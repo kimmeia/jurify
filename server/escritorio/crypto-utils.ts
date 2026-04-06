@@ -18,9 +18,17 @@ function getEncryptionKey(): Buffer {
     return Buffer.from(envKey, "hex");
   }
 
-  // Fallback: derivar do DATABASE_URL (menos seguro, mas funcional)
-  const dbUrl = process.env.DATABASE_URL || "fallback-key-not-secure";
-  console.warn("[Crypto] ENCRYPTION_KEY não definida. Usando chave derivada do DATABASE_URL. Defina ENCRYPTION_KEY para produção.");
+  const isProduction = process.env.NODE_ENV === "production";
+  if (isProduction) {
+    throw new Error("[Crypto] ENCRYPTION_KEY é obrigatória em produção. Defina uma chave hex de 64 caracteres (32 bytes).");
+  }
+
+  // Fallback apenas em desenvolvimento: derivar do DATABASE_URL
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    throw new Error("[Crypto] ENCRYPTION_KEY ou DATABASE_URL deve estar definida.");
+  }
+  console.warn("[Crypto] AVISO: Usando chave derivada do DATABASE_URL. Defina ENCRYPTION_KEY antes de ir para produção.");
   return crypto.createHash("sha256").update(dbUrl).digest();
 }
 

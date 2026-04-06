@@ -14,6 +14,10 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { iniciarJobs } from "./cron-jobs";
 import { registrarSSE } from "./sse-notifications";
+import { rateLimit, globalApiRateLimit } from "./rate-limit";
+import { createLogger } from "./logger";
+
+const log = createLogger("server");
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -44,30 +48,18 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // Serve uploaded files statically
   app.use("/uploads", express.static("./uploads"));
-  // Simple rate limiting for public routes (signing)
-  const rateLimitMap = new Map<string, { count: number; ts: number }>();
-  app.use("/api/trpc/assinaturas.visualizarPorToken", (req, res, next) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const now = Date.now();
-    const entry = rateLimitMap.get(ip);
-    if (entry && now - entry.ts < 60000) {
-      entry.count++;
-      if (entry.count > 30) { res.status(429).json({ error: "Muitas requisições. Tente novamente em 1 minuto." }); return; }
-    } else { rateLimitMap.set(ip, { count: 1, ts: now }); }
-    // Cleanup old entries every 5 min
-    if (rateLimitMap.size > 10000) { for (const [k, v] of rateLimitMap) { if (now - v.ts > 120000) rateLimitMap.delete(k); } }
-    next();
-  });
-  app.use("/api/trpc/assinaturas.assinarPorToken", (req, res, next) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const now = Date.now();
-    const entry = rateLimitMap.get(`sign:${ip}`);
-    if (entry && now - entry.ts < 60000) {
-      entry.count++;
-      if (entry.count > 5) { res.status(429).json({ error: "Muitas tentativas. Tente novamente em 1 minuto." }); return; }
-    } else { rateLimitMap.set(`sign:${ip}`, { count: 1, ts: now }); }
-    next();
-  });
+  // Rate limiting — aplicar globalmente ao tRPC e limites específicos para públicas
+  app.use("/api/trpc", globalApiRateLimit);
+  app.use(
+    "/api/trpc/assinaturas.visualizarPorToken",
+    rateLimit({ name: "sign-view", max: 30 }),
+  );
+  app.use(
+    "/api/trpc/assinaturas.assinarPorToken",
+    rateLimit({ name: "sign-submit", max: 5 }),
+  );
+  // Webhooks públicos também precisam de limite
+  app.use("/api/stripe/webhook", rateLimit({ name: "webhook-stripe", max: 120 }));
   // PDF export route
   registerPDFExportRoute(app);
   // Cal.com webhook
@@ -141,13 +133,16 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    log.info({ preferredPort, port }, "Preferred port busy, using fallback");
   }
 
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    log.info({ port }, `Server running on http://localhost:${port}/`);
     iniciarJobs();
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => {
+  log.fatal({ err: String(err) }, "Failed to start server");
+  process.exit(1);
+});
