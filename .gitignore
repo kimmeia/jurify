@@ -108,3 +108,7 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+.whatsapp-sessions/
+uploads/
+node_modules/
+.env
