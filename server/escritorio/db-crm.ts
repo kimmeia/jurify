@@ -6,8 +6,28 @@
 import { eq, and, desc, asc, or, sql, gte, lte, like } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("crm");
+
+// Tipos compartilhados para validação de entrada
+type OrigemContato = "whatsapp" | "instagram" | "facebook" | "telefone" | "manual" | "site";
+type PrioridadeConv = "baixa" | "normal" | "alta" | "urgente";
+type StatusConv = "aguardando" | "em_atendimento" | "resolvido" | "fechado";
+type DirecaoMsg = "entrada" | "saida";
+type TipoMsg = "texto" | "imagem" | "audio" | "video" | "documento" | "localizacao" | "contato" | "sticker" | "sistema";
+type EtapaFunil = "novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido";
 
 // ─── Contatos ────────────────────────────────────────────────────────────────
+
+const ORIGENS_VALIDAS = new Set<OrigemContato>([
+  "whatsapp", "instagram", "facebook", "telefone", "manual", "site",
+]);
+
+function validarOrigem(v: string | undefined): OrigemContato {
+  if (v && ORIGENS_VALIDAS.has(v as OrigemContato)) return v as OrigemContato;
+  return "manual";
+}
 
 export async function criarContato(dados: {
   escritorioId: number; nome: string; telefone?: string; email?: string;
@@ -22,12 +42,12 @@ export async function criarContato(dados: {
     telefone: dados.telefone || null,
     email: dados.email || null,
     cpfCnpj: dados.cpfCnpj || null,
-    origem: (dados.origem as any) || "manual",
+    origem: validarOrigem(dados.origem),
     tags: dados.tags ? JSON.stringify(dados.tags) : null,
     observacoes: dados.observacoes || null,
     responsavelId: dados.responsavelId ?? null,
   });
-  return (result as any).insertId as number;
+  return (result as { insertId: number }).insertId;
 }
 
 export async function listarContatos(escritorioId: number, busca?: string) {
@@ -74,6 +94,18 @@ export async function excluirContato(id: number, escritorioId: number) {
 
 // ─── Conversas ───────────────────────────────────────────────────────────────
 
+const PRIORIDADES_VALIDAS = new Set<PrioridadeConv>([
+  "baixa", "normal", "alta", "urgente",
+]);
+const STATUS_CONV_VALIDOS = new Set<StatusConv>([
+  "aguardando", "em_atendimento", "resolvido", "fechado",
+]);
+
+function validarPrioridade(v: string | undefined): PrioridadeConv {
+  if (v && PRIORIDADES_VALIDAS.has(v as PrioridadeConv)) return v as PrioridadeConv;
+  return "normal";
+}
+
 export async function criarConversa(dados: {
   escritorioId: number; contatoId: number; canalId: number;
   atendenteId?: number; assunto?: string; prioridade?: string;
@@ -87,10 +119,10 @@ export async function criarConversa(dados: {
     canalId: dados.canalId,
     atendenteId: dados.atendenteId ?? null,
     assunto: dados.assunto || null,
-    prioridade: (dados.prioridade as any) || "normal",
+    prioridade: validarPrioridade(dados.prioridade),
     chatIdExterno: dados.chatIdExterno || null,
   });
-  return (result as any).insertId as number;
+  return (result as { insertId: number }).insertId;
 }
 
 export async function listarConversas(escritorioId: number, filtros?: {
@@ -99,7 +131,9 @@ export async function listarConversas(escritorioId: number, filtros?: {
   const db = await getDb();
   if (!db) return [];
   const conditions = [eq(conversas.escritorioId, escritorioId)];
-  if (filtros?.status) conditions.push(eq(conversas.status, filtros.status as any));
+  if (filtros?.status && STATUS_CONV_VALIDOS.has(filtros.status as StatusConv)) {
+    conditions.push(eq(conversas.status, filtros.status as StatusConv));
+  }
   if (filtros?.atendenteId) conditions.push(eq(conversas.atendenteId, filtros.atendenteId));
 
   const rows = await db
@@ -168,17 +202,25 @@ export async function excluirConversa(id: number, escritorioId: number) {
 
 // ─── Mensagens ───────────────────────────────────────────────────────────────
 
+const TIPOS_MSG_VALIDOS = new Set<TipoMsg>([
+  "texto", "imagem", "audio", "video", "documento", "localizacao", "contato", "sticker", "sistema",
+]);
+
 export async function enviarMensagem(dados: {
   conversaId: number; remetenteId?: number; direcao: string;
   tipo?: string; conteudo: string; mediaUrl?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+  if (dados.direcao !== "entrada" && dados.direcao !== "saida") {
+    throw new Error(`Direção inválida: ${dados.direcao}`);
+  }
+  const tipoValido: TipoMsg = TIPOS_MSG_VALIDOS.has(dados.tipo as TipoMsg) ? (dados.tipo as TipoMsg) : "texto";
   const [result] = await db.insert(mensagens).values({
     conversaId: dados.conversaId,
     remetenteId: dados.remetenteId ?? null,
-    direcao: (dados.direcao as any),
-    tipo: (dados.tipo as any) || "texto",
+    direcao: dados.direcao as DirecaoMsg,
+    tipo: tipoValido,
     conteudo: dados.conteudo,
     mediaUrl: dados.mediaUrl || null,
     status: "enviada",
@@ -190,7 +232,7 @@ export async function enviarMensagem(dados: {
     ultimaMensagemPreview: dados.conteudo.slice(0, 250),
   }).where(eq(conversas.id, dados.conversaId));
 
-  return (result as any).insertId as number;
+  return (result as { insertId: number }).insertId;
 }
 
 export async function listarMensagens(conversaId: number, limite = 50) {
@@ -235,14 +277,19 @@ export async function criarLead(dados: {
     valorEstimado: dados.valorEstimado || null,
     origemLead: dados.origemLead || null,
   });
-  return (result as any).insertId as number;
+  return (result as { insertId: number }).insertId;
 }
 
 export async function listarLeads(escritorioId: number, etapa?: string) {
   const db = await getDb();
   if (!db) return [];
+  const ETAPAS_VALIDAS = new Set<EtapaFunil>([
+    "novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido",
+  ]);
   const conditions = [eq(leads.escritorioId, escritorioId)];
-  if (etapa) conditions.push(eq(leads.etapaFunil, etapa as any));
+  if (etapa && ETAPAS_VALIDAS.has(etapa as EtapaFunil)) {
+    conditions.push(eq(leads.etapaFunil, etapa as EtapaFunil));
+  }
 
   const rows = await db
     .select({
@@ -359,7 +406,7 @@ export async function distribuirLead(
       : ["seg", "ter", "qua", "qui", "sex"];
 
     if (!diasFuncionamento.includes(diaHoje)) {
-      console.log(`[Distribuição] Escritório fechado hoje (${diaHoje})`);
+      log.debug({ diaHoje }, "Distribuição: escritório fechado hoje");
       return null; // Escritório fechado hoje
     }
 
@@ -369,7 +416,7 @@ export async function distribuirLead(
     const fechamento = esc.horarioFechamento ? parseHorario(esc.horarioFechamento) : 1080; // 18:00
 
     if (horaAtual < abertura || horaAtual > fechamento) {
-      console.log(`[Distribuição] Fora do horário (${esc.horarioAbertura}-${esc.horarioFechamento})`);
+      log.debug({ abertura: esc.horarioAbertura, fechamento: esc.horarioFechamento }, "Distribuição: fora do horário");
       return null; // Fora do expediente
     }
   }
@@ -425,7 +472,7 @@ export async function distribuirLead(
         const max = anteriorDisponivel.maxAtendimentosSimultaneos || 5;
 
         if (carga < max) {
-          console.log(`[Distribuição] Retornando ao atendente anterior: ${anteriorDisponivel.id}`);
+          log.info({ atendenteId: anteriorDisponivel.id }, "Distribuição: retornando ao atendente anterior");
           await marcarDistribuicao(db, anteriorDisponivel.id);
           return anteriorDisponivel.id;
         }
@@ -453,7 +500,7 @@ export async function distribuirLead(
     }).from(conversas)
       .where(and(
         eq(conversas.escritorioId, escritorioId),
-        sql`atendenteIdConv IN (${sql.raw(candidatoIds.join(","))})`,
+        sql`atendenteIdConv IN (${sql.join(candidatoIds.map(id => sql`${id}`), sql`, `)})`,
         or(eq(conversas.status, "aguardando"), eq(conversas.status, "em_atendimento")),
       ))
       .groupBy(conversas.atendenteId);
@@ -492,7 +539,7 @@ export async function distribuirLead(
   });
 
   const escolhido = cargas[0];
-  console.log(`[Distribuição] Atribuído ao colaborador ${escolhido.id} (carga: ${escolhido.carga}, online: ${escolhido.estaOnline})`);
+  log.info({ colaboradorId: escolhido.id, carga: escolhido.carga, online: escolhido.estaOnline }, "Distribuição: lead atribuído");
 
   await marcarDistribuicao(db, escolhido.id);
   return escolhido.id;
@@ -609,9 +656,9 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
   const atendenteIds = rankingRows.map(r => r.atendenteId).filter(Boolean) as number[];
   const colabMap: Record<number, { nome: string; online: boolean }> = {};
   if (atendenteIds.length > 0) {
-    const allColabs = await db.select().from(colaboradores).where(sql`id IN (${sql.raw(atendenteIds.join(","))})`);
+    const allColabs = await db.select().from(colaboradores).where(sql`id IN (${sql.join(atendenteIds.map(id => sql`${id}`), sql`, `)})`);
     const userIds = allColabs.map(c => c.userId);
-    const allUsers = userIds.length > 0 ? await db.select({ id: users.id, name: users.name }).from(users).where(sql`id IN (${sql.raw(userIds.join(","))})`) : [];
+    const allUsers = userIds.length > 0 ? await db.select({ id: users.id, name: users.name }).from(users).where(sql`id IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`) : [];
     const userMap: Record<number, string> = {};
     for (const u of allUsers) userMap[u.id] = u.name || "Sem nome";
     for (const c of allColabs) {

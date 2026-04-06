@@ -5,6 +5,9 @@ import { getStripe } from "./index";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { subscriptions, users } from "../../drizzle/schema";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("stripe-webhook");
 
 export function registerStripeWebhook(app: Express) {
   app.post(
@@ -15,15 +18,14 @@ export function registerStripeWebhook(app: Express) {
         const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
         if (!webhookSecret) {
-          console.error("[Webhook] STRIPE_WEBHOOK_SECRET not set");
-          return res.status(200).json({ verified: true, warning: "Webhook secret not configured" });
+          log.error("STRIPE_WEBHOOK_SECRET not set — rejecting request");
+          return res.status(500).json({ error: "Webhook secret not configured" });
         }
 
         const sig = req.headers["stripe-signature"] as string;
 
         if (!sig) {
-          console.log("[Webhook] No Stripe-Signature header, treating as health check");
-          return res.status(200).json({ verified: true });
+          return res.status(400).json({ error: "Missing Stripe-Signature header" });
         }
 
         let event: Stripe.Event;
@@ -32,16 +34,16 @@ export function registerStripeWebhook(app: Express) {
           const stripe = getStripe();
           event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
         } catch (err: any) {
-          console.error("[Webhook] Signature verification failed:", err.message);
-          return res.status(200).json({ verified: true, error: err.message });
+          log.error({ err: err.message }, "Signature verification failed");
+          return res.status(400).json({ error: "Invalid signature" });
         }
 
         if (event.id.startsWith("evt_test_")) {
-          console.log("[Webhook] Test event detected, returning verification response");
+          log.debug({ eventId: event.id }, "Test event detected");
           return res.status(200).json({ verified: true });
         }
 
-        console.log(`[Webhook] Received event: ${event.type} (${event.id})`);
+        log.info({ eventType: event.type, eventId: event.id }, "Received event");
 
         const eventType = event.type;
         const eventData = event.data.object;
@@ -59,19 +61,19 @@ export function registerStripeWebhook(app: Express) {
               await handleSubscriptionDeleted(eventData as Stripe.Subscription);
               break;
             case "invoice.paid":
-              console.log("[Webhook] Invoice paid:", (eventData as any).id);
+              log.info({ invoiceId: (eventData as any).id }, "Invoice paid");
               break;
             default:
-              console.log(`[Webhook] Unhandled event type: ${eventType}`);
+              log.debug({ eventType }, "Unhandled event type");
           }
         } catch (err: any) {
-          console.error(`[Webhook] Error processing ${eventType}:`, err.message);
+          log.error({ err: err.message, eventType }, "Error processing event");
         }
 
         return res.status(200).json({ verified: true, received: true });
       } catch (err: any) {
-        console.error("[Webhook] Unexpected error:", err.message);
-        return res.status(200).json({ verified: true });
+        log.error({ err: err.message }, "Unexpected webhook error");
+        return res.status(500).json({ error: "Internal webhook error" });
       }
     }
   );
@@ -85,7 +87,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const cancelOldSub = session.metadata?.cancel_old_subscription;
 
   if (!userId) {
-    console.error("[Webhook] No user_id in checkout session metadata");
+    log.error("No user_id in checkout session metadata");
     return;
   }
 
@@ -104,7 +106,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const credits = parseInt(creditsToAdd) || 1;
     const { addCreditsToUser } = await import("../db");
     await addCreditsToUser(parseInt(userId), credits);
-    console.log(`[Webhook] Avulso: added ${credits} credit(s) to user ${userId}`);
+    log.info({ userId, credits }, "Avulso: credits added");
     return;
   }
 
@@ -118,7 +120,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         metadata: { plan_id: planId, user_id: userId },
       });
     } catch (err: any) {
-      console.error(`[Webhook] Failed to update Stripe sub metadata: ${err.message}`);
+      log.error({ err: err.message }, "Failed to update Stripe sub metadata");
     }
 
     const existing = await db
@@ -141,14 +143,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           .update(subscriptions)
           .set({ status: "canceled" })
           .where(eq(subscriptions.stripeSubscriptionId, cancelOldSub));
-        console.log(`[Webhook] Plan change: canceled old subscription ${cancelOldSub}`);
+        log.info({ cancelOldSub }, "Plan change: canceled old subscription");
       } catch (err: any) {
-        console.error(`[Webhook] Failed to cancel old subscription: ${err.message}`);
+        log.error({ err: err.message }, "Failed to cancel old subscription");
       }
     }
   }
 
-  console.log(`[Webhook] Checkout completed for user ${userId}, plan ${planId}`);
+  log.info({ userId, planId }, "Checkout completed");
 }
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
@@ -164,7 +166,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
     .limit(1);
 
   if (userRows.length === 0) {
-    console.error(`[Webhook] No user found for customer ${customerId}`);
+    log.error({ customerId }, "No user found for customer");
     return;
   }
 
@@ -204,9 +206,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
     await db.insert(subscriptions).values(subData);
   }
 
-  console.log(
-    `[Webhook] Subscription ${subscription.id} updated: status=${subscription.status}, planId=${finalPlanId}`
-  );
+  log.info({ subscriptionId: subscription.id, status: subscription.status, planId: finalPlanId }, "Subscription updated");
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -218,5 +218,5 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     .set({ status: "canceled" })
     .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
 
-  console.log(`[Webhook] Subscription ${subscription.id} deleted/canceled`);
+  log.info({ subscriptionId: subscription.id }, "Subscription deleted/canceled");
 }

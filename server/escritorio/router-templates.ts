@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { mensagemTemplates } from "../../drizzle/schema";
-import { eq, and, like, or, sql } from "drizzle-orm";
+import { eq, and, like, or, sql, type SQL } from "drizzle-orm";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { TRPCError } from "@trpc/server";
 
@@ -66,15 +66,14 @@ export const templatesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const sets: string[] = [];
-      const vals: any[] = [];
-      if (input.titulo) { sets.push("tituloTpl = ?"); vals.push(input.titulo); }
-      if (input.conteudo) { sets.push("conteudoTpl = ?"); vals.push(input.conteudo); }
-      if (input.categoria) { sets.push("categoriaTpl = ?"); vals.push(input.categoria); }
-      if (input.atalho !== undefined) { sets.push("atalhoTpl = ?"); vals.push(input.atalho || null); }
+      const updates: SQL[] = [];
+      if (input.titulo) updates.push(sql`tituloTpl = ${input.titulo}`);
+      if (input.conteudo) updates.push(sql`conteudoTpl = ${input.conteudo}`);
+      if (input.categoria) updates.push(sql`categoriaTpl = ${input.categoria}`);
+      if (input.atalho !== undefined) updates.push(sql`atalhoTpl = ${input.atalho || null}`);
 
-      if (sets.length > 0) {
-        await db.execute(sql.raw(`UPDATE mensagem_templates SET ${sets.join(", ")} WHERE id = ${input.id} AND escritorioIdTpl = ${esc.escritorio.id}`));
+      if (updates.length > 0) {
+        await db.execute(sql`UPDATE mensagem_templates SET ${sql.join(updates, sql`, `)} WHERE id = ${input.id} AND escritorioIdTpl = ${esc.escritorio.id}`);
       }
       return { success: true };
     }),

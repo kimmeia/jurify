@@ -60,10 +60,10 @@ export const tarefasRouter = router({
       const respIds = [...new Set(rows.filter(r => r.responsavelId).map(r => r.responsavelId!))];
       const nomeMap: Record<number, string> = {};
       if (respIds.length > 0) {
-        const colabs = await db.select().from(colaboradores).where(sql`id IN (${sql.raw(respIds.join(","))})`);
+        const colabs = await db.select().from(colaboradores).where(sql`id IN (${sql.join(respIds.map(id => sql`${id}`), sql`, `)})`);
         const userIds = colabs.map(c => c.userId);
         if (userIds.length > 0) {
-          const allUsers = await db.select({ id: users.id, name: users.name }).from(users).where(sql`id IN (${sql.raw(userIds.join(","))})`);
+          const allUsers = await db.select({ id: users.id, name: users.name }).from(users).where(sql`id IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
           const userMap: Record<number, string> = {};
           for (const u of allUsers) userMap[u.id] = u.name || "Sem nome";
           for (const c of colabs) nomeMap[c.id] = userMap[c.userId] || "Sem nome";

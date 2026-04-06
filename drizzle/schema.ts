@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -117,7 +117,7 @@ export type InsertUserCredits = typeof userCredits.$inferInsert;
 export const processosMonitorados = mysqlTable("processos_monitorados", {
   id: int("id").autoincrement().primaryKey(),
   /** FK para users.id — OBRIGATÓRIO para isolamento de dados */
-  userId: int("userId").notNull(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   /** Número CNJ formatado: NNNNNNN-DD.AAAA.J.TR.OOOO */
   numeroCnj: varchar("numeroCnj", { length: 25 }).notNull(),
   /** Número CNJ sem formatação (20 dígitos) para busca */
