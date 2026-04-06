@@ -124,7 +124,7 @@ export const juditOperacoesRouter = router({
       const lawsuits = responses.page_data.filter((r) => r.response_type === "lawsuit");
       if (lawsuits.length === 0) {
         const erros = responses.page_data.filter((r) => r.response_type === "application_error");
-        return { encontrado: false, requestId: request.request_id, mensagem: erros.length > 0 ? (erros[0].response_data?.message || "Processo não encontrado") : "Nenhum resultado para este CNJ" };
+        return { encontrado: false, requestId: request.request_id, mensagem: erros.length > 0 ? ((erros[0].response_data as { message?: string })?.message || "Processo não encontrado") : "Nenhum resultado para este CNJ" };
       }
 
       return { encontrado: true, requestId: request.request_id, processo: lawsuits[0].response_data, totalInstancias: lawsuits.length };
@@ -135,6 +135,7 @@ export const juditOperacoesRouter = router({
     .input(z.object({
       numeroCnj: z.string().min(20).max(25),
       apelido: z.string().max(255).optional(),
+      recurrence: z.number().int().min(1).max(30).default(1),
     }))
     .mutation(async ({ ctx, input }) => {
       const { limites } = await verificarAcessoJudit(ctx.user.id);
@@ -163,7 +164,7 @@ export const juditOperacoesRouter = router({
       }
 
       const tracking = await client.criarMonitoramento({
-        recurrence: 1,
+        recurrence: input.recurrence,
         search: { search_type: "lawsuit_cnj", search_key: input.numeroCnj },
         with_attachments: false,
       });
@@ -172,7 +173,7 @@ export const juditOperacoesRouter = router({
         trackingId: tracking.tracking_id,
         searchType: "lawsuit_cnj",
         searchKey: input.numeroCnj,
-        recurrence: 1,
+        recurrence: input.recurrence,
         statusJudit: tracking.status as any,
         apelido: input.apelido || null,
         clienteUserId: ctx.user.id,
@@ -187,10 +188,11 @@ export const juditOperacoesRouter = router({
     .input(z.object({
       status: z.enum(["created", "updating", "updated", "paused", "deleted", "todos"]).default("todos"),
       busca: z.string().optional(),
+      pageSize: z.number().int().min(1).max(200).default(50),
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return [];
+      if (!db) return { items: [], total: 0 };
 
       const conditions: any[] = [eq(juditMonitoramentos.clienteUserId, ctx.user.id)];
       const statusFilter = input?.status ?? "todos";
@@ -211,7 +213,9 @@ export const juditOperacoesRouter = router({
         conditions.push(or(like(juditMonitoramentos.searchKey, b), like(juditMonitoramentos.apelido, b), like(juditMonitoramentos.nomePartes, b)));
       }
 
-      return db.select().from(juditMonitoramentos).where(and(...conditions)).orderBy(desc(juditMonitoramentos.updatedAt)).limit(100);
+      const pageSize = input?.pageSize ?? 50;
+      const items = await db.select().from(juditMonitoramentos).where(and(...conditions)).orderBy(desc(juditMonitoramentos.updatedAt)).limit(pageSize);
+      return { items, total: items.length };
     }),
 
   /** Pausa monitoramento (próprio) */

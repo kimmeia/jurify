@@ -154,11 +154,19 @@ export interface JuditLawsuit {
   }>;
 }
 
+/** Body de erro retornado quando response_type === "application_error" */
+export interface JuditApplicationError {
+  message?: string;
+  code?: string;
+  details?: string;
+}
+
 export interface JuditResponseItem {
   request_id: string;
   response_id: string;
   response_type: string;
-  response_data: JuditLawsuit;
+  /** Pode ser um lawsuit (sucesso) ou um erro (response_type === "application_error") */
+  response_data: JuditLawsuit | JuditApplicationError;
   user_id: string;
   created_at: string;
   tags?: Record<string, unknown>;

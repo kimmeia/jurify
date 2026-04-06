@@ -204,6 +204,7 @@ export const asaasRouter = router({
 
       const fullWebhookUrl = `${input.webhookUrl.replace(/\/$/, "")}/api/webhooks/asaas`;
       try {
+        if (!cfg.webhookToken) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Token do webhook não configurado" });
         // Asaas exige email obrigatorio
         const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
         const email = userRow?.email || "noreply@calcsaas.app";

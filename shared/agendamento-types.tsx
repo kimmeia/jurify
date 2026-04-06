@@ -237,7 +237,7 @@ export default function Agendamento() {
     dataFim: fimMes.toISOString(),
   });
 
-  const deleteMut = trpc.agendamento.deletar.useMutation({
+  const deleteMut = trpc.agendamento.excluir.useMutation({
     onSuccess: () => { toast.success("Agendamento deletado!"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });

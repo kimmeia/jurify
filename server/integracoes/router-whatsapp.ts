@@ -179,7 +179,7 @@ export const whatsappRouter = router({
     if (!esc) return [];
 
     // Retorna apenas sessões do escritório (o manager é global)
-    const todas = manager.listarSessoes();
+    const todas = await manager.listarSessoes();
     // TODO: filtrar por escritorioId quando disponível no state
     return todas;
   }),

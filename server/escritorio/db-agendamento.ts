@@ -6,7 +6,7 @@
 import { eq, and, desc, gte, lte, or, asc } from "drizzle-orm";
 import { getDb } from "../db";
 import { agendamentos, agendamentoLembretes, colaboradores, users } from "../../drizzle/schema";
-import type { TipoAgendamento, PrioridadeAgendamento, StatusAgendamento } from "../../shared/agendamento-types";
+import type { TipoAgendamento, PrioridadeAgendamento, StatusAgendamento } from "../../shared/agendamento-constants";
 
 // ─── Agendamentos ────────────────────────────────────────────────────────────
 

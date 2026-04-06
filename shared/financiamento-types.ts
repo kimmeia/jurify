@@ -27,7 +27,7 @@ export type ModalidadeCredito =
 
 export type TipoPessoa = "fisica" | "juridica";
 
-export type TipoVinculoConsignado = "clt" | "servidor_publico" | "militar";
+export type TipoVinculoConsignado = "clt" | "servidor_publico" | "militar" | "inss";
 
 export type SistemaAmortizacao = "PRICE" | "SAC" | "SACRE";
 
@@ -285,6 +285,7 @@ export const CONSIGNADO_SGS_MAP: Record<TipoVinculoConsignado, number> = {
   clt: 20744,                         // Setor privado (CLT)
   servidor_publico: 25467,            // Servidores públicos
   militar: 25467,                     // Militares (mesma série do servidor público)
+  inss: 20746,                        // Aposentados e pensionistas do INSS
 };
 
 /** Retorna o código SGS correto conforme modalidade, tipo de pessoa e vínculo consignado */

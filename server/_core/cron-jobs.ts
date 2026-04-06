@@ -57,8 +57,9 @@ async function syncAsaas() {
  */
 async function notificarPrazos() {
   try {
-    const db = await getDb();
-    if (!db) return;
+    const dbConn = await getDb();
+    if (!dbConn) return;
+    const db = dbConn;
 
     const now = new Date();
     const em1h = new Date(now.getTime() + 60 * 60 * 1000);
@@ -68,7 +69,7 @@ async function notificarPrazos() {
     let notificadas = 0;
 
     // Helper: criar notificação se não duplicada nas últimas 12h
-    async function notificarSeNovo(userId: number, titulo: string, mensagem: string) {
+    const notificarSeNovo = async (userId: number, titulo: string, mensagem: string) => {
       const limite12h = new Date(now.getTime() - 12 * 60 * 60 * 1000);
       const [existente] = await db.select({ id: notificacoes.id }).from(notificacoes)
         .where(and(
@@ -86,14 +87,14 @@ async function notificarPrazos() {
         tipo: "sistema",
       });
       notificadas++;
-    }
+    };
 
     // Helper: obter userId do colaborador
-    async function getUserId(colabId: number): Promise<number | null> {
+    const getUserId = async (colabId: number): Promise<number | null> => {
       const [c] = await db.select({ userId: colaboradores.userId }).from(colaboradores)
         .where(eq(colaboradores.id, colabId)).limit(1);
       return c?.userId || null;
-    }
+    };
 
     // ─── Compromissos que começam na próxima 1h ─────────────────────────
     const proximos = await db.select().from(agendamentos)

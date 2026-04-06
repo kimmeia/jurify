@@ -10,13 +10,13 @@ import {
   formatPhoneBR,
   WHATSAPP_STATUS_LABELS,
   WHATSAPP_STATUS_CORES,
-} from "../../../shared/whatsapp-types";
+} from "../../shared/whatsapp-types";
 import type {
   WhatsappSessionStatus,
   WhatsappMensagemRecebida,
   WhatsappMensagemEnviar,
   WhatsappSessionInfo,
-} from "../../../shared/whatsapp-types";
+} from "../../shared/whatsapp-types";
 
 // ─── Testes: Formatação de JID/Telefone ──────────────────────────────────────
 
@@ -255,7 +255,7 @@ function mapStatusToDb(status: WhatsappSessionStatus): string {
 import {
   TIPO_LABELS as AGEND_TIPO_LABELS,
   TIPO_CORES as AGEND_TIPO_CORES,
-} from "../../../shared/agendamento-types";
+} from "../../shared/agendamento-constants";
 
 describe("Agendamento Types", () => {
   it("TIPO_LABELS tem todos os tipos", () => {

@@ -60,6 +60,14 @@ export function mensalParaAnual(taxaMensal: number): number {
   return round4((Math.pow(1 + taxaMensal / 100, 12) - 1) * 100);
 }
 
+/**
+ * Converte taxa anual para mensal por método linear (divisão por 12).
+ * Usado para indexadores como TR, IPCA, IGPM em correção monetária.
+ */
+export function anualParaMensalLinear(taxaAnual: number): number {
+  return round8(taxaAnual / 12);
+}
+
 // ─── MIP e DFI ───────────────────────────────────────────────────────────────
 
 /**
@@ -448,6 +456,13 @@ export function analisarAbusividade(
 
   // 3. Capitalização (análise completa por regime)
   const capitalizacao = analisarCapitalizacao(params);
+  // Anatocismo: capitalização composta detectada quando o sistema é PRICE
+  // (Tabela Price embute capitalização composta na fórmula matemática — Tema 572/STJ).
+  // SAC usa juros simples sobre saldo, sem anatocismo.
+  const anatocismoDetectado = capitalizacao.usaPrice;
+  const anatocismoDetalhes = anatocismoDetectado
+    ? `Sistema PRICE detectado: a Tabela Price embute capitalização composta na fórmula de cálculo. Conforme Tema 572/STJ, a existência efetiva de anatocismo é questão de fato e exige perícia.`
+    : `Sistema ${params.sistemaAmortizacao} não envolve capitalização composta de juros (juros simples sobre saldo devedor).`;
 
   // 4. MIP
   const taxaMIPRef = obterTaxaMIP(params.idadeComprador);
@@ -513,6 +528,8 @@ export function analisarAbusividade(
     taxaAnualCalculada: round4(taxaAnualCalc),
     taxasEquivalentes,
     capitalizacao,
+    anatocismoDetectado,
+    anatocismoDetalhes,
     mipAbusivo,
     mipDetalhes,
     dfiAbusivo,

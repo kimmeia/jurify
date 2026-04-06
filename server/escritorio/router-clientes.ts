@@ -59,7 +59,7 @@ export const clientesRouter = router({
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
       const { id, ...d } = input; const u: any = {};
       if (d.nome !== undefined) u.nome = d.nome; if (d.telefone !== undefined) u.telefone = d.telefone; if (d.email !== undefined) u.email = d.email; if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj; if (d.observacoes !== undefined) u.observacoes = d.observacoes; if (d.tags !== undefined) u.tags = d.tags;
-      await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, esc.escritorio.id)));
+      await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 

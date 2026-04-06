@@ -249,8 +249,8 @@ class WhatsappSessionManager extends EventEmitter {
   }
 
   /** Lista todas as sessões ativas */
-  listarSessoes(): WhatsappSessionInfo[] {
-    return Array.from(this.sessions.keys()).map((id) => this.getSessionInfo(id));
+  async listarSessoes(): Promise<WhatsappSessionInfo[]> {
+    return Promise.all(Array.from(this.sessions.keys()).map((id) => this.getSessionInfo(id)));
   }
 
   /**

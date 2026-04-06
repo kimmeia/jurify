@@ -29,9 +29,8 @@ async function getVerifyToken(): Promise<string> {
     const [row] = await db.select().from(adminIntegracoes)
       .where(eq(adminIntegracoes.provedor, "whatsapp_cloud")).limit(1);
     if (!row?.apiKeyEncrypted || !row?.apiKeyIv || !row?.apiKeyTag) return "";
-    const raw = decryptConfig(row.apiKeyEncrypted, row.apiKeyIv, row.apiKeyTag);
-    // raw is JSON: {"appId":"...", "appSecret":"...", "webhookVerifyToken":"..."}
-    const config = JSON.parse(raw);
+    // decryptConfig já retorna o objeto parseado: {appId, appSecret, webhookVerifyToken}
+    const config = decryptConfig(row.apiKeyEncrypted, row.apiKeyIv, row.apiKeyTag);
     return config.webhookVerifyToken || "";
   } catch { return ""; }
 }

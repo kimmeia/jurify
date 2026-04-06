@@ -542,7 +542,7 @@ describe("Parecer Técnico", () => {
     expect(parecer).toContain("PARECER TÉCNICO");
     expect(parecer).toContain("DADOS DO CONTRATO");
     expect(parecer).toContain("CUSTO EFETIVO TOTAL");
-    expect(parecer).toContain("ANÁLISE DE TAXAS");
+    expect(parecer).toContain("ANÁLISE DA TAXA DE JUROS");
     expect(parecer).toContain("CAPITALIZAÇÃO DE JUROS");
     expect(parecer).toContain("TARIFAS");
     expect(parecer).toContain("ENCARGOS DE MORA");
