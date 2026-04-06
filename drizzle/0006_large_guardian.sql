@@ -1,0 +1,1 @@
+ALTER TABLE `user_credits` ADD `currentPlanId` varchar(64);

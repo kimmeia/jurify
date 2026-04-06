@@ -1,0 +1,125 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1773162151670,
+      "tag": "0000_nosy_hedge_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1773162632154,
+      "tag": "0001_nervous_scarlet_witch",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1773167342741,
+      "tag": "0002_chunky_chimera",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1773173495344,
+      "tag": "0003_bright_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1773176168056,
+      "tag": "0004_violet_ulik",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1773275178705,
+      "tag": "0005_thankful_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1773627036088,
+      "tag": "0006_large_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1773674006081,
+      "tag": "0007_salty_deadpool",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1773680316387,
+      "tag": "0008_chunky_maginty",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1773682084010,
+      "tag": "0009_lucky_fenris",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1774388846247,
+      "tag": "0010_silly_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1774533617343,
+      "tag": "0011_fresh_lester",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1775141143749,
+      "tag": "0012_whole_ben_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1775146447364,
+      "tag": "0013_right_doomsday",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1775317014149,
+      "tag": "0014_colorful_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1775400178246,
+      "tag": "0015_free_the_hood",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1775482015613,
+      "tag": "0016_flawless_caretaker",
+      "breakpoints": true
+    }
+  ]
+}

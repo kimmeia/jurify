@@ -1,0 +1,70 @@
+{
+  "query": "SELECT s.id, s.planId, s.status, s.stripeSubscriptionId FROM subscriptions s WHERE s.userId = 60001 ORDER BY s.id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 251zJLoVRHq5PUy.14d127b9599c --database mm4erxc6TGQp4C3DQqc4wh --execute SELECT s.id, s.planId, s.status, s.stripeSubscriptionId FROM subscriptions s WHERE s.userId = 60001 ORDER BY s.id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "90002",
+      "planId": "essencial",
+      "status": "active",
+      "stripeSubscriptionId": "sub_1TBQWRLr7RI36Vz7ORdeB4AW"
+    },
+    {
+      "id": "90001",
+      "planId": "ilimitado",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBQVNLr7RI36Vz7d7rzHyst"
+    },
+    {
+      "id": "60006",
+      "planId": "profissional",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBMmjLr7RI36Vz7mwstmY79"
+    },
+    {
+      "id": "60005",
+      "planId": "NULL",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBMSWLr7RI36Vz7nNE11PSX"
+    },
+    {
+      "id": "60004",
+      "planId": "NULL",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBMR7Lr7RI36Vz7yscyppTU"
+    },
+    {
+      "id": "60003",
+      "planId": "NULL",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBMQDLr7RI36Vz70xd2B4W0"
+    },
+    {
+      "id": "60002",
+      "planId": "NULL",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBMPALr7RI36Vz7AOv9CPV8"
+    },
+    {
+      "id": "60001",
+      "planId": "essencial",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1TBM9XLr7RI36Vz7Lied3xJk"
+    },
+    {
+      "id": "3",
+      "planId": "NULL",
+      "status": "canceled",
+      "stripeSubscriptionId": "sub_1T9Us3Lr7RI36Vz7avJWT41U"
+    },
+    {
+      "id": "2",
+      "planId": "NULL",
+      "status": "incomplete",
+      "stripeSubscriptionId": "sub_1T9UijLr7RI36Vz7Bx1ZMjlo"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tplanId\tstatus\tstripeSubscriptionId\n90002\tessencial\tactive\tsub_1TBQWRLr7RI36Vz7ORdeB4AW\n90001\tilimitado\tcanceled\tsub_1TBQVNLr7RI36Vz7d7rzHyst\n60006\tprofissional\tcanceled\tsub_1TBMmjLr7RI36Vz7mwstmY79\n60005\tNULL\tcanceled\tsub_1TBMSWLr7RI36Vz7nNE11PSX\n60004\tNULL\tcanceled\tsub_1TBMR7Lr7RI36Vz7yscyppTU\n60003\tNULL\tcanceled\tsub_1TBMQDLr7RI36Vz70xd2B4W0\n60002\tNULL\tcanceled\tsub_1TBMPALr7RI36Vz7AOv9CPV8\n60001\tessencial\tcanceled\tsub_1TBM9XLr7RI36Vz7Lied3xJk\n3\tNULL\tcanceled\tsub_1T9Us3Lr7RI36Vz7avJWT41U\n2\tNULL\tincomplete\tsub_1T9UijLr7RI36Vz7Bx1ZMjlo\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

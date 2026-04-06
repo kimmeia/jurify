@@ -1,0 +1,43 @@
+{
+  "query": "SELECT u.id, u.name, u.email, u.role, u.stripeCustomerId, s.id as sub_id, s.status, s.planId, s.stripeSubscriptionId FROM users u LEFT JOIN subscriptions s ON u.id = s.userId ORDER BY u.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 251zJLoVRHq5PUy.14d127b9599c --database mm4erxc6TGQp4C3DQqc4wh --execute SELECT u.id, u.name, u.email, u.role, u.stripeCustomerId, s.id as sub_id, s.status, s.planId, s.stripeSubscriptionId FROM users u LEFT JOIN subscriptions s ON u.id = s.userId ORDER BY u.id;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Rafael Rocha",
+      "email": "agenciaboyadjianmkt@gmail.com",
+      "role": "admin",
+      "stripeCustomerId": "NULL",
+      "sub_id": "NULL",
+      "status": "NULL",
+      "planId": "NULL",
+      "stripeSubscriptionId": "NULL"
+    },
+    {
+      "id": "60001",
+      "name": "Rafael Rocha",
+      "email": "mktrafaelrocha@gmail.com",
+      "role": "user",
+      "stripeCustomerId": "NULL",
+      "sub_id": "NULL",
+      "status": "NULL",
+      "planId": "NULL",
+      "stripeSubscriptionId": "NULL"
+    },
+    {
+      "id": "60078",
+      "name": "Rafael Rocha",
+      "email": "boyadjianmkt@gmail.com",
+      "role": "user",
+      "stripeCustomerId": "NULL",
+      "sub_id": "NULL",
+      "status": "NULL",
+      "planId": "NULL",
+      "stripeSubscriptionId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tstripeCustomerId\tsub_id\tstatus\tplanId\tstripeSubscriptionId\n1\tRafael Rocha\tagenciaboyadjianmkt@gmail.com\tadmin\tNULL\tNULL\tNULL\tNULL\tNULL\n60001\tRafael Rocha\tmktrafaelrocha@gmail.com\tuser\tNULL\tNULL\tNULL\tNULL\tNULL\n60078\tRafael Rocha\tboyadjianmkt@gmail.com\tuser\tNULL\tNULL\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 103
+}

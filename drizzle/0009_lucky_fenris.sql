@@ -1,0 +1,1 @@
+ALTER TABLE `movimentacoes_processo` ADD `orgaoJulgador` varchar(255);

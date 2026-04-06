@@ -1,0 +1,1 @@
+ALTER TABLE `subscriptions` ADD `planId` varchar(64);

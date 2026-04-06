@@ -1,0 +1,100 @@
+{
+  "query": "SELECT s.id, s.userId, s.stripeSubscriptionId, s.planId, s.status, s.cancelAtPeriodEnd, s.currentPeriodEnd FROM subscriptions s WHERE s.userId = 60001 ORDER BY s.createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 251zJLoVRHq5PUy.14d127b9599c --database mm4erxc6TGQp4C3DQqc4wh --execute SELECT s.id, s.userId, s.stripeSubscriptionId, s.planId, s.status, s.cancelAtPeriodEnd, s.currentPeriodEnd FROM subscriptions s WHERE s.userId = 60001 ORDER BY s.createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "90002",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBQWRLr7RI36Vz7ORdeB4AW",
+      "planId": "essencial",
+      "status": "active",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "90001",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBQVNLr7RI36Vz7d7rzHyst",
+      "planId": "ilimitado",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "60006",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBMmjLr7RI36Vz7mwstmY79",
+      "planId": "profissional",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "60005",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBMSWLr7RI36Vz7nNE11PSX",
+      "planId": "NULL",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "60004",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBMR7Lr7RI36Vz7yscyppTU",
+      "planId": "NULL",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "60003",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBMQDLr7RI36Vz70xd2B4W0",
+      "planId": "NULL",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "60002",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBMPALr7RI36Vz7AOv9CPV8",
+      "planId": "NULL",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "60001",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1TBM9XLr7RI36Vz7Lied3xJk",
+      "planId": "essencial",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "3",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1T9Us3Lr7RI36Vz7avJWT41U",
+      "planId": "NULL",
+      "status": "canceled",
+      "cancelAtPeriodEnd": "1",
+      "currentPeriodEnd": "NULL"
+    },
+    {
+      "id": "2",
+      "userId": "60001",
+      "stripeSubscriptionId": "sub_1T9UijLr7RI36Vz7Bx1ZMjlo",
+      "planId": "NULL",
+      "status": "incomplete",
+      "cancelAtPeriodEnd": "0",
+      "currentPeriodEnd": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tstripeSubscriptionId\tplanId\tstatus\tcancelAtPeriodEnd\tcurrentPeriodEnd\n90002\t60001\tsub_1TBQWRLr7RI36Vz7ORdeB4AW\tessencial\tactive\t0\tNULL\n90001\t60001\tsub_1TBQVNLr7RI36Vz7d7rzHyst\tilimitado\tcanceled\t0\tNULL\n60006\t60001\tsub_1TBMmjLr7RI36Vz7mwstmY79\tprofissional\tcanceled\t0\tNULL\n60005\t60001\tsub_1TBMSWLr7RI36Vz7nNE11PSX\tNULL\tcanceled\t0\tNULL\n60004\t60001\tsub_1TBMR7Lr7RI36Vz7yscyppTU\tNULL\tcanceled\t0\tNULL\n60003\t60001\tsub_1TBMQDLr7RI36Vz70xd2B4W0\tNULL\tcanceled\t0\tNULL\n60002\t60001\tsub_1TBMPALr7RI36Vz7AOv9CPV8\tNULL\tcanceled\t0\tNULL\n60001\t60001\tsub_1TBM9XLr7RI36Vz7Lied3xJk\tessencial\tcanceled\t0\tNULL\n3\t60001\tsub_1T9Us3Lr7RI36Vz7avJWT41U\tNULL\tcanceled\t1\tNULL\n2\t60001\tsub_1T9UijLr7RI36Vz7Bx1ZMjlo\tNULL\tincomplete\t0\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 114
+}

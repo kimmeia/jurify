@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE user_credits SET creditsTotal = 30 + 9, creditsUsed = 9, currentPlanId = 'essencial' WHERE userId = 60001;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 251zJLoVRHq5PUy.14d127b9599c --database mm4erxc6TGQp4C3DQqc4wh --execute UPDATE user_credits SET creditsTotal = 30 + 9, creditsUsed = 9, currentPlanId = 'essencial' WHERE userId = 60001;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 73
+}
