@@ -8,12 +8,13 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import {
-  criarContato, listarContatos, atualizarContato, excluirContato,
+  criarContato, listarContatos, atualizarContato,
   criarConversa, listarConversas, atualizarConversa, excluirConversa,
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
+import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
 const log = createLogger("escritorio-router-crm");
 
@@ -69,8 +70,10 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
       if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") throw new Error("Sem permissão.");
-      await excluirContato(input.id, esc.escritorio.id);
-      return { success: true };
+      // Cascata: cancela cobranças no Asaas + deleta todos os dados
+      // vinculados (conversas, mensagens, leads, tarefas, arquivos, etc).
+      const resultado = await excluirClienteEmCascata(input.id, esc.escritorio.id);
+      return resultado;
     }),
 
   // ─── Conversas ─────────────────────────────────────────────────────────────
