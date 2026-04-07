@@ -31,11 +31,37 @@ const log = createLogger("meta-channels");
 
 // ─── Configuração Meta (compartilhada entre os 3 canais) ──────────────────────
 
+interface MetaAppConfig {
+  appId: string;
+  appSecret: string;
+  configId?: string;
+}
+
 /**
- * Retorna o App ID e Config ID cadastrados pelo admin.
- * O App Secret nunca é exposto ao frontend.
+ * Retorna o App ID, App Secret e Config ID do app Meta.
+ *
+ * Ordem de prioridade:
+ *   1. Variáveis de ambiente (META_APP_ID, META_APP_SECRET, META_CONFIG_ID)
+ *   2. Tabela `adminIntegracoes` (compatibilidade legado)
+ *
+ * Variáveis de ambiente são preferidas porque:
+ *   - Não exigem painel admin no app pra configurar
+ *   - São mais seguras (não passam pelo banco/criptografia)
+ *   - Funcionam em deploy headless (Railway, Vercel, etc.)
  */
-async function getMetaAppConfig() {
+async function getMetaAppConfig(): Promise<MetaAppConfig | null> {
+  // 1. Tenta env vars primeiro
+  const envAppId = process.env.META_APP_ID;
+  const envAppSecret = process.env.META_APP_SECRET;
+  if (envAppId && envAppSecret) {
+    return {
+      appId: envAppId,
+      appSecret: envAppSecret,
+      configId: process.env.META_CONFIG_ID || undefined,
+    };
+  }
+
+  // 2. Fallback para o banco (legado — admin cadastrava via painel)
   const db = await getDb();
   if (!db) return null;
   try {
@@ -52,7 +78,12 @@ async function getMetaAppConfig() {
       appSecret?: string;
       configId?: string;
     };
-    return config;
+    if (!config.appId || !config.appSecret) return null;
+    return {
+      appId: config.appId,
+      appSecret: config.appSecret,
+      configId: config.configId,
+    };
   } catch (err) {
     log.warn({ err: String(err) }, "Falha ao carregar config Meta");
     return null;
@@ -67,7 +98,7 @@ async function exchangeCodeForToken(code: string): Promise<string> {
   const config = await getMetaAppConfig();
   if (!config?.appId || !config?.appSecret) {
     throw new Error(
-      "Meta API não configurada. Peça ao administrador para cadastrar em Admin → Integrações.",
+      "Meta API não configurada. Defina META_APP_ID e META_APP_SECRET nas variáveis de ambiente do servidor.",
     );
   }
 
