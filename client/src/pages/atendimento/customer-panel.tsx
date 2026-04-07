@@ -160,7 +160,7 @@ export function CustomerPanel({
           <p className="text-[11px] text-muted-foreground">Nenhum processo ativo.</p>
         ) : (
           <div className="space-y-1.5">
-            {processos.slice(0, 3).map((p) => (
+            {processos.slice(0, 3).map((p: any) => (
               <div
                 key={p.id}
                 className="text-[11px] rounded border bg-muted/20 px-2 py-1.5 hover:bg-muted/40 cursor-pointer"
@@ -171,6 +171,14 @@ export function CustomerPanel({
                   {p.tribunal && (
                     <Badge variant="outline" className="text-[8px] px-1 py-0">
                       {p.tribunal}
+                    </Badge>
+                  )}
+                  {p.fonte === "judit" && (
+                    <Badge
+                      variant="outline"
+                      className="text-[8px] px-1 py-0 bg-violet-50 text-violet-700 border-violet-200"
+                    >
+                      Judit
                     </Badge>
                   )}
                 </div>
@@ -575,15 +583,18 @@ function CriarNotaInline({ contatoId, onSuccess }: { contatoId: number; onSucces
 }
 
 // ─── Adicionar processo inline (popover) ─────────────────────────────────────
+//
+// Usa o Judit.IO como provedor (mais rápido, mais confiável e cobre mais
+// tribunais que o DataJud). Custa créditos do plano Judit do escritório.
 
 function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [cnj, setCnj] = useState("");
   const [apelido, setApelido] = useState("");
 
-  const mut = trpc.processos.adicionar.useMutation({
+  const mut = trpc.juditOperacoes.criarMonitoramento.useMutation({
     onSuccess: () => {
-      toast.success("Processo adicionado ao monitoramento");
+      toast.success("Processo monitorado via Judit.IO — atualizações diárias ativadas");
       setCnj("");
       setApelido("");
       setOpen(false);
@@ -617,16 +628,17 @@ function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
           className="h-8 text-xs"
         />
         <p className="text-[10px] text-muted-foreground">
-          O processo será consultado no DataJud e adicionado à lista de monitorados.
+          Monitoramento via <strong>Judit.IO</strong> com atualizações diárias.
+          Necessário ter plano Judit ativo no escritório.
         </p>
         <Button
           size="sm"
           className="w-full h-8 text-xs"
           onClick={() => mut.mutate({ numeroCnj: cnj.trim(), apelido: apelido || undefined })}
-          disabled={!cnj.trim() || mut.isPending}
+          disabled={cnj.trim().length < 20 || mut.isPending}
         >
           {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
-          Adicionar
+          Monitorar
         </Button>
       </PopoverContent>
     </Popover>
