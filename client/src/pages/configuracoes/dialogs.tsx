@@ -694,28 +694,32 @@ export function CalcomDialog({ open, onClose, canEdit }: { open: boolean; onClos
 }
 
 // ─── ChatGPT Dialog ─────────────────────────────────────────────────────────
+//
+// Armazena APENAS a API Key compartilhada da OpenAI para o escritório.
+// Os agentes (com prompt, modelo, comportamento) são criados/gerenciados
+// na aba "Agentes de IA". Esta tela é apenas pra cadastrar a credencial
+// uma única vez por escritório.
 
 export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClose: () => void; canEdit: boolean }) {
   const [apiKey, setApiKey] = useState("");
-  const [modelo, setModelo] = useState("gpt-4o-mini");
-  const [prompt, setPrompt] = useState("Você é um assistente jurídico prestativo. Responda de forma educada, profissional e concisa às perguntas dos clientes. Se não souber a resposta, sugira que o cliente agende uma consulta.");
-  const [ativo, setAtivo] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
   const chatgptCanal = (canaisData?.canais || []).find((c: any) => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"));
 
   const criarMut = trpc.configuracoes.criarCanal.useMutation({
-    onSuccess: () => { toast.success("ChatGPT configurado com sucesso!"); refetch(); onClose(); },
+    onSuccess: () => { toast.success("Chave OpenAI salva! Agora crie agentes em 'Agentes de IA'."); refetch(); onClose(); setApiKey(""); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const atualizarMut = trpc.configuracoes.atualizarConfigCanal.useMutation({
-    onSuccess: () => { toast.success("ChatGPT atualizado!"); refetch(); onClose(); },
+    onSuccess: () => { toast.success("Chave OpenAI atualizada!"); refetch(); onClose(); setApiKey(""); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const handleSalvar = () => {
-    if (!apiKey) { toast.error("Informe a API Key"); return; }
-    const config = { openaiApiKey: apiKey, modelo, prompt, ativo: ativo ? "true" : "false" };
+    if (!apiKey || apiKey.trim().length < 20) { toast.error("Informe uma API Key válida (sk-...)"); return; }
+    // Mantém o canal como "ChatGPT Bot" mas só com a key — os agentes herdam dela
+    const config = { openaiApiKey: apiKey.trim() };
     if (chatgptCanal) {
       atualizarMut.mutate({ canalId: chatgptCanal.id, config });
     } else {
@@ -723,52 +727,64 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
     }
   };
 
+  const conectado = !!chatgptCanal;
+  const isPending = criarMut.isPending || atualizarMut.isPending;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-xl shadow">🤖</div>
-            ChatGPT — Chatbot Inteligente
+            <div>
+              <span>OpenAI / ChatGPT</span>
+              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
+            </div>
           </DialogTitle>
         </DialogHeader>
+
         <div className="space-y-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Salve a sua chave da OpenAI uma única vez. Depois, crie e personalize
+            seus agentes de IA (prompt, modelo, canal vinculado) na aba <strong>Agentes de IA</strong>.
+          </p>
+
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">API Key da OpenAI *</Label>
-            <Input type="password" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value={apiKey} onChange={(e) => setApiKey(e.target.value)} disabled={!canEdit} />
-            <p className="text-[10px] text-muted-foreground">Gere em <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">platform.openai.com/api-keys</a></p>
+            <Label className="text-xs font-medium">API Key da OpenAI {conectado ? "(deixe vazio para manter a atual)" : "*"}</Label>
+            <div className="flex gap-2">
+              <Input
+                type={showKey ? "text" : "password"}
+                placeholder="sk-..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={!canEdit}
+                className="font-mono text-sm"
+              />
+              <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => setShowKey(!showKey)}>
+                <Eye className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Gere em <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">platform.openai.com/api-keys</a>.
+              A chave é criptografada (AES-256-GCM) antes de ir pro banco.
+            </p>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Modelo</Label>
-            <Select value={modelo} onValueChange={setModelo} disabled={!canEdit}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini (rápido)</SelectItem>
-                <SelectItem value="gpt-4o">GPT-4o (inteligente)</SelectItem>
-                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (barato)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Prompt do Sistema</Label>
-            <Textarea rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} disabled={!canEdit} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={ativo} onCheckedChange={setAtivo} disabled={!canEdit} />
-            <Label className="text-xs">Chatbot ativo (responde automaticamente)</Label>
-          </div>
-          <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 p-3">
-            <p className="text-xs text-green-700 font-medium">Como funciona</p>
-            <p className="text-[11px] text-green-600 mt-1">
-              Quando ativo, o chatbot responde mensagens do WhatsApp automaticamente. Se o cliente pedir atendente humano, a conversa é transferida.
+
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 p-3 space-y-1">
+            <p className="text-xs font-semibold text-blue-700">📌 Próximo passo</p>
+            <p className="text-[11px] text-blue-600">
+              Após salvar a chave, vá em <strong>Configurações → Agentes de IA</strong> para criar
+              chatbots com prompts personalizados, vincular a canais (WhatsApp, Instagram) e ativar
+              respostas automáticas.
             </p>
           </div>
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSalvar} disabled={!apiKey || criarMut.isPending || atualizarMut.isPending || !canEdit}>
-            {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
-            {chatgptCanal ? "Atualizar" : "Salvar Configuração"}
+          <Button onClick={handleSalvar} disabled={(!apiKey && !conectado) || isPending || !canEdit}>
+            {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
+            {conectado ? "Atualizar chave" : "Salvar chave"}
           </Button>
         </DialogFooter>
       </DialogContent>
