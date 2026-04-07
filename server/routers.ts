@@ -6,15 +6,8 @@
  * e compõe o `appRouter` final.
  */
 
-import { COOKIE_NAME, SESSION_DURATION_MS } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
-import { sdk } from "./_core/sdk";
-import { upsertUser, getUserByOpenId, getDb } from "./db";
-import { users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
+import { router } from "./_core/trpc";
 
 // Cálculos
 import { financiamentoRouter } from "./calculos/router-financiamento";
@@ -54,6 +47,7 @@ import { asaasRouter } from "./integracoes/router-asaas";
 import { uploadRouter } from "./upload/upload-route";
 
 // Sub-routers extraídos
+import { authRouter } from "./routers/auth";
 import { subscriptionRouter } from "./routers/subscription";
 import { whatsappCoexRouter } from "./routers/whatsapp-coex";
 import { metaChannelsRouter } from "./routers/meta-channels";
@@ -65,78 +59,8 @@ import { adminRouter } from "./routers/admin";
 export const appRouter = router({
   system: systemRouter,
 
-  auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-
-    /**
-     * Login de demonstração — só funciona se ALLOW_DEV_LOGIN=true.
-     *
-     * Cria/encontra um usuário "demo@jurify.dev" com role admin, gera o
-     * session token JWT e seta o cookie. Permite testar o sistema completo
-     * sem precisar configurar um provedor OAuth real.
-     *
-     * NUNCA habilite isso em produção real (com clientes reais), pois
-     * qualquer pessoa que conheça a URL pode logar como admin.
-     */
-    devLoginEnabled: publicProcedure.query(() => {
-      return process.env.ALLOW_DEV_LOGIN === "true";
-    }),
-
-    devLogin: publicProcedure
-      .input(
-        z.object({
-          role: z.enum(["user", "admin"]).default("admin"),
-        }).optional(),
-      )
-      .mutation(async ({ ctx, input }) => {
-        if (process.env.ALLOW_DEV_LOGIN !== "true") {
-          throw new Error("Login de demonstração desabilitado.");
-        }
-
-        const role = input?.role ?? "admin";
-        const openId = role === "admin" ? "demo-admin-jurify" : "demo-user-jurify";
-        const email = role === "admin" ? "demo-admin@jurify.dev" : "demo-user@jurify.dev";
-        const name = role === "admin" ? "Admin Demonstração" : "Usuário Demonstração";
-
-        // Cria/atualiza o usuário demo
-        await upsertUser({
-          openId,
-          name,
-          email,
-          loginMethod: "demo",
-          lastSignedIn: new Date(),
-        });
-
-        // Garante que tem o role correto (upsert não atualiza role)
-        const db = await getDb();
-        if (db) {
-          await db
-            .update(users)
-            .set({ role })
-            .where(eq(users.openId, openId));
-        }
-
-        // Gera o session token
-        const sessionToken = await sdk.createSessionToken(openId, {
-          name,
-          expiresInMs: SESSION_DURATION_MS,
-        });
-
-        // Seta o cookie
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, {
-          ...cookieOptions,
-          maxAge: SESSION_DURATION_MS,
-        });
-
-        return { success: true, role, name } as const;
-      }),
-  }),
+  // Autenticação própria — email/senha + Google Sign-In
+  auth: authRouter,
 
   // Assinaturas e Stripe
   subscription: subscriptionRouter,

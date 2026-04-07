@@ -11,10 +11,23 @@ export const users = mysqlTable("users", {
    * Use this for relations between tables.
    */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  /**
+   * Identificador único do usuário. Pode ser:
+   * - `email-{base64email}` para usuários cadastrados via email/senha
+   * - `google-{googleSub}` para usuários cadastrados via Google
+   * - O openId real do Manus OAuth (legado)
+   */
+  openId: varchar("openId", { length: 128 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  /**
+   * Hash da senha (scrypt) para usuários cadastrados via email/senha.
+   * Formato: `{salt}:{hash}` em hex. Null para usuários OAuth (Google).
+   */
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  /** Sub do Google (id único do usuário no Google). Null para email/senha. */
+  googleSub: varchar("googleSub", { length: 128 }),
+  /** Método de login: 'email', 'google', 'manus' (legado), 'demo' */
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),

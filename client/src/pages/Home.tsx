@@ -1,7 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { getLoginUrl, isOAuthConfigured } from "@/const";
 import {
   Calculator,
   Landmark,
@@ -10,13 +8,17 @@ import {
   Receipt,
   ShieldCheck,
   TrendingUp,
-  ArrowRight,
-  Loader2,
-  Sparkles,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { toast } from "sonner";
+import { AuthForms } from "./auth/AuthForms";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const features = [
   { icon: Landmark, label: "Bancário", desc: "Juros, amortização e revisão contratual" },
@@ -30,7 +32,7 @@ const features = [
 export default function Home() {
   const { user, loading, refresh } = useAuth();
   const [, setLocation] = useLocation();
-  const oauthConfigured = isOAuthConfigured();
+  const [authOpen, setAuthOpen] = useState<"login" | "signup" | null>(null);
 
   // Check subscription for user role
   const { data: subscription, isFetched: subFetched } = trpc.subscription.current.useQuery(
@@ -39,34 +41,8 @@ export default function Home() {
       enabled: !!user && user.role === "user",
       retry: false,
       refetchOnWindowFocus: false,
-    }
-  );
-
-  // Verifica se o login de demonstração está habilitado no servidor
-  const { data: devLoginEnabled } = trpc.auth.devLoginEnabled.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const devLoginMut = trpc.auth.devLogin.useMutation({
-    onSuccess: async () => {
-      toast.success("Login de demonstração ativado!");
-      await refresh();
     },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const handleStart = () => {
-    if (oauthConfigured) {
-      window.location.href = getLoginUrl();
-    } else if (devLoginEnabled) {
-      devLoginMut.mutate({ role: "admin" });
-    } else {
-      toast.error(
-        "Login não configurado. Configure VITE_OAUTH_PORTAL_URL ou ALLOW_DEV_LOGIN=true no servidor.",
-      );
-    }
-  };
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -81,11 +57,9 @@ export default function Home() {
     // User: wait for subscription query to finish
     if (!subFetched) return;
 
-    // User with active subscription → dashboard
     if (subscription) {
       setLocation("/dashboard");
     } else {
-      // User without subscription → plans page
       setLocation("/plans");
     }
   }, [loading, user, subscription, subFetched, setLocation]);
@@ -95,7 +69,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero */}
+      {/* ─── Hero ─── */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/3" />
         <div className="relative max-w-5xl mx-auto px-4 pt-20 pb-16 text-center">
@@ -109,45 +83,30 @@ export default function Home() {
             <span className="text-primary">precisos e eficientes</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
-            Simplifique seus cálculos bancários, imobiliários, trabalhistas,
-            tributários, previdenciários e de atualização monetária com nossa
-            plataforma especializada.
+            Simplifique seus cálculos bancários, imobiliários, trabalhistas, tributários,
+            previdenciários e de atualização monetária com nossa plataforma especializada.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
               size="lg"
               className="text-base px-8 shadow-lg hover:shadow-xl transition-all"
-              onClick={handleStart}
-              disabled={devLoginMut.isPending}
+              onClick={() => setAuthOpen("signup")}
             >
-              {devLoginMut.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : !oauthConfigured && devLoginEnabled ? (
-                <Sparkles className="mr-2 h-4 w-4" />
-              ) : null}
-              {!oauthConfigured && devLoginEnabled
-                ? "Entrar em modo demonstração"
-                : "Começar Agora"}
-              {!devLoginMut.isPending && (
-                <ArrowRight className="ml-2 h-4 w-4" />
-              )}
+              Criar conta grátis
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-base px-8"
+              onClick={() => setAuthOpen("login")}
+            >
+              Já tenho conta
             </Button>
           </div>
-
-          {!oauthConfigured && devLoginEnabled && (
-            <p className="text-xs text-muted-foreground mt-3">
-              ⚡ Modo demonstração ativo — você entra como admin sem precisar de senha.
-            </p>
-          )}
-          {!oauthConfigured && !devLoginEnabled && (
-            <p className="text-xs text-amber-600 mt-3">
-              ⚠ Login não configurado. Para testar, defina <code className="font-mono bg-muted px-1 rounded">ALLOW_DEV_LOGIN=true</code> nas variáveis de ambiente.
-            </p>
-          )}
         </div>
       </div>
 
-      {/* Features Grid */}
+      {/* ─── Features Grid ─── */}
       <div className="max-w-5xl mx-auto px-4 py-16">
         <h2 className="text-2xl font-semibold text-center text-foreground mb-10">
           Módulos Disponíveis
@@ -168,12 +127,30 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ─── Footer ─── */}
       <footer className="border-t py-8">
         <div className="max-w-5xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} SaaS de Cálculos. Todos os direitos reservados.
+          &copy; {new Date().getFullYear()} Jurify. Todos os direitos reservados.
         </div>
       </footer>
+
+      {/* ─── Modal de autenticação ─── */}
+      <Dialog open={!!authOpen} onOpenChange={(o) => !o && setAuthOpen(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">
+              {authOpen === "signup" ? "Crie sua conta" : "Bem-vindo de volta"}
+            </DialogTitle>
+          </DialogHeader>
+          <AuthForms
+            defaultTab={authOpen || "login"}
+            onSuccess={async () => {
+              setAuthOpen(null);
+              await refresh();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

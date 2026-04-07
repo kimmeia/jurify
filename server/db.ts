@@ -35,14 +35,14 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "loginMethod", "passwordHash", "googleSub"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
       const value = user[field];
       if (value === undefined) return;
       const normalized = value ?? null;
-      values[field] = normalized;
+      (values as Record<string, unknown>)[field] = normalized;
       updateSet[field] = normalized;
     };
 
@@ -80,6 +80,25 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return undefined;
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** Busca usuário por e-mail (case insensitive). Usado pelo login email/senha. */
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const normalized = email.trim().toLowerCase();
+  const result = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** Busca usuário pelo sub do Google. Usado pelo login Google. */
+export async function getUserByGoogleSub(googleSub: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(users).where(eq(users.googleSub, googleSub)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
