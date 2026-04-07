@@ -55,23 +55,37 @@ function isHarmlessError(msg: string): boolean {
   );
 }
 
+/** Remove linhas que são apenas comentários `-- ...` no início e fim do statement. */
+function stripCommentLines(sql: string): string {
+  return sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
+    .trim();
+}
+
 /**
  * Divide o conteúdo do arquivo .sql em statements individuais.
- * Drizzle usa `--> statement-breakpoint` como separador. Se não tiver,
- * tenta dividir por `;` no final de linha.
+ *
+ * Suporta dois formatos:
+ *  - Drizzle padrão: usa `--> statement-breakpoint` como separador
+ *  - SQL puro: divide por `;` no final de linha
+ *
+ * Para cada statement, remove linhas de comentário inteiras (-- ...) antes
+ * de avaliar se o statement é vazio. Isso evita que statements com
+ * comentários explicativos no topo sejam erroneamente filtrados.
  */
 function splitStatements(sql: string): string[] {
+  let parts: string[];
   if (sql.includes("--> statement-breakpoint")) {
-    return sql
-      .split("--> statement-breakpoint")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    parts = sql.split("--> statement-breakpoint");
+  } else {
+    parts = sql.split(/;\s*\n/);
   }
-  // Fallback: split por `;` mas preserva strings
-  return sql
-    .split(/;\s*\n/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+
+  return parts
+    .map((s) => stripCommentLines(s))
+    .filter((s) => s.length > 0);
 }
 
 export async function runMigrations(): Promise<void> {
@@ -132,6 +146,11 @@ export async function runMigrations(): Promise<void> {
       const fullPath = path.join(dir, file);
       const sql = fs.readFileSync(fullPath, "utf8");
       const statements = splitStatements(sql);
+
+      if (statements.length === 0) {
+        log.warn({ file }, "Migration sem statements executáveis — pulando sem marcar como aplicada");
+        continue;
+      }
 
       log.info({ file, statements: statements.length }, "Aplicando migration");
 
