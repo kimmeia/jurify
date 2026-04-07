@@ -37,6 +37,7 @@ import {
   CalcomIntegration,
 } from "./configuracoes/dialogs";
 import { PermissoesTab, AgentesIaTab } from "./configuracoes/tabs";
+import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -484,88 +485,135 @@ export default function Configuracoes() {
 // ─── Canais de Comunicação Tab ──────────────────────────────────────────────
 
 function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
-  const [openDialog, setOpenDialog] = useState<string | null>(null);
+  const [metaDialog, setMetaDialog] = useState<"whatsapp" | "instagram" | "messenger" | null>(null);
+  const [legacyDialog, setLegacyDialog] = useState<string | null>(null);
+  const [showAvancado, setShowAvancado] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
 
   const canais = canaisData?.canais || [];
+  // Canal "moderno" WhatsApp = whatsapp_api (qualquer nome, exceto ChatGPT bot)
+  const whatsappCanal = canais.find(c => c.tipo === "whatsapp_api" && !(c.nome || "").includes("ChatGPT"));
   const whatsappQrCanal = canais.find(c => c.tipo === "whatsapp_qr");
-  const whatsappApiCanal = canais.find(c => c.tipo === "whatsapp_api" && !(c.nome || "").includes("ChatGPT") && !(c.nome || "").includes("CoEx"));
-  const whatsappCoexCanal = canais.find(c => c.tipo === "whatsapp_api" && (c.nome || "").includes("CoEx"));
   const instagramCanal = canais.find(c => c.tipo === "instagram");
   const facebookCanal = canais.find(c => c.tipo === "facebook");
 
-  const canaisConfig = [
+  // Cards principais: Embedded Signup (fluxo moderno)
+  const canaisPrincipais = [
     {
-      id: "whatsapp_qr",
-      nome: "WhatsApp QR Code",
-      descricao: "Conecte seu WhatsApp pessoal ou business escaneando o QR Code. Mensagens chegam direto no Inbox.",
+      id: "whatsapp" as const,
+      nome: "WhatsApp Business",
+      descricao: "Conecte seu WhatsApp com 1 clique via Facebook. API oficial, sem risco de banimento.",
       logo: "💬",
       cor: "from-emerald-500 to-green-600",
-      status: whatsappQrCanal?.status || "desconectado",
-      conectado: whatsappQrCanal?.status === "conectado",
+      canal: whatsappCanal,
+      conectado: whatsappCanal?.status === "conectado",
+      comErro: whatsappCanal?.status === "erro",
     },
     {
-      id: "whatsapp_coex",
-      nome: "WhatsApp CoEx",
-      descricao: "Coexistência: use o WhatsApp Business App e a Cloud API ao mesmo tempo, sem perder histórico. Oficial da Meta.",
-      logo: "🔗",
-      cor: "from-emerald-600 to-teal-700",
-      status: whatsappCoexCanal?.status || "desconectado",
-      conectado: whatsappCoexCanal?.status === "conectado",
-    },
-    {
-      id: "whatsapp_api",
-      nome: "WhatsApp API Oficial",
-      descricao: "Integração via Meta Business API. Ideal para alto volume de mensagens sem risco de banimento.",
-      logo: "🟢",
-      cor: "from-green-600 to-emerald-700",
-      status: whatsappApiCanal?.status || "desconectado",
-      conectado: whatsappApiCanal?.status === "conectado",
-    },
-    {
-      id: "instagram",
-      nome: "Instagram",
-      descricao: "Receba e responda Direct Messages do Instagram Business diretamente pelo Inbox.",
+      id: "instagram" as const,
+      nome: "Instagram Business",
+      descricao: "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
       logo: "📸",
       cor: "from-pink-500 to-rose-600",
-      status: instagramCanal?.status || "desconectado",
+      canal: instagramCanal,
       conectado: instagramCanal?.status === "conectado",
+      comErro: instagramCanal?.status === "erro",
     },
     {
-      id: "facebook",
+      id: "messenger" as const,
       nome: "Facebook Messenger",
-      descricao: "Conecte sua página do Facebook para atender clientes via Messenger no Inbox.",
+      descricao: "Mensagens da sua página do Facebook direto no Inbox.",
       logo: "💙",
       cor: "from-blue-500 to-indigo-600",
-      status: facebookCanal?.status || "desconectado",
+      canal: facebookCanal,
       conectado: facebookCanal?.status === "conectado",
+      comErro: facebookCanal?.status === "erro",
     },
   ];
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {canaisConfig.map((canal) => (
-          <Card key={canal.id} className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${canal.conectado ? "border-emerald-300" : "border-transparent hover:border-primary/20"}`}
-            onClick={() => setOpenDialog(canal.id)}>
+      {/* Banner explicativo */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <div className="h-8 w-8 rounded-lg bg-[#1877F2] flex items-center justify-center text-white shrink-0">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              Conexão simplificada via Facebook
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+              WhatsApp, Instagram e Messenger agora se conectam com 1 clique. Sem precisar copiar
+              tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Cards principais */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {canaisPrincipais.map((canal) => (
+          <Card
+            key={canal.id}
+            className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${
+              canal.conectado
+                ? "border-emerald-300"
+                : canal.comErro
+                  ? "border-red-300"
+                  : "border-transparent hover:border-primary/20"
+            }`}
+            onClick={() => setMetaDialog(canal.id)}
+          >
             <CardContent className="p-5">
               <div className="flex items-start gap-4">
-                <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${canal.cor} flex items-center justify-center text-2xl shadow-md shrink-0`}>
+                <div
+                  className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${canal.cor} flex items-center justify-center text-2xl shadow-md shrink-0`}
+                >
                   {canal.logo}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="font-semibold text-sm">{canal.nome}</h3>
-                    <Badge variant="outline" className={`text-[10px] ${canal.conectado ? "text-emerald-600 bg-emerald-50 border-emerald-200" : "text-gray-500 bg-gray-50 border-gray-200"}`}>
-                      {canal.conectado ? <><Wifi className="h-3 w-3 mr-1" />Conectado</> : "Não configurado"}
-                    </Badge>
+                    {canal.conectado && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"
+                      >
+                        <Wifi className="h-3 w-3 mr-1" />
+                        Conectado
+                      </Badge>
+                    )}
+                    {canal.comErro && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] text-red-600 bg-red-50 border-red-200"
+                      >
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Erro
+                      </Badge>
+                    )}
+                    {!canal.conectado && !canal.comErro && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] text-gray-500 bg-gray-50 border-gray-200"
+                      >
+                        Não conectado
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">{canal.descricao}</p>
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
-                <Button variant={canal.conectado ? "outline" : "default"} size="sm" className="text-xs">
-                  {canal.conectado ? "Gerenciar" : "Configurar"}
+                <Button
+                  variant={canal.conectado ? "outline" : "default"}
+                  size="sm"
+                  className="text-xs"
+                >
+                  {canal.conectado ? "Gerenciar" : canal.comErro ? "Reconectar" : "Conectar"}
                 </Button>
               </div>
             </CardContent>
@@ -573,12 +621,77 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         ))}
       </div>
 
-      {/* Dialogs dos Canais */}
-      <WhatsAppQRDialog open={openDialog === "whatsapp_qr"} onClose={() => setOpenDialog(null)} canal={whatsappQrCanal} canEdit={canEdit} isDono={isDono} onRefresh={refetch} />
-      <WhatsAppCoExDialog open={openDialog === "whatsapp_coex"} onClose={() => setOpenDialog(null)} canal={whatsappCoexCanal} canEdit={canEdit} onRefresh={refetch} />
-      <WhatsAppAPIDialog open={openDialog === "whatsapp_api"} onClose={() => setOpenDialog(null)} canal={whatsappApiCanal} canEdit={canEdit} onRefresh={refetch} />
-      <InstagramDialog open={openDialog === "instagram"} onClose={() => setOpenDialog(null)} canal={instagramCanal} canEdit={canEdit} onRefresh={refetch} />
-      <FacebookDialog open={openDialog === "facebook"} onClose={() => setOpenDialog(null)} canal={facebookCanal} canEdit={canEdit} onRefresh={refetch} />
+      {/* Opções avançadas (escondidas por padrão) */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowAvancado(!showAvancado)}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+        >
+          {showAvancado ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          Opções avançadas (QR Code, configuração manual)
+        </button>
+
+        {showAvancado && (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Card
+              className="cursor-pointer hover:border-primary/40 transition-colors"
+              onClick={() => setLegacyDialog("whatsapp_qr")}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-gray-500 to-slate-600 flex items-center justify-center text-lg shrink-0">
+                    📱
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold">WhatsApp QR Code</h4>
+                      {whatsappQrCanal?.status === "conectado" && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] text-emerald-600 bg-emerald-50"
+                        >
+                          <Wifi className="h-2.5 w-2.5 mr-0.5" />
+                          Conectado
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Conexão via QR code (alternativa para quem não tem conta Business).
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {/* Dialog unificado para WhatsApp/Instagram/Messenger */}
+      {metaDialog && (
+        <MetaConnectDialog
+          open={!!metaDialog}
+          onClose={() => setMetaDialog(null)}
+          channel={metaDialog}
+          canal={
+            metaDialog === "whatsapp"
+              ? whatsappCanal
+              : metaDialog === "instagram"
+                ? instagramCanal
+                : facebookCanal
+          }
+          onRefresh={refetch}
+        />
+      )}
+
+      {/* Dialog legacy para QR Code (avançado) */}
+      <WhatsAppQRDialog
+        open={legacyDialog === "whatsapp_qr"}
+        onClose={() => setLegacyDialog(null)}
+        canal={whatsappQrCanal}
+        canEdit={canEdit}
+        isDono={isDono}
+        onRefresh={refetch}
+      />
     </>
   );
 }

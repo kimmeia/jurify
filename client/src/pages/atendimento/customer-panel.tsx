@@ -1,0 +1,581 @@
+/**
+ * CustomerPanel — painel lateral "Customer 360" do Atendimento.
+ *
+ * Mostra todo o contexto do cliente em cards colapsáveis:
+ *   • Resumo (avatar, tags, status financeiro em 1 badge)
+ *   • Processos ativos
+ *   • Financeiro (saldo devedor, cobranças ativas, nova cobrança)
+ *   • Negociações (leads em aberto)
+ *   • Tarefas pendentes
+ *   • Próximos compromissos
+ *   • Anotações
+ *   • Assinaturas pendentes
+ *
+ * Sem NAVEGAÇÃO: todas as ações abrem em side panels/dialogs dentro do
+ * próprio atendimento. O atendente nunca sai da conversa.
+ */
+
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  User, Star, DollarSign, Gavel, TrendingUp, CheckSquare, Calendar,
+  StickyNote, PenLine, Plus, Phone, Mail, Loader2, ChevronDown, ChevronRight,
+  AlertTriangle, ExternalLink, Copy,
+} from "lucide-react";
+import { toast } from "sonner";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatBRL(v: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+function formatDate(iso: string | null) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+function daysFromNow(iso: string | null): number | null {
+  if (!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+// ─── Componente ──────────────────────────────────────────────────────────────
+
+export function CustomerPanel({
+  contatoId,
+  onOpenFinanceiro,
+  onOpenAgendar,
+  onOpenWhatsapp,
+}: {
+  contatoId: number;
+  onOpenFinanceiro?: () => void;
+  onOpenAgendar?: () => void;
+  onOpenWhatsapp?: (phone: string) => void;
+}) {
+  const { data, isLoading, refetch } = trpc.customer360.getContext.useQuery(
+    { contatoId },
+    { refetchInterval: 30_000 }, // refresh a cada 30s
+  );
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="h-full flex items-center justify-center py-12 px-4">
+        <p className="text-xs text-muted-foreground text-center">
+          Não foi possível carregar o contexto do cliente.
+        </p>
+      </div>
+    );
+  }
+
+  const { contato, financeiro, leads, tarefas, compromissos, anotacoes, processos, stats } = data;
+  const isVip = contato.tags.some((t) => t.toLowerCase() === "vip");
+
+  // Status financeiro (1 badge)
+  const statusFin = financeiro.vencido > 0
+    ? { label: `${formatBRL(financeiro.vencido)} vencido`, color: "bg-red-50 border-red-200 text-red-700" }
+    : financeiro.pendente > 0
+      ? { label: `${formatBRL(financeiro.pendente)} a receber`, color: "bg-amber-50 border-amber-200 text-amber-700" }
+      : { label: "Em dia", color: "bg-emerald-50 border-emerald-200 text-emerald-700" };
+
+  return (
+    <div className="h-full overflow-y-auto space-y-3 pb-4">
+      {/* ─── Card 1: Resumo (sempre aberto) ─── */}
+      <div className="px-4 pt-4">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-200 to-purple-100 flex items-center justify-center text-sm font-bold text-violet-700 shrink-0">
+            {contato.nome.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm font-semibold truncate">{contato.nome}</p>
+              {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+            </div>
+            {contato.telefone && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Phone className="h-2.5 w-2.5" />
+                {contato.telefone}
+              </p>
+            )}
+            {contato.email && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                <Mail className="h-2.5 w-2.5" />
+                {contato.email}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Tags + contador resumido */}
+        {contato.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {contato.tags.slice(0, 5).map((tag, i) => (
+              <Badge key={i} variant="outline" className="text-[9px] font-normal">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <Badge variant="outline" className={`text-[10px] ${statusFin.color} w-full justify-center py-1`}>
+          <DollarSign className="h-3 w-3 mr-1" />
+          {statusFin.label}
+        </Badge>
+
+        <p className="text-[10px] text-muted-foreground text-center mt-2">
+          {stats.totalProcessos} processo(s) · {stats.totalTarefas} tarefa(s) pendente(s) ·{" "}
+          {stats.totalLeads} lead(s) ativo(s)
+        </p>
+      </div>
+
+      <div className="border-t" />
+
+      {/* ─── Card 2: Processos ativos ─── */}
+      <Section
+        icon={Gavel}
+        iconColor="text-indigo-600"
+        title={`Processos (${processos.length})`}
+        defaultOpen={processos.length > 0}
+      >
+        {processos.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">Nenhum processo ativo.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {processos.slice(0, 3).map((p) => (
+              <div
+                key={p.id}
+                className="text-[11px] rounded border bg-muted/20 px-2 py-1.5 hover:bg-muted/40 cursor-pointer"
+                onClick={() => window.open(`/processos?id=${p.id}`, "_blank")}
+              >
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono truncate flex-1">{p.numeroCnj}</p>
+                  {p.tribunal && (
+                    <Badge variant="outline" className="text-[8px] px-1 py-0">
+                      {p.tribunal}
+                    </Badge>
+                  )}
+                </div>
+                {p.classe && <p className="text-muted-foreground truncate">{p.classe}</p>}
+                {p.ultimaMovimentacao && (
+                  <p className="text-[10px] text-muted-foreground italic truncate mt-0.5">
+                    {p.ultimaMovimentacao}
+                  </p>
+                )}
+              </div>
+            ))}
+            {processos.length > 3 && (
+              <p className="text-[10px] text-muted-foreground text-center">
+                + {processos.length - 3} processo(s)
+              </p>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {/* ─── Card 3: Financeiro ─── */}
+      <Section
+        icon={DollarSign}
+        iconColor="text-emerald-600"
+        title="Financeiro"
+        defaultOpen={financeiro.vencido > 0 || financeiro.pendente > 0}
+      >
+        {!financeiro.vinculado ? (
+          <div className="space-y-2">
+            <p className="text-[11px] text-muted-foreground">
+              Cliente ainda não está vinculado ao Asaas.
+            </p>
+            <Button size="sm" variant="outline" className="h-7 text-[11px] w-full" onClick={onOpenFinanceiro}>
+              <Plus className="h-3 w-3 mr-1" /> Vincular e criar cobrança
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-1 text-center">
+              <div>
+                <p className="text-[10px] text-muted-foreground">Em dia</p>
+                <p className="text-xs font-bold text-emerald-600">{formatBRL(financeiro.pago)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">A receber</p>
+                <p className="text-xs font-bold text-amber-600">{formatBRL(financeiro.pendente)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Vencido</p>
+                <p className="text-xs font-bold text-red-600">{formatBRL(financeiro.vencido)}</p>
+              </div>
+            </div>
+
+            {financeiro.ultimoPagamento && (
+              <p className="text-[10px] text-muted-foreground">
+                Último pagamento: {formatBRL(financeiro.ultimoPagamento.valor)} em{" "}
+                {new Date(financeiro.ultimoPagamento.data).toLocaleDateString("pt-BR")}
+              </p>
+            )}
+
+            {financeiro.cobrancasAtivas.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground">Cobranças ativas:</p>
+                {financeiro.cobrancasAtivas.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`text-[10px] rounded px-2 py-1 flex items-center gap-1.5 ${
+                      c.status === "OVERDUE" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    <span className="font-bold">{formatBRL(parseFloat(c.valor))}</span>
+                    <span className="text-muted-foreground">· venc. {c.vencimento}</span>
+                    {c.invoiceUrl && (
+                      <button
+                        className="ml-auto"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(c.invoiceUrl!);
+                          toast.success("Link copiado");
+                        }}
+                      >
+                        <Copy className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px] w-full"
+              onClick={onOpenFinanceiro}
+            >
+              <Plus className="h-3 w-3 mr-1" /> Nova cobrança
+            </Button>
+          </div>
+        )}
+      </Section>
+
+      {/* ─── Card 4: Leads/negociações ─── */}
+      <Section
+        icon={TrendingUp}
+        iconColor="text-violet-600"
+        title={`Negociações (${leads.length})`}
+        defaultOpen={leads.length > 0}
+      >
+        {leads.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">Nenhuma negociação aberta.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {leads.map((l) => (
+              <div key={l.id} className="text-[11px] rounded border bg-muted/20 px-2 py-1.5">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="text-[9px]">
+                    {l.etapaFunil}
+                  </Badge>
+                  {l.valorEstimado && (
+                    <span className="font-bold text-emerald-600">
+                      {formatBRL(parseFloat(l.valorEstimado))}
+                    </span>
+                  )}
+                </div>
+                {l.observacoes && (
+                  <p className="text-muted-foreground text-[10px] truncate mt-0.5">{l.observacoes}</p>
+                )}
+                {l.probabilidade != null && (
+                  <p className="text-[9px] text-muted-foreground">
+                    Probabilidade: {l.probabilidade}%
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* ─── Card 5: Tarefas ─── */}
+      <Section
+        icon={CheckSquare}
+        iconColor="text-blue-600"
+        title={`Tarefas (${tarefas.length})`}
+        defaultOpen={tarefas.length > 0}
+        headerAction={<CriarTarefaInline contatoId={contatoId} onSuccess={refetch} />}
+      >
+        {tarefas.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">Nenhuma tarefa pendente.</p>
+        ) : (
+          <div className="space-y-1">
+            {tarefas.map((t) => {
+              const dias = daysFromNow(t.dataVencimento);
+              const atrasada = dias !== null && dias < 0;
+              return (
+                <div
+                  key={t.id}
+                  className="text-[11px] rounded px-2 py-1.5 hover:bg-muted/40 flex items-start gap-2"
+                >
+                  <CheckSquare className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate">{t.titulo}</p>
+                    {t.dataVencimento && (
+                      <p
+                        className={`text-[9px] ${atrasada ? "text-red-600 font-medium" : "text-muted-foreground"}`}
+                      >
+                        {atrasada ? `⚠ vencida há ${-dias!}d` : `venc. ${formatDate(t.dataVencimento)}`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {/* ─── Card 6: Próximos compromissos ─── */}
+      <Section
+        icon={Calendar}
+        iconColor="text-amber-600"
+        title={`Compromissos (${compromissos.length})`}
+        headerAction={
+          onOpenAgendar && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-5 w-5 p-0"
+              onClick={onOpenAgendar}
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+          )
+        }
+      >
+        {compromissos.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">Nenhum compromisso futuro.</p>
+        ) : (
+          <div className="space-y-1">
+            {compromissos.map((a) => (
+              <div key={a.id} className="text-[11px] rounded border bg-muted/20 px-2 py-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="truncate font-medium">{a.titulo}</p>
+                  <Badge variant="outline" className="text-[8px] px-1 py-0">
+                    {a.tipo}
+                  </Badge>
+                </div>
+                <p className="text-[9px] text-muted-foreground">
+                  {new Date(a.dataInicio).toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* ─── Card 7: Anotações ─── */}
+      <Section
+        icon={StickyNote}
+        iconColor="text-amber-500"
+        title="Anotações"
+        headerAction={<CriarNotaInline contatoId={contatoId} onSuccess={refetch} />}
+      >
+        {anotacoes.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">Nenhuma anotação.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {anotacoes.map((n) => (
+              <div key={n.id} className="text-[11px] rounded border bg-amber-50/50 px-2 py-1.5">
+                {n.titulo && <p className="font-medium">{n.titulo}</p>}
+                <p className="text-muted-foreground whitespace-pre-wrap line-clamp-3">
+                  {n.conteudo}
+                </p>
+                <p className="text-[9px] text-muted-foreground/60 mt-0.5">
+                  {formatDate(n.createdAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ─── Sub-componente: Section colapsável ──────────────────────────────────────
+
+function Section({
+  icon: Icon,
+  iconColor,
+  title,
+  defaultOpen = false,
+  headerAction,
+  children,
+}: {
+  icon: any;
+  iconColor: string;
+  title: string;
+  defaultOpen?: boolean;
+  headerAction?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="px-4 space-y-2">
+      <div className="flex items-center gap-1">
+        <button
+          className="flex items-center gap-1.5 flex-1 text-left"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? (
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+          )}
+          <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
+          <p className="text-xs font-semibold">{title}</p>
+        </button>
+        {headerAction}
+      </div>
+      {open && <div className="pl-4">{children}</div>}
+    </div>
+  );
+}
+
+// ─── Criar tarefa inline (popover) ───────────────────────────────────────────
+
+function CriarTarefaInline({ contatoId, onSuccess }: { contatoId: number; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [prioridade, setPrioridade] = useState("normal");
+  const [dataVencimento, setDataVencimento] = useState("");
+
+  const mut = trpc.customer360.criarTarefaRapida.useMutation({
+    onSuccess: () => {
+      toast.success("Tarefa criada");
+      setTitulo("");
+      setDataVencimento("");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
+          <Plus className="h-3 w-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 space-y-2" side="left">
+        <p className="text-xs font-semibold">Nova tarefa</p>
+        <Input
+          placeholder="Título"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          className="h-8 text-sm"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={prioridade} onValueChange={setPrioridade}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="baixa">Baixa</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="urgente">Urgente</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            type="date"
+            value={dataVencimento}
+            onChange={(e) => setDataVencimento(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() =>
+            mut.mutate({
+              contatoId,
+              titulo,
+              prioridade: prioridade as any,
+              dataVencimento: dataVencimento
+                ? new Date(dataVencimento + "T23:59:59").toISOString()
+                : undefined,
+            })
+          }
+          disabled={!titulo || mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Criar
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Criar nota inline (popover) ─────────────────────────────────────────────
+
+function CriarNotaInline({ contatoId, onSuccess }: { contatoId: number; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [conteudo, setConteudo] = useState("");
+
+  const mut = trpc.customer360.criarNotaRapida.useMutation({
+    onSuccess: () => {
+      toast.success("Nota salva");
+      setConteudo("");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
+          <Plus className="h-3 w-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 space-y-2" side="left">
+        <p className="text-xs font-semibold">Nova nota</p>
+        <Textarea
+          placeholder="Digite sua nota..."
+          value={conteudo}
+          onChange={(e) => setConteudo(e.target.value)}
+          rows={4}
+          className="text-xs"
+        />
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() => mut.mutate({ contatoId, conteudo })}
+          disabled={!conteudo || mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Salvar
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}

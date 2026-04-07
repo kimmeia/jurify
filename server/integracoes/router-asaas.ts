@@ -648,6 +648,136 @@ export const asaasRouter = router({
     }
   }),
 
+  /** Fluxo de caixa mensal — últimos N meses, agrupado por mês de vencimento/pagamento */
+  cashFlowMensal: protectedProcedure
+    .input(z.object({ meses: z.number().int().min(3).max(24).default(6) }).optional())
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      const db = await getDb();
+      if (!db) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+
+      const meses = input?.meses ?? 6;
+      try {
+        const todas = await db.select().from(asaasCobrancas)
+          .where(eq(asaasCobrancas.escritorioId, esc.escritorio.id));
+
+        const porMes = new Map<string, { recebido: number; pendente: number; vencido: number }>();
+        const hoje = new Date();
+        for (let i = meses - 1; i >= 0; i--) {
+          const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          porMes.set(key, { recebido: 0, pendente: 0, vencido: 0 });
+        }
+
+        let totalRecebido = 0, totalPendente = 0, totalVencido = 0;
+        const hojeStr = hoje.toISOString().slice(0, 10);
+
+        for (const c of todas) {
+          const valor = parseFloat(c.valor) || 0;
+          const pago = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status);
+          const refDate = pago ? (c.dataPagamento || c.vencimento) : c.vencimento;
+          if (!refDate) continue;
+          const mes = refDate.slice(0, 7);
+          const bucket = porMes.get(mes);
+
+          if (pago) {
+            totalRecebido += valor;
+            if (bucket) bucket.recebido += valor;
+          } else if (c.status === "PENDING") {
+            if (c.vencimento < hojeStr) {
+              totalVencido += valor;
+              if (bucket) bucket.vencido += valor;
+            } else {
+              totalPendente += valor;
+              if (bucket) bucket.pendente += valor;
+            }
+          } else if (c.status === "OVERDUE") {
+            totalVencido += valor;
+            if (bucket) bucket.vencido += valor;
+          }
+        }
+
+        const pontos = Array.from(porMes.entries()).map(([mes, v]) => ({
+          mes,
+          recebido: Math.round(v.recebido * 100) / 100,
+          pendente: Math.round(v.pendente * 100) / 100,
+          vencido: Math.round(v.vencido * 100) / 100,
+        }));
+
+        return { pontos, totalRecebido, totalPendente, totalVencido };
+      } catch {
+        return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      }
+    }),
+
+  /** Previsão de recebimentos — próximos N dias, agrupado por semana */
+  forecast: protectedProcedure
+    .input(z.object({ dias: z.number().int().min(7).max(90).default(30) }).optional())
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { semanas: [], total: 0, atrasado: 0 };
+      const db = await getDb();
+      if (!db) return { semanas: [], total: 0, atrasado: 0 };
+
+      const dias = input?.dias ?? 30;
+      try {
+        const hoje = new Date();
+        const fim = new Date();
+        fim.setDate(fim.getDate() + dias);
+        const hojeStr = hoje.toISOString().slice(0, 10);
+        const fimStr = fim.toISOString().slice(0, 10);
+
+        const pendentes = await db.select().from(asaasCobrancas)
+          .where(and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            eq(asaasCobrancas.status, "PENDING"),
+          ));
+
+        const semanas: { semana: string; label: string; valor: number; quantidade: number }[] = [];
+        let total = 0;
+        let atrasado = 0;
+
+        for (let sem = 0; sem < Math.ceil(dias / 7); sem++) {
+          const ini = new Date(hoje);
+          ini.setDate(ini.getDate() + sem * 7);
+          const fimSem = new Date(ini);
+          fimSem.setDate(fimSem.getDate() + 6);
+          const iniStr = ini.toISOString().slice(0, 10);
+          const fimSemStr = fimSem.toISOString().slice(0, 10);
+          semanas.push({
+            semana: iniStr,
+            label: `${ini.getDate()}/${ini.getMonth() + 1} - ${fimSem.getDate()}/${fimSem.getMonth() + 1}`,
+            valor: 0,
+            quantidade: 0,
+          });
+        }
+
+        for (const c of pendentes) {
+          const valor = parseFloat(c.valor) || 0;
+          if (!c.vencimento) continue;
+
+          if (c.vencimento < hojeStr) {
+            atrasado += valor;
+            continue;
+          }
+          if (c.vencimento > fimStr) continue;
+
+          total += valor;
+          const diffDias = Math.floor(
+            (new Date(c.vencimento).getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+          );
+          const idxSem = Math.min(semanas.length - 1, Math.max(0, Math.floor(diffDias / 7)));
+          semanas[idxSem].valor += valor;
+          semanas[idxSem].quantidade += 1;
+        }
+
+        return { semanas, total, atrasado };
+      } catch {
+        return { semanas: [], total: 0, atrasado: 0 };
+      }
+    }),
+
   // ─── CLIENTES ASAAS (CRUD) ─────────────────────────────────────────────
 
   /** Criar cliente direto no Asaas + vincular ao CRM */

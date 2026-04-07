@@ -1,0 +1,469 @@
+/**
+ * Router — Canais Meta (WhatsApp, Instagram, Messenger) via Embedded Signup.
+ *
+ * Este router unifica o fluxo de conexão "Conectar com Facebook" para os três
+ * canais da Meta. Em vez de pedir ao usuário final App ID / App Secret / Page ID /
+ * Access Token manualmente (padrão antigo), usamos o Facebook Login SDK:
+ *
+ *   1. Admin cadastra App ID + App Secret uma única vez em Admin → Integrações
+ *   2. Cliente final clica em "Conectar com Facebook" no card do canal
+ *   3. Popup do Facebook abre, cliente autoriza o escopo necessário
+ *   4. Frontend envia o `code` OAuth para cá
+ *   5. Trocamos o code por access_token
+ *   6. Buscamos os dados do canal (número, nome da página, etc.)
+ *   7. Salvamos o canal criptografado
+ *
+ * Escopos por canal:
+ *   - whatsapp:   whatsapp_business_management, whatsapp_business_messaging
+ *   - instagram:  instagram_basic, instagram_manage_messages, pages_show_list
+ *   - messenger:  pages_messaging, pages_show_list, pages_manage_metadata
+ */
+
+import { z } from "zod";
+import { and, eq } from "drizzle-orm";
+import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import { adminIntegracoes, canaisIntegrados } from "../../drizzle/schema";
+import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("meta-channels");
+
+// ─── Configuração Meta (compartilhada entre os 3 canais) ──────────────────────
+
+/**
+ * Retorna o App ID e Config ID cadastrados pelo admin.
+ * O App Secret nunca é exposto ao frontend.
+ */
+async function getMetaAppConfig() {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const [row] = await db
+      .select()
+      .from(adminIntegracoes)
+      .where(eq(adminIntegracoes.provedor, "whatsapp_cloud"))
+      .limit(1);
+    if (!row?.apiKeyEncrypted || !row?.apiKeyIv || !row?.apiKeyTag) return null;
+    const { decrypt } = await import("../escritorio/crypto-utils");
+    const raw = decrypt(row.apiKeyEncrypted, row.apiKeyIv, row.apiKeyTag);
+    const config = JSON.parse(raw) as {
+      appId?: string;
+      appSecret?: string;
+      configId?: string;
+    };
+    return config;
+  } catch (err) {
+    log.warn({ err: String(err) }, "Falha ao carregar config Meta");
+    return null;
+  }
+}
+
+/**
+ * Troca o `code` OAuth retornado pelo Facebook Login por um access_token
+ * de longa duração usando o App Secret do admin.
+ */
+async function exchangeCodeForToken(code: string): Promise<string> {
+  const config = await getMetaAppConfig();
+  if (!config?.appId || !config?.appSecret) {
+    throw new Error(
+      "Meta API não configurada. Peça ao administrador para cadastrar em Admin → Integrações.",
+    );
+  }
+
+  const axios = (await import("axios")).default;
+  const tokenRes = await axios.get("https://graph.facebook.com/v21.0/oauth/access_token", {
+    params: {
+      client_id: config.appId,
+      client_secret: config.appSecret,
+      code,
+    },
+    timeout: 15000,
+  });
+  const accessToken = tokenRes.data?.access_token;
+  if (!accessToken) throw new Error("Falha ao obter access token do Facebook.");
+  return accessToken;
+}
+
+// ─── Router ────────────────────────────────────────────────────────────────
+
+export const metaChannelsRouter = router({
+  /**
+   * Retorna os parâmetros públicos (não-sensíveis) que o frontend precisa
+   * para inicializar o Facebook Login SDK.
+   */
+  getConfig: protectedProcedure.query(async () => {
+    const config = await getMetaAppConfig();
+    if (!config?.appId) return null;
+    return {
+      appId: config.appId,
+      configId: config.configId || "",
+    };
+  }),
+
+  /**
+   * Conecta WhatsApp Business via Embedded Signup.
+   * Recebe o code OAuth + session_info (waba_id, phone_number_id) e persiste o canal.
+   */
+  connectWhatsApp: protectedProcedure
+    .input(
+      z.object({
+        code: z.string().min(10),
+        wabaId: z.string().optional(),
+        phoneNumberId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const accessToken = await exchangeCodeForToken(input.code);
+
+      // Busca info do telefone
+      let telefone = "";
+      let nomeVerificado = "";
+      if (input.phoneNumberId) {
+        try {
+          const axios = (await import("axios")).default;
+          const phoneRes = await axios.get(
+            `https://graph.facebook.com/v21.0/${input.phoneNumberId}`,
+            {
+              params: { fields: "display_phone_number,verified_name" },
+              headers: { Authorization: `Bearer ${accessToken}` },
+              timeout: 10000,
+            },
+          );
+          telefone = phoneRes.data?.display_phone_number || "";
+          nomeVerificado = phoneRes.data?.verified_name || "";
+        } catch (err) {
+          log.warn({ err: String(err) }, "Falha ao buscar info do telefone WhatsApp");
+        }
+      }
+
+      const { encryptConfig } = await import("../escritorio/crypto-utils");
+      const config = {
+        accessToken,
+        phoneNumberId: input.phoneNumberId || "",
+        wabaId: input.wabaId || "",
+        coexMode: "true",
+      };
+      const { encrypted, iv, tag } = encryptConfig(config);
+
+      const [existente] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+            eq(canaisIntegrados.tipo, "whatsapp_api"),
+          ),
+        )
+        .limit(1);
+
+      if (existente) {
+        await db
+          .update(canaisIntegrados)
+          .set({
+            configEncrypted: encrypted,
+            configIv: iv,
+            configTag: tag,
+            status: "conectado",
+            telefone: telefone || existente.telefone,
+            nome: nomeVerificado ? `WhatsApp (${nomeVerificado})` : existente.nome,
+            mensagemErro: null,
+          })
+          .where(eq(canaisIntegrados.id, existente.id));
+      } else {
+        await db.insert(canaisIntegrados).values({
+          escritorioId: esc.escritorio.id,
+          tipo: "whatsapp_api",
+          nome: nomeVerificado ? `WhatsApp (${nomeVerificado})` : "WhatsApp",
+          status: "conectado",
+          configEncrypted: encrypted,
+          configIv: iv,
+          configTag: tag,
+          telefone,
+        });
+      }
+
+      log.info({ escritorioId: esc.escritorio.id, telefone }, "WhatsApp conectado via Embedded Signup");
+      return { success: true, telefone, nome: nomeVerificado, canal: "whatsapp" as const };
+    }),
+
+  /**
+   * Conecta Instagram Business via Facebook Login.
+   * Recebe o code OAuth e o pageId da página conectada ao Instagram Business.
+   */
+  connectInstagram: protectedProcedure
+    .input(
+      z.object({
+        code: z.string().min(10),
+        pageId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const accessToken = await exchangeCodeForToken(input.code);
+
+      // Busca páginas do usuário e o Instagram Business ligado
+      const axios = (await import("axios")).default;
+      let pageId = input.pageId || "";
+      let pageAccessToken = "";
+      let igUserId = "";
+      let igUsername = "";
+
+      try {
+        // 1. Lista páginas do usuário
+        const pagesRes = await axios.get("https://graph.facebook.com/v21.0/me/accounts", {
+          params: { fields: "id,name,access_token,instagram_business_account", access_token: accessToken },
+          timeout: 10000,
+        });
+        const pages = pagesRes.data?.data || [];
+        const page = pageId ? pages.find((p: any) => p.id === pageId) : pages[0];
+        if (!page) throw new Error("Nenhuma página Facebook com Instagram Business encontrada.");
+
+        pageId = page.id;
+        pageAccessToken = page.access_token;
+
+        // 2. Pega o Instagram Business Account
+        if (page.instagram_business_account?.id) {
+          igUserId = page.instagram_business_account.id;
+          const igRes = await axios.get(
+            `https://graph.facebook.com/v21.0/${igUserId}`,
+            {
+              params: { fields: "username,name", access_token: pageAccessToken },
+              timeout: 10000,
+            },
+          );
+          igUsername = igRes.data?.username || "";
+        }
+      } catch (err: any) {
+        log.error({ err: err.message }, "Falha ao buscar páginas Instagram");
+        throw new Error(
+          "Não foi possível carregar sua conta Instagram. Verifique se a página do Facebook está conectada a uma conta Instagram Business.",
+        );
+      }
+
+      if (!igUserId) {
+        throw new Error(
+          "Instagram Business não encontrado. Converta sua conta em Business no app do Instagram e vincule a uma página Facebook.",
+        );
+      }
+
+      const { encryptConfig } = await import("../escritorio/crypto-utils");
+      const config = {
+        accessToken,
+        pageAccessToken,
+        pageId,
+        igUserId,
+        igUsername,
+      };
+      const { encrypted, iv, tag } = encryptConfig(config);
+
+      const [existente] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+            eq(canaisIntegrados.tipo, "instagram"),
+          ),
+        )
+        .limit(1);
+
+      const nome = igUsername ? `Instagram (@${igUsername})` : "Instagram";
+      if (existente) {
+        await db
+          .update(canaisIntegrados)
+          .set({
+            configEncrypted: encrypted,
+            configIv: iv,
+            configTag: tag,
+            status: "conectado",
+            nome,
+            mensagemErro: null,
+          })
+          .where(eq(canaisIntegrados.id, existente.id));
+      } else {
+        await db.insert(canaisIntegrados).values({
+          escritorioId: esc.escritorio.id,
+          tipo: "instagram",
+          nome,
+          status: "conectado",
+          configEncrypted: encrypted,
+          configIv: iv,
+          configTag: tag,
+        });
+      }
+
+      log.info({ escritorioId: esc.escritorio.id, igUsername }, "Instagram conectado via Facebook Login");
+      return { success: true, username: igUsername, canal: "instagram" as const };
+    }),
+
+  /**
+   * Conecta Messenger (Facebook Page) via Facebook Login.
+   */
+  connectMessenger: protectedProcedure
+    .input(
+      z.object({
+        code: z.string().min(10),
+        pageId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const accessToken = await exchangeCodeForToken(input.code);
+
+      const axios = (await import("axios")).default;
+      let pageId = input.pageId || "";
+      let pageName = "";
+      let pageAccessToken = "";
+
+      try {
+        const pagesRes = await axios.get("https://graph.facebook.com/v21.0/me/accounts", {
+          params: { fields: "id,name,access_token", access_token: accessToken },
+          timeout: 10000,
+        });
+        const pages = pagesRes.data?.data || [];
+        const page = pageId ? pages.find((p: any) => p.id === pageId) : pages[0];
+        if (!page) throw new Error("Nenhuma página Facebook encontrada.");
+        pageId = page.id;
+        pageName = page.name;
+        pageAccessToken = page.access_token;
+      } catch (err: any) {
+        log.error({ err: err.message }, "Falha ao buscar páginas Messenger");
+        throw new Error("Não foi possível carregar suas páginas do Facebook.");
+      }
+
+      const { encryptConfig } = await import("../escritorio/crypto-utils");
+      const config = {
+        accessToken,
+        pageAccessToken,
+        pageId,
+        pageName,
+      };
+      const { encrypted, iv, tag } = encryptConfig(config);
+
+      const [existente] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+            eq(canaisIntegrados.tipo, "facebook"),
+          ),
+        )
+        .limit(1);
+
+      const nome = pageName ? `Messenger (${pageName})` : "Messenger";
+      if (existente) {
+        await db
+          .update(canaisIntegrados)
+          .set({
+            configEncrypted: encrypted,
+            configIv: iv,
+            configTag: tag,
+            status: "conectado",
+            nome,
+            mensagemErro: null,
+          })
+          .where(eq(canaisIntegrados.id, existente.id));
+      } else {
+        await db.insert(canaisIntegrados).values({
+          escritorioId: esc.escritorio.id,
+          tipo: "facebook",
+          nome,
+          status: "conectado",
+          configEncrypted: encrypted,
+          configIv: iv,
+          configTag: tag,
+        });
+      }
+
+      log.info({ escritorioId: esc.escritorio.id, pageName }, "Messenger conectado");
+      return { success: true, pageName, canal: "messenger" as const };
+    }),
+
+  /**
+   * Testa a conexão do canal atualizando info do provedor.
+   * Útil para o indicador de saúde no card de integrações.
+   */
+  testConnection: protectedProcedure
+    .input(z.object({ canalId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const [canal] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.id, input.canalId),
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!canal) throw new Error("Canal não encontrado");
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) {
+        throw new Error("Canal sem configuração");
+      }
+
+      const { decryptConfig } = await import("../escritorio/crypto-utils");
+      const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+
+      const axios = (await import("axios")).default;
+      try {
+        if (canal.tipo === "whatsapp_api" && config.phoneNumberId && config.accessToken) {
+          await axios.get(`https://graph.facebook.com/v21.0/${config.phoneNumberId}`, {
+            params: { fields: "display_phone_number" },
+            headers: { Authorization: `Bearer ${config.accessToken}` },
+            timeout: 8000,
+          });
+        } else if (canal.tipo === "instagram" && config.igUserId && config.pageAccessToken) {
+          await axios.get(`https://graph.facebook.com/v21.0/${config.igUserId}`, {
+            params: { fields: "username", access_token: config.pageAccessToken },
+            timeout: 8000,
+          });
+        } else if (canal.tipo === "facebook" && config.pageId && config.pageAccessToken) {
+          await axios.get(`https://graph.facebook.com/v21.0/${config.pageId}`, {
+            params: { fields: "name", access_token: config.pageAccessToken },
+            timeout: 8000,
+          });
+        } else {
+          throw new Error("Configuração incompleta");
+        }
+
+        await db
+          .update(canaisIntegrados)
+          .set({ status: "conectado", mensagemErro: null, ultimaSync: new Date() })
+          .where(eq(canaisIntegrados.id, input.canalId));
+
+        return { ok: true };
+      } catch (err: any) {
+        const msg = err.response?.data?.error?.message || err.message || "Erro desconhecido";
+        await db
+          .update(canaisIntegrados)
+          .set({ status: "erro", mensagemErro: msg.slice(0, 500) })
+          .where(eq(canaisIntegrados.id, input.canalId));
+        return { ok: false, error: msg };
+      }
+    }),
+});

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { CustomerPanel } from "./atendimento/customer-panel";
 import { DndContext, closestCenter, DragOverlay, useSensor, useSensors, PointerSensor, TouchSensor, useDroppable } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -244,16 +245,136 @@ export default function Atendimento() {
           <TabsTrigger value="pipeline" className="text-xs sm:text-sm gap-1.5"><TrendingUp className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
           <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Dashboard</TabsTrigger>
         </TabsList>
-        <TabsContent value="inbox" className="mt-4"><div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ minHeight: 520 }}>
-          <div className="lg:col-span-1 rounded-xl border bg-card overflow-hidden flex flex-col">
-            <div className="p-3 border-b flex items-center gap-2"><p className="text-sm font-semibold flex-1">Conversas</p><Select value={filtro} onValueChange={setFiltro}><SelectTrigger className="h-7 w-[110px] text-[11px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">Todas</SelectItem><SelectItem value="aguardando">Aguardando</SelectItem><SelectItem value="em_atendimento">Em atend.</SelectItem><SelectItem value="resolvido">Resolvido</SelectItem></SelectContent></Select></div>
-            <ScrollArea className="flex-1">{!convs?.length ? <div className="text-center py-16 px-4"><MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">Nenhuma conversa</p></div> : convs.map((c: any) => (
-              <button key={c.id} className={"w-full text-left px-3 py-3 border-b transition-all hover:bg-muted/40 " + (selId === c.id ? "bg-primary/5 border-l-[3px] border-l-primary" : "border-l-[3px] border-l-transparent")} onClick={() => setSelId(c.id)}>
-                <div className="flex items-center gap-2.5"><div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(c.contatoNome || "?")}</div><div className="flex-1 min-w-0"><div className="flex items-center justify-between"><p className="text-sm font-medium truncate">{c.contatoNome}</p><span className="text-[10px] text-muted-foreground shrink-0 ml-2">{timeAgo(c.ultimaMensagemAt)}</span></div><p className="text-xs text-muted-foreground truncate mt-0.5">{c.ultimaMensagemPreview || "Sem mensagens"}</p><Badge variant="outline" className={"text-[9px] px-1.5 py-0 mt-1 " + (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[c.status as StatusConversa]}</Badge></div></div>
-              </button>))}</ScrollArea>
+        <TabsContent value="inbox" className="mt-4">
+          {/* Layout Customer 360: Lista | Chat | Painel contextual */}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_320px] gap-4" style={{ minHeight: 600 }}>
+            {/* Coluna 1: Lista de conversas */}
+            <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+              <div className="p-3 border-b flex items-center gap-2">
+                <p className="text-sm font-semibold flex-1">Conversas</p>
+                <Select value={filtro} onValueChange={setFiltro}>
+                  <SelectTrigger className="h-7 w-[110px] text-[11px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas</SelectItem>
+                    <SelectItem value="aguardando">Aguardando</SelectItem>
+                    <SelectItem value="em_atendimento">Em atend.</SelectItem>
+                    <SelectItem value="resolvido">Resolvido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <ScrollArea className="flex-1">
+                {!convs?.length ? (
+                  <div className="text-center py-16 px-4">
+                    <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">Nenhuma conversa</p>
+                  </div>
+                ) : (
+                  convs.map((c: any) => (
+                    <button
+                      key={c.id}
+                      className={
+                        "w-full text-left px-3 py-3 border-b transition-all hover:bg-muted/40 " +
+                        (selId === c.id
+                          ? "bg-primary/5 border-l-[3px] border-l-primary"
+                          : "border-l-[3px] border-l-transparent")
+                      }
+                      onClick={() => setSelId(c.id)}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          {initials(c.contatoNome || "?")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium truncate">{c.contatoNome}</p>
+                            <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                              {timeAgo(c.ultimaMensagemAt)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {c.ultimaMensagemPreview || "Sem mensagens"}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className={
+                              "text-[9px] px-1.5 py-0 mt-1 " +
+                              (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
+                            }
+                          >
+                            {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
+                          </Badge>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </ScrollArea>
+            </div>
+
+            {/* Coluna 2: Chat */}
+            <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+              {selId ? (
+                <ChatArea
+                  cid={selId}
+                  convs={convs || []}
+                  onUpdate={rC}
+                  onLeadUpdate={rL}
+                  onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
+                  onTel={hasTwilio ? (p) => setTelPopup(p) : undefined}
+                  onDeleted={() => {
+                    setSelId(null);
+                    rC();
+                  }}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center min-h-[520px]">
+                  <div className="text-center space-y-3">
+                    <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
+                      <MessageCircle className="h-8 w-8 text-muted-foreground/30" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">Selecione uma conversa</p>
+                    <Button variant="outline" size="sm" onClick={() => setShowIniciar(true)}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Iniciar nova
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Coluna 3: Customer 360 Panel */}
+            <div className="rounded-xl border bg-card overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
+              {(() => {
+                const convAtual = (convs || []).find((c: any) => c.id === selId);
+                if (!selId || !convAtual?.contatoId) {
+                  return (
+                    <div className="flex-1 flex items-center justify-center p-6">
+                      <div className="text-center space-y-2">
+                        <div className="h-12 w-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto">
+                          <Users className="h-6 w-6 text-muted-foreground/30" />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Selecione uma conversa para ver o perfil do cliente
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <CustomerPanel
+                    contatoId={convAtual.contatoId}
+                    onOpenWhatsapp={
+                      hasWhatsapp
+                        ? (p) => setWaPopup(p || convAtual.contatoTelefone)
+                        : undefined
+                    }
+                  />
+                );
+              })()}
+            </div>
           </div>
-          <div className="lg:col-span-2 rounded-xl border bg-card overflow-hidden flex flex-col">{selId ? <ChatArea cid={selId} convs={convs || []} onUpdate={rC} onLeadUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onTel={hasTwilio ? (p) => setTelPopup(p) : undefined} onDeleted={() => { setSelId(null); rC(); }} /> : <div className="flex-1 flex items-center justify-center min-h-[520px]"><div className="text-center space-y-3"><div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto"><MessageCircle className="h-8 w-8 text-muted-foreground/30" /></div><p className="text-sm text-muted-foreground">Selecione uma conversa</p><Button variant="outline" size="sm" onClick={() => setShowIniciar(true)}><Plus className="h-3.5 w-3.5 mr-1" /> Iniciar nova</Button></div></div>}</div>
-        </div></TabsContent>
+        </TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} /></TabsContent>
         <TabsContent value="dashboard" className="mt-4"><DashboardAtendimento /></TabsContent>
       </Tabs>
