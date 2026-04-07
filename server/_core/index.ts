@@ -16,6 +16,7 @@ import { iniciarJobs } from "./cron-jobs";
 import { registrarSSE } from "./sse-notifications";
 import { rateLimit, globalApiRateLimit } from "./rate-limit";
 import { createLogger } from "./logger";
+import { runMigrations } from "./auto-migrate";
 
 const log = createLogger("server");
 
@@ -39,6 +40,10 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Roda migrations ANTES de tudo — garante que o schema está atualizado
+  // antes do servidor aceitar qualquer request.
+  await runMigrations();
+
   const app = express();
   const server = createServer(app);
   // Stripe webhook MUST be registered BEFORE express.json()
