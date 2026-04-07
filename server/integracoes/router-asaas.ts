@@ -37,7 +37,7 @@ async function requireEscritorio(userId: number) {
   return result;
 }
 
-async function getAsaasClient(escritorioId: number): Promise<AsaasClient | null> {
+export async function getAsaasClient(escritorioId: number): Promise<AsaasClient | null> {
   const db = await getDb();
   if (!db) return null;
 

@@ -7,6 +7,7 @@ import { eq, and, desc, like, or, sql } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../stripe/plan-limits";
+import { excluirClienteEmCascata } from "./excluir-cliente";
 
 export const clientesRouter = router({
   listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional() }).optional()).query(async ({ ctx, input }) => {
@@ -101,11 +102,11 @@ export const clientesRouter = router({
   excluir: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
     if (!perm.allowed) throw new Error("Sem permissão para excluir clientes.");
-    const db = await getDb(); if (!db) throw new Error("Database indisponível");
-    await db.delete(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.id), eq(clienteAnotacoes.escritorioId, perm.escritorioId)));
-    await db.delete(clienteArquivos).where(and(eq(clienteArquivos.contatoId, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)));
-    await db.delete(contatos).where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)));
-    return { success: true };
+    // Cascata: cancela cobranças no Asaas, deleta espelhos locais,
+    // conversas, mensagens, leads, tarefas, anotações, arquivos e
+    // assinaturas — tudo vinculado a este cliente.
+    const resultado = await excluirClienteEmCascata(input.id, perm.escritorioId);
+    return resultado;
   }),
 
   listarAnotacoes: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
