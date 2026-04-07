@@ -296,15 +296,25 @@ export default function Atendimento() {
                           <p className="text-xs text-muted-foreground truncate mt-0.5">
                             {c.ultimaMensagemPreview || "Sem mensagens"}
                           </p>
-                          <Badge
-                            variant="outline"
-                            className={
-                              "text-[9px] px-1.5 py-0 mt-1 " +
-                              (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
-                            }
-                          >
-                            {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
-                          </Badge>
+                          <div className="flex items-center gap-1 mt-1">
+                            <Badge
+                              variant="outline"
+                              className={
+                                "text-[9px] px-1.5 py-0 " +
+                                (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
+                              }
+                            >
+                              {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
+                            </Badge>
+                            {(c as any).temAtraso && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1.5 py-0 bg-red-50 text-red-700 border-red-300 font-semibold"
+                              >
+                                ⚠ Atraso
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </button>

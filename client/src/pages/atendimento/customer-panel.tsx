@@ -209,11 +209,10 @@ export function CustomerPanel({
         {!financeiro.vinculado ? (
           <div className="space-y-2">
             <p className="text-[11px] text-muted-foreground">
-              Cliente ainda não está vinculado ao Asaas.
+              Cliente ainda não está vinculado ao Asaas. Ao criar a primeira
+              cobrança, o vínculo é feito automaticamente.
             </p>
-            <Button size="sm" variant="outline" className="h-7 text-[11px] w-full" onClick={onOpenFinanceiro}>
-              <Plus className="h-3 w-3 mr-1" /> Vincular e criar cobrança
-            </Button>
+            <CriarCobrancaInline contatoId={contatoId} onSuccess={refetch} fullWidth />
           </div>
         ) : (
           <div className="space-y-2">
@@ -268,51 +267,25 @@ export function CustomerPanel({
               </div>
             )}
 
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-[11px] w-full"
-              onClick={onOpenFinanceiro}
-            >
-              <Plus className="h-3 w-3 mr-1" /> Nova cobrança
-            </Button>
+            <CriarCobrancaInline contatoId={contatoId} onSuccess={refetch} fullWidth />
           </div>
         )}
       </Section>
 
-      {/* ─── Card 4: Leads/negociações ─── */}
+      {/* ─── Card 4: Pipeline ─── */}
       <Section
         icon={TrendingUp}
         iconColor="text-violet-600"
-        title={`Negociações (${leads.length})`}
+        title={`Pipeline (${leads.length})`}
         defaultOpen={leads.length > 0}
         headerAction={<CriarLeadInline contatoId={contatoId} onSuccess={refetch} />}
       >
         {leads.length === 0 ? (
-          <p className="text-[11px] text-muted-foreground">Nenhuma negociação aberta.</p>
+          <p className="text-[11px] text-muted-foreground">Nenhum lead no pipeline.</p>
         ) : (
           <div className="space-y-1.5">
             {leads.map((l) => (
-              <div key={l.id} className="text-[11px] rounded border bg-muted/20 px-2 py-1.5">
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-[9px]">
-                    {l.etapaFunil}
-                  </Badge>
-                  {l.valorEstimado && (
-                    <span className="font-bold text-emerald-600">
-                      {formatBRL(parseFloat(l.valorEstimado))}
-                    </span>
-                  )}
-                </div>
-                {l.observacoes && (
-                  <p className="text-muted-foreground text-[10px] truncate mt-0.5">{l.observacoes}</p>
-                )}
-                {l.probabilidade != null && (
-                  <p className="text-[9px] text-muted-foreground">
-                    Probabilidade: {l.probabilidade}%
-                  </p>
-                )}
-              </div>
+              <EditarLeadInline key={l.id} lead={l} onSuccess={refetch} />
             ))}
           </div>
         )}
@@ -816,6 +789,298 @@ function CriarCompromissoInline({
         >
           {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
           Criar compromisso
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Criar cobrança inline (popover) ─────────────────────────────────────────
+//
+// Substitui o antigo botão "Nova cobrança" que dependia de um callback
+// onOpenFinanceiro nunca conectado. Agora cria a cobrança inline via Asaas.
+
+function CriarCobrancaInline({
+  contatoId,
+  onSuccess,
+  fullWidth = false,
+}: {
+  contatoId: number;
+  onSuccess: () => void;
+  fullWidth?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [valor, setValor] = useState("");
+  const [vencimento, setVencimento] = useState(() => {
+    // Default: vencimento em 7 dias
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [forma, setForma] = useState<"PIX" | "BOLETO" | "CREDIT_CARD" | "UNDEFINED">("PIX");
+  const [descricao, setDescricao] = useState("");
+
+  const mut = trpc.asaas.criarCobranca.useMutation({
+    onSuccess: () => {
+      toast.success("Cobrança criada no Asaas");
+      setValor("");
+      setDescricao("");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const trigger = fullWidth ? (
+    <Button size="sm" variant="outline" className="h-7 text-[11px] w-full">
+      <Plus className="h-3 w-3 mr-1" /> Nova cobrança
+    </Button>
+  ) : (
+    <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
+      <Plus className="h-3 w-3" />
+    </Button>
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent className="w-80 space-y-2" side="left">
+        <p className="text-xs font-semibold flex items-center gap-1.5">
+          <DollarSign className="h-3.5 w-3.5 text-emerald-600" />
+          Nova cobrança
+        </p>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Valor (R$)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="150.00"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-muted-foreground">Vencimento</Label>
+            <Input
+              type="date"
+              value={vencimento}
+              onChange={(e) => setVencimento(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-muted-foreground">Forma</Label>
+            <Select value={forma} onValueChange={(v) => setForma(v as typeof forma)}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PIX">Pix</SelectItem>
+                <SelectItem value="BOLETO">Boleto</SelectItem>
+                <SelectItem value="CREDIT_CARD">Cartão</SelectItem>
+                <SelectItem value="UNDEFINED">Cliente escolhe</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Descrição (opcional)</Label>
+          <Input
+            placeholder="Honorários advocatícios..."
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() => {
+            const v = parseFloat(valor);
+            if (!v || v <= 0) {
+              toast.error("Informe um valor válido");
+              return;
+            }
+            if (!vencimento) {
+              toast.error("Informe a data de vencimento");
+              return;
+            }
+            mut.mutate({
+              contatoId,
+              valor: v,
+              vencimento,
+              formaPagamento: forma,
+              descricao: descricao || undefined,
+            });
+          }}
+          disabled={mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Criar cobrança
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Editar lead inline (popover) ────────────────────────────────────────────
+//
+// Renderiza o card clicável de um lead. Ao clicar, abre popover com os campos
+// etapa do funil + valor estimado + observações, permitindo atualizar sem
+// criar um novo lead.
+
+const ETAPAS_FUNIL_LABELS: Record<string, string> = {
+  novo: "Novo",
+  qualificado: "Qualificado",
+  proposta: "Proposta",
+  negociacao: "Negociação",
+  fechado_ganho: "Fechado ✓",
+  fechado_perdido: "Perdido ✗",
+};
+
+const ETAPAS_FUNIL_COLORS: Record<string, string> = {
+  novo: "bg-blue-50 text-blue-700 border-blue-200",
+  qualificado: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  proposta: "bg-violet-50 text-violet-700 border-violet-200",
+  negociacao: "bg-amber-50 text-amber-700 border-amber-200",
+  fechado_ganho: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  fechado_perdido: "bg-gray-50 text-gray-500 border-gray-200",
+};
+
+type EtapaFunil = "novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido";
+
+function EditarLeadInline({
+  lead,
+  onSuccess,
+}: {
+  lead: any;
+  onSuccess: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [etapa, setEtapa] = useState<EtapaFunil>(lead.etapaFunil);
+  const [valor, setValor] = useState(lead.valorEstimado || "");
+  const [observacoes, setObservacoes] = useState(lead.observacoes || "");
+
+  const mut = trpc.crm.atualizarLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead atualizado");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const excluirMut = trpc.crm.excluirLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead removido");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="w-full text-left text-[11px] rounded border bg-muted/20 px-2 py-1.5 hover:bg-muted/40 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <Badge
+              variant="outline"
+              className={`text-[9px] ${ETAPAS_FUNIL_COLORS[lead.etapaFunil] || ""}`}
+            >
+              {ETAPAS_FUNIL_LABELS[lead.etapaFunil] || lead.etapaFunil}
+            </Badge>
+            {lead.valorEstimado && (
+              <span className="font-bold text-emerald-600">
+                {formatBRL(parseFloat(lead.valorEstimado))}
+              </span>
+            )}
+          </div>
+          {lead.observacoes && (
+            <p className="text-muted-foreground text-[10px] truncate mt-0.5">
+              {lead.observacoes}
+            </p>
+          )}
+          {lead.probabilidade != null && (
+            <p className="text-[9px] text-muted-foreground">
+              Probabilidade: {lead.probabilidade}%
+            </p>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-2" side="left">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold flex items-center gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
+            Editar lead
+          </p>
+          <button
+            className="text-[10px] text-red-600 hover:underline"
+            onClick={() => {
+              if (confirm("Remover este lead do pipeline?")) {
+                excluirMut.mutate({ id: lead.id });
+              }
+            }}
+            disabled={excluirMut.isPending}
+          >
+            Excluir
+          </button>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Etapa (coluna)</Label>
+          <Select value={etapa} onValueChange={(v) => setEtapa(v as EtapaFunil)}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="novo">Novo</SelectItem>
+              <SelectItem value="qualificado">Qualificado</SelectItem>
+              <SelectItem value="proposta">Proposta</SelectItem>
+              <SelectItem value="negociacao">Negociação</SelectItem>
+              <SelectItem value="fechado_ganho">Fechado ganho ✓</SelectItem>
+              <SelectItem value="fechado_perdido">Perdido ✗</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Valor estimado (R$)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="5000.00"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Observações</Label>
+          <Textarea
+            placeholder="Anotações sobre essa negociação..."
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            rows={3}
+            className="text-xs"
+          />
+        </div>
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() =>
+            mut.mutate({
+              id: lead.id,
+              etapaFunil: etapa,
+              valorEstimado: valor || undefined,
+              observacoes: observacoes || undefined,
+            })
+          }
+          disabled={mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Salvar
         </Button>
       </PopoverContent>
     </Popover>

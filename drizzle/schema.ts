@@ -427,6 +427,14 @@ export const contatos = mysqlTable("contatos", {
   escritorioId: int("escritorioIdContato").notNull(),
   nome: varchar("nomeContato", { length: 255 }).notNull(),
   telefone: varchar("telefoneContato", { length: 20 }),
+  /**
+   * Histórico de telefones anteriores (separados por vírgula).
+   * Usado pelo handler do WhatsApp pra reconhecer contatos que tiveram
+   * o telefone alterado, evitando criação de contato duplicado quando
+   * chega mensagem do número anterior. Nunca removemos entradas — só
+   * acrescentamos no início quando o telefone é atualizado.
+   */
+  telefonesAnteriores: text("telefonesAnteriores"),
   email: varchar("emailContato", { length: 320 }),
   cpfCnpj: varchar("cpfCnpj", { length: 18 }),
   origem: mysqlEnum("origemContato", ["whatsapp", "instagram", "facebook", "telefone", "manual", "site"]).default("manual").notNull(),
