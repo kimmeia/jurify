@@ -165,7 +165,7 @@ export const juditUsuarioRouter = router({
         const erros = responses.page_data.filter((r) => r.response_type === "application_error");
         return {
           encontrado: false,
-          mensagem: erros.length > 0 ? (erros[0].response_data?.message || "Processo não encontrado") : "Nenhum resultado encontrado",
+          mensagem: erros.length > 0 ? ((erros[0].response_data as { message?: string })?.message || "Processo não encontrado") : "Nenhum resultado encontrado",
         };
       }
 

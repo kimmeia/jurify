@@ -6,7 +6,7 @@
 import { eq, and, desc, gte, lte, or, asc } from "drizzle-orm";
 import { getDb } from "../db";
 import { agendamentos, agendamentoLembretes, colaboradores, users } from "../../drizzle/schema";
-import type { TipoAgendamento, PrioridadeAgendamento, StatusAgendamento } from "../../shared/agendamento-types";
+import type { TipoAgendamento, PrioridadeAgendamento, StatusAgendamento } from "../../shared/agendamento-constants";
 
 // ─── Agendamentos ────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ export async function criarAgendamento(dados: {
     corHex: dados.corHex ?? "#3b82f6",
   });
 
-  const agendamentoId = (result as any).insertId as number;
+  const agendamentoId = (result as { insertId: number }).insertId;
 
   // Criar lembretes
   if (dados.lembretes && dados.lembretes.length > 0) {

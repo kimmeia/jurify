@@ -7,6 +7,8 @@
  */
 
 import crypto from "crypto";
+import { createLogger } from "../_core/logger";
+const log = createLogger("escritorio-crypto-utils");
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // GCM recomenda 12 bytes
@@ -28,7 +30,7 @@ function getEncryptionKey(): Buffer {
   if (!dbUrl) {
     throw new Error("[Crypto] ENCRYPTION_KEY ou DATABASE_URL deve estar definida.");
   }
-  console.warn("[Crypto] AVISO: Usando chave derivada do DATABASE_URL. Defina ENCRYPTION_KEY antes de ir para produção.");
+  log.warn("[Crypto] AVISO: Usando chave derivada do DATABASE_URL. Defina ENCRYPTION_KEY antes de ir para produção.");
   return crypto.createHash("sha256").update(dbUrl).digest();
 }
 

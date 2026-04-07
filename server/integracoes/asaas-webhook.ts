@@ -24,6 +24,8 @@ import type { Express, Request, Response } from "express";
 import { getDb } from "../db";
 import { asaasConfig, asaasCobrancas, asaasClientes, contatos } from "../../drizzle/schema";
 import { eq, and, or, like } from "drizzle-orm";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
   event: string;
@@ -76,7 +78,7 @@ export function registerAsaasWebhook(app: Express) {
         .limit(1);
 
       if (!cfg) {
-        console.warn(`[Asaas Webhook] Token não reconhecido: ${accessToken.slice(0, 8)}...`);
+        log.warn(`[Asaas Webhook] Token não reconhecido: ${accessToken.slice(0, 8)}...`);
         return res.status(401).json({ error: "Token inválido" });
       }
 
@@ -85,7 +87,7 @@ export function registerAsaasWebhook(app: Express) {
       // ─── EVENTOS DE COBRANÇA ─────────────────────────────────────────
       if (body.event.startsWith("PAYMENT_") && body.payment) {
         const payment = body.payment;
-        console.log(`[Asaas Webhook] Escritório ${escritorioId} | ${body.event} | Payment: ${payment.id} | Status: ${payment.status}`);
+        log.info(`[Asaas Webhook] Escritório ${escritorioId} | ${body.event} | Payment: ${payment.id} | Status: ${payment.status}`);
 
         const [local] = await db.select().from(asaasCobrancas)
           .where(and(
@@ -97,7 +99,7 @@ export function registerAsaasWebhook(app: Express) {
         if (body.event === "PAYMENT_DELETED" || payment.deleted) {
           if (local) {
             await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
-            console.log(`[Asaas Webhook] Cobrança ${payment.id} DELETADA localmente`);
+            log.info(`[Asaas Webhook] Cobrança ${payment.id} DELETADA localmente`);
           }
         } else if (local) {
           // Atualizar registro existente
@@ -136,14 +138,14 @@ export function registerAsaasWebhook(app: Express) {
             dataPagamento: payment.paymentDate || null,
             externalReference: payment.externalReference || null,
           });
-          console.log(`[Asaas Webhook] Cobrança ${payment.id} CRIADA localmente`);
+          log.info(`[Asaas Webhook] Cobrança ${payment.id} CRIADA localmente`);
         }
       }
 
       // ─── EVENTOS DE CLIENTE ──────────────────────────────────────────
       else if (body.event.startsWith("CUSTOMER_") && body.customer) {
         const customer = body.customer;
-        console.log(`[Asaas Webhook] Escritório ${escritorioId} | ${body.event} | Customer: ${customer.id}`);
+        log.info(`[Asaas Webhook] Escritório ${escritorioId} | ${body.event} | Customer: ${customer.id}`);
 
         const [vincLocal] = await db.select().from(asaasClientes)
           .where(and(
@@ -155,7 +157,7 @@ export function registerAsaasWebhook(app: Express) {
         if (body.event === "CUSTOMER_DELETED" || customer.deleted) {
           if (vincLocal) {
             await db.delete(asaasClientes).where(eq(asaasClientes.id, vincLocal.id));
-            console.log(`[Asaas Webhook] Cliente ${customer.id} DELETADO localmente`);
+            log.info(`[Asaas Webhook] Cliente ${customer.id} DELETADO localmente`);
           }
         } else if (body.event === "CUSTOMER_CREATED") {
           if (!vincLocal) {
@@ -205,7 +207,7 @@ export function registerAsaasWebhook(app: Express) {
               cpfCnpj: cpfLimpo,
               nome: customer.name,
             });
-            console.log(`[Asaas Webhook] Cliente ${customer.id} CRIADO localmente (contato ${contatoId})`);
+            log.info(`[Asaas Webhook] Cliente ${customer.id} CRIADO localmente (contato ${contatoId})`);
           }
         } else if (body.event === "CUSTOMER_UPDATED") {
           if (vincLocal) {
@@ -221,14 +223,14 @@ export function registerAsaasWebhook(app: Express) {
               nome: customer.name,
               cpfCnpj: cpfLimpo,
             }).where(eq(asaasClientes.id, vincLocal.id));
-            console.log(`[Asaas Webhook] Cliente ${customer.id} ATUALIZADO localmente`);
+            log.info(`[Asaas Webhook] Cliente ${customer.id} ATUALIZADO localmente`);
           }
         }
       }
 
       return res.status(200).json({ received: true });
     } catch (err: any) {
-      console.error("[Asaas Webhook] Erro:", err.message, err.stack);
+      log.error("[Asaas Webhook] Erro:", err.message, err.stack);
       return res.status(500).json({ error: "Erro interno" });
     }
   });

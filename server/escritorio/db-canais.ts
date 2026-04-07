@@ -71,7 +71,7 @@ export async function criarCanal(dados: {
     status: dados.config ? "conectado" : "desconectado",
   });
 
-  return (result as any).insertId as number;
+  return (result as { insertId: number }).insertId;
 }
 
 /** Atualiza configuração do canal (criptografa novos dados) */

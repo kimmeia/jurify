@@ -413,7 +413,7 @@ function IntegracaoCard({
                   </button>
                 </div>
                 <Button
-                  onClick={handleConnect}
+                  onClick={() => handleConnect()}
                   disabled={isConnecting || !apiKey.trim()}
                   className="shrink-0"
                 >

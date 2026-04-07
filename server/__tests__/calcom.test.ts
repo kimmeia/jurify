@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { CalcomConfig, CalcomBooking, CalcomEventType, CalcomAvailableSlot } from "../../../shared/calcom-types";
-import { CALCOM_STATUS_LABELS } from "../../../shared/calcom-types";
+import type { CalcomConfig, CalcomBooking, CalcomEventType, CalcomAvailableSlot } from "../../shared/calcom-types";
+import { CALCOM_STATUS_LABELS } from "../../shared/calcom-types";
 
 // ─── Mock do CalcomClient (sem dependência de rede) ──────────────────────────
 

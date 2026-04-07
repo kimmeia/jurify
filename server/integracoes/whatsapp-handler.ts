@@ -1,6 +1,8 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { criarContato, listarContatos, criarConversa, listarConversas, enviarMensagem as salvarMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
 import { obterConfigChatBot, gerarRespostaChatBot, converterHistoricoParaChatBot } from "./chatbot-openai";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-whatsapp-handler");
 
 export async function processarMensagemRecebida(canalId: number, escritorioId: number, msg: WhatsappMensagemRecebida) {
   if (msg.isGroup) return { contatoId: 0, conversaId: 0, mensagemId: 0 };
@@ -19,7 +21,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     emitirParaEscritorio(escritorioId, { tipo: "nova_mensagem", titulo: "Nova mensagem", mensagem: `${msg.nome || msg.telefone}: ${(msg.conteudo || "").slice(0, 80)}`, dados: { conversaId, contatoId, canal: "whatsapp" } });
   } catch { /* SSE indisponível */ }
 
-  if (msg.tipo === "texto" && msg.conteudo) { try { await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo); } catch (e: any) { console.error(`[ChatBot] Erro:`, e.message); } }
+  if (msg.tipo === "texto" && msg.conteudo) { try { await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo); } catch (e: any) { log.error(`[ChatBot] Erro:`, e.message); } }
   return { contatoId, conversaId, mensagemId };
 }
 
@@ -39,7 +41,7 @@ async function processarChatBot(escritorioId: number, canalId: number, conversaI
 
 async function enviarResposta(canalId: number, conversaId: number, chatIdExterno: string, resposta: string) {
   await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "saida", tipo: "texto", conteudo: resposta });
-  try { const { getWhatsappManager } = await import("./whatsapp-baileys"); const m = getWhatsappManager(); if (m.isConectado(canalId)) await m.enviarMensagemJid(canalId, chatIdExterno, resposta); } catch (e: any) { console.error(`[ChatBot] Envio WA erro:`, e.message); }
+  try { const { getWhatsappManager } = await import("./whatsapp-baileys"); const m = getWhatsappManager(); if (m.isConectado(canalId)) await m.enviarMensagemJid(canalId, chatIdExterno, resposta); } catch (e: any) { log.error(`[ChatBot] Envio WA erro:`, e.message); }
 }
 
 async function buscarContatoPorTelefone(escritorioId: number, telefone: string) {

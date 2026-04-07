@@ -146,6 +146,10 @@ export interface AnaliseAbusividadeImob {
   taxaAnualCalculada: number;
   taxasEquivalentes: boolean;
   capitalizacao: AnaliseCapitalizacao;
+  /** Indica se foi detectado anatocismo (capitalização composta de juros) — derivado da capitalização */
+  anatocismoDetectado: boolean;
+  /** Detalhes textuais sobre o anatocismo detectado (ou ausência dele) */
+  anatocismoDetalhes: string;
   mipAbusivo: boolean;
   mipDetalhes: string;
   dfiAbusivo: boolean;

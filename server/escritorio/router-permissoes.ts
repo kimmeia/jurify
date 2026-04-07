@@ -105,7 +105,7 @@ export async function criarCargosDefault(escritorioId: number) {
       isDefault: true,
     });
 
-    const cargoId = (result as any).insertId;
+    const cargoId = (result as { insertId: number }).insertId;
 
     // Criar permissões para cada módulo
     for (const [modulo, perm] of Object.entries(perms)) {
@@ -198,7 +198,7 @@ export const permissoesRouter = router({
         isDefault: false,
       });
 
-      const cargoId = (result as any).insertId;
+      const cargoId = (result as { insertId: number }).insertId;
 
       // Criar permissões
       for (const [modulo, perm] of Object.entries(input.permissoes)) {

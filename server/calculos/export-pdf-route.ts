@@ -9,6 +9,8 @@ import type { Express, Request, Response } from "express";
 import { gerarPDF } from "./export-pdf";
 import { sdk } from "../_core/sdk";
 import { storagePut } from "../storage";
+import { createLogger } from "../_core/logger";
+const log = createLogger("calculos-export-pdf-route");
 
 function generateFilename(protocolo?: string): string {
   return protocolo
@@ -49,7 +51,7 @@ export function registerPDFExportRoute(app: Express) {
       res.setHeader("Content-Length", pdfBuffer.length);
       res.send(pdfBuffer);
     } catch (error) {
-      console.error("[PDF Export] Erro ao gerar PDF:", error);
+      log.error({ err: String(error) }, "Erro ao gerar PDF");
       res.status(500).json({ error: "Erro ao gerar PDF" });
     }
   });
@@ -79,7 +81,7 @@ export function registerPDFExportRoute(app: Express) {
       // Upload ao S3
       const { url } = await storagePut(storageKey, pdfBuffer, "application/pdf");
 
-      console.log(`[PDF Share] Parecer "${filename}" uploaded to S3: ${url}`);
+      log.info(`[PDF Share] Parecer "${filename}" uploaded to S3: ${url}`);
 
       res.json({
         url,
@@ -87,7 +89,7 @@ export function registerPDFExportRoute(app: Express) {
         size: pdfBuffer.length,
       });
     } catch (error) {
-      console.error("[PDF Share] Erro ao gerar/enviar PDF:", error);
+      log.error({ err: String(error) }, "Erro ao gerar/enviar PDF compartilhado");
       res.status(500).json({ error: "Erro ao gerar link de compartilhamento" });
     }
   });

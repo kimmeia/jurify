@@ -5,6 +5,8 @@
 
 import type { Express, Request, Response } from "express";
 import type { CalcomWebhookPayload } from "../../shared/calcom-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-calcom-webhook");
 
 export function registerCalcomWebhook(app: Express) {
   app.post("/api/webhooks/calcom", async (req: Request, res: Response) => {
@@ -15,7 +17,7 @@ export function registerCalcomWebhook(app: Express) {
         return res.status(400).json({ error: "Payload inválido" });
       }
 
-      console.log(`[Cal.com Webhook] Evento: ${payload.triggerEvent} — Booking: ${payload.payload?.uid}`);
+      log.info(`[Cal.com Webhook] Evento: ${payload.triggerEvent} — Booking: ${payload.payload?.uid}`);
 
       switch (payload.triggerEvent) {
         case "BOOKING_CREATED":
@@ -29,20 +31,20 @@ export function registerCalcomWebhook(app: Express) {
           break;
         case "BOOKING_COMPLETED":
           // Marcar agendamento como concluído se existir
-          console.log(`[Cal.com Webhook] Booking completado: ${payload.payload?.uid}`);
+          log.info(`[Cal.com Webhook] Booking completado: ${payload.payload?.uid}`);
           break;
         default:
-          console.log(`[Cal.com Webhook] Evento não tratado: ${payload.triggerEvent}`);
+          log.info(`[Cal.com Webhook] Evento não tratado: ${payload.triggerEvent}`);
       }
 
       return res.status(200).json({ received: true });
     } catch (err: any) {
-      console.error("[Cal.com Webhook] Erro:", err.message);
+      log.error("[Cal.com Webhook] Erro:", err.message);
       return res.status(500).json({ error: "Erro interno" });
     }
   });
 
-  console.log("[Cal.com Webhook] Registrado em POST /api/webhooks/calcom");
+  log.info("[Cal.com Webhook] Registrado em POST /api/webhooks/calcom");
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -50,10 +52,10 @@ export function registerCalcomWebhook(app: Express) {
 async function handleBookingCreated(payload: CalcomWebhookPayload) {
   const { id, uid, title, startTime, endTime, attendees, organizer } = payload.payload;
 
-  console.log(`[Cal.com] Novo booking: "${title}" em ${startTime}`);
-  console.log(`[Cal.com]   Organizador: ${organizer?.name} (${organizer?.email})`);
+  log.info(`[Cal.com] Novo booking: "${title}" em ${startTime}`);
+  log.info(`[Cal.com]   Organizador: ${organizer?.name} (${organizer?.email})`);
   if (attendees?.length) {
-    console.log(`[Cal.com]   Participante: ${attendees[0].name} (${attendees[0].email})`);
+    log.info(`[Cal.com]   Participante: ${attendees[0].name} (${attendees[0].email})`);
   }
 
   // TODO: Quando o escritorioId estiver no metadata do booking,
@@ -76,14 +78,14 @@ async function handleBookingCreated(payload: CalcomWebhookPayload) {
 
 async function handleBookingCancelled(payload: CalcomWebhookPayload) {
   const { uid, title } = payload.payload;
-  console.log(`[Cal.com] Booking cancelado: "${title}" (${uid})`);
+  log.info(`[Cal.com] Booking cancelado: "${title}" (${uid})`);
 
   // TODO: Buscar agendamento pelo uid do Cal.com e cancelar
 }
 
 async function handleBookingRescheduled(payload: CalcomWebhookPayload) {
   const { uid, title, startTime, endTime } = payload.payload;
-  console.log(`[Cal.com] Booking reagendado: "${title}" → ${startTime}`);
+  log.info(`[Cal.com] Booking reagendado: "${title}" → ${startTime}`);
 
   // TODO: Buscar agendamento pelo uid e atualizar data
 }

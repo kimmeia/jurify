@@ -13,6 +13,8 @@
 import axios from "axios";
 import type { ModalidadeCredito, TipoPessoa, TipoVinculoConsignado } from "../../shared/financiamento-types";
 import { getCodigoSgs } from "../../shared/financiamento-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("calculos-bcb-taxas-medias");
 
 const BCB_BASE_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs";
 
@@ -117,7 +119,7 @@ export async function buscarTaxaMediaBACEN(
 
   const url = `${BCB_BASE_URL}.${codigoSgs}/dados?formato=json&dataInicial=${formatBCB(dataInicio)}&dataFinal=${formatBCB(dataFim)}`;
 
-  console.log(`[BACEN] Buscando série ${codigoSgs} (${modalidade}${tipoPessoa ? `, ${tipoPessoa}` : ""}): ${url}`);
+  log.info(`[BACEN] Buscando série ${codigoSgs} (${modalidade}${tipoPessoa ? `, ${tipoPessoa}` : ""}): ${url}`);
 
   try {
     const response = await axios.get<DadoSGS[]>(url, {
@@ -134,7 +136,7 @@ export async function buscarTaxaMediaBACEN(
       );
     }
 
-    console.log(`[BACEN] Recebidos ${dados.length} registros. Primeiro: ${dados[0].data}=${dados[0].valor}, Último: ${dados[dados.length - 1].data}=${dados[dados.length - 1].valor}`);
+    log.info(`[BACEN] Recebidos ${dados.length} registros. Primeiro: ${dados[0].data}=${dados[0].valor}, Último: ${dados[dados.length - 1].data}=${dados[dados.length - 1].valor}`);
 
     // Encontrar o dado mais próximo da data do contrato (preferencialmente anterior ou igual)
     const targetTime = dataRef.getTime();
@@ -163,7 +165,7 @@ export async function buscarTaxaMediaBACEN(
     // Validar a taxa antes de retornar
     const validacao = validarTaxa(taxaAnualBruta, taxaMensalBruta, modalidade);
     if (!validacao.valida) {
-      console.warn(`[BACEN] Taxa rejeitada: ${validacao.erro}`);
+      log.warn(`[BACEN] Taxa rejeitada: ${validacao.erro}`);
       throw new Error(
         `Taxa retornada pela API BACEN falhou na validação: ${validacao.erro}. ` +
         `Série SGS ${codigoSgs}, data ${closest.data}, valor bruto: ${closest.valor}% a.a.`
@@ -174,7 +176,7 @@ export async function buscarTaxaMediaBACEN(
     const [dd, mm, yyyy] = closest.data.split("/");
     const dataReferencia = `${yyyy}-${mm}-${dd}`;
 
-    console.log(`[BACEN] Taxa validada: ${taxaAnualBruta}% a.a. (${round4(taxaMensalBruta)}% a.m.) em ${dataReferencia}`);
+    log.info(`[BACEN] Taxa validada: ${taxaAnualBruta}% a.a. (${round4(taxaMensalBruta)}% a.m.) em ${dataReferencia}`);
 
     return {
       taxaMensal: round4(taxaMensalBruta),
@@ -182,7 +184,7 @@ export async function buscarTaxaMediaBACEN(
       dataReferencia,
     };
   } catch (error: any) {
-    console.error(`[BACEN] Erro: ${error.message}`);
+    log.error(`[BACEN] Erro: ${error.message}`);
     // Propagar o erro com mensagem clara — NÃO usar fallback silencioso
     if (error.response?.status === 404) {
       throw new Error(
@@ -232,7 +234,7 @@ export async function buscarTaxaMediaComFallback(
     }
 
     // Apenas erros de rede/timeout usam fallback
-    console.warn(`[BACEN] API indisponível, usando fallback para ${modalidade}:`, msg);
+    log.warn({ modalidade, msg }, "BACEN API indisponível, usando fallback");
 
     const fallbackAnual = FALLBACK_TAXAS_ANUAIS[modalidade] ?? 30.0;
     const taxaMensal = anualParaMensal(fallbackAnual);

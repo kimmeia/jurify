@@ -17,6 +17,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { notificacoes } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { createLogger } from "../_core/logger";
+const log = createLogger("processos-router-notificacoes");
 
 // ============================================================
 // Helper para criar notificações (usado por outros módulos)
@@ -35,7 +37,7 @@ export async function criarNotificacao(params: {
 }): Promise<void> {
   const db = await getDb();
   if (!db) {
-    console.warn("[Notificações] Base de dados indisponível, notificação não criada");
+    log.warn("[Notificações] Base de dados indisponível, notificação não criada");
     return;
   }
 

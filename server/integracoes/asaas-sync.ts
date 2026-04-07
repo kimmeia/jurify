@@ -16,6 +16,8 @@ import { asaasConfig, asaasClientes, asaasCobrancas, contatos } from "../../driz
 import { eq, and } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient } from "./asaas-client";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-asaas-sync");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -72,7 +74,7 @@ export async function syncCobrancasDeCliente(
         if (local) {
           await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
           atualizadas++;
-          console.log(`[Asaas Sync] Cobrança ${cob.id} deletada localmente (excluida no Asaas)`);
+          log.info(`[Asaas Sync] Cobrança ${cob.id} deletada localmente (excluida no Asaas)`);
         }
         continue;
       }
@@ -125,7 +127,7 @@ export async function syncCobrancasDeCliente(
     if (!idsAsaas.has(local.asaasPaymentId)) {
       await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
       atualizadas++;
-      console.log(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
+      log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
     }
   }
 
@@ -156,7 +158,7 @@ export async function syncCobrancasEscritorio(escritorioId: number): Promise<{ c
       const qty = await syncCobrancasDeCliente(client, escritorioId, vinculo.contatoId, vinculo.asaasCustomerId);
       totalCobrancas += qty;
     } catch (err: any) {
-      console.warn(`[Asaas Sync] Erro ao sincronizar cobranças de ${vinculo.asaasCustomerId}: ${err.message}`);
+      log.warn(`[Asaas Sync] Erro ao sincronizar cobranças de ${vinculo.asaasCustomerId}: ${err.message}`);
     }
   }
 
@@ -189,16 +191,16 @@ export async function syncTodosEscritorios(): Promise<void> {
 
   if (escritorios.length === 0) return;
 
-  console.log(`[Asaas Sync] Iniciando sync de ${escritorios.length} escritório(s)...`);
+  log.info(`[Asaas Sync] Iniciando sync de ${escritorios.length} escritório(s)...`);
 
   for (const { escritorioId } of escritorios) {
     try {
       const result = await syncCobrancasEscritorio(escritorioId);
       if (result.cobrancas > 0) {
-        console.log(`[Asaas Sync] Escritório ${escritorioId}: ${result.cobrancas} cobranças sincronizadas`);
+        log.info(`[Asaas Sync] Escritório ${escritorioId}: ${result.cobrancas} cobranças sincronizadas`);
       }
     } catch (err: any) {
-      console.warn(`[Asaas Sync] Erro no escritório ${escritorioId}: ${err.message}`);
+      log.warn(`[Asaas Sync] Erro no escritório ${escritorioId}: ${err.message}`);
     }
   }
 }

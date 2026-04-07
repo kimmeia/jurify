@@ -208,7 +208,7 @@ export const agendaRouter = router({
             local: null,
             tipo: "tarefa",
             status: t.status === "concluida" ? "concluido" : t.status === "cancelada" ? "cancelado" : t.status,
-            prioridade: t.prioridade === "critica" ? "critica" : t.prioridade,
+            prioridade: t.prioridade === "urgente" ? "critica" : t.prioridade,
             responsavelId: t.responsavelId,
             responsavelNome: getColabName(t.responsavelId),
             contatoId: t.contatoId,

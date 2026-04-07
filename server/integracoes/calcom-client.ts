@@ -14,6 +14,8 @@ import type {
   CalcomBooking,
   CalcomAvailableSlot,
 } from "../../shared/calcom-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-calcom-client");
 
 export class CalcomClient {
   private baseUrl: string;
@@ -80,7 +82,7 @@ export class CalcomClient {
         description: et.description || undefined,
       }));
     } catch (err: any) {
-      console.error("[CalcomClient v2] Erro event types:", err.message);
+      log.error("[CalcomClient v2] Erro event types:", err.message);
       return [];
     }
   }
@@ -112,7 +114,7 @@ export class CalcomClient {
       }
       return slots;
     } catch (err: any) {
-      console.error("[CalcomClient v2] Erro slots:", err.message);
+      log.error("[CalcomClient v2] Erro slots:", err.message);
       return [];
     }
   }
@@ -143,7 +145,7 @@ export class CalcomClient {
 
       return this.mapBooking(data.data || data);
     } catch (err: any) {
-      console.error("[CalcomClient v2] Erro criar booking:", err.message);
+      log.error("[CalcomClient v2] Erro criar booking:", err.message);
       return null;
     }
   }
@@ -155,7 +157,7 @@ export class CalcomClient {
       });
       return true;
     } catch (err: any) {
-      console.error("[CalcomClient v2] Erro cancelar:", err.message);
+      log.error("[CalcomClient v2] Erro cancelar:", err.message);
       return false;
     }
   }
@@ -175,7 +177,7 @@ export class CalcomClient {
       const bookings = data.data?.bookings || data.data || data.bookings || [];
       return bookings.map((b: any) => this.mapBooking(b)).filter(Boolean) as CalcomBooking[];
     } catch (err: any) {
-      console.error("[CalcomClient v2] Erro listar bookings:", err.message);
+      log.error("[CalcomClient v2] Erro listar bookings:", err.message);
       return [];
     }
   }
@@ -185,7 +187,7 @@ export class CalcomClient {
       const data = await this.request("GET", `/bookings/${bookingId}`);
       return this.mapBooking(data.data || data.booking || data);
     } catch (err: any) {
-      console.error("[CalcomClient v2] Erro obter booking:", err.message);
+      log.error("[CalcomClient v2] Erro obter booking:", err.message);
       return null;
     }
   }

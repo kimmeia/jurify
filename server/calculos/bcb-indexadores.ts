@@ -10,6 +10,8 @@
 
 import axios from "axios";
 import type { IndexadorCorrecao } from "../../shared/imobiliario-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("calculos-bcb-indexadores");
 
 const BCB_BASE_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs";
 
@@ -126,7 +128,7 @@ export async function buscarIndexadorComFallback(indexador: IndexadorCorrecao): 
   try {
     return await buscarIndexadorBACEN(indexador);
   } catch (err: any) {
-    console.warn(`[BACEN] Falha ao buscar ${indexador}: ${err.message}. Usando referência.`);
+    log.warn(`[BACEN] Falha ao buscar ${indexador}: ${err.message}. Usando referência.`);
     return getFallback(indexador);
   }
 }
@@ -204,7 +206,7 @@ export async function buscarSerieHistoricaComFallback(
   try {
     return await buscarSerieHistorica(indexador, dataInicio, prazoMeses);
   } catch (err: any) {
-    console.warn(`[BACEN] Falha série histórica ${indexador}: ${err.message}`);
+    log.warn(`[BACEN] Falha série histórica ${indexador}: ${err.message}`);
     return null;
   }
 }

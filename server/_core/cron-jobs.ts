@@ -11,6 +11,8 @@ import { getDb } from "../db";
 import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes } from "../../drizzle/schema";
 import { eq, and, lt, sql, or, gte, lte } from "drizzle-orm";
 import { syncTodosEscritorios } from "../integracoes/asaas-sync";
+import { createLogger } from "./logger";
+const log = createLogger("_core-cron-jobs");
 
 /** Marca assinaturas expiradas */
 async function expirarAssinaturas() {
@@ -29,10 +31,10 @@ async function expirarAssinaturas() {
         lt(assinaturasDigitais.expiracaoAt, new Date()),
       ));
 
-    const count = (result as any)?.[0]?.affectedRows || 0;
-    if (count > 0) console.log(`[Cron] ${count} assinatura(s) expirada(s)`);
+    const count = (result as { affectedRows?: number }[] | undefined)?.[0]?.affectedRows || 0;
+    if (count > 0) log.info(`[Cron] ${count} assinatura(s) expirada(s)`);
   } catch (err: any) {
-    console.error("[Cron] Erro ao expirar assinaturas:", err.message);
+    log.error("[Cron] Erro ao expirar assinaturas:", err.message);
   }
 }
 
@@ -41,7 +43,7 @@ async function syncAsaas() {
   try {
     await syncTodosEscritorios();
   } catch (err: any) {
-    console.error("[Cron] Erro ao sincronizar Asaas:", err.message);
+    log.error("[Cron] Erro ao sincronizar Asaas:", err.message);
   }
 }
 
@@ -57,8 +59,9 @@ async function syncAsaas() {
  */
 async function notificarPrazos() {
   try {
-    const db = await getDb();
-    if (!db) return;
+    const dbConn = await getDb();
+    if (!dbConn) return;
+    const db = dbConn;
 
     const now = new Date();
     const em1h = new Date(now.getTime() + 60 * 60 * 1000);
@@ -68,7 +71,7 @@ async function notificarPrazos() {
     let notificadas = 0;
 
     // Helper: criar notificação se não duplicada nas últimas 12h
-    async function notificarSeNovo(userId: number, titulo: string, mensagem: string) {
+    const notificarSeNovo = async (userId: number, titulo: string, mensagem: string) => {
       const limite12h = new Date(now.getTime() - 12 * 60 * 60 * 1000);
       const [existente] = await db.select({ id: notificacoes.id }).from(notificacoes)
         .where(and(
@@ -86,14 +89,14 @@ async function notificarPrazos() {
         tipo: "sistema",
       });
       notificadas++;
-    }
+    };
 
     // Helper: obter userId do colaborador
-    async function getUserId(colabId: number): Promise<number | null> {
+    const getUserId = async (colabId: number): Promise<number | null> => {
       const [c] = await db.select({ userId: colaboradores.userId }).from(colaboradores)
         .where(eq(colaboradores.id, colabId)).limit(1);
       return c?.userId || null;
-    }
+    };
 
     // ─── Compromissos que começam na próxima 1h ─────────────────────────
     const proximos = await db.select().from(agendamentos)
@@ -151,15 +154,15 @@ async function notificarPrazos() {
       await notificarSeNovo(userId, `Tarefa atrasada`, `"${t.titulo}" está atrasada.`);
     }
 
-    if (notificadas > 0) console.log(`[Cron] ${notificadas} notificação(ões) de prazo criada(s)`);
+    if (notificadas > 0) log.info(`[Cron] ${notificadas} notificação(ões) de prazo criada(s)`);
   } catch (err: any) {
-    console.error("[Cron] Erro ao notificar prazos:", err.message);
+    log.error("[Cron] Erro ao notificar prazos:", err.message);
   }
 }
 
 /** Inicializa todos os jobs */
 export function iniciarJobs() {
-  console.log("[Cron] Jobs iniciados");
+  log.info("[Cron] Jobs iniciados");
 
   // Executar imediatamente na inicialização (com delay)
   setTimeout(() => expirarAssinaturas(), 5000);

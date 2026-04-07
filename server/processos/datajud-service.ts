@@ -14,6 +14,8 @@
  */
 
 import type { DadosProcessoDataJud, ConsultaDataJudResult, MovimentacaoProcessual } from "../../shared/processos-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("processos-datajud-service");
 
 const DATAJUD_BASE_URL = "https://api-publica.datajud.cnj.jus.br";
 const DATAJUD_API_KEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
@@ -131,7 +133,7 @@ export async function consultarProcessoDataJud(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      console.error(`[DataJud] Erro HTTP ${response.status}: ${text}`);
+      log.error(`[DataJud] Erro HTTP ${response.status}: ${text}`);
       return { success: false, error: tratarErroHTTP(response.status) };
     }
 
@@ -146,7 +148,7 @@ export async function consultarProcessoDataJud(
     return { success: true, processo: processarResposta(data.hits.hits[0]._source) };
   } catch (error: any) {
     if (error.name === "AbortError") return { success: false, error: "Timeout na consulta ao DataJud (15s). Tente novamente." };
-    console.error("[DataJud] Erro:", error.message);
+    log.error("[DataJud] Erro:", error.message);
     return { success: false, error: "Erro de conexão com a API DataJud. Verifique sua conexão e tente novamente." };
   }
 }
@@ -175,7 +177,7 @@ export async function consultarMovimentacoesRecentes(
     return { success: true, processo: processarResposta(data.hits.hits[0]._source) };
   } catch (error: any) {
     if (error.name === "AbortError") return { success: false, error: "Timeout na consulta ao DataJud." };
-    console.error("[DataJud] Erro movimentações:", error.message);
+    log.error("[DataJud] Erro movimentações:", error.message);
     return { success: false, error: "Erro de conexão. Tente novamente." };
   }
 }

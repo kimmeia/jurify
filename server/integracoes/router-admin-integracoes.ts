@@ -18,6 +18,8 @@ import { adminIntegracoes } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt, maskToken, generateWebhookSecret } from "../escritorio/crypto-utils";
 import { JuditClient } from "./judit-client";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-router-admin-integracoes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // METADATA DOS PROVEDORES SUPORTADOS
@@ -97,7 +99,7 @@ export const adminIntegracoesRouter = router({
       registros = await db.select().from(adminIntegracoes);
     } catch {
       // Tabela pode não existir ainda (migration pendente) — retorna tudo desconectado
-      console.warn("[Integrações] Tabela admin_integracoes não encontrada. Execute a migration 0015.");
+      log.warn("[Integrações] Tabela admin_integracoes não encontrada. Execute a migration 0015.");
     }
 
     return PROVEDORES.map((provedor) => {

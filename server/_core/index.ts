@@ -92,7 +92,7 @@ async function startServer() {
 
       try {
         const [ins] = await conn.execute("INSERT INTO mensagem_templates (escritorioIdTpl, tituloTpl, conteudoTpl, categoriaTpl, criadoPorTpl) VALUES (1, 'test_debug', 'teste ok', 'outro', 1)");
-        results.step3_insert = { ok: true, id: (ins as any).insertId };
+        results.step3_insert = { ok: true, id: (ins as { insertId: number }).insertId };
       } catch (e: any) { results.step3_error = { msg: e.message, code: e.code, errno: e.errno }; }
 
       try {

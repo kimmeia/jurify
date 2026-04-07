@@ -110,7 +110,7 @@ export const tarefasRouter = router({
         dataVencimento: input.dataVencimento ? new Date(input.dataVencimento) : null,
       });
 
-      return { id: (r as any).insertId as number };
+      return { id: (r as { insertId: number }).insertId };
     }),
 
   /** Atualizar tarefa */
@@ -184,9 +184,9 @@ export const tarefasRouter = router({
       .where(and(eq(tarefas.escritorioId, eid), eq(tarefas.responsavelId, cid), or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))));
 
     return {
-      pendentes: Number((pend as any)?.count || 0),
-      vencidas: Number((venc as any)?.count || 0),
-      minhas: Number((minhas as any)?.count || 0),
+      pendentes: Number((pend as { count: number } | undefined)?.count || 0),
+      vencidas: Number((venc as { count: number } | undefined)?.count || 0),
+      minhas: Number((minhas as { count: number } | undefined)?.count || 0),
     };
   }),
 });

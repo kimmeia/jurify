@@ -90,7 +90,7 @@ export const assinaturasRouter = router({
       });
 
       return {
-        id: (result as any).insertId as number,
+        id: (result as { insertId: number }).insertId,
         token,
         linkAssinatura: `/assinar/${token}`,
       };

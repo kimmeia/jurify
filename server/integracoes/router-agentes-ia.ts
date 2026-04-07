@@ -44,7 +44,7 @@ export const agentesIaRouter = router({
       let apiKeyEncrypted: string | null = null, apiKeyIv: string | null = null, apiKeyTag: string | null = null;
       if (input.openaiApiKey) { const enc = encryptApiKey(input.openaiApiKey); apiKeyEncrypted = enc.encrypted; apiKeyIv = enc.iv; apiKeyTag = enc.tag; }
       const [result] = await db.insert(agentesIa).values({ escritorioId: esc.escritorio.id, nome: input.nome, descricao: input.descricao || null, modelo: input.modelo, prompt: input.prompt, canalId: input.canalId || null, openaiApiKey: apiKeyEncrypted, apiKeyIv, apiKeyTag, maxTokens: input.maxTokens || 500, temperatura: input.temperatura || "0.70", ativo: false });
-      return { id: (result as any).insertId as number };
+      return { id: (result as { insertId: number }).insertId };
     }),
 
   atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(128).optional(), descricao: z.string().max(512).optional(), modelo: z.string().optional(), prompt: z.string().min(10).optional(), canalId: z.number().nullable().optional(), openaiApiKey: z.string().min(10).optional(), maxTokens: z.number().min(100).max(4000).optional(), temperatura: z.string().optional(), ativo: z.boolean().optional() }))
