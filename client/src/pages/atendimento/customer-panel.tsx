@@ -20,6 +20,7 @@ import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -153,6 +154,7 @@ export function CustomerPanel({
         iconColor="text-indigo-600"
         title={`Processos (${processos.length})`}
         defaultOpen={processos.length > 0}
+        headerAction={<AdicionarProcessoInline onSuccess={refetch} />}
       >
         {processos.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">Nenhum processo ativo.</p>
@@ -276,6 +278,7 @@ export function CustomerPanel({
         iconColor="text-violet-600"
         title={`Negociações (${leads.length})`}
         defaultOpen={leads.length > 0}
+        headerAction={<CriarLeadInline contatoId={contatoId} onSuccess={refetch} />}
       >
         {leads.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">Nenhuma negociação aberta.</p>
@@ -351,16 +354,7 @@ export function CustomerPanel({
         iconColor="text-amber-600"
         title={`Compromissos (${compromissos.length})`}
         headerAction={
-          onOpenAgendar && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-5 w-5 p-0"
-              onClick={onOpenAgendar}
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-          )
+          <CriarCompromissoInline contatoNome={contato.nome} onSuccess={refetch} />
         }
       >
         {compromissos.length === 0 ? (
@@ -574,6 +568,242 @@ function CriarNotaInline({ contatoId, onSuccess }: { contatoId: number; onSucces
         >
           {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
           Salvar
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Adicionar processo inline (popover) ─────────────────────────────────────
+
+function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [cnj, setCnj] = useState("");
+  const [apelido, setApelido] = useState("");
+
+  const mut = trpc.processos.adicionar.useMutation({
+    onSuccess: () => {
+      toast.success("Processo adicionado ao monitoramento");
+      setCnj("");
+      setApelido("");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
+          <Plus className="h-3 w-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-2" side="left">
+        <p className="text-xs font-semibold flex items-center gap-1.5">
+          <Gavel className="h-3.5 w-3.5 text-indigo-600" />
+          Monitorar processo
+        </p>
+        <Input
+          placeholder="Número CNJ (0000000-00.0000.0.00.0000)"
+          value={cnj}
+          onChange={(e) => setCnj(e.target.value)}
+          className="h-8 text-xs font-mono"
+        />
+        <Input
+          placeholder="Apelido (opcional)"
+          value={apelido}
+          onChange={(e) => setApelido(e.target.value)}
+          className="h-8 text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          O processo será consultado no DataJud e adicionado à lista de monitorados.
+        </p>
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() => mut.mutate({ numeroCnj: cnj.trim(), apelido: apelido || undefined })}
+          disabled={!cnj.trim() || mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Adicionar
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Criar lead inline (popover) ─────────────────────────────────────────────
+
+function CriarLeadInline({ contatoId, onSuccess }: { contatoId: number; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [valorEstimado, setValorEstimado] = useState("");
+  const [origem, setOrigem] = useState("");
+
+  const mut = trpc.crm.criarLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead criado");
+      setValorEstimado("");
+      setOrigem("");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
+          <Plus className="h-3 w-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 space-y-2" side="left">
+        <p className="text-xs font-semibold flex items-center gap-1.5">
+          <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
+          Nova negociação
+        </p>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Valor estimado (R$)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="5000.00"
+            value={valorEstimado}
+            onChange={(e) => setValorEstimado(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">Origem (opcional)</Label>
+          <Input
+            placeholder="Indicação, Google, etc."
+            value={origem}
+            onChange={(e) => setOrigem(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() =>
+            mut.mutate({
+              contatoId,
+              valorEstimado: valorEstimado || undefined,
+              origemLead: origem || undefined,
+            })
+          }
+          disabled={mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Criar lead
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Criar compromisso inline (popover) ──────────────────────────────────────
+
+function CriarCompromissoInline({
+  contatoNome,
+  onSuccess,
+}: {
+  contatoNome: string;
+  onSuccess: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [titulo, setTitulo] = useState("");
+  const [tipo, setTipo] = useState<
+    "reuniao_comercial" | "audiencia" | "prazo_processual" | "follow_up" | "outro"
+  >("reuniao_comercial");
+  const [data, setData] = useState("");
+  const [hora, setHora] = useState("09:00");
+  const [local, setLocal] = useState("");
+
+  const mut = trpc.agendamento.criar.useMutation({
+    onSuccess: () => {
+      toast.success("Compromisso criado");
+      setTitulo("");
+      setData("");
+      setHora("09:00");
+      setLocal("");
+      setOpen(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleCriar = () => {
+    if (!titulo || !data) return;
+    const dataInicio = new Date(`${data}T${hora}:00`).toISOString();
+    mut.mutate({
+      tipo,
+      titulo,
+      dataInicio,
+      local: local || undefined,
+      descricao: `Compromisso com ${contatoNome}`,
+    });
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-5 w-5 p-0">
+          <Plus className="h-3 w-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-2" side="left">
+        <p className="text-xs font-semibold flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5 text-amber-600" />
+          Novo compromisso
+        </p>
+        <Input
+          placeholder="Título"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          className="h-8 text-xs"
+        />
+        <Select value={tipo} onValueChange={(v) => setTipo(v as typeof tipo)}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="reuniao_comercial">Reunião comercial</SelectItem>
+            <SelectItem value="audiencia">Audiência</SelectItem>
+            <SelectItem value="prazo_processual">Prazo processual</SelectItem>
+            <SelectItem value="follow_up">Follow-up</SelectItem>
+            <SelectItem value="outro">Outro</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            type="date"
+            value={data}
+            onChange={(e) => setData(e.target.value)}
+            className="h-8 text-xs"
+          />
+          <Input
+            type="time"
+            value={hora}
+            onChange={(e) => setHora(e.target.value)}
+            className="h-8 text-xs"
+          />
+        </div>
+        <Input
+          placeholder="Local (opcional)"
+          value={local}
+          onChange={(e) => setLocal(e.target.value)}
+          className="h-8 text-xs"
+        />
+        <Button
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={handleCriar}
+          disabled={!titulo || !data || mut.isPending}
+        >
+          {mut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+          Criar compromisso
         </Button>
       </PopoverContent>
     </Popover>
