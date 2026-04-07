@@ -213,19 +213,17 @@ class SDKServer {
       });
       const { openId, appId, name } = payload as Record<string, unknown>;
 
-      if (
-        !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
-      ) {
-        log.warn("Session payload missing required fields");
+      // Apenas openId é obrigatório. appId e name têm defaults razoáveis
+      // pra suportar JWTs gerados sem essas variáveis configuradas.
+      if (!isNonEmptyString(openId)) {
+        log.warn("Session payload sem openId");
         return null;
       }
 
       return {
         openId,
-        appId,
-        name,
+        appId: isNonEmptyString(appId) ? appId : "jurify",
+        name: isNonEmptyString(name) ? name : "Usuário",
       };
     } catch (error) {
       log.warn({ err: String(error) }, "Session verification failed");

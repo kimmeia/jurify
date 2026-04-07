@@ -12,7 +12,9 @@ function requireEnv(name: string, value: string | undefined): string {
 }
 
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
+  // appId é usado como audience do JWT de sessão. Default "jurify" pra
+  // funcionar sem precisar definir VITE_APP_ID no servidor.
+  appId: process.env.VITE_APP_ID || "jurify",
   cookieSecret: requireEnv("JWT_SECRET", process.env.JWT_SECRET),
   databaseUrl: requireEnv("DATABASE_URL", process.env.DATABASE_URL),
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
