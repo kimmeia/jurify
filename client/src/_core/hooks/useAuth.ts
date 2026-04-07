@@ -9,8 +9,11 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
-    options ?? {};
+  // Importante: NÃO chamar getLoginUrl() no destructuring default — isso
+  // executa em toda render mesmo quando o componente não vai redirecionar.
+  // Calculamos sob demanda apenas dentro do useEffect.
+  const redirectOnUnauthenticated = options?.redirectOnUnauthenticated ?? false;
+  const explicitRedirectPath = options?.redirectPath;
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -65,12 +68,15 @@ export function useAuth(options?: UseAuthOptions) {
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
-    if (window.location.pathname === redirectPath) return;
 
-    window.location.href = redirectPath
+    const target = explicitRedirectPath ?? getLoginUrl();
+    if (!target || target === "/") return; // sem OAuth configurado: não redireciona
+    if (window.location.pathname === target) return;
+
+    window.location.href = target;
   }, [
     redirectOnUnauthenticated,
-    redirectPath,
+    explicitRedirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
     state.user,
