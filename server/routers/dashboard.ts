@@ -5,7 +5,8 @@
  * inteligente do escritório (compromissos, leads, financeiro, processos).
  */
 
-import { eq, and, desc, asc, gte, lte, lt, or } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, lt, or, sql } from "drizzle-orm";
+import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
   getDb,
@@ -19,6 +20,7 @@ import {
   conversas,
   contatos,
   leads,
+  mensagens,
   asaasCobrancas,
   processosMonitorados,
   movimentacoesProcesso,
@@ -285,4 +287,300 @@ export const dashboardRouter = router({
       return null;
     }
   }),
+
+  /**
+   * Série temporal de fluxo de caixa — últimos N dias agrupados por dia.
+   * Retorna pontos com recebido e pendente para gráficos de linha/área.
+   */
+  cashFlow: protectedProcedure
+    .input(
+      z
+        .object({
+          days: z.number().int().min(7).max(365).default(30),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+
+      const days = input?.days ?? 30;
+      const inicio = new Date();
+      inicio.setDate(inicio.getDate() - days);
+      inicio.setHours(0, 0, 0, 0);
+
+      try {
+        const cobrancas = await db
+          .select({
+            valor: asaasCobrancas.valor,
+            status: asaasCobrancas.status,
+            vencimento: asaasCobrancas.vencimento,
+            dataPagamento: asaasCobrancas.dataPagamento,
+            createdAt: asaasCobrancas.createdAt,
+          })
+          .from(asaasCobrancas)
+          .where(
+            and(
+              eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+              gte(asaasCobrancas.createdAt, inicio),
+            ),
+          );
+
+        // Agrupar por dia
+        const porDia = new Map<string, { recebido: number; pendente: number }>();
+        for (let i = 0; i <= days; i++) {
+          const d = new Date(inicio);
+          d.setDate(d.getDate() + i);
+          const key = d.toISOString().slice(0, 10);
+          porDia.set(key, { recebido: 0, pendente: 0 });
+        }
+
+        let totalRecebido = 0;
+        let totalPendente = 0;
+        let totalVencido = 0;
+        const hoje = new Date().toISOString().slice(0, 10);
+
+        for (const c of cobrancas) {
+          const valor = parseFloat(c.valor) || 0;
+          const pago = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status);
+
+          if (pago) {
+            totalRecebido += valor;
+            const dia = (c.dataPagamento || "").slice(0, 10) ||
+              (c.createdAt as Date).toISOString().slice(0, 10);
+            if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
+          } else if (c.status === "PENDING") {
+            totalPendente += valor;
+            const dia = (c.vencimento || "").slice(0, 10);
+            if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
+          } else if (c.status === "OVERDUE" || (c.vencimento && c.vencimento < hoje && !pago)) {
+            totalVencido += valor;
+          }
+        }
+
+        const pontos = Array.from(porDia.entries()).map(([data, v]) => ({
+          data,
+          recebido: Math.round(v.recebido * 100) / 100,
+          pendente: Math.round(v.pendente * 100) / 100,
+        }));
+
+        return { pontos, totalRecebido, totalPendente, totalVencido };
+      } catch (err) {
+        log.warn({ err: String(err) }, "Falha ao calcular cash flow");
+        return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      }
+    }),
+
+  /**
+   * Feed de atividades recentes do escritório.
+   * Combina: pagamentos, mensagens de entrada, movimentações processuais,
+   * tarefas concluídas e agendamentos criados. Ordenado por data desc.
+   */
+  activityFeed: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(5).max(50).default(20) }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return [];
+
+      const limit = input?.limit ?? 20;
+      const desde = new Date();
+      desde.setDate(desde.getDate() - 7); // últimos 7 dias
+
+      try {
+        type FeedItem = {
+          id: string;
+          tipo: "pagamento" | "mensagem" | "movimentacao" | "tarefa" | "agendamento" | "lead";
+          titulo: string;
+          descricao: string;
+          timestamp: string;
+          link?: string;
+        };
+
+        const items: FeedItem[] = [];
+
+        // 1. Pagamentos recebidos
+        try {
+          const pagtos = await db
+            .select({
+              id: asaasCobrancas.id,
+              valor: asaasCobrancas.valor,
+              descricao: asaasCobrancas.descricao,
+              dataPagamento: asaasCobrancas.dataPagamento,
+              updatedAt: asaasCobrancas.updatedAt,
+            })
+            .from(asaasCobrancas)
+            .where(
+              and(
+                eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+                or(
+                  eq(asaasCobrancas.status, "RECEIVED"),
+                  eq(asaasCobrancas.status, "CONFIRMED"),
+                  eq(asaasCobrancas.status, "RECEIVED_IN_CASH"),
+                ),
+                gte(asaasCobrancas.updatedAt, desde),
+              ),
+            )
+            .orderBy(desc(asaasCobrancas.updatedAt))
+            .limit(limit);
+
+          for (const p of pagtos) {
+            items.push({
+              id: `pag-${p.id}`,
+              tipo: "pagamento",
+              titulo: `Pagamento recebido`,
+              descricao: `R$ ${parseFloat(p.valor).toFixed(2)} — ${p.descricao || "cobrança"}`,
+              timestamp: (p.updatedAt as Date).toISOString(),
+              link: "/financeiro",
+            });
+          }
+        } catch {
+          /* asaas pode não estar configurado */
+        }
+
+        // 2. Mensagens de entrada (últimas)
+        const msgsEntrada = await db
+          .select({
+            id: mensagens.id,
+            conteudo: mensagens.conteudo,
+            createdAt: mensagens.createdAt,
+            conversaId: mensagens.conversaId,
+            contatoNome: contatos.nome,
+          })
+          .from(mensagens)
+          .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
+          .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
+          .where(
+            and(
+              eq(conversas.escritorioId, esc.escritorio.id),
+              eq(mensagens.direcao, "entrada"),
+              gte(mensagens.createdAt, desde),
+            ),
+          )
+          .orderBy(desc(mensagens.createdAt))
+          .limit(limit);
+
+        for (const m of msgsEntrada) {
+          items.push({
+            id: `msg-${m.id}`,
+            tipo: "mensagem",
+            titulo: `Nova mensagem de ${m.contatoNome}`,
+            descricao: (m.conteudo || "").slice(0, 80),
+            timestamp: (m.createdAt as Date).toISOString(),
+            link: "/atendimento",
+          });
+        }
+
+        // 3. Movimentações processuais
+        const processosDoUser = await db
+          .select({ id: processosMonitorados.id, numeroCnj: processosMonitorados.numeroCnj })
+          .from(processosMonitorados)
+          .where(eq(processosMonitorados.userId, ctx.user.id));
+
+        if (processosDoUser.length > 0) {
+          const procIds = processosDoUser.slice(0, 30).map((p) => p.id);
+          const procMap = new Map(processosDoUser.map((p) => [p.id, p.numeroCnj]));
+
+          for (const pid of procIds) {
+            const movs = await db
+              .select({
+                id: movimentacoesProcesso.id,
+                nome: movimentacoesProcesso.nome,
+                dataHora: movimentacoesProcesso.dataHora,
+                createdAt: movimentacoesProcesso.createdAt,
+                processoId: movimentacoesProcesso.processoId,
+              })
+              .from(movimentacoesProcesso)
+              .where(
+                and(
+                  eq(movimentacoesProcesso.processoId, pid),
+                  gte(movimentacoesProcesso.createdAt, desde),
+                ),
+              )
+              .orderBy(desc(movimentacoesProcesso.createdAt))
+              .limit(3);
+
+            for (const m of movs) {
+              items.push({
+                id: `mov-${m.id}`,
+                tipo: "movimentacao",
+                titulo: `Movimentação processual`,
+                descricao: `${procMap.get(m.processoId) || ""} — ${m.nome.slice(0, 60)}`,
+                timestamp: (m.createdAt as Date).toISOString(),
+                link: "/processos",
+              });
+            }
+          }
+        }
+
+        // 4. Tarefas concluídas recentemente
+        const tarefasConcluidas = await db
+          .select({
+            id: tarefas.id,
+            titulo: tarefas.titulo,
+            concluidaAt: tarefas.concluidaAt,
+          })
+          .from(tarefas)
+          .where(
+            and(
+              eq(tarefas.escritorioId, esc.escritorio.id),
+              eq(tarefas.status, "concluida"),
+              gte(tarefas.concluidaAt, desde),
+            ),
+          )
+          .orderBy(desc(tarefas.concluidaAt))
+          .limit(limit);
+
+        for (const t of tarefasConcluidas) {
+          if (!t.concluidaAt) continue;
+          items.push({
+            id: `tar-${t.id}`,
+            tipo: "tarefa",
+            titulo: `Tarefa concluída`,
+            descricao: t.titulo,
+            timestamp: (t.concluidaAt as Date).toISOString(),
+            link: "/tarefas",
+          });
+        }
+
+        // 5. Novos leads criados
+        const leadsNovos = await db
+          .select({
+            id: leads.id,
+            createdAt: leads.createdAt,
+            etapaFunil: leads.etapaFunil,
+            contatoNome: contatos.nome,
+          })
+          .from(leads)
+          .innerJoin(contatos, eq(leads.contatoId, contatos.id))
+          .where(
+            and(eq(leads.escritorioId, esc.escritorio.id), gte(leads.createdAt, desde)),
+          )
+          .orderBy(desc(leads.createdAt))
+          .limit(limit);
+
+        for (const l of leadsNovos) {
+          items.push({
+            id: `lead-${l.id}`,
+            tipo: "lead",
+            titulo: `Novo lead`,
+            descricao: `${l.contatoNome} — etapa: ${l.etapaFunil}`,
+            timestamp: (l.createdAt as Date).toISOString(),
+            link: "/atendimento",
+          });
+        }
+
+        // Ordena e limita
+        items.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        return items.slice(0, limit);
+      } catch (err) {
+        log.warn({ err: String(err) }, "Falha ao montar activity feed");
+        return [];
+      }
+    }),
 });

@@ -9,8 +9,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell } from "lucide-react";
 import { toast } from "sonner";
+import {
+  SearchHistorySidebar,
+  KeywordAlertsButton,
+  useSearchHistory,
+  useKeywordAlerts,
+  checkKeywords,
+} from "./processos/search-history";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", oab: "OAB", name: "Nome" };
@@ -23,12 +30,16 @@ const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ",
 
 function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: (cnj: string) => void }) {
   const [aberto, setAberto] = useState(false);
+  const { items: alerts } = useKeywordAlerts();
   const d = processo.response_data || processo;
   const ativos = (d.parties || []).filter((p: any) => p.side === "Active").slice(0, 5);
   const passivos = (d.parties || []).filter((p: any) => p.side === "Passive").slice(0, 5);
   const movs = (d.steps || []).slice(0, 10);
   const advs: any[] = [];
   (d.parties || []).forEach((p: any) => { (p.lawyers || []).forEach((l: any) => { if (advs.length < 5) advs.push(l); }); });
+
+  // Contar movimentações que acionam algum alerta
+  const movsComAlerta = (d.steps || []).filter((m: any) => checkKeywords(m.content || "", alerts).length > 0).length;
 
   return (
     <Card>
@@ -49,6 +60,12 @@ function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: 
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {movsComAlerta > 0 && (
+              <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/25 text-[9px] gap-1">
+                <Bell className="h-2.5 w-2.5" />
+                {movsComAlerta}
+              </Badge>
+            )}
             {onMonitorar && d.code && <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => onMonitorar(d.code)}><Radar className="h-3 w-3 mr-1" />Monitorar</Button>}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAberto(!aberto)}>{aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
           </div>
@@ -65,7 +82,46 @@ function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: 
 
             {advs.length > 0 && (<div><p className="text-[10px] font-semibold text-violet-600 mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-violet-500 shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-[9px] text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
 
-            {movs.length > 0 && (<div><p className="text-[10px] font-semibold text-muted-foreground mb-1">MOVIMENTACOES ({d.steps?.length || 0} total)</p><div className="space-y-1.5 max-h-48 overflow-y-auto">{movs.map((m: any, i: number) => (<div key={i} className="flex items-start gap-2 text-xs border-l-2 border-indigo-200 pl-2 py-1"><div className="shrink-0 w-16 text-[9px] text-muted-foreground font-mono">{m.step_date ? new Date(m.step_date).toLocaleDateString("pt-BR") : ""}</div><div className="flex-1">{m.content}</div></div>))}</div></div>)}
+            {movs.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground mb-2">
+                  MOVIMENTAÇÕES ({d.steps?.length || 0} total)
+                </p>
+                {/* Timeline visual */}
+                <div className="relative space-y-2 max-h-64 overflow-y-auto pl-4">
+                  <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200" />
+                  {movs.map((m: any, i: number) => {
+                    const matches = checkKeywords(m.content || "", alerts);
+                    const hasAlert = matches.length > 0;
+                    return (
+                      <div key={i} className="relative">
+                        <div
+                          className={`absolute -left-3 top-1.5 h-2 w-2 rounded-full ring-2 ring-background ${
+                            hasAlert ? "bg-blue-500 animate-pulse" : "bg-indigo-400"
+                          }`}
+                        />
+                        <div
+                          className={`text-xs pl-2 py-1 ${hasAlert ? "bg-blue-50 rounded pr-2" : ""}`}
+                        >
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[9px] text-muted-foreground font-mono">
+                              {m.step_date ? new Date(m.step_date).toLocaleDateString("pt-BR") : ""}
+                            </span>
+                            {hasAlert && (
+                              <Badge className="bg-blue-500/20 text-blue-700 border-0 text-[8px] px-1 py-0">
+                                <Bell className="h-2 w-2 mr-0.5" />
+                                {matches[0]}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="leading-snug">{m.content}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
@@ -85,6 +141,7 @@ function ConsultarTab() {
   const [polling, setPolling] = useState(false);
   const [resultados, setResultados] = useState<any>(null);
   const [tentativas, setTentativas] = useState(0);
+  const history = useSearchHistory();
 
   const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
   const consultarDoc = trpc.juditProcessos.consultarDocumento.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
@@ -106,14 +163,22 @@ function ConsultarTab() {
   const handleBuscar = () => {
     if (!valor.trim()) return;
     setBuscando(true); setResultados(null); setRequestId(""); setTentativas(0);
+    history.add(tipo, valor.trim());
     if (tipo === "lawsuit_cnj") consultarCNJ.mutate({ cnj: valor.trim() });
     else consultarDoc.mutate({ tipo: tipo as any, valor: valor.trim() });
+  };
+
+  const handleSelectHistorico = (t: string, v: string) => {
+    setTipo(t);
+    setValor(v);
+    setResultados(null);
   };
 
   const placeholders: Record<string, string> = { lawsuit_cnj: "0000000-00.0000.0.00.0000", cpf: "000.000.000-00", cnpj: "00.000.000/0000-00", oab: "SP123456", name: "Nome da parte" };
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+      <div className="space-y-4 min-w-0">
       {/* Barra de busca */}
       <Card>
         <CardContent className="pt-4 pb-4">
@@ -136,6 +201,7 @@ function ConsultarTab() {
               {buscando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
               Buscar
             </Button>
+            <KeywordAlertsButton />
           </div>
           <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
             <span>Custo: <strong>{tipo === "lawsuit_cnj" ? "1" : "5"} credito(s)</strong></span>
@@ -172,6 +238,12 @@ function ConsultarTab() {
           <p className="text-sm text-muted-foreground">Busque por CNJ, CPF, CNPJ, OAB ou nome em +90 tribunais do Brasil.</p>
         </div>
       ) : null}
+      </div>
+
+      {/* Sidebar: histórico + favoritos */}
+      <div className="hidden lg:block">
+        <SearchHistorySidebar onSelect={handleSelectHistorico} />
+      </div>
     </div>
   );
 }

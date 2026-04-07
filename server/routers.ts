@@ -51,6 +51,8 @@ import { uploadRouter } from "./upload/upload-route";
 // Sub-routers extraídos
 import { subscriptionRouter } from "./routers/subscription";
 import { whatsappCoexRouter } from "./routers/whatsapp-coex";
+import { metaChannelsRouter } from "./routers/meta-channels";
+import { customer360Router } from "./routers/customer360";
 import { juditProcessosRouter } from "./routers/judit-processos";
 import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
@@ -100,7 +102,9 @@ export const appRouter = router({
   templates: templatesRouter,
 
   // Integrações específicas
-  whatsappCoex: whatsappCoexRouter,
+  whatsappCoex: whatsappCoexRouter, // legado — mantido para retrocompatibilidade
+  metaChannels: metaChannelsRouter, // unificado: WhatsApp + Instagram + Messenger
+  customer360: customer360Router, // perfil 360° do cliente para Atendimento
   juditProcessos: juditProcessosRouter,
   adminIntegracoes: adminIntegracoesRouter,
   juditOperacoes: juditOperacoesRouter,
