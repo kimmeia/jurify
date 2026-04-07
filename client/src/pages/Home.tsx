@@ -15,6 +15,7 @@ import { AuthForms } from "./auth/AuthForms";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -48,19 +49,25 @@ export default function Home() {
     if (loading) return;
     if (!user) return;
 
-    // Admin goes to admin panel
+    // Admin goes to admin panel imediatamente
     if (user.role === "admin") {
       setLocation("/admin");
       return;
     }
 
-    // User: wait for subscription query to finish
-    if (!subFetched) return;
-
+    // User: redireciona pro dashboard se já tem subscription, senão pra /plans.
+    // NÃO espera `subFetched` ficar true — se a query falhar ou demorar,
+    // o usuário ficaria preso na home indefinidamente. Usa o último valor
+    // disponível e deixa o /plans/dashboard tratar a falta de subscription.
     if (subscription) {
       setLocation("/dashboard");
-    } else {
+    } else if (subFetched) {
+      // Query terminou sem assinatura → vai pra /plans
       setLocation("/plans");
+    } else {
+      // Query ainda em andamento — não bloqueia. Após 1s, força /plans.
+      const t = setTimeout(() => setLocation("/plans"), 1000);
+      return () => clearTimeout(t);
     }
   }, [loading, user, subscription, subFetched, setLocation]);
 
@@ -141,6 +148,11 @@ export default function Home() {
             <DialogTitle className="text-center">
               {authOpen === "signup" ? "Crie sua conta" : "Bem-vindo de volta"}
             </DialogTitle>
+            <DialogDescription className="text-center text-xs">
+              {authOpen === "signup"
+                ? "Cadastre-se em segundos. Sem cartão de crédito."
+                : "Entre com seu e-mail ou conta Google."}
+            </DialogDescription>
           </DialogHeader>
           <AuthForms
             defaultTab={authOpen || "login"}
