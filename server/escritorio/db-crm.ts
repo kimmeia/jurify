@@ -73,9 +73,47 @@ export async function listarContatos(escritorioId: number, busca?: string) {
 export async function atualizarContato(id: number, escritorioId: number, dados: Record<string, any>) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+
+  // Se o telefone está sendo alterado, guarda o anterior em telefonesAnteriores
+  // pra que o handler do WhatsApp ainda reconheça mensagens vindas do número
+  // antigo (evita perda de conexão com o cliente).
+  let telefonesAnterioresAtualizado: string | null | undefined;
+  if (dados.telefone !== undefined) {
+    try {
+      const [existente] = await db.select({
+        telefone: contatos.telefone,
+        telefonesAnteriores: contatos.telefonesAnteriores,
+      }).from(contatos)
+        .where(and(eq(contatos.id, id), eq(contatos.escritorioId, escritorioId)))
+        .limit(1);
+
+      if (existente?.telefone && existente.telefone !== dados.telefone) {
+        const historico = (existente.telefonesAnteriores || "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
+        // Adiciona no início se não estiver lá
+        if (!historico.includes(existente.telefone)) {
+          historico.unshift(existente.telefone);
+        }
+        telefonesAnterioresAtualizado = historico.join(",");
+        log.info({
+          contatoId: id,
+          telefoneAntigo: existente.telefone,
+          telefoneNovo: dados.telefone,
+        }, "Telefone do contato alterado — preservando histórico");
+      }
+    } catch (err) {
+      log.warn({ err: String(err) }, "Falha ao buscar telefone anterior (pode ser schema antigo)");
+    }
+  }
+
   const updateData: Record<string, unknown> = {};
   if (dados.nome !== undefined) updateData.nome = dados.nome;
   if (dados.telefone !== undefined) updateData.telefone = dados.telefone || null;
+  if (telefonesAnterioresAtualizado !== undefined) {
+    updateData.telefonesAnteriores = telefonesAnterioresAtualizado;
+  }
   if (dados.email !== undefined) updateData.email = dados.email || null;
   if (dados.cpfCnpj !== undefined) updateData.cpfCnpj = dados.cpfCnpj || null;
   if (dados.tags !== undefined) updateData.tags = JSON.stringify(dados.tags);
@@ -168,9 +206,33 @@ export async function listarConversas(escritorioId: number, filtros?: {
     }
   }
 
+  // Para cada contato com conversa, verifica se tem cobrança vencida no Asaas.
+  // Usamos uma única query agregada pra performance. Se asaas_cobrancas não
+  // existir (banco antigo sem a tabela), cai no catch e segue sem flag.
+  const contatoIds = [...new Set(rows.map(r => r.contatoId).filter(Boolean))];
+  const contatosComAtraso = new Set<number>();
+  if (contatoIds.length > 0) {
+    try {
+      const { asaasCobrancas } = await import("../../drizzle/schema");
+      const atrasos = await db
+        .select({ contatoId: asaasCobrancas.contatoId })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.status, "OVERDUE"),
+        ));
+      for (const a of atrasos) {
+        if (a.contatoId) contatosComAtraso.add(a.contatoId);
+      }
+    } catch {
+      /* asaas não configurado — tudo bem */
+    }
+  }
+
   return rows.map((r) => ({
     ...r,
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
+    temAtraso: contatosComAtraso.has(r.contatoId),
     ultimaMensagemAt: r.ultimaMensagemAt ? (r.ultimaMensagemAt as Date).toISOString() : undefined,
     createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
   }));

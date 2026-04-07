@@ -194,6 +194,93 @@ async function ensureAuthColumns(connection: mysql.Connection): Promise<void> {
   }
 }
 
+/**
+ * Garante que a tabela `contatos` tem a coluna `telefonesAnteriores`.
+ * Usado pelo handler do WhatsApp pra reconhecer contatos que tiveram o
+ * telefone alterado — evita criar contatos duplicados quando chega
+ * mensagem do número antigo.
+ */
+async function ensureContatoColumns(connection: mysql.Connection): Promise<void> {
+  try {
+    const [tables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contatos'`,
+    );
+    if ((tables as unknown[]).length === 0) {
+      log.debug("Tabela 'contatos' ainda não existe — pulando ensureContatoColumns");
+      return;
+    }
+
+    const [cols] = await connection.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contatos'`,
+    );
+    const colSet = new Set(
+      (cols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+    );
+
+    if (!colSet.has("telefonesAnteriores")) {
+      try {
+        await connection.query(
+          "ALTER TABLE contatos ADD COLUMN telefonesAnteriores TEXT NULL AFTER telefoneContato",
+        );
+        log.info("ensureContatoColumns: telefonesAnteriores adicionada");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (!isHarmlessError(msg)) {
+          log.warn({ err: msg }, "ensureContatoColumns: falha ao adicionar telefonesAnteriores");
+        }
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureContatoColumns: erro inesperado");
+  }
+}
+
+/**
+ * Remove o ON DELETE CASCADE da FK conversas.contatoIdConv — estava
+ * perigoso: se alguém deletasse um contato, TODAS as conversas históricas
+ * seriam apagadas junto. Agora: ON DELETE NO ACTION (RESTRICT) — banco
+ * bloqueia o delete se houver conversas, forçando o usuário a lidar
+ * com o histórico explicitamente.
+ */
+async function relaxConversasForeignKey(connection: mysql.Connection): Promise<void> {
+  try {
+    // Checa se a FK existe e se está com CASCADE
+    const [rows] = await connection.query(
+      `SELECT rc.CONSTRAINT_NAME, rc.DELETE_RULE
+       FROM information_schema.REFERENTIAL_CONSTRAINTS rc
+       WHERE rc.CONSTRAINT_SCHEMA = DATABASE()
+         AND rc.TABLE_NAME = 'conversas'
+         AND rc.REFERENCED_TABLE_NAME = 'contatos'`,
+    );
+    const fks = rows as { CONSTRAINT_NAME: string; DELETE_RULE: string }[];
+    if (fks.length === 0) {
+      log.debug("relaxConversasForeignKey: FK não existe ainda, pulando");
+      return;
+    }
+
+    for (const fk of fks) {
+      if (fk.DELETE_RULE === "CASCADE") {
+        log.info({ fk: fk.CONSTRAINT_NAME }, "relaxConversasForeignKey: removendo CASCADE");
+        try {
+          await connection.query(`ALTER TABLE conversas DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+          await connection.query(
+            `ALTER TABLE conversas ADD CONSTRAINT \`${fk.CONSTRAINT_NAME}\`
+             FOREIGN KEY (contatoIdConv) REFERENCES contatos(id)
+             ON DELETE NO ACTION ON UPDATE NO ACTION`,
+          );
+          log.info({ fk: fk.CONSTRAINT_NAME }, "relaxConversasForeignKey: aplicado");
+        } catch (err: any) {
+          log.warn({ err: err.message, fk: fk.CONSTRAINT_NAME }, "relaxConversasForeignKey: falha");
+        }
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "relaxConversasForeignKey: erro inesperado");
+  }
+}
+
 export async function runMigrations(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -215,6 +302,8 @@ export async function runMigrations(): Promise<void> {
     // ─── 1. Garantia hardcoded de schema essencial ──────────────────────────
     // Roda SEMPRE, independente das migrations baseadas em arquivo.
     await ensureAuthColumns(connection);
+    await ensureContatoColumns(connection);
+    await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────
     const dir = findDrizzleDir();

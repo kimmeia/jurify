@@ -57,8 +57,43 @@ export const clientesRouter = router({
       if (input.cpfCnpj) { const v = validarCpfCnpj(input.cpfCnpj); if (!v.valido) throw new Error("CPF/CNPJ inválido."); }
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
-      const { id, ...d } = input; const u: any = {};
-      if (d.nome !== undefined) u.nome = d.nome; if (d.telefone !== undefined) u.telefone = d.telefone; if (d.email !== undefined) u.email = d.email; if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj; if (d.observacoes !== undefined) u.observacoes = d.observacoes; if (d.tags !== undefined) u.tags = d.tags;
+
+      // Se o telefone mudou, preserva o antigo em telefonesAnteriores
+      // para que o handler do WhatsApp ainda reconheça mensagens do número
+      // anterior (evita perda de histórico/conexão).
+      let telefonesAnterioresAtualizado: string | null | undefined;
+      if (input.telefone !== undefined) {
+        try {
+          const [existente] = await db.select({
+            telefone: contatos.telefone,
+            telefonesAnteriores: contatos.telefonesAnteriores,
+          }).from(contatos)
+            .where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)))
+            .limit(1);
+
+          if (existente?.telefone && existente.telefone !== input.telefone) {
+            const historico = (existente.telefonesAnteriores || "")
+              .split(",")
+              .map((t: string) => t.trim())
+              .filter(Boolean);
+            if (!historico.includes(existente.telefone)) {
+              historico.unshift(existente.telefone);
+            }
+            telefonesAnterioresAtualizado = historico.join(",");
+          }
+        } catch {
+          /* schema antigo — ignora, próximo deploy garante a coluna */
+        }
+      }
+
+      const { id, ...d } = input; const u: Record<string, unknown> = {};
+      if (d.nome !== undefined) u.nome = d.nome;
+      if (d.telefone !== undefined) u.telefone = d.telefone;
+      if (telefonesAnterioresAtualizado !== undefined) u.telefonesAnteriores = telefonesAnterioresAtualizado;
+      if (d.email !== undefined) u.email = d.email;
+      if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj;
+      if (d.observacoes !== undefined) u.observacoes = d.observacoes;
+      if (d.tags !== undefined) u.tags = d.tags;
       await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
