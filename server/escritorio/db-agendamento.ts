@@ -45,7 +45,7 @@ export async function criarAgendamento(dados: {
     corHex: dados.corHex ?? "#3b82f6",
   });
 
-  const agendamentoId = (result as any).insertId as number;
+  const agendamentoId = (result as { insertId: number }).insertId;
 
   // Criar lembretes
   if (dados.lembretes && dados.lembretes.length > 0) {

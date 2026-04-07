@@ -53,7 +53,7 @@ export async function criarEscritorio(userId: number, nome: string, email?: stri
     diasFuncionamento: JSON.stringify(["seg", "ter", "qua", "qui", "sex"]),
   });
 
-  const escritorioId = (result as any).insertId;
+  const escritorioId = (result as { insertId: number }).insertId;
 
   // Criar colaborador dono
   await db.insert(colaboradores).values({

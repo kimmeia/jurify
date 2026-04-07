@@ -16,6 +16,8 @@ import { adminIntegracoes, juditMonitoramentos, juditRespostas } from "../../dri
 import { eq, and } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { JuditClient } from "./judit-client";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-judit-webhook");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPER: OBTER API KEY DECRIPTOGRAFADA
@@ -90,13 +92,13 @@ export function registerJuditWebhook(app: Express) {
         return res.status(400).json({ error: "Payload inválido" });
       }
 
-      console.log(
+      log.info(
         `[Judit Webhook] Evento: ${body.event_type} | Tipo: ${body.reference_type} | Ref: ${body.reference_id} | Response: ${body.payload.response_type}`
       );
 
       const db = await getDb();
       if (!db) {
-        console.error("[Judit Webhook] Database indisponível");
+        log.error("[Judit Webhook] Database indisponível");
         return res.status(500).json({ error: "Database indisponível" });
       }
 
@@ -113,7 +115,7 @@ export function registerJuditWebhook(app: Express) {
 
       if (!trackingId) {
         // Pode ser resposta de uma consulta avulsa, não de monitoramento
-        console.log("[Judit Webhook] Resposta de consulta avulsa (não tracking), ignorando armazenamento");
+        log.info("[Judit Webhook] Resposta de consulta avulsa (não tracking), ignorando armazenamento");
         return res.status(200).json({ received: true });
       }
 
@@ -125,7 +127,7 @@ export function registerJuditWebhook(app: Express) {
         .limit(1);
 
       if (monLocal.length === 0) {
-        console.warn(`[Judit Webhook] Tracking ${trackingId} não encontrado localmente`);
+        log.warn(`[Judit Webhook] Tracking ${trackingId} não encontrado localmente`);
         return res.status(200).json({ received: true, warning: "tracking_not_found_locally" });
       }
 
@@ -162,18 +164,18 @@ export function registerJuditWebhook(app: Express) {
           })
           .where(eq(juditMonitoramentos.id, mon.id));
 
-        console.log(
+        log.info(
           `[Judit Webhook] Processo ${data?.code} atualizado. Última mov: ${lastStep?.content?.slice(0, 60)}...`
         );
       } else if (payload.response_type === "application_info") {
         // request_completed — a consulta do tracking terminou
         const code = payload.response_data?.code;
         if (code === 600) {
-          console.log(`[Judit Webhook] Tracking ${trackingId} — consulta concluída`);
+          log.info(`[Judit Webhook] Tracking ${trackingId} — consulta concluída`);
         }
       } else if (payload.response_type === "application_error") {
         const errMsg = payload.response_data?.message || "UNKNOWN_ERROR";
-        console.warn(`[Judit Webhook] Tracking ${trackingId} — erro: ${errMsg}`);
+        log.warn(`[Judit Webhook] Tracking ${trackingId} — erro: ${errMsg}`);
 
         // Salvar resposta de erro
         await db.insert(juditRespostas).values({
@@ -188,7 +190,7 @@ export function registerJuditWebhook(app: Express) {
 
       return res.status(200).json({ received: true });
     } catch (err: any) {
-      console.error("[Judit Webhook] Erro:", err.message);
+      log.error("[Judit Webhook] Erro:", err.message);
       return res.status(500).json({ error: "Erro interno" });
     }
   });

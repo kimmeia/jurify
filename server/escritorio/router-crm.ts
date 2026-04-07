@@ -14,6 +14,8 @@ import {
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
+import { createLogger } from "../_core/logger";
+const log = createLogger("escritorio-router-crm");
 
 export const crmRouter = router({
   // ─── Contatos ──────────────────────────────────────────────────────────────
@@ -182,10 +184,13 @@ export const crmRouter = router({
             .where(eq(conversas.id, input.conversaId))
             .limit(1);
 
-          console.log(`[CRM] Dados conversa ${input.conversaId}:`, JSON.stringify({
-            canalId: convData?.canalId, canalTipo: convData?.canalTipo,
-            telefone: convData?.telefone, chatIdExterno: convData?.chatIdExterno,
-          }));
+          log.debug({
+            conversaId: input.conversaId,
+            canalId: convData?.canalId,
+            canalTipo: convData?.canalTipo,
+            telefone: convData?.telefone,
+            chatIdExterno: convData?.chatIdExterno,
+          }, "Dados da conversa");
 
           if (convData && convData.canalTipo === "whatsapp_qr") {
             const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
@@ -195,12 +200,12 @@ export const crmRouter = router({
               const destinatario = convData.chatIdExterno || convData.telefone;
               if (destinatario) {
                 await manager.enviarMensagemJid(convData.canalId, destinatario, input.conteudo);
-                console.log(`[CRM] Mensagem enviada via WhatsApp QR para ${destinatario}`);
+                log.info(`[CRM] Mensagem enviada via WhatsApp QR para ${destinatario}`);
               } else {
-                console.warn(`[CRM] Sem destinatário para conversa ${input.conversaId}`);
+                log.warn(`[CRM] Sem destinatário para conversa ${input.conversaId}`);
               }
             } else {
-              console.warn(`[CRM] Canal WhatsApp QR ${convData.canalId} não conectado`);
+              log.warn(`[CRM] Canal WhatsApp QR ${convData.canalId} não conectado`);
             }
           } else if (convData && convData.canalTipo === "whatsapp_api") {
             // Cloud API (CoEx) — enviar via API oficial
@@ -215,21 +220,21 @@ export const crmRouter = router({
                   const telefone = convData.telefone?.replace(/\D/g, "") || "";
                   if (telefone) {
                     const msgId = await client.enviarTexto(telefone, input.conteudo);
-                    console.log(`[CRM] Mensagem enviada via Cloud API CoEx para ${telefone} (msgId: ${msgId})`);
+                    log.info(`[CRM] Mensagem enviada via Cloud API CoEx para ${telefone} (msgId: ${msgId})`);
                     // Atualizar idExterno da mensagem para rastrear status
                     if (msgId) {
                       const { mensagens } = await import("../../drizzle/schema");
                       await db.update(mensagens).set({ idExterno: msgId, status: "enviada" }).where(eq(mensagens.id, id));
                     }
                   }
-                } else { console.warn(`[CRM] Canal CoEx ${convData.canalId} sem accessToken ou phoneNumberId`); }
+                } else { log.warn(`[CRM] Canal CoEx ${convData.canalId} sem accessToken ou phoneNumberId`); }
               }
-            } catch (cloudErr: any) { console.error(`[CRM] Erro ao enviar via Cloud API:`, cloudErr.message); }
+            } catch (cloudErr: any) { log.error(`[CRM] Erro ao enviar via Cloud API:`, cloudErr.message); }
           }
         }
       } catch (err: any) {
         // Não falhar a mutation se WhatsApp der erro — mensagem já está salva
-        console.error(`[CRM] Erro ao enviar via WhatsApp:`, err.message, err.stack);
+        log.error(`[CRM] Erro ao enviar via WhatsApp:`, err.message, err.stack);
       }
 
       return { id };
@@ -325,10 +330,10 @@ export const crmRouter = router({
         const manager = getWhatsappManager();
         if (manager.isConectado(input.canalId)) {
           await manager.enviarMensagemJid(input.canalId, jid, input.mensagem);
-          console.log(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp`);
+          log.info(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp`);
         }
       } catch (err: any) {
-        console.error(`[CRM] Erro ao enviar 1ª mensagem:`, err.message);
+        log.error(`[CRM] Erro ao enviar 1ª mensagem:`, err.message);
       }
 
       return { conversaId, contatoId };

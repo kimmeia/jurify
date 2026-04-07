@@ -128,35 +128,35 @@ export async function verificarLimite(
   switch (recurso) {
     case "clientes": {
       const [r] = await db.select({ count: sql<number>`COUNT(*)` }).from(contatos).where(eq(contatos.escritorioId, escritorioId));
-      atual = Number((r as any)?.count || 0);
+      atual = Number((r as { count: number } | undefined)?.count || 0);
       maximo = limites.maxClientes;
       label = "clientes";
       break;
     }
     case "colaboradores": {
       const [r] = await db.select({ count: sql<number>`COUNT(*)` }).from(colaboradores).where(and(eq(colaboradores.escritorioId, escritorioId), eq(colaboradores.ativo, true)));
-      atual = Number((r as any)?.count || 0);
+      atual = Number((r as { count: number } | undefined)?.count || 0);
       maximo = limites.maxColaboradores;
       label = "colaboradores";
       break;
     }
     case "conversas": {
       const [r] = await db.select({ count: sql<number>`COUNT(*)` }).from(conversas).where(and(eq(conversas.escritorioId, escritorioId), or(eq(conversas.status, "aguardando"), eq(conversas.status, "em_atendimento"))));
-      atual = Number((r as any)?.count || 0);
+      atual = Number((r as { count: number } | undefined)?.count || 0);
       maximo = limites.maxConversasAtivas;
       label = "conversas ativas";
       break;
     }
     case "leads": {
       const [r] = await db.select({ count: sql<number>`COUNT(*)` }).from(sql`leads`).where(sql`escritorioIdLead = ${escritorioId} AND etapaFunil NOT IN ('fechado_ganho','fechado_perdido')`);
-      atual = Number((r as any)?.count || 0);
+      atual = Number((r as { count: number } | undefined)?.count || 0);
       maximo = limites.maxLeads;
       label = "leads ativos";
       break;
     }
     case "agentes_ia": {
       const [r] = await db.select({ count: sql<number>`COUNT(*)` }).from(sql`agentes_ia`).where(sql`escritorioId = ${escritorioId}`);
-      atual = Number((r as any)?.count || 0);
+      atual = Number((r as { count: number } | undefined)?.count || 0);
       maximo = limites.maxAgentesIa;
       label = "agentes IA";
       break;

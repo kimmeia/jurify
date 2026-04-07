@@ -358,7 +358,7 @@ export async function obterMetricasDashboard(escritorioId: number) {
     .reduce((s, r) => s + (parseFloat(r.valor || "0") || 0), 0);
 
   return {
-    totalContatos: (contatosCount as any)?.count ?? 0,
+    totalContatos: (contatosCount as { count: number } | undefined)?.count ?? 0,
     conversasAbertas: abertas,
     conversasAguardando: aguardando,
     leadsNovos: novos,
@@ -468,7 +468,7 @@ export async function distribuirLead(
             or(eq(conversas.status, "aguardando"), eq(conversas.status, "em_atendimento")),
           ));
 
-        const carga = Number((cargaAnterior as any)?.count || 0);
+        const carga = Number((cargaAnterior as { count: number } | undefined)?.count || 0);
         const max = anteriorDisponivel.maxAtendimentosSimultaneos || 5;
 
         if (carga < max) {
@@ -696,8 +696,8 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
     msgsSaidaHoje,
     msgsTotalHoje: msgsEntradaHoje + msgsSaidaHoje,
     conversasPorStatus: porStatus,
-    resolvidasHoje: Number((resolvidasHoje as any)?.count || 0),
-    novasHoje: Number((novasHoje as any)?.count || 0),
+    resolvidasHoje: Number((resolvidasHoje as { count: number } | undefined)?.count || 0),
+    novasHoje: Number((novasHoje as { count: number } | undefined)?.count || 0),
     porCanal: porCanal.map(c => ({
       canalId: c.canalId,
       nome: canaisMap[c.canalId!] || `Canal ${c.canalId}`,

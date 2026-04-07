@@ -20,7 +20,7 @@ export const clientesRouter = router({
     if (input?.busca) { const b = `%${input.busca}%`; where = and(where, or(like(contatos.nome, b), like(contatos.telefone, b), like(contatos.email, b), like(contatos.cpfCnpj, b))); }
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
-    return { clientes: rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" })), total: Number((cnt as any)?.count || 0), pagina: input?.pagina || 1, limite, totalPaginas: Math.ceil(Number((cnt as any)?.count || 0) / limite) };
+    return { clientes: rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" })), total: Number((cnt as { count: number } | undefined)?.count || 0), pagina: input?.pagina || 1, limite, totalPaginas: Math.ceil(Number((cnt as { count: number } | undefined)?.count || 0) / limite) };
   }),
 
   detalhe: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
@@ -32,7 +32,7 @@ export const clientesRouter = router({
     const [lc] = await db.select({ count: sql`COUNT(*)` }).from(leads).where(and(eq(leads.contatoId, input.id), eq(leads.escritorioId, esc.escritorio.id)));
     const [ac] = await db.select({ count: sql`COUNT(*)` }).from(clienteArquivos).where(and(eq(clienteArquivos.contatoId, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)));
     const [nc] = await db.select({ count: sql`COUNT(*)` }).from(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.id), eq(clienteAnotacoes.escritorioId, esc.escritorio.id)));
-    return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as any)?.count || 0), totalLeads: Number((lc as any)?.count || 0), totalArquivos: Number((ac as any)?.count || 0), totalAnotacoes: Number((nc as any)?.count || 0) };
+    return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
   criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional() }))
@@ -46,7 +46,7 @@ export const clientesRouter = router({
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido. Use formato (XX) XXXXX-XXXX.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
       const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: perm.colaboradorId });
-      return { id: (r as any).insertId as number };
+      return { id: (r as { insertId: number }).insertId };
     }),
 
   atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional() }))
@@ -81,7 +81,7 @@ export const clientesRouter = router({
   criarAnotacao: protectedProcedure.input(z.object({ contatoId: z.number(), titulo: z.string().max(255).optional(), conteudo: z.string().min(1) })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
     const [r] = await db.insert(clienteAnotacoes).values({ escritorioId: esc.escritorio.id, contatoId: input.contatoId, titulo: input.titulo || null, conteudo: input.conteudo, criadoPor: esc.colaborador.id });
-    return { id: (r as any).insertId as number };
+    return { id: (r as { insertId: number }).insertId };
   }),
   excluirAnotacao: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
@@ -97,7 +97,7 @@ export const clientesRouter = router({
   salvarArquivo: protectedProcedure.input(z.object({ contatoId: z.number(), nome: z.string().max(255), tipo: z.string().max(64).optional(), tamanho: z.number().optional(), url: z.string() })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
     const [r] = await db.insert(clienteArquivos).values({ escritorioId: esc.escritorio.id, contatoId: input.contatoId, nome: input.nome, tipo: input.tipo || null, tamanho: input.tamanho || null, url: input.url, uploadPor: esc.colaborador.id });
-    return { id: (r as any).insertId as number };
+    return { id: (r as { insertId: number }).insertId };
   }),
   excluirArquivo: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
@@ -125,6 +125,6 @@ export const clientesRouter = router({
     const [ct] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`telefoneContato IS NOT NULL AND telefoneContato != ''`));
     const [ce] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`emailContato IS NOT NULL AND emailContato != ''`));
     const [nh] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`DATE(createdAtContato) = CURDATE()`));
-    return { total: Number((t as any)?.count || 0), novosHoje: Number((nh as any)?.count || 0), comTelefone: Number((ct as any)?.count || 0), comEmail: Number((ce as any)?.count || 0) };
+    return { total: Number((t as { count: number } | undefined)?.count || 0), novosHoje: Number((nh as { count: number } | undefined)?.count || 0), comTelefone: Number((ct as { count: number } | undefined)?.count || 0), comEmail: Number((ce as { count: number } | undefined)?.count || 0) };
   }),
 });

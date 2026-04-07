@@ -10,6 +10,8 @@ import { atualizarStatusCanal, registrarAudit } from "../escritorio/db-canais";
 import { getWhatsappManager } from "./whatsapp-baileys";
 import { processarMensagemRecebida } from "./whatsapp-handler";
 import type { WhatsappSessionStatus } from "../../shared/whatsapp-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-router-whatsapp");
 
 // ─── Inicializar callbacks do manager ────────────────────────────────────────
 
@@ -20,7 +22,7 @@ manager.setOnMensagem(async (canalId, escritorioId, msg) => {
   try {
     await processarMensagemRecebida(canalId, escritorioId, msg);
   } catch (err: any) {
-    console.error(`[WhatsApp Router] Erro ao processar mensagem canal ${canalId}:`, err.message);
+    log.error(`[WhatsApp Router] Erro ao processar mensagem canal ${canalId}:`, err.message);
   }
 });
 
@@ -39,11 +41,11 @@ manager.setOnStatusChange(async (canalId, status, extra) => {
         .from(canaisIntegrados).where(eq(canaisIntegrados.id, canalId)).limit(1);
       if (canal) {
         await atualizarStatusCanal(canalId, canal.escritorioId, dbStatus, mensagemErro);
-        console.log(`[WhatsApp Router] Status canal ${canalId} atualizado: ${dbStatus}`);
+        log.info(`[WhatsApp Router] Status canal ${canalId} atualizado: ${dbStatus}`);
       }
     }
   } catch (err: any) {
-    console.error(`[WhatsApp Router] Erro ao atualizar status canal ${canalId}:`, err.message);
+    log.error(`[WhatsApp Router] Erro ao atualizar status canal ${canalId}:`, err.message);
   }
 });
 
@@ -59,12 +61,12 @@ setTimeout(async () => {
         .from(canaisIntegrados)
         .where(and(eq(canaisIntegrados.tipo, "whatsapp_qr"), eq(canaisIntegrados.status, "conectado")));
       if (canais.length > 0) {
-        console.log(`[WhatsApp Router] Restaurando ${canais.length} sessão(ões) WhatsApp...`);
+        log.info(`[WhatsApp Router] Restaurando ${canais.length} sessão(ões) WhatsApp...`);
         await manager.restaurarSessoesSalvas(canais.map(c => ({ canalId: c.id, escritorioId: c.escritorioId })));
       }
     }
   } catch (err: any) {
-    console.error(`[WhatsApp Router] Erro ao restaurar sessões:`, err.message);
+    log.error(`[WhatsApp Router] Erro ao restaurar sessões:`, err.message);
   }
 }, 5000);
 

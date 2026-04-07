@@ -5,6 +5,8 @@ import { mensagemTemplates } from "../../drizzle/schema";
 import { eq, and, like, or, sql, type SQL } from "drizzle-orm";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { TRPCError } from "@trpc/server";
+import { createLogger } from "../_core/logger";
+const log = createLogger("escritorio-router-templates");
 
 export const templatesRouter = router({
   listar: protectedProcedure
@@ -23,7 +25,7 @@ export const templatesRouter = router({
         }
         return await db.select().from(mensagemTemplates).where(and(...conditions));
       } catch (err: any) {
-        console.error("[Templates] Erro ao listar:", err.message);
+        log.error("[Templates] Erro ao listar:", err.message);
         return [];
       }
     }),
@@ -48,7 +50,9 @@ export const templatesRouter = router({
         sql`INSERT INTO mensagem_templates (escritorioIdTpl, tituloTpl, conteudoTpl, categoriaTpl, atalhoTpl, criadoPorTpl) VALUES (${esc.escritorio.id}, ${input.titulo}, ${input.conteudo}, ${cat}, ${atalho}, ${esc.colaborador.id})`
       );
 
-      const insertId = (result as any)[0]?.insertId || (result as any).insertId || 0;
+      // db.execute() retorna [ResultSetHeader, FieldPacket[]] no mysql2
+      const header = Array.isArray(result) ? (result[0] as { insertId?: number }) : (result as { insertId?: number });
+      const insertId = header?.insertId ?? 0;
       return { id: insertId };
     }),
 

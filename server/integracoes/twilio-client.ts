@@ -1,3 +1,5 @@
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-twilio-client");
 /**
  * Twilio VoIP Client — Faz chamadas telefônicas via Twilio REST API
  * 
@@ -73,7 +75,7 @@ export async function iniciarChamada(
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[Twilio] Erro ${response.status}:`, errText);
+      log.error({ status: response.status, err: errText }, "Twilio retornou erro");
 
       // Tentar extrair mensagem de erro do Twilio
       let erroMsg = `Twilio erro: ${response.status}`;
@@ -86,7 +88,7 @@ export async function iniciarChamada(
     }
 
     const data = await response.json();
-    console.log(`[Twilio] Chamada iniciada: SID=${data.sid}, status=${data.status}`);
+    log.info(`[Twilio] Chamada iniciada: SID=${data.sid}, status=${data.status}`);
 
     return {
       success: true,
@@ -94,7 +96,7 @@ export async function iniciarChamada(
       status: data.status, // "queued" ou "initiated"
     };
   } catch (err: any) {
-    console.error(`[Twilio] Erro ao iniciar chamada:`, err.message);
+    log.error(`[Twilio] Erro ao iniciar chamada:`, err.message);
     return { success: false, erro: err.message };
   }
 }
@@ -150,11 +152,11 @@ export async function encerrarChamada(
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[Twilio] Erro ao encerrar chamada:`, errText);
+      log.error({ err: errText }, "Erro ao encerrar chamada Twilio");
       return { success: false, erro: `HTTP ${response.status}` };
     }
 
-    console.log(`[Twilio] Chamada ${callSid} encerrada`);
+    log.info(`[Twilio] Chamada ${callSid} encerrada`);
     return { success: true };
   } catch (err: any) {
     return { success: false, erro: err.message };

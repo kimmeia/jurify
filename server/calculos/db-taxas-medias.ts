@@ -14,6 +14,8 @@ import { taxasMediasBacen } from "../../drizzle/schema";
 import type { ModalidadeCredito, TipoPessoa, TipoVinculoConsignado } from "../../shared/financiamento-types";
 import { getCodigoSgs } from "../../shared/financiamento-types";
 import { buscarTaxaMediaBACEN, anualParaMensal } from "./bcb-taxas-medias";
+import { createLogger } from "../_core/logger";
+const log = createLogger("calculos-db-taxas-medias");
 
 /** Cache expira após 30 dias */
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -40,7 +42,7 @@ function validarCacheEntry(taxaMensal: number, taxaAnual: number, modalidade: st
 
   const limite = LIMITES_TAXA_MENSAL[modalidade] ?? 20;
   if (taxaMensal > limite) {
-    console.warn(`[cache] Taxa mensal ${taxaMensal}% excede limite ${limite}% para ${modalidade} — cache corrompido`);
+    log.warn(`[cache] Taxa mensal ${taxaMensal}% excede limite ${limite}% para ${modalidade} — cache corrompido`);
     return false;
   }
 
@@ -48,7 +50,7 @@ function validarCacheEntry(taxaMensal: number, taxaAnual: number, modalidade: st
   const anualCalculada = (Math.pow(1 + taxaMensal / 100, 12) - 1) * 100;
   const diff = Math.abs(anualCalculada - taxaAnual);
   if (diff > 5) {
-    console.warn(`[cache] Incoerência mensal/anual: ${taxaMensal}% → ${anualCalculada.toFixed(2)}% vs ${taxaAnual}% — cache corrompido`);
+    log.warn(`[cache] Incoerência mensal/anual: ${taxaMensal}% → ${anualCalculada.toFixed(2)}% vs ${taxaAnual}% — cache corrompido`);
     return false;
   }
 
@@ -93,7 +95,7 @@ export async function obterTaxaMedia(
 
         // Validação rigorosa do cache
         if (validarCacheEntry(taxaMensal, taxaAnual, modalidade)) {
-          console.log(`[cache] Hit: ${modalidade}/${dataContrato} (SGS ${codigoSgs}) → ${taxaAnual}% a.a. (${taxaMensal}% a.m.)`);
+          log.info(`[cache] Hit: ${modalidade}/${dataContrato} (SGS ${codigoSgs}) → ${taxaAnual}% a.a. (${taxaMensal}% a.m.)`);
           return {
             taxaMensal,
             taxaAnual,
@@ -102,7 +104,7 @@ export async function obterTaxaMedia(
           };
         } else {
           // Cache corrompido: deletar e re-buscar
-          console.warn(`[cache] Valor corrompido para ${modalidade}/${dataContrato}, deletando e re-buscando...`);
+          log.warn(`[cache] Valor corrompido para ${modalidade}/${dataContrato}, deletando e re-buscando...`);
           await db
             .delete(taxasMediasBacen)
             .where(
@@ -115,7 +117,7 @@ export async function obterTaxaMedia(
         }
       }
     } catch (e) {
-      console.warn("[db-taxas-medias] Erro ao buscar cache:", e);
+      log.warn({ err: String(e) }, "Erro ao buscar cache de taxas");
     }
   }
 
@@ -145,9 +147,9 @@ export async function obterTaxaMedia(
         taxaAnual: resultado.taxaAnual.toString(),
       });
 
-      console.log(`[cache] Saved: ${modalidade}/${dataContrato} (SGS ${codigoSgs}) → ${resultado.taxaAnual}% a.a. (${resultado.taxaMensal}% a.m.)`);
+      log.info(`[cache] Saved: ${modalidade}/${dataContrato} (SGS ${codigoSgs}) → ${resultado.taxaAnual}% a.a. (${resultado.taxaMensal}% a.m.)`);
     } catch (e) {
-      console.warn("[db-taxas-medias] Erro ao salvar cache:", e);
+      log.warn({ err: String(e) }, "Erro ao salvar cache de taxas");
     }
   }
 

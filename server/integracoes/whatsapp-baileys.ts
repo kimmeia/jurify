@@ -19,6 +19,8 @@ import type {
   WhatsappMensagemEnviar,
 } from "../../shared/whatsapp-types";
 import { jidToPhone } from "../../shared/whatsapp-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-whatsapp-baileys");
 
 // ─── Tipos internos ────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ class WhatsappSessionManager extends EventEmitter {
       this.baileysModule = await import("@whiskeysockets/baileys");
       return this.baileysModule;
     } catch (err) {
-      console.error("[WhatsApp] @whiskeysockets/baileys não instalado. Execute: npm install @whiskeysockets/baileys");
+      log.error("[WhatsApp] @whiskeysockets/baileys não instalado. Execute: npm install @whiskeysockets/baileys");
       throw new Error("Baileys não disponível. Instale @whiskeysockets/baileys.");
     }
   }
@@ -214,7 +216,7 @@ class WhatsappSessionManager extends EventEmitter {
       jid = `${destinatario.replace(/\D/g, "")}@s.whatsapp.net`;
     }
 
-    console.log(`[WhatsApp] Enviando para JID: ${jid}`);
+    log.info(`[WhatsApp] Enviando para JID: ${jid}`);
 
     try {
       let sent: any;
@@ -240,10 +242,10 @@ class WhatsappSessionManager extends EventEmitter {
         sent = await state.socket.sendMessage(jid, { text: conteudo });
       }
 
-      console.log(`[WhatsApp] Mensagem enviada com sucesso para ${jid}, id=${sent?.key?.id}`);
+      log.info(`[WhatsApp] Mensagem enviada com sucesso para ${jid}, id=${sent?.key?.id}`);
       return { messageId: sent?.key?.id || "" };
     } catch (err: any) {
-      console.error(`[WhatsApp] Erro ao enviar msg para ${jid}:`, err.message);
+      log.error(`[WhatsApp] Erro ao enviar msg para ${jid}:`, err.message);
       throw new Error(`Falha ao enviar mensagem: ${err.message}`);
     }
   }
@@ -261,11 +263,11 @@ class WhatsappSessionManager extends EventEmitter {
     for (const { canalId, escritorioId } of canais) {
       const authPath = this.getAuthPath(canalId);
       if (fs.existsSync(authPath) && fs.existsSync(path.join(authPath, "creds.json"))) {
-        console.log(`[WhatsApp] Restaurando sessão canal ${canalId}...`);
+        log.info(`[WhatsApp] Restaurando sessão canal ${canalId}...`);
         try {
           await this.iniciarSessao(canalId, escritorioId);
         } catch (err: any) {
-          console.error(`[WhatsApp] Falha ao restaurar canal ${canalId}:`, err.message);
+          log.error(`[WhatsApp] Falha ao restaurar canal ${canalId}:`, err.message);
         }
       }
     }
@@ -281,7 +283,7 @@ class WhatsappSessionManager extends EventEmitter {
         try {
           await state.socket.sendPresenceUpdate("available");
         } catch (err: any) {
-          console.warn(`[WhatsApp] Keepalive falhou canal ${state.canalId}:`, err.message);
+          log.warn(`[WhatsApp] Keepalive falhou canal ${state.canalId}:`, err.message);
         }
       }
     }, 2 * 60 * 1000); // 2 minutos
@@ -322,9 +324,9 @@ class WhatsappSessionManager extends EventEmitter {
         trace: () => {},
         debug: () => {},
         info: () => {},
-        warn: console.warn,
-        error: console.error,
-        fatal: console.error,
+        warn: log.warn,
+        error: log.error,
+        fatal: log.error,
         child: () => logger,
       };
     }
@@ -387,7 +389,7 @@ class WhatsappSessionManager extends EventEmitter {
           telefone: state.telefone,
           nome: state.nomeDispositivo,
         });
-        console.log(`[WhatsApp] Canal ${state.canalId} conectado: ${state.telefone}`);
+        log.info(`[WhatsApp] Canal ${state.canalId} conectado: ${state.telefone}`);
         this.startKeepalive(state);
       }
 
@@ -446,7 +448,7 @@ class WhatsappSessionManager extends EventEmitter {
       const isNotify = upsert.type === "notify";
       if (!isNotify && !isHistory) return;
 
-      console.log(`[WhatsApp] messages.upsert type=${upsert.type}, count=${upsert.messages?.length || 0}${isHistory ? " (histórico)" : ""}`);
+      log.info(`[WhatsApp] messages.upsert type=${upsert.type}, count=${upsert.messages?.length || 0}${isHistory ? " (histórico)" : ""}`);
 
       for (const msg of upsert.messages) {
         // Ignorar broadcast
@@ -466,7 +468,7 @@ class WhatsappSessionManager extends EventEmitter {
           continue;
         }
 
-        console.log(`[WhatsApp] Msg recebida de ${telefone} (${msg.pushName || "?"}) no chat ${chatId}`);
+        log.info(`[WhatsApp] Msg recebida de ${telefone} (${msg.pushName || "?"}) no chat ${chatId}`);
 
         // Extrair conteúdo
         let conteudo = "";
@@ -475,7 +477,7 @@ class WhatsappSessionManager extends EventEmitter {
 
         const m = msg.message;
         if (!m) {
-          console.log(`[WhatsApp] Msg sem conteúdo, ignorando`);
+          log.info(`[WhatsApp] Msg sem conteúdo, ignorando`);
           continue;
         }
 
@@ -544,11 +546,11 @@ class WhatsappSessionManager extends EventEmitter {
           tipo = "contato";
           conteudo = `👤 Contato: ${m.contactMessage.displayName || ""}`;
         } else {
-          console.log(`[WhatsApp] Tipo de mensagem não reconhecido:`, Object.keys(m));
+          log.debug({ tipos: Object.keys(m) }, "Tipo de mensagem WhatsApp não reconhecido");
           continue;
         }
 
-        console.log(`[WhatsApp] Processando: tipo=${tipo}, conteudo="${conteudo.slice(0, 50)}"${mediaUrl ? `, mediaUrl=${mediaUrl}` : ""}`);
+        log.info(`[WhatsApp] Processando: tipo=${tipo}, conteudo="${conteudo.slice(0, 50)}"${mediaUrl ? `, mediaUrl=${mediaUrl}` : ""}`);
 
         const parsed: WhatsappMensagemRecebida = {
           chatId,
@@ -566,14 +568,14 @@ class WhatsappSessionManager extends EventEmitter {
         // Emitir para callback
         if (this.onMensagem) {
           try {
-            console.log(`[WhatsApp] Chamando onMensagem callback para canal ${state.canalId}, escritório ${state.escritorioId}`);
+            log.info(`[WhatsApp] Chamando onMensagem callback para canal ${state.canalId}, escritório ${state.escritorioId}`);
             await this.onMensagem(state.canalId, state.escritorioId, parsed);
-            console.log(`[WhatsApp] Mensagem processada com sucesso no CRM`);
+            log.info(`[WhatsApp] Mensagem processada com sucesso no CRM`);
           } catch (err: any) {
-            console.error(`[WhatsApp] Erro no callback de mensagem:`, err.message, err.stack);
+            log.error(`[WhatsApp] Erro no callback de mensagem:`, err.message, err.stack);
           }
         } else {
-          console.warn(`[WhatsApp] onMensagem callback NÃO configurado!`);
+          log.warn(`[WhatsApp] onMensagem callback NÃO configurado!`);
         }
 
         this.emit("mensagem", state.canalId, parsed);
@@ -592,7 +594,7 @@ class WhatsappSessionManager extends EventEmitter {
       const buffer = await downloadMediaMessage(msg, "buffer", {});
       return buffer as Buffer;
     } catch (err: any) {
-      console.warn(`[WhatsApp] Falha ao baixar mídia:`, err.message);
+      log.warn(`[WhatsApp] Falha ao baixar mídia:`, err.message);
       return null;
     }
   }

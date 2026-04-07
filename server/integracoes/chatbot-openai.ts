@@ -1,3 +1,5 @@
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-chatbot-openai");
 export interface ChatBotConfig { openaiApiKey: string; modelo: string; prompt: string; ativo: boolean; maxTokens?: number; temperatura?: number; nomeAgente?: string; }
 export interface ChatBotMessage { role: "system" | "user" | "assistant"; content: string; }
 export interface ChatBotResponse { resposta: string | null; transferir: boolean; tokensUsados: number; nomeAgente?: string; erro?: string; }
@@ -11,13 +13,13 @@ export async function gerarRespostaChatBot(config: ChatBotConfig, historico: Cha
   const messages: ChatBotMessage[] = [{ role: "system", content: config.prompt + "\n\nIMPORTANTE: Se o cliente pedir para falar com um humano, responda dizendo que vai transferir e finalize com [TRANSFERIR]." }, ...historico.slice(-20), { role: "user", content: msgCliente }];
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` }, body: JSON.stringify({ model: config.modelo || "gpt-4o-mini", messages, max_tokens: config.maxTokens || 500, temperature: config.temperatura || 0.7 }) });
-    if (!res.ok) { const err = await res.text(); console.error(`[ChatBot] OpenAI ${res.status}:`, err); return { resposta: null, transferir: false, tokensUsados: 0, erro: `OpenAI ${res.status}` }; }
+    if (!res.ok) { const err = await res.text(); log.error({ status: res.status, err }, "OpenAI retornou erro"); return { resposta: null, transferir: false, tokensUsados: 0, erro: `OpenAI ${res.status}` }; }
     const data = await res.json();
     const texto = data.choices?.[0]?.message?.content?.trim() || "";
     const tokens = data.usage?.total_tokens || 0;
     if (texto.includes("[TRANSFERIR]")) { return { resposta: texto.replace("[TRANSFERIR]", "").trim() || "Vou transferir você para um atendente.", transferir: true, tokensUsados: tokens, nomeAgente: config.nomeAgente }; }
     return { resposta: texto, transferir: false, tokensUsados: tokens, nomeAgente: config.nomeAgente };
-  } catch (err: any) { console.error(`[ChatBot] Erro:`, err.message); return { resposta: null, transferir: false, tokensUsados: 0, erro: err.message }; }
+  } catch (err: any) { log.error(`[ChatBot] Erro:`, err.message); return { resposta: null, transferir: false, tokensUsados: 0, erro: err.message }; }
 }
 
 export async function obterConfigChatBot(escritorioId: number, canalId?: number): Promise<ChatBotConfig | null> {
@@ -28,7 +30,7 @@ export async function obterConfigChatBot(escritorioId: number, canalId?: number)
     const db = await getDb(); if (db) { const [g] = await db.select().from(agentesIa).where(and(eq(agentesIa.escritorioId, escritorioId), eq(agentesIa.ativo, true))).limit(1);
       if (g && g.openaiApiKey && g.apiKeyIv && g.apiKeyTag) { const crypto = await import("crypto"); const K = process.env.CANAIS_ENCRYPTION_KEY || "0".repeat(64); const d = crypto.createDecipheriv("aes-256-gcm", Buffer.from(K, "hex"), Buffer.from(g.apiKeyIv, "base64")); d.setAuthTag(Buffer.from(g.apiKeyTag, "base64")); let k = d.update(g.openaiApiKey, "base64", "utf8"); k += d.final("utf8"); return { openaiApiKey: k, modelo: g.modelo, prompt: g.prompt, ativo: true, maxTokens: g.maxTokens || 500, temperatura: parseFloat(g.temperatura || "0.70"), nomeAgente: g.nome }; }
     }
-  } catch { console.log(`[ChatBot] agentes_ia indisponível, fallback legado`); }
+  } catch { log.info(`[ChatBot] agentes_ia indisponível, fallback legado`); }
   return null;
 }
 

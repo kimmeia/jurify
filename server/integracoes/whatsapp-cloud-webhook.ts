@@ -16,6 +16,8 @@ import { eq, and } from "drizzle-orm";
 import { processarMensagemRecebida } from "./whatsapp-handler";
 import { decryptConfig } from "../escritorio/crypto-utils";
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-whatsapp-cloud-webhook");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -95,15 +97,15 @@ export function registerWhatsAppCloudWebhook(app: Express) {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    console.log("[WhatsApp Cloud] Verificação webhook recebida:", { mode, token: token ? "***" : "vazio" });
+    log.info({ mode, hasToken: !!token }, "Verificação webhook recebida");
 
     if (mode === "subscribe") {
       const verifyToken = await getVerifyToken();
       if (verifyToken && token === verifyToken) {
-        console.log("[WhatsApp Cloud] Webhook verificado com sucesso!");
+        log.info("[WhatsApp Cloud] Webhook verificado com sucesso!");
         return res.status(200).send(challenge);
       }
-      console.warn("[WhatsApp Cloud] Token de verificação inválido");
+      log.warn("[WhatsApp Cloud] Token de verificação inválido");
       return res.status(403).send("Forbidden");
     }
 
@@ -132,7 +134,7 @@ export function registerWhatsAppCloudWebhook(app: Express) {
           let canalInfo = phoneNumberId ? await findCanalByPhoneNumberId(phoneNumberId) : null;
           if (!canalInfo && wabaId) canalInfo = await findCanalByWabaId(wabaId);
           if (!canalInfo) {
-            console.warn(`[WhatsApp Cloud] Canal não encontrado para phoneNumberId=${phoneNumberId} wabaId=${wabaId}`);
+            log.warn(`[WhatsApp Cloud] Canal não encontrado para phoneNumberId=${phoneNumberId} wabaId=${wabaId}`);
             continue;
           }
 
@@ -202,11 +204,11 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                 isGroup: false,
               };
 
-              console.log(`[WhatsApp Cloud] Mensagem de ${nome} (${telefone}): ${conteudo.slice(0, 50)}`);
+              log.info(`[WhatsApp Cloud] Mensagem de ${nome} (${telefone}): ${conteudo.slice(0, 50)}`);
               await processarMensagemRecebida(canalInfo.canalId, canalInfo.escritorioId, msg);
 
             } catch (msgErr: any) {
-              console.error(`[WhatsApp Cloud] Erro ao processar mensagem:`, msgErr.message);
+              log.error(`[WhatsApp Cloud] Erro ao processar mensagem:`, msgErr.message);
             }
           }
 
@@ -232,9 +234,9 @@ export function registerWhatsAppCloudWebhook(app: Express) {
         }
       }
     } catch (err: any) {
-      console.error("[WhatsApp Cloud] Erro geral no webhook:", err.message);
+      log.error("[WhatsApp Cloud] Erro geral no webhook:", err.message);
     }
   });
 
-  console.log("[WhatsApp Cloud] Webhook registrado: GET/POST /api/webhooks/whatsapp");
+  log.info("[WhatsApp Cloud] Webhook registrado: GET/POST /api/webhooks/whatsapp");
 }

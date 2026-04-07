@@ -3,6 +3,8 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { PLANS } from "./stripe/products";
+import { createLogger } from "./_core/logger";
+const log = createLogger("db");
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -11,7 +13,7 @@ export async function getDb() {
     try {
       _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      log.warn({ err: String(error) }, "Failed to connect");
       _db = null;
     }
   }
@@ -25,7 +27,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
+    log.warn("[Database] Cannot upsert user: database not available");
     return;
   }
 
@@ -68,7 +70,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
     await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
+    log.error({ err: String(error) }, "Failed to upsert user");
     throw error;
   }
 }
@@ -329,7 +331,7 @@ export async function registarCalculo(data: InsertCalculoHistorico): Promise<voi
   try {
     await db.insert(calculosHistorico).values(data);
   } catch (error) {
-    console.error("[Database] Failed to register calculo:", error);
+    log.error({ err: String(error) }, "Failed to register calculo");
   }
 }
 

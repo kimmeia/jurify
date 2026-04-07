@@ -19,6 +19,8 @@
  */
 
 import type { Express, Request, Response } from "express";
+import { createLogger } from "./logger";
+const log = createLogger("_core-sse-notifications");
 
 export interface Notificacao {
   tipo: "nova_mensagem" | "novo_lead" | "conversa_atribuida" | "assinatura_concluida" | "movimentacao_processo" | "info";
@@ -56,7 +58,7 @@ export function registrarSSE(app: Express) {
     atual.push(res);
     conexoes.set(userId, atual);
 
-    console.log(`[SSE] Usuário ${userId} conectado (${atual.length} conexão(ões))`);
+    log.info(`[SSE] Usuário ${userId} conectado (${atual.length} conexão(ões))`);
 
     // Heartbeat a cada 30s para manter conexão viva
     const heartbeat = setInterval(() => {
@@ -72,7 +74,7 @@ export function registrarSSE(app: Express) {
       if (idx >= 0) conns.splice(idx, 1);
       if (conns.length === 0) conexoes.delete(userId);
       else conexoes.set(userId, conns);
-      console.log(`[SSE] Usuário ${userId} desconectado`);
+      log.info(`[SSE] Usuário ${userId} desconectado`);
     });
   });
 }
@@ -119,7 +121,7 @@ export async function emitirParaEscritorio(escritorioId: number, notificacao: Om
       emitirNotificacao(c.userId, notificacao);
     }
   } catch (err: any) {
-    console.error("[SSE] Erro ao emitir para escritório:", err.message);
+    log.error("[SSE] Erro ao emitir para escritório:", err.message);
   }
 }
 
@@ -140,7 +142,7 @@ export async function emitirParaAtendente(colaboradorId: number, notificacao: Om
 
     if (colab) emitirNotificacao(colab.userId, notificacao);
   } catch (err: any) {
-    console.error("[SSE] Erro ao emitir para atendente:", err.message);
+    log.error("[SSE] Erro ao emitir para atendente:", err.message);
   }
 }
 

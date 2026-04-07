@@ -15,6 +15,8 @@ import { consultarProcessoDataJud, consultarMovimentacoesRecentes, buscarProcess
 import { extrairTribunalAlias, formatarNumeroCnj, validarNumeroCnj } from "../../shared/processos-types";
 import { criarNotificacao } from "./router-notificacoes";
 import { getFonteInfo, getProviderByAlias } from "./tribunal-providers";
+import { createLogger } from "../_core/logger";
+const log = createLogger("processos-router-processos");
 
 export const processosRouter = router({
   checkAccess: protectedProcedure.query(() => ({ available: true })),
@@ -273,7 +275,7 @@ export const processosRouter = router({
             tipo: "movimentacao",
             processoId: processo.id,
           });
-        } catch (e) { console.warn("[Processos] Erro notificação:", e); }
+        } catch (e) { log.warn({ err: String(e) }, "Erro ao criar notificação de processo"); }
       }
 
       return {

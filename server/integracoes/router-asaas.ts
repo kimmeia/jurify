@@ -22,6 +22,8 @@ import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritori
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient } from "./asaas-client";
 import { syncCobrancasDeCliente, syncCobrancasEscritorio } from "./asaas-sync";
+import { createLogger } from "../_core/logger";
+const log = createLogger("integracoes-router-asaas");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -171,10 +173,10 @@ export const asaasRouter = router({
           const email = userRow?.email || "noreply@calcsaas.app";
           await client.configurarWebhook(fullWebhookUrl, webhookToken, email);
           webhookRegistrado = true;
-          console.log(`[Asaas] Webhook auto-registrado: ${fullWebhookUrl}`);
+          log.info(`[Asaas] Webhook auto-registrado: ${fullWebhookUrl}`);
         } catch (err: any) {
           webhookErro = err.response?.data?.errors?.[0]?.description || err.message || "Erro desconhecido";
-          console.warn(`[Asaas] Falha ao auto-registrar webhook: ${webhookErro}`);
+          log.warn(`[Asaas] Falha ao auto-registrar webhook: ${webhookErro}`);
         }
       }
 
@@ -263,7 +265,7 @@ export const asaasRouter = router({
           if (vinc) {
             await db.delete(asaasClientes).where(eq(asaasClientes.id, vinc.id));
             removidos++;
-            console.log(`[Asaas Sync] Cliente ${asaasCli.id} deletado localmente`);
+            log.info(`[Asaas Sync] Cliente ${asaasCli.id} deletado localmente`);
           }
           continue;
         }
@@ -351,7 +353,7 @@ export const asaasRouter = router({
       if (!idsAsaas.has(vinc.asaasCustomerId)) {
         await db.delete(asaasClientes).where(eq(asaasClientes.id, vinc.id));
         removidos++;
-        console.log(`[Asaas Sync] Cliente órfão ${vinc.asaasCustomerId} removido (não existe mais no Asaas)`);
+        log.info(`[Asaas Sync] Cliente órfão ${vinc.asaasCustomerId} removido (não existe mais no Asaas)`);
       }
     }
 
@@ -361,7 +363,7 @@ export const asaasRouter = router({
       const result = await syncCobrancasEscritorio(esc.escritorio.id);
       cobrancasSincronizadas = result.cobrancas;
     } catch (err: any) {
-      console.warn(`[Asaas] Erro ao sincronizar cobranças: ${err.message}`);
+      log.warn(`[Asaas] Erro ao sincronizar cobranças: ${err.message}`);
     }
 
     return { vinculados, novos, removidos, total: vinculados + novos, cobrancasSincronizadas };

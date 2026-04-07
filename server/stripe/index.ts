@@ -1,9 +1,11 @@
 import Stripe from "stripe";
+import { createLogger } from "../_core/logger";
+const log = createLogger("stripe-index");
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 if (!stripeSecretKey) {
-  console.warn("[Stripe] STRIPE_SECRET_KEY not set — Stripe features disabled");
+  log.warn("[Stripe] STRIPE_SECRET_KEY not set — Stripe features disabled");
 }
 
 export const stripe = stripeSecretKey
