@@ -32,6 +32,7 @@ import {
   asaasClientes,
   asaasCobrancas,
   processosMonitorados,
+  juditMonitoramentos,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
@@ -285,9 +286,11 @@ export const customer360Router = router({
           .orderBy(desc(conversas.ultimaMensagemAt))
           .limit(5);
 
-        // ─── Processos (buscar por CPF/CNPJ no nome das partes — best effort) ─
-        // Processos monitorados pelo userId logado — usamos isso como proxy
-        const processosDoUser = await db
+        // ─── Processos das DUAS fontes (DataJud + Judit.IO) ──────────────
+        // Mescla processos monitorados via DataJud (tabela processosMonitorados)
+        // com os monitorados via Judit.IO (tabela juditMonitoramentos).
+        // Frontend renderiza todos juntos com badge de "fonte".
+        const processosDataJud = await db
           .select({
             id: processosMonitorados.id,
             numeroCnj: processosMonitorados.numeroCnj,
@@ -305,6 +308,70 @@ export const customer360Router = router({
             ),
           )
           .limit(10);
+
+        // Shape unificada que aceita campos nullable de qualquer fonte
+        type ProcessoNoCard = {
+          id: number;
+          numeroCnj: string;
+          classe: string | null;
+          tribunal: string | null;
+          ultimaMovimentacao: string | null;
+          ultimaMovimentacaoData: string | null;
+          status: string;
+          fonte: "datajud" | "judit";
+        };
+
+        const processosNormalizados: ProcessoNoCard[] = processosDataJud.map((p) => ({
+          id: p.id,
+          numeroCnj: p.numeroCnj,
+          classe: p.classe,
+          tribunal: p.tribunal,
+          ultimaMovimentacao: p.ultimaMovimentacao,
+          ultimaMovimentacaoData: p.ultimaMovimentacaoData,
+          status: p.status,
+          fonte: "datajud",
+        }));
+
+        try {
+          const monsJudit = await db
+            .select({
+              id: juditMonitoramentos.id,
+              searchKey: juditMonitoramentos.searchKey,
+              tribunal: juditMonitoramentos.tribunal,
+              ultimaMovJudit: juditMonitoramentos.ultimaMovimentacao,
+              ultimaMovDataJudit: juditMonitoramentos.ultimaMovimentacaoData,
+              statusJudit: juditMonitoramentos.statusJudit,
+            })
+            .from(juditMonitoramentos)
+            .where(
+              and(
+                eq(juditMonitoramentos.clienteUserId, ctx.user.id),
+                or(
+                  eq(juditMonitoramentos.statusJudit, "created"),
+                  eq(juditMonitoramentos.statusJudit, "updating"),
+                  eq(juditMonitoramentos.statusJudit, "updated"),
+                ),
+              ),
+            )
+            .limit(10);
+
+          for (const m of monsJudit) {
+            processosNormalizados.push({
+              id: -m.id, // negativo pra não colidir com IDs DataJud no React key
+              numeroCnj: m.searchKey,
+              classe: null,
+              tribunal: m.tribunal,
+              ultimaMovimentacao: m.ultimaMovJudit,
+              ultimaMovimentacaoData: m.ultimaMovDataJudit,
+              status: "ativo",
+              fonte: "judit",
+            });
+          }
+        } catch (err) {
+          log.warn({ err: String(err) }, "Falha ao buscar monitoramentos Judit");
+        }
+
+        const processosDoUser = processosNormalizados.slice(0, 10);
 
         // ─── Parse de tags ────────────────────────────────────────────────
         let tags: string[] = [];
