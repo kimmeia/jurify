@@ -88,6 +88,112 @@ function splitStatements(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * Garantia hardcoded de schema para auth (passwordHash, googleSub).
+ *
+ * Roda ANTES das migrations baseadas em arquivo. Garante que as colunas
+ * essenciais para login existem mesmo se:
+ *  - A pasta drizzle/ não for acessível em runtime
+ *  - Alguma migration anterior falhar e bloquear as seguintes
+ *  - O esquema do banco estiver dessincronizado por qualquer motivo
+ *
+ * Usa information_schema pra checar antes de tentar adicionar — assim
+ * é idempotente e seguro de rodar a cada boot.
+ */
+async function ensureAuthColumns(connection: mysql.Connection): Promise<void> {
+  try {
+    // Verifica se a tabela users existe
+    const [tables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+    );
+    if ((tables as unknown[]).length === 0) {
+      log.warn("Tabela 'users' ainda não existe — pulando ensureAuthColumns");
+      return;
+    }
+
+    // Lista colunas existentes
+    const [cols] = await connection.query(
+      `SELECT COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+    );
+    const colMap = new Map(
+      (cols as { COLUMN_NAME: string; CHARACTER_MAXIMUM_LENGTH: number | null }[]).map(
+        (c) => [c.COLUMN_NAME, c.CHARACTER_MAXIMUM_LENGTH],
+      ),
+    );
+
+    const ops: { name: string; sql: string }[] = [];
+
+    // openId precisa ser >= 128 chars (acomoda openIds sintéticos)
+    const openIdLen = colMap.get("openId");
+    if (openIdLen != null && openIdLen < 128) {
+      ops.push({
+        name: "openId → VARCHAR(128)",
+        sql: "ALTER TABLE users MODIFY COLUMN openId VARCHAR(128) NOT NULL",
+      });
+    }
+
+    // passwordHash
+    if (!colMap.has("passwordHash")) {
+      ops.push({
+        name: "ADD passwordHash",
+        sql: "ALTER TABLE users ADD COLUMN passwordHash VARCHAR(255) NULL AFTER email",
+      });
+    }
+
+    // googleSub
+    if (!colMap.has("googleSub")) {
+      ops.push({
+        name: "ADD googleSub",
+        sql: "ALTER TABLE users ADD COLUMN googleSub VARCHAR(128) NULL AFTER passwordHash",
+      });
+    }
+
+    if (ops.length === 0) {
+      log.debug("ensureAuthColumns: schema já está atualizado");
+      return;
+    }
+
+    log.info({ ops: ops.map((o) => o.name) }, "ensureAuthColumns: aplicando alterações");
+
+    for (const op of ops) {
+      try {
+        await connection.query(op.sql);
+        log.info({ op: op.name }, "ensureAuthColumns: aplicado");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (isHarmlessError(msg)) {
+          log.debug({ op: op.name, err: msg }, "ensureAuthColumns: já aplicado");
+        } else {
+          log.error({ op: op.name, err: msg }, "ensureAuthColumns: falha");
+        }
+      }
+    }
+
+    // Índices úteis (idempotente)
+    const indexOps = [
+      { name: "idx_users_googleSub", sql: "CREATE INDEX idx_users_googleSub ON users (googleSub)" },
+      { name: "idx_users_email", sql: "CREATE INDEX idx_users_email ON users (email)" },
+    ];
+    for (const op of indexOps) {
+      try {
+        await connection.query(op.sql);
+        log.info({ op: op.name }, "ensureAuthColumns: índice criado");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (isHarmlessError(msg)) {
+          /* já existe */
+        } else {
+          log.warn({ op: op.name, err: msg }, "ensureAuthColumns: índice falhou");
+        }
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureAuthColumns: erro inesperado");
+  }
+}
+
 export async function runMigrations(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -95,23 +201,7 @@ export async function runMigrations(): Promise<void> {
     return;
   }
 
-  const dir = findDrizzleDir();
-  if (!dir) {
-    log.warn("Pasta drizzle/ não encontrada — pulando migrations");
-    return;
-  }
-
-  const files = fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort(); // garante ordem alfabética/numérica
-
-  if (files.length === 0) {
-    log.info("Nenhuma migration encontrada em drizzle/");
-    return;
-  }
-
-  log.info({ count: files.length, dir }, "Iniciando migrations");
+  log.info("Iniciando processo de migrations");
 
   let connection: mysql.Connection;
   try {
@@ -122,6 +212,29 @@ export async function runMigrations(): Promise<void> {
   }
 
   try {
+    // ─── 1. Garantia hardcoded de schema essencial ──────────────────────────
+    // Roda SEMPRE, independente das migrations baseadas em arquivo.
+    await ensureAuthColumns(connection);
+
+    // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────
+    const dir = findDrizzleDir();
+    if (!dir) {
+      log.warn("Pasta drizzle/ não encontrada — pulando migrations baseadas em arquivo");
+      return;
+    }
+
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+
+    if (files.length === 0) {
+      log.info("Nenhum arquivo .sql em drizzle/");
+      return;
+    }
+
+    log.info({ count: files.length, dir }, "Lendo migrations da pasta drizzle/");
+
     // Garante a tabela de controle
     await connection.execute(
       `CREATE TABLE IF NOT EXISTS __migrations (
@@ -130,12 +243,12 @@ export async function runMigrations(): Promise<void> {
       )`,
     );
 
-    // Carrega quais já foram aplicadas
     const [rows] = await connection.execute("SELECT filename FROM __migrations");
     const applied = new Set((rows as { filename: string }[]).map((r) => r.filename));
 
     let aplicadas = 0;
     let puladas = 0;
+    let comErro = 0;
 
     for (const file of files) {
       if (applied.has(file)) {
@@ -144,17 +257,26 @@ export async function runMigrations(): Promise<void> {
       }
 
       const fullPath = path.join(dir, file);
-      const sql = fs.readFileSync(fullPath, "utf8");
+      let sql: string;
+      try {
+        sql = fs.readFileSync(fullPath, "utf8");
+      } catch (err) {
+        log.warn({ file, err: String(err) }, "Não consegui ler arquivo, pulando");
+        comErro++;
+        continue;
+      }
+
       const statements = splitStatements(sql);
 
       if (statements.length === 0) {
-        log.warn({ file }, "Migration sem statements executáveis — pulando sem marcar como aplicada");
+        log.warn({ file }, "Sem statements executáveis, pulando sem marcar");
         continue;
       }
 
       log.info({ file, statements: statements.length }, "Aplicando migration");
 
       let warnings = 0;
+      let fileFailed = false;
       for (const stmt of statements) {
         try {
           await connection.query(stmt);
@@ -162,23 +284,30 @@ export async function runMigrations(): Promise<void> {
           const msg = err.message || String(err);
           if (isHarmlessError(msg)) {
             warnings++;
-            log.debug({ file, err: msg }, "Statement já aplicado");
           } else {
-            log.error({ file, err: msg, stmt: stmt.slice(0, 200) }, "Erro na migration");
-            throw err;
+            log.warn({ file, err: msg, stmt: stmt.slice(0, 150) }, "Statement falhou");
+            fileFailed = true;
+            // NÃO faz throw — continua tentando os próximos statements e o próximo arquivo
           }
         }
       }
 
-      // Marca como aplicada
-      await connection.execute("INSERT INTO __migrations (filename) VALUES (?)", [file]);
-      aplicadas++;
-      log.info({ file, warnings }, "Migration aplicada");
+      if (fileFailed) {
+        comErro++;
+        log.warn({ file, warnings }, "Migration teve falhas — não marcando como aplicada");
+      } else {
+        await connection.execute("INSERT INTO __migrations (filename) VALUES (?)", [file]);
+        aplicadas++;
+        log.info({ file, warnings }, "Migration aplicada com sucesso");
+      }
     }
 
-    log.info({ aplicadas, puladas, total: files.length }, "Migrations concluídas");
+    log.info(
+      { aplicadas, puladas, comErro, total: files.length },
+      "Migrations concluídas",
+    );
   } catch (err) {
-    log.error({ err: String(err) }, "Falha ao executar migrations — boot prossegue mesmo assim");
+    log.error({ err: String(err) }, "Falha geral em runMigrations");
   } finally {
     await connection.end().catch(() => {
       /* ignore */
