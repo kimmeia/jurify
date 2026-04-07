@@ -30,6 +30,8 @@ interface GoogleAccountsId {
   initialize: (config: {
     client_id: string;
     callback: (response: { credential: string }) => void;
+    auto_select?: boolean;
+    cancel_on_tap_outside?: boolean;
   }) => void;
   renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
   prompt: () => void;
@@ -39,6 +41,12 @@ function getGoogleGIS(): GoogleAccountsId | null {
   const w = window as unknown as { google?: { accounts?: { id?: GoogleAccountsId } } };
   return w.google?.accounts?.id ?? null;
 }
+
+// Estado global pra evitar inicializar o Google SDK várias vezes (cada
+// instância do AuthForms — Login modal, Cadastro modal — chamava initialize
+// e o GSI loga warning sobre múltiplas inicializações).
+let gisInitialized = false;
+let gisCallback: ((response: { credential: string }) => void) | null = null;
 
 export function AuthForms({ onSuccess, defaultTab = "login" }: AuthFormsProps) {
   const [tab, setTab] = useState<"login" | "signup">(defaultTab);
@@ -102,21 +110,35 @@ export function AuthForms({ onSuccess, defaultTab = "login" }: AuthFormsProps) {
     }
   }, [googleConfig?.enabled]);
 
-  // Inicializa e renderiza o botão Google quando o script carrega
+  // Inicializa o Google SDK uma única vez (global) e renderiza o botão local.
+  // O callback é mantido em uma referência mutável global pra cada instância
+  // do AuthForms poder injetar sua própria mutation sem reinicializar o SDK.
   useEffect(() => {
     if (!gisLoaded || !googleConfig?.clientId || !googleBtnRef.current) return;
     const gis = getGoogleGIS();
     if (!gis) return;
 
-    gis.initialize({
-      client_id: googleConfig.clientId,
-      callback: (response: { credential: string }) => {
-        if (response.credential) {
-          loginGoogleMut.mutate({ idToken: response.credential });
-        }
-      },
-    });
+    // Atualiza o callback global apontando pra mutation desta instância
+    gisCallback = (response: { credential: string }) => {
+      if (response.credential) {
+        loginGoogleMut.mutate({ idToken: response.credential });
+      }
+    };
 
+    // Initialize só na primeira vez
+    if (!gisInitialized) {
+      gis.initialize({
+        client_id: googleConfig.clientId,
+        callback: (response: { credential: string }) => {
+          gisCallback?.(response);
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      gisInitialized = true;
+    }
+
+    // Render do botão sempre roda (precisa do ref atual)
     gis.renderButton(googleBtnRef.current, {
       type: "standard",
       theme: "outline",

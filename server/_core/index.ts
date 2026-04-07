@@ -46,6 +46,22 @@ async function startServer() {
 
   const app = express();
   const server = createServer(app);
+
+  // Confia no proxy reverso (Railway, Vercel, Nginx, etc.) — necessário pra
+  // que req.protocol detecte HTTPS via X-Forwarded-Proto. Sem isso, os cookies
+  // saem com `secure: false` mesmo em HTTPS, e o navegador rejeita
+  // (sameSite=none exige secure=true).
+  app.set("trust proxy", 1);
+
+  // Headers de segurança — Cross-Origin-Opener-Policy permite popups (Google
+  // Sign-In, Facebook Login) se comunicarem de volta via postMessage com a
+  // janela pai. Sem isso, o popup do Google Sign-In falha ao retornar o token.
+  app.use((_req, res, next) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+    res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+    next();
+  });
+
   // Stripe webhook MUST be registered BEFORE express.json()
   registerStripeWebhook(app);
   // Configure body parser with larger size limit for file uploads
