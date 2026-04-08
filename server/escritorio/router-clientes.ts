@@ -6,7 +6,7 @@ import { contatos, clienteArquivos, clienteAnotacoes, conversas, leads } from ".
 import { eq, and, desc, like, or, sql } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
-import { verificarLimite } from "../stripe/plan-limits";
+import { verificarLimite } from "../billing/plan-limits";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 
 export const clientesRouter = router({

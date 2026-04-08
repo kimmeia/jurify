@@ -5,7 +5,7 @@
  *  - Estatísticas e relatórios (crescimento, MRR, cálculos)
  *  - Gestão de usuários (atualizar role, conceder créditos)
  *  - Visão operacional (escritórios, canais, conversas)
- *  - Saúde do sistema (DB, Stripe, env vars)
+ *  - Saúde do sistema (DB, Asaas, env vars)
  */
 
 import { z } from "zod";
@@ -25,7 +25,8 @@ import {
   addCreditsToUser,
   getActiveSubscription,
 } from "../db";
-import { PLANS } from "../stripe/products";
+import { PLANS } from "../billing/products";
+import { isAsaasBillingConfigured } from "../billing/asaas-billing-client";
 import {
   users,
   subscriptions as subscriptionsTable,
@@ -292,7 +293,7 @@ export const adminRouter = router({
     }));
   }),
 
-  /** Saúde do sistema: verifica DB, Stripe, variáveis essenciais */
+  /** Saúde do sistema: verifica DB, gateway de pagamento, variáveis essenciais */
   systemHealth: adminProcedure.query(async () => {
     const checks: Array<{ nome: string; status: "ok" | "erro" | "aviso"; detalhe: string }> = [];
 
@@ -303,20 +304,13 @@ export const adminRouter = router({
       detalhe: db ? "Conectado" : "Indisponível",
     });
 
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const asaasOk = await isAsaasBillingConfigured();
     checks.push({
-      nome: "Stripe",
-      status: stripeKey ? "ok" : "aviso",
-      detalhe: stripeKey
-        ? `Key: ${stripeKey.slice(0, 7)}...${stripeKey.slice(-4)}`
-        : "STRIPE_SECRET_KEY não definida",
-    });
-
-    const stripeWh = process.env.STRIPE_WEBHOOK_SECRET;
-    checks.push({
-      nome: "Stripe Webhook",
-      status: stripeWh ? "ok" : "aviso",
-      detalhe: stripeWh ? "Configurado" : "STRIPE_WEBHOOK_SECRET não definida",
+      nome: "Asaas (Cobrança SaaS)",
+      status: asaasOk ? "ok" : "aviso",
+      detalhe: asaasOk
+        ? "Configurado em Integrações"
+        : "API key do Asaas não configurada — vá em Integrações",
     });
 
     const encKey = process.env.ENCRYPTION_KEY;

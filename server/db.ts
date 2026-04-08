@@ -2,7 +2,7 @@ import { eq, and, or, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico } from "../drizzle/schema";
 import { ENV } from './_core/env';
-import { PLANS } from "./stripe/products";
+import { PLANS } from "./billing/products";
 import { createLogger } from "./_core/logger";
 const log = createLogger("db");
 

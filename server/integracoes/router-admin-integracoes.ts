@@ -18,6 +18,7 @@ import { adminIntegracoes } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt, maskToken, generateWebhookSecret } from "../escritorio/crypto-utils";
 import { JuditClient } from "./judit-client";
+import { AsaasClient } from "./asaas-client";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-router-admin-integracoes");
 
@@ -48,6 +49,13 @@ const PROVEDORES: ProvedorMeta[] = [
     docUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api",
     services: ["Cloud API", "Webhooks", "CoEx", "Mensagens"],
   },
+  {
+    id: "asaas",
+    nome: "Asaas (Cobrança SaaS)",
+    descricao: "Gateway de pagamento para mensalidades dos escritórios assinantes do Jurify (substitui Stripe).",
+    docUrl: "https://docs.asaas.com/reference",
+    services: ["Assinaturas", "Boleto", "PIX", "Cartão", "Webhooks"],
+  },
 ];
 
 function getProvedorMeta(provedor: string): ProvedorMeta | undefined {
@@ -75,6 +83,19 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
       } catch {
         return { ok: false, mensagem: "Formato invalido. Esperado JSON com appId, appSecret, webhookVerifyToken" };
       }
+    }
+    case "asaas": {
+      // Mesma classe AsaasClient que escritórios usam — só que aqui é a key
+      // do ADMIN, usada pra cobrar a mensalidade dos próprios escritórios.
+      const client = new AsaasClient(apiKey);
+      const r = await client.testarConexao();
+      if (!r.ok) return r;
+      return {
+        ok: true,
+        mensagem: `Asaas (${r.modo}) conectado. Saldo: R$ ${(r.saldo ?? 0).toFixed(2)}`,
+        modo: r.modo,
+        saldo: r.saldo,
+      };
     }
     default:
       return { ok: false, mensagem: `Provedor "${provedor}" não suportado` };

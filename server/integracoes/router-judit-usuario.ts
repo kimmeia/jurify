@@ -24,7 +24,7 @@ import { juditMonitoramentos, juditRespostas } from "../../drizzle/schema";
 import { eq, and, desc, or, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getJuditClient } from "./judit-webhook";
-import { getLimites } from "../stripe/plan-limits";
+import { getLimites } from "../billing/plan-limits";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS

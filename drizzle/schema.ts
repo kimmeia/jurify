@@ -30,7 +30,8 @@ export const users = mysqlTable("users", {
   /** Método de login: 'email', 'google', 'manus' (legado), 'demo' */
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  /** ID do customer no Asaas (cobrança SaaS Jurify). Substituiu stripeCustomerId. */
+  asaasCustomerId: varchar("asaasCustomerId", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -40,14 +41,19 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Subscriptions table — tracks active Stripe subscriptions per user.
- * We store only essential Stripe IDs and a cached status for quick lookups.
+ * Subscriptions table — assinaturas SaaS Jurify (uma por usuário-dono).
+ *
+ * Migrado de Stripe para Asaas. Os IDs do Asaas substituem os antigos
+ * stripeSubscriptionId/stripePriceId. O `planId` continua mapeando para
+ * a tabela `PLANS` em `server/billing/products.ts`.
  */
 export const subscriptions = mysqlTable("subscriptions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }).notNull().unique(),
-  stripePriceId: varchar("stripePriceId", { length: 255 }).notNull(),
+  /** ID da assinatura no Asaas (sub_xxxx). Único por subscription. */
+  asaasSubscriptionId: varchar("asaasSubscriptionId", { length: 255 }).unique(),
+  /** ID do customer no Asaas (cus_xxxx). Mesmo de users.asaasCustomerId. */
+  asaasCustomerId: varchar("asaasCustomerId", { length: 255 }),
   planId: varchar("planId", { length: 64 }),
   status: mysqlEnum("status", [
     "active",

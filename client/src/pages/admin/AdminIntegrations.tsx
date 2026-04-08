@@ -85,12 +85,19 @@ function WhatsAppCloudForm({ onConnect, isConnecting }: { onConnect: (json: stri
   );
 }
 
-// Logo SVG inline para a Judit (verde institucional)
+// Logo SVG inline para cada integração
 function IntegrationLogo({ id, className }: { id: string; className?: string }) {
   if (id === "whatsapp_cloud") {
     return (
       <div className={`flex items-center justify-center rounded-lg bg-emerald-600/10 ${className}`}>
         <span className="text-lg">💬</span>
+      </div>
+    );
+  }
+  if (id === "asaas") {
+    return (
+      <div className={`flex items-center justify-center rounded-lg bg-sky-500/10 ${className}`}>
+        <span className="text-lg font-bold text-sky-600">A</span>
       </div>
     );
   }
@@ -326,9 +333,11 @@ function IntegracaoCard({
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       A API key será removida do sistema. Você precisará inserir
-                      uma nova key para reconectar. Monitoramentos ativos na
-                      Judit continuarão funcionando no lado deles, mas o sistema
-                      não poderá mais consultá-los.
+                      uma nova key para reconectar. {integracao.id === "asaas" ? (
+                        "Assinaturas ativas dos escritórios continuarão sendo cobradas pelo Asaas — o sistema só não poderá criar novas até reconectar."
+                      ) : (
+                        "Recursos ativos no provedor continuarão funcionando no lado deles, mas o sistema não poderá mais consultá-los."
+                      )}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -426,16 +435,35 @@ function IntegracaoCard({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                A key será criptografada (AES-256) antes de ser salva. Obtenha sua key no{" "}
-                <a
-                  href="https://plataforma.judit.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground transition-colors"
-                >
-                  painel da Judit
-                </a>
-                .
+                A key será criptografada (AES-256) antes de ser salva.
+                {integracao.id === "asaas" ? (
+                  <>
+                    {" "}Obtenha sua API key em{" "}
+                    <a
+                      href="https://www.asaas.com/config/integracao"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground transition-colors"
+                    >
+                      Asaas → Configurações → Integrações
+                    </a>
+                    . Use a key sandbox (<code>$aact_YTU5...</code>) para testes ou production
+                    para produção. O sistema detecta o modo automaticamente.
+                  </>
+                ) : (
+                  <>
+                    {" "}Obtenha sua key no{" "}
+                    <a
+                      href="https://plataforma.judit.io"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground transition-colors"
+                    >
+                      painel da Judit
+                    </a>
+                    .
+                  </>
+                )}
               </p>
             </div>
             )}

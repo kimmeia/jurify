@@ -23,7 +23,7 @@ function createUserContext(
     name: "Test User",
     loginMethod: "manus",
     role,
-    stripeCustomerId: null,
+    asaasCustomerId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),

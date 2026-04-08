@@ -62,7 +62,7 @@ export const appRouter = router({
   // Autenticação própria — email/senha + Google Sign-In
   auth: authRouter,
 
-  // Assinaturas e Stripe
+  // Assinaturas SaaS (cobrança via Asaas)
   subscription: subscriptionRouter,
 
   // Motor de Cálculos

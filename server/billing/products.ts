@@ -1,7 +1,9 @@
 /**
- * Stripe product/plan definitions.
- * Prices are created dynamically via Stripe API on first use.
- * This file serves as the single source of truth for plan metadata.
+ * Definição dos planos do Jurify SaaS.
+ *
+ * Planos são gateway-agnóstico: nem Stripe nem Asaas conhecem este arquivo
+ * diretamente. Ao criar uma assinatura, mapeamos o `id` do plano para o
+ * preço/ciclo correspondente no gateway.
  */
 
 export interface PlanDefinition {
@@ -9,13 +11,16 @@ export interface PlanDefinition {
   name: string;
   description: string;
   features: string[];
-  priceMonthly: number; // in cents (BRL)
-  priceYearly: number;  // in cents (BRL)
+  /** Preço mensal em centavos (BRL) */
+  priceMonthly: number;
+  /** Preço anual em centavos (BRL) */
+  priceYearly: number;
   currency: string;
   popular?: boolean;
   /** Pagamento avulso (one-time) em vez de assinatura recorrente */
   isOneTime?: boolean;
-  creditsPerMonth: number; // Número de cálculos permitidos por mês
+  /** Número de cálculos permitidos por mês (0 = ilimitado) */
+  creditsPerMonth: number;
 }
 
 export const PLANS: PlanDefinition[] = [
@@ -29,7 +34,7 @@ export const PLANS: PlanDefinition[] = [
       "Sem compromisso",
       "Suporte por e-mail",
     ],
-    priceMonthly: 4900,  // R$ 49,00 (avulso — usado como preço único)
+    priceMonthly: 4900,
     priceYearly: 4900,
     currency: "brl",
     isOneTime: true,
@@ -45,8 +50,8 @@ export const PLANS: PlanDefinition[] = [
       "Pareceres técnicos em PDF",
       "Suporte por e-mail",
     ],
-    priceMonthly: 9900,  // R$ 99,00
-    priceYearly: 95000,  // R$ 950,00 (economia de ~20%)
+    priceMonthly: 9900,
+    priceYearly: 95000,
     currency: "brl",
     creditsPerMonth: 50,
   },
@@ -61,8 +66,8 @@ export const PLANS: PlanDefinition[] = [
       "Suporte prioritário",
       "Atualizações automáticas de índices",
     ],
-    priceMonthly: 19900,  // R$ 199,00
-    priceYearly: 190000,  // R$ 1.900,00 (economia de ~20%)
+    priceMonthly: 19900,
+    priceYearly: 190000,
     currency: "brl",
     popular: true,
     creditsPerMonth: 200,
@@ -79,8 +84,8 @@ export const PLANS: PlanDefinition[] = [
       "Suporte dedicado",
       "Multi-usuários",
     ],
-    priceMonthly: 49900,  // R$ 499,00
-    priceYearly: 479000,  // R$ 4.790,00 (economia de ~20%)
+    priceMonthly: 49900,
+    priceYearly: 479000,
     currency: "brl",
     creditsPerMonth: 999999,
   },

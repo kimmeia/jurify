@@ -359,7 +359,7 @@ export const configuracoesRouter = router({
   uso: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
-    const { obterResumoUso } = await import("../stripe/plan-limits");
+    const { obterResumoUso } = await import("../billing/plan-limits");
     return obterResumoUso(esc.escritorio.id, ctx.user.id);
   }),
 });

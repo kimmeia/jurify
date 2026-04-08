@@ -195,6 +195,128 @@ async function ensureAuthColumns(connection: mysql.Connection): Promise<void> {
 }
 
 /**
+ * Migração: substitui Stripe por Asaas na tabela `subscriptions` e em `users`.
+ *
+ * - users.stripeCustomerId  → users.asaasCustomerId
+ * - subscriptions.stripeSubscriptionId → subscriptions.asaasSubscriptionId
+ * - subscriptions.stripePriceId        → REMOVIDO (não tem equivalente Asaas)
+ * - subscriptions.asaasCustomerId      → NOVO
+ *
+ * Estratégia: ADICIONA colunas novas (sem dropar as antigas), tornando
+ * stripeSubscriptionId/stripePriceId nullable. Bancos com dados antigos
+ * continuam funcionando — assinaturas Stripe legadas podem coexistir
+ * com assinaturas Asaas novas até serem migradas manualmente.
+ */
+async function ensureAsaasBillingColumns(connection: mysql.Connection): Promise<void> {
+  try {
+    // ─── users.asaasCustomerId ────────────────────────────────────────
+    const [userTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+    );
+    if ((userTables as unknown[]).length > 0) {
+      const [userCols] = await connection.query(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+      );
+      const userColSet = new Set(
+        (userCols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+      );
+      if (!userColSet.has("asaasCustomerId")) {
+        try {
+          await connection.query(
+            "ALTER TABLE users ADD COLUMN asaasCustomerId VARCHAR(255) NULL",
+          );
+          log.info("ensureAsaasBillingColumns: users.asaasCustomerId adicionada");
+        } catch (err: any) {
+          if (!isHarmlessError(err.message || String(err))) {
+            log.warn({ err: err.message }, "Falha ao adicionar users.asaasCustomerId");
+          }
+        }
+      }
+    }
+
+    // ─── subscriptions: asaasSubscriptionId, asaasCustomerId ──────────
+    const [subTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'`,
+    );
+    if ((subTables as unknown[]).length === 0) {
+      log.debug("Tabela 'subscriptions' não existe — pulando ensureAsaasBillingColumns");
+      return;
+    }
+
+    const [subCols] = await connection.query(
+      `SELECT COLUMN_NAME, IS_NULLABLE FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'`,
+    );
+    const subColMap = new Map(
+      (subCols as { COLUMN_NAME: string; IS_NULLABLE: string }[]).map(
+        (c) => [c.COLUMN_NAME, c.IS_NULLABLE],
+      ),
+    );
+
+    const ops: { name: string; sql: string }[] = [];
+
+    if (!subColMap.has("asaasSubscriptionId")) {
+      ops.push({
+        name: "ADD asaasSubscriptionId",
+        sql: "ALTER TABLE subscriptions ADD COLUMN asaasSubscriptionId VARCHAR(255) NULL",
+      });
+    }
+    if (!subColMap.has("asaasCustomerId")) {
+      ops.push({
+        name: "ADD asaasCustomerId",
+        sql: "ALTER TABLE subscriptions ADD COLUMN asaasCustomerId VARCHAR(255) NULL",
+      });
+    }
+    // Tornar stripeSubscriptionId nullable (se ainda existir e for NOT NULL)
+    if (subColMap.get("stripeSubscriptionId") === "NO") {
+      ops.push({
+        name: "stripeSubscriptionId → NULL",
+        sql: "ALTER TABLE subscriptions MODIFY COLUMN stripeSubscriptionId VARCHAR(255) NULL",
+      });
+    }
+    if (subColMap.get("stripePriceId") === "NO") {
+      ops.push({
+        name: "stripePriceId → NULL",
+        sql: "ALTER TABLE subscriptions MODIFY COLUMN stripePriceId VARCHAR(255) NULL",
+      });
+    }
+
+    if (ops.length === 0) {
+      log.debug("ensureAsaasBillingColumns: schema já está atualizado");
+    } else {
+      log.info({ ops: ops.map((o) => o.name) }, "ensureAsaasBillingColumns: aplicando");
+      for (const op of ops) {
+        try {
+          await connection.query(op.sql);
+          log.info({ op: op.name }, "ensureAsaasBillingColumns: aplicado");
+        } catch (err: any) {
+          if (!isHarmlessError(err.message || String(err))) {
+            log.warn({ op: op.name, err: err.message }, "ensureAsaasBillingColumns: falha");
+          }
+        }
+      }
+    }
+
+    // Índice único em asaasSubscriptionId (idempotente)
+    try {
+      await connection.query(
+        "CREATE UNIQUE INDEX uniq_subscriptions_asaasSubscriptionId ON subscriptions (asaasSubscriptionId)",
+      );
+      log.info("ensureAsaasBillingColumns: índice único criado");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.debug({ err: err.message }, "Índice asaasSubscriptionId já existe ou falhou");
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureAsaasBillingColumns: erro inesperado");
+  }
+}
+
+/**
  * Garante que a tabela `contatos` tem a coluna `telefonesAnteriores`.
  * Usado pelo handler do WhatsApp pra reconhecer contatos que tiveram o
  * telefone alterado — evita criar contatos duplicados quando chega
@@ -303,6 +425,7 @@ export async function runMigrations(): Promise<void> {
     // Roda SEMPRE, independente das migrations baseadas em arquivo.
     await ensureAuthColumns(connection);
     await ensureContatoColumns(connection);
+    await ensureAsaasBillingColumns(connection);
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────
