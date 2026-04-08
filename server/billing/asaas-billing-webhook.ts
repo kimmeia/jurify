@@ -28,6 +28,12 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { subscriptions, users } from "../../drizzle/schema";
 import { getAsaasBillingWebhookSecret } from "./asaas-billing-client";
+import {
+  mapAsaasStatus,
+  isPaymentPaidEvent,
+  isPaymentOverdueEvent,
+  parseExternalReference,
+} from "./asaas-billing-mappers";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("billing-asaas-webhook");
@@ -53,21 +59,6 @@ interface AsaasBillingWebhookPayload {
     externalReference?: string;
     deleted?: boolean;
   };
-}
-
-/**
- * Mapeia o status da assinatura Asaas para o enum local de subscriptions.
- */
-function mapAsaasStatus(asaasStatus: string): "active" | "canceled" | "past_due" | "incomplete" {
-  switch (asaasStatus) {
-    case "ACTIVE":
-      return "active";
-    case "INACTIVE":
-    case "EXPIRED":
-      return "canceled";
-    default:
-      return "incomplete";
-  }
 }
 
 export function registerAsaasBillingWebhook(app: Express) {
@@ -102,9 +93,7 @@ export function registerAsaasBillingWebhook(app: Express) {
         log.info({ event: body.event, subscriptionId: sub.id }, "Subscription event");
 
         // externalReference armazena `userId:planId`
-        const ref = (sub.externalReference || "").split(":");
-        const userId = parseInt(ref[0] || "", 10);
-        const planId = ref[1] || null;
+        const { userId, planId } = parseExternalReference(sub.externalReference);
 
         if (!userId) {
           log.warn({ subId: sub.id }, "externalReference sem userId — ignorando");
@@ -184,13 +173,8 @@ export function registerAsaasBillingWebhook(app: Express) {
             return res.status(200).json({ received: true });
           }
 
-          const isPaid =
-            body.event === "PAYMENT_RECEIVED" ||
-            body.event === "PAYMENT_CONFIRMED" ||
-            payment.status === "RECEIVED" ||
-            payment.status === "CONFIRMED";
-          const isOverdue =
-            body.event === "PAYMENT_OVERDUE" || payment.status === "OVERDUE";
+          const isPaid = isPaymentPaidEvent(body.event, payment.status);
+          const isOverdue = isPaymentOverdueEvent(body.event, payment.status);
 
           if (isPaid) {
             // Ativa a assinatura e renova o período

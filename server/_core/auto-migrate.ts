@@ -311,6 +311,46 @@ async function ensureAsaasBillingColumns(connection: mysql.Connection): Promise<
         log.debug({ err: err.message }, "Índice asaasSubscriptionId já existe ou falhou");
       }
     }
+
+    // ─── Cancelamento de subs órfãs (Stripe legado sem Asaas) ─────────
+    // Linhas que tinham stripeSubscriptionId mas não foram migradas
+    // ficam órfãs: ainda aparecem como "active" mas não têm
+    // asaasSubscriptionId, então cancel/changePlan quebram. Marcamos
+    // como "canceled" — o usuário precisa criar nova assinatura no
+    // Asaas via /plans.
+    if (subColMap.has("stripeSubscriptionId")) {
+      try {
+        const [orphans] = await connection.query(
+          `SELECT COUNT(*) AS total FROM subscriptions
+           WHERE stripeSubscriptionId IS NOT NULL
+             AND (asaasSubscriptionId IS NULL OR asaasSubscriptionId = '')
+             AND status IN ('active', 'trialing', 'past_due')`,
+        );
+        const total = Number((orphans as { total: number }[])[0]?.total || 0);
+        if (total > 0) {
+          log.warn(
+            { total },
+            "Encontradas assinaturas Stripe legadas sem migração — marcando como canceladas",
+          );
+          await connection.query(
+            `UPDATE subscriptions
+             SET status = 'canceled'
+             WHERE stripeSubscriptionId IS NOT NULL
+               AND (asaasSubscriptionId IS NULL OR asaasSubscriptionId = '')
+               AND status IN ('active', 'trialing', 'past_due')`,
+          );
+          log.info(
+            { total },
+            "ensureAsaasBillingColumns: subs Stripe órfãs canceladas — usuários precisam reasinar via Asaas",
+          );
+        }
+      } catch (err: any) {
+        log.warn(
+          { err: err.message },
+          "ensureAsaasBillingColumns: falha ao cancelar subs Stripe órfãs",
+        );
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureAsaasBillingColumns: erro inesperado");
   }
