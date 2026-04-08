@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
-  Download, Filter, DollarSign, Star, Calendar, Send,
+  Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
@@ -28,6 +28,82 @@ import {
   EditarForm, AnotacoesTab, ArquivosTab, AssinaturasTab, TarefasClienteTab,
   NovoClienteDialog,
 } from "./clientes/detail-tabs";
+import { useLocation } from "wouter";
+
+/**
+ * Botão "Monitorar na Judit" — cria um monitoramento de NOVAS AÇÕES
+ * pra o CPF/CNPJ do cliente. Após criar, é possível ir direto pra
+ * aba de Novas Ações em /processos.
+ */
+function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
+  const clean = cpfCnpj.replace(/\D/g, "");
+  const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
+  const [, setLocation] = useLocation();
+
+  // Verifica se já existe monitoramento ativo
+  const { data: monsData } = trpc.juditUsuario.meusMonitoramentos.useQuery(
+    { busca: clean },
+    { retry: false },
+  );
+  const jaMonitorado = (monsData || []).some(
+    (m: any) =>
+      m.searchKey === clean &&
+      m.tipoMonitoramento === "novas_acoes" &&
+      m.statusJudit !== "deleted",
+  );
+
+  const criarMut = trpc.juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
+    onSuccess: () => {
+      toast.success(`Monitoramento criado para ${nome}!`, {
+        description: "Vamos avisar quando novas ações forem distribuídas.",
+        action: {
+          label: "Ver em Processos",
+          onClick: () => setLocation("/processos"),
+        },
+      });
+    },
+    onError: (e) => toast.error("Erro ao criar monitoramento", { description: e.message }),
+  });
+
+  if (jaMonitorado) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        className="border-emerald-500/30 text-emerald-700"
+      >
+        <CheckCircle2 className="h-4 w-4 mr-1" />
+        Monitorado
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        if (confirm(`Criar monitoramento de novas ações para ${nome}? Você será avisado quando alguém processar este cliente.`)) {
+          criarMut.mutate({
+            tipo,
+            valor: clean,
+            apelido: nome,
+          });
+        }
+      }}
+      disabled={criarMut.isPending}
+      className="border-red-500/30 text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+    >
+      {criarMut.isPending ? (
+        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+      ) : (
+        <Siren className="h-4 w-4 mr-1" />
+      )}
+      Monitorar
+    </Button>
+  );
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -482,6 +558,12 @@ function ClienteDetalhe({
             <Send className="h-4 w-4 mr-1 text-emerald-600" />
             WhatsApp
           </Button>
+        )}
+        {cliente.cpfCnpj && (
+          <MonitorarJuditButton
+            cpfCnpj={cliente.cpfCnpj}
+            nome={cliente.nome}
+          />
         )}
         <FinanceiroPopover contatoId={id} />
         <Button

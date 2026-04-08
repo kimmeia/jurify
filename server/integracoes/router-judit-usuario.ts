@@ -393,9 +393,11 @@ export const juditUsuarioRouter = router({
       const { juditNovasAcoes } = await import("../../drizzle/schema");
       const params = input || { limite: 50 };
 
-      // Primeiro pega os IDs dos monitoramentos do usuário
+      // Primeiro pega os monitoramentos COMPLETOS do usuário (pra ter o
+      // apelido, searchKey, searchType — usado pra mostrar contexto
+      // do cliente na lista de novas ações)
       const mons = await db
-        .select({ id: juditMonitoramentos.id })
+        .select()
         .from(juditMonitoramentos)
         .where(
           and(
@@ -405,6 +407,9 @@ export const juditUsuarioRouter = router({
         );
       const monIds = mons.map((m) => m.id);
       if (monIds.length === 0) return { acoes: [], totalNaoLidas: 0 };
+
+      // Mapa id → monitoramento pra fazer join local
+      const monMap = new Map(mons.map((m) => [m.id, m]));
 
       const { inArray } = await import("drizzle-orm");
       const conditions: any[] = [inArray(juditNovasAcoes.monitoramentoId, monIds)];
@@ -434,12 +439,31 @@ export const juditUsuarioRouter = router({
         );
 
       return {
-        acoes: acoes.map((a) => ({
-          ...a,
-          poloAtivo: a.poloAtivo ? JSON.parse(a.poloAtivo) : [],
-          poloPassivo: a.poloPassivo ? JSON.parse(a.poloPassivo) : [],
-        })),
+        acoes: acoes.map((a) => {
+          const mon = monMap.get(a.monitoramentoId);
+          return {
+            ...a,
+            poloAtivo: a.poloAtivo ? JSON.parse(a.poloAtivo) : [],
+            poloPassivo: a.poloPassivo ? JSON.parse(a.poloPassivo) : [],
+            // Contexto do monitoramento (apelido/cliente monitorado)
+            clienteApelido: mon?.apelido || null,
+            clienteSearchKey: mon?.searchKey || null,
+            clienteSearchType: mon?.searchType || null,
+          };
+        }),
         totalNaoLidas: naoLidasRows.length,
+        /**
+         * Retorna também a lista de monitoramentos ativos pra a UI
+         * poder mostrar cards resumo do que está sendo monitorado.
+         */
+        monitoramentos: mons.map((m) => ({
+          id: m.id,
+          apelido: m.apelido,
+          searchKey: m.searchKey,
+          searchType: m.searchType,
+          totalNovasAcoes: m.totalNovasAcoes,
+          statusJudit: m.statusJudit,
+        })),
       };
     }),
 

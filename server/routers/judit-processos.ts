@@ -6,11 +6,18 @@
  */
 
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, like } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { juditCreditos, juditTransacoes } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { createLogger } from "../_core/logger";
+import {
+  calcularCustoExtraConsultaHistorica,
+  estimarCustoConsulta,
+} from "./judit-credit-calc";
+
+const log = createLogger("judit-processos");
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -22,13 +29,26 @@ const PACOTES_CREDITOS = [
 ] as const;
 
 const CUSTOS_OPERACOES = {
+  /** Consulta direta por CNJ — resultado único garantido */
   consulta_cnj: 1,
-  consulta_historica: 5,
+  /**
+   * Consulta histórica por CPF/CNPJ/OAB/Nome — custo BASE da requisição
+   * (taxa fixa da Judit). O custo TOTAL é calculado dinamicamente:
+   *   custo_total = consulta_historica_base + (processos_encontrados × consulta_historica_por_processo)
+   * Capped em CONSULTA_HISTORICA_MAX.
+   */
+  consulta_historica_base: 3,
+  /** Custo adicional por processo retornado na busca histórica */
+  consulta_historica_por_processo: 1,
+  /** Teto máximo de créditos por busca histórica (evita sticker shock) */
+  consulta_historica_max: 100,
   consulta_sintetica: 2,
   monitorar_processo: 5,
   monitorar_pessoa: 50,
   resumo_ia: 1,
   anexos: 10,
+  // Compatibilidade com UI antiga — label exibido
+  consulta_historica: 3, // legacy, usado só pra exibição; real é calculado
 } as const;
 
 const PACOTE_QUANTIDADES: Record<string, number> = {
@@ -188,17 +208,28 @@ export const juditProcessosRouter = router({
       return { requestId: request.request_id, status: request.status };
     }),
 
+  /**
+   * Retorna a estimativa de custo de uma consulta antes de executar.
+   * Usado pelo frontend pra mostrar aviso ao usuário.
+   */
+  estimarCusto: protectedProcedure
+    .input(z.object({ tipo: z.enum(["cpf", "cnpj", "oab", "name", "lawsuit_cnj"]) }))
+    .query(({ input }) => estimarCustoConsulta(input.tipo)),
+
   consultarDocumento: protectedProcedure
     .input(z.object({ tipo: z.enum(["cpf", "cnpj", "oab", "name"]), valor: z.string().min(3).max(100) }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
       const client = await getJuditClientOrThrow();
+      // Cobra APENAS o custo base aqui (request na Judit). O custo
+      // variável (por processo encontrado) é cobrado em `resultados`
+      // quando a gente sabe quantos resultados vieram.
       await consumirCreditos(
         esc.escritorio.id,
         ctx.user.id,
-        CUSTOS_OPERACOES.consulta_historica,
-        "consulta_historica",
+        CUSTOS_OPERACOES.consulta_historica_base,
+        "consulta_historica_base",
         `${input.tipo.toUpperCase()}: ${input.valor}`,
       );
       const searchKey = input.tipo === "cpf" || input.tipo === "cnpj" ? input.valor.replace(/\D/g, "") : input.valor;
@@ -214,11 +245,86 @@ export const juditProcessosRouter = router({
       return { status: status.status, requestId: status.request_id, updatedAt: status.updated_at };
     }),
 
+  /**
+   * Retorna os resultados da consulta E cobra crédito adicional por
+   * processo encontrado (uma vez só, idempotente via transaction log).
+   *
+   * Mudança de query → mutation porque tem efeito colateral (cobrança).
+   * Na primeira chamada com este requestId:
+   *   1. Busca resultados na Judit
+   *   2. Verifica se já cobrou extra pra este requestId
+   *   3. Se não cobrou: calcula (qtd × por_processo) capped no máximo
+   *      e consome créditos
+   *   4. Retorna os dados
+   *
+   * Chamadas subsequentes (paginação) só retornam, sem cobrar de novo.
+   */
   resultados: protectedProcedure
     .input(z.object({ requestId: z.string(), page: z.number().optional() }))
-    .query(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
       const client = await getJuditClientOrThrow();
-      return await client.buscarRespostas(input.requestId, input.page ?? 1, 20);
+      const resultado = await client.buscarRespostas(input.requestId, input.page ?? 1, 20);
+
+      // Cobrança de crédito variável por processo — só na primeira
+      // chamada (page=1 ou undefined)
+      const isPrimeiraPage = !input.page || input.page === 1;
+      if (isPrimeiraPage) {
+        const db = await getDb();
+        if (db) {
+          // Verifica se já foi cobrado extra pra este requestId
+          const jaCobrado = await db
+            .select()
+            .from(juditTransacoes)
+            .where(
+              and(
+                eq(juditTransacoes.escritorioId, esc.escritorio.id),
+                eq(juditTransacoes.operacao, "consulta_historica_extra"),
+                like(juditTransacoes.detalhes, `%${input.requestId}%`),
+              ),
+            )
+            .limit(1);
+
+          if (jaCobrado.length === 0) {
+            const totalProcessos = resultado?.all_count ?? resultado?.page_data?.length ?? 0;
+            // Usa helper puro pra calcular o custo extra (testável)
+            const custoExtra = calcularCustoExtraConsultaHistorica(totalProcessos);
+
+            if (custoExtra > 0) {
+              try {
+                await consumirCreditos(
+                  esc.escritorio.id,
+                  ctx.user.id,
+                  custoExtra,
+                  "consulta_historica_extra",
+                  `req:${input.requestId} (${totalProcessos} processos)`,
+                );
+              } catch (err: any) {
+                // Se falhar por saldo insuficiente, devolve os dados mas
+                // marca o resultado pra UI avisar o usuário
+                log.warn(
+                  { err: err.message, requestId: input.requestId, totalProcessos },
+                  "Créditos insuficientes pro custo variável — retornando resultados mesmo assim",
+                );
+                return {
+                  ...resultado,
+                  custoExtraErro: err.message,
+                  custoExtraNecessario: custoExtra,
+                };
+              }
+            }
+
+            return {
+              ...resultado,
+              custoExtraCobrado: custoExtra,
+              totalProcessosEncontrados: totalProcessos,
+            };
+          }
+        }
+      }
+
+      return resultado;
     }),
 
   monitorarProcesso: protectedProcedure

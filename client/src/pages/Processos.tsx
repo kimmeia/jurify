@@ -148,14 +148,37 @@ function ConsultarTab() {
   const monitorarMut = trpc.juditProcessos.monitorarProcesso.useMutation({ onSuccess: () => toast.success("Monitoramento criado (5 creditos)"), onError: (e) => toast.error(e.message) });
 
   const { data: statusData } = trpc.juditProcessos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
-  const { data: resData, refetch: refetchRes } = trpc.juditProcessos.resultados.useQuery({ requestId }, { enabled: !!requestId && statusData?.status === "completed", retry: false });
+
+  // `resultados` virou mutation (tem efeito colateral: cobra créditos por
+  // processo encontrado). Chamamos uma vez quando o status fica completed.
+  const resultadosMut = trpc.juditProcessos.resultados.useMutation({
+    onSuccess: (data: any) => {
+      setResultados(data);
+      if (data?.custoExtraCobrado && data.custoExtraCobrado > 0) {
+        toast.success(
+          `${data.totalProcessosEncontrados} processos encontrados. Cobrado: ${data.custoExtraCobrado} créditos adicionais.`,
+        );
+      } else if (data?.custoExtraErro) {
+        toast.error(
+          `Resultados parciais: créditos insuficientes pra cobrar o custo variável (${data.custoExtraNecessario}). Compre mais créditos pra ver tudo.`,
+          { duration: 10000 },
+        );
+      }
+    },
+    onError: (e) => toast.error("Erro ao buscar resultados: " + e.message),
+  });
 
   useEffect(() => {
-    if (statusData?.status === "completed") { setPolling(false); setBuscando(false); }
+    if (statusData?.status === "completed") {
+      setPolling(false);
+      setBuscando(false);
+      // Dispara busca dos resultados uma única vez
+      if (requestId && !resultados) {
+        resultadosMut.mutate({ requestId });
+      }
+    }
     if (polling) setTentativas(t => t + 1);
-  }, [statusData?.status, polling]);
-
-  useEffect(() => { if (resData) setResultados(resData); }, [resData]);
+  }, [statusData?.status, polling, requestId]);
 
   // Timeout apos 40 tentativas (~2 min)
   useEffect(() => { if (tentativas > 40 && polling) { setPolling(false); setBuscando(false); toast.error("Busca demorou demais. Tente novamente."); } }, [tentativas]);
@@ -203,9 +226,28 @@ function ConsultarTab() {
             </Button>
             <KeywordAlertsButton />
           </div>
-          <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
-            <span>Custo: <strong>{tipo === "lawsuit_cnj" ? "1" : "5"} credito(s)</strong></span>
-            {tipo !== "lawsuit_cnj" && <span className="text-amber-600">Buscas por {TIPO_LABELS[tipo]} podem levar ate 2 minutos</span>}
+          <div className="mt-2">
+            {tipo === "lawsuit_cnj" ? (
+              <p className="text-[10px] text-muted-foreground">
+                Custo: <strong className="text-foreground">1 crédito</strong> — consulta direta por número do processo.
+              </p>
+            ) : (
+              <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 p-2 text-[11px] text-amber-900 dark:text-amber-100">
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
+                    <p className="mt-0.5 text-[10px] opacity-90">
+                      Cobramos <strong>3 créditos base</strong> + <strong>1 crédito por processo encontrado</strong> (teto: 100 créditos).
+                      Se sua busca trouxer 30 processos, custo = 33 créditos. Se não encontrar nada, só os 3 base.
+                    </p>
+                    <p className="mt-0.5 text-[10px] opacity-80">
+                      Pode levar até 2 minutos.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -249,6 +291,180 @@ function ConsultarTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CARD DE MONITORAMENTO (expansível — mostra timeline de movimentações)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function MonitoramentoCard({
+  mon,
+  onPausar,
+  onReativar,
+  onDeletar,
+}: {
+  mon: any;
+  onPausar: () => void;
+  onReativar: () => void;
+  onDeletar: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const st = STATUS_MON[mon.status] || { label: mon.status, cor: "" };
+
+  // Busca o histórico de movimentações quando o card abre
+  const { data: historico, isLoading: loadingHist } = trpc.juditProcessos.historicoMonitoramento.useQuery(
+    { trackingId: mon.tracking_id },
+    { enabled: aberto, retry: false },
+  );
+
+  // Extrai movimentações e dados do processo do histórico
+  const respostas = historico?.page_data || [];
+  const ultimaResposta = respostas.find((r: any) => r.response_type === "lawsuit");
+  const processoData: any = ultimaResposta?.response_data || null;
+  const steps: any[] = processoData?.steps || [];
+  const partes: any[] = processoData?.parties || [];
+  const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
+  const passivos = partes.filter((p: any) => p.side === "Passive").slice(0, 5);
+
+  return (
+    <Card className="transition-all hover:shadow-sm">
+      <CardContent className="pt-3 pb-3">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
+          <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+            {mon.search?.search_type === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-mono font-medium truncate">{mon.search?.search_key || "-"}</p>
+              <Badge variant="outline" className="text-[9px] shrink-0">{TIPO_LABELS[mon.search?.search_type] || mon.search?.search_type}</Badge>
+              <Badge variant="outline" className={`text-[9px] shrink-0 ${st.cor}`}>{st.label}</Badge>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
+              <span>Atualiza a cada {mon.recurrence} dia(s)</span>
+              <span>{mon.tracked_items_count || 0} processo(s)</span>
+              <span>{mon.tracked_items_steps_count || 0} movimentação(ões)</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {(mon.status === "created" || mon.status === "updated") && (
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" title="Pausar" onClick={onPausar}>
+                <Pause className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {mon.status === "paused" && (
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Reativar" onClick={onReativar}>
+                <Play className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" title="Excluir" onClick={onDeletar}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setAberto(!aberto); }}>
+              {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+
+        {aberto && (
+          <div className="mt-3 pt-3 border-t space-y-4">
+            {loadingHist ? (
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+              </div>
+            ) : !processoData ? (
+              <div className="text-center py-8 text-xs text-muted-foreground">
+                <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p>Ainda não há dados do processo.</p>
+                <p className="text-[10px] mt-1">Aguarde a primeira consulta da Judit (geralmente até 24h).</p>
+              </div>
+            ) : (
+              <>
+                {/* Cabeçalho do processo */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {processoData.tribunal_acronym && (
+                    <Badge variant="outline" className="text-[10px]">
+                      <MapPin className="h-2.5 w-2.5 mr-0.5" />
+                      {processoData.tribunal_acronym}
+                    </Badge>
+                  )}
+                  {processoData.instance && (
+                    <Badge variant="outline" className="text-[10px]">{processoData.instance}ª instância</Badge>
+                  )}
+                  {processoData.amount && (
+                    <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">
+                      <CircleDollarSign className="h-2.5 w-2.5 mr-0.5" />
+                      {formatBRL(processoData.amount)}
+                    </Badge>
+                  )}
+                </div>
+
+                {processoData.classifications?.[0] && (
+                  <p className="text-xs text-muted-foreground">{processoData.classifications[0].name}</p>
+                )}
+
+                {/* Partes */}
+                {(ativos.length > 0 || passivos.length > 0) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {ativos.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-blue-600 mb-1">POLO ATIVO</p>
+                        {ativos.map((p: any, i: number) => (
+                          <p key={i} className="text-xs truncate">{p.name}</p>
+                        ))}
+                      </div>
+                    )}
+                    {passivos.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-red-600 mb-1">POLO PASSIVO</p>
+                        {passivos.map((p: any, i: number) => (
+                          <p key={i} className="text-xs truncate">{p.name}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Timeline de movimentações */}
+                {steps.length > 0 ? (
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground mb-2">
+                      MOVIMENTAÇÕES ({steps.length})
+                    </p>
+                    <div className="relative space-y-3 max-h-96 overflow-y-auto pl-4">
+                      <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200 dark:bg-indigo-900" />
+                      {steps.map((s: any, i: number) => (
+                        <div key={i} className="relative">
+                          <div className="absolute -left-3 top-1.5 h-2 w-2 rounded-full bg-indigo-400 ring-2 ring-background" />
+                          <div className="text-xs">
+                            {s.step_date && (
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {new Date(s.step_date).toLocaleDateString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                })}
+                              </span>
+                            )}
+                            <p className="text-[11px] leading-tight mt-0.5">{s.content}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    Sem movimentações registradas ainda.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ABA: MONITORAR CLIENTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -288,37 +504,15 @@ function MonitorarTab() {
 
       {isLoading ? <Skeleton className="h-20 w-full" /> : mons.length > 0 ? (
         <div className="space-y-2">
-          {mons.map((m: any) => {
-            const st = STATUS_MON[m.status] || { label: m.status, cor: "" };
-            return (
-              <Card key={m.tracking_id}>
-                <CardContent className="pt-3 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
-                      {m.search?.search_type === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-mono font-medium truncate">{m.search?.search_key || "-"}</p>
-                        <Badge variant="outline" className="text-[9px] shrink-0">{TIPO_LABELS[m.search?.search_type] || m.search?.search_type}</Badge>
-                        <Badge variant="outline" className={`text-[9px] shrink-0 ${st.cor}`}>{st.label}</Badge>
-                      </div>
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
-                        <span>Atualiza a cada {m.recurrence} dia(s)</span>
-                        <span>{m.tracked_items_count || 0} processo(s)</span>
-                        <span>{m.tracked_items_steps_count || 0} movimentacao(oes)</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {(m.status === "created" || m.status === "updated") && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" title="Pausar" onClick={() => pausarMut.mutate({ trackingId: m.tracking_id })}><Pause className="h-3.5 w-3.5" /></Button>}
-                      {m.status === "paused" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Reativar" onClick={() => reativarMut.mutate({ trackingId: m.tracking_id })}><Play className="h-3.5 w-3.5" /></Button>}
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" title="Excluir" onClick={() => { if (confirm("Remover monitoramento?")) deletarMut.mutate({ trackingId: m.tracking_id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {mons.map((m: any) => (
+            <MonitoramentoCard
+              key={m.tracking_id}
+              mon={m}
+              onPausar={() => pausarMut.mutate({ trackingId: m.tracking_id })}
+              onReativar={() => reativarMut.mutate({ trackingId: m.tracking_id })}
+              onDeletar={() => { if (confirm("Remover monitoramento?")) deletarMut.mutate({ trackingId: m.tracking_id }); }}
+            />
+          ))}
         </div>
       ) : (
         <div className="text-center py-12 space-y-2">
@@ -542,6 +736,7 @@ function NovasAcoesTab() {
   });
 
   const acoes = data?.acoes || [];
+  const monitoramentos = data?.monitoramentos || [];
 
   return (
     <div className="space-y-4">
@@ -567,6 +762,41 @@ function NovasAcoesTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Cards dos clientes sendo monitorados (contexto) */}
+      {monitoramentos.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+            Monitorando {monitoramentos.length} {monitoramentos.length === 1 ? "cliente" : "clientes"}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {monitoramentos.map((m: any) => (
+              <Card key={m.id} className="hover:shadow-sm transition-all">
+                <CardContent className="pt-3 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                      <User className="h-3.5 w-3.5 text-violet-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold truncate">
+                        {m.apelido || m.searchKey}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate">
+                        {(m.searchType || "").toUpperCase()}: {m.searchKey}
+                      </p>
+                    </div>
+                    {m.totalNovasAcoes > 0 && (
+                      <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[9px] shrink-0">
+                        {m.totalNovasAcoes}
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
@@ -625,6 +855,21 @@ function NovasAcoesTab() {
                           <Badge className="bg-red-500 text-white text-[9px]">NOVO</Badge>
                         )}
                       </div>
+                      {/* Contexto do cliente monitorado */}
+                      {(a.clienteApelido || a.clienteSearchKey) && (
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-violet-700 dark:text-violet-400">
+                          <User className="h-3 w-3" />
+                          <span className="font-medium">Cliente monitorado:</span>
+                          <span className="font-semibold truncate">
+                            {a.clienteApelido || a.clienteSearchKey}
+                          </span>
+                          {a.clienteApelido && a.clienteSearchKey && (
+                            <span className="font-mono text-muted-foreground">
+                              ({(a.clienteSearchType || "").toUpperCase()}: {a.clienteSearchKey})
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {a.classeProcesso && (
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">{a.classeProcesso}</p>
                       )}
