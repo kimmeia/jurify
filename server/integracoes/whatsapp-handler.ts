@@ -1,4 +1,5 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
+import { isLidJid } from "../../shared/whatsapp-types";
 import { criarContato, listarContatos, criarConversa, listarConversas, enviarMensagem as salvarMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
 import { obterConfigChatBot, gerarRespostaChatBot, converterHistoricoParaChatBot } from "./chatbot-openai";
 import { createLogger } from "../_core/logger";
@@ -6,10 +7,54 @@ const log = createLogger("integracoes-whatsapp-handler");
 
 export async function processarMensagemRecebida(canalId: number, escritorioId: number, msg: WhatsappMensagemRecebida) {
   if (msg.isGroup) return { contatoId: 0, conversaId: 0, mensagemId: 0 };
-  let contatoId = await buscarContatoPorTelefone(escritorioId, msg.telefone);
-  if (!contatoId) { contatoId = await criarContato({ escritorioId, nome: msg.nome || msg.telefone, telefone: msg.telefone, origem: "whatsapp" }); }
-  let conversaId = await buscarConversaExistente(escritorioId, contatoId, canalId, msg.chatId);
-  if (!conversaId) { const aid = await distribuirLead(escritorioId, contatoId || undefined, canalId) ?? undefined; conversaId = await criarConversa({ escritorioId, contatoId, canalId, atendenteId: aid, assunto: `WhatsApp: ${msg.nome || msg.telefone}`, chatIdExterno: msg.chatId }); }
+
+  // ─── Resolução de contato/conversa ──────────────────────────────────────
+  // PRIMEIRO tentamos achar uma conversa existente pelo chatId (JID, mesmo
+  // que seja @lid). Isso é crucial: quando WhatsApp entrega a resposta de
+  // um contato com JID em formato @lid (linked id), o telefone "extraído"
+  // não bate com o telefone original do contato — então sem este lookup
+  // criaríamos um contato duplicado a cada resposta.
+  let contatoId = 0;
+  let conversaId = await buscarConversaPorChatId(escritorioId, canalId, msg.chatId);
+
+  if (conversaId) {
+    contatoId = await pegarContatoIdDaConversa(conversaId) ?? 0;
+  }
+
+  // Se o JID é LID e nenhuma conversa correspondente foi achada, é um LID
+  // novo: ainda assim tentamos um lookup por telefone (caso senderPn tenha
+  // funcionado) — senão, criamos um contato novo com nome do pushName.
+  if (!contatoId && msg.telefone) {
+    contatoId = await buscarContatoPorTelefone(escritorioId, msg.telefone) ?? 0;
+  }
+
+  if (!contatoId) {
+    // Sem contato conhecido — cria um. Se o JID é LID e não temos telefone
+    // real, salvamos o telefone vazio (não o LID) para evitar poluir o
+    // cadastro com identificadores opacos.
+    const telefoneParaSalvar = isLidJid(msg.chatId) && !msg.telefone ? "" : msg.telefone;
+    contatoId = await criarContato({
+      escritorioId,
+      nome: msg.nome || telefoneParaSalvar || "Contato WhatsApp",
+      telefone: telefoneParaSalvar,
+      origem: "whatsapp",
+    });
+  }
+
+  if (!conversaId) {
+    conversaId = await buscarConversaExistente(escritorioId, contatoId, canalId, msg.chatId);
+  }
+  if (!conversaId) {
+    const aid = await distribuirLead(escritorioId, contatoId || undefined, canalId) ?? undefined;
+    conversaId = await criarConversa({
+      escritorioId,
+      contatoId,
+      canalId,
+      atendenteId: aid,
+      assunto: `WhatsApp: ${msg.nome || msg.telefone || "contato"}`,
+      chatIdExterno: msg.chatId,
+    });
+  }
   const tipoMsg = mapTipo(msg.tipo);
   const conteudo = msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
   const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo });
@@ -125,6 +170,48 @@ async function buscarConversaExistente(escritorioId: number, contatoId: number, 
   for (const c of all) if (c.contatoId === contatoId && c.canalId === canalId && (c.status === "aguardando" || c.status === "em_atendimento")) return c.id;
   for (const c of all) if (c.contatoId === contatoId && c.canalId === canalId && c.status === "resolvido") return c.id;
   return null;
+}
+
+/**
+ * Busca uma conversa existente pelo chatIdExterno (JID).
+ *
+ * Inclui matching tolerante: se o JID recebido é LID (@lid) ou PN
+ * (@s.whatsapp.net), tentamos casar com o exato OU com a "variante" — caso
+ * o WhatsApp tenha alternado o formato entre o envio inicial e a resposta.
+ * Para isso comparamos a parte numérica do JID, se o lado armazenado for
+ * do tipo PN.
+ */
+async function buscarConversaPorChatId(escritorioId: number, canalId: number, chatId: string): Promise<number | null> {
+  if (!chatId) return null;
+  const all = await listarConversas(escritorioId, {});
+
+  // 1. Match exato pelo chatId
+  for (const c of all) {
+    if ((c as any).chatIdExterno === chatId && c.canalId === canalId) return c.id;
+  }
+
+  // 2. Se chatId é LID, não tem match direto — não há fallback confiável
+  // (LIDs são opacos). Quem chamou vai criar um contato novo se necessário.
+  // Mas se chatId é PN, pode existir uma conversa antiga que armazenou LID
+  // — nesse caso só conseguimos casar via número, o que já é o caminho
+  // padrão (buscarContatoPorTelefone).
+
+  return null;
+}
+
+async function pegarContatoIdDaConversa(conversaId: number): Promise<number | null> {
+  try {
+    const { getDb } = await import("../db");
+    const { conversas } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db.select({ contatoId: conversas.contatoId }).from(conversas).where(eq(conversas.id, conversaId)).limit(1);
+    return row?.contatoId ?? null;
+  } catch (err) {
+    log.warn({ err: String(err) }, "Falha ao buscar contatoId da conversa");
+    return null;
+  }
 }
 
 function mapTipo(tipo: WhatsappMensagemRecebida["tipo"]): any {

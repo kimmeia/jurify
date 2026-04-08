@@ -263,7 +263,15 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
-      const cleanPhone = input.telefone.replace(/\D/g, "");
+      // Normaliza telefone: remove formatação e garante DDI 55 (Brasil).
+      // O frontend manda só os dígitos do DDD+número (10 ou 11 chars) e o
+      // backend prepende o 55 — assim o JID gerado é sempre válido para
+      // o WhatsApp internacional.
+      const { normalizePhoneBR } = await import("../../shared/whatsapp-types");
+      const cleanPhone = normalizePhoneBR(input.telefone);
+      if (!cleanPhone || cleanPhone.length < 12) {
+        throw new Error("Telefone inválido. Informe DDD + número.");
+      }
 
       // 1. Buscar ou criar contato
       const contatos = await listarContatos(esc.escritorio.id, cleanPhone);
