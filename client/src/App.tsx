@@ -14,6 +14,8 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import AdminAuditoria from "./pages/admin/AdminAuditoria";
 import AdminInadimplentes from "./pages/admin/AdminInadimplentes";
+import AdminPlanos from "./pages/admin/AdminPlanos";
+import AdminCupons from "./pages/admin/AdminCupons";
 import Plans from "./pages/Plans";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
@@ -88,6 +90,16 @@ function Router() {
       <Route path="/admin/inadimplentes">
         <AdminArea>
           <AdminInadimplentes />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/planos">
+        <AdminArea>
+          <AdminPlanos />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/cupons">
+        <AdminArea>
+          <AdminCupons />
         </AdminArea>
       </Route>
       <Route path="/admin/reports">

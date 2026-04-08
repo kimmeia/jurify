@@ -14,10 +14,13 @@ import {
   Users,
   CreditCard,
   TrendingUp,
+  TrendingDown,
   DollarSign,
   UserPlus,
   UserCheck,
   AlertCircle,
+  Activity,
+  Target,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -210,6 +213,9 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
+      {/* Churn e retenção — Sprint 3 */}
+      <ChurnSection />
+
       {/* Two-column layout: Recent Subscriptions + Recent Clients */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Subscriptions */}
@@ -328,4 +334,96 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
   const config = variants[status] || { label: status, variant: "outline" as const };
 
   return <Badge variant={config.variant} className="text-[10px]">{config.label}</Badge>;
+}
+
+/**
+ * Seção de churn e retenção — mostra taxa de churn atual, LTV estimado
+ * e retenção dos últimos 12 meses. Dados agregados no backend.
+ */
+function ChurnSection() {
+  const { data: churn, isLoading } = trpc.admin.metricasChurn.useQuery(undefined, {
+    retry: false,
+  });
+
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
+
+  const churnColor = (rate: number) => {
+    if (rate < 3) return "text-emerald-600";
+    if (rate < 7) return "text-amber-600";
+    return "text-red-600";
+  };
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Churn (últimos 3 meses)
+          </CardTitle>
+          <TrendingDown className="h-4 w-4 text-red-500" />
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-20" />
+          ) : (
+            <>
+              <p className={`text-2xl font-bold ${churnColor(churn?.churnAtual ?? 0)}`}>
+                {(churn?.churnAtual ?? 0).toFixed(2)}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Média móvel de cancelamentos mensais
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            LTV estimado
+          </CardTitle>
+          <Target className="h-4 w-4 text-violet-500" />
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-28" />
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-foreground">
+                {formatCurrency(churn?.ltvEstimado ?? 0)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                ARPU ÷ churn rate mensal
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Retenção 12 meses
+          </CardTitle>
+          <Activity className="h-4 w-4 text-blue-500" />
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-8 w-20" />
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-foreground">
+                {churn?.retencao12m ?? 0}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Clientes antigos ainda ativos
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

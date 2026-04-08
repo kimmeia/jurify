@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveSubscription, getUserSubscriptions, getDb } from "../db";
 import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-billing-client";
-import { PLANS } from "../billing/products";
+import { getPlansResolved, getPlanByIdResolved } from "../billing/products-resolver";
 import { subscriptions as subscriptionsTable, users } from "../../drizzle/schema";
 import { validarCpfCnpj } from "../../shared/validacoes";
 import { createLogger } from "../_core/logger";
@@ -95,8 +95,9 @@ export const subscriptionRouter = router({
   }),
 
   /** Get available plans (todos recorrentes — não tem mais avulso) */
-  plans: publicProcedure.query(() => {
-    return PLANS.map((p) => ({
+  plans: publicProcedure.query(async () => {
+    const plans = await getPlansResolved(false); // só os visíveis
+    return plans.map((p) => ({
       id: p.id,
       name: p.name,
       description: p.description,
@@ -132,7 +133,7 @@ export const subscriptionRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const plan = PLANS.find((p) => p.id === input.planId);
+      const plan = await getPlanByIdResolved(input.planId);
       if (!plan) throw new Error("Plano não encontrado");
 
       const client = await getAdminAsaasClient();
@@ -210,7 +211,7 @@ export const subscriptionRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const newPlan = PLANS.find((p) => p.id === input.newPlanId);
+      const newPlan = await getPlanByIdResolved(input.newPlanId);
       if (!newPlan) throw new Error("Plano não encontrado");
 
       const client = await getAdminAsaasClient();

@@ -699,6 +699,414 @@ export const adminRouter = router({
     }),
 
   // ═══════════════════════════════════════════════════════════════════════
+  // PLANOS DINÂMICOS — Sprint 3
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Lista os planos com overrides aplicados — usado pela página
+   * /admin/planos para mostrar os valores efetivos. Também marca quais
+   * têm override ativo (pra mostrar badge "Modificado" no UI).
+   */
+  listarPlanosEditaveis: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const { planosOverrides } = await import("../../drizzle/schema");
+    const overrides = await db.select().from(planosOverrides);
+    const overrideMap = new Map(overrides.map((o) => [o.planId, o]));
+
+    return PLANS.map((plan) => {
+      const ov = overrideMap.get(plan.id);
+      return {
+        id: plan.id,
+        // Hardcoded (default)
+        defaultName: plan.name,
+        defaultDescription: plan.description,
+        defaultPriceMonthly: plan.priceMonthly,
+        defaultPriceYearly: plan.priceYearly,
+        defaultFeatures: plan.features,
+        defaultPopular: plan.popular ?? false,
+        // Atual (com override)
+        name: ov?.name ?? plan.name,
+        description: ov?.description ?? plan.description,
+        priceMonthly: ov?.priceMonthly ?? plan.priceMonthly,
+        priceYearly: ov?.priceYearly ?? plan.priceYearly,
+        features: ov?.features ? (() => {
+          try { return JSON.parse(ov.features); } catch { return plan.features; }
+        })() : plan.features,
+        popular: ov?.popular ?? plan.popular ?? false,
+        oculto: ov?.oculto ?? false,
+        hasOverride: !!ov,
+        updatedAt: ov?.updatedAt,
+      };
+    });
+  }),
+
+  /**
+   * Edita um plano (cria ou atualiza override). Campos null = remove
+   * o override desse campo (volta ao default).
+   */
+  editarPlano: adminProcedure
+    .input(z.object({
+      planId: z.string(),
+      name: z.string().max(100).nullable().optional(),
+      description: z.string().max(500).nullable().optional(),
+      priceMonthly: z.number().int().min(0).nullable().optional(),
+      priceYearly: z.number().int().min(0).nullable().optional(),
+      features: z.array(z.string()).nullable().optional(),
+      popular: z.boolean().nullable().optional(),
+      oculto: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Validar que planId existe no hardcoded
+      const planoBase = PLANS.find((p) => p.id === input.planId);
+      if (!planoBase) throw new Error(`Plano "${input.planId}" não existe`);
+
+      const { planosOverrides } = await import("../../drizzle/schema");
+      const [existing] = await db
+        .select()
+        .from(planosOverrides)
+        .where(eq(planosOverrides.planId, input.planId))
+        .limit(1);
+
+      const valores = {
+        name: input.name === null ? null : input.name,
+        description: input.description === null ? null : input.description,
+        priceMonthly: input.priceMonthly === null ? null : input.priceMonthly,
+        priceYearly: input.priceYearly === null ? null : input.priceYearly,
+        features: input.features === null ? null : (input.features ? JSON.stringify(input.features) : null),
+        popular: input.popular === null ? null : input.popular,
+        oculto: input.oculto ?? false,
+        updatedBy: ctx.user.id,
+      };
+
+      if (existing) {
+        await db
+          .update(planosOverrides)
+          .set(valores)
+          .where(eq(planosOverrides.planId, input.planId));
+      } else {
+        await db.insert(planosOverrides).values({
+          planId: input.planId,
+          ...valores,
+        });
+      }
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.editar",
+        alvoTipo: "plano",
+        alvoNome: input.planId,
+        detalhes: {
+          priceMonthly: valores.priceMonthly,
+          priceYearly: valores.priceYearly,
+          oculto: valores.oculto,
+        },
+      });
+
+      return { success: true, mensagem: "Plano atualizado" };
+    }),
+
+  /** Remove override de um plano (volta tudo ao default do código) */
+  resetarOverridePlano: adminProcedure
+    .input(z.object({ planId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { planosOverrides } = await import("../../drizzle/schema");
+      await db.delete(planosOverrides).where(eq(planosOverrides.planId, input.planId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.resetar",
+        alvoTipo: "plano",
+        alvoNome: input.planId,
+      });
+
+      return { success: true };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CUPONS DE DESCONTO — Sprint 3
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** Lista todos os cupons (ativos e inativos), mais recentes primeiro */
+  listarCupons: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const { cupons } = await import("../../drizzle/schema");
+    return db.select().from(cupons).orderBy(desc(cupons.createdAt));
+  }),
+
+  /** Cria um novo cupom de desconto */
+  criarCupom: adminProcedure
+    .input(z.object({
+      codigo: z.string().min(3).max(64).regex(/^[A-Z0-9_-]+$/i, "Use apenas letras, números, _ e -"),
+      descricao: z.string().max(255).optional(),
+      tipo: z.enum(["percentual", "valorFixo"]),
+      valor: z.number().int().min(1),
+      validoDe: z.string().datetime().optional(),
+      validoAte: z.string().datetime().optional(),
+      maxUsos: z.number().int().min(1).optional(),
+      planosIds: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { cupons } = await import("../../drizzle/schema");
+
+      // Validar percentual <= 100
+      if (input.tipo === "percentual" && input.valor > 100) {
+        throw new Error("Desconto percentual não pode passar de 100%");
+      }
+
+      // Validar planos existem
+      if (input.planosIds && input.planosIds.length > 0) {
+        for (const pid of input.planosIds) {
+          if (!PLANS.find((p) => p.id === pid)) {
+            throw new Error(`Plano "${pid}" não existe`);
+          }
+        }
+      }
+
+      // Codigo case-insensitive
+      const codigoNorm = input.codigo.toUpperCase();
+
+      // Checar se já existe
+      const [existing] = await db
+        .select()
+        .from(cupons)
+        .where(eq(cupons.codigo, codigoNorm))
+        .limit(1);
+      if (existing) throw new Error(`Já existe cupom com o código "${codigoNorm}"`);
+
+      await db.insert(cupons).values({
+        codigo: codigoNorm,
+        descricao: input.descricao,
+        tipo: input.tipo,
+        valor: input.valor,
+        validoDe: input.validoDe ? new Date(input.validoDe) : null,
+        validoAte: input.validoAte ? new Date(input.validoAte) : null,
+        maxUsos: input.maxUsos,
+        planosIds: input.planosIds && input.planosIds.length > 0 ? input.planosIds.join(",") : null,
+        criadoPor: ctx.user.id,
+      });
+
+      await registrarAuditoria({
+        ctx,
+        acao: "cupom.criar",
+        alvoTipo: "cupom",
+        alvoNome: codigoNorm,
+        detalhes: { tipo: input.tipo, valor: input.valor },
+      });
+
+      return { success: true, mensagem: `Cupom ${codigoNorm} criado` };
+    }),
+
+  /** Ativa/desativa um cupom (sem deletar — preserva histórico) */
+  alternarAtivoCupom: adminProcedure
+    .input(z.object({ id: z.number(), ativo: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { cupons } = await import("../../drizzle/schema");
+      await db
+        .update(cupons)
+        .set({ ativo: input.ativo })
+        .where(eq(cupons.id, input.id));
+
+      await registrarAuditoria({
+        ctx,
+        acao: input.ativo ? "cupom.ativar" : "cupom.desativar",
+        alvoTipo: "cupom",
+        alvoId: input.id,
+      });
+
+      return { success: true };
+    }),
+
+  /** Deletar cupom (apenas se nunca foi usado) */
+  deletarCupom: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { cupons } = await import("../../drizzle/schema");
+
+      const [c] = await db.select().from(cupons).where(eq(cupons.id, input.id)).limit(1);
+      if (!c) throw new Error("Cupom não encontrado");
+      if (c.usos > 0) {
+        throw new Error("Cupom já foi usado — desative em vez de deletar para preservar histórico");
+      }
+
+      await db.delete(cupons).where(eq(cupons.id, input.id));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "cupom.deletar",
+        alvoTipo: "cupom",
+        alvoId: input.id,
+        alvoNome: c.codigo,
+      });
+
+      return { success: true };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CHURN E MÉTRICAS DE RECEITA — Sprint 3
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Métricas de churn dos últimos 12 meses:
+   *   - clientes ativos no início do mês
+   *   - cancelamentos no mês
+   *   - taxa de churn (%)
+   *   - LTV estimado (avg MRR / churn rate)
+   */
+  metricasChurn: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) {
+      return {
+        meses: [],
+        churnAtual: 0,
+        ltvEstimado: 0,
+        retencao12m: 0,
+      };
+    }
+
+    const allSubs = await db.select().from(subscriptionsTable);
+
+    // Calcula a foto de cada mês: ativos no início, cancelados no mês
+    const meses: Array<{
+      mes: string;
+      ativosInicio: number;
+      cancelados: number;
+      churnRate: number;
+    }> = [];
+
+    for (let i = 11; i >= 0; i--) {
+      const inicioMes = new Date();
+      inicioMes.setMonth(inicioMes.getMonth() - i);
+      inicioMes.setDate(1);
+      inicioMes.setHours(0, 0, 0, 0);
+
+      const fimMes = new Date(inicioMes);
+      fimMes.setMonth(fimMes.getMonth() + 1);
+
+      // Subs criadas antes do início do mês e (não canceladas OU canceladas após o início)
+      const ativosInicio = allSubs.filter((s) => {
+        const created = new Date(s.createdAt).getTime();
+        return created < inicioMes.getTime();
+      }).length;
+
+      // Subs canceladas no mês (proxy: status canceled E updatedAt no mês)
+      const cancelados = allSubs.filter((s) => {
+        if (s.status !== "canceled") return false;
+        const updated = new Date(s.updatedAt).getTime();
+        return updated >= inicioMes.getTime() && updated < fimMes.getTime();
+      }).length;
+
+      const churnRate = ativosInicio > 0 ? (cancelados / ativosInicio) * 100 : 0;
+
+      meses.push({
+        mes: `${inicioMes.getFullYear()}-${String(inicioMes.getMonth() + 1).padStart(2, "0")}`,
+        ativosInicio,
+        cancelados,
+        churnRate: Math.round(churnRate * 100) / 100,
+      });
+    }
+
+    // Churn médio dos últimos 3 meses (mais estável)
+    const ultimos3 = meses.slice(-3);
+    const churnAtual = ultimos3.length > 0
+      ? ultimos3.reduce((sum, m) => sum + m.churnRate, 0) / ultimos3.length
+      : 0;
+
+    // LTV estimado = (MRR médio por cliente) / (churn rate mensal)
+    const subsAtivas = allSubs.filter((s) => s.status === "active");
+    const mrrTotal = subsAtivas.reduce((sum, s) => {
+      const plan = PLANS.find((p) => p.id === s.planId);
+      return sum + (plan?.priceMonthly || 0);
+    }, 0);
+    const arpu = subsAtivas.length > 0 ? mrrTotal / subsAtivas.length : 0;
+    const ltvEstimado = churnAtual > 0 ? arpu / (churnAtual / 100) : 0;
+
+    // Retenção 12m: clientes que ainda estão ativos vs criados há 12+ meses
+    const umAnoAtras = new Date();
+    umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1);
+    const criadosHaUmAno = allSubs.filter((s) => new Date(s.createdAt) <= umAnoAtras);
+    const aindaAtivos = criadosHaUmAno.filter((s) => s.status === "active").length;
+    const retencao12m = criadosHaUmAno.length > 0
+      ? Math.round((aindaAtivos / criadosHaUmAno.length) * 100)
+      : 0;
+
+    return {
+      meses,
+      churnAtual: Math.round(churnAtual * 100) / 100,
+      ltvEstimado: Math.round(ltvEstimado),
+      retencao12m,
+    };
+  }),
+
+  /**
+   * Cancela assinatura via admin (sem precisar do consentimento do usuário).
+   * Usa AsaasClient pra cancelar no Asaas + marca como canceled localmente.
+   */
+  cancelarAssinaturaAdmin: adminProcedure
+    .input(z.object({
+      subscriptionId: z.number(),
+      motivo: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.id, input.subscriptionId))
+        .limit(1);
+      if (!sub) throw new Error("Assinatura não encontrada");
+      if (sub.status === "canceled") throw new Error("Assinatura já está cancelada");
+
+      // Buscar nome do user pra auditoria
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users).where(eq(users.id, sub.userId)).limit(1);
+
+      // Cancela no Asaas (best-effort)
+      if (sub.asaasSubscriptionId) {
+        try {
+          const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
+          const client = await getAdminAsaasClient();
+          await client.cancelarAssinatura(sub.asaasSubscriptionId);
+        } catch (err: any) {
+          // Loga mas não bloqueia — admin pode estar cancelando uma sub
+          // que já foi removida no Asaas
+          console.warn("Asaas cancel falhou:", err.message);
+        }
+      }
+
+      await db
+        .update(subscriptionsTable)
+        .set({ status: "canceled" })
+        .where(eq(subscriptionsTable.id, input.subscriptionId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "subscription.cancelarAdmin",
+        alvoTipo: "subscription",
+        alvoId: input.subscriptionId,
+        alvoNome: u?.name || u?.email || undefined,
+        detalhes: { motivo: input.motivo, planId: sub.planId },
+      });
+
+      return { success: true, mensagem: "Assinatura cancelada" };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
   // MONITORAMENTO OPERACIONAL
   // ═══════════════════════════════════════════════════════════════════════
 

@@ -985,3 +985,73 @@ export const auditLog = mysqlTable("audit_log", {
 
 export type AuditLog = typeof auditLog.$inferSelect;
 export type InsertAuditLog = typeof auditLog.$inferInsert;
+
+/**
+ * Overrides de planos — permite o admin alterar preço/features dos
+ * planos definidos em `server/billing/products.ts` SEM precisar de
+ * deploy. Linha em planos_overrides "vence" o hardcoded.
+ *
+ * Cada linha referencia um planId (que precisa existir em PLANS).
+ * Campos null = mantém valor do hardcoded. Campos não-null sobrescrevem.
+ */
+export const planosOverrides = mysqlTable("planos_overrides", {
+  id: int("id").autoincrement().primaryKey(),
+  /** ID do plano em PLANS (ex: "iniciante", "profissional", "escritorio") */
+  planId: varchar("planIdOverride", { length: 64 }).notNull().unique(),
+  /** Override do nome (null = usa o de PLANS) */
+  name: varchar("nameOverride", { length: 100 }),
+  /** Override da descrição */
+  description: varchar("descriptionOverride", { length: 500 }),
+  /** Override do preço mensal em centavos */
+  priceMonthly: int("priceMonthlyOverride"),
+  /** Override do preço anual em centavos */
+  priceYearly: int("priceYearlyOverride"),
+  /** Features (array JSON) — null = usa as de PLANS */
+  features: text("featuresOverride"),
+  /** Marca como popular (badge "Mais Popular") */
+  popular: boolean("popularOverride"),
+  /** Plano oculto da página /plans (mas continua válido pra subscriptions existentes) */
+  oculto: boolean("ocultoOverride").default(false),
+  updatedBy: int("updatedByOverride"),
+  updatedAt: timestamp("updatedAtOverride").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PlanoOverride = typeof planosOverrides.$inferSelect;
+export type InsertPlanoOverride = typeof planosOverrides.$inferInsert;
+
+/**
+ * Cupons de desconto — admin cria, cliente aplica no checkout.
+ *
+ * Aplicado via Asaas como discount na primeira cobrança da assinatura
+ * OU como percentual recorrente. Validade controlada pela data e pelo
+ * limite de usos.
+ */
+export const cupons = mysqlTable("cupons", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Código que o cliente digita (case-insensitive) */
+  codigo: varchar("codigoCupom", { length: 64 }).notNull().unique(),
+  /** Descrição interna pro admin */
+  descricao: varchar("descricaoCupom", { length: 255 }),
+  /** Tipo de desconto */
+  tipo: mysqlEnum("tipoCupom", ["percentual", "valorFixo"]).notNull(),
+  /** Valor do desconto (% se percentual, centavos se valorFixo) */
+  valor: int("valorCupom").notNull(),
+  /** Data inicial de validade (pode ser passada → válido desde já) */
+  validoDe: timestamp("validoDeCupom"),
+  /** Data final de validade (null = sem expiração) */
+  validoAte: timestamp("validoAteCupom"),
+  /** Limite total de usos (null = ilimitado) */
+  maxUsos: int("maxUsosCupom"),
+  /** Contador de usos (incrementado no resgate) */
+  usos: int("usosCupom").default(0).notNull(),
+  /** Cupom ativo? Admin pode desativar sem deletar pra preservar histórico */
+  ativo: boolean("ativoCupom").default(true).notNull(),
+  /** Restringe a planos específicos (CSV de planIds, null = todos) */
+  planosIds: varchar("planosIdsCupom", { length: 500 }),
+  criadoPor: int("criadoPorCupom"),
+  createdAt: timestamp("createdAtCupom").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtCupom").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Cupom = typeof cupons.$inferSelect;
+export type InsertCupom = typeof cupons.$inferInsert;

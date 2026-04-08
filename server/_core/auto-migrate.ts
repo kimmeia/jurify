@@ -493,6 +493,60 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
         log.warn({ err: err.message }, "Falha ao criar audit_log");
       }
     }
+
+    // ─── planos_overrides: editar planos sem deploy ────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS planos_overrides (
+          id INT NOT NULL AUTO_INCREMENT,
+          planIdOverride VARCHAR(64) NOT NULL UNIQUE,
+          nameOverride VARCHAR(100),
+          descriptionOverride VARCHAR(500),
+          priceMonthlyOverride INT,
+          priceYearlyOverride INT,
+          featuresOverride TEXT,
+          popularOverride BOOLEAN,
+          ocultoOverride BOOLEAN DEFAULT FALSE,
+          updatedByOverride INT,
+          updatedAtOverride TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("planos_overrides criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar planos_overrides");
+      }
+    }
+
+    // ─── cupons: descontos promocionais ────────────────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS cupons (
+          id INT NOT NULL AUTO_INCREMENT,
+          codigoCupom VARCHAR(64) NOT NULL UNIQUE,
+          descricaoCupom VARCHAR(255),
+          tipoCupom ENUM('percentual','valorFixo') NOT NULL,
+          valorCupom INT NOT NULL,
+          validoDeCupom TIMESTAMP NULL,
+          validoAteCupom TIMESTAMP NULL,
+          maxUsosCupom INT,
+          usosCupom INT NOT NULL DEFAULT 0,
+          ativoCupom BOOLEAN NOT NULL DEFAULT TRUE,
+          planosIdsCupom VARCHAR(500),
+          criadoPorCupom INT,
+          createdAtCupom TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtCupom TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_cupons_ativo (ativoCupom)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("cupons criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar cupons");
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
   }
