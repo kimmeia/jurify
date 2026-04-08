@@ -123,29 +123,44 @@ export function registerAsaasBillingWebhook(app: Express) {
           return res.status(200).json({ received: true });
         }
 
-        const status = mapAsaasStatus(sub.status);
+        const statusFromAsaas = mapAsaasStatus(sub.status);
         const periodEnd = sub.nextDueDate
           ? new Date(sub.nextDueDate).getTime()
           : null;
 
         if (existing) {
+          // PRESERVA status mais avançado: se local já está "active" e o
+          // SUBSCRIPTION_UPDATED chega com "incomplete"/"canceled", NÃO
+          // rebaixa. Isso protege contra race condition onde PAYMENT_RECEIVED
+          // chegou primeiro e ativou, depois SUBSCRIPTION_UPDATED chegou
+          // dizendo INACTIVE (porque o Asaas ainda não processou).
+          const novoStatus =
+            existing.status === "active" && statusFromAsaas !== "canceled"
+              ? existing.status
+              : statusFromAsaas;
+
           await db
             .update(subscriptions)
             .set({
-              status,
-              currentPeriodEnd: periodEnd,
+              status: novoStatus,
+              currentPeriodEnd: periodEnd ?? existing.currentPeriodEnd,
               planId: planId || existing.planId,
             })
             .where(eq(subscriptions.id, existing.id));
+          log.info(
+            { subId: existing.id, novoStatus, antigoStatus: existing.status },
+            "Subscription atualizada",
+          );
         } else {
           await db.insert(subscriptions).values({
             userId,
             asaasSubscriptionId: sub.id,
             asaasCustomerId: sub.customer,
             planId,
-            status,
+            status: statusFromAsaas,
             currentPeriodEnd: periodEnd,
           });
+          log.info({ subId: sub.id, userId }, "Subscription criada via webhook");
         }
       }
 
@@ -153,22 +168,65 @@ export function registerAsaasBillingWebhook(app: Express) {
       else if (body.event.startsWith("PAYMENT_") && body.payment) {
         const payment = body.payment;
         log.info(
-          { event: body.event, paymentId: payment.id, status: payment.status },
+          { event: body.event, paymentId: payment.id, status: payment.status, asaasSubId: payment.subscription },
           "Payment event",
         );
 
         // Pagamento de assinatura: atualizar status da subscription
         if (payment.subscription) {
-          const [existing] = await db
+          let [existing] = await db
             .select()
             .from(subscriptions)
             .where(eq(subscriptions.asaasSubscriptionId, payment.subscription))
             .limit(1);
 
+          // ─── FALLBACK: criar a row se não existir ────────────────────
+          // Race condition protection: se o PAYMENT_* chegar antes do
+          // SUBSCRIPTION_CREATED (ou se o createCheckout não criou a row
+          // por alguma falha), ainda assim devemos criar/ativar a
+          // subscription aqui. Os dados vêm do externalReference do
+          // payment.
           if (!existing) {
-            log.warn(
+            const { userId, planId } = parseExternalReference(payment.externalReference);
+            if (!userId) {
+              log.warn(
+                { asaasSubId: payment.subscription, externalRef: payment.externalReference },
+                "Subscription não encontrada e externalReference sem userId — ignorando",
+              );
+              return res.status(200).json({ received: true, ignored: true });
+            }
+
+            log.info(
+              { asaasSubId: payment.subscription, userId, planId },
+              "Criando subscription via webhook de pagamento (fallback)",
+            );
+
+            // Salva asaasCustomerId no users
+            await db
+              .update(users)
+              .set({ asaasCustomerId: payment.customer })
+              .where(eq(users.id, userId));
+
+            await db.insert(subscriptions).values({
+              userId,
+              asaasSubscriptionId: payment.subscription,
+              asaasCustomerId: payment.customer,
+              planId,
+              status: "incomplete",
+            });
+
+            // Releer a row recém-criada
+            [existing] = await db
+              .select()
+              .from(subscriptions)
+              .where(eq(subscriptions.asaasSubscriptionId, payment.subscription))
+              .limit(1);
+          }
+
+          if (!existing) {
+            log.error(
               { asaasSubId: payment.subscription },
-              "Subscription não encontrada para o pagamento",
+              "Falha ao criar/localizar subscription mesmo com fallback",
             );
             return res.status(200).json({ received: true });
           }
@@ -177,15 +235,23 @@ export function registerAsaasBillingWebhook(app: Express) {
           const isOverdue = isPaymentOverdueEvent(body.event, payment.status);
 
           if (isPaid) {
-            // Ativa a assinatura e renova o período
-            const nextPeriod = payment.dueDate
-              ? new Date(payment.dueDate).getTime()
+            // Ativa a assinatura e renova o período.
+            // currentPeriodEnd fica com o próximo vencimento (dueDate +
+            // ciclo) — como a primeira cobrança acabou de ser paga,
+            // usamos dueDate como proxy + 30 dias pro próximo ciclo.
+            const dueDate = payment.dueDate ? new Date(payment.dueDate).getTime() : null;
+            const nextPeriod = dueDate
+              ? dueDate + 30 * 24 * 60 * 60 * 1000
               : existing.currentPeriodEnd;
+
             await db
               .update(subscriptions)
               .set({ status: "active", currentPeriodEnd: nextPeriod })
               .where(eq(subscriptions.id, existing.id));
-            log.info({ subId: existing.id }, "Subscription paga e ativa");
+            log.info(
+              { subId: existing.id, event: body.event, status: payment.status },
+              "Subscription paga e ativada",
+            );
           } else if (isOverdue) {
             await db
               .update(subscriptions)
@@ -193,6 +259,11 @@ export function registerAsaasBillingWebhook(app: Express) {
               .where(eq(subscriptions.id, existing.id));
             log.info({ subId: existing.id }, "Subscription past_due");
           }
+        } else {
+          log.debug(
+            { event: body.event, paymentId: payment.id },
+            "Payment sem subscription vinculada — ignorando",
+          );
         }
       }
 

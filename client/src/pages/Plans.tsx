@@ -21,8 +21,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, ArrowRight, XCircle, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { Check, Loader2, ArrowRight, XCircle, AlertCircle, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 /** Máscara CPF/CNPJ — alterna conforme o usuário digita */
@@ -55,22 +56,49 @@ export default function Plans() {
   const [cpfInput, setCpfInput] = useState("");
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 
+  // Estado "aguardando pagamento": mostrado após o usuário clicar em
+  // assinar e ser redirecionado pro Asaas. Faz polling da subscription
+  // atual pra detectar quando ficar ativa.
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
+
   const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
 
   const { data: plans, isLoading } = trpc.subscription.plans.useQuery();
   const { data: currentSub } = trpc.subscription.current.useQuery(undefined, {
     enabled: !!user,
     retry: false,
+    // Polling a cada 3s quando awaiting — pro redirect rápido
+    // quando o webhook ativa a subscription.
+    refetchInterval: awaitingPayment ? 3000 : false,
   });
   const { data: billingOk } = trpc.subscription.billingConfigured.useQuery();
+
+  // Detecta ativação: se estávamos aguardando E agora tem sub ativa,
+  // para o polling, mostra sucesso e redireciona pro dashboard.
+  useEffect(() => {
+    if (awaitingPayment && currentSub && currentSub.status === "active") {
+      setAwaitingPayment(false);
+      toast.success("Pagamento confirmado! Bem-vindo ao Jurify 🎉", {
+        duration: 5000,
+      });
+      // Delay curto pra o usuário ver o toast
+      setTimeout(() => {
+        setLocation("/dashboard");
+      }, 1500);
+    }
+  }, [awaitingPayment, currentSub, setLocation]);
 
   const createCheckout = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
       if (data.url) {
-        toast.info("Redirecionando para o checkout do Asaas...");
+        toast.info("Abrindo página de pagamento do Asaas...");
         window.open(data.url, "_blank");
+        setAwaitingPayment(true); // inicia polling
       } else {
-        toast.warning("Assinatura criada, mas link de pagamento não disponível ainda. Verifique seu e-mail.");
+        toast.warning(
+          "Assinatura criada, mas link de pagamento não disponível ainda. Verifique seu e-mail.",
+        );
       }
       setLoadingPlan(null);
       setCpfModalOpen(false);
@@ -86,8 +114,9 @@ export default function Plans() {
   const changePlan = trpc.subscription.changePlan.useMutation({
     onSuccess: (data) => {
       if (data.url) {
-        toast.info("Redirecionando para trocar de plano...");
+        toast.info("Abrindo checkout pra troca de plano...");
         window.open(data.url, "_blank");
+        setAwaitingPayment(true);
       }
       setLoadingPlan(null);
     },
@@ -210,6 +239,47 @@ export default function Plans() {
                 breve.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Estado "aguardando pagamento" — polling ativo */}
+      {awaitingPayment && (
+        <Card className="border-blue-300/50 bg-blue-50/50 dark:bg-blue-950/20">
+          <CardContent className="pt-6 flex items-start gap-3">
+            <div className="relative">
+              <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Loader2 className="h-3 w-3 text-blue-600 absolute -bottom-0.5 -right-0.5 animate-spin" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">
+                Aguardando confirmação do pagamento
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Complete o pagamento na aba do Asaas que foi aberta. Esta
+                página vai atualizar automaticamente quando o pagamento for
+                confirmado (pode levar alguns segundos após o pagamento).
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                onClick={() => {
+                  utils.subscription.current.invalidate();
+                  toast.info("Verificando...");
+                }}
+              >
+                <Loader2 className="h-3 w-3 mr-1.5" />
+                Verificar agora
+              </Button>
+            </div>
+            <button
+              onClick={() => setAwaitingPayment(false)}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Cancelar espera"
+            >
+              <XCircle className="h-4 w-4" />
+            </button>
           </CardContent>
         </Card>
       )}

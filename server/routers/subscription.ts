@@ -157,6 +157,38 @@ export const subscriptionRouter = router({
         externalReference: `${ctx.user.id}:${input.planId}`,
       });
 
+      // ─── CRIAR ROW LOCAL IMEDIATAMENTE ────────────────────────────────
+      // Antes esperávamos o webhook SUBSCRIPTION_CREATED chegar pra inserir
+      // a row local. Mas isso criava uma race condition: se o usuário
+      // pagasse rápido (PIX), o webhook PAYMENT_CONFIRMED chegava PRIMEIRO,
+      // não encontrava a row local, e apenas logava warning — a assinatura
+      // nunca era ativada.
+      //
+      // Agora inserimos a row imediatamente com status "incomplete". Os
+      // webhooks subsequentes vão ATUALIZAR (não inserir) — o que é
+      // idempotente e sem race.
+      const db = await getDb();
+      if (db) {
+        const existingLocal = await db
+          .select()
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
+          .limit(1);
+        if (existingLocal.length === 0) {
+          await db.insert(subscriptionsTable).values({
+            userId: ctx.user.id,
+            asaasSubscriptionId: sub.id,
+            asaasCustomerId: customerId,
+            planId: input.planId,
+            status: "incomplete", // aguarda primeiro pagamento
+          });
+          log.info(
+            { userId: ctx.user.id, subId: sub.id },
+            "Row local criada como incomplete",
+          );
+        }
+      }
+
       // Buscar a primeira cobrança gerada para retornar o link de pagamento
       const cobrancas = await client.listarCobrancas({
         customer: customerId,
@@ -258,6 +290,25 @@ export const subscriptionRouter = router({
         description: `${newPlan.name} — Jurify SaaS`,
         externalReference: `${ctx.user.id}:${input.newPlanId}`,
       });
+
+      // Cria row local imediatamente (mesma lógica do createCheckout)
+      const db2 = await getDb();
+      if (db2) {
+        const existingLocal = await db2
+          .select()
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
+          .limit(1);
+        if (existingLocal.length === 0) {
+          await db2.insert(subscriptionsTable).values({
+            userId: ctx.user.id,
+            asaasSubscriptionId: sub.id,
+            asaasCustomerId: customerId,
+            planId: input.newPlanId,
+            status: "incomplete",
+          });
+        }
+      }
 
       const cobrancas = await client.listarCobrancas({
         customer: customerId,
