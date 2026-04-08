@@ -43,10 +43,14 @@ function dataVencimentoPadrao(): string {
  * que vai detectar a ativação via polling e redirecionar pro dashboard.
  *
  * IMPORTANTE: o domínio precisa estar cadastrado nos dados comerciais
- * da conta Asaas (Configurações → Informações), senão o redirect falha
- * silenciosamente.
+ * da conta Asaas (Configurações → Informações), senão o Asaas rejeita
+ * a criação da assinatura com 400. Nesse caso o fallback em
+ * `criarAssinaturaComFallback` tenta novamente sem o callback.
+ *
+ * Retorna null se não conseguir montar uma URL válida pública
+ * (localhost, IP, etc) — o Asaas rejeita esses.
  */
-function buildSuccessUrl(ctx: { req: any }): string {
+function buildSuccessUrl(ctx: { req: any }): string | null {
   const req = ctx.req;
   const proto =
     req.headers?.["x-forwarded-proto"]?.toString().split(",")[0]?.trim() ||
@@ -56,11 +60,54 @@ function buildSuccessUrl(ctx: { req: any }): string {
     req.headers?.["x-forwarded-host"]?.toString().split(",")[0]?.trim() ||
     req.headers?.host ||
     "";
-  // Fallback: se nada detectou, usa o origin vindo do header (caso de CORS)
   const origin =
     req.headers?.origin?.toString() ||
     (host ? `${proto}://${host}` : "");
-  return origin ? `${origin}/checkout/success` : "/checkout/success";
+
+  if (!origin) return null;
+
+  // Asaas rejeita localhost e HTTP — só manda se for domínio público HTTPS
+  const isLocalhost = /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(origin);
+  const isHttps = origin.startsWith("https://");
+  if (isLocalhost || !isHttps) {
+    log.warn(
+      { origin },
+      "Origin não é HTTPS público — não enviando callback ao Asaas",
+    );
+    return null;
+  }
+
+  return `${origin}/checkout/success`;
+}
+
+/**
+ * Cria uma assinatura no Asaas. Se a chamada vier com `callback` e o
+ * Asaas responder 400 (tipicamente porque o domínio do successUrl não
+ * está cadastrado na conta Asaas), tenta novamente SEM o callback.
+ *
+ * Assim o usuário nunca fica travado — no pior caso, a assinatura é
+ * criada mas o auto-redirect não funciona (o cliente tem que voltar
+ * manualmente pro sistema).
+ */
+async function criarAssinaturaComFallback(
+  client: { criarAssinatura: (input: any) => Promise<any> },
+  input: any,
+) {
+  try {
+    return await client.criarAssinatura(input);
+  } catch (err: any) {
+    const msg = err?.message || "";
+    // Se for 400 e tem callback no input, tenta sem
+    if (input.callback && /rejeitou criarAssinatura \(400/.test(msg)) {
+      log.warn(
+        { err: msg, successUrl: input.callback.successUrl },
+        "Asaas rejeitou callback.successUrl — tentando sem callback (domínio provavelmente não cadastrado no Asaas)",
+      );
+      const { callback, ...inputSemCallback } = input;
+      return await client.criarAssinatura(inputSemCallback);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -176,7 +223,7 @@ export const subscriptionRouter = router({
         input.interval === "monthly" ? plan.priceMonthly : plan.priceYearly;
 
       const successUrl = buildSuccessUrl(ctx);
-      const sub = await client.criarAssinatura({
+      const sub = await criarAssinaturaComFallback(client, {
         customer: customerId,
         billingType: "UNDEFINED", // cliente escolhe PIX/boleto/cartão
         value: value / 100, // Asaas usa BRL, não centavos
@@ -186,10 +233,9 @@ export const subscriptionRouter = router({
         externalReference: `${ctx.user.id}:${input.planId}`,
         // Redirect automático após pagamento (PIX/cartão). Boleto não
         // redireciona porque a confirmação é assíncrona.
-        callback: {
-          successUrl,
-          autoRedirect: true,
-        },
+        // Se successUrl for null (localhost) ou Asaas rejeitar (domínio
+        // não cadastrado), o fallback retenta sem callback.
+        ...(successUrl ? { callback: { successUrl, autoRedirect: true } } : {}),
       });
 
       // ─── CRIAR ROW LOCAL IMEDIATAMENTE ────────────────────────────────
@@ -317,7 +363,7 @@ export const subscriptionRouter = router({
           : newPlan.priceYearly;
 
       const successUrl = buildSuccessUrl(ctx);
-      const sub = await client.criarAssinatura({
+      const sub = await criarAssinaturaComFallback(client, {
         customer: customerId,
         billingType: "UNDEFINED",
         value: value / 100,
@@ -325,10 +371,7 @@ export const subscriptionRouter = router({
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
         description: `${newPlan.name} — Jurify SaaS`,
         externalReference: `${ctx.user.id}:${input.newPlanId}`,
-        callback: {
-          successUrl,
-          autoRedirect: true,
-        },
+        ...(successUrl ? { callback: { successUrl, autoRedirect: true } } : {}),
       });
 
       // Cria row local imediatamente (mesma lógica do createCheckout)

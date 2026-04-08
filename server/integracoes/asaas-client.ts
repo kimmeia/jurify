@@ -312,8 +312,25 @@ export class AsaasClient {
   // ─── COBRANÇAS ─────────────────────────────────────────────────────────────
 
   async criarCobranca(input: AsaasPaymentInput): Promise<AsaasPayment> {
-    const res = await this.api.post("/payments", input);
-    return res.data;
+    try {
+      const res = await this.api.post("/payments", input);
+      return res.data;
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response) {
+        const data = axErr.response.data;
+        const errors = data?.errors;
+        const msgs = Array.isArray(errors)
+          ? errors
+              .map((e: any) => `${e.code ?? ""}: ${e.description ?? JSON.stringify(e)}`)
+              .join(" | ")
+          : typeof data === "string"
+          ? data
+          : JSON.stringify(data).slice(0, 500);
+        throw new Error(`Asaas rejeitou criarCobranca (${axErr.response.status}): ${msgs}`);
+      }
+      throw err;
+    }
   }
 
   async listarCobrancas(params?: {
@@ -376,8 +393,26 @@ export class AsaasClient {
   // ─── ASSINATURAS ───────────────────────────────────────────────────────────
 
   async criarAssinatura(input: AsaasSubscriptionInput): Promise<AsaasSubscription> {
-    const res = await this.api.post("/subscriptions", input);
-    return res.data;
+    try {
+      const res = await this.api.post("/subscriptions", input);
+      return res.data;
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response) {
+        // Monta mensagem amigável com os erros estruturados do Asaas
+        const data = axErr.response.data;
+        const errors = data?.errors;
+        const msgs = Array.isArray(errors)
+          ? errors
+              .map((e: any) => `${e.code ?? ""}: ${e.description ?? JSON.stringify(e)}`)
+              .join(" | ")
+          : typeof data === "string"
+          ? data
+          : JSON.stringify(data).slice(0, 500);
+        throw new Error(`Asaas rejeitou criarAssinatura (${axErr.response.status}): ${msgs}`);
+      }
+      throw err;
+    }
   }
 
   async listarAssinaturas(params?: {
