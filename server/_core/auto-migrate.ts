@@ -357,6 +357,121 @@ async function ensureAsaasBillingColumns(connection: mysql.Connection): Promise<
 }
 
 /**
+ * Sprint 1 — Controle de cliente:
+ *   - users.bloqueado / motivoBloqueio / bloqueadoEm
+ *   - escritorios.suspenso / motivoSuspensao / suspensoEm
+ *   - tabela cliente_notas_admin (notas internas do admin)
+ */
+async function ensureClienteControlSchema(connection: mysql.Connection): Promise<void> {
+  try {
+    // ─── users: colunas de bloqueio ───────────────────────────────────
+    const [userCols] = await connection.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+    );
+    const userColSet = new Set(
+      (userCols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+    );
+
+    if (!userColSet.has("bloqueado")) {
+      await connection
+        .query("ALTER TABLE users ADD COLUMN bloqueado BOOLEAN NOT NULL DEFAULT FALSE")
+        .then(() => log.info("users.bloqueado adicionada"))
+        .catch((err: any) => {
+          if (!isHarmlessError(err.message || String(err)))
+            log.warn({ err: err.message }, "Falha ao adicionar users.bloqueado");
+        });
+    }
+    if (!userColSet.has("motivoBloqueio")) {
+      await connection
+        .query("ALTER TABLE users ADD COLUMN motivoBloqueio VARCHAR(500) NULL")
+        .then(() => log.info("users.motivoBloqueio adicionada"))
+        .catch((err: any) => {
+          if (!isHarmlessError(err.message || String(err)))
+            log.warn({ err: err.message }, "Falha ao adicionar users.motivoBloqueio");
+        });
+    }
+    if (!userColSet.has("bloqueadoEm")) {
+      await connection
+        .query("ALTER TABLE users ADD COLUMN bloqueadoEm TIMESTAMP NULL")
+        .then(() => log.info("users.bloqueadoEm adicionada"))
+        .catch((err: any) => {
+          if (!isHarmlessError(err.message || String(err)))
+            log.warn({ err: err.message }, "Falha ao adicionar users.bloqueadoEm");
+        });
+    }
+
+    // ─── escritorios: colunas de suspensão ────────────────────────────
+    const [escTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'escritorios'`,
+    );
+    if ((escTables as unknown[]).length > 0) {
+      const [escCols] = await connection.query(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'escritorios'`,
+      );
+      const escColSet = new Set(
+        (escCols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+      );
+
+      if (!escColSet.has("suspenso")) {
+        await connection
+          .query("ALTER TABLE escritorios ADD COLUMN suspenso BOOLEAN NOT NULL DEFAULT FALSE")
+          .then(() => log.info("escritorios.suspenso adicionada"))
+          .catch((err: any) => {
+            if (!isHarmlessError(err.message || String(err)))
+              log.warn({ err: err.message }, "Falha ao adicionar escritorios.suspenso");
+          });
+      }
+      if (!escColSet.has("motivoSuspensao")) {
+        await connection
+          .query("ALTER TABLE escritorios ADD COLUMN motivoSuspensao VARCHAR(500) NULL")
+          .then(() => log.info("escritorios.motivoSuspensao adicionada"))
+          .catch((err: any) => {
+            if (!isHarmlessError(err.message || String(err)))
+              log.warn({ err: err.message }, "Falha ao adicionar escritorios.motivoSuspensao");
+          });
+      }
+      if (!escColSet.has("suspensoEm")) {
+        await connection
+          .query("ALTER TABLE escritorios ADD COLUMN suspensoEm TIMESTAMP NULL")
+          .then(() => log.info("escritorios.suspensoEm adicionada"))
+          .catch((err: any) => {
+            if (!isHarmlessError(err.message || String(err)))
+              log.warn({ err: err.message }, "Falha ao adicionar escritorios.suspensoEm");
+          });
+      }
+    }
+
+    // ─── cliente_notas_admin: tabela inteira ──────────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS cliente_notas_admin (
+          id INT NOT NULL AUTO_INCREMENT,
+          userIdNota INT NOT NULL,
+          autorAdminIdNota INT NOT NULL,
+          conteudoNota TEXT NOT NULL,
+          categoriaNota ENUM('geral','financeiro','suporte','comercial','alerta') NOT NULL DEFAULT 'geral',
+          createdAtNota TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtNota TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_notas_user (userIdNota),
+          INDEX idx_notas_admin (autorAdminIdNota)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("cliente_notas_admin criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar cliente_notas_admin");
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
+  }
+}
+
+/**
  * Garante que a tabela `contatos` tem a coluna `telefonesAnteriores`.
  * Usado pelo handler do WhatsApp pra reconhecer contatos que tiveram o
  * telefone alterado — evita criar contatos duplicados quando chega
@@ -466,6 +581,7 @@ export async function runMigrations(): Promise<void> {
     await ensureAuthColumns(connection);
     await ensureContatoColumns(connection);
     await ensureAsaasBillingColumns(connection);
+    await ensureClienteControlSchema(connection);
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

@@ -32,6 +32,17 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   /** ID do customer no Asaas (cobrança SaaS Jurify). Substituiu stripeCustomerId. */
   asaasCustomerId: varchar("asaasCustomerId", { length: 255 }),
+  /**
+   * Conta bloqueada pelo admin do Jurify. Quando true, o usuário não
+   * consegue mais autenticar (verificado em authenticateRequest).
+   * Diferente de role: bloqueio é uma ação punitiva/de suporte, role
+   * é o nível de permissão.
+   */
+  bloqueado: boolean("bloqueado").default(false).notNull(),
+  /** Motivo do bloqueio (auditável). Null quando bloqueado=false. */
+  motivoBloqueio: varchar("motivoBloqueio", { length: 500 }),
+  /** Timestamp do bloqueio. */
+  bloqueadoEm: timestamp("bloqueadoEm"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -283,6 +294,16 @@ export const escritorios = mysqlTable("escritorios", {
   planoAtendimento: mysqlEnum("planoAtendimento", ["basico", "intermediario", "completo"]).default("basico").notNull(),
   maxColaboradores: int("maxColaboradores").default(1).notNull(),
   maxConexoesWhatsapp: int("maxConexoesWhatsapp").default(0).notNull(),
+  /**
+   * Suspensão administrativa do escritório (controle pelo admin do
+   * Jurify, ex: inadimplência grave, violação de termos). Quando true,
+   * todos os usuários do escritório recebem 403 nas chamadas tRPC
+   * que dependem do contexto do escritório. Diferente do bloqueio
+   * individual em users.bloqueado: este é organizacional.
+   */
+  suspenso: boolean("suspenso").default(false).notNull(),
+  motivoSuspensao: varchar("motivoSuspensao", { length: 500 }),
+  suspensoEm: timestamp("suspensoEm"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -901,3 +922,27 @@ export const juditTransacoes = mysqlTable("judit_transacoes", {
   userId: int("userIdJTx").notNull(),
   createdAt: timestamp("createdAtJTx").defaultNow().notNull(),
 });
+
+/**
+ * Notas internas do admin sobre clientes — visíveis apenas no painel admin.
+ *
+ * Usado pelo time de suporte/financeiro pra registrar contexto sobre um
+ * cliente: "Ligou reclamando do bug X em 15/03", "Pediu desconto e
+ * negamos", "Cliente VIP", etc. Não é visível pro próprio cliente.
+ */
+export const clienteNotasAdmin = mysqlTable("cliente_notas_admin", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Sobre qual usuário/escritório é a nota */
+  userId: int("userIdNota").notNull(),
+  /** Quem criou a nota (admin) */
+  autorAdminId: int("autorAdminIdNota").notNull(),
+  /** Conteúdo livre (markdown permitido) */
+  conteudo: text("conteudoNota").notNull(),
+  /** Categoria opcional pra filtrar/destacar */
+  categoria: mysqlEnum("categoriaNota", ["geral", "financeiro", "suporte", "comercial", "alerta"]).default("geral").notNull(),
+  createdAt: timestamp("createdAtNota").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtNota").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ClienteNotaAdmin = typeof clienteNotasAdmin.$inferSelect;
+export type InsertClienteNotaAdmin = typeof clienteNotasAdmin.$inferInsert;

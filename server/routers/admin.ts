@@ -9,7 +9,7 @@
  */
 
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { adminProcedure, router } from "../_core/trpc";
 import {
   getDb,
@@ -218,6 +218,217 @@ export const adminRouter = router({
     .mutation(async ({ input }) => {
       await addCreditsToUser(input.userId, input.quantidade);
       return { success: true, mensagem: `${input.quantidade} créditos adicionados` };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CONTROLE DE CLIENTE — Sprint 1
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Bloquear conta de usuário individual.
+   *
+   * Quando bloqueado, o usuário não consegue mais autenticar (verificado
+   * em authenticateRequest). Útil pra: violação de termos, fraude, etc.
+   * Diferente de suspender escritório (que afeta todos os colaboradores).
+   */
+  bloquearUsuario: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      motivo: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db
+        .update(users)
+        .set({
+          bloqueado: true,
+          motivoBloqueio: input.motivo,
+          bloqueadoEm: new Date(),
+        })
+        .where(eq(users.id, input.userId));
+      return { success: true, mensagem: "Usuário bloqueado" };
+    }),
+
+  /** Desbloquear conta de usuário */
+  desbloquearUsuario: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db
+        .update(users)
+        .set({ bloqueado: false, motivoBloqueio: null, bloqueadoEm: null })
+        .where(eq(users.id, input.userId));
+      return { success: true, mensagem: "Usuário desbloqueado" };
+    }),
+
+  /**
+   * Suspender escritório inteiro (afeta todos os colaboradores).
+   * Use pra: inadimplência grave, violação organizacional de termos.
+   * Os colaboradores continuam autenticando, mas qualquer chamada
+   * que dependa do escritório retorna 403.
+   */
+  suspenderEscritorio: adminProcedure
+    .input(z.object({
+      escritorioId: z.number(),
+      motivo: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db
+        .update(escritorios)
+        .set({
+          suspenso: true,
+          motivoSuspensao: input.motivo,
+          suspensoEm: new Date(),
+        })
+        .where(eq(escritorios.id, input.escritorioId));
+      return { success: true, mensagem: "Escritório suspenso" };
+    }),
+
+  /** Reativar escritório suspenso */
+  reativarEscritorio: adminProcedure
+    .input(z.object({ escritorioId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db
+        .update(escritorios)
+        .set({ suspenso: false, motivoSuspensao: null, suspensoEm: null })
+        .where(eq(escritorios.id, input.escritorioId));
+      return { success: true, mensagem: "Escritório reativado" };
+    }),
+
+  /**
+   * Login impersonation — admin "entra como" outro usuário.
+   *
+   * Cria um JWT especial onde o openId é do usuário-alvo, mas com
+   * `impersonatedBy` apontando pro admin que iniciou. O admin enxerga
+   * exatamente o que o usuário enxergaria, mas as ações ficam
+   * registradas em nome do admin (auditoria).
+   *
+   * Limite: sessão de impersonation dura 1 hora (não a SESSION_DURATION
+   * normal). Pra "sair" da impersonation, o admin clica em logout.
+   */
+  impersonarUsuario: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Buscar usuário-alvo
+      const [targetUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!targetUser) throw new Error("Usuário não encontrado");
+      if (targetUser.role === "admin") {
+        throw new Error("Não é possível impersonar outro admin");
+      }
+
+      // Importar dinamicamente pra evitar ciclos
+      const { sdk } = await import("../_core/sdk");
+      const { COOKIE_NAME } = await import("../../shared/const");
+      const { getSessionCookieOptions } = await import("../_core/cookies");
+
+      const ONE_HOUR = 60 * 60 * 1000;
+      const sessionToken = await sdk.signSession(
+        {
+          openId: targetUser.openId,
+          appId: "jurify",
+          name: targetUser.name || targetUser.email || "Usuário",
+          impersonatedBy: ctx.user.openId, // ← admin original
+        },
+        { expiresInMs: ONE_HOUR },
+      );
+
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_HOUR,
+      });
+
+      return {
+        success: true,
+        mensagem: `Logado como ${targetUser.name || targetUser.email}. Sessão expira em 1h.`,
+        targetName: targetUser.name || targetUser.email,
+      };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // NOTAS INTERNAS DO ADMIN — Sprint 1
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** Lista todas as notas internas sobre um cliente, mais recentes primeiro */
+  listarNotasCliente: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { clienteNotasAdmin } = await import("../../drizzle/schema");
+      const { desc } = await import("drizzle-orm");
+      const rows = await db
+        .select({
+          id: clienteNotasAdmin.id,
+          conteudo: clienteNotasAdmin.conteudo,
+          categoria: clienteNotasAdmin.categoria,
+          autorAdminId: clienteNotasAdmin.autorAdminId,
+          createdAt: clienteNotasAdmin.createdAt,
+          updatedAt: clienteNotasAdmin.updatedAt,
+        })
+        .from(clienteNotasAdmin)
+        .where(eq(clienteNotasAdmin.userId, input.userId))
+        .orderBy(desc(clienteNotasAdmin.createdAt))
+        .limit(100);
+
+      // Junta nome do admin autor
+      const adminIds = Array.from(new Set(rows.map((r) => r.autorAdminId)));
+      const admins = adminIds.length > 0
+        ? await db
+            .select({ id: users.id, name: users.name })
+            .from(users)
+            .where(inArray(users.id, adminIds))
+        : [];
+      const adminMap = new Map(admins.map((a) => [a.id, a.name || "Admin"]));
+
+      return rows.map((r) => ({
+        ...r,
+        autorNome: adminMap.get(r.autorAdminId) || "Admin",
+      }));
+    }),
+
+  /** Cria nota interna sobre um cliente */
+  criarNotaCliente: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      conteudo: z.string().min(1).max(5000),
+      categoria: z.enum(["geral", "financeiro", "suporte", "comercial", "alerta"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { clienteNotasAdmin } = await import("../../drizzle/schema");
+      await db.insert(clienteNotasAdmin).values({
+        userId: input.userId,
+        autorAdminId: ctx.user.id,
+        conteudo: input.conteudo,
+        categoria: input.categoria || "geral",
+      });
+      return { success: true };
+    }),
+
+  /** Deleta nota (somente o autor ou admin master) */
+  deletarNotaCliente: adminProcedure
+    .input(z.object({ notaId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { clienteNotasAdmin } = await import("../../drizzle/schema");
+      await db.delete(clienteNotasAdmin).where(eq(clienteNotasAdmin.id, input.notaId));
+      return { success: true };
     }),
 
   // ═══════════════════════════════════════════════════════════════════════
