@@ -547,6 +547,58 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
         log.warn({ err: err.message }, "Falha ao criar cupons");
       }
     }
+
+    // ─── agentes_admin: agentes de IA globais (admin-level) ───────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agentes_admin (
+          id INT NOT NULL AUTO_INCREMENT,
+          nomeAgenteAdmin VARCHAR(128) NOT NULL,
+          descricaoAgenteAdmin VARCHAR(512),
+          areaConhecimentoAgente VARCHAR(128),
+          modeloAgente VARCHAR(64) NOT NULL DEFAULT 'gpt-4o-mini',
+          promptAgente TEXT NOT NULL,
+          temperaturaAgente VARCHAR(10) NOT NULL DEFAULT '0.70',
+          maxTokensAgente INT NOT NULL DEFAULT 800,
+          ativoAgente BOOLEAN NOT NULL DEFAULT TRUE,
+          modulosPermitidosAgente VARCHAR(500),
+          criadoPorAgente INT,
+          createdAtAgenteAdmin TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtAgenteAdmin TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_agentes_admin_ativo (ativoAgente)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("agentes_admin criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar agentes_admin");
+      }
+    }
+
+    // ─── agente_documentos: training docs/links/texto por agente ──────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agente_documentos (
+          id INT NOT NULL AUTO_INCREMENT,
+          agenteIdDoc INT NOT NULL,
+          nomeDoc VARCHAR(255) NOT NULL,
+          tipoDoc ENUM('arquivo','link','texto') NOT NULL,
+          urlDoc VARCHAR(1024),
+          conteudoDoc TEXT,
+          tamanhoDoc INT,
+          mimeTypeDoc VARCHAR(128),
+          createdAtDoc TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_doc_agente (agenteIdDoc)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("agente_documentos criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar agente_documentos");
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
   }

@@ -1055,3 +1055,72 @@ export const cupons = mysqlTable("cupons", {
 
 export type Cupom = typeof cupons.$inferSelect;
 export type InsertCupom = typeof cupons.$inferInsert;
+
+/**
+ * Agentes de IA globais (admin-level) — criados pelo dono do Jurify
+ * pra serem usados por todos os módulos (atendimento, futuros).
+ *
+ * Diferente de `agentes_ia` (tabela por escritório), estes agentes são
+ * da plataforma inteira. Cada agente tem:
+ *   - Prompt e modelo (GPT-4o, etc)
+ *   - Ativo/inativo
+ *   - Área de conhecimento (ex: "Direito Trabalhista", "FAQ Jurify")
+ *   - Documentos de treinamento (via tabela agente_documentos)
+ *
+ * A API key do OpenAI é puxada da integração `openai` em admin_integracoes
+ * (singleton), então não precisa ser armazenada no agente.
+ */
+export const agentesAdmin = mysqlTable("agentes_admin", {
+  id: int("id").autoincrement().primaryKey(),
+  nome: varchar("nomeAgenteAdmin", { length: 128 }).notNull(),
+  descricao: varchar("descricaoAgenteAdmin", { length: 512 }),
+  areaConhecimento: varchar("areaConhecimentoAgente", { length: 128 }),
+  modelo: varchar("modeloAgente", { length: 64 }).notNull().default("gpt-4o-mini"),
+  /** Prompt de sistema — define a "personalidade" e instruções do agente */
+  prompt: text("promptAgente").notNull(),
+  /** Temperatura do modelo (0.0 a 2.0) */
+  temperatura: varchar("temperaturaAgente", { length: 10 }).notNull().default("0.70"),
+  /** Máximo de tokens na resposta */
+  maxTokens: int("maxTokensAgente").notNull().default(800),
+  /** Ativo — pode ser referenciado por outros módulos */
+  ativo: boolean("ativoAgente").notNull().default(true),
+  /** Módulos onde este agente pode ser usado (CSV: "atendimento,resumos,calculos") */
+  modulosPermitidos: varchar("modulosPermitidosAgente", { length: 500 }),
+  criadoPor: int("criadoPorAgente"),
+  createdAt: timestamp("createdAtAgenteAdmin").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtAgenteAdmin").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AgenteAdmin = typeof agentesAdmin.$inferSelect;
+export type InsertAgenteAdmin = typeof agentesAdmin.$inferInsert;
+
+/**
+ * Documentos de treinamento vinculados a um agente admin.
+ *
+ * Pode ser:
+ *   - Arquivo uploadado (PDF, DOCX, TXT, MD) — `tipo: "arquivo"`, `url` = path local
+ *   - Link externo — `tipo: "link"`, `url` = URL HTTP(S)
+ *   - Texto colado direto — `tipo: "texto"`, `conteudo` inline no campo
+ *
+ * Usado pelo pipeline de RAG/contexto quando o agente é invocado.
+ * Quando a integração OpenAI Assistants API estiver ativa, estes docs
+ * podem ser enviados como `file` ao Assistant.
+ */
+export const agenteDocumentos = mysqlTable("agente_documentos", {
+  id: int("id").autoincrement().primaryKey(),
+  agenteId: int("agenteIdDoc").notNull(),
+  nome: varchar("nomeDoc", { length: 255 }).notNull(),
+  tipo: mysqlEnum("tipoDoc", ["arquivo", "link", "texto"]).notNull(),
+  /** URL: path do arquivo (/uploads/...) OU URL externa */
+  url: varchar("urlDoc", { length: 1024 }),
+  /** Texto colado diretamente (pra tipo="texto") */
+  conteudo: text("conteudoDoc"),
+  /** Tamanho em bytes (só arquivos) */
+  tamanho: int("tamanhoDoc"),
+  /** MIME type do arquivo */
+  mimeType: varchar("mimeTypeDoc", { length: 128 }),
+  createdAt: timestamp("createdAtDoc").defaultNow().notNull(),
+});
+
+export type AgenteDocumento = typeof agenteDocumentos.$inferSelect;
+export type InsertAgenteDocumento = typeof agenteDocumentos.$inferInsert;

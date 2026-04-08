@@ -17,6 +17,7 @@ import AdminInadimplentes from "./pages/admin/AdminInadimplentes";
 import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminCupons from "./pages/admin/AdminCupons";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
+import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
 import Plans from "./pages/Plans";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
@@ -106,6 +107,11 @@ function Router() {
       <Route path="/admin/financeiro">
         <AdminArea>
           <AdminFinanceiro />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/agentes-ia">
+        <AdminArea>
+          <AdminAgentesIA />
         </AdminArea>
       </Route>
       <Route path="/admin/reports">

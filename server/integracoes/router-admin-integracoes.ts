@@ -59,16 +59,9 @@ const PROVEDORES: ProvedorMeta[] = [
   {
     id: "openai",
     nome: "OpenAI (ChatGPT)",
-    descricao: "Modelo GPT para chatbot de atendimento e resumos automáticos.",
+    descricao: "API key do OpenAI usada pelos Agentes IA do admin e resumos automáticos.",
     docUrl: "https://platform.openai.com/api-keys",
-    services: ["GPT-4", "GPT-3.5", "Chatbot", "Resumos"],
-  },
-  {
-    id: "agentes_ia",
-    nome: "Agentes IA Treináveis",
-    descricao: "Agentes personalizados com conhecimento do escritório (FAQ, RAG).",
-    docUrl: "https://platform.openai.com/docs/assistants/overview",
-    services: ["Assistants API", "RAG", "Fine-tuning", "Custom"],
+    services: ["GPT-4", "GPT-3.5", "Assistants", "Embeddings"],
   },
 ];
 
@@ -140,41 +133,6 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
       } catch (err: any) {
         if (err.name === "AbortError" || err.name === "TimeoutError") {
           return { ok: false, mensagem: "Timeout — OpenAI não respondeu em 10s" };
-        }
-        return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
-      }
-    }
-    case "agentes_ia": {
-      // Agentes IA usa a key do OpenAI (Assistants API) mas é uma
-      // integração separada pra permitir configuração de agentes
-      // treinados específicos do escritório. Validamos a key do mesmo
-      // jeito do openai, mas esperamos JSON: { apiKey, modeloPadrao? }
-      try {
-        const config = typeof apiKey === "string" && apiKey.startsWith("{")
-          ? JSON.parse(apiKey)
-          : { apiKey };
-
-        if (!config.apiKey) {
-          return { ok: false, mensagem: "Informe a API key do OpenAI" };
-        }
-
-        const res = await fetch("https://api.openai.com/v1/models", {
-          headers: { Authorization: `Bearer ${config.apiKey}` },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (res.status === 401) {
-          return { ok: false, mensagem: "API key OpenAI inválida" };
-        }
-        if (!res.ok) {
-          return { ok: false, mensagem: `Erro HTTP ${res.status}` };
-        }
-        return {
-          ok: true,
-          mensagem: `Agentes IA conectado. Modelo padrão: ${config.modeloPadrao || "gpt-4o-mini"}.`,
-        };
-      } catch (err: any) {
-        if (err.name === "SyntaxError") {
-          return { ok: false, mensagem: "Formato inválido. Esperado JSON com apiKey." };
         }
         return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
       }

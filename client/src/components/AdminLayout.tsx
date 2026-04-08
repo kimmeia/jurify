@@ -38,6 +38,7 @@ import {
   Package,
   Tag,
   DollarSign,
+  BrainCircuit,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -178,6 +179,7 @@ function AdminSidebarContent({
     { icon: AlertTriangle, label: "Inadimplência", path: "/admin/inadimplentes" },
     { icon: Package, label: "Planos", path: "/admin/planos" },
     { icon: Tag, label: "Cupons", path: "/admin/cupons" },
+    { icon: BrainCircuit, label: "Agentes IA", path: "/admin/agentes-ia" },
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
     { icon: Plug, label: "Integrações", path: "/admin/integrations" },
