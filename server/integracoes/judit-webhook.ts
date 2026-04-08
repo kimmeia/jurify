@@ -12,7 +12,7 @@
 
 import type { Express, Request, Response } from "express";
 import { getDb } from "../db";
-import { adminIntegracoes, juditMonitoramentos, juditRespostas } from "../../drizzle/schema";
+import { adminIntegracoes, juditMonitoramentos, juditRespostas, juditNovasAcoes } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { JuditClient } from "./judit-client";
@@ -102,7 +102,110 @@ export function registerJuditWebhook(app: Express) {
         return res.status(500).json({ error: "Database indisponível" });
       }
 
-      // Ignorar eventos que não são response_created
+      // ─── NEW LAWSUIT: nova ação detectada pelo monitoramento de novas ações ──
+      // A Judit envia event_type="new_lawsuit" quando uma nova ação é
+      // distribuída contra uma pessoa/empresa sendo monitorada. Diferente
+      // do response_created, aqui não é uma atualização em processo
+      // existente — é uma PROCESSO NOVO que apareceu contra o monitorado.
+      if (body.event_type === "new_lawsuit") {
+        const trackingId = body.reference_id;
+        if (!trackingId) {
+          return res.status(200).json({ received: true, warning: "no_tracking_id" });
+        }
+
+        const monLocal = await db
+          .select()
+          .from(juditMonitoramentos)
+          .where(eq(juditMonitoramentos.trackingId, trackingId))
+          .limit(1);
+        if (monLocal.length === 0) {
+          log.warn(`[Judit Webhook] new_lawsuit para tracking ${trackingId} não encontrado`);
+          return res.status(200).json({ received: true, warning: "tracking_not_found" });
+        }
+
+        const mon = monLocal[0];
+        const data = body.payload?.response_data || {};
+        const cnj = data.code || data.cnj || data.lawsuit_code || "";
+
+        if (!cnj) {
+          log.warn("[Judit Webhook] new_lawsuit sem CNJ — ignorando");
+          return res.status(200).json({ received: true, warning: "no_cnj" });
+        }
+
+        // Dedup: não insere a mesma nova ação 2x (unique index protege, mas
+        // checamos antes pra evitar erro desnecessário)
+        const existe = await db
+          .select()
+          .from(juditNovasAcoes)
+          .where(
+            and(
+              eq(juditNovasAcoes.cnj, cnj),
+              eq(juditNovasAcoes.monitoramentoId, mon.id),
+            ),
+          )
+          .limit(1);
+        if (existe.length > 0) {
+          log.info(`[Judit Webhook] new_lawsuit ${cnj} já existe localmente`);
+          return res.status(200).json({ received: true, duplicate: true });
+        }
+
+        // Extrai informações úteis do payload
+        const polos: { ativo: any[]; passivo: any[] } = { ativo: [], passivo: [] };
+        for (const p of data.parties || []) {
+          if (p.side === "Active") polos.ativo.push({ name: p.name, document: p.main_document });
+          else if (p.side === "Passive") polos.passivo.push({ name: p.name, document: p.main_document });
+        }
+
+        // Detecta área do direito pela classe/assuntos
+        const areaDireito = detectarAreaDireito(
+          data.classifications?.[0]?.name || "",
+          data.subjects?.map((s: any) => s.name).join(" ") || "",
+        );
+
+        await db.insert(juditNovasAcoes).values({
+          monitoramentoId: mon.id,
+          cnj,
+          tribunal: data.tribunal_acronym || null,
+          classeProcesso: data.classifications?.[0]?.name || null,
+          areaDireito,
+          poloAtivo: polos.ativo.length > 0 ? JSON.stringify(polos.ativo) : null,
+          poloPassivo: polos.passivo.length > 0 ? JSON.stringify(polos.passivo) : null,
+          dataDistribuicao: data.distribution_date || null,
+          valorCausa: data.amount ? Math.round(data.amount * 100) : null,
+          payloadCompleto: JSON.stringify(data).slice(0, 50000),
+          lido: false,
+          alertaEnviado: false,
+        });
+
+        // Incrementa contador no monitoramento
+        await db
+          .update(juditMonitoramentos)
+          .set({ totalNovasAcoes: (mon.totalNovasAcoes || 0) + 1 })
+          .where(eq(juditMonitoramentos.id, mon.id));
+
+        // Disparar notificação SSE pro usuário
+        try {
+          const { emitirNotificacao } = await import("../_core/sse-notifications");
+          if (mon.clienteUserId) {
+            emitirNotificacao(mon.clienteUserId, {
+              tipo: "nova_acao",
+              titulo: "⚠️ Nova ação detectada!",
+              mensagem: `${areaDireito || data.classifications?.[0]?.name || "Nova ação"}: ${cnj}`,
+              dados: { monitoramentoId: mon.id, cnj, areaDireito },
+            });
+          }
+        } catch {
+          /* SSE indisponível — não bloqueia */
+        }
+
+        log.info(
+          { cnj, trackingId, areaDireito, valorCausa: data.amount },
+          "Nova ação detectada e registrada",
+        );
+        return res.status(200).json({ received: true, registered: true });
+      }
+
+      // Ignorar outros eventos que não são response_created
       if (body.event_type !== "response_created") {
         return res.status(200).json({ received: true, ignored: true });
       }
@@ -194,4 +297,67 @@ export function registerJuditWebhook(app: Express) {
       return res.status(500).json({ error: "Erro interno" });
     }
   });
+}
+
+/**
+ * Detecta a área do direito baseada na classe e assuntos do processo.
+ * É um classificador simples baseado em palavras-chave — o módulo de
+ * Atendimento futuro pode usar IA pra fazer classificação mais precisa.
+ *
+ * Útil pra alertas: admin pode querer ser avisado ESPECIALMENTE de
+ * novas ações trabalhistas, por exemplo.
+ */
+function detectarAreaDireito(classe: string, assuntos: string): string {
+  const texto = `${classe} ${assuntos}`.toLowerCase();
+
+  const mapa: Array<{ area: string; palavras: string[] }> = [
+    {
+      area: "Trabalhista",
+      palavras: ["trabalh", "reclamação trabalh", "rescisão", "horas extras", "fgts", "aviso prévio", "vínculo empregatício", "equiparação salarial"],
+    },
+    {
+      area: "Tributário",
+      palavras: ["tribut", "imposto", "icms", "ipi", "pis", "cofins", "fiscal", "execução fiscal", "dívida ativa"],
+    },
+    {
+      area: "Previdenciário",
+      palavras: ["previdenc", "inss", "auxílio", "aposentadoria", "pensão", "benefício"],
+    },
+    {
+      area: "Consumidor",
+      palavras: ["consumidor", "cdc", "vício", "defeito", "propaganda enganosa", "cobrança indevida"],
+    },
+    {
+      area: "Bancário",
+      palavras: ["bancár", "revisional", "juros abusivos", "cédula de crédito", "financiamento", "capitalização"],
+    },
+    {
+      area: "Família",
+      palavras: ["família", "divórcio", "alimentos", "guarda", "união estável", "inventário", "separação"],
+    },
+    {
+      area: "Civil",
+      palavras: ["civil", "indenização", "dano moral", "dano material", "responsabilidade", "posse", "propriedade"],
+    },
+    {
+      area: "Penal",
+      palavras: ["penal", "criminal", "ação penal", "inquérito", "denúncia"],
+    },
+    {
+      area: "Empresarial",
+      palavras: ["empresarial", "societário", "falência", "recuperação judicial", "marca"],
+    },
+    {
+      area: "Imobiliário",
+      palavras: ["imobiliár", "despejo", "locação", "aluguel", "condomínio", "usucapião"],
+    },
+  ];
+
+  for (const { area, palavras } of mapa) {
+    for (const p of palavras) {
+      if (texto.includes(p)) return area;
+    }
+  }
+
+  return "Outros";
 }

@@ -23,7 +23,14 @@ import { createLogger } from "./logger";
 const log = createLogger("_core-sse-notifications");
 
 export interface Notificacao {
-  tipo: "nova_mensagem" | "novo_lead" | "conversa_atribuida" | "assinatura_concluida" | "movimentacao_processo" | "info";
+  tipo:
+    | "nova_mensagem"
+    | "novo_lead"
+    | "conversa_atribuida"
+    | "assinatura_concluida"
+    | "movimentacao_processo"
+    | "nova_acao"
+    | "info";
   titulo: string;
   mensagem: string;
   dados?: Record<string, any>;

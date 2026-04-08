@@ -658,6 +658,132 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
         log.warn({ err: err.message }, "Falha ao criar agente_ia_documentos");
       }
     }
+
+    // ─── judit_monitoramentos: colunas novas (tipoMonitoramento, etc) ──
+    try {
+      const [tables] = await connection.query(
+        `SELECT TABLE_NAME FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'judit_monitoramentos'`,
+      );
+      if ((tables as unknown[]).length > 0) {
+        const [cols] = await connection.query(
+          `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'judit_monitoramentos'`,
+        );
+        const colSet = new Set(
+          (cols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+        );
+        if (!colSet.has("tipoMonitoramento")) {
+          await connection
+            .query(
+              "ALTER TABLE judit_monitoramentos ADD COLUMN tipoMonitoramento ENUM('movimentacoes','novas_acoes') NULL",
+            )
+            .then(() => log.info("judit_monitoramentos.tipoMonitoramento adicionada"))
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha ao adicionar tipoMonitoramento");
+            });
+        }
+        if (!colSet.has("credencialIdJuditMon")) {
+          await connection
+            .query("ALTER TABLE judit_monitoramentos ADD COLUMN credencialIdJuditMon INT NULL")
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha credencialIdJuditMon");
+            });
+        }
+        if (!colSet.has("escritorioIdJuditMon")) {
+          await connection
+            .query("ALTER TABLE judit_monitoramentos ADD COLUMN escritorioIdJuditMon INT NULL")
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha escritorioIdJuditMon");
+            });
+        }
+        if (!colSet.has("totalNovasAcoes")) {
+          await connection
+            .query("ALTER TABLE judit_monitoramentos ADD COLUMN totalNovasAcoes INT NOT NULL DEFAULT 0")
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha totalNovasAcoes");
+            });
+        }
+        // Backfill: infere o tipo para rows antigas sem tipoMonitoramento
+        try {
+          await connection.query(
+            `UPDATE judit_monitoramentos
+             SET tipoMonitoramento = CASE
+               WHEN searchType = 'lawsuit_cnj' THEN 'movimentacoes'
+               ELSE 'novas_acoes'
+             END
+             WHERE tipoMonitoramento IS NULL`,
+          );
+        } catch {
+          /* ignore backfill errors */
+        }
+      }
+    } catch (err: any) {
+      log.warn({ err: err.message }, "Falha ao atualizar judit_monitoramentos columns");
+    }
+
+    // ─── judit_credenciais: cofre de credenciais de tribunais ─────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS judit_credenciais (
+          id INT NOT NULL AUTO_INCREMENT,
+          escritorioIdJuditCred INT NOT NULL,
+          customerKeyJuditCred VARCHAR(128) NOT NULL,
+          systemNameJuditCred VARCHAR(64) NOT NULL,
+          usernameJuditCred VARCHAR(64) NOT NULL,
+          has2faJuditCred BOOLEAN NOT NULL DEFAULT FALSE,
+          statusJuditCred ENUM('ativa','erro','expirada','removida') NOT NULL DEFAULT 'ativa',
+          mensagemErroJuditCred TEXT,
+          juditCredIdJuditCred VARCHAR(128),
+          criadoPorJuditCred INT NOT NULL,
+          createdAtJuditCred TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtJuditCred TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_cred_escritorio (escritorioIdJuditCred),
+          INDEX idx_cred_status (statusJuditCred)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("judit_credenciais criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar judit_credenciais");
+      }
+    }
+
+    // ─── judit_novas_acoes: ações novas detectadas ────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS judit_novas_acoes (
+          id INT NOT NULL AUTO_INCREMENT,
+          monitoramentoIdNovaAcao INT NOT NULL,
+          cnjNovaAcao VARCHAR(32) NOT NULL,
+          tribunalNovaAcao VARCHAR(16),
+          classeNovaAcao VARCHAR(255),
+          areaDireitoNovaAcao VARCHAR(64),
+          poloAtivoNovaAcao TEXT,
+          poloPassivoNovaAcao TEXT,
+          dataDistribuicaoNovaAcao VARCHAR(32),
+          valorCausaNovaAcao BIGINT,
+          payloadCompletoNovaAcao TEXT,
+          lidoNovaAcao BOOLEAN NOT NULL DEFAULT FALSE,
+          alertaEnviadoNovaAcao BOOLEAN NOT NULL DEFAULT FALSE,
+          createdAtNovaAcao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_novaacao_mon (monitoramentoIdNovaAcao),
+          INDEX idx_novaacao_lido (lidoNovaAcao),
+          UNIQUE KEY uniq_novaacao_cnj_mon (cnjNovaAcao, monitoramentoIdNovaAcao)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("judit_novas_acoes criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar judit_novas_acoes");
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
   }

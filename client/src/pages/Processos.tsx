@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   SearchHistorySidebar,
@@ -449,16 +449,535 @@ export default function Processos() {
       {saldo < 5 && (<div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5"><AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /><span className="text-sm text-amber-700">Saldo baixo. Compre creditos para consultar e monitorar processos.</span><Button size="sm" variant="outline" className="ml-auto text-xs" onClick={() => setTab("creditos")}>Comprar</Button></div>)}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="consultar" className="gap-1.5"><Search className="h-3.5 w-3.5" />Consultar</TabsTrigger>
-          <TabsTrigger value="monitorar" className="gap-1.5"><Radar className="h-3.5 w-3.5" />Monitorar clientes</TabsTrigger>
-          <TabsTrigger value="creditos" className="gap-1.5"><Coins className="h-3.5 w-3.5" />Creditos ({saldo})</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsTrigger value="consultar" className="gap-1.5 text-xs py-2">
+            <Search className="h-3.5 w-3.5" />Consultar
+          </TabsTrigger>
+          <TabsTrigger value="movimentacoes" className="gap-1.5 text-xs py-2">
+            <Radar className="h-3.5 w-3.5" />Movimentações
+          </TabsTrigger>
+          <TabsTrigger value="novas-acoes" className="gap-1.5 text-xs py-2 relative">
+            <Siren className="h-3.5 w-3.5" />Novas Ações
+            <NovasAcoesBadge />
+          </TabsTrigger>
+          <TabsTrigger value="cofre" className="gap-1.5 text-xs py-2">
+            <KeyRound className="h-3.5 w-3.5" />Cofre
+          </TabsTrigger>
+          <TabsTrigger value="creditos" className="gap-1.5 text-xs py-2">
+            <Coins className="h-3.5 w-3.5" />{saldo}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="consultar" className="mt-4"><ConsultarTab /></TabsContent>
-        <TabsContent value="monitorar" className="mt-4"><MonitorarTab /></TabsContent>
+        <TabsContent value="movimentacoes" className="mt-4"><MonitorarTab /></TabsContent>
+        <TabsContent value="novas-acoes" className="mt-4"><NovasAcoesTab /></TabsContent>
+        <TabsContent value="cofre" className="mt-4"><CofreTab /></TabsContent>
         <TabsContent value="creditos" className="mt-4"><CreditosTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BADGE DE NOVAS AÇÕES NÃO LIDAS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function NovasAcoesBadge() {
+  const { data } = trpc.juditUsuario.listarNovasAcoes.useQuery(
+    { apenasNaoLidas: true, limite: 1 },
+    { retry: false, refetchInterval: 60000 },
+  );
+  const count = data?.totalNaoLidas ?? 0;
+  if (count === 0) return null;
+  return (
+    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: NOVAS AÇÕES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const AREA_CORES: Record<string, string> = {
+  Trabalhista: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  Tributário: "bg-indigo-500/15 text-indigo-700 border-indigo-500/30",
+  Previdenciário: "bg-sky-500/15 text-sky-700 border-sky-500/30",
+  Consumidor: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  Bancário: "bg-violet-500/15 text-violet-700 border-violet-500/30",
+  Família: "bg-pink-500/15 text-pink-700 border-pink-500/30",
+  Civil: "bg-blue-500/15 text-blue-700 border-blue-500/30",
+  Penal: "bg-red-500/15 text-red-700 border-red-500/30",
+  Empresarial: "bg-purple-500/15 text-purple-700 border-purple-500/30",
+  Imobiliário: "bg-orange-500/15 text-orange-700 border-orange-500/30",
+  Outros: "bg-slate-500/15 text-slate-700 border-slate-500/30",
+};
+
+function NovasAcoesTab() {
+  const [apenasNaoLidas, setApenasNaoLidas] = useState(false);
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [novoTipo, setNovoTipo] = useState<"cpf" | "cnpj" | "oab" | "name">("cpf");
+  const [novoValor, setNovoValor] = useState("");
+  const [novoApelido, setNovoApelido] = useState("");
+
+  const { data, refetch, isLoading } = trpc.juditUsuario.listarNovasAcoes.useQuery(
+    { apenasNaoLidas, limite: 100 },
+    { retry: false },
+  );
+
+  const criarMut = trpc.juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
+    onSuccess: () => {
+      toast.success("Monitoramento criado!");
+      setNovoOpen(false);
+      setNovoValor("");
+      setNovoApelido("");
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const marcarLidaMut = trpc.juditUsuario.marcarNovaAcaoLida.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  const acoes = data?.acoes || [];
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-red-500/20 bg-gradient-to-br from-red-50/40 to-orange-50/40 dark:from-red-950/10 dark:to-orange-950/10">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                <Siren className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Alerta de novas ações contra clientes</p>
+                <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+                  Cadastre CPF/CNPJ/OAB de clientes e seja avisado IMEDIATAMENTE quando
+                  uma nova ação for distribuída contra eles — antes mesmo da citação chegar.
+                  Funciona para ações de busca e apreensão, reclamações trabalhistas, execuções, etc.
+                </p>
+              </div>
+            </div>
+            <Button size="sm" onClick={() => setNovoOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Novo monitoramento
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {acoes.length} {acoes.length === 1 ? "nova ação" : "novas ações"} detectada{acoes.length === 1 ? "" : "s"}
+          {data?.totalNaoLidas ? ` (${data.totalNaoLidas} não lidas)` : ""}
+        </p>
+        <Button
+          size="sm"
+          variant={apenasNaoLidas ? "default" : "outline"}
+          onClick={() => setApenasNaoLidas(!apenasNaoLidas)}
+        >
+          <Bell className="h-3 w-3 mr-1" />
+          {apenasNaoLidas ? "Mostrando só não lidas" : "Filtrar não lidas"}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : acoes.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-12 text-center">
+            <Siren className="h-10 w-10 text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium">Nenhuma nova ação detectada</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md">
+              Quando houver novos processos contra seus clientes monitorados, eles aparecerão aqui.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {acoes.map((a: any) => {
+            const areaColor = AREA_CORES[a.areaDireito || "Outros"] || AREA_CORES.Outros;
+            return (
+              <Card
+                key={a.id}
+                className={`cursor-pointer transition-all hover:shadow-md ${!a.lido ? "border-red-500/40 bg-red-50/30 dark:bg-red-950/10" : ""}`}
+                onClick={() => { if (!a.lido) marcarLidaMut.mutate({ id: a.id }); }}
+              >
+                <CardContent className="pt-3 pb-3">
+                  <div className="flex items-start gap-3">
+                    <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${!a.lido ? "bg-red-500/15" : "bg-slate-500/10"}`}>
+                      {!a.lido ? (
+                        <Siren className="h-4 w-4 text-red-600 animate-pulse" />
+                      ) : (
+                        <Scale className="h-4 w-4 text-slate-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-bold font-mono">{a.cnj}</p>
+                        {a.tribunal && <Badge variant="outline" className="text-[9px]">{a.tribunal}</Badge>}
+                        {a.areaDireito && (
+                          <Badge className={`${areaColor} text-[9px]`}>{a.areaDireito}</Badge>
+                        )}
+                        {!a.lido && (
+                          <Badge className="bg-red-500 text-white text-[9px]">NOVO</Badge>
+                        )}
+                      </div>
+                      {a.classeProcesso && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{a.classeProcesso}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
+                        {a.dataDistribuicao && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {new Date(a.dataDistribuicao).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
+                        {a.valorCausa && (
+                          <span className="flex items-center gap-1 text-emerald-600 font-medium">
+                            <CircleDollarSign className="h-3 w-3" />
+                            {formatBRL(a.valorCausa / 100)}
+                          </span>
+                        )}
+                      </div>
+                      {(a.poloAtivo?.length > 0 || a.poloPassivo?.length > 0) && (
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                          {a.poloAtivo?.length > 0 && (
+                            <div>
+                              <p className="text-[9px] font-semibold text-blue-600">POLO ATIVO</p>
+                              {a.poloAtivo.slice(0, 2).map((p: any, i: number) => (
+                                <p key={i} className="truncate text-[11px]">{p.name}</p>
+                              ))}
+                            </div>
+                          )}
+                          {a.poloPassivo?.length > 0 && (
+                            <div>
+                              <p className="text-[9px] font-semibold text-red-600">POLO PASSIVO</p>
+                              {a.poloPassivo.slice(0, 2).map((p: any, i: number) => (
+                                <p key={i} className="truncate text-[11px]">{p.name}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dialog de novo monitoramento */}
+      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Monitorar novas ações</DialogTitle>
+            <DialogDescription>
+              Cadastre CPF/CNPJ/OAB pra ser avisado quando uma nova ação for distribuída contra essa pessoa/empresa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Tipo *</Label>
+                <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cpf">CPF</SelectItem>
+                    <SelectItem value="cnpj">CNPJ</SelectItem>
+                    <SelectItem value="oab">OAB</SelectItem>
+                    <SelectItem value="name">Nome</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Valor *</Label>
+                <Input
+                  placeholder={novoTipo === "cpf" ? "000.000.000-00" : novoTipo === "cnpj" ? "00.000.000/0000-00" : novoTipo === "oab" ? "SP123456" : "Nome completo"}
+                  value={novoValor}
+                  onChange={(e) => setNovoValor(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Apelido (opcional)</Label>
+              <Input
+                placeholder="Ex: Cliente João Silva"
+                value={novoApelido}
+                onChange={(e) => setNovoApelido(e.target.value)}
+              />
+            </div>
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-3 text-xs flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-amber-900 dark:text-amber-200 space-y-1">
+                <p className="font-semibold">Segredo de justiça?</p>
+                <p>
+                  Ações em segredo de justiça só aparecem se você tiver uma credencial de advogado
+                  cadastrada no <strong>Cofre</strong>. Sem credencial, só detectamos ações públicas.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() =>
+                criarMut.mutate({
+                  tipo: novoTipo,
+                  valor: novoValor,
+                  apelido: novoApelido || undefined,
+                })
+              }
+              disabled={!novoValor.trim() || criarMut.isPending}
+            >
+              {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar monitoramento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: COFRE DE CREDENCIAIS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function CofreTab() {
+  const { data: credenciais, refetch, isLoading } = trpc.juditCredenciais.listar.useQuery();
+  const { data: sistemas } = trpc.juditCredenciais.listarSistemasSuportados.useQuery();
+
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [form, setForm] = useState({
+    customerKey: "",
+    systemName: "*",
+    username: "",
+    password: "",
+    totpSecret: "",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [show2fa, setShow2fa] = useState(false);
+
+  const cadastrarMut = trpc.juditCredenciais.cadastrar.useMutation({
+    onSuccess: () => {
+      toast.success("Credencial cadastrada!");
+      setNovoOpen(false);
+      setForm({ customerKey: "", systemName: "*", username: "", password: "", totpSecret: "" });
+      refetch();
+    },
+    onError: (e) => toast.error("Erro", { description: e.message }),
+  });
+
+  const removerMut = trpc.juditCredenciais.remover.useMutation({
+    onSuccess: () => {
+      toast.success("Credencial removida");
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const creds = credenciais || [];
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-violet-500/20 bg-gradient-to-br from-violet-50/40 to-purple-50/40 dark:from-violet-950/10 dark:to-purple-950/10">
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                <KeyRound className="h-5 w-5 text-violet-600" />
+              </div>
+              <div className="max-w-2xl">
+                <p className="font-semibold text-sm">Cofre de Credenciais de Advogado</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Cadastre o login OAB de um advogado do escritório pra acessar processos
+                  em <strong>segredo de justiça</strong>. As senhas ficam criptografadas pela Judit e
+                  NUNCA são expostas depois do cadastro — se precisar trocar, delete e cadastre
+                  uma nova.
+                </p>
+              </div>
+            </div>
+            <Button size="sm" onClick={() => setNovoOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Nova credencial
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : creds.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-12 text-center">
+            <Lock className="h-10 w-10 text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium">Nenhuma credencial cadastrada</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md">
+              Sem credenciais, você só consegue monitorar processos públicos. Pra acessar
+              processos em segredo de justiça, cadastre o login de um advogado.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {creds.map((c: any) => (
+            <Card key={c.id}>
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-2">
+                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                    <KeyRound className="h-4 w-4 text-violet-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{c.customerKey}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {c.systemName === "*" ? "Todos os tribunais" : c.systemName.toUpperCase()}
+                    </p>
+                  </div>
+                  <Badge
+                    className={`text-[9px] ${
+                      c.status === "ativa"
+                        ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
+                        : c.status === "erro"
+                        ? "bg-red-500/15 text-red-700 border-red-500/30"
+                        : "bg-amber-500/15 text-amber-700 border-amber-500/30"
+                    }`}
+                  >
+                    {c.status}
+                  </Badge>
+                </div>
+                <div className="mt-2 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <User className="h-3 w-3" />
+                    <span className="font-mono truncate">{c.username}</span>
+                  </div>
+                  {c.has2fa && (
+                    <div className="flex items-center gap-1.5 text-violet-600">
+                      <ShieldAlert className="h-3 w-3" />
+                      <span>2FA ativado</span>
+                    </div>
+                  )}
+                  {c.mensagemErro && (
+                    <p className="text-red-600 text-[10px]">{c.mensagemErro}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 pt-2 mt-2 border-t">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-destructive ml-auto"
+                    onClick={() => {
+                      if (confirm(`Remover credencial "${c.customerKey}"? Monitoramentos que dependem dela vão parar de funcionar.`)) {
+                        removerMut.mutate({ id: c.id });
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />Remover
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog de cadastro */}
+      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cadastrar credencial</DialogTitle>
+            <DialogDescription>
+              Login de advogado do tribunal. A senha será criptografada imediatamente e
+              <strong> não poderá ser recuperada</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Apelido da credencial *</Label>
+              <Input
+                placeholder="Ex: Dr. João Silva - TJSP"
+                value={form.customerKey}
+                onChange={(e) => setForm({ ...form, customerKey: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Tribunal/Sistema *</Label>
+              <Select value={form.systemName} onValueChange={(v) => setForm({ ...form, systemName: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {(sistemas || []).map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>CPF ou OAB *</Label>
+              <Input
+                placeholder="12345678900 ou SP123456"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Senha *</Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  className="pr-8"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <Label>Secret do 2FA (opcional)</Label>
+              <div className="relative">
+                <Input
+                  type={show2fa ? "text" : "password"}
+                  placeholder="Se o tribunal exige autenticador"
+                  value={form.totpSecret}
+                  onChange={(e) => setForm({ ...form, totpSecret: e.target.value })}
+                  className="pr-8 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShow2fa(!show2fa)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {show2fa ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Cole o secret base32 do app autenticador (Google Authenticator, etc). Opcional.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => cadastrarMut.mutate(form)}
+              disabled={
+                !form.customerKey || !form.systemName || !form.username || !form.password ||
+                cadastrarMut.isPending
+              }
+            >
+              {cadastrarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Cadastrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -791,6 +791,21 @@ export const juditMonitoramentos = mysqlTable("judit_monitoramentos", {
   searchType: varchar("searchType", { length: 32 }).notNull(),
   /** Chave de busca (CNJ, CPF, etc) */
   searchKey: varchar("searchKey", { length: 128 }).notNull(),
+  /**
+   * Tipo de monitoramento (novo campo para diferenciar claramente):
+   *   - "movimentacoes": monitora atualizações em UM processo específico
+   *     (search_type costuma ser "lawsuit_cnj")
+   *   - "novas_acoes": monitora se NOVAS ações são distribuídas contra
+   *     uma pessoa/empresa (search_type costuma ser cpf/cnpj/oab/name)
+   *
+   * Se null, inferir a partir de searchType (lawsuit_cnj → movimentacoes,
+   * resto → novas_acoes) pra compatibilidade com rows antigas.
+   */
+  tipoMonitoramento: mysqlEnum("tipoMonitoramento", ["movimentacoes", "novas_acoes"]),
+  /** ID da credencial do cofre usada para acessar processos em segredo de justiça */
+  credencialId: int("credencialIdJuditMon"),
+  /** Escritório dono do monitoramento (null = admin/global) */
+  escritorioId: int("escritorioIdJuditMon"),
   /** Recorrência em dias */
   recurrence: int("recurrence").default(1).notNull(),
   /** Status do tracking na Judit */
@@ -809,6 +824,8 @@ export const juditMonitoramentos = mysqlTable("judit_monitoramentos", {
   ultimaMovimentacaoData: varchar("ultimaMovDataJudit", { length: 32 }),
   /** Total de atualizações recebidas via webhook */
   totalAtualizacoes: int("totalAtualizacoes").default(0).notNull(),
+  /** Total de NOVAS AÇÕES detectadas (se tipoMonitoramento = "novas_acoes") */
+  totalNovasAcoes: int("totalNovasAcoes").default(0).notNull(),
   /** Com anexos */
   withAttachments: boolean("withAttachments").default(false).notNull(),
   createdAt: timestamp("createdAtJuditMon").defaultNow().notNull(),
@@ -817,6 +834,105 @@ export const juditMonitoramentos = mysqlTable("judit_monitoramentos", {
 
 export type JuditMonitoramento = typeof juditMonitoramentos.$inferSelect;
 export type InsertJuditMonitoramento = typeof juditMonitoramentos.$inferInsert;
+
+/**
+ * Cofre de Credenciais — armazena credenciais de advogados (CPF/OAB + senha)
+ * necessárias para acessar processos em segredo de justiça. As senhas são
+ * criptografadas pelo backend do Jurify E também pela Judit (duas camadas).
+ *
+ * A Judit cadastra essas credenciais no próprio cofre dela via POST
+ * /credentials e retorna um identificador opaco. Armazenamos o
+ * identificador + metadados pra poder listar/remover — mas NUNCA o
+ * password original (a Judit não permite recuperar).
+ *
+ * Cada escritório pode ter múltiplas credenciais (um advogado por
+ * sistema de tribunal, por exemplo).
+ */
+export const juditCredenciais = mysqlTable("judit_credenciais", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdJuditCred").notNull(),
+  /**
+   * Label amigável — ex: "Dr. João Silva - TJSP" — usada pro admin
+   * identificar rapidamente qual credencial é qual.
+   */
+  customerKey: varchar("customerKeyJuditCred", { length: 128 }).notNull(),
+  /**
+   * Sistema de tribunal (ex: "tjsp", "trf3", etc) ou "*" para curinga.
+   * A Judit aceita "*" pra credenciais genéricas que funcionam em
+   * múltiplos tribunais.
+   */
+  systemName: varchar("systemNameJuditCred", { length: 64 }).notNull(),
+  /** CPF ou número OAB do advogado */
+  username: varchar("usernameJuditCred", { length: 64 }).notNull(),
+  /**
+   * Flag indicando se a credencial tem 2FA configurado. Não armazenamos
+   * o secret aqui — ele é enviado direto pra Judit no cadastro.
+   */
+  has2fa: boolean("has2faJuditCred").default(false).notNull(),
+  /**
+   * Status da credencial:
+   *   - ativa: cadastrada e funcionando
+   *   - erro: última tentativa de uso retornou erro de auth
+   *   - expirada: senha do tribunal vence/mudou, precisa recadastrar
+   *   - removida: deletada (soft delete pra preservar auditoria)
+   */
+  status: mysqlEnum("statusJuditCred", ["ativa", "erro", "expirada", "removida"]).default("ativa").notNull(),
+  /** Mensagem do último erro (se status="erro") */
+  mensagemErro: text("mensagemErroJuditCred"),
+  /**
+   * Credential ID retornado pela API da Judit (opaco).
+   * Nós usamos esse ID quando fazemos referência à credencial
+   * em chamadas subsequentes (tracking, requests).
+   */
+  juditCredentialId: varchar("juditCredIdJuditCred", { length: 128 }),
+  /** Quem cadastrou */
+  criadoPor: int("criadoPorJuditCred").notNull(),
+  createdAt: timestamp("createdAtJuditCred").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtJuditCred").defaultNow().onUpdateNow().notNull(),
+});
+
+export type JuditCredencial = typeof juditCredenciais.$inferSelect;
+export type InsertJuditCredencial = typeof juditCredenciais.$inferInsert;
+
+/**
+ * Novas ações detectadas pelo monitoramento de NOVAS AÇÕES.
+ * Cada registro é uma ação nova distribuída contra a pessoa/empresa
+ * sendo monitorada. Difere da `juditRespostas` (que são atualizações
+ * de processos já conhecidos).
+ */
+export const juditNovasAcoes = mysqlTable("judit_novas_acoes", {
+  id: int("id").autoincrement().primaryKey(),
+  monitoramentoId: int("monitoramentoIdNovaAcao").notNull(),
+  /** CNJ da nova ação detectada */
+  cnj: varchar("cnjNovaAcao", { length: 32 }).notNull(),
+  /** Tribunal onde a ação foi distribuída */
+  tribunal: varchar("tribunalNovaAcao", { length: 16 }),
+  /** Classe/assunto do processo (ex: "Reclamação Trabalhista") */
+  classeProcesso: varchar("classeNovaAcao", { length: 255 }),
+  /** Área do direito (ex: "Trabalhista", "Civil", "Tributário") */
+  areaDireito: varchar("areaDireitoNovaAcao", { length: 64 }),
+  /** Polo ativo (quem está processando) — JSON array */
+  poloAtivo: text("poloAtivoNovaAcao"),
+  /** Polo passivo (quem está sendo processado) — JSON array */
+  poloPassivo: text("poloPassivoNovaAcao"),
+  /** Data de distribuição */
+  dataDistribuicao: varchar("dataDistribuicaoNovaAcao", { length: 32 }),
+  /** Valor da causa (em centavos pra precisão) */
+  valorCausa: bigint("valorCausaNovaAcao", { mode: "number" }),
+  /** Payload completo recebido no webhook pra consulta detalhada */
+  payloadCompleto: text("payloadCompletoNovaAcao"),
+  /**
+   * Status de leitura — true quando o usuário abriu a nova ação na UI.
+   * Usado pra badge de "não lidas" no menu.
+   */
+  lido: boolean("lidoNovaAcao").default(false).notNull(),
+  /** Se foi gerado alerta por email/notificação */
+  alertaEnviado: boolean("alertaEnviadoNovaAcao").default(false).notNull(),
+  createdAt: timestamp("createdAtNovaAcao").defaultNow().notNull(),
+});
+
+export type JuditNovaAcao = typeof juditNovasAcoes.$inferSelect;
+export type InsertJuditNovaAcao = typeof juditNovasAcoes.$inferInsert;
 
 /**
  * Respostas/atualizações recebidas da Judit (via webhook ou polling).

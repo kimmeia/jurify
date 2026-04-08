@@ -180,10 +180,16 @@ export const juditUsuarioRouter = router({
    * Cria um monitoramento processual por CNJ.
    * Verificações: plano, limite de monitoramentos, duplicata.
    */
+  /**
+   * Cria monitoramento de MOVIMENTAÇÕES em um processo específico (CNJ).
+   * Recebe atualizações (despachos, sentenças, audiências) via webhook.
+   */
   criarMonitoramento: protectedProcedure
     .input(z.object({
       numeroCnj: z.string().min(20).max(25),
       apelido: z.string().max(255).optional(),
+      /** ID de credencial do cofre (pra segredo de justiça) */
+      credencialId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { limites } = await verificarPlanoJudit(ctx.user.id);
@@ -224,6 +230,20 @@ export const juditUsuarioRouter = router({
         });
       }
 
+      // Resolve credencial (se informada)
+      let juditCredentialId: string | undefined;
+      if (input.credencialId) {
+        const { juditCredenciais } = await import("../../drizzle/schema");
+        const [cred] = await db
+          .select()
+          .from(juditCredenciais)
+          .where(eq(juditCredenciais.id, input.credencialId))
+          .limit(1);
+        if (cred?.juditCredentialId) {
+          juditCredentialId = cred.juditCredentialId;
+        }
+      }
+
       // Criar na Judit (recorrência diária)
       const tracking = await client.criarMonitoramento({
         recurrence: 1,
@@ -232,6 +252,7 @@ export const juditUsuarioRouter = router({
           search_key: input.numeroCnj,
         },
         with_attachments: false,
+        ...(juditCredentialId ? { credential_id: juditCredentialId } : {}),
       });
 
       // Salvar localmente vinculado ao usuário
@@ -239,6 +260,8 @@ export const juditUsuarioRouter = router({
         trackingId: tracking.tracking_id,
         searchType: "lawsuit_cnj",
         searchKey: input.numeroCnj,
+        tipoMonitoramento: "movimentacoes",
+        credencialId: input.credencialId || null,
         recurrence: 1,
         statusJudit: tracking.status as any,
         apelido: input.apelido || null,
@@ -251,6 +274,205 @@ export const juditUsuarioRouter = router({
         trackingId: tracking.tracking_id,
         mensagem: "Monitoramento criado. Você receberá atualizações diárias.",
       };
+    }),
+
+  /**
+   * Cria monitoramento de NOVAS AÇÕES contra uma pessoa/empresa.
+   * Quando uma nova ação for distribuída no futuro contra o CPF/CNPJ/OAB
+   * monitorado, recebemos um webhook event_type="new_lawsuit" e
+   * registramos em `judit_novas_acoes`.
+   *
+   * Use case típico: escritório monitora seu cliente "Empresa X" e é
+   * avisado quando alguém processa a empresa (antes mesmo do cliente
+   * ficar sabendo da citação).
+   */
+  criarMonitoramentoNovasAcoes: protectedProcedure
+    .input(z.object({
+      tipo: z.enum(["cpf", "cnpj", "oab", "name"]),
+      valor: z.string().min(3).max(128),
+      apelido: z.string().max(255).optional(),
+      credencialId: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { limites } = await verificarPlanoJudit(ctx.user.id);
+      const client = await requireJuditDisponivel();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const ativos = await contarMonitoramentosAtivos(ctx.user.id);
+      if (ativos >= limites.maxMonitoramentosJudit) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Limite de ${limites.maxMonitoramentosJudit} monitoramentos atingido.`,
+        });
+      }
+
+      // Normaliza o valor pra CPF/CNPJ (remove formatação)
+      const searchKey = (input.tipo === "cpf" || input.tipo === "cnpj")
+        ? input.valor.replace(/\D/g, "")
+        : input.valor.trim();
+
+      // Duplicata
+      const existente = await db
+        .select()
+        .from(juditMonitoramentos)
+        .where(
+          and(
+            eq(juditMonitoramentos.searchKey, searchKey),
+            eq(juditMonitoramentos.clienteUserId, ctx.user.id),
+            eq(juditMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          ),
+        )
+        .limit(1);
+      if (existente.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Você já monitora novas ações para este CPF/CNPJ/OAB.",
+        });
+      }
+
+      // Resolve credencial se informada
+      let juditCredentialId: string | undefined;
+      if (input.credencialId) {
+        const { juditCredenciais } = await import("../../drizzle/schema");
+        const [cred] = await db
+          .select()
+          .from(juditCredenciais)
+          .where(eq(juditCredenciais.id, input.credencialId))
+          .limit(1);
+        if (cred?.juditCredentialId) juditCredentialId = cred.juditCredentialId;
+      }
+
+      // Cria na Judit com flag only_new_lawsuits
+      const tracking = await client.criarMonitoramento({
+        recurrence: 1,
+        search: {
+          search_type: input.tipo,
+          search_key: searchKey,
+        },
+        only_new_lawsuits: true,
+        with_attachments: false,
+        ...(juditCredentialId ? { credential_id: juditCredentialId } : {}),
+      });
+
+      // Salva localmente
+      await db.insert(juditMonitoramentos).values({
+        trackingId: tracking.tracking_id,
+        searchType: input.tipo,
+        searchKey,
+        tipoMonitoramento: "novas_acoes",
+        credencialId: input.credencialId || null,
+        recurrence: 1,
+        statusJudit: tracking.status as any,
+        apelido: input.apelido || null,
+        clienteUserId: ctx.user.id,
+        withAttachments: false,
+      });
+
+      return {
+        success: true,
+        trackingId: tracking.tracking_id,
+        mensagem: "Monitoramento de novas ações criado. Você será avisado quando alguém processar esta pessoa/empresa.",
+      };
+    }),
+
+  /**
+   * Lista as novas ações detectadas (paginado) para o usuário.
+   * Se `apenasNaoLidas=true`, retorna só as que ainda não foram abertas.
+   */
+  listarNovasAcoes: protectedProcedure
+    .input(z.object({
+      apenasNaoLidas: z.boolean().optional(),
+      monitoramentoId: z.number().optional(),
+      limite: z.number().min(1).max(100).default(50),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { acoes: [], totalNaoLidas: 0 };
+
+      const { juditNovasAcoes } = await import("../../drizzle/schema");
+      const params = input || { limite: 50 };
+
+      // Primeiro pega os IDs dos monitoramentos do usuário
+      const mons = await db
+        .select({ id: juditMonitoramentos.id })
+        .from(juditMonitoramentos)
+        .where(
+          and(
+            eq(juditMonitoramentos.clienteUserId, ctx.user.id),
+            eq(juditMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          ),
+        );
+      const monIds = mons.map((m) => m.id);
+      if (monIds.length === 0) return { acoes: [], totalNaoLidas: 0 };
+
+      const { inArray } = await import("drizzle-orm");
+      const conditions: any[] = [inArray(juditNovasAcoes.monitoramentoId, monIds)];
+      if (params.apenasNaoLidas) {
+        conditions.push(eq(juditNovasAcoes.lido, false));
+      }
+      if (params.monitoramentoId) {
+        conditions.push(eq(juditNovasAcoes.monitoramentoId, params.monitoramentoId));
+      }
+
+      const acoes = await db
+        .select()
+        .from(juditNovasAcoes)
+        .where(and(...conditions))
+        .orderBy(desc(juditNovasAcoes.createdAt))
+        .limit(params.limite);
+
+      // Conta não-lidas (independente de filtros)
+      const naoLidasRows = await db
+        .select({ id: juditNovasAcoes.id })
+        .from(juditNovasAcoes)
+        .where(
+          and(
+            inArray(juditNovasAcoes.monitoramentoId, monIds),
+            eq(juditNovasAcoes.lido, false),
+          ),
+        );
+
+      return {
+        acoes: acoes.map((a) => ({
+          ...a,
+          poloAtivo: a.poloAtivo ? JSON.parse(a.poloAtivo) : [],
+          poloPassivo: a.poloPassivo ? JSON.parse(a.poloPassivo) : [],
+        })),
+        totalNaoLidas: naoLidasRows.length,
+      };
+    }),
+
+  /** Marca uma nova ação como lida */
+  marcarNovaAcaoLida: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { juditNovasAcoes } = await import("../../drizzle/schema");
+
+      // Segurança: só marca se for de um monitoramento do user
+      const [acao] = await db
+        .select()
+        .from(juditNovasAcoes)
+        .where(eq(juditNovasAcoes.id, input.id))
+        .limit(1);
+      if (!acao) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const [mon] = await db
+        .select()
+        .from(juditMonitoramentos)
+        .where(eq(juditMonitoramentos.id, acao.monitoramentoId))
+        .limit(1);
+      if (!mon || mon.clienteUserId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      await db
+        .update(juditNovasAcoes)
+        .set({ lido: true })
+        .where(eq(juditNovasAcoes.id, input.id));
+      return { success: true };
     }),
 
   /**

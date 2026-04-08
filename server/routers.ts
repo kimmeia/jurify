@@ -41,6 +41,7 @@ import { agentesIaRouter } from "./integracoes/router-agentes-ia";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { juditOperacoesRouter } from "./integracoes/router-judit-operacoes";
 import { juditUsuarioRouter } from "./integracoes/router-judit-usuario";
+import { juditCredenciaisRouter } from "./integracoes/router-judit-credenciais";
 import { asaasRouter } from "./integracoes/router-asaas";
 
 // Outros
@@ -104,6 +105,7 @@ export const appRouter = router({
   adminIntegracoes: adminIntegracoesRouter,
   juditOperacoes: juditOperacoesRouter,
   juditUsuario: juditUsuarioRouter,
+  juditCredenciais: juditCredenciaisRouter,
   asaas: asaasRouter,
 
   // Dashboard do utilizador

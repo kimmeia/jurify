@@ -68,8 +68,22 @@ export interface JuditTrackingPayload {
   callback_url?: string;
   notification_emails?: string[];
   notification_filters?: {
+    /** Palavras-chave que disparam alerta quando aparecem numa movimentação */
     step_terms?: string[];
   };
+  /**
+   * ID de credencial do cofre (cadastrada via POST /credentials).
+   * Obrigatória pra monitorar processos em segredo de justiça.
+   */
+  credential_id?: string;
+  /**
+   * Quando true, este tracking não monitora movimentações de processos
+   * já conhecidos — monitora apenas NOVAS AÇÕES distribuídas contra a
+   * pessoa/empresa. Recebe webhook event_type="new_lawsuit".
+   *
+   * Usar apenas com search_type cpf/cnpj/oab/name (nunca lawsuit_cnj).
+   */
+  only_new_lawsuits?: boolean;
 }
 
 export interface JuditTracking {
@@ -187,10 +201,46 @@ export interface JuditResponsesPage {
 
 const REQUESTS_BASE = "https://requests.prod.judit.io";
 const TRACKING_BASE = "https://tracking.prod.judit.io";
+const CRAWLER_BASE = "https://crawler.prod.judit.io";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TIPOS — COFRE DE CREDENCIAIS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface JuditCredencialInput {
+  /**
+   * Tribunal + sistema, ou "*" como curinga.
+   * Exemplos: "tjsp", "trf3", "tst", "*"
+   */
+  system_name: string;
+  /** Etiqueta livre pro admin identificar — ex: "Dr. João Silva" */
+  customer_key: string;
+  /** CPF ou número OAB do advogado */
+  username: string;
+  /** Senha do tribunal */
+  password: string;
+  /** Dados customizados — usado pra 2FA (secret) */
+  custom_data?: {
+    secret?: string;
+    [key: string]: string | undefined;
+  };
+}
+
+export interface JuditCredencialResposta {
+  /** ID opaco retornado pela Judit — use pra referenciar depois */
+  credential_id?: string;
+  id?: string;
+  system_name: string;
+  customer_key: string;
+  username: string;
+  status?: string;
+  created_at?: string;
+}
 
 export class JuditClient {
   private requestsApi: AxiosInstance;
   private trackingApi: AxiosInstance;
+  private crawlerApi: AxiosInstance;
 
   constructor(apiKey: string) {
     const headers = {
@@ -209,6 +259,92 @@ export class JuditClient {
       headers,
       timeout: 15000,
     });
+
+    this.crawlerApi = axios.create({
+      baseURL: CRAWLER_BASE,
+      headers,
+      timeout: 20000,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // COFRE DE CREDENCIAIS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Cadastra uma credencial de tribunal no cofre da Judit.
+   *
+   * A Judit criptografa a senha e NÃO permite recuperar depois —
+   * pra alterar, é necessário remover e recadastrar.
+   *
+   * Endpoint: POST https://crawler.prod.judit.io/credentials
+   * Body: { credentials: [ {...} ] }
+   */
+  async cadastrarCredencial(credencial: JuditCredencialInput): Promise<JuditCredencialResposta> {
+    try {
+      const res = await this.crawlerApi.post("/credentials", {
+        credentials: [credencial],
+      });
+      // Pode retornar array ou objeto único — normaliza
+      const data = res.data;
+      if (Array.isArray(data)) return data[0];
+      if (data?.credentials && Array.isArray(data.credentials)) return data.credentials[0];
+      return data;
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response) {
+        const data = axErr.response.data;
+        const msg =
+          data?.message ||
+          data?.error ||
+          JSON.stringify(data).slice(0, 300);
+        throw new Error(
+          `Judit rejeitou cadastrarCredencial (${axErr.response.status}): ${msg}`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Lista todas as credenciais cadastradas no cofre.
+   * Útil pra exibir no admin do Jurify quais credenciais já existem.
+   */
+  async listarCredenciais(): Promise<JuditCredencialResposta[]> {
+    try {
+      const res = await this.crawlerApi.get("/credentials");
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      if (data?.credentials && Array.isArray(data.credentials)) return data.credentials;
+      return [];
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response?.status === 404) return [];
+      throw err;
+    }
+  }
+
+  /**
+   * Remove uma credencial do cofre. A credencial fica indisponível
+   * imediatamente, e processos que dependiam dela param de ser
+   * acessíveis até um replacement ser cadastrado.
+   */
+  async deletarCredencial(credentialId: string): Promise<void> {
+    try {
+      await this.crawlerApi.delete(`/credentials/${encodeURIComponent(credentialId)}`);
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response?.status === 404) {
+        // Já não existe — considera sucesso
+        return;
+      }
+      if (axErr.response) {
+        const data = axErr.response.data;
+        const msg = data?.message || data?.error || JSON.stringify(data).slice(0, 300);
+        throw new Error(`Judit rejeitou deletarCredencial (${axErr.response.status}): ${msg}`);
+      }
+      throw err;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
