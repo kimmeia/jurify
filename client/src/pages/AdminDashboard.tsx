@@ -156,12 +156,12 @@ export default function AdminDashboard() {
                 <UserCheck className="h-5 w-5 text-emerald-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Plano Essencial</p>
+                <p className="text-sm text-muted-foreground">Plano Iniciante</p>
                 {statsLoading ? (
                   <Skeleton className="h-6 w-10 mt-1" />
                 ) : (
                   <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.essencial ?? 0}
+                    {stats?.planBreakdown?.iniciante ?? 0}
                   </p>
                 )}
               </div>
@@ -196,12 +196,12 @@ export default function AdminDashboard() {
                 <DollarSign className="h-5 w-5 text-violet-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Plano Ilimitado</p>
+                <p className="text-sm text-muted-foreground">Plano Escritório</p>
                 {statsLoading ? (
                   <Skeleton className="h-6 w-10 mt-1" />
                 ) : (
                   <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.ilimitado ?? 0}
+                    {stats?.planBreakdown?.escritorio ?? 0}
                   </p>
                 )}
               </div>

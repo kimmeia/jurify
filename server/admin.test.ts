@@ -65,9 +65,9 @@ describe("admin.stats", () => {
     expect(stats).toHaveProperty("conversionRate");
     expect(stats).toHaveProperty("newClientsThisMonth");
     expect(stats).toHaveProperty("planBreakdown");
-    expect(stats.planBreakdown).toHaveProperty("essencial");
+    expect(stats.planBreakdown).toHaveProperty("iniciante");
     expect(stats.planBreakdown).toHaveProperty("profissional");
-    expect(stats.planBreakdown).toHaveProperty("ilimitado");
+    expect(stats.planBreakdown).toHaveProperty("escritorio");
     expect(typeof stats.totalClients).toBe("number");
     expect(typeof stats.mrr).toBe("number");
     expect(typeof stats.conversionRate).toBe("number");
@@ -163,7 +163,7 @@ describe("subscription.plans", () => {
     const plans = await caller.subscription.plans();
 
     expect(Array.isArray(plans)).toBe(true);
-    expect(plans.length).toBe(4);
+    expect(plans.length).toBe(3);
     expect(plans[0]).toHaveProperty("id");
     expect(plans[0]).toHaveProperty("name");
     expect(plans[0]).toHaveProperty("priceMonthly");

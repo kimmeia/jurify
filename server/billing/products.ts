@@ -1,9 +1,13 @@
 /**
- * Definição dos planos do Jurify SaaS.
+ * Definição dos planos do Jurify SaaS — gateway-agnóstico.
  *
- * Planos são gateway-agnóstico: nem Stripe nem Asaas conhecem este arquivo
- * diretamente. Ao criar uma assinatura, mapeamos o `id` do plano para o
- * preço/ciclo correspondente no gateway.
+ * Cada plano tem:
+ *   - id          → chave usada em `subscriptions.planId` e em plan-limits.ts
+ *   - name        → nome de exibição
+ *   - features    → bullets na página /plans
+ *   - priceMonthly/Yearly → centavos (BRL). Anual = 10x mensal (~17% off).
+ *
+ * Para alterar limites (clientes, processos, etc), editar `plan-limits.ts`.
  */
 
 export interface PlanDefinition {
@@ -17,77 +21,72 @@ export interface PlanDefinition {
   priceYearly: number;
   currency: string;
   popular?: boolean;
-  /** Pagamento avulso (one-time) em vez de assinatura recorrente */
-  isOneTime?: boolean;
-  /** Número de cálculos permitidos por mês (0 = ilimitado) */
+  /**
+   * Limite de cálculos jurídicos/mês (módulos de Cálculos).
+   * Não é exibido na página de planos, mas é usado pelo sistema de
+   * créditos para travar o uso. Use 999999 para ilimitado.
+   */
   creditsPerMonth: number;
 }
 
 export const PLANS: PlanDefinition[] = [
   {
-    id: "avulso",
-    name: "Cálculo Avulso",
-    description: "Pague por cálculo, sem mensalidade",
+    id: "iniciante",
+    name: "Iniciante",
+    description: "Para advogados autônomos começando agora",
     features: [
-      "1 cálculo por compra",
-      "Acesso imediato ao parecer técnico",
-      "Sem compromisso",
+      "Até 50 clientes",
+      "2 colaboradores",
+      "WhatsApp QR Code (Baileys)",
+      "Pipeline de leads + CRM básico",
+      "Cálculos jurídicos (todos os módulos)",
+      "5 GB de armazenamento",
       "Suporte por e-mail",
     ],
-    priceMonthly: 4900,
-    priceYearly: 4900,
+    priceMonthly: 9900, // R$ 99,00/mês
+    priceYearly: 99000, // R$ 990,00/ano (2 meses grátis)
     currency: "brl",
-    isOneTime: true,
-    creditsPerMonth: 1,
-  },
-  {
-    id: "essencial",
-    name: "Essencial",
-    description: "Para profissionais autônomos",
-    features: [
-      "Cálculos Bancários e Diversos",
-      "Até 50 cálculos por mês",
-      "Pareceres técnicos em PDF",
-      "Suporte por e-mail",
-    ],
-    priceMonthly: 9900,
-    priceYearly: 95000,
-    currency: "brl",
-    creditsPerMonth: 50,
+    creditsPerMonth: 100,
   },
   {
     id: "profissional",
     name: "Profissional",
     description: "Para escritórios em crescimento",
     features: [
-      "Todos os módulos de cálculo",
-      "Até 200 cálculos por mês",
+      "Até 500 clientes",
+      "5 colaboradores",
+      "WhatsApp Cloud API + QR Code",
+      "Monitoramento de processos (Judit.IO)",
+      "Cobranças automáticas (Asaas)",
+      "Agendamento integrado (Cal.com)",
       "Pareceres técnicos em PDF",
+      "20 GB de armazenamento",
       "Suporte prioritário",
-      "Atualizações automáticas de índices",
     ],
-    priceMonthly: 19900,
-    priceYearly: 190000,
+    priceMonthly: 19900, // R$ 199,00/mês
+    priceYearly: 199000, // R$ 1.990,00/ano
     currency: "brl",
     popular: true,
-    creditsPerMonth: 200,
+    creditsPerMonth: 500,
   },
   {
-    id: "ilimitado",
-    name: "Ilimitado",
-    description: "Para grandes escritórios e equipes",
+    id: "escritorio",
+    name: "Escritório",
+    description: "Para escritórios estabelecidos e equipes maiores",
     features: [
-      "Todos os módulos de cálculo",
-      "Cálculos ilimitados",
-      "Relatórios personalizados",
+      "Clientes ilimitados",
+      "Colaboradores ilimitados",
+      "Tudo do Profissional",
+      "Agentes de IA (chatbot inteligente)",
+      "Relatórios avançados e BI",
       "API de integração",
-      "Suporte dedicado",
-      "Multi-usuários",
+      "100 GB de armazenamento",
+      "Suporte dedicado + onboarding",
     ],
-    priceMonthly: 49900,
-    priceYearly: 479000,
+    priceMonthly: 39900, // R$ 399,00/mês
+    priceYearly: 399000, // R$ 3.990,00/ano
     currency: "brl",
-    creditsPerMonth: 999999,
+    creditsPerMonth: 999999, // ilimitado
   },
 ];
 

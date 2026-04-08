@@ -272,7 +272,7 @@ export async function getAdminStats() {
       mrr: 0,
       conversionRate: 0,
       newClientsThisMonth: 0,
-      planBreakdown: { essencial: 0, profissional: 0, ilimitado: 0 },
+      planBreakdown: { iniciante: 0, profissional: 0, escritorio: 0 },
     };
   }
 
@@ -293,21 +293,21 @@ export async function getAdminStats() {
   const trialingSubscriptions = trialingSubs.length;
 
   let mrr = 0;
-  const planBreakdown = { essencial: 0, profissional: 0, ilimitado: 0 };
+  const planBreakdown = { iniciante: 0, profissional: 0, escritorio: 0 };
 
   const allActiveSubs = activeSubs.concat(trialingSubs);
   for (const sub of allActiveSubs) {
-    const pid = sub.planId || "essencial";
+    const pid = sub.planId || "iniciante";
     const plan = PLANS.find((p) => p.id === pid);
     if (plan) {
       mrr += plan.priceMonthly;
     } else {
-      mrr += 2990;
+      mrr += 9900;
     }
-    if (pid === "essencial") planBreakdown.essencial++;
+    if (pid === "iniciante") planBreakdown.iniciante++;
     else if (pid === "profissional") planBreakdown.profissional++;
-    else if (pid === "ilimitado") planBreakdown.ilimitado++;
-    else planBreakdown.essencial++;
+    else if (pid === "escritorio") planBreakdown.escritorio++;
+    else planBreakdown.iniciante++;
   }
 
   const now = new Date();

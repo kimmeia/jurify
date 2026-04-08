@@ -5,7 +5,7 @@
  * cancelamento. Substituiu a integração com Stripe.
  *
  * Fluxo de assinatura:
- *   1. cliente seleciona plano → createCheckout
+ *   1. cliente seleciona plano + informa CPF/CNPJ → createCheckout
  *   2. servidor cria/recupera AsaasCustomer (vinculado ao users.asaasCustomerId)
  *   3. servidor cria AsaasSubscription com externalReference = "userId:planId"
  *   4. retorna invoiceUrl da próxima fatura → cliente paga
@@ -20,6 +20,7 @@ import { getActiveSubscription, getUserSubscriptions, getDb } from "../db";
 import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-billing-client";
 import { PLANS } from "../billing/products";
 import { subscriptions as subscriptionsTable, users } from "../../drizzle/schema";
+import { validarCpfCnpj } from "../../shared/validacoes";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-subscription");
@@ -36,12 +37,16 @@ function dataVencimentoPadrao(): string {
 
 /**
  * Garante que existe um Customer no Asaas para este usuário.
- * Reutiliza o existente via users.asaasCustomerId; se não existir, cria.
+ * Reutiliza o existente via users.asaasCustomerId; se não existir, cria
+ * usando o CPF/CNPJ informado pelo cliente.
+ *
+ * @throws Error se cpfCnpj for inválido ou ausente quando precisar criar customer
  */
 async function garantirAsaasCustomer(
   userId: number,
   email: string | null | undefined,
   name: string | null | undefined,
+  cpfCnpj: string,
 ): Promise<string> {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -49,15 +54,19 @@ async function garantirAsaasCustomer(
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new Error("Usuário não encontrado");
 
+  // Se já existe customer no Asaas para este user, reusar
   if (user.asaasCustomerId) return user.asaasCustomerId;
 
+  // Customer novo: validar CPF/CNPJ obrigatório
+  const validacao = validarCpfCnpj(cpfCnpj);
+  if (!validacao.valido) {
+    throw new Error("CPF/CNPJ inválido. Verifique os dígitos.");
+  }
+
   const client = await getAdminAsaasClient();
-  // CPF/CNPJ é obrigatório no Asaas — usamos um placeholder para o customer
-  // ser criado no sandbox; em produção, exigir cadastro completo do CPF
-  // antes de criar a subscription.
   const customer = await client.criarCliente({
     name: name || email || `Usuário ${userId}`,
-    cpfCnpj: "00000000000", // placeholder — TODO: coletar CPF real no fluxo de checkout
+    cpfCnpj: cpfCnpj.replace(/\D/g, ""),
     email: email || undefined,
     externalReference: `user:${userId}`,
   });
@@ -67,7 +76,10 @@ async function garantirAsaasCustomer(
     .set({ asaasCustomerId: customer.id })
     .where(eq(users.id, userId));
 
-  log.info({ userId, asaasCustomerId: customer.id }, "Customer Asaas criado");
+  log.info(
+    { userId, asaasCustomerId: customer.id, tipo: validacao.tipo },
+    "Customer Asaas criado",
+  );
   return customer.id;
 }
 
@@ -82,7 +94,7 @@ export const subscriptionRouter = router({
     return getUserSubscriptions(ctx.user.id);
   }),
 
-  /** Get available plans */
+  /** Get available plans (todos recorrentes — não tem mais avulso) */
   plans: publicProcedure.query(() => {
     return PLANS.map((p) => ({
       id: p.id,
@@ -93,8 +105,6 @@ export const subscriptionRouter = router({
       priceYearly: p.priceYearly,
       currency: p.currency,
       popular: p.popular ?? false,
-      isOneTime: p.isOneTime ?? false,
-      creditsPerMonth: p.creditsPerMonth,
     }));
   }),
 
@@ -102,18 +112,23 @@ export const subscriptionRouter = router({
   billingConfigured: publicProcedure.query(() => isAsaasBillingConfigured()),
 
   /**
-   * Cria checkout via Asaas.
+   * Cria checkout (assinatura recorrente) via Asaas.
    *
-   * Para `isOneTime` (avulso): cria uma cobrança única (PIX/boleto/cartão).
-   * Para subscription: cria customer + assinatura recorrente.
+   * Cria customer + AsaasSubscription e retorna o invoiceUrl da primeira
+   * cobrança. O cliente paga via PIX/boleto/cartão escolhido na página
+   * do Asaas, o webhook /api/webhooks/asaas-billing recebe PAYMENT_RECEIVED
+   * e ativa a subscription localmente.
    *
-   * Retorna `{ url }` apontando para o invoiceUrl do Asaas.
+   * `cpfCnpj` é obrigatório só na PRIMEIRA assinatura (quando ainda não
+   * existe customer no Asaas). Em assinaturas subsequentes do mesmo
+   * usuário, o customer já existe e o CPF não é exigido novamente.
    */
   createCheckout: protectedProcedure
     .input(
       z.object({
         planId: z.string(),
         interval: z.enum(["monthly", "yearly"]),
+        cpfCnpj: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -125,33 +140,16 @@ export const subscriptionRouter = router({
         ctx.user.id,
         ctx.user.email,
         ctx.user.name,
+        input.cpfCnpj || "",
       );
 
-      // Avulso → cobrança única
-      if (plan.isOneTime) {
-        const cobranca = await client.criarCobranca({
-          customer: customerId,
-          billingType: "UNDEFINED", // permite cliente escolher PIX/boleto/cartão
-          value: plan.priceMonthly / 100, // Asaas usa unidade BRL, não centavos
-          dueDate: dataVencimentoPadrao(),
-          description: `${plan.name} — Cálculo Avulso`,
-          externalReference: `${ctx.user.id}:${input.planId}`,
-        });
-        log.info(
-          { userId: ctx.user.id, paymentId: cobranca.id, plan: plan.id },
-          "Checkout avulso criado",
-        );
-        return { url: cobranca.invoiceUrl };
-      }
-
-      // Subscription → assinatura recorrente
       const value =
         input.interval === "monthly" ? plan.priceMonthly : plan.priceYearly;
 
       const sub = await client.criarAssinatura({
         customer: customerId,
-        billingType: "UNDEFINED",
-        value: value / 100,
+        billingType: "UNDEFINED", // cliente escolhe PIX/boleto/cartão
+        value: value / 100, // Asaas usa BRL, não centavos
         nextDueDate: dataVencimentoPadrao(),
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
         description: `${plan.name} — Jurify SaaS`,
@@ -201,18 +199,9 @@ export const subscriptionRouter = router({
   }),
 
   /**
-   * Reativar não é suportado nativamente pelo Asaas (cancelamento é definitivo).
-   * Cliente precisa criar nova assinatura via createCheckout. Mantemos o método
-   * por compatibilidade com o frontend, mas retorna erro explicativo.
+   * Trocar plano = nova assinatura. Cancela a antiga (se houver) e cria a nova.
+   * Não exige CPF de novo (customer já existe no Asaas).
    */
-  reactivate: protectedProcedure.mutation(async () => {
-    throw new Error(
-      "Para reativar, crie uma nova assinatura na página de planos. " +
-        "O Asaas não permite reativar assinaturas canceladas.",
-    );
-  }),
-
-  /** Trocar plano = nova assinatura. Cancela a antiga (se houver) e cria a nova. */
   changePlan: protectedProcedure
     .input(
       z.object({
@@ -223,7 +212,6 @@ export const subscriptionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const newPlan = PLANS.find((p) => p.id === input.newPlanId);
       if (!newPlan) throw new Error("Plano não encontrado");
-      if (newPlan.isOneTime) throw new Error("Use a opção de compra avulsa.");
 
       const client = await getAdminAsaasClient();
       const currentSub = await getActiveSubscription(ctx.user.id);
@@ -247,10 +235,12 @@ export const subscriptionRouter = router({
         }
       }
 
+      // Em changePlan o customer já existe (passou por createCheckout antes)
       const customerId = await garantirAsaasCustomer(
         ctx.user.id,
         ctx.user.email,
         ctx.user.name,
+        "", // não precisa de CPF — customer já existe
       );
 
       const value =

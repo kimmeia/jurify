@@ -28,7 +28,6 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { subscriptions, users } from "../../drizzle/schema";
 import { getAsaasBillingWebhookSecret } from "./asaas-billing-client";
-import { addCreditsToUser } from "../db";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("billing-asaas-webhook");
@@ -168,28 +167,6 @@ export function registerAsaasBillingWebhook(app: Express) {
           { event: body.event, paymentId: payment.id, status: payment.status },
           "Payment event",
         );
-
-        // Avulso: pagamento sem subscription, mas com externalReference user:plan
-        if (!payment.subscription && payment.externalReference) {
-          const ref = payment.externalReference.split(":");
-          const userId = parseInt(ref[0] || "", 10);
-          const isPaid =
-            body.event === "PAYMENT_RECEIVED" ||
-            body.event === "PAYMENT_CONFIRMED" ||
-            payment.status === "RECEIVED" ||
-            payment.status === "CONFIRMED";
-
-          if (userId && isPaid) {
-            // Pagamento avulso → adicionar 1 crédito ao usuário
-            try {
-              await addCreditsToUser(userId, 1);
-              log.info({ userId, paymentId: payment.id }, "Avulso: 1 crédito adicionado");
-            } catch (err: any) {
-              log.error({ err: err.message, userId }, "Falha ao adicionar crédito avulso");
-            }
-          }
-          return res.status(200).json({ received: true });
-        }
 
         // Pagamento de assinatura: atualizar status da subscription
         if (payment.subscription) {
