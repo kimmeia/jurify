@@ -30,7 +30,19 @@ export const users = mysqlTable("users", {
   /** Método de login: 'email', 'google', 'manus' (legado), 'demo' */
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  /** ID do customer no Asaas (cobrança SaaS Jurify). Substituiu stripeCustomerId. */
+  asaasCustomerId: varchar("asaasCustomerId", { length: 255 }),
+  /**
+   * Conta bloqueada pelo admin do Jurify. Quando true, o usuário não
+   * consegue mais autenticar (verificado em authenticateRequest).
+   * Diferente de role: bloqueio é uma ação punitiva/de suporte, role
+   * é o nível de permissão.
+   */
+  bloqueado: boolean("bloqueado").default(false).notNull(),
+  /** Motivo do bloqueio (auditável). Null quando bloqueado=false. */
+  motivoBloqueio: varchar("motivoBloqueio", { length: 500 }),
+  /** Timestamp do bloqueio. */
+  bloqueadoEm: timestamp("bloqueadoEm"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -40,14 +52,19 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Subscriptions table — tracks active Stripe subscriptions per user.
- * We store only essential Stripe IDs and a cached status for quick lookups.
+ * Subscriptions table — assinaturas SaaS Jurify (uma por usuário-dono).
+ *
+ * Migrado de Stripe para Asaas. Os IDs do Asaas substituem os antigos
+ * stripeSubscriptionId/stripePriceId. O `planId` continua mapeando para
+ * a tabela `PLANS` em `server/billing/products.ts`.
  */
 export const subscriptions = mysqlTable("subscriptions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }).notNull().unique(),
-  stripePriceId: varchar("stripePriceId", { length: 255 }).notNull(),
+  /** ID da assinatura no Asaas (sub_xxxx). Único por subscription. */
+  asaasSubscriptionId: varchar("asaasSubscriptionId", { length: 255 }).unique(),
+  /** ID do customer no Asaas (cus_xxxx). Mesmo de users.asaasCustomerId. */
+  asaasCustomerId: varchar("asaasCustomerId", { length: 255 }),
   planId: varchar("planId", { length: 64 }),
   status: mysqlEnum("status", [
     "active",
@@ -277,6 +294,16 @@ export const escritorios = mysqlTable("escritorios", {
   planoAtendimento: mysqlEnum("planoAtendimento", ["basico", "intermediario", "completo"]).default("basico").notNull(),
   maxColaboradores: int("maxColaboradores").default(1).notNull(),
   maxConexoesWhatsapp: int("maxConexoesWhatsapp").default(0).notNull(),
+  /**
+   * Suspensão administrativa do escritório (controle pelo admin do
+   * Jurify, ex: inadimplência grave, violação de termos). Quando true,
+   * todos os usuários do escritório recebem 403 nas chamadas tRPC
+   * que dependem do contexto do escritório. Diferente do bloqueio
+   * individual em users.bloqueado: este é organizacional.
+   */
+  suspenso: boolean("suspenso").default(false).notNull(),
+  motivoSuspensao: varchar("motivoSuspensao", { length: 500 }),
+  suspensoEm: timestamp("suspensoEm"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -895,3 +922,136 @@ export const juditTransacoes = mysqlTable("judit_transacoes", {
   userId: int("userIdJTx").notNull(),
   createdAt: timestamp("createdAtJTx").defaultNow().notNull(),
 });
+
+/**
+ * Notas internas do admin sobre clientes — visíveis apenas no painel admin.
+ *
+ * Usado pelo time de suporte/financeiro pra registrar contexto sobre um
+ * cliente: "Ligou reclamando do bug X em 15/03", "Pediu desconto e
+ * negamos", "Cliente VIP", etc. Não é visível pro próprio cliente.
+ */
+export const clienteNotasAdmin = mysqlTable("cliente_notas_admin", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Sobre qual usuário/escritório é a nota */
+  userId: int("userIdNota").notNull(),
+  /** Quem criou a nota (admin) */
+  autorAdminId: int("autorAdminIdNota").notNull(),
+  /** Conteúdo livre (markdown permitido) */
+  conteudo: text("conteudoNota").notNull(),
+  /** Categoria opcional pra filtrar/destacar */
+  categoria: mysqlEnum("categoriaNota", ["geral", "financeiro", "suporte", "comercial", "alerta"]).default("geral").notNull(),
+  createdAt: timestamp("createdAtNota").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtNota").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ClienteNotaAdmin = typeof clienteNotasAdmin.$inferSelect;
+export type InsertClienteNotaAdmin = typeof clienteNotasAdmin.$inferInsert;
+
+/**
+ * Audit log — toda ação sensível executada por admin do Jurify ou via
+ * impersonation deve ser registrada aqui. Imutável (apenas INSERTs).
+ *
+ * Compliance + troubleshooting: "quem promoveu fulano a admin?",
+ * "quem suspendeu este escritório e quando?", "este admin entrou como
+ * cliente X em qual horário?".
+ */
+export const auditLog = mysqlTable("audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  /** ID do usuário ator (admin que executou). */
+  actorUserId: int("actorUserIdAudit").notNull(),
+  /** Nome do ator no momento do log (snapshot, evita join no read). */
+  actorName: varchar("actorNameAudit", { length: 255 }),
+  /**
+   * Identificador da ação. Ex: "user.bloquear", "escritorio.suspender",
+   * "user.impersonar", "user.resetSenha", "plano.editar".
+   */
+  acao: varchar("acaoAudit", { length: 100 }).notNull(),
+  /** Tipo do alvo: "user" | "escritorio" | "plano" | "subscription" | etc */
+  alvoTipo: varchar("alvoTipoAudit", { length: 50 }),
+  /** ID numérico do alvo (quando aplicável) */
+  alvoId: int("alvoIdAudit"),
+  /** Nome/email do alvo no momento do log (snapshot pra leitura rápida) */
+  alvoNome: varchar("alvoNomeAudit", { length: 255 }),
+  /** JSON com payload livre (motivo, valores antes/depois, etc) */
+  detalhes: text("detalhesAudit"),
+  /** IP de origem da request (X-Forwarded-For ou socket) */
+  ip: varchar("ipAudit", { length: 64 }),
+  createdAt: timestamp("createdAtAudit").defaultNow().notNull(),
+}, (t) => ({
+  idxActor: index("idx_audit_actor").on(t.actorUserId),
+  idxAcao: index("idx_audit_acao").on(t.acao),
+  idxCreated: index("idx_audit_created").on(t.createdAt),
+}));
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;
+
+/**
+ * Overrides de planos — permite o admin alterar preço/features dos
+ * planos definidos em `server/billing/products.ts` SEM precisar de
+ * deploy. Linha em planos_overrides "vence" o hardcoded.
+ *
+ * Cada linha referencia um planId (que precisa existir em PLANS).
+ * Campos null = mantém valor do hardcoded. Campos não-null sobrescrevem.
+ */
+export const planosOverrides = mysqlTable("planos_overrides", {
+  id: int("id").autoincrement().primaryKey(),
+  /** ID do plano em PLANS (ex: "iniciante", "profissional", "escritorio") */
+  planId: varchar("planIdOverride", { length: 64 }).notNull().unique(),
+  /** Override do nome (null = usa o de PLANS) */
+  name: varchar("nameOverride", { length: 100 }),
+  /** Override da descrição */
+  description: varchar("descriptionOverride", { length: 500 }),
+  /** Override do preço mensal em centavos */
+  priceMonthly: int("priceMonthlyOverride"),
+  /** Override do preço anual em centavos */
+  priceYearly: int("priceYearlyOverride"),
+  /** Features (array JSON) — null = usa as de PLANS */
+  features: text("featuresOverride"),
+  /** Marca como popular (badge "Mais Popular") */
+  popular: boolean("popularOverride"),
+  /** Plano oculto da página /plans (mas continua válido pra subscriptions existentes) */
+  oculto: boolean("ocultoOverride").default(false),
+  updatedBy: int("updatedByOverride"),
+  updatedAt: timestamp("updatedAtOverride").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PlanoOverride = typeof planosOverrides.$inferSelect;
+export type InsertPlanoOverride = typeof planosOverrides.$inferInsert;
+
+/**
+ * Cupons de desconto — admin cria, cliente aplica no checkout.
+ *
+ * Aplicado via Asaas como discount na primeira cobrança da assinatura
+ * OU como percentual recorrente. Validade controlada pela data e pelo
+ * limite de usos.
+ */
+export const cupons = mysqlTable("cupons", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Código que o cliente digita (case-insensitive) */
+  codigo: varchar("codigoCupom", { length: 64 }).notNull().unique(),
+  /** Descrição interna pro admin */
+  descricao: varchar("descricaoCupom", { length: 255 }),
+  /** Tipo de desconto */
+  tipo: mysqlEnum("tipoCupom", ["percentual", "valorFixo"]).notNull(),
+  /** Valor do desconto (% se percentual, centavos se valorFixo) */
+  valor: int("valorCupom").notNull(),
+  /** Data inicial de validade (pode ser passada → válido desde já) */
+  validoDe: timestamp("validoDeCupom"),
+  /** Data final de validade (null = sem expiração) */
+  validoAte: timestamp("validoAteCupom"),
+  /** Limite total de usos (null = ilimitado) */
+  maxUsos: int("maxUsosCupom"),
+  /** Contador de usos (incrementado no resgate) */
+  usos: int("usosCupom").default(0).notNull(),
+  /** Cupom ativo? Admin pode desativar sem deletar pra preservar histórico */
+  ativo: boolean("ativoCupom").default(true).notNull(),
+  /** Restringe a planos específicos (CSV de planIds, null = todos) */
+  planosIds: varchar("planosIdsCupom", { length: 500 }),
+  criadoPor: int("criadoPorCupom"),
+  createdAt: timestamp("createdAtCupom").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtCupom").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Cupom = typeof cupons.$inferSelect;
+export type InsertCupom = typeof cupons.$inferInsert;

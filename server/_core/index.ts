@@ -4,7 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
-import { registerStripeWebhook } from "../stripe/webhook";
+import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
 import { registerCalcomWebhook } from "../integracoes/calcom-webhook";
 import { registerJuditWebhook } from "../integracoes/judit-webhook";
@@ -62,8 +62,6 @@ async function startServer() {
     next();
   });
 
-  // Stripe webhook MUST be registered BEFORE express.json()
-  registerStripeWebhook(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -80,15 +78,17 @@ async function startServer() {
     rateLimit({ name: "sign-submit", max: 5 }),
   );
   // Webhooks públicos também precisam de limite
-  app.use("/api/stripe/webhook", rateLimit({ name: "webhook-stripe", max: 120 }));
+  app.use("/api/webhooks/asaas-billing", rateLimit({ name: "webhook-asaas-billing", max: 120 }));
   // PDF export route
   registerPDFExportRoute(app);
   // Cal.com webhook
   registerCalcomWebhook(app);
   // Judit.IO webhook
   registerJuditWebhook(app);
-  // Asaas webhook
+  // Asaas webhook (escritório → seus clientes)
   registerAsaasWebhook(app);
+  // Asaas webhook (Jurify → mensalidades dos escritórios)
+  registerAsaasBillingWebhook(app);
   // WhatsApp Cloud API (CoEx) webhook
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);

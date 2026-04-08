@@ -26,8 +26,17 @@ export interface LimitesPlano {
   modulosPermitidos: string[];
 }
 
+/**
+ * Limites por plano. Os IDs aqui DEVEM bater com os IDs em
+ * `server/billing/products.ts`. Se você adicionar/remover um plano lá,
+ * adicione/remova aqui também.
+ *
+ * O plano "free" é o estado de quem ainda não assinou (trial). Ele NÃO
+ * aparece em /plans, mas existe aqui para servir de fallback no
+ * `verificarLimite`.
+ */
 const LIMITES: Record<string, LimitesPlano> = {
-  // Sem plano (trial/free)
+  // Sem plano (trial — usuário criou conta mas ainda não assinou)
   free: {
     maxClientes: 10,
     maxColaboradores: 1,
@@ -40,40 +49,40 @@ const LIMITES: Record<string, LimitesPlano> = {
     modulosPermitidos: ["calculos", "processos"],
   },
 
-  basic: {
-    maxClientes: 100,
+  iniciante: {
+    maxClientes: 50,
     maxColaboradores: 2,
     maxConversasAtivas: 20,
-    maxArmazenamentoMB: 500,
+    maxArmazenamentoMB: 5000,
     maxLeads: 50,
-    maxAgentesIa: 1,
-    maxMonitoramentosJudit: 5,
+    maxAgentesIa: 0,
+    maxMonitoramentosJudit: 0,
     maxCobrancasAsaas: 50,
+    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "financeiro"],
+  },
+
+  profissional: {
+    maxClientes: 500,
+    maxColaboradores: 5,
+    maxConversasAtivas: 100,
+    maxArmazenamentoMB: 20000,
+    maxLeads: 500,
+    maxAgentesIa: 1,
+    maxMonitoramentosJudit: 50,
+    maxCobrancasAsaas: 500,
     modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "agendamento", "monitoramento_judit", "financeiro"],
   },
 
-  professional: {
-    maxClientes: 1000,
-    maxColaboradores: 10,
-    maxConversasAtivas: 100,
-    maxArmazenamentoMB: 5000,
-    maxLeads: 500,
-    maxAgentesIa: 5,
-    maxMonitoramentosJudit: 50,
-    maxCobrancasAsaas: 500,
-    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "agendamento", "relatorios", "configuracoes", "equipe", "monitoramento_judit", "financeiro"],
-  },
-
-  enterprise: {
+  escritorio: {
     maxClientes: 999999,
     maxColaboradores: 999999,
     maxConversasAtivas: 999999,
-    maxArmazenamentoMB: 50000,
+    maxArmazenamentoMB: 100000,
     maxLeads: 999999,
     maxAgentesIa: 999999,
     maxMonitoramentosJudit: 999999,
     maxCobrancasAsaas: 999999,
-    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "agendamento", "relatorios", "configuracoes", "equipe", "monitoramento_judit", "financeiro"],
+    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "agendamento", "relatorios", "configuracoes", "equipe", "monitoramento_judit", "financeiro", "agentes_ia"],
   },
 };
 

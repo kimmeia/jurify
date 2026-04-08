@@ -1,17 +1,87 @@
 /**
- * Router — Assinaturas e Stripe Checkout
+ * Router — Assinaturas e Cobrança SaaS via Asaas
  *
- * Responsável por: listar planos disponíveis, criar checkout sessions
- * (subscription e one-time), cancelar/reativar/trocar plano.
+ * Cria customers + subscriptions no Asaas, lista planos e gerencia
+ * cancelamento. Substituiu a integração com Stripe.
+ *
+ * Fluxo de assinatura:
+ *   1. cliente seleciona plano + informa CPF/CNPJ → createCheckout
+ *   2. servidor cria/recupera AsaasCustomer (vinculado ao users.asaasCustomerId)
+ *   3. servidor cria AsaasSubscription com externalReference = "userId:planId"
+ *   4. retorna invoiceUrl da próxima fatura → cliente paga
+ *   5. webhook /api/webhooks/asaas-billing recebe SUBSCRIPTION_CREATED + PAYMENT_RECEIVED
+ *      e atualiza a tabela `subscriptions` local
  */
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveSubscription, getUserSubscriptions, getDb } from "../db";
-import { getStripe } from "../stripe/index";
-import { PLANS } from "../stripe/products";
-import { subscriptions as subscriptionsTable } from "../../drizzle/schema";
+import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-billing-client";
+import { getPlansResolved, getPlanByIdResolved } from "../billing/products-resolver";
+import { subscriptions as subscriptionsTable, users } from "../../drizzle/schema";
+import { validarCpfCnpj } from "../../shared/validacoes";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("router-subscription");
+
+/**
+ * Próxima data de vencimento padrão (3 dias a partir de hoje, formato YYYY-MM-DD).
+ * 3 dias dá tempo do cliente abrir o link e pagar via boleto/PIX antes do vencimento.
+ */
+function dataVencimentoPadrao(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Garante que existe um Customer no Asaas para este usuário.
+ * Reutiliza o existente via users.asaasCustomerId; se não existir, cria
+ * usando o CPF/CNPJ informado pelo cliente.
+ *
+ * @throws Error se cpfCnpj for inválido ou ausente quando precisar criar customer
+ */
+async function garantirAsaasCustomer(
+  userId: number,
+  email: string | null | undefined,
+  name: string | null | undefined,
+  cpfCnpj: string,
+): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("Usuário não encontrado");
+
+  // Se já existe customer no Asaas para este user, reusar
+  if (user.asaasCustomerId) return user.asaasCustomerId;
+
+  // Customer novo: validar CPF/CNPJ obrigatório
+  const validacao = validarCpfCnpj(cpfCnpj);
+  if (!validacao.valido) {
+    throw new Error("CPF/CNPJ inválido. Verifique os dígitos.");
+  }
+
+  const client = await getAdminAsaasClient();
+  const customer = await client.criarCliente({
+    name: name || email || `Usuário ${userId}`,
+    cpfCnpj: cpfCnpj.replace(/\D/g, ""),
+    email: email || undefined,
+    externalReference: `user:${userId}`,
+  });
+
+  await db
+    .update(users)
+    .set({ asaasCustomerId: customer.id })
+    .where(eq(users.id, userId));
+
+  log.info(
+    { userId, asaasCustomerId: customer.id, tipo: validacao.tipo },
+    "Customer Asaas criado",
+  );
+  return customer.id;
+}
 
 export const subscriptionRouter = router({
   /** Get current user's active subscription */
@@ -24,9 +94,10 @@ export const subscriptionRouter = router({
     return getUserSubscriptions(ctx.user.id);
   }),
 
-  /** Get available plans */
-  plans: publicProcedure.query(() => {
-    return PLANS.map((p) => ({
+  /** Get available plans (todos recorrentes — não tem mais avulso) */
+  plans: publicProcedure.query(async () => {
+    const plans = await getPlansResolved(false); // só os visíveis
+    return plans.map((p) => ({
       id: p.id,
       name: p.name,
       description: p.description,
@@ -35,138 +106,103 @@ export const subscriptionRouter = router({
       priceYearly: p.priceYearly,
       currency: p.currency,
       popular: p.popular ?? false,
-      isOneTime: p.isOneTime ?? false,
-      creditsPerMonth: p.creditsPerMonth,
     }));
   }),
 
-  /** Create Stripe Checkout Session */
+  /** Health-check: o admin já configurou a integração Asaas? */
+  billingConfigured: publicProcedure.query(() => isAsaasBillingConfigured()),
+
+  /**
+   * Cria checkout (assinatura recorrente) via Asaas.
+   *
+   * Cria customer + AsaasSubscription e retorna o invoiceUrl da primeira
+   * cobrança. O cliente paga via PIX/boleto/cartão escolhido na página
+   * do Asaas, o webhook /api/webhooks/asaas-billing recebe PAYMENT_RECEIVED
+   * e ativa a subscription localmente.
+   *
+   * `cpfCnpj` é obrigatório só na PRIMEIRA assinatura (quando ainda não
+   * existe customer no Asaas). Em assinaturas subsequentes do mesmo
+   * usuário, o customer já existe e o CPF não é exigido novamente.
+   */
   createCheckout: protectedProcedure
     .input(
       z.object({
         planId: z.string(),
         interval: z.enum(["monthly", "yearly"]),
+        cpfCnpj: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const stripe = getStripe();
-      const plan = PLANS.find((p) => p.id === input.planId);
+      const plan = await getPlanByIdResolved(input.planId);
       if (!plan) throw new Error("Plano não encontrado");
 
-      const origin = ctx.req.headers.origin || ctx.req.headers.referer || "";
+      const client = await getAdminAsaasClient();
+      const customerId = await garantirAsaasCustomer(
+        ctx.user.id,
+        ctx.user.email,
+        ctx.user.name,
+        input.cpfCnpj || "",
+      );
 
-      // Avulso = one-time payment
-      if (plan.isOneTime) {
-        const session = await stripe.checkout.sessions.create({
-          mode: "payment",
-          payment_method_types: ["card"],
-          customer_email: ctx.user.email ?? undefined,
-          client_reference_id: ctx.user.id.toString(),
-          metadata: {
-            user_id: ctx.user.id.toString(),
-            plan_id: input.planId,
-            credits_to_add: "1",
-          },
-          line_items: [
-            {
-              price_data: {
-                currency: plan.currency,
-                product_data: {
-                  name: `${plan.name} - Cálculo Avulso`,
-                  description: plan.description,
-                },
-                unit_amount: plan.priceMonthly,
-              },
-              quantity: 1,
-            },
-          ],
-          success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${origin}/plans`,
-        });
-        return { url: session.url };
-      }
+      const value =
+        input.interval === "monthly" ? plan.priceMonthly : plan.priceYearly;
 
-      // Subscription plans
-      const price = input.interval === "monthly" ? plan.priceMonthly : plan.priceYearly;
-
-      const session = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        payment_method_types: ["card"],
-        customer_email: ctx.user.email ?? undefined,
-        client_reference_id: ctx.user.id.toString(),
-        metadata: {
-          user_id: ctx.user.id.toString(),
-          customer_email: ctx.user.email ?? "",
-          customer_name: ctx.user.name ?? "",
-          plan_id: input.planId,
-        },
-        line_items: [
-          {
-            price_data: {
-              currency: plan.currency,
-              product_data: {
-                name: `${plan.name} - SaaS de Cálculos`,
-                description: plan.description,
-              },
-              unit_amount: price,
-              recurring: {
-                interval: input.interval === "monthly" ? "month" : "year",
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        allow_promotion_codes: true,
-        success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/plans`,
+      const sub = await client.criarAssinatura({
+        customer: customerId,
+        billingType: "UNDEFINED", // cliente escolhe PIX/boleto/cartão
+        value: value / 100, // Asaas usa BRL, não centavos
+        nextDueDate: dataVencimentoPadrao(),
+        cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
+        description: `${plan.name} — Jurify SaaS`,
+        externalReference: `${ctx.user.id}:${input.planId}`,
       });
 
-      return { url: session.url };
+      // Buscar a primeira cobrança gerada para retornar o link de pagamento
+      const cobrancas = await client.listarCobrancas({
+        customer: customerId,
+        limit: 5,
+      });
+      const primeira = cobrancas.data.find(
+        (c) => c.externalReference === `${ctx.user.id}:${input.planId}` && !c.deleted,
+      );
+
+      log.info(
+        { userId: ctx.user.id, subId: sub.id, plan: plan.id },
+        "Subscription Asaas criada",
+      );
+
+      return {
+        url: primeira?.invoiceUrl || "",
+        asaasSubscriptionId: sub.id,
+      };
     }),
 
-  /** Cancel subscription at period end */
+  /** Cancela a assinatura ativa imediatamente (Asaas não tem "cancel at period end") */
   cancel: protectedProcedure.mutation(async ({ ctx }) => {
     const sub = await getActiveSubscription(ctx.user.id);
     if (!sub) throw new Error("Nenhuma assinatura ativa encontrada.");
+    if (!sub.asaasSubscriptionId) {
+      throw new Error("Assinatura sem ID Asaas — contate o suporte.");
+    }
 
-    const stripe = getStripe();
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    });
+    const client = await getAdminAsaasClient();
+    await client.cancelarAssinatura(sub.asaasSubscriptionId);
 
     const db = await getDb();
     if (db) {
       await db
         .update(subscriptionsTable)
-        .set({ cancelAtPeriodEnd: true })
+        .set({ status: "canceled", cancelAtPeriodEnd: true })
         .where(eq(subscriptionsTable.id, sub.id));
     }
 
     return { success: true };
   }),
 
-  /** Reactivate canceled subscription */
-  reactivate: protectedProcedure.mutation(async ({ ctx }) => {
-    const sub = await getActiveSubscription(ctx.user.id);
-    if (!sub) throw new Error("Nenhuma assinatura encontrada.");
-
-    const stripe = getStripe();
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-      cancel_at_period_end: false,
-    });
-
-    const db = await getDb();
-    if (db) {
-      await db
-        .update(subscriptionsTable)
-        .set({ cancelAtPeriodEnd: false })
-        .where(eq(subscriptionsTable.id, sub.id));
-    }
-
-    return { success: true };
-  }),
-
-  /** Change plan (upgrade/downgrade) */
+  /**
+   * Trocar plano = nova assinatura. Cancela a antiga (se houver) e cria a nova.
+   * Não exige CPF de novo (customer já existe no Asaas).
+   */
   changePlan: protectedProcedure
     .input(
       z.object({
@@ -175,49 +211,67 @@ export const subscriptionRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const stripe = getStripe();
-      const newPlan = PLANS.find((p) => p.id === input.newPlanId);
+      const newPlan = await getPlanByIdResolved(input.newPlanId);
       if (!newPlan) throw new Error("Plano não encontrado");
-      if (newPlan.isOneTime) throw new Error("Use a opção de compra avulsa.");
 
+      const client = await getAdminAsaasClient();
       const currentSub = await getActiveSubscription(ctx.user.id);
-      const origin = ctx.req.headers.origin || ctx.req.headers.referer || "";
-      const price = input.interval === "monthly" ? newPlan.priceMonthly : newPlan.priceYearly;
 
-      const metadata: Record<string, string> = {
-        user_id: ctx.user.id.toString(),
-        plan_id: input.newPlanId,
-      };
-      if (currentSub) {
-        metadata.cancel_old_subscription = currentSub.stripeSubscriptionId;
+      // Cancela a antiga (não estorna pagamentos já feitos)
+      if (currentSub?.asaasSubscriptionId) {
+        try {
+          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
+          const db = await getDb();
+          if (db) {
+            await db
+              .update(subscriptionsTable)
+              .set({ status: "canceled" })
+              .where(eq(subscriptionsTable.id, currentSub.id));
+          }
+        } catch (err: any) {
+          log.warn(
+            { err: err.message, subId: currentSub.asaasSubscriptionId },
+            "Falha ao cancelar assinatura antiga",
+          );
+        }
       }
 
-      const session = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        payment_method_types: ["card"],
-        customer_email: ctx.user.email ?? undefined,
-        client_reference_id: ctx.user.id.toString(),
-        metadata,
-        line_items: [
-          {
-            price_data: {
-              currency: newPlan.currency,
-              product_data: {
-                name: `${newPlan.name} - SaaS de Cálculos`,
-                description: newPlan.description,
-              },
-              unit_amount: price,
-              recurring: {
-                interval: input.interval === "monthly" ? "month" : "year",
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/plans`,
+      // Em changePlan o customer já existe (passou por createCheckout antes)
+      const customerId = await garantirAsaasCustomer(
+        ctx.user.id,
+        ctx.user.email,
+        ctx.user.name,
+        "", // não precisa de CPF — customer já existe
+      );
+
+      const value =
+        input.interval === "monthly"
+          ? newPlan.priceMonthly
+          : newPlan.priceYearly;
+
+      const sub = await client.criarAssinatura({
+        customer: customerId,
+        billingType: "UNDEFINED",
+        value: value / 100,
+        nextDueDate: dataVencimentoPadrao(),
+        cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
+        description: `${newPlan.name} — Jurify SaaS`,
+        externalReference: `${ctx.user.id}:${input.newPlanId}`,
       });
 
-      return { url: session.url };
+      const cobrancas = await client.listarCobrancas({
+        customer: customerId,
+        limit: 5,
+      });
+      const primeira = cobrancas.data.find(
+        (c) =>
+          c.externalReference === `${ctx.user.id}:${input.newPlanId}` &&
+          !c.deleted,
+      );
+
+      return {
+        url: primeira?.invoiceUrl || "",
+        asaasSubscriptionId: sub.id,
+      };
     }),
 });

@@ -18,7 +18,7 @@ import type {
   WhatsappMensagemRecebida,
   WhatsappMensagemEnviar,
 } from "../../shared/whatsapp-types";
-import { jidToPhone } from "../../shared/whatsapp-types";
+import { jidToPhone, isLidJid } from "../../shared/whatsapp-types";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-baileys");
 
@@ -456,7 +456,36 @@ class WhatsappSessionManager extends EventEmitter {
 
         const isGroup = msg.key.remoteJid?.endsWith("@g.us") ?? false;
         const chatId = msg.key.remoteJid || "";
-        const telefone = jidToPhone(isGroup ? (msg.key.participant || chatId) : chatId);
+
+        // ─── Extração robusta do telefone real ──────────────────────────
+        // Baileys pode entregar JID em 2 formatos:
+        //   1. PN  (Phone Number): "5511999999999@s.whatsapp.net"
+        //   2. LID (Linked ID):    "123456789012345@lid"  ← NÃO é telefone
+        //
+        // Quando o JID é LID, o telefone real fica em msg.key.senderPn (1:1)
+        // ou msg.key.participantPn (grupos). Se ignorarmos isso e extrairmos
+        // o número do LID, criaríamos um contato duplicado com um "número"
+        // que na verdade é um id opaco do WhatsApp.
+        const senderJidRaw = isGroup ? (msg.key.participant || chatId) : chatId;
+        const senderPnJid: string | undefined =
+          (msg.key as any).senderPn || (msg.key as any).participantPn;
+
+        let telefone: string;
+        if (senderPnJid) {
+          // Caminho preferido: usar o telefone real exposto pelo Baileys
+          telefone = jidToPhone(senderPnJid);
+        } else if (isLidJid(senderJidRaw)) {
+          // Sem senderPn e o JID é LID — não temos como saber o telefone real.
+          // Deixar vazio sinaliza pro handler que ele deve buscar pelo chatId
+          // (LID) em conversas existentes ao invés de criar um contato novo.
+          telefone = "";
+          log.warn(
+            { chatId, senderJidRaw },
+            "[WhatsApp] Mensagem chegou com JID @lid e sem senderPn — usando lookup por chatId",
+          );
+        } else {
+          telefone = jidToPhone(senderJidRaw);
+        }
 
         // Se a mensagem é enviada por nós (fromMe), atualizar preview da conversa para sincronização
         if (msg.key.fromMe) {

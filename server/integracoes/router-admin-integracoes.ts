@@ -18,6 +18,7 @@ import { adminIntegracoes } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt, maskToken, generateWebhookSecret } from "../escritorio/crypto-utils";
 import { JuditClient } from "./judit-client";
+import { AsaasClient } from "./asaas-client";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-router-admin-integracoes");
 
@@ -48,6 +49,13 @@ const PROVEDORES: ProvedorMeta[] = [
     docUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api",
     services: ["Cloud API", "Webhooks", "CoEx", "Mensagens"],
   },
+  {
+    id: "asaas",
+    nome: "Asaas (Cobrança SaaS)",
+    descricao: "Gateway de pagamento para mensalidades dos escritórios assinantes do Jurify (substitui Stripe).",
+    docUrl: "https://docs.asaas.com/reference",
+    services: ["Assinaturas", "Boleto", "PIX", "Cartão", "Webhooks"],
+  },
 ];
 
 function getProvedorMeta(provedor: string): ProvedorMeta | undefined {
@@ -75,6 +83,19 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
       } catch {
         return { ok: false, mensagem: "Formato invalido. Esperado JSON com appId, appSecret, webhookVerifyToken" };
       }
+    }
+    case "asaas": {
+      // Mesma classe AsaasClient que escritórios usam — só que aqui é a key
+      // do ADMIN, usada pra cobrar a mensalidade dos próprios escritórios.
+      const client = new AsaasClient(apiKey);
+      const r = await client.testarConexao();
+      if (!r.ok) return r;
+      return {
+        ok: true,
+        mensagem: `Asaas (${r.modo}) conectado. Saldo: R$ ${(r.saldo ?? 0).toFixed(2)}`,
+        modo: r.modo,
+        saldo: r.saldo,
+      };
     }
     default:
       return { ok: false, mensagem: `Provedor "${provedor}" não suportado` };
@@ -291,6 +312,67 @@ export const adminIntegracoesRouter = router({
         .where(eq(adminIntegracoes.provedor, input.provedor));
 
       return teste;
+    }),
+
+  /**
+   * Configura o webhook do Asaas automaticamente.
+   *
+   * Em vez do admin ter que abrir o painel do Asaas, ir em
+   * Configurações → Webhooks e colar a URL e o token, este endpoint
+   * faz a chamada via API do Asaas, registrando o webhook do Jurify
+   * com o webhookSecret armazenado.
+   *
+   * Idempotente: chamar de novo apenas atualiza a configuração.
+   */
+  configurarWebhookAsaas: adminProcedure
+    .input(z.object({
+      baseUrl: z.string().url(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database não disponível");
+
+      const [reg] = await db
+        .select()
+        .from(adminIntegracoes)
+        .where(eq(adminIntegracoes.provedor, "asaas"))
+        .limit(1);
+
+      if (!reg || !reg.apiKeyEncrypted || !reg.apiKeyIv || !reg.apiKeyTag) {
+        throw new Error("Asaas não está conectado. Conecte primeiro com a API key.");
+      }
+      if (!reg.webhookSecret) {
+        throw new Error("webhookSecret ausente — desconecte e reconecte o Asaas.");
+      }
+
+      const apiKey = decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
+      const client = new AsaasClient(apiKey);
+
+      // Monta a URL completa do webhook do Jurify
+      const webhookUrl = `${input.baseUrl.replace(/\/$/, "")}/api/webhooks/asaas-billing`;
+
+      try {
+        await client.configurarWebhook(webhookUrl, reg.webhookSecret);
+        log.info({ webhookUrl }, "Webhook Asaas configurado automaticamente");
+
+        // Atualizar registro com a URL configurada
+        await db
+          .update(adminIntegracoes)
+          .set({ webhookUrl, ultimoTeste: new Date(), mensagemErro: null })
+          .where(eq(adminIntegracoes.provedor, "asaas"));
+
+        return {
+          ok: true,
+          mensagem: `Webhook configurado em ${webhookUrl}`,
+          webhookUrl,
+        };
+      } catch (err: any) {
+        const detalhe = err.response?.data
+          ? JSON.stringify(err.response.data).slice(0, 300)
+          : err.message;
+        log.error({ err: detalhe }, "Falha ao configurar webhook Asaas");
+        throw new Error(`Falha ao configurar webhook: ${detalhe}`);
+      }
     }),
 
   /**

@@ -68,20 +68,63 @@ export const WHATSAPP_STATUS_CORES: Record<WhatsappSessionStatus, string> = {
   banido: "text-red-800 bg-red-100 border-red-300",
 };
 
-/** Formata JID para número de telefone limpo */
+/**
+ * Formata JID para número de telefone limpo.
+ *
+ * IMPORTANTE: WhatsApp tem 2 tipos de identificadores:
+ *   1. Phone Number (PN): "5511999999999@s.whatsapp.net" — número real
+ *   2. Linked ID (LID):  "123456789012345@lid"          — id interno opaco
+ *
+ * Quando um contato responde, dependendo da versão do WhatsApp e do protocolo
+ * de criptografia, o JID pode vir como LID. O número do LID NÃO é um telefone
+ * — usar isso como `telefone` causa duplicação de contato.
+ *
+ * Esta função retorna apenas a parte numérica de JIDs do tipo PN, ou string
+ * vazia para LIDs (que devem ser tratados pelo chamador via senderPn/lookups).
+ */
 export function jidToPhone(jid: string): string {
-  // Remover sufixos de JID do WhatsApp
+  if (!jid) return "";
+  // LID não é um telefone — caller deve usar senderPn ou lookup por chatId
+  if (jid.endsWith("@lid")) return "";
   return jid
     .replace(/@s\.whatsapp\.net$/, "")
     .replace(/@g\.us$/, "")
-    .replace(/@lid$/, "")
     .replace(/@.*$/, ""); // Catch-all para qualquer outro sufixo
+}
+
+/** Verifica se um JID é do tipo LID (linked id, não-telefone) */
+export function isLidJid(jid: string): boolean {
+  return !!jid && jid.endsWith("@lid");
 }
 
 /** Formata número de telefone para JID */
 export function phoneToJid(phone: string): string {
   const clean = phone.replace(/\D/g, "");
   return `${clean}@s.whatsapp.net`;
+}
+
+/**
+ * Normaliza um número brasileiro:
+ *   - Remove tudo que não for dígito
+ *   - Garante prefixo 55 (Brasil) se não tiver
+ *   - Garante o "9" do celular após DDD se faltar
+ *
+ * Aceita formatos:
+ *   "85999990000"          -> "5585999990000"
+ *   "(85) 99999-0000"      -> "5585999990000"
+ *   "+55 85 99999-0000"    -> "5585999990000"
+ *   "5585999990000"        -> "5585999990000"
+ */
+export function normalizePhoneBR(input: string): string {
+  let clean = (input || "").replace(/\D/g, "");
+  if (!clean) return "";
+  // Se começar com 0, remover (acesso de longa distância)
+  if (clean.startsWith("0")) clean = clean.slice(1);
+  // Se não tem DDI, adiciona 55
+  if (clean.length === 10 || clean.length === 11) {
+    clean = "55" + clean;
+  }
+  return clean;
 }
 
 /** Formata número BR para exibição: +55 (11) 99999-9999 */

@@ -85,12 +85,28 @@ function WhatsAppCloudForm({ onConnect, isConnecting }: { onConnect: (json: stri
   );
 }
 
-// Logo SVG inline para a Judit (verde institucional)
+// Logo SVG inline para cada integração
 function IntegrationLogo({ id, className }: { id: string; className?: string }) {
   if (id === "whatsapp_cloud") {
     return (
       <div className={`flex items-center justify-center rounded-lg bg-emerald-600/10 ${className}`}>
         <span className="text-lg">💬</span>
+      </div>
+    );
+  }
+  if (id === "asaas") {
+    // Marca do Asaas — círculo com cifrão estilizado em azul institucional
+    return (
+      <div className={`flex items-center justify-center rounded-lg bg-sky-500/10 ${className}`}>
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="10" fill="#1969E5" />
+          <path
+            d="M12 6.5v11M9.5 9.2c0-1.1.9-2 2-2h1.5c1.1 0 2 .9 2 2 0 1-.7 1.7-1.6 1.9l-2.3.4c-1 .2-1.6.9-1.6 1.9 0 1.1.9 2 2 2H14c1.1 0 2-.9 2-2"
+            stroke="#fff"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
       </div>
     );
   }
@@ -148,6 +164,23 @@ function IntegracaoCard({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isRetesting, setIsRetesting] = useState(false);
+  const [isConfigWebhook, setIsConfigWebhook] = useState(false);
+
+  const configWebhookMutation = trpc.adminIntegracoes.configurarWebhookAsaas.useMutation({
+    onSuccess: (res) => {
+      toast.success("Webhook configurado!", { description: res.mensagem });
+      onRefresh();
+    },
+    onError: (err) => {
+      toast.error("Falha ao configurar webhook", { description: err.message });
+    },
+    onSettled: () => setIsConfigWebhook(false),
+  });
+
+  const handleConfigWebhook = () => {
+    setIsConfigWebhook(true);
+    configWebhookMutation.mutate({ baseUrl: window.location.origin });
+  };
 
   const salvarMutation = trpc.adminIntegracoes.salvar.useMutation({
     onSuccess: () => {
@@ -287,7 +320,7 @@ function IntegracaoCard({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -302,6 +335,25 @@ function IntegracaoCard({
                 )}
                 Retestar
               </Button>
+
+              {/* Botão exclusivo do Asaas: configurar webhook automaticamente */}
+              {integracao.id === "asaas" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleConfigWebhook}
+                  disabled={isConfigWebhook}
+                  className="text-xs"
+                  title="Cadastra automaticamente o webhook do Jurify no painel do Asaas, evitando configuração manual"
+                >
+                  {isConfigWebhook ? (
+                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  ) : (
+                    <Plug className="h-3 w-3 mr-1.5" />
+                  )}
+                  Configurar webhook
+                </Button>
+              )}
 
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -326,9 +378,11 @@ function IntegracaoCard({
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       A API key será removida do sistema. Você precisará inserir
-                      uma nova key para reconectar. Monitoramentos ativos na
-                      Judit continuarão funcionando no lado deles, mas o sistema
-                      não poderá mais consultá-los.
+                      uma nova key para reconectar. {integracao.id === "asaas" ? (
+                        "Assinaturas ativas dos escritórios continuarão sendo cobradas pelo Asaas — o sistema só não poderá criar novas até reconectar."
+                      ) : (
+                        "Recursos ativos no provedor continuarão funcionando no lado deles, mas o sistema não poderá mais consultá-los."
+                      )}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -426,16 +480,35 @@ function IntegracaoCard({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                A key será criptografada (AES-256) antes de ser salva. Obtenha sua key no{" "}
-                <a
-                  href="https://plataforma.judit.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground transition-colors"
-                >
-                  painel da Judit
-                </a>
-                .
+                A key será criptografada (AES-256) antes de ser salva.
+                {integracao.id === "asaas" ? (
+                  <>
+                    {" "}Obtenha sua API key em{" "}
+                    <a
+                      href="https://www.asaas.com/config/integracao"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground transition-colors"
+                    >
+                      Asaas → Configurações → Integrações
+                    </a>
+                    . Use a key sandbox (<code>$aact_YTU5...</code>) para testes ou production
+                    para produção. O sistema detecta o modo automaticamente.
+                  </>
+                ) : (
+                  <>
+                    {" "}Obtenha sua key no{" "}
+                    <a
+                      href="https://plataforma.judit.io"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground transition-colors"
+                    >
+                      painel da Judit
+                    </a>
+                    .
+                  </>
+                )}
               </p>
             </div>
             )}

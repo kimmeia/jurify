@@ -25,6 +25,13 @@ export type SessionPayload = {
   openId: string;
   appId: string;
   name: string;
+  /**
+   * Impersonation: quando um admin "entra como" outro usuário, o JWT
+   * contém o openId do usuário-alvo (campo openId acima) e o openId
+   * do admin que iniciou a impersonation aqui. Toda ação fica auditada
+   * em nome do admin original.
+   */
+  impersonatedBy?: string;
 };
 
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
@@ -188,11 +195,16 @@ class SDKServer {
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 
-    return new SignJWT({
+    const claims: Record<string, unknown> = {
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
-    })
+    };
+    if (payload.impersonatedBy) {
+      claims.impersonatedBy = payload.impersonatedBy;
+    }
+
+    return new SignJWT(claims)
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
@@ -200,7 +212,12 @@ class SDKServer {
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  ): Promise<{
+    openId: string;
+    appId: string;
+    name: string;
+    impersonatedBy?: string;
+  } | null> {
     if (!cookieValue) {
       log.debug("Missing session cookie");
       return null;
@@ -211,7 +228,7 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, appId, name, impersonatedBy } = payload as Record<string, unknown>;
 
       // Apenas openId é obrigatório. appId e name têm defaults razoáveis
       // pra suportar JWTs gerados sem essas variáveis configuradas.
@@ -224,6 +241,7 @@ class SDKServer {
         openId,
         appId: isNonEmptyString(appId) ? appId : "jurify",
         name: isNonEmptyString(name) ? name : "Usuário",
+        impersonatedBy: isNonEmptyString(impersonatedBy) ? impersonatedBy : undefined,
       };
     } catch (error) {
       log.warn({ err: String(error) }, "Session verification failed");
@@ -255,7 +273,7 @@ class SDKServer {
     } as GetUserInfoWithJwtResponse;
   }
 
-  async authenticateRequest(req: Request): Promise<User> {
+  async authenticateRequest(req: Request): Promise<User & { impersonatedBy?: string }> {
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
@@ -291,12 +309,30 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    // ─── Bloqueio de conta ────────────────────────────────────────────
+    // Usuários bloqueados pelo admin não conseguem mais autenticar.
+    // EXCEÇÃO: o admin que está impersonando — verificamos contra o
+    // impersonator, não contra o user-alvo.
+    if (user.bloqueado && !session.impersonatedBy) {
+      log.warn(
+        { userId: user.id, motivo: user.motivoBloqueio },
+        "Tentativa de login de usuário bloqueado",
+      );
+      throw ForbiddenError(
+        `Conta bloqueada${user.motivoBloqueio ? `: ${user.motivoBloqueio}` : ""}. Entre em contato com o suporte.`,
+      );
+    }
 
-    return user;
+    // Atualiza lastSignedIn (mas só se NÃO for impersonation, pra não
+    // bagunçar o "último acesso" real do usuário-alvo)
+    if (!session.impersonatedBy) {
+      await db.upsertUser({
+        openId: user.openId,
+        lastSignedIn: signedInAt,
+      });
+    }
+
+    return { ...user, impersonatedBy: session.impersonatedBy };
   }
 }
 

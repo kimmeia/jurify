@@ -33,6 +33,10 @@ import {
   ShieldCheck,
   BarChart3,
   Plug,
+  ScrollText,
+  AlertTriangle,
+  Package,
+  Tag,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -169,7 +173,11 @@ function AdminSidebarContent({
     { icon: LayoutDashboard, label: "Visão Geral", path: "/admin" },
     { icon: Users, label: "Clientes", path: "/admin/clients" },
     { icon: CreditCard, label: "Assinaturas", path: "/admin/subscriptions" },
+    { icon: AlertTriangle, label: "Inadimplência", path: "/admin/inadimplentes" },
+    { icon: Package, label: "Planos", path: "/admin/planos" },
+    { icon: Tag, label: "Cupons", path: "/admin/cupons" },
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
+    { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
     { icon: Plug, label: "Integrações", path: "/admin/integrations" },
     { icon: Settings, label: "Configurações", path: "/admin/settings" },
   ];

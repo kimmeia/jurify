@@ -195,6 +195,364 @@ async function ensureAuthColumns(connection: mysql.Connection): Promise<void> {
 }
 
 /**
+ * Migração: substitui Stripe por Asaas na tabela `subscriptions` e em `users`.
+ *
+ * - users.stripeCustomerId  → users.asaasCustomerId
+ * - subscriptions.stripeSubscriptionId → subscriptions.asaasSubscriptionId
+ * - subscriptions.stripePriceId        → REMOVIDO (não tem equivalente Asaas)
+ * - subscriptions.asaasCustomerId      → NOVO
+ *
+ * Estratégia: ADICIONA colunas novas (sem dropar as antigas), tornando
+ * stripeSubscriptionId/stripePriceId nullable. Bancos com dados antigos
+ * continuam funcionando — assinaturas Stripe legadas podem coexistir
+ * com assinaturas Asaas novas até serem migradas manualmente.
+ */
+async function ensureAsaasBillingColumns(connection: mysql.Connection): Promise<void> {
+  try {
+    // ─── users.asaasCustomerId ────────────────────────────────────────
+    const [userTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+    );
+    if ((userTables as unknown[]).length > 0) {
+      const [userCols] = await connection.query(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+      );
+      const userColSet = new Set(
+        (userCols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+      );
+      if (!userColSet.has("asaasCustomerId")) {
+        try {
+          await connection.query(
+            "ALTER TABLE users ADD COLUMN asaasCustomerId VARCHAR(255) NULL",
+          );
+          log.info("ensureAsaasBillingColumns: users.asaasCustomerId adicionada");
+        } catch (err: any) {
+          if (!isHarmlessError(err.message || String(err))) {
+            log.warn({ err: err.message }, "Falha ao adicionar users.asaasCustomerId");
+          }
+        }
+      }
+    }
+
+    // ─── subscriptions: asaasSubscriptionId, asaasCustomerId ──────────
+    const [subTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'`,
+    );
+    if ((subTables as unknown[]).length === 0) {
+      log.debug("Tabela 'subscriptions' não existe — pulando ensureAsaasBillingColumns");
+      return;
+    }
+
+    const [subCols] = await connection.query(
+      `SELECT COLUMN_NAME, IS_NULLABLE FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'`,
+    );
+    const subColMap = new Map(
+      (subCols as { COLUMN_NAME: string; IS_NULLABLE: string }[]).map(
+        (c) => [c.COLUMN_NAME, c.IS_NULLABLE],
+      ),
+    );
+
+    const ops: { name: string; sql: string }[] = [];
+
+    if (!subColMap.has("asaasSubscriptionId")) {
+      ops.push({
+        name: "ADD asaasSubscriptionId",
+        sql: "ALTER TABLE subscriptions ADD COLUMN asaasSubscriptionId VARCHAR(255) NULL",
+      });
+    }
+    if (!subColMap.has("asaasCustomerId")) {
+      ops.push({
+        name: "ADD asaasCustomerId",
+        sql: "ALTER TABLE subscriptions ADD COLUMN asaasCustomerId VARCHAR(255) NULL",
+      });
+    }
+    // Tornar stripeSubscriptionId nullable (se ainda existir e for NOT NULL)
+    if (subColMap.get("stripeSubscriptionId") === "NO") {
+      ops.push({
+        name: "stripeSubscriptionId → NULL",
+        sql: "ALTER TABLE subscriptions MODIFY COLUMN stripeSubscriptionId VARCHAR(255) NULL",
+      });
+    }
+    if (subColMap.get("stripePriceId") === "NO") {
+      ops.push({
+        name: "stripePriceId → NULL",
+        sql: "ALTER TABLE subscriptions MODIFY COLUMN stripePriceId VARCHAR(255) NULL",
+      });
+    }
+
+    if (ops.length === 0) {
+      log.debug("ensureAsaasBillingColumns: schema já está atualizado");
+    } else {
+      log.info({ ops: ops.map((o) => o.name) }, "ensureAsaasBillingColumns: aplicando");
+      for (const op of ops) {
+        try {
+          await connection.query(op.sql);
+          log.info({ op: op.name }, "ensureAsaasBillingColumns: aplicado");
+        } catch (err: any) {
+          if (!isHarmlessError(err.message || String(err))) {
+            log.warn({ op: op.name, err: err.message }, "ensureAsaasBillingColumns: falha");
+          }
+        }
+      }
+    }
+
+    // Índice único em asaasSubscriptionId (idempotente)
+    try {
+      await connection.query(
+        "CREATE UNIQUE INDEX uniq_subscriptions_asaasSubscriptionId ON subscriptions (asaasSubscriptionId)",
+      );
+      log.info("ensureAsaasBillingColumns: índice único criado");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.debug({ err: err.message }, "Índice asaasSubscriptionId já existe ou falhou");
+      }
+    }
+
+    // ─── Cancelamento de subs órfãs (Stripe legado sem Asaas) ─────────
+    // Linhas que tinham stripeSubscriptionId mas não foram migradas
+    // ficam órfãs: ainda aparecem como "active" mas não têm
+    // asaasSubscriptionId, então cancel/changePlan quebram. Marcamos
+    // como "canceled" — o usuário precisa criar nova assinatura no
+    // Asaas via /plans.
+    if (subColMap.has("stripeSubscriptionId")) {
+      try {
+        const [orphans] = await connection.query(
+          `SELECT COUNT(*) AS total FROM subscriptions
+           WHERE stripeSubscriptionId IS NOT NULL
+             AND (asaasSubscriptionId IS NULL OR asaasSubscriptionId = '')
+             AND status IN ('active', 'trialing', 'past_due')`,
+        );
+        const total = Number((orphans as { total: number }[])[0]?.total || 0);
+        if (total > 0) {
+          log.warn(
+            { total },
+            "Encontradas assinaturas Stripe legadas sem migração — marcando como canceladas",
+          );
+          await connection.query(
+            `UPDATE subscriptions
+             SET status = 'canceled'
+             WHERE stripeSubscriptionId IS NOT NULL
+               AND (asaasSubscriptionId IS NULL OR asaasSubscriptionId = '')
+               AND status IN ('active', 'trialing', 'past_due')`,
+          );
+          log.info(
+            { total },
+            "ensureAsaasBillingColumns: subs Stripe órfãs canceladas — usuários precisam reasinar via Asaas",
+          );
+        }
+      } catch (err: any) {
+        log.warn(
+          { err: err.message },
+          "ensureAsaasBillingColumns: falha ao cancelar subs Stripe órfãs",
+        );
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureAsaasBillingColumns: erro inesperado");
+  }
+}
+
+/**
+ * Sprint 1 — Controle de cliente:
+ *   - users.bloqueado / motivoBloqueio / bloqueadoEm
+ *   - escritorios.suspenso / motivoSuspensao / suspensoEm
+ *   - tabela cliente_notas_admin (notas internas do admin)
+ */
+async function ensureClienteControlSchema(connection: mysql.Connection): Promise<void> {
+  try {
+    // ─── users: colunas de bloqueio ───────────────────────────────────
+    const [userCols] = await connection.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'`,
+    );
+    const userColSet = new Set(
+      (userCols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+    );
+
+    if (!userColSet.has("bloqueado")) {
+      await connection
+        .query("ALTER TABLE users ADD COLUMN bloqueado BOOLEAN NOT NULL DEFAULT FALSE")
+        .then(() => log.info("users.bloqueado adicionada"))
+        .catch((err: any) => {
+          if (!isHarmlessError(err.message || String(err)))
+            log.warn({ err: err.message }, "Falha ao adicionar users.bloqueado");
+        });
+    }
+    if (!userColSet.has("motivoBloqueio")) {
+      await connection
+        .query("ALTER TABLE users ADD COLUMN motivoBloqueio VARCHAR(500) NULL")
+        .then(() => log.info("users.motivoBloqueio adicionada"))
+        .catch((err: any) => {
+          if (!isHarmlessError(err.message || String(err)))
+            log.warn({ err: err.message }, "Falha ao adicionar users.motivoBloqueio");
+        });
+    }
+    if (!userColSet.has("bloqueadoEm")) {
+      await connection
+        .query("ALTER TABLE users ADD COLUMN bloqueadoEm TIMESTAMP NULL")
+        .then(() => log.info("users.bloqueadoEm adicionada"))
+        .catch((err: any) => {
+          if (!isHarmlessError(err.message || String(err)))
+            log.warn({ err: err.message }, "Falha ao adicionar users.bloqueadoEm");
+        });
+    }
+
+    // ─── escritorios: colunas de suspensão ────────────────────────────
+    const [escTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'escritorios'`,
+    );
+    if ((escTables as unknown[]).length > 0) {
+      const [escCols] = await connection.query(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'escritorios'`,
+      );
+      const escColSet = new Set(
+        (escCols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+      );
+
+      if (!escColSet.has("suspenso")) {
+        await connection
+          .query("ALTER TABLE escritorios ADD COLUMN suspenso BOOLEAN NOT NULL DEFAULT FALSE")
+          .then(() => log.info("escritorios.suspenso adicionada"))
+          .catch((err: any) => {
+            if (!isHarmlessError(err.message || String(err)))
+              log.warn({ err: err.message }, "Falha ao adicionar escritorios.suspenso");
+          });
+      }
+      if (!escColSet.has("motivoSuspensao")) {
+        await connection
+          .query("ALTER TABLE escritorios ADD COLUMN motivoSuspensao VARCHAR(500) NULL")
+          .then(() => log.info("escritorios.motivoSuspensao adicionada"))
+          .catch((err: any) => {
+            if (!isHarmlessError(err.message || String(err)))
+              log.warn({ err: err.message }, "Falha ao adicionar escritorios.motivoSuspensao");
+          });
+      }
+      if (!escColSet.has("suspensoEm")) {
+        await connection
+          .query("ALTER TABLE escritorios ADD COLUMN suspensoEm TIMESTAMP NULL")
+          .then(() => log.info("escritorios.suspensoEm adicionada"))
+          .catch((err: any) => {
+            if (!isHarmlessError(err.message || String(err)))
+              log.warn({ err: err.message }, "Falha ao adicionar escritorios.suspensoEm");
+          });
+      }
+    }
+
+    // ─── cliente_notas_admin: tabela inteira ──────────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS cliente_notas_admin (
+          id INT NOT NULL AUTO_INCREMENT,
+          userIdNota INT NOT NULL,
+          autorAdminIdNota INT NOT NULL,
+          conteudoNota TEXT NOT NULL,
+          categoriaNota ENUM('geral','financeiro','suporte','comercial','alerta') NOT NULL DEFAULT 'geral',
+          createdAtNota TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtNota TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_notas_user (userIdNota),
+          INDEX idx_notas_admin (autorAdminIdNota)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("cliente_notas_admin criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar cliente_notas_admin");
+      }
+    }
+
+    // ─── audit_log: tabela imutável de auditoria ──────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INT NOT NULL AUTO_INCREMENT,
+          actorUserIdAudit INT NOT NULL,
+          actorNameAudit VARCHAR(255),
+          acaoAudit VARCHAR(100) NOT NULL,
+          alvoTipoAudit VARCHAR(50),
+          alvoIdAudit INT,
+          alvoNomeAudit VARCHAR(255),
+          detalhesAudit TEXT,
+          ipAudit VARCHAR(64),
+          createdAtAudit TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_audit_actor (actorUserIdAudit),
+          INDEX idx_audit_acao (acaoAudit),
+          INDEX idx_audit_created (createdAtAudit)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("audit_log criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar audit_log");
+      }
+    }
+
+    // ─── planos_overrides: editar planos sem deploy ────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS planos_overrides (
+          id INT NOT NULL AUTO_INCREMENT,
+          planIdOverride VARCHAR(64) NOT NULL UNIQUE,
+          nameOverride VARCHAR(100),
+          descriptionOverride VARCHAR(500),
+          priceMonthlyOverride INT,
+          priceYearlyOverride INT,
+          featuresOverride TEXT,
+          popularOverride BOOLEAN,
+          ocultoOverride BOOLEAN DEFAULT FALSE,
+          updatedByOverride INT,
+          updatedAtOverride TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("planos_overrides criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar planos_overrides");
+      }
+    }
+
+    // ─── cupons: descontos promocionais ────────────────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS cupons (
+          id INT NOT NULL AUTO_INCREMENT,
+          codigoCupom VARCHAR(64) NOT NULL UNIQUE,
+          descricaoCupom VARCHAR(255),
+          tipoCupom ENUM('percentual','valorFixo') NOT NULL,
+          valorCupom INT NOT NULL,
+          validoDeCupom TIMESTAMP NULL,
+          validoAteCupom TIMESTAMP NULL,
+          maxUsosCupom INT,
+          usosCupom INT NOT NULL DEFAULT 0,
+          ativoCupom BOOLEAN NOT NULL DEFAULT TRUE,
+          planosIdsCupom VARCHAR(500),
+          criadoPorCupom INT,
+          createdAtCupom TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtCupom TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_cupons_ativo (ativoCupom)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("cupons criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar cupons");
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
+  }
+}
+
+/**
  * Garante que a tabela `contatos` tem a coluna `telefonesAnteriores`.
  * Usado pelo handler do WhatsApp pra reconhecer contatos que tiveram o
  * telefone alterado — evita criar contatos duplicados quando chega
@@ -303,6 +661,8 @@ export async function runMigrations(): Promise<void> {
     // Roda SEMPRE, independente das migrations baseadas em arquivo.
     await ensureAuthColumns(connection);
     await ensureContatoColumns(connection);
+    await ensureAsaasBillingColumns(connection);
+    await ensureClienteControlSchema(connection);
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

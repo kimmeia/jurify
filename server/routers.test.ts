@@ -23,7 +23,7 @@ function createUserContext(
     name: "Test User",
     loginMethod: "manus",
     role,
-    stripeCustomerId: null,
+    asaasCustomerId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -102,11 +102,10 @@ describe("subscription.plans", () => {
     const { ctx } = createAnonymousContext();
     const caller = appRouter.createCaller(ctx);
     const plans = await caller.subscription.plans();
-    expect(plans).toHaveLength(4);
-    expect(plans[0].id).toBe("avulso");
-    expect(plans[1].id).toBe("essencial");
-    expect(plans[2].id).toBe("profissional");
-    expect(plans[3].id).toBe("ilimitado");
+    expect(plans).toHaveLength(3);
+    expect(plans[0].id).toBe("iniciante");
+    expect(plans[1].id).toBe("profissional");
+    expect(plans[2].id).toBe("escritorio");
   });
 
   it("plans have required fields", async () => {

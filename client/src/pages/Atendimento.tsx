@@ -157,17 +157,49 @@ function TwilioCallPopup({ phone, onClose }: { phone: string; onClose: () => voi
   </div></div>);
 }
 
+/**
+ * Aplica máscara brasileira no telefone enquanto o usuário digita.
+ * Aceita até 11 dígitos (DDD + 9 dígitos do celular). O DDI 55 é
+ * adicionado automaticamente no envio.
+ *
+ *   "11999990000"   -> "(11) 99999-0000"
+ *   "1199999"       -> "(11) 9999-9"
+ *   "11"            -> "(11) "
+ */
+function maskPhoneBR(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+/** Valida se o telefone tem ao menos DDD + número (10 ou 11 dígitos) */
+function isValidPhoneBR(value: string): boolean {
+  const d = value.replace(/\D/g, "");
+  return d.length === 10 || d.length === 11;
+}
+
 function IniciarConversaDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: (id: number) => void }) {
   const [tel, setTel] = useState(""); const [nome, setNome] = useState(""); const [msg, setMsg] = useState(""); const [canalId, setCanalId] = useState<number | null>(null);
   const { data: canais } = trpc.configuracoes.listarCanais.useQuery();
   const waCh = (canais?.canais || []).filter((c: any) => c.tipo === "whatsapp_qr" && c.status === "conectado");
   useEffect(() => { if (waCh.length > 0 && !canalId) setCanalId(waCh[0].id); }, [waCh, canalId]);
   const ini = trpc.crm.iniciarConversa.useMutation({ onSuccess: (r: any) => { toast.success("Conversa iniciada!"); onOpenChange(false); setTel(""); setNome(""); setMsg(""); onSuccess(r.conversaId); }, onError: (e: any) => toast.error(e.message) });
+  const telDigits = tel.replace(/\D/g, "");
+  const telValido = isValidPhoneBR(tel);
+  const handleEnviar = () => {
+    if (!canalId || !msg) return;
+    if (!telValido) { toast.error("Telefone inválido. Use DDD + número (ex: (11) 99999-0000)"); return; }
+    // Envia só os dígitos — o servidor adiciona DDI 55 e converte para JID
+    ini.mutate({ telefone: telDigits, nome: nome || undefined, mensagem: msg, canalId });
+  };
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600" /> Nova Conversa</DialogTitle></DialogHeader>
-    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="5585999990000" value={tel} onChange={(e) => setTel(e.target.value)} /></div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
+    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-red-400" : ""} />{tel && !telValido && <p className="text-[10px] text-red-500">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
     <div className="space-y-1.5"><Label>Mensagem *</Label><Input placeholder="Olá! Como posso ajudar?" value={msg} onChange={(e) => setMsg(e.target.value)} /></div>
     {waCh.length === 0 && <p className="text-xs text-red-600">Nenhum WhatsApp conectado.</p>}</div>
-    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { if (canalId && tel && msg) ini.mutate({ telefone: tel, nome: nome || undefined, mensagem: msg, canalId }); }} disabled={!tel || !msg || !canalId || ini.isPending}>{ini.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar</Button></DialogFooter>
+    <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleEnviar} disabled={!telValido || !msg || !canalId || ini.isPending}>{ini.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar</Button></DialogFooter>
   </DialogContent></Dialog>);
 }
 
