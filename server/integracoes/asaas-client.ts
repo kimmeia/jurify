@@ -112,6 +112,11 @@ export interface AsaasPaymentInput {
   fine?: { value: number; type?: "FIXED" | "PERCENTAGE" };
   interest?: { value: number; type?: "FIXED" | "PERCENTAGE" };
   discount?: { value: number; dueDateLimitDays: number; type?: "FIXED" | "PERCENTAGE" };
+  /** Redirect automático após pagamento (PIX/cartão apenas) */
+  callback?: {
+    successUrl: string;
+    autoRedirect?: boolean;
+  };
 }
 
 export interface AsaasPixQrCode {
@@ -146,6 +151,21 @@ export interface AsaasSubscription {
   externalReference?: string;
 }
 
+export interface AsaasCallbackConfig {
+  /**
+   * URL para onde o cliente é redirecionado após pagamento confirmado.
+   * Só funciona pra métodos com confirmação instantânea: PIX, cartão.
+   * Boleto NÃO faz auto-redirect (compensação é assíncrona).
+   *
+   * IMPORTANTE: o domínio desta URL precisa estar cadastrado nos dados
+   * comerciais da conta Asaas (Configurações da Conta → Informações),
+   * senão o redirecionamento falha.
+   */
+  successUrl: string;
+  /** true = redireciona automaticamente, false = mostra botão "Ir para o site" */
+  autoRedirect?: boolean;
+}
+
 export interface AsaasSubscriptionInput {
   customer: string;
   billingType: AsaasBillingType;
@@ -156,6 +176,7 @@ export interface AsaasSubscriptionInput {
   externalReference?: string;
   fine?: { value: number; type?: "FIXED" | "PERCENTAGE" };
   interest?: { value: number; type?: "FIXED" | "PERCENTAGE" };
+  callback?: AsaasCallbackConfig;
 }
 
 export interface AsaasInstallmentInput {

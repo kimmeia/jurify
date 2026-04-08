@@ -36,6 +36,34 @@ function dataVencimentoPadrao(): string {
 }
 
 /**
+ * Constrói a URL de sucesso para o callback do Asaas.
+ *
+ * A URL é montada a partir do `origin` da request (respeitando proxy
+ * reverso como Railway). Aponta pra `/checkout/success` no frontend,
+ * que vai detectar a ativação via polling e redirecionar pro dashboard.
+ *
+ * IMPORTANTE: o domínio precisa estar cadastrado nos dados comerciais
+ * da conta Asaas (Configurações → Informações), senão o redirect falha
+ * silenciosamente.
+ */
+function buildSuccessUrl(ctx: { req: any }): string {
+  const req = ctx.req;
+  const proto =
+    req.headers?.["x-forwarded-proto"]?.toString().split(",")[0]?.trim() ||
+    req.protocol ||
+    "https";
+  const host =
+    req.headers?.["x-forwarded-host"]?.toString().split(",")[0]?.trim() ||
+    req.headers?.host ||
+    "";
+  // Fallback: se nada detectou, usa o origin vindo do header (caso de CORS)
+  const origin =
+    req.headers?.origin?.toString() ||
+    (host ? `${proto}://${host}` : "");
+  return origin ? `${origin}/checkout/success` : "/checkout/success";
+}
+
+/**
  * Garante que existe um Customer no Asaas para este usuário.
  * Reutiliza o existente via users.asaasCustomerId; se não existir, cria
  * usando o CPF/CNPJ informado pelo cliente.
@@ -147,6 +175,7 @@ export const subscriptionRouter = router({
       const value =
         input.interval === "monthly" ? plan.priceMonthly : plan.priceYearly;
 
+      const successUrl = buildSuccessUrl(ctx);
       const sub = await client.criarAssinatura({
         customer: customerId,
         billingType: "UNDEFINED", // cliente escolhe PIX/boleto/cartão
@@ -155,6 +184,12 @@ export const subscriptionRouter = router({
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
         description: `${plan.name} — Jurify SaaS`,
         externalReference: `${ctx.user.id}:${input.planId}`,
+        // Redirect automático após pagamento (PIX/cartão). Boleto não
+        // redireciona porque a confirmação é assíncrona.
+        callback: {
+          successUrl,
+          autoRedirect: true,
+        },
       });
 
       // ─── CRIAR ROW LOCAL IMEDIATAMENTE ────────────────────────────────
@@ -281,6 +316,7 @@ export const subscriptionRouter = router({
           ? newPlan.priceMonthly
           : newPlan.priceYearly;
 
+      const successUrl = buildSuccessUrl(ctx);
       const sub = await client.criarAssinatura({
         customer: customerId,
         billingType: "UNDEFINED",
@@ -289,6 +325,10 @@ export const subscriptionRouter = router({
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
         description: `${newPlan.name} — Jurify SaaS`,
         externalReference: `${ctx.user.id}:${input.newPlanId}`,
+        callback: {
+          successUrl,
+          autoRedirect: true,
+        },
       });
 
       // Cria row local imediatamente (mesma lógica do createCheckout)
