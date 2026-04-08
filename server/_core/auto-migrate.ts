@@ -599,6 +599,65 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
         log.warn({ err: err.message }, "Falha ao criar agente_documentos");
       }
     }
+
+    // ─── agentes_ia: adicionar colunas areaConhecimento + modulosPermitidos
+    try {
+      const [cols] = await connection.query(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agentes_ia'`,
+      );
+      const colSet = new Set(
+        (cols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+      );
+      if (colSet.size > 0) {
+        if (!colSet.has("areaConhecimentoAgenteIa")) {
+          await connection
+            .query("ALTER TABLE agentes_ia ADD COLUMN areaConhecimentoAgenteIa VARCHAR(128) NULL")
+            .then(() => log.info("agentes_ia.areaConhecimentoAgenteIa adicionada"))
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha ao adicionar areaConhecimentoAgenteIa");
+            });
+        }
+        if (!colSet.has("modulosPermitidosAgenteIa")) {
+          await connection
+            .query("ALTER TABLE agentes_ia ADD COLUMN modulosPermitidosAgenteIa VARCHAR(500) NULL")
+            .then(() => log.info("agentes_ia.modulosPermitidosAgenteIa adicionada"))
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha ao adicionar modulosPermitidosAgenteIa");
+            });
+        }
+      }
+    } catch (err: any) {
+      log.warn({ err: err.message }, "Falha ao atualizar agentes_ia columns");
+    }
+
+    // ─── agente_ia_documentos: training docs do escritório ─────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agente_ia_documentos (
+          id INT NOT NULL AUTO_INCREMENT,
+          agenteIdIaDoc INT NOT NULL,
+          escritorioIdIaDoc INT NOT NULL,
+          nomeIaDoc VARCHAR(255) NOT NULL,
+          tipoIaDoc ENUM('arquivo','link','texto') NOT NULL,
+          urlIaDoc VARCHAR(1024),
+          conteudoIaDoc TEXT,
+          tamanhoIaDoc INT,
+          mimeTypeIaDoc VARCHAR(128),
+          createdAtIaDoc TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_iadoc_agente (agenteIdIaDoc),
+          INDEX idx_iadoc_escritorio (escritorioIdIaDoc)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("agente_ia_documentos criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar agente_ia_documentos");
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
   }

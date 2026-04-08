@@ -564,6 +564,12 @@ export const agentesIa = mysqlTable("agentes_ia", {
   escritorioId: int("escritorioId").notNull(),
   nome: varchar("nome", { length: 128 }).notNull(),
   descricao: varchar("descricao", { length: 512 }),
+  /**
+   * Área de especialização do agente (ex: "Direito Trabalhista", "Análise
+   * Processual", "Recepção"). Usada pra categorizar na UI e filtrar quando
+   * outros módulos precisam selecionar qual agente invocar.
+   */
+  areaConhecimento: varchar("areaConhecimentoAgenteIa", { length: 128 }),
   modelo: varchar("modelo", { length: 64 }).notNull().default("gpt-4o-mini"),
   prompt: text("prompt").notNull(),
   ativo: boolean("ativo").notNull().default(false),
@@ -573,12 +579,42 @@ export const agentesIa = mysqlTable("agentes_ia", {
   apiKeyTag: varchar("apiKeyTag", { length: 64 }),
   maxTokens: int("maxTokens").notNull().default(500),
   temperatura: varchar("temperatura", { length: 10 }).notNull().default("0.70"),
+  /**
+   * Módulos onde este agente pode ser invocado: CSV de
+   * "atendimento,analiseProcessual,resumos,documentos,calculos,pesquisa".
+   * Null/vazio = disponível em todos os módulos que suportarem agentes.
+   */
+  modulosPermitidos: varchar("modulosPermitidosAgenteIa", { length: 500 }),
   createdAt: timestamp("createdAtAgente").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgente").defaultNow().onUpdateNow().notNull(),
 });
 
 export type AgenteIa = typeof agentesIa.$inferSelect;
 export type InsertAgenteIa = typeof agentesIa.$inferInsert;
+
+/**
+ * Documentos de treinamento vinculados a um agente do escritório.
+ * Mesma estrutura da `agente_documentos` do admin mas scoped ao
+ * escritório (via `agenteId` → agentes_ia.id).
+ *
+ * Usado pra RAG: quando o agente é invocado, seu contexto inclui
+ * os documentos aqui listados.
+ */
+export const agenteIaDocumentos = mysqlTable("agente_ia_documentos", {
+  id: int("id").autoincrement().primaryKey(),
+  agenteId: int("agenteIdIaDoc").notNull(),
+  escritorioId: int("escritorioIdIaDoc").notNull(),
+  nome: varchar("nomeIaDoc", { length: 255 }).notNull(),
+  tipo: mysqlEnum("tipoIaDoc", ["arquivo", "link", "texto"]).notNull(),
+  url: varchar("urlIaDoc", { length: 1024 }),
+  conteudo: text("conteudoIaDoc"),
+  tamanho: int("tamanhoIaDoc"),
+  mimeType: varchar("mimeTypeIaDoc", { length: 128 }),
+  createdAt: timestamp("createdAtIaDoc").defaultNow().notNull(),
+});
+
+export type AgenteIaDocumento = typeof agenteIaDocumentos.$inferSelect;
+export type InsertAgenteIaDocumento = typeof agenteIaDocumentos.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FASE 5 — MÓDULO CLIENTES (Arquivos + Anotações)
