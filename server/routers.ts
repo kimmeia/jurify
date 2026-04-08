@@ -55,6 +55,7 @@ import { customer360Router } from "./routers/customer360";
 import { juditProcessosRouter } from "./routers/judit-processos";
 import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
+import { adminFinanceiroRouter } from "./routers/admin-financeiro";
 
 export const appRouter = router({
   system: systemRouter,
@@ -109,6 +110,7 @@ export const appRouter = router({
 
   // Administração do sistema (admin only)
   admin: adminRouter,
+  adminFinanceiro: adminFinanceiroRouter,
 });
 
 export type AppRouter = typeof appRouter;

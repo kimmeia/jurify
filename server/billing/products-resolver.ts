@@ -33,7 +33,9 @@ export async function getPlansResolved(incluirOcultos = false): Promise<PlanDefi
     if (overrides.length === 0) return DEFAULT_PLANS;
 
     const overrideMap = new Map(overrides.map((o) => [o.planId, o]));
+    const defaultIds = new Set(DEFAULT_PLANS.map((p) => p.id));
 
+    // 1. Planos hardcoded com overrides aplicados
     const merged = DEFAULT_PLANS.map((plan) => {
       const ov = overrideMap.get(plan.id);
       if (!ov) return plan;
@@ -60,10 +62,49 @@ export async function getPlansResolved(incluirOcultos = false): Promise<PlanDefi
       } as PlanDefinition & { oculto: boolean };
     });
 
-    if (!incluirOcultos) {
-      return merged.filter((p) => !(p as any).oculto);
+    // 2. Planos 100% customizados (não existem em DEFAULT_PLANS) —
+    //    criados pelo admin via /admin/planos. Precisam de TODOS os
+    //    campos preenchidos no override pra serem válidos.
+    const customPlans: (PlanDefinition & { oculto: boolean })[] = [];
+    for (const ov of overrides) {
+      if (defaultIds.has(ov.planId)) continue; // já processado acima
+
+      // Custom plan precisa ter name + priceMonthly pra ser exibível
+      if (!ov.name || ov.priceMonthly == null) {
+        log.warn({ planId: ov.planId }, "Custom plan sem campos obrigatórios");
+        continue;
+      }
+
+      let features: string[] = [];
+      if (ov.features) {
+        try {
+          const parsed = JSON.parse(ov.features);
+          if (Array.isArray(parsed)) features = parsed;
+        } catch {
+          /* ignore */
+        }
+      }
+
+      customPlans.push({
+        id: ov.planId,
+        name: ov.name,
+        description: ov.description ?? "",
+        features,
+        priceMonthly: ov.priceMonthly,
+        priceYearly: ov.priceYearly ?? ov.priceMonthly * 12,
+        currency: "brl",
+        popular: ov.popular ?? false,
+        creditsPerMonth: 0,
+        oculto: ov.oculto ?? false,
+      });
     }
-    return merged;
+
+    const all = [...merged, ...customPlans];
+
+    if (!incluirOcultos) {
+      return all.filter((p) => !(p as any).oculto);
+    }
+    return all;
   } catch (err) {
     log.error({ err: String(err) }, "Falha ao carregar overrides — usando hardcoded");
     return DEFAULT_PLANS;

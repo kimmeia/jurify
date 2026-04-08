@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Edit, Eye, EyeOff, RotateCcw, Loader2, Star, Plus, X, Check } from "lucide-react";
+import { Package, Edit, Eye, EyeOff, RotateCcw, Loader2, Star, Plus, X, Check, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -228,6 +228,7 @@ export default function AdminPlanos() {
   const { data: planos, isLoading, refetch } = trpc.admin.listarPlanosEditaveis.useQuery();
   const [editando, setEditando] = useState<PlanoEditavel | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [criarOpen, setCriarOpen] = useState(false);
 
   const resetMut = trpc.admin.resetarOverridePlano.useMutation({
     onSuccess: () => {
@@ -237,18 +238,32 @@ export default function AdminPlanos() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  const deletarCustomMut = trpc.admin.deletarPlanoPersonalizado.useMutation({
+    onSuccess: () => {
+      toast.success("Plano personalizado deletado");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro ao deletar", { description: err.message }),
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-          <Package className="h-6 w-6 text-violet-600" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
+            <Package className="h-6 w-6 text-violet-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Planos</h1>
+            <p className="text-muted-foreground mt-1">
+              Edite preços, features ou crie planos totalmente personalizados.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Planos</h1>
-          <p className="text-muted-foreground mt-1">
-            Edite preços, features e visibilidade dos planos sem precisar de deploy.
-          </p>
-        </div>
+        <Button onClick={() => setCriarOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Criar novo plano
+        </Button>
       </div>
 
       {isLoading ? (
@@ -281,9 +296,13 @@ export default function AdminPlanos() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-lg">{plan.name}</CardTitle>
-                  {plan.hasOverride && (
+                  {(plan as any).isCustom ? (
+                    <Badge className="bg-purple-500/15 text-purple-700 border-purple-500/30 text-[10px]">
+                      Personalizado
+                    </Badge>
+                  ) : plan.hasOverride ? (
                     <Badge variant="secondary" className="text-[10px]">Modificado</Badge>
-                  )}
+                  ) : null}
                 </div>
                 <CardDescription className="text-xs">{plan.description}</CardDescription>
                 <code className="text-[10px] text-muted-foreground">{plan.id}</code>
@@ -323,7 +342,21 @@ export default function AdminPlanos() {
                     <Edit className="h-3 w-3 mr-1" />
                     Editar
                   </Button>
-                  {plan.hasOverride && (
+                  {(plan as any).isCustom ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-destructive hover:text-destructive"
+                      title="Deletar plano personalizado (só se não houver assinantes)"
+                      onClick={() => {
+                        if (confirm(`Deletar plano "${plan.name}"? Esta ação não pode ser desfeita.`)) {
+                          deletarCustomMut.mutate({ planId: plan.id });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  ) : plan.hasOverride && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -351,6 +384,189 @@ export default function AdminPlanos() {
         onOpenChange={setEditOpen}
         onSaved={refetch}
       />
+
+      <CriarPlanoDialog
+        open={criarOpen}
+        onOpenChange={setCriarOpen}
+        onCreated={refetch}
+      />
     </div>
+  );
+}
+
+function CriarPlanoDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [priceMonthlyBRL, setPriceMonthlyBRL] = useState("");
+  const [priceYearlyBRL, setPriceYearlyBRL] = useState("");
+  const [features, setFeatures] = useState<string[]>([]);
+  const [novaFeature, setNovaFeature] = useState("");
+  const [popular, setPopular] = useState(false);
+  const [oculto, setOculto] = useState(false);
+
+  const criarMut = trpc.admin.criarPlanoPersonalizado.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.mensagem);
+      setName("");
+      setDescription("");
+      setPriceMonthlyBRL("");
+      setPriceYearlyBRL("");
+      setFeatures([]);
+      setNovaFeature("");
+      setPopular(false);
+      setOculto(false);
+      onCreated();
+      onOpenChange(false);
+    },
+    onError: (err) => toast.error("Erro ao criar plano", { description: err.message }),
+  });
+
+  const handleSave = () => {
+    if (!name.trim()) { toast.error("Informe o nome"); return; }
+    const monthlyCents = Math.round(parseFloat(priceMonthlyBRL.replace(",", ".")) * 100);
+    const yearlyCents = Math.round(parseFloat(priceYearlyBRL.replace(",", ".")) * 100);
+    if (isNaN(monthlyCents) || monthlyCents < 0) {
+      toast.error("Preço mensal inválido");
+      return;
+    }
+    criarMut.mutate({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      priceMonthly: monthlyCents,
+      priceYearly: isNaN(yearlyCents) ? monthlyCents * 12 : yearlyCents,
+      features,
+      popular,
+      oculto,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Criar plano personalizado</DialogTitle>
+          <DialogDescription>
+            Crie um plano que NÃO existe no código hardcoded. Armazenado
+            exclusivamente no banco — pode ser deletado a qualquer momento.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Nome *</Label>
+            <Input
+              placeholder="Ex: Enterprise Gold"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Descrição</Label>
+            <Input
+              placeholder="Ex: Pra grandes escritórios com SLA premium"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Preço mensal (R$) *</Label>
+              <Input
+                value={priceMonthlyBRL}
+                onChange={(e) => setPriceMonthlyBRL(e.target.value)}
+                placeholder="999,00"
+                inputMode="decimal"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Preço anual (R$)</Label>
+              <Input
+                value={priceYearlyBRL}
+                onChange={(e) => setPriceYearlyBRL(e.target.value)}
+                placeholder="9990,00"
+                inputMode="decimal"
+              />
+              <p className="text-[10px] text-muted-foreground">Vazio = 12× mensal</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Features</Label>
+            <div className="space-y-1.5">
+              {features.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span className="flex-1 truncate">{f}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={() => setFeatures(features.filter((_, idx) => idx !== i))}
+                  >
+                    <X className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Input
+                  value={novaFeature}
+                  onChange={(e) => setNovaFeature(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && novaFeature.trim()) {
+                      setFeatures([...features, novaFeature.trim()]);
+                      setNovaFeature("");
+                    }
+                  }}
+                  placeholder="Nova feature..."
+                  className="text-sm"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (novaFeature.trim()) {
+                      setFeatures([...features, novaFeature.trim()]);
+                      setNovaFeature("");
+                    }
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label>Marcar como popular</Label>
+            <Switch checked={popular} onCheckedChange={setPopular} />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label>Ocultar da página /plans</Label>
+            <Switch checked={oculto} onCheckedChange={setOculto} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={criarMut.isPending || !name.trim() || !priceMonthlyBRL}>
+            {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Criar plano
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

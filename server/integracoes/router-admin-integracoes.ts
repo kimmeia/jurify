@@ -36,25 +36,39 @@ interface ProvedorMeta {
 
 const PROVEDORES: ProvedorMeta[] = [
   {
+    id: "asaas",
+    nome: "Asaas",
+    descricao: "Gateway de pagamento para mensalidades dos escritórios (substitui Stripe).",
+    docUrl: "https://docs.asaas.com/reference",
+    services: ["Assinaturas", "PIX", "Boleto", "Cartão"],
+  },
+  {
     id: "judit",
     nome: "Judit.IO",
-    descricao: "Monitoramento processual, consultas por CNJ/CPF/CNPJ/OAB em 90+ tribunais",
+    descricao: "Monitoramento processual em 90+ tribunais por CNJ/CPF/CNPJ/OAB.",
     docUrl: "https://docs.judit.io",
-    services: ["Consulta processual", "Monitoramento", "Datalake", "Webhooks"],
+    services: ["Processos", "Monitoramento", "Webhooks"],
   },
   {
     id: "whatsapp_cloud",
-    nome: "WhatsApp Cloud API",
-    descricao: "Configuracao global para WhatsApp CoEx. Escritorios conectam na aba Canais.",
+    nome: "WhatsApp Cloud",
+    descricao: "Configuração global do WhatsApp CoEx. Escritórios conectam em Canais.",
     docUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api",
-    services: ["Cloud API", "Webhooks", "CoEx", "Mensagens"],
+    services: ["Cloud API", "CoEx", "Mensagens"],
   },
   {
-    id: "asaas",
-    nome: "Asaas (Cobrança SaaS)",
-    descricao: "Gateway de pagamento para mensalidades dos escritórios assinantes do Jurify (substitui Stripe).",
-    docUrl: "https://docs.asaas.com/reference",
-    services: ["Assinaturas", "Boleto", "PIX", "Cartão", "Webhooks"],
+    id: "openai",
+    nome: "OpenAI (ChatGPT)",
+    descricao: "Modelo GPT para chatbot de atendimento e resumos automáticos.",
+    docUrl: "https://platform.openai.com/api-keys",
+    services: ["GPT-4", "GPT-3.5", "Chatbot", "Resumos"],
+  },
+  {
+    id: "agentes_ia",
+    nome: "Agentes IA Treináveis",
+    descricao: "Agentes personalizados com conhecimento do escritório (FAQ, RAG).",
+    docUrl: "https://platform.openai.com/docs/assistants/overview",
+    services: ["Assistants API", "RAG", "Fine-tuning", "Custom"],
   },
 ];
 
@@ -96,6 +110,74 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
         modo: r.modo,
         saldo: r.saldo,
       };
+    }
+    case "openai": {
+      // Testa a key do OpenAI fazendo um GET em /v1/models.
+      // É o endpoint mais barato e rápido — retorna a lista de modelos
+      // disponíveis pra essa key. Não consome tokens.
+      try {
+        const res = await fetch("https://api.openai.com/v1/models", {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.status === 401) {
+          return { ok: false, mensagem: "API key inválida ou revogada" };
+        }
+        if (!res.ok) {
+          return {
+            ok: false,
+            mensagem: `Erro HTTP ${res.status}`,
+            detalhes: (await res.text()).slice(0, 200),
+          };
+        }
+        const data = (await res.json()) as { data?: Array<{ id: string }> };
+        const models = data.data || [];
+        const hasGpt4 = models.some((m) => m.id.includes("gpt-4"));
+        return {
+          ok: true,
+          mensagem: `OpenAI conectado. ${models.length} modelos disponíveis${hasGpt4 ? " (incluindo GPT-4)" : ""}.`,
+        };
+      } catch (err: any) {
+        if (err.name === "AbortError" || err.name === "TimeoutError") {
+          return { ok: false, mensagem: "Timeout — OpenAI não respondeu em 10s" };
+        }
+        return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
+      }
+    }
+    case "agentes_ia": {
+      // Agentes IA usa a key do OpenAI (Assistants API) mas é uma
+      // integração separada pra permitir configuração de agentes
+      // treinados específicos do escritório. Validamos a key do mesmo
+      // jeito do openai, mas esperamos JSON: { apiKey, modeloPadrao? }
+      try {
+        const config = typeof apiKey === "string" && apiKey.startsWith("{")
+          ? JSON.parse(apiKey)
+          : { apiKey };
+
+        if (!config.apiKey) {
+          return { ok: false, mensagem: "Informe a API key do OpenAI" };
+        }
+
+        const res = await fetch("https://api.openai.com/v1/models", {
+          headers: { Authorization: `Bearer ${config.apiKey}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.status === 401) {
+          return { ok: false, mensagem: "API key OpenAI inválida" };
+        }
+        if (!res.ok) {
+          return { ok: false, mensagem: `Erro HTTP ${res.status}` };
+        }
+        return {
+          ok: true,
+          mensagem: `Agentes IA conectado. Modelo padrão: ${config.modeloPadrao || "gpt-4o-mini"}.`,
+        };
+      } catch (err: any) {
+        if (err.name === "SyntaxError") {
+          return { ok: false, mensagem: "Formato inválido. Esperado JSON com apiKey." };
+        }
+        return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
+      }
     }
     default:
       return { ok: false, mensagem: `Provedor "${provedor}" não suportado` };

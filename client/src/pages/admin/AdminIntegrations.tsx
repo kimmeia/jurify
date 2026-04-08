@@ -85,20 +85,71 @@ function WhatsAppCloudForm({ onConnect, isConnecting }: { onConnect: (json: stri
   );
 }
 
+// ─── Agentes IA Form (OpenAI key + modelo padrão) ─────────────────────────
+
+function AgentesIAForm({ onConnect, isConnecting }: { onConnect: (json: string) => void; isConnecting: boolean }) {
+  const [apiKey, setApiKey] = useState("");
+  const [modeloPadrao, setModeloPadrao] = useState("gpt-4o-mini");
+
+  const handleSubmit = () => {
+    if (!apiKey.trim()) { toast.error("Cole a API key do OpenAI"); return; }
+    const json = JSON.stringify({ apiKey: apiKey.trim(), modeloPadrao });
+    onConnect(json);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <Label className="text-[10px] font-medium">API Key OpenAI</Label>
+        <Input
+          type="password"
+          placeholder="sk-..."
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          className="font-mono text-xs h-8"
+        />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-[10px] font-medium">Modelo padrão</Label>
+        <select
+          value={modeloPadrao}
+          onChange={(e) => setModeloPadrao(e.target.value)}
+          className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+        >
+          <option value="gpt-4o-mini">gpt-4o-mini (barato)</option>
+          <option value="gpt-4o">gpt-4o (mais capaz)</option>
+          <option value="gpt-4-turbo">gpt-4-turbo</option>
+          <option value="gpt-3.5-turbo">gpt-3.5-turbo (legado)</option>
+        </select>
+      </div>
+      <Button
+        onClick={handleSubmit}
+        disabled={isConnecting || !apiKey.trim()}
+        className="w-full h-8 text-xs"
+      >
+        {isConnecting ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <Plug className="h-3 w-3 mr-1.5" />}
+        Conectar
+      </Button>
+      <p className="text-[10px] text-muted-foreground">
+        Habilita criação de agentes treinados com documentos do escritório (RAG).
+      </p>
+    </div>
+  );
+}
+
 // Logo SVG inline para cada integração
 function IntegrationLogo({ id, className }: { id: string; className?: string }) {
   if (id === "whatsapp_cloud") {
     return (
       <div className={`flex items-center justify-center rounded-lg bg-emerald-600/10 ${className}`}>
-        <span className="text-lg">💬</span>
+        <span className="text-base">💬</span>
       </div>
     );
   }
   if (id === "asaas") {
-    // Marca do Asaas — círculo com cifrão estilizado em azul institucional
     return (
       <div className={`flex items-center justify-center rounded-lg bg-sky-500/10 ${className}`}>
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="12" cy="12" r="10" fill="#1969E5" />
           <path
             d="M12 6.5v11M9.5 9.2c0-1.1.9-2 2-2h1.5c1.1 0 2 .9 2 2 0 1-.7 1.7-1.6 1.9l-2.3.4c-1 .2-1.6.9-1.6 1.9 0 1.1.9 2 2 2H14c1.1 0 2-.9 2-2"
@@ -110,9 +161,25 @@ function IntegrationLogo({ id, className }: { id: string; className?: string }) 
       </div>
     );
   }
+  if (id === "openai") {
+    return (
+      <div className={`flex items-center justify-center rounded-lg bg-green-500/10 ${className}`}>
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="#10A37F" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5Z"/>
+        </svg>
+      </div>
+    );
+  }
+  if (id === "agentes_ia") {
+    return (
+      <div className={`flex items-center justify-center rounded-lg bg-violet-500/10 ${className}`}>
+        <span className="text-base">🤖</span>
+      </div>
+    );
+  }
   return (
     <div className={`flex items-center justify-center rounded-lg bg-emerald-500/10 ${className}`}>
-      <span className="text-lg font-bold text-emerald-600">J</span>
+      <span className="text-base font-bold text-emerald-600">J</span>
     </div>
   );
 }
@@ -248,7 +315,7 @@ function IntegracaoCard({
 
   return (
     <Card
-      className={`transition-all ${
+      className={`transition-all flex flex-col h-full ${
         isConectado
           ? "border-emerald-500/30 shadow-sm"
           : isErro
@@ -256,17 +323,11 @@ function IntegracaoCard({
           : ""
       }`}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <IntegrationLogo id={integracao.id} className="h-10 w-10 shrink-0" />
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-base">{integracao.nome}</CardTitle>
-                <StatusBadge status={integracao.status} />
-              </div>
-              <CardDescription>{integracao.descricao}</CardDescription>
-            </div>
+      <CardHeader className="pb-2 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <IntegrationLogo id={integracao.id} className="h-8 w-8 shrink-0" />
+            <CardTitle className="text-sm truncate">{integracao.nome}</CardTitle>
           </div>
           <a
             href={integracao.docUrl}
@@ -274,18 +335,24 @@ function IntegracaoCard({
             rel="noopener noreferrer"
             className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={integracao.status} />
+        </div>
+        <CardDescription className="text-xs line-clamp-2">
+          {integracao.descricao}
+        </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {/* Services tags */}
-        <div className="flex flex-wrap gap-1.5">
-          {integracao.services.map((s) => (
+      <CardContent className="space-y-3 flex-1 flex flex-col">
+        {/* Services tags — compactos */}
+        <div className="flex flex-wrap gap-1">
+          {integracao.services.slice(0, 4).map((s) => (
             <span
               key={s}
-              className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground"
             >
               {s}
             </span>
@@ -294,12 +361,12 @@ function IntegracaoCard({
 
         {/* Se está conectado — mostra info e ações */}
         {isConectado && (
-          <div className="space-y-3 pt-1">
+          <div className="space-y-2 pt-1 mt-auto">
             {/* Key preview */}
             {integracao.apiKeyPreview && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="font-mono text-xs">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ShieldCheck className="h-3 w-3 text-emerald-500" />
+                <span className="font-mono text-[10px] truncate">
                   {integracao.apiKeyPreview}
                 </span>
               </div>
@@ -307,33 +374,32 @@ function IntegracaoCard({
 
             {/* Último teste */}
             {integracao.ultimoTeste && (
-              <p className="text-xs text-muted-foreground">
-                Último teste:{" "}
+              <p className="text-[10px] text-muted-foreground">
+                Testado{" "}
                 {new Date(integracao.ultimoTeste).toLocaleString("pt-BR", {
                   day: "2-digit",
                   month: "2-digit",
-                  year: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
               </p>
             )}
 
-            {/* Actions */}
-            <div className="flex items-center gap-2 pt-1 flex-wrap">
+            {/* Actions — compactas */}
+            <div className="flex items-center gap-1 pt-1 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRetest}
                 disabled={isRetesting}
-                className="text-xs"
+                className="text-[10px] h-7 px-2"
               >
                 {isRetesting ? (
-                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />
                 ) : (
-                  <RefreshCw className="h-3 w-3 mr-1.5" />
+                  <RefreshCw className="h-2.5 w-2.5 mr-1" />
                 )}
-                Retestar
+                Testar
               </Button>
 
               {/* Botão exclusivo do Asaas: configurar webhook automaticamente */}
@@ -343,15 +409,15 @@ function IntegracaoCard({
                   size="sm"
                   onClick={handleConfigWebhook}
                   disabled={isConfigWebhook}
-                  className="text-xs"
-                  title="Cadastra automaticamente o webhook do Jurify no painel do Asaas, evitando configuração manual"
+                  className="text-[10px] h-7 px-2"
+                  title="Cadastra automaticamente o webhook do Jurify no painel do Asaas"
                 >
                   {isConfigWebhook ? (
-                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                    <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />
                   ) : (
-                    <Plug className="h-3 w-3 mr-1.5" />
+                    <Plug className="h-2.5 w-2.5 mr-1" />
                   )}
-                  Configurar webhook
+                  Webhook
                 </Button>
               )}
 
@@ -360,15 +426,15 @@ function IntegracaoCard({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="text-xs text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/50 hover:bg-destructive/5"
+                    className="text-[10px] h-7 px-2 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/50 hover:bg-destructive/5"
                     disabled={isDisconnecting}
                   >
                     {isDisconnecting ? (
-                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                      <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />
                     ) : (
-                      <Unplug className="h-3 w-3 mr-1.5" />
+                      <Unplug className="h-2.5 w-2.5 mr-1" />
                     )}
-                    Desconectar
+                    Remover
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -431,83 +497,76 @@ function IntegracaoCard({
 
         {/* Se está desconectado — mostra formulário para conectar */}
         {!isConectado && !isErro && (
-          <div className="space-y-3 pt-1">
+          <div className="space-y-2 pt-1 mt-auto">
             {integracao.id === "whatsapp_cloud" ? (
               <WhatsAppCloudForm
                 onConnect={(json) => handleConnect(json)}
                 isConnecting={isConnecting}
               />
+            ) : integracao.id === "agentes_ia" ? (
+              <AgentesIAForm
+                onConnect={(json) => handleConnect(json)}
+                isConnecting={isConnecting}
+              />
             ) : (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                API Key
-              </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showKey ? "text" : "password"}
-                    placeholder="Cole sua API key aqui"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleConnect();
-                    }}
-                    className="pr-10 font-mono text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showKey ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                <Button
-                  onClick={() => handleConnect()}
-                  disabled={isConnecting || !apiKey.trim()}
-                  className="shrink-0"
+            <div className="space-y-1.5">
+              <div className="relative">
+                <Input
+                  type={showKey ? "text" : "password"}
+                  placeholder="Cole sua API key"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleConnect();
+                  }}
+                  className="pr-8 font-mono text-xs h-8"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {isConnecting ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {showKey ? (
+                    <EyeOff className="h-3 w-3" />
                   ) : (
-                    <Plug className="h-4 w-4 mr-2" />
+                    <Eye className="h-3 w-3" />
                   )}
-                  Conectar
-                </Button>
+                </button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                A key será criptografada (AES-256) antes de ser salva.
+              <Button
+                onClick={() => handleConnect()}
+                disabled={isConnecting || !apiKey.trim()}
+                className="w-full h-8 text-xs"
+              >
+                {isConnecting ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <Plug className="h-3 w-3 mr-1.5" />
+                )}
+                Conectar
+              </Button>
+              <p className="text-[10px] text-muted-foreground">
                 {integracao.id === "asaas" ? (
-                  <>
-                    {" "}Obtenha sua API key em{" "}
-                    <a
+                  <>Cole a API key do <a
                       href="https://www.asaas.com/config/integracao"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline hover:text-foreground transition-colors"
-                    >
-                      Asaas → Configurações → Integrações
-                    </a>
-                    . Use a key sandbox (<code>$aact_YTU5...</code>) para testes ou production
-                    para produção. O sistema detecta o modo automaticamente.
-                  </>
-                ) : (
-                  <>
-                    {" "}Obtenha sua key no{" "}
-                    <a
-                      href="https://plataforma.judit.io"
+                      className="underline hover:text-foreground"
+                    >painel Asaas</a>. Sandbox/prod auto-detectado.</>
+                ) : integracao.id === "openai" ? (
+                  <>Cole uma key <code className="bg-muted px-1 rounded">sk-...</code> de <a
+                      href="https://platform.openai.com/api-keys"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline hover:text-foreground transition-colors"
-                    >
-                      painel da Judit
-                    </a>
-                    .
-                  </>
+                      className="underline hover:text-foreground"
+                    >platform.openai.com</a>.</>
+                ) : (
+                  <>Cole a key do <a
+                      href={integracao.docUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground"
+                    >painel do provedor</a>. Criptografada AES-256.</>
                 )}
               </p>
             </div>
@@ -541,7 +600,7 @@ export default function AdminIntegrations() {
 
       {/* Cards grid */}
       {isLoading ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader>
               <Skeleton className="h-10 w-10 rounded-lg" />
@@ -554,7 +613,7 @@ export default function AdminIntegrations() {
           </Card>
         </div>
       ) : integracoes && integracoes.length > 0 ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {integracoes.map((integ) => (
             <IntegracaoCard
               key={integ.id}

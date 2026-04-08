@@ -703,9 +703,8 @@ export const adminRouter = router({
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Lista os planos com overrides aplicados — usado pela página
-   * /admin/planos para mostrar os valores efetivos. Também marca quais
-   * têm override ativo (pra mostrar badge "Modificado" no UI).
+   * Lista os planos com overrides aplicados + planos customizados
+   * criados pelo admin. Usado pela página /admin/planos.
    */
   listarPlanosEditaveis: adminProcedure.query(async () => {
     const db = await getDb();
@@ -714,17 +713,20 @@ export const adminRouter = router({
     const { planosOverrides } = await import("../../drizzle/schema");
     const overrides = await db.select().from(planosOverrides);
     const overrideMap = new Map(overrides.map((o) => [o.planId, o]));
+    const defaultIds = new Set(PLANS.map((p) => p.id));
 
-    return PLANS.map((plan) => {
+    // Planos hardcoded (com overrides se houver)
+    const planosHardcoded = PLANS.map((plan) => {
       const ov = overrideMap.get(plan.id);
       return {
         id: plan.id,
+        isCustom: false,
         // Hardcoded (default)
         defaultName: plan.name,
         defaultDescription: plan.description,
         defaultPriceMonthly: plan.priceMonthly,
         defaultPriceYearly: plan.priceYearly,
-        defaultFeatures: plan.features,
+        defaultFeatures: plan.features as string[],
         defaultPopular: plan.popular ?? false,
         // Atual (com override)
         name: ov?.name ?? plan.name,
@@ -732,15 +734,150 @@ export const adminRouter = router({
         priceMonthly: ov?.priceMonthly ?? plan.priceMonthly,
         priceYearly: ov?.priceYearly ?? plan.priceYearly,
         features: ov?.features ? (() => {
-          try { return JSON.parse(ov.features); } catch { return plan.features; }
-        })() : plan.features,
+          try { return JSON.parse(ov.features) as string[]; } catch { return plan.features as string[]; }
+        })() : (plan.features as string[]),
         popular: ov?.popular ?? plan.popular ?? false,
         oculto: ov?.oculto ?? false,
         hasOverride: !!ov,
         updatedAt: ov?.updatedAt,
       };
     });
+
+    // Planos customizados (criados pelo admin — planId não existe em PLANS)
+    const planosCustom = overrides
+      .filter((ov) => !defaultIds.has(ov.planId))
+      .map((ov) => {
+        const features: string[] = ov.features ? (() => {
+          try { return JSON.parse(ov.features) as string[]; } catch { return []; }
+        })() : [];
+        return {
+          id: ov.planId,
+          isCustom: true,
+          defaultName: ov.name ?? "",
+          defaultDescription: ov.description ?? "",
+          defaultPriceMonthly: ov.priceMonthly ?? 0,
+          defaultPriceYearly: ov.priceYearly ?? 0,
+          defaultFeatures: features,
+          defaultPopular: ov.popular ?? false,
+          name: ov.name ?? "",
+          description: ov.description ?? "",
+          priceMonthly: ov.priceMonthly ?? 0,
+          priceYearly: ov.priceYearly ?? 0,
+          features,
+          popular: ov.popular ?? false,
+          oculto: ov.oculto ?? false,
+          hasOverride: true,
+          updatedAt: ov.updatedAt,
+        };
+      });
+
+    return [...planosHardcoded, ...planosCustom];
   }),
+
+  /**
+   * Cria um plano totalmente personalizado (não existe em PLANS hardcoded).
+   * Gera um planId baseado no nome + timestamp pra evitar colisão.
+   */
+  criarPlanoPersonalizado: adminProcedure
+    .input(z.object({
+      name: z.string().min(2).max(100),
+      description: z.string().max(500).optional(),
+      priceMonthly: z.number().int().min(0),
+      priceYearly: z.number().int().min(0),
+      features: z.array(z.string()).optional(),
+      popular: z.boolean().optional(),
+      oculto: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Slug do nome + sufixo random pra id único
+      const slug = input.name
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40);
+      const planId = `${slug}-${Date.now().toString(36).slice(-5)}`;
+
+      // Verifica se não colide com hardcoded
+      if (PLANS.some((p) => p.id === planId)) {
+        throw new Error("ID de plano duplicado — tente outro nome");
+      }
+
+      const { planosOverrides } = await import("../../drizzle/schema");
+      await db.insert(planosOverrides).values({
+        planId,
+        name: input.name,
+        description: input.description ?? null,
+        priceMonthly: input.priceMonthly,
+        priceYearly: input.priceYearly,
+        features: input.features ? JSON.stringify(input.features) : null,
+        popular: input.popular ?? false,
+        oculto: input.oculto ?? false,
+        updatedBy: ctx.user.id,
+      });
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.criar",
+        alvoTipo: "plano",
+        alvoNome: planId,
+        detalhes: {
+          name: input.name,
+          priceMonthly: input.priceMonthly,
+        },
+      });
+
+      return { success: true, planId, mensagem: `Plano "${input.name}" criado` };
+    }),
+
+  /**
+   * Deleta um plano personalizado. NÃO permite deletar planos hardcoded
+   * (use resetarOverridePlano pra isso). Falha se houver assinaturas
+   * ativas usando o plano.
+   */
+  deletarPlanoPersonalizado: adminProcedure
+    .input(z.object({ planId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Blinda contra deletar plano hardcoded
+      if (PLANS.some((p) => p.id === input.planId)) {
+        throw new Error("Não é possível deletar plano nativo. Use 'Resetar ao default' pra remover customizações.");
+      }
+
+      // Verifica se tem assinaturas ativas
+      const subs = await db
+        .select({ id: subscriptionsTable.id })
+        .from(subscriptionsTable)
+        .where(
+          and(
+            eq(subscriptionsTable.planId, input.planId),
+            eq(subscriptionsTable.status, "active"),
+          ),
+        )
+        .limit(1);
+
+      if (subs.length > 0) {
+        throw new Error("Existem assinaturas ativas neste plano — cancele primeiro.");
+      }
+
+      const { planosOverrides } = await import("../../drizzle/schema");
+      await db.delete(planosOverrides).where(eq(planosOverrides.planId, input.planId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.deletar",
+        alvoTipo: "plano",
+        alvoNome: input.planId,
+      });
+
+      return { success: true };
+    }),
 
   /**
    * Edita um plano (cria ou atualiza override). Campos null = remove

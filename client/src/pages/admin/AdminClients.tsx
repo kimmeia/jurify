@@ -127,10 +127,28 @@ function ClienteDetalheDialog({
   const impersonateMut = trpc.admin.impersonarUsuario.useMutation({
     onSuccess: (res) => {
       toast.success(res.mensagem);
-      // Recarrega a página inteira pra pegar o novo cookie de sessão
-      setTimeout(() => { window.location.href = "/dashboard"; }, 800);
+      // Aguarda o cookie ser persistido, limpa QUALQUER cache do React
+      // Query (pra forçar refetch do auth.me no próximo page load) e faz
+      // hard reload. Vai pra raiz "/" — Home.tsx cuida do roteamento
+      // correto baseado na subscription do usuário impersonado.
+      setTimeout(() => {
+        // Limpa localStorage de auth cache pra garantir que auth.me
+        // busque fresco
+        try {
+          localStorage.removeItem("manus-runtime-user-info");
+        } catch {
+          /* ignore */
+        }
+        window.location.href = "/";
+      }, 600);
     },
-    onError: (err) => toast.error("Falha ao entrar como cliente", { description: err.message }),
+    onError: (err) => {
+      console.error("[impersonarUsuario] erro:", err);
+      toast.error("Falha ao entrar como cliente", {
+        description: err.message || "Erro desconhecido",
+        duration: 10000,
+      });
+    },
   });
 
   const resetSenhaMut = trpc.admin.resetarSenhaUsuario.useMutation({

@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   Package,
   Tag,
+  DollarSign,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -172,6 +173,7 @@ function AdminSidebarContent({
   const adminMenuItems = [
     { icon: LayoutDashboard, label: "Visão Geral", path: "/admin" },
     { icon: Users, label: "Clientes", path: "/admin/clients" },
+    { icon: DollarSign, label: "Financeiro", path: "/admin/financeiro" },
     { icon: CreditCard, label: "Assinaturas", path: "/admin/subscriptions" },
     { icon: AlertTriangle, label: "Inadimplência", path: "/admin/inadimplentes" },
     { icon: Package, label: "Planos", path: "/admin/planos" },
@@ -277,6 +279,31 @@ function AdminSidebarContent({
       </div>
 
       <SidebarInset>
+        {/* Banner de impersonation — caso admin vá pra área admin
+            estando impersonando alguém */}
+        {(user as any)?.impersonatedBy && (
+          <div className="bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between gap-3 sticky top-0 z-50 border-b border-amber-600 shadow-md">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <ShieldCheck className="h-4 w-4" />
+              <span>
+                Você está vendo o sistema como <strong>{user?.name || user?.email}</strong>{" "}
+                — toda ação é registrada em nome do admin original.
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white hover:bg-amber-50 border-amber-700 text-amber-950 h-8 text-xs font-medium"
+              onClick={async () => {
+                await logout();
+                window.location.href = "/";
+              }}
+            >
+              <LogOut className="h-3.5 w-3.5 mr-1.5" />
+              Sair da impersonação
+            </Button>
+          </div>
+        )}
         {isMobile && (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
