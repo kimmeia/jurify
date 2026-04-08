@@ -466,6 +466,33 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
         log.warn({ err: err.message }, "Falha ao criar cliente_notas_admin");
       }
     }
+
+    // ─── audit_log: tabela imutável de auditoria ──────────────────────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INT NOT NULL AUTO_INCREMENT,
+          actorUserIdAudit INT NOT NULL,
+          actorNameAudit VARCHAR(255),
+          acaoAudit VARCHAR(100) NOT NULL,
+          alvoTipoAudit VARCHAR(50),
+          alvoIdAudit INT,
+          alvoNomeAudit VARCHAR(255),
+          detalhesAudit TEXT,
+          ipAudit VARCHAR(64),
+          createdAtAudit TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_audit_actor (actorUserIdAudit),
+          INDEX idx_audit_acao (acaoAudit),
+          INDEX idx_audit_created (createdAtAudit)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("audit_log criada (ou já existia)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar audit_log");
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureClienteControlSchema: erro inesperado");
   }

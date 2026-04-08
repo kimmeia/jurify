@@ -946,3 +946,42 @@ export const clienteNotasAdmin = mysqlTable("cliente_notas_admin", {
 
 export type ClienteNotaAdmin = typeof clienteNotasAdmin.$inferSelect;
 export type InsertClienteNotaAdmin = typeof clienteNotasAdmin.$inferInsert;
+
+/**
+ * Audit log — toda ação sensível executada por admin do Jurify ou via
+ * impersonation deve ser registrada aqui. Imutável (apenas INSERTs).
+ *
+ * Compliance + troubleshooting: "quem promoveu fulano a admin?",
+ * "quem suspendeu este escritório e quando?", "este admin entrou como
+ * cliente X em qual horário?".
+ */
+export const auditLog = mysqlTable("audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  /** ID do usuário ator (admin que executou). */
+  actorUserId: int("actorUserIdAudit").notNull(),
+  /** Nome do ator no momento do log (snapshot, evita join no read). */
+  actorName: varchar("actorNameAudit", { length: 255 }),
+  /**
+   * Identificador da ação. Ex: "user.bloquear", "escritorio.suspender",
+   * "user.impersonar", "user.resetSenha", "plano.editar".
+   */
+  acao: varchar("acaoAudit", { length: 100 }).notNull(),
+  /** Tipo do alvo: "user" | "escritorio" | "plano" | "subscription" | etc */
+  alvoTipo: varchar("alvoTipoAudit", { length: 50 }),
+  /** ID numérico do alvo (quando aplicável) */
+  alvoId: int("alvoIdAudit"),
+  /** Nome/email do alvo no momento do log (snapshot pra leitura rápida) */
+  alvoNome: varchar("alvoNomeAudit", { length: 255 }),
+  /** JSON com payload livre (motivo, valores antes/depois, etc) */
+  detalhes: text("detalhesAudit"),
+  /** IP de origem da request (X-Forwarded-For ou socket) */
+  ip: varchar("ipAudit", { length: 64 }),
+  createdAt: timestamp("createdAtAudit").defaultNow().notNull(),
+}, (t) => ({
+  idxActor: index("idx_audit_actor").on(t.actorUserId),
+  idxAcao: index("idx_audit_acao").on(t.acao),
+  idxCreated: index("idx_audit_created").on(t.createdAt),
+}));
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;

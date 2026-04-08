@@ -9,8 +9,9 @@
  */
 
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, desc, and, gt, sql } from "drizzle-orm";
 import { adminProcedure, router } from "../_core/trpc";
+import { registrarAuditoria } from "../_core/audit";
 import {
   getDb,
   getAllUsers,
@@ -62,10 +63,23 @@ export const adminRouter = router({
   /** Update user role */
   updateUserRole: adminProcedure
     .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!target) throw new Error("Usuário não encontrado");
+
       await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.updateRole",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: target.name || target.email || undefined,
+        detalhes: { antigaRole: target.role, novaRole: input.role },
+      });
+
       return { success: true };
     }),
 
@@ -215,8 +229,17 @@ export const adminRouter = router({
         motivo: z.string().max(255).optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       await addCreditsToUser(input.userId, input.quantidade);
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.concederCreditos",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        detalhes: { quantidade: input.quantidade, motivo: input.motivo },
+      });
+
       return { success: true, mensagem: `${input.quantidade} créditos adicionados` };
     }),
 
@@ -236,9 +259,12 @@ export const adminRouter = router({
       userId: z.number(),
       motivo: z.string().min(3).max(500),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!target) throw new Error("Usuário não encontrado");
+
       await db
         .update(users)
         .set({
@@ -247,19 +273,41 @@ export const adminRouter = router({
           bloqueadoEm: new Date(),
         })
         .where(eq(users.id, input.userId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.bloquear",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: target.name || target.email || undefined,
+        detalhes: { motivo: input.motivo },
+      });
+
       return { success: true, mensagem: "Usuário bloqueado" };
     }),
 
   /** Desbloquear conta de usuário */
   desbloquearUsuario: adminProcedure
     .input(z.object({ userId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!target) throw new Error("Usuário não encontrado");
+
       await db
         .update(users)
         .set({ bloqueado: false, motivoBloqueio: null, bloqueadoEm: null })
         .where(eq(users.id, input.userId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.desbloquear",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: target.name || target.email || undefined,
+      });
+
       return { success: true, mensagem: "Usuário desbloqueado" };
     }),
 
@@ -274,9 +322,12 @@ export const adminRouter = router({
       escritorioId: z.number(),
       motivo: z.string().min(3).max(500),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(escritorios).where(eq(escritorios.id, input.escritorioId)).limit(1);
+      if (!target) throw new Error("Escritório não encontrado");
+
       await db
         .update(escritorios)
         .set({
@@ -285,19 +336,41 @@ export const adminRouter = router({
           suspensoEm: new Date(),
         })
         .where(eq(escritorios.id, input.escritorioId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "escritorio.suspender",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        alvoNome: target.nome,
+        detalhes: { motivo: input.motivo },
+      });
+
       return { success: true, mensagem: "Escritório suspenso" };
     }),
 
   /** Reativar escritório suspenso */
   reativarEscritorio: adminProcedure
     .input(z.object({ escritorioId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(escritorios).where(eq(escritorios.id, input.escritorioId)).limit(1);
+      if (!target) throw new Error("Escritório não encontrado");
+
       await db
         .update(escritorios)
         .set({ suspenso: false, motivoSuspensao: null, suspensoEm: null })
         .where(eq(escritorios.id, input.escritorioId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "escritorio.reativar",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        alvoNome: target.nome,
+      });
+
       return { success: true, mensagem: "Escritório reativado" };
     }),
 
@@ -351,12 +424,206 @@ export const adminRouter = router({
         maxAge: ONE_HOUR,
       });
 
+      // Auditoria CRÍTICA: registrar quem entrou como quem
+      await registrarAuditoria({
+        ctx,
+        acao: "user.impersonar",
+        alvoTipo: "user",
+        alvoId: targetUser.id,
+        alvoNome: targetUser.name || targetUser.email || undefined,
+        detalhes: { duracaoMs: ONE_HOUR },
+      });
+
       return {
         success: true,
         mensagem: `Logado como ${targetUser.name || targetUser.email}. Sessão expira em 1h.`,
         targetName: targetUser.name || targetUser.email,
       };
     }),
+
+  /**
+   * Reset de senha — gera senha temporária para usuários que perderam
+   * acesso. Admin vê a senha apenas uma vez (deve passar pro cliente).
+   * O cliente deve trocar a senha no primeiro acesso.
+   *
+   * Só funciona pra usuários com loginMethod="email" (signup tradicional).
+   * Usuários Google não têm senha, precisam logar com Google.
+   */
+  resetarSenhaUsuario: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!target) throw new Error("Usuário não encontrado");
+      if (!target.passwordHash) {
+        throw new Error("Este usuário não tem senha (login via Google ou outro provider).");
+      }
+
+      // Gera senha temporária aleatória — 12 chars alfanuméricos
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+      let novaSenha = "";
+      for (let i = 0; i < 12; i++) {
+        novaSenha += chars[Math.floor(Math.random() * chars.length)];
+      }
+
+      const { hashPassword } = await import("../_core/password");
+      const passwordHash = await hashPassword(novaSenha);
+
+      await db.update(users).set({ passwordHash }).where(eq(users.id, input.userId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.resetSenha",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: target.name || target.email || undefined,
+      });
+
+      return {
+        success: true,
+        mensagem: "Senha resetada. Passe a senha temporária ao cliente.",
+        senhaTemp: novaSenha,
+      };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // INADIMPLÊNCIA E AUDITORIA — Sprint 2
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Lista assinaturas com pagamento atrasado (status = past_due).
+   *
+   * Inclui dados do usuário pra contato direto. Usado pro dashboard
+   * de cobrança / financeiro tomar ação.
+   */
+  listarInadimplentes: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db
+      .select({
+        subId: subscriptionsTable.id,
+        userId: users.id,
+        userName: users.name,
+        userEmail: users.email,
+        planId: subscriptionsTable.planId,
+        status: subscriptionsTable.status,
+        currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
+        asaasSubscriptionId: subscriptionsTable.asaasSubscriptionId,
+        createdAt: subscriptionsTable.createdAt,
+      })
+      .from(subscriptionsTable)
+      .innerJoin(users, eq(subscriptionsTable.userId, users.id))
+      .where(eq(subscriptionsTable.status, "past_due"))
+      .orderBy(desc(subscriptionsTable.currentPeriodEnd));
+
+    return rows.map((r) => {
+      const plan = PLANS.find((p) => p.id === r.planId);
+      return {
+        ...r,
+        planName: plan?.name || r.planId,
+        valorMensal: plan?.priceMonthly || 0,
+      };
+    });
+  }),
+
+  /**
+   * Lista o audit log com filtros e paginação.
+   */
+  listarAuditoria: adminProcedure
+    .input(z.object({
+      acao: z.string().optional(),
+      actorUserId: z.number().optional(),
+      alvoTipo: z.string().optional(),
+      limit: z.number().min(1).max(500).default(100),
+      offset: z.number().min(0).default(0),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { logs: [], total: 0 };
+
+      const { auditLog } = await import("../../drizzle/schema");
+      const params = input || { limit: 100, offset: 0 };
+
+      const conditions = [];
+      if (params.acao) conditions.push(eq(auditLog.acao, params.acao));
+      if (params.actorUserId) conditions.push(eq(auditLog.actorUserId, params.actorUserId));
+      if (params.alvoTipo) conditions.push(eq(auditLog.alvoTipo, params.alvoTipo));
+
+      const baseQuery = db.select().from(auditLog);
+      const filtered = conditions.length > 0
+        ? baseQuery.where(and(...conditions))
+        : baseQuery;
+
+      const logs = await filtered
+        .orderBy(desc(auditLog.createdAt))
+        .limit(params.limit ?? 100)
+        .offset(params.offset ?? 0);
+
+      // Total para paginação
+      const totalQuery = db.select({ count: sql<number>`COUNT(*)` }).from(auditLog);
+      const totalFiltered = conditions.length > 0
+        ? totalQuery.where(and(...conditions))
+        : totalQuery;
+      const [totalRow] = await totalFiltered;
+      const total = Number((totalRow as { count: number } | undefined)?.count || 0);
+
+      return {
+        logs: logs.map((l) => ({
+          ...l,
+          detalhes: l.detalhes ? (() => {
+            try { return JSON.parse(l.detalhes); } catch { return l.detalhes; }
+          })() : null,
+        })),
+        total,
+      };
+    }),
+
+  /**
+   * Estatísticas rápidas do audit log: top 5 ações, top 5 atores,
+   * total nos últimos 7 dias. Usado pro dashboard.
+   */
+  estatisticasAuditoria: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { totalUltimos7Dias: 0, topAcoes: [], topAtores: [] };
+
+    const { auditLog } = await import("../../drizzle/schema");
+    const seteDias = new Date();
+    seteDias.setDate(seteDias.getDate() - 7);
+
+    const recentes = await db
+      .select()
+      .from(auditLog)
+      .where(gt(auditLog.createdAt, seteDias));
+
+    const acoesCount: Record<string, number> = {};
+    const atoresCount: Record<string, { id: number; name: string; count: number }> = {};
+
+    for (const r of recentes) {
+      acoesCount[r.acao] = (acoesCount[r.acao] || 0) + 1;
+      const key = String(r.actorUserId);
+      if (!atoresCount[key]) {
+        atoresCount[key] = { id: r.actorUserId, name: r.actorName || "?", count: 0 };
+      }
+      atoresCount[key].count++;
+    }
+
+    const topAcoes = Object.entries(acoesCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([acao, count]) => ({ acao, count }));
+
+    const topAtores = Object.values(atoresCount)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    return {
+      totalUltimos7Dias: recentes.length,
+      topAcoes,
+      topAtores,
+    };
+  }),
 
   // ═══════════════════════════════════════════════════════════════════════
   // NOTAS INTERNAS DO ADMIN — Sprint 1

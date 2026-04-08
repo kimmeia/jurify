@@ -20,7 +20,7 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle,
+  AlertTriangle, RotateCcw,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -131,6 +131,20 @@ function ClienteDetalheDialog({
       setTimeout(() => { window.location.href = "/dashboard"; }, 800);
     },
     onError: (err) => toast.error("Falha ao entrar como cliente", { description: err.message }),
+  });
+
+  const resetSenhaMut = trpc.admin.resetarSenhaUsuario.useMutation({
+    onSuccess: (res) => {
+      toast.success("Senha resetada", {
+        description: `Senha temporária: ${res.senhaTemp}`,
+        duration: 30000,
+        action: {
+          label: "Copiar",
+          onClick: () => navigator.clipboard.writeText(res.senhaTemp),
+        },
+      });
+    },
+    onError: (err) => toast.error("Falha ao resetar senha", { description: err.message }),
   });
 
   const criarNotaMut = trpc.admin.criarNotaCliente.useMutation({
@@ -459,6 +473,33 @@ function ClienteDetalheDialog({
                     <LogIn className="h-3.5 w-3.5 mr-1.5" />
                   )}
                   Entrar como {user?.name?.split(" ")[0] || "cliente"}
+                </Button>
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <RotateCcw className="h-4 w-4 text-amber-600" />
+                  Resetar senha
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Gera uma senha temporária aleatória de 12 caracteres. O cliente
+                  recebe a senha pelo admin (não automático). Só funciona para
+                  contas com senha (não-Google).
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={resetSenhaMut.isPending}
+                  onClick={() => {
+                    if (confirm(`Resetar a senha de ${user?.name || user?.email}?`)) {
+                      resetSenhaMut.mutate({ userId: userId! });
+                    }
+                  }}
+                >
+                  {resetSenhaMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Resetar senha
                 </Button>
               </div>
 
