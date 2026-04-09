@@ -30,26 +30,151 @@ const log = createLogger("router-judit-credenciais");
  * Lista de sistemas suportados. Exibida no select do frontend.
  * "*" é curinga — tenta usar a credencial em qualquer tribunal.
  */
+/**
+ * Lista de sistemas suportados pela Judit — nomes EXATOS conforme
+ * retornados por GET /credentials. O system_name no POST /credentials
+ * deve ser um desses valores (ou "*" para curinga).
+ */
 export const SISTEMAS_TRIBUNAL = [
   { id: "*", label: "Todos os tribunais (curinga)" },
-  { id: "tjsp", label: "TJ-SP — São Paulo" },
-  { id: "tjrj", label: "TJ-RJ — Rio de Janeiro" },
-  { id: "tjmg", label: "TJ-MG — Minas Gerais" },
-  { id: "tjrs", label: "TJ-RS — Rio Grande do Sul" },
-  { id: "tjpr", label: "TJ-PR — Paraná" },
-  { id: "tjsc", label: "TJ-SC — Santa Catarina" },
-  { id: "tjba", label: "TJ-BA — Bahia" },
-  { id: "tjdft", label: "TJ-DFT — Distrito Federal" },
-  { id: "trf1", label: "TRF-1 — Federal 1ª Região" },
-  { id: "trf2", label: "TRF-2 — Federal 2ª Região" },
-  { id: "trf3", label: "TRF-3 — Federal 3ª Região" },
-  { id: "trf4", label: "TRF-4 — Federal 4ª Região" },
-  { id: "trf5", label: "TRF-5 — Federal 5ª Região" },
-  { id: "tst", label: "TST — Superior Trabalho" },
-  { id: "trt2", label: "TRT-2 — Trabalho SP" },
-  { id: "trt15", label: "TRT-15 — Trabalho Campinas" },
-  { id: "stj", label: "STJ — Superior Justiça" },
-  { id: "stf", label: "STF — Supremo" },
+  // ESAJ
+  { id: "ESAJ - TJSP - 1º grau", label: "ESAJ - TJSP - 1º grau" },
+  { id: "ESAJ - TJSP - 2º grau", label: "ESAJ - TJSP - 2º grau" },
+  { id: "ESAJ - TJCE - 1º grau", label: "ESAJ - TJCE - 1º grau" },
+  { id: "ESAJ - TJCE - 2º grau", label: "ESAJ - TJCE - 2º grau" },
+  { id: "ESAJ - TJAL - 1º grau", label: "ESAJ - TJAL - 1º grau" },
+  { id: "ESAJ - TJAL - 2º grau", label: "ESAJ - TJAL - 2º grau" },
+  { id: "ESAJ - TJAC - 1º grau", label: "ESAJ - TJAC - 1º grau" },
+  { id: "ESAJ - TJAC - 2º grau", label: "ESAJ - TJAC - 2º grau" },
+  { id: "ESAJ - TJAM - 1º grau", label: "ESAJ - TJAM - 1º grau" },
+  { id: "ESAJ - TJAM - 2º grau", label: "ESAJ - TJAM - 2º grau" },
+  { id: "ESAJ - TJMS - 1º grau", label: "ESAJ - TJMS - 1º grau" },
+  { id: "ESAJ - TJMS - 2º grau", label: "ESAJ - TJMS - 2º grau" },
+  // PJE Estadual
+  { id: "PJE TJBA - 1º grau", label: "PJE TJBA - 1º grau" },
+  { id: "PJE TJBA - 2º grau", label: "PJE TJBA - 2º grau" },
+  { id: "PJE TJCE - 1º grau", label: "PJE TJCE - 1º grau" },
+  { id: "PJE TJCE - 2º grau", label: "PJE TJCE - 2º grau" },
+  { id: "PJE TJDFT - 1º grau", label: "PJE TJDFT - 1º grau" },
+  { id: "PJE TJDFT - 2º grau", label: "PJE TJDFT - 2º grau" },
+  { id: "PJE TJES - 1º grau", label: "PJE TJES - 1º grau" },
+  { id: "PJE TJES - 2º grau", label: "PJE TJES - 2º grau" },
+  { id: "PJE TJMA - 1º grau", label: "PJE TJMA - 1º grau" },
+  { id: "PJE TJMA - 2º grau", label: "PJE TJMA - 2º grau" },
+  { id: "PJE TJMG - 1º grau", label: "PJE TJMG - 1º grau" },
+  { id: "PJE TJMG - 2º grau", label: "PJE TJMG - 2º grau" },
+  { id: "PJE TJMT - 1º grau", label: "PJE TJMT - 1º grau" },
+  { id: "PJE TJMT - 2º grau", label: "PJE TJMT - 2º grau" },
+  { id: "PJE TJPA - 1º grau", label: "PJE TJPA - 1º grau" },
+  { id: "PJE TJPA - 2º grau", label: "PJE TJPA - 2º grau" },
+  { id: "PJE TJPB - 1º grau", label: "PJE TJPB - 1º grau" },
+  { id: "PJE TJPB - 2º grau", label: "PJE TJPB - 2º grau" },
+  { id: "PJE TJPE - 1º grau", label: "PJE TJPE - 1º grau" },
+  { id: "PJE TJPE - 2º grau", label: "PJE TJPE - 2º grau" },
+  { id: "PJE TJPI - 1º grau", label: "PJE TJPI - 1º grau" },
+  { id: "PJE TJPI - 2º grau", label: "PJE TJPI - 2º grau" },
+  { id: "PJE TJRJ - 1º grau", label: "PJE TJRJ - 1º grau" },
+  { id: "PJE TJRN - 1º grau", label: "PJE TJRN - 1º grau" },
+  { id: "PJE TJRN - 2º grau", label: "PJE TJRN - 2º grau" },
+  { id: "PJE TJRO - 1º grau", label: "PJE TJRO - 1º grau" },
+  { id: "PJE TJRO - 2º grau", label: "PJE TJRO - 2º grau" },
+  { id: "PJE TJRR - 1º grau", label: "PJE TJRR - 1º grau" },
+  { id: "PJE TJRR - 2º grau", label: "PJE TJRR - 2º grau" },
+  { id: "PJE TJAP - 1º grau", label: "PJE TJAP - 1º grau" },
+  { id: "PJE TJAP - 2º grau", label: "PJE TJAP - 2º grau" },
+  // TJRJ próprio
+  { id: "TJRJ - 1º grau", label: "TJRJ - 1º grau" },
+  { id: "TJRJ - 2º grau", label: "TJRJ - 2º grau" },
+  // EPROC
+  { id: "EPROC - TJRS - 1º grau", label: "EPROC - TJRS - 1º grau" },
+  { id: "EPROC - TJRS - 2º grau", label: "EPROC - TJRS - 2º grau" },
+  { id: "EPROC - TJSC - 1º grau", label: "EPROC - TJSC - 1º grau" },
+  { id: "EPROC - TJSC - 2º grau", label: "EPROC - TJSC - 2º grau" },
+  { id: "EPROC - TJMG - 1º grau", label: "EPROC - TJMG - 1º grau" },
+  { id: "EPROC - TJMG - 2º grau", label: "EPROC - TJMG - 2º grau" },
+  { id: "EPROC - TJTO - 1º grau", label: "EPROC - TJTO - 1º grau" },
+  { id: "EPROC - TJTO - 2º grau", label: "EPROC - TJTO - 2º grau" },
+  // EPROC Federal
+  { id: "EPROC - JFES - 1º grau", label: "EPROC - JFES - 1º grau" },
+  { id: "EPROC - JFPR - 1º grau", label: "EPROC - JFPR - 1º grau" },
+  { id: "EPROC - JFRJ - 1º grau", label: "EPROC - JFRJ - 1º grau" },
+  { id: "EPROC - JFRS - 1º grau", label: "EPROC - JFRS - 1º grau" },
+  { id: "EPROC - JFSC - 1º grau", label: "EPROC - JFSC - 1º grau" },
+  { id: "EPROC - TRF2 - 2º grau", label: "EPROC - TRF2 - 2º grau" },
+  { id: "EPROC - TRF4 - 2º grau", label: "EPROC - TRF4 - 2º grau" },
+  { id: "EPROC - TRF6 - 1º grau", label: "EPROC - TRF6 - 1º grau" },
+  { id: "EPROC - TRF6 - 2º grau", label: "EPROC - TRF6 - 2º grau" },
+  { id: "EPROC - TNU - 2º grau", label: "EPROC - TNU - 2º grau" },
+  // PJE Federal
+  { id: "PJE TRF1 - 1º grau", label: "PJE TRF1 - 1º grau" },
+  { id: "PJE TRF1 - 2º grau", label: "PJE TRF1 - 2º grau" },
+  { id: "PJE TRF3 - 1º grau", label: "PJE TRF3 - 1º grau" },
+  { id: "PJE TRF3 - 2º grau", label: "PJE TRF3 - 2º grau" },
+  // PJE Trabalho
+  { id: "PJE TST - 1º grau", label: "PJE TST - 1º grau" },
+  { id: "PJE TST - 2º grau", label: "PJE TST - 2º grau" },
+  { id: "PJE TST - 3º grau", label: "PJE TST - 3º grau" },
+  { id: "PJE TRT1 - 1º grau", label: "PJE TRT1 - 1º grau (RJ)" },
+  { id: "PJE TRT1 - 2º grau", label: "PJE TRT1 - 2º grau (RJ)" },
+  { id: "PJE TRT2 - 1º grau", label: "PJE TRT2 - 1º grau (SP)" },
+  { id: "PJE TRT2 - 2º grau", label: "PJE TRT2 - 2º grau (SP)" },
+  { id: "PJE TRT3 - 1º grau", label: "PJE TRT3 - 1º grau (MG)" },
+  { id: "PJE TRT3 - 2º grau", label: "PJE TRT3 - 2º grau (MG)" },
+  { id: "PJE TRT4 - 1º grau", label: "PJE TRT4 - 1º grau (RS)" },
+  { id: "PJE TRT4 - 2º grau", label: "PJE TRT4 - 2º grau (RS)" },
+  { id: "PJE TRT5 - 1º grau", label: "PJE TRT5 - 1º grau (BA)" },
+  { id: "PJE TRT5 - 2º grau", label: "PJE TRT5 - 2º grau (BA)" },
+  { id: "PJE TRT6 - 1º grau", label: "PJE TRT6 - 1º grau (PE)" },
+  { id: "PJE TRT6 - 2º grau", label: "PJE TRT6 - 2º grau (PE)" },
+  { id: "PJE TRT7 - 1º grau", label: "PJE TRT7 - 1º grau (CE)" },
+  { id: "PJE TRT7 - CE - 2º grau", label: "PJE TRT7 - CE - 2º grau" },
+  { id: "PJE TRT8 - 1º grau", label: "PJE TRT8 - 1º grau (PA)" },
+  { id: "PJE TRT8 - 2º grau", label: "PJE TRT8 - 2º grau (PA)" },
+  { id: "PJE TRT9 - 1º grau", label: "PJE TRT9 - 1º grau (PR)" },
+  { id: "PJE TRT9 - 2º grau", label: "PJE TRT9 - 2º grau (PR)" },
+  { id: "PJE TRT10 - 1º grau", label: "PJE TRT10 - 1º grau (DF)" },
+  { id: "PJE TRT10 - 2º grau", label: "PJE TRT10 - 2º grau (DF)" },
+  { id: "PJE TRT11 - 1º grau", label: "PJE TRT11 - 1º grau (AM)" },
+  { id: "PJE TRT11 - 2º grau", label: "PJE TRT11 - 2º grau (AM)" },
+  { id: "PJE TRT12 - 1º grau", label: "PJE TRT12 - 1º grau (SC)" },
+  { id: "PJE TRT12 - 2º grau", label: "PJE TRT12 - 2º grau (SC)" },
+  { id: "PJE TRT13 - 1º grau", label: "PJE TRT13 - 1º grau (PB)" },
+  { id: "PJE TRT13 - 2º grau", label: "PJE TRT13 - 2º grau (PB)" },
+  { id: "PJE TRT14 - 1º grau", label: "PJE TRT14 - 1º grau (RO)" },
+  { id: "PJE TRT14 - 2º grau", label: "PJE TRT14 - 2º grau (RO)" },
+  { id: "PJE TRT15 - 1º grau", label: "PJE TRT15 - 1º grau (Campinas)" },
+  { id: "PJE TRT15 - 2º grau", label: "PJE TRT15 - 2º grau (Campinas)" },
+  { id: "PJE TRT16 - 1º grau", label: "PJE TRT16 - 1º grau (MA)" },
+  { id: "PJE TRT16 - 2º grau", label: "PJE TRT16 - 2º grau (MA)" },
+  { id: "PJE TRT17 - 1º grau", label: "PJE TRT17 - 1º grau (ES)" },
+  { id: "PJE TRT17 - 2º grau", label: "PJE TRT17 - 2º grau (ES)" },
+  { id: "PJE TRT18 - 1º grau", label: "PJE TRT18 - 1º grau (GO)" },
+  { id: "PJE TRT18 - 2º grau", label: "PJE TRT18 - 2º grau (GO)" },
+  { id: "PJE TRT19 - 1º grau", label: "PJE TRT19 - 1º grau (AL)" },
+  { id: "PJE TRT19 - 2º grau", label: "PJE TRT19 - 2º grau (AL)" },
+  { id: "PJE TRT20 - 1º grau", label: "PJE TRT20 - 1º grau (SE)" },
+  { id: "PJE TRT20 - 2º grau", label: "PJE TRT20 - 2º grau (SE)" },
+  { id: "PJE TRT21 - 1º grau", label: "PJE TRT21 - 1º grau (RN)" },
+  { id: "PJE TRT21 - 2º grau", label: "PJE TRT21 - 2º grau (RN)" },
+  { id: "PJE TRT22 - 1º grau", label: "PJE TRT22 - 1º grau (PI)" },
+  { id: "PJE TRT22 - 2º grau", label: "PJE TRT22 - 2º grau (PI)" },
+  { id: "PJE TRT23 - 1º grau", label: "PJE TRT23 - 1º grau (MT)" },
+  { id: "PJE TRT23 - 2º grau", label: "PJE TRT23 - 2º grau (MT)" },
+  { id: "PJE TRT24 - 1º grau", label: "PJE TRT24 - 1º grau (MS)" },
+  { id: "PJE TRT24 - 2º grau", label: "PJE TRT24 - 2º grau (MS)" },
+  // PJEINTER
+  { id: "PJEINTER TJAP - 1º grau", label: "PJEINTER TJAP - 1º grau" },
+  { id: "PJEINTER TJAP - 2º grau", label: "PJEINTER TJAP - 2º grau" },
+  { id: "PJEINTER TJBA - 1º grau", label: "PJEINTER TJBA - 1º grau" },
+  { id: "PJEINTER TJES - 1º grau", label: "PJEINTER TJES - 1º grau" },
+  { id: "PJEINTER TJMT - 1º grau", label: "PJEINTER TJMT - 1º grau" },
+  { id: "PJEINTER TJPB - 1º grau", label: "PJEINTER TJPB - 1º grau" },
+  { id: "PJEINTER TJPB - 2º grau", label: "PJEINTER TJPB - 2º grau" },
+  { id: "PJEINTER TJRJ - 1º grau", label: "PJEINTER TJRJ - 1º grau" },
+  { id: "PJEINTER TJRO - 1º grau", label: "PJEINTER TJRO - 1º grau" },
+  // PROJUDI
+  { id: "PROJUDI TJBA - 1º grau", label: "PROJUDI TJBA - 1º grau" },
+  { id: "PROJUDI TJBA - 2º grau", label: "PROJUDI TJBA - 2º grau" },
 ];
 
 async function requireJuditClient() {
@@ -154,30 +279,32 @@ export const juditCredenciaisRouter = router({
       }
 
       // 2. Verifica se a Judit aceitou: GET /credentials?customer_key=X
+      //    Retorna { systems: [{ name, customer_key, credential_status }] }
       let cofreAtivo = false;
       try {
-        // Pequeno delay pra Judit processar
         await new Promise((r) => setTimeout(r, 2000));
         const verificacao = await client.verificarCredencial(input.customerKey);
 
-        // Procura o sistema cadastrado na resposta
-        for (const item of verificacao) {
-          const sn = item.system_name || item.systemName || "";
-          const st = item.credential_status || item.status || "";
-          if (
-            (sn === input.systemName || input.systemName === "*") &&
-            st.toLowerCase() === "active"
-          ) {
-            cofreAtivo = true;
-            break;
-          }
-        }
+        // A resposta pode ter .systems[] ou ser o array direto
+        const systems: any[] = Array.isArray(verificacao)
+          ? verificacao
+          : verificacao.systems || verificacao;
 
-        // Se usou "*" (curinga), qualquer "active" é suficiente
-        if (input.systemName === "*" && !cofreAtivo) {
-          cofreAtivo = verificacao.some(
-            (item: any) => (item.credential_status || item.status || "").toLowerCase() === "active",
-          );
+        for (const item of systems) {
+          const sn = item.name || item.system_name || "";
+          const ck = item.customer_key || "";
+          const st = (item.credential_status || "").toLowerCase();
+
+          // Verifica se o sistema + customer_key batem e status é "active"
+          if (st === "active") {
+            if (input.systemName === "*") {
+              // Curinga: qualquer sistema com essa customer_key ativo
+              if (ck === input.customerKey) { cofreAtivo = true; break; }
+            } else if (sn === input.systemName && ck === input.customerKey) {
+              cofreAtivo = true;
+              break;
+            }
+          }
         }
       } catch (err: any) {
         log.warn({ err: err.message }, "Erro ao verificar credencial no cofre");
