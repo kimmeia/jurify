@@ -369,6 +369,8 @@ export const juditProcessosRouter = router({
     .input(z.object({
       cnj: z.string().min(15).max(30),
       credencialId: z.number().optional(),
+      /** Se informado, salva o resultado em juditRespostas vinculado ao monitoramento */
+      monitoramentoId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -401,7 +403,26 @@ export const juditProcessosRouter = router({
         if (status.status === "completed") {
           const responses = await client.buscarRespostas(request.request_id, 1, 10);
           const lawsuit = responses.page_data.find((r: any) => r.response_type === "lawsuit");
-          if (lawsuit?.response_data) return { processo: lawsuit.response_data, encontrado: true };
+          if (lawsuit?.response_data) {
+            // Salvar em juditRespostas pra ficar persistido (não precisa buscar de novo)
+            if (input.monitoramentoId) {
+              try {
+                const db = await getDb();
+                if (db) {
+                  const { juditRespostas } = await import("../../drizzle/schema");
+                  await db.insert(juditRespostas).values({
+                    monitoramentoId: input.monitoramentoId,
+                    responseId: lawsuit.response_id || `manual_${Date.now()}`,
+                    requestId: request.request_id,
+                    responseType: "lawsuit",
+                    responseData: JSON.stringify(lawsuit.response_data),
+                    stepsCount: (lawsuit.response_data as any).steps?.length || 0,
+                  });
+                }
+              } catch { /* best-effort */ }
+            }
+            return { processo: lawsuit.response_data, encontrado: true };
+          }
           return { processo: null, encontrado: false, mensagem: "Processo não encontrado ou sem acesso." };
         }
       }

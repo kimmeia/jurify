@@ -429,7 +429,9 @@ function MonitoramentoCard({
     onSuccess: (data: any) => {
       if (data.encontrado && data.processo) {
         setProcessoCompleto(data.processo);
-        toast.success("Histórico completo carregado (1 crédito)");
+        toast.success("Histórico completo carregado e salvo (1 crédito)");
+        // Refetch historico local pra que o dado persistido apareça na próxima abertura
+        if (mon.id) refetchHist();
       } else {
         toast.error(data.mensagem || "Processo não encontrado");
       }
@@ -441,7 +443,7 @@ function MonitoramentoCard({
   const st = STATUS_MON[status] || { label: status, cor: "" };
 
   // Busca o histórico de movimentações quando o card abre (local DB — atualizações do webhook)
-  const { data: historico, isLoading: loadingHist } = trpc.juditUsuario.historico.useQuery(
+  const { data: historico, isLoading: loadingHist, refetch: refetchHist } = trpc.juditUsuario.historico.useQuery(
     { monitoramentoId: mon.id, page: 1, pageSize: 50 },
     { enabled: aberto && !!mon.id, retry: false },
   );
@@ -498,7 +500,7 @@ function MonitoramentoCard({
                   className="h-7 text-[10px] text-indigo-600"
                   title="Buscar processo completo na Judit (1 crédito)"
                   disabled={buscarCompletoMut.isPending}
-                  onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined })}
+                  onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id })}
                 >
                   {buscarCompletoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
                   Histórico
