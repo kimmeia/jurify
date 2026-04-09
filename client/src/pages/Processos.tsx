@@ -403,11 +403,10 @@ function MonitoramentoCard({
   const resumoMut = trpc.juditProcessos.resumoIA.useMutation({
     onSuccess: (data: any) => {
       setResumoIA(data.resumo);
-      toast.success(`Resumo gerado (1 crédito)${data.fonte === "ia" ? " — análise IA" : ""}`);
-      // Se o resumo buscou dados completos internamente, auto-buscar histórico
-      if (!processoCompleto) {
-        buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined });
-      }
+      // O resumo IA agora retorna o processo completo junto
+      if (data.processo) setProcessoCompleto(data.processo);
+      const fonteLabel = data.fonte === "judit_ia" ? " — Judit IA" : data.fonte === "ia" ? " — análise IA" : "";
+      toast.success(`Resumo gerado (1 crédito)${fonteLabel}`);
     },
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });

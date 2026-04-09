@@ -209,7 +209,7 @@ export const juditUsuarioRouter = router({
       if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
 
       // ─── Resolver credencial OAB (se informada) ───────────────────────
-      let juditCredentialId: string | undefined;
+      let credCustomerKey: string | undefined;
       if (input.credencialId) {
         const { juditCredenciais } = await import("../../drizzle/schema");
         const [cred] = await db
@@ -235,7 +235,7 @@ export const juditUsuarioRouter = router({
             message: `Credencial "${cred.customerKey}" não pode ser usada (status: ${cred.status}). Verifique no Cofre.`,
           });
         }
-        juditCredentialId = cred.juditCredentialId || undefined;
+        credCustomerKey = cred.customerKey || undefined;
       }
 
       // Verificar limite de monitoramentos
@@ -277,9 +277,11 @@ export const juditUsuarioRouter = router({
         search: {
           search_type: "lawsuit_cnj",
           search_key: input.numeroCnj,
+          ...(credCustomerKey ? {
+            search_params: { credential: { customer_key: credCustomerKey } },
+          } : {}),
         },
         with_attachments: false,
-        ...(juditCredentialId ? { credential_id: juditCredentialId } : {}),
       });
 
       // Salvar localmente vinculado ao usuário
@@ -393,7 +395,7 @@ export const juditUsuarioRouter = router({
       }
 
       // Resolve credencial se informada
-      let juditCredentialId: string | undefined;
+      let credCK: string | undefined;
       if (input.credencialId) {
         const { juditCredenciais } = await import("../../drizzle/schema");
         const [cred] = await db
@@ -401,7 +403,7 @@ export const juditUsuarioRouter = router({
           .from(juditCredenciais)
           .where(eq(juditCredenciais.id, input.credencialId))
           .limit(1);
-        if (cred?.juditCredentialId) juditCredentialId = cred.juditCredentialId;
+        if (cred?.customerKey) credCK = cred.customerKey;
       }
 
       // Cria na Judit com flag only_new_lawsuits
@@ -410,10 +412,12 @@ export const juditUsuarioRouter = router({
         search: {
           search_type: input.tipo,
           search_key: searchKey,
+          ...(credCK ? {
+            search_params: { credential: { customer_key: credCK } },
+          } : {}),
         },
         only_new_lawsuits: true,
         with_attachments: false,
-        ...(juditCredentialId ? { credential_id: juditCredentialId } : {}),
       });
 
       // Salva localmente

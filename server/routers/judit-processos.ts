@@ -200,7 +200,7 @@ export const juditProcessosRouter = router({
       await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.consulta_cnj, "consulta_cnj", `CNJ: ${input.cnj}`);
 
       // Resolver credencial do cofre pra segredo de justiça
-      let credential_id: string | undefined;
+      let customerKey: string | undefined;
       if (input.credencialId) {
         const db = await getDb();
         if (db) {
@@ -208,13 +208,13 @@ export const juditProcessosRouter = router({
           const [cred] = await db.select().from(juditCredenciais)
             .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
             .limit(1);
-          if (cred?.juditCredentialId) credential_id = cred.juditCredentialId;
+          if (cred?.customerKey) customerKey = cred.customerKey;
         }
       }
 
       const request = await client.criarRequest({
         search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
-        ...(credential_id ? { credential_id } : {}),
+        ...(customerKey ? { customer_key: customerKey } : {}),
       });
       return { requestId: request.request_id, status: request.status };
     }),
@@ -246,7 +246,7 @@ export const juditProcessosRouter = router({
       );
 
       // Resolver credencial do cofre pra segredo de justiça
-      let credential_id: string | undefined;
+      let customerKey: string | undefined;
       if (input.credencialId) {
         const db = await getDb();
         if (db) {
@@ -254,14 +254,14 @@ export const juditProcessosRouter = router({
           const [cred] = await db.select().from(juditCredenciais)
             .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
             .limit(1);
-          if (cred?.juditCredentialId) credential_id = cred.juditCredentialId;
+          if (cred?.customerKey) customerKey = cred.customerKey;
         }
       }
 
       const searchKey = input.tipo === "cpf" || input.tipo === "cnpj" ? input.valor.replace(/\D/g, "") : input.valor;
       const request = await client.criarRequest({
         search: { search_type: input.tipo, search_key: searchKey },
-        ...(credential_id ? { credential_id } : {}),
+        ...(customerKey ? { customer_key: customerKey } : {}),
       });
       return { requestId: request.request_id, status: request.status };
     }),
@@ -372,7 +372,7 @@ export const juditProcessosRouter = router({
       const client = await getJuditClientOrThrow();
       await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.consulta_cnj, "consulta_cnj_completa", `Histórico completo: ${input.cnj}`);
 
-      let credential_id: string | undefined;
+      let customerKey: string | undefined;
       if (input.credencialId) {
         const db = await getDb();
         if (db) {
@@ -380,13 +380,13 @@ export const juditProcessosRouter = router({
           const [cred] = await db.select().from(juditCredenciais)
             .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
             .limit(1);
-          if (cred?.juditCredentialId) credential_id = cred.juditCredentialId;
+          if (cred?.customerKey) customerKey = cred.customerKey;
         }
       }
 
       const request = await client.criarRequest({
         search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
-        ...(credential_id ? { credential_id } : {}),
+        ...(customerKey ? { customer_key: customerKey } : {}),
       });
 
       // Polling (max 45s)
@@ -414,6 +414,17 @@ export const juditProcessosRouter = router({
    *
    * Cobra 1 crédito.
    */
+  /**
+   * Gera resumo IA de um processo via Judit (judit_ia: ["summary"]).
+   *
+   * Fluxo:
+   * 1. Faz request com judit_ia: ["summary"] pra Judit gerar resumo nativo
+   * 2. Polling até completed
+   * 3. Extrai resumo IA + dados do processo (lawsuit) da resposta
+   * 4. Se tiver agente IA (OpenAI) configurado, enriquece com análise detalhada
+   *
+   * Cobra 1 crédito.
+   */
   resumoIA: protectedProcedure
     .input(z.object({ cnj: z.string().min(15).max(30) }))
     .mutation(async ({ ctx, input }) => {
@@ -423,115 +434,97 @@ export const juditProcessosRouter = router({
 
       await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.resumo_ia, "resumo_ia", `Resumo IA: ${input.cnj}`);
 
-      // 1. Buscar processo completo na Judit
-      const request = await client.criarRequest({
-        search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
-      });
+      // 1. Request com judit_ia: ["summary"] pra resumo nativo + dados completos
+      const request = await client.solicitarResumoIA(input.cnj.replace(/[^\d.-]/g, ""));
 
+      // 2. Polling
       let processoData: any = null;
+      let resumoJudit: string | null = null;
       const startTime = Date.now();
-      while (Date.now() - startTime < 30000) {
-        await new Promise((r) => setTimeout(r, 2000));
+      while (Date.now() - startTime < 35000) {
+        await new Promise((r) => setTimeout(r, 2500));
         const status = await client.consultarRequest(request.request_id);
         if (status.status === "completed") {
-          const responses = await client.buscarRespostas(request.request_id, 1, 10);
-          const lawsuit = responses.page_data.find((r: any) => r.response_type === "lawsuit");
-          if (lawsuit?.response_data) processoData = lawsuit.response_data;
+          const responses = await client.buscarRespostas(request.request_id, 1, 20);
+          for (const r of responses.page_data) {
+            if (r.response_type === "lawsuit" && !processoData) {
+              processoData = r.response_data;
+            }
+            // Resumo IA da Judit pode vir como outro response_type
+            if (r.response_type === "ai_summary" || r.response_type === "lawsuit_summary") {
+              const rd = r.response_data as any;
+              resumoJudit = rd?.summary || rd?.text || rd?.content || null;
+            }
+          }
           break;
         }
       }
 
-      if (!processoData) {
-        return { resumo: "Não foi possível obter os dados do processo. Tente novamente." };
+      if (!processoData && !resumoJudit) {
+        return { resumo: "Não foi possível obter os dados. Tente novamente em alguns segundos.", fonte: "erro" };
       }
 
-      const d = processoData;
-      const partesTexto = (d.parties || []).map((p: any) => {
-        const advs = (p.lawyers || []).map((l: any) => `  - Adv: ${l.name} (OAB ${l.main_document || ""})`).join("\n");
-        return `${p.side === "Active" ? "AUTOR" : "RÉU"}: ${p.name}${p.main_document ? ` (${p.main_document})` : ""}${advs ? "\n" + advs : ""}`;
-      }).join("\n");
+      // 3. Se Judit retornou resumo IA nativo, usar direto
+      if (resumoJudit) {
+        return { resumo: resumoJudit, fonte: "judit_ia", processo: processoData };
+      }
 
-      const movsTexto = (d.steps || []).slice(0, 30).map((s: any) =>
-        `${s.step_date || "S/D"} — ${s.content}`
-      ).join("\n");
+      // 4. Fallback: se tiver OpenAI configurado, gerar análise detalhada
+      if (processoData) {
+        const d = processoData;
+        try {
+          const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
+          const config = await obterConfigChatBot(esc.escritorio.id);
+          if (config?.openaiApiKey) {
+            const partesTexto = (d.parties || []).map((p: any) => {
+              const advs = (p.lawyers || []).map((l: any) => `  Adv: ${l.name} (OAB ${l.main_document || ""})`).join("\n");
+              return `${p.side === "Active" ? "AUTOR" : "RÉU"}: ${p.name}${advs ? "\n" + advs : ""}`;
+            }).join("\n");
+            const movsTexto = (d.steps || []).slice(0, 30).map((s: any) => `${s.step_date || "S/D"} — ${s.content}`).join("\n");
 
-      const assuntos = (d.subjects || []).map((s: any) => s.name).join(", ");
-      const classe = d.classifications?.[0]?.name || "";
-      const vara = d.courts?.[0]?.name || "";
+            const prompt = `Analise DETALHADAMENTE este processo judicial — entre nos autos e dê um resumo executivo para o advogado.
 
-      // 2. Tentar gerar resumo com IA (se agente configurado)
-      try {
-        const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
-        const config = await obterConfigChatBot(esc.escritorio.id);
+PROCESSO: ${d.code || input.cnj} | ${d.tribunal_acronym || ""} | ${d.classifications?.[0]?.name || ""} | ${(d.subjects || []).map((s: any) => s.name).join(", ")}
+VALOR: ${d.amount ? `R$ ${Number(d.amount).toLocaleString("pt-BR")}` : "N/A"} | DISTRIBUIÇÃO: ${d.distribution_date || "N/A"}
+VARA: ${d.courts?.[0]?.name || "N/A"}
 
-        if (config?.openaiApiKey) {
-          const prompt = `Você é um assistente jurídico especialista. Analise DETALHADAMENTE o processo abaixo — entre nos autos, interprete cada movimentação importante, identifique a situação real do caso.
+PARTES:\n${partesTexto || "N/A"}
 
-PROCESSO: ${d.code || input.cnj}
-TRIBUNAL: ${d.tribunal_acronym || "N/A"}
-INSTÂNCIA: ${d.instance || "N/A"}ª
-CLASSE: ${classe}
-ASSUNTOS: ${assuntos || "N/A"}
-VARA: ${vara}
-VALOR DA CAUSA: ${d.amount ? `R$ ${Number(d.amount).toLocaleString("pt-BR")}` : "N/A"}
-DISTRIBUIÇÃO: ${d.distribution_date || "N/A"}
+MOVIMENTAÇÕES (${d.steps?.length || 0} total):\n${movsTexto || "Nenhuma"}
 
-PARTES E ADVOGADOS:
-${partesTexto || "N/A"}
+Resumo executivo: 1) Situação atual 2) Cronologia importante 3) Pontos críticos 4) Próximos passos 5) Risco. Cite datas e movimentações específicas.`;
 
-MOVIMENTAÇÕES (${d.steps?.length || 0} total, mostrando últimas 30):
-${movsTexto || "Nenhuma"}
-
-Gere um RESUMO EXECUTIVO DETALHADO incluindo:
-1. **Situação atual**: Em que fase está o processo? O que aconteceu recentemente?
-2. **Histórico resumido**: Cronologia dos eventos mais importantes
-3. **Pontos críticos**: Decisões relevantes, liminares, recursos
-4. **Partes e representação**: Quem são as partes e advogados
-5. **Próximos passos prováveis**: O que deve acontecer a seguir
-6. **Risco/Oportunidade**: Avaliação do cenário para o advogado
-
-Seja específico — cite datas e conteúdos das movimentações relevantes.`;
-
-          const res = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [{ role: "user", content: prompt }],
-              max_tokens: 1500,
-              temperature: 0.2,
-            }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const resumo = data.choices?.[0]?.message?.content?.trim();
-            if (resumo) return { resumo, fonte: "ia" };
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` },
+              body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], max_tokens: 1500, temperature: 0.2 }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const resumo = data.choices?.[0]?.message?.content?.trim();
+              if (resumo) return { resumo, fonte: "ia", processo: processoData };
+            }
           }
-        }
-      } catch {
-        // Fallback silencioso para resumo estruturado
+        } catch { /* fallback */ }
+
+        // 5. Fallback final: resumo estruturado
+        const partesCurto = (d.parties || []).map((p: any) => `${p.side === "Active" ? "Autor" : "Réu"}: ${p.name}`).join("; ");
+        const ultimasMoves = (d.steps || []).slice(0, 5).map((s: any) => `• ${s.step_date || ""} — ${s.content}`).join("\n");
+        return {
+          resumo: [
+            `**${d.code || input.cnj}** — ${d.tribunal_acronym || ""} ${d.courts?.[0]?.name || ""}`,
+            d.classifications?.[0]?.name ? `**Classe:** ${d.classifications[0].name}` : null,
+            d.amount ? `**Valor:** R$ ${Number(d.amount).toLocaleString("pt-BR")}` : null,
+            `**Partes:** ${partesCurto}`,
+            d.steps?.length ? `**${d.steps.length} movimentações.** Últimas:` : null,
+            ultimasMoves || null,
+          ].filter(Boolean).join("\n"),
+          fonte: "estruturado",
+          processo: processoData,
+        };
       }
 
-      // 3. Fallback: resumo estruturado sem IA
-      const partesCurto = (d.parties || []).map((p: any) => `${p.side === "Active" ? "Autor" : "Réu"}: ${p.name}`).join("; ");
-      const ultimasMoves = (d.steps || []).slice(0, 5).map((s: any) => `• ${s.step_date || ""} — ${s.content}`).join("\n");
-
-      return {
-        resumo: [
-          `**Processo:** ${d.code || input.cnj}`,
-          `**Tribunal:** ${d.tribunal_acronym || "N/A"} — ${vara}`,
-          classe ? `**Classe:** ${classe}` : null,
-          assuntos ? `**Assuntos:** ${assuntos}` : null,
-          d.amount ? `**Valor:** R$ ${Number(d.amount).toLocaleString("pt-BR")}` : null,
-          d.distribution_date ? `**Distribuição:** ${new Date(d.distribution_date).toLocaleDateString("pt-BR")}` : null,
-          `\n**Partes:** ${partesCurto}`,
-          d.steps?.length ? `\n**Movimentações:** ${d.steps.length} total` : null,
-          ultimasMoves ? `\n**Últimas movimentações:**\n${ultimasMoves}` : null,
-          "\n_Para um resumo analítico detalhado, configure um Agente IA com API Key em Agentes IA._",
-        ].filter(Boolean).join("\n"),
-        fonte: "estruturado",
-      };
+      return { resumo: "Processo não encontrado.", fonte: "erro" };
     }),
 
   monitorarProcesso: protectedProcedure

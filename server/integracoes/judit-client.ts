@@ -35,12 +35,18 @@ export interface JuditRequestPayload {
       filter?: Record<string, unknown>;
       pagination?: Record<string, unknown>;
     };
+    /** Para consulta on-demand (tempo real nos tribunais) */
+    on_demand?: boolean;
+    /** Tipo de resposta: "entity" para dados cadastrais */
+    response_type?: string;
   };
   cache_ttl_in_days?: number;
   with_attachments?: boolean;
   callback_url?: string;
-  /** ID da credencial do cofre Judit — necessário pra acessar processos em segredo de justiça */
-  credential_id?: string;
+  /** customer_key do cofre de credenciais — pra segredo de justiça */
+  customer_key?: string;
+  /** Ativa resumo IA da Judit — ex: ["summary"] */
+  judit_ia?: string[];
 }
 
 export interface JuditRequestResponse {
@@ -64,26 +70,21 @@ export interface JuditTrackingPayload {
       lawsuit_instance?: number;
       filter?: Record<string, unknown>;
       pagination?: Record<string, unknown>;
+      /** Credencial do cofre pra segredo de justiça */
+      credential?: {
+        customer_key: string;
+      };
     };
   };
   with_attachments?: boolean;
   callback_url?: string;
   notification_emails?: string[];
   notification_filters?: {
-    /** Palavras-chave que disparam alerta quando aparecem numa movimentação */
     step_terms?: string[];
   };
   /**
-   * ID de credencial do cofre (cadastrada via POST /credentials).
-   * Obrigatória pra monitorar processos em segredo de justiça.
-   */
-  credential_id?: string;
-  /**
-   * Quando true, este tracking não monitora movimentações de processos
-   * já conhecidos — monitora apenas NOVAS AÇÕES distribuídas contra a
-   * pessoa/empresa. Recebe webhook event_type="new_lawsuit".
-   *
-   * Usar apenas com search_type cpf/cnpj/oab/name (nunca lawsuit_cnj).
+   * Quando true, monitora apenas NOVAS AÇÕES distribuídas contra a
+   * pessoa/empresa. Usar com search_type cpf/cnpj/oab/name.
    */
   only_new_lawsuits?: boolean;
 }
@@ -204,6 +205,7 @@ export interface JuditResponsesPage {
 const REQUESTS_BASE = "https://requests.prod.judit.io";
 const TRACKING_BASE = "https://tracking.prod.judit.io";
 const CRAWLER_BASE = "https://crawler.prod.judit.io";
+const LAWSUITS_BASE = "https://lawsuits.production.judit.io";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TIPOS — COFRE DE CREDENCIAIS
@@ -243,6 +245,7 @@ export class JuditClient {
   private requestsApi: AxiosInstance;
   private trackingApi: AxiosInstance;
   private crawlerApi: AxiosInstance;
+  private lawsuitsApi: AxiosInstance;
 
   constructor(apiKey: string) {
     const headers = {
@@ -266,6 +269,12 @@ export class JuditClient {
       baseURL: CRAWLER_BASE,
       headers,
       timeout: 20000,
+    });
+
+    this.lawsuitsApi = axios.create({
+      baseURL: LAWSUITS_BASE,
+      headers,
+      timeout: 30000,
     });
   }
 
@@ -462,21 +471,37 @@ export class JuditClient {
 
   /**
    * Solicita resumo IA de um processo via Judit.
-   * A Judit gera o resumo internamente (R$0,07/consulta).
-   * Cria uma request com response_type "ai_summary" no search_params.
+   * Usa o parâmetro `judit_ia: ["summary"]` conforme documentação.
+   * R$0,07/consulta na Judit.
    */
-  async solicitarResumoIA(cnj: string, credentialId?: string): Promise<JuditRequestResponse> {
+  async solicitarResumoIA(cnj: string, customerKey?: string): Promise<JuditRequestResponse> {
     const payload: JuditRequestPayload = {
       search: {
         search_type: "lawsuit_cnj",
         search_key: cnj,
-        search_params: {
-          filter: { response_type: "ai_summary" },
-        },
       },
-      ...(credentialId ? { credential_id: credentialId } : {}),
+      judit_ia: ["summary"],
+      ...(customerKey ? { customer_key: customerKey } : {}),
     };
     const res = await this.requestsApi.post("/requests", payload);
+    return res.data;
+  }
+
+  /**
+   * Busca processo no datalake síncrono (resposta instantânea).
+   * Não cobra como request assíncrona — usa Hot Storage.
+   * Retorna dados de capa, partes, sem movimentações detalhadas.
+   */
+  async buscarProcessoSincrono(searchType: JuditSearchType, searchKey: string, customerKey?: string): Promise<any> {
+    const payload: any = {
+      search: {
+        search_type: searchType,
+        search_key: searchKey,
+      },
+      process_status: true,
+      ...(customerKey ? { customer_key: customerKey } : {}),
+    };
+    const res = await this.lawsuitsApi.post("/lawsuits", payload);
     return res.data;
   }
 
