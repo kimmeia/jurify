@@ -1312,14 +1312,20 @@ function CofreTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
 
-  const cadastrarMut = trpc.juditCredenciais.cadastrar.useMutation({
-    onSuccess: () => {
-      toast.success("Credencial cadastrada!");
+  const cadastrarMut = (trpc as any).juditCredenciais.cadastrar.useMutation({
+    onSuccess: (data: any) => {
+      if (data.status === "ativa") {
+        toast.success("Credencial válida!", { description: data.mensagem, duration: 6000 });
+      } else if (data.status === "erro") {
+        toast.error("Login falhou", { description: data.mensagem, duration: 10000 });
+      } else {
+        toast.warning("Validação pendente", { description: data.mensagem, duration: 8000 });
+      }
       setNovoOpen(false);
       setForm({ customerKey: "", systemName: "*", username: "", password: "", totpSecret: "" });
       refetch();
     },
-    onError: (e) => toast.error("Erro", { description: e.message }),
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
 
   const removerMut = trpc.juditCredenciais.remover.useMutation({
@@ -1523,8 +1529,14 @@ function CofreTab() {
                 cadastrarMut.isPending
               }
             >
-              {cadastrarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Cadastrar
+              {cadastrarMut.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Validando login...
+                </>
+              ) : (
+                "Cadastrar e validar"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
