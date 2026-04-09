@@ -22,7 +22,58 @@ import {
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", name: "Nome" };
 const STATUS_MON: Record<string, { label: string; cor: string }> = { created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" }, updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" }, updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" }, paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" } };
-const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ", consulta_historica: "Consulta CPF/CNPJ/OAB/Nome", consulta_sintetica: "Consulta sintetica", monitorar_processo: "Monitorar processo", monitorar_pessoa: "Monitorar pessoa/empresa", resumo_ia: "Resumo IA", anexos: "Baixar anexos" };
+const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ", consulta_historica: "Consulta CPF/CNPJ/Nome", consulta_sintetica: "Consulta sintetica", monitorar_processo: "Monitorar processo", monitorar_pessoa: "Monitorar pessoa/empresa", resumo_ia: "Resumo IA", anexos: "Baixar anexos" };
+
+/**
+ * Indicador de saúde do monitoramento baseado na última atualização.
+ * - verde pulsante: atualizado nas últimas 48h (OK)
+ * - amarelo: sem atualização entre 48h e 7 dias (atenção)
+ * - vermelho: sem atualização há mais de 7 dias (provável falha)
+ * - cinza: pausado ou recém-criado sem dados ainda
+ */
+function MonitorHealthDot({ statusJudit, updatedAt, createdAt }: { statusJudit: string; updatedAt?: string | null; createdAt?: string | null }) {
+  if (statusJudit === "paused") {
+    return (
+      <span className="relative flex h-3 w-3 shrink-0" title="Monitoramento pausado">
+        <span className="h-3 w-3 rounded-full bg-gray-400" />
+      </span>
+    );
+  }
+
+  const ref = updatedAt || createdAt;
+  if (!ref) {
+    return (
+      <span className="relative flex h-3 w-3 shrink-0" title="Aguardando primeira atualização">
+        <span className="animate-pulse h-3 w-3 rounded-full bg-blue-400" />
+      </span>
+    );
+  }
+
+  const horasDesdeUpdate = (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60);
+
+  if (horasDesdeUpdate <= 48) {
+    return (
+      <span className="relative flex h-3 w-3 shrink-0" title={`Monitoramento ativo — atualizado há ${Math.round(horasDesdeUpdate)}h`}>
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+      </span>
+    );
+  }
+
+  if (horasDesdeUpdate <= 168) { // 7 dias
+    return (
+      <span className="relative flex h-3 w-3 shrink-0" title={`Atenção — sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias`}>
+        <span className="animate-pulse h-3 w-3 rounded-full bg-amber-500" />
+      </span>
+    );
+  }
+
+  return (
+    <span className="relative flex h-3 w-3 shrink-0" title={`ALERTA — sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias. Possível falha de conexão.`}>
+      <span className="animate-pulse h-3 w-3 rounded-full bg-red-500" />
+    </span>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CARD DE PROCESSO (resultado expandivel)
@@ -377,6 +428,11 @@ function MonitoramentoCard({
     <Card className="transition-all hover:shadow-sm">
       <CardContent className="pt-3 pb-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
+          <MonitorHealthDot
+            statusJudit={status}
+            updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
+            createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
+          />
           <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
             {searchType === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
           </div>
@@ -940,6 +996,11 @@ function NovasAcoesTab() {
               <Card key={m.id} className="group hover:shadow-sm transition-all">
                 <CardContent className="pt-3 pb-3">
                   <div className="flex items-center gap-2">
+                    <MonitorHealthDot
+                      statusJudit={m.statusJudit}
+                      updatedAt={m.updatedAt}
+                      createdAt={m.createdAt}
+                    />
                     <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                       <User className="h-3.5 w-3.5 text-violet-600" />
                     </div>

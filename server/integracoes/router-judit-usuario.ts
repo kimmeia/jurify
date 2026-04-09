@@ -530,6 +530,9 @@ export const juditUsuarioRouter = router({
           searchType: m.searchType,
           totalNovasAcoes: m.totalNovasAcoes,
           statusJudit: m.statusJudit,
+          totalAtualizacoes: m.totalAtualizacoes,
+          updatedAt: m.updatedAt ? (m.updatedAt as Date).toISOString() : null,
+          createdAt: m.createdAt ? (m.createdAt as Date).toISOString() : null,
         })),
       };
     }),
