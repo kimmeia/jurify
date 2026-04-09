@@ -257,7 +257,7 @@ function ConsultarTab() {
     setResultados(null);
   };
 
-  const placeholders: Record<string, string> = { lawsuit_cnj: "0000000-00.0000.0.00.0000", cpf: "000.000.000-00", cnpj: "00.000.000/0000-00", name: "Nome da parte" };
+  const placeholders: Record<string, string> = { lawsuit_cnj: "0000000-00.0000.0.00.0000", cpf: "000.000.000-00", cnpj: "00.000.000/0000-00" };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
@@ -272,7 +272,6 @@ function ConsultarTab() {
                 <SelectItem value="lawsuit_cnj">CNJ</SelectItem>
                 <SelectItem value="cpf">CPF</SelectItem>
                 <SelectItem value="cnpj">CNPJ</SelectItem>
-                <SelectItem value="name">Nome</SelectItem>
               </SelectContent>
             </Select>
             <div className="relative flex-1">
