@@ -357,75 +357,66 @@ export const juditProcessosRouter = router({
     }),
 
   /**
-   * Gera um resumo IA de um processo judicial.
-   * Usa a API Key OpenAI do escritório (configurada nos Agentes IA).
-   * Cobra 1 crédito por resumo.
+   * Gera um resumo IA de um processo judicial via API da Judit.
+   * A Judit oferece resumo IA nativo (R$0,07/consulta).
+   * Cobra 1 crédito. Faz request + polling + extrai resposta ai_summary.
    */
   resumoIA: protectedProcedure
-    .input(z.object({
-      processo: z.object({
-        cnj: z.string().optional(),
-        tribunal: z.string().optional(),
-        classe: z.string().optional(),
-        assunto: z.string().optional(),
-        partes: z.array(z.object({ nome: z.string(), lado: z.string() })).optional(),
-        movimentacoes: z.array(z.object({ data: z.string().optional(), conteudo: z.string() })).optional(),
-        valor: z.number().optional(),
-      }),
-    }))
+    .input(z.object({ cnj: z.string().min(15).max(30) }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
+      const client = await getJuditClientOrThrow();
 
       // Cobra 1 crédito
-      await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.resumo_ia, "resumo_ia", `Resumo IA: ${input.processo.cnj || "processo"}`);
+      await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.resumo_ia, "resumo_ia", `Resumo IA: ${input.cnj}`);
 
-      // Buscar config do agente IA do escritório
-      const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
-      const config = await obterConfigChatBot(esc.escritorio.id);
-      if (!config?.openaiApiKey) {
-        throw new Error("Configure um Agente de IA com API Key OpenAI para usar o resumo. Vá em Agentes IA.");
+      // Solicita resumo via Judit
+      const request = await client.solicitarResumoIA(input.cnj);
+
+      // Polling (max 30s)
+      const startTime = Date.now();
+      while (Date.now() - startTime < 30000) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const status = await client.consultarRequest(request.request_id);
+        if (status.status === "completed") {
+          const responses = await client.buscarRespostas(request.request_id, 1, 10);
+          // Procura resposta tipo ai_summary
+          const summary = responses.page_data.find(
+            (r: any) => r.response_type === "ai_summary" || r.response_type === "lawsuit_summary",
+          );
+          if (summary?.response_data) {
+            const data = summary.response_data as any;
+            return {
+              resumo: data.summary || data.text || data.content || JSON.stringify(data),
+            };
+          }
+          // Se não veio ai_summary, tenta extrair do lawsuit normal
+          const lawsuit = responses.page_data.find((r: any) => r.response_type === "lawsuit");
+          if (lawsuit?.response_data) {
+            const d = lawsuit.response_data as any;
+            // Monta resumo a partir dos dados estruturados
+            const partes = (d.parties || []).map((p: any) => `${p.side === "Active" ? "Autor" : "Réu"}: ${p.name}`).join("; ");
+            const lastStep = d.last_step || d.steps?.[0];
+            return {
+              resumo: [
+                `**Processo:** ${d.code || input.cnj}`,
+                d.tribunal_acronym ? `**Tribunal:** ${d.tribunal_acronym}` : null,
+                d.classifications?.[0]?.name ? `**Classe:** ${d.classifications[0].name}` : null,
+                d.subjects?.[0]?.name ? `**Assunto:** ${d.subjects[0].name}` : null,
+                d.amount ? `**Valor:** R$ ${Number(d.amount).toLocaleString("pt-BR")}` : null,
+                partes ? `**Partes:** ${partes}` : null,
+                d.courts?.[0]?.name ? `**Vara:** ${d.courts[0].name}` : null,
+                lastStep?.content ? `**Última movimentação (${lastStep.step_date || ""})**:\n${lastStep.content}` : null,
+                d.steps?.length ? `\n**Total de movimentações:** ${d.steps.length}` : null,
+              ].filter(Boolean).join("\n"),
+            };
+          }
+          return { resumo: "Resumo não disponível para este processo." };
+        }
       }
 
-      // Montar contexto do processo
-      const p = input.processo;
-      const partesTexto = (p.partes || []).map((pt) => `${pt.lado}: ${pt.nome}`).join("\n");
-      const movsTexto = (p.movimentacoes || []).slice(0, 20).map((m) => `${m.data || ""} - ${m.conteudo}`).join("\n");
-
-      const prompt = `Você é um assistente jurídico especialista. Analise o processo abaixo e gere um RESUMO EXECUTIVO claro e objetivo em português para um advogado. Inclua: situação atual, pontos críticos, próximos passos recomendados, e risco estimado.
-
-PROCESSO: ${p.cnj || "N/A"}
-TRIBUNAL: ${p.tribunal || "N/A"}
-CLASSE: ${p.classe || "N/A"}
-ASSUNTO: ${p.assunto || "N/A"}
-VALOR DA CAUSA: ${p.valor ? `R$ ${p.valor.toLocaleString("pt-BR")}` : "N/A"}
-
-PARTES:
-${partesTexto || "N/A"}
-
-ÚLTIMAS MOVIMENTAÇÕES:
-${movsTexto || "Nenhuma disponível"}
-
-Gere o resumo de forma estruturada e concisa (máximo 500 palavras).`;
-
-      try {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 800,
-            temperature: 0.3,
-          }),
-        });
-        if (!res.ok) throw new Error(`OpenAI retornou ${res.status}`);
-        const data = await res.json();
-        const resumo = data.choices?.[0]?.message?.content?.trim() || "Não foi possível gerar o resumo.";
-        return { resumo, tokensUsados: data.usage?.total_tokens || 0 };
-      } catch (err: any) {
-        throw new Error(`Erro ao gerar resumo IA: ${err.message}`);
-      }
+      return { resumo: "Resumo em processamento. Tente novamente em alguns segundos." };
     }),
 
   monitorarProcesso: protectedProcedure

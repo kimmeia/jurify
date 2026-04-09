@@ -460,6 +460,26 @@ export class JuditClient {
     return res.data;
   }
 
+  /**
+   * Solicita resumo IA de um processo via Judit.
+   * A Judit gera o resumo internamente (R$0,07/consulta).
+   * Cria uma request com response_type "ai_summary" no search_params.
+   */
+  async solicitarResumoIA(cnj: string, credentialId?: string): Promise<JuditRequestResponse> {
+    const payload: JuditRequestPayload = {
+      search: {
+        search_type: "lawsuit_cnj",
+        search_key: cnj,
+        search_params: {
+          filter: { response_type: "ai_summary" },
+        },
+      },
+      ...(credentialId ? { credential_id: credentialId } : {}),
+    };
+    const res = await this.requestsApi.post("/requests", payload);
+    return res.data;
+  }
+
   /** Consulta o status de uma requisição */
   async consultarRequest(requestId: string): Promise<JuditRequestResponse> {
     const res = await this.requestsApi.get(`/requests/${requestId}`);
