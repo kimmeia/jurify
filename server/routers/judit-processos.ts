@@ -357,9 +357,62 @@ export const juditProcessosRouter = router({
     }),
 
   /**
-   * Gera um resumo IA de um processo judicial via API da Judit.
-   * A Judit oferece resumo IA nativo (R$0,07/consulta).
-   * Cobra 1 crédito. Faz request + polling + extrai resposta ai_summary.
+   * Busca o processo completo na Judit (todas as movimentações, partes, autos).
+   * Diferente do monitoramento que só traz atualizações, isso faz um request
+   * fresh e retorna o histórico inteiro. Cobra 1 crédito (consulta CNJ).
+   */
+  buscarProcessoCompleto: protectedProcedure
+    .input(z.object({
+      cnj: z.string().min(15).max(30),
+      credencialId: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const client = await getJuditClientOrThrow();
+      await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.consulta_cnj, "consulta_cnj_completa", `Histórico completo: ${input.cnj}`);
+
+      let credential_id: string | undefined;
+      if (input.credencialId) {
+        const db = await getDb();
+        if (db) {
+          const { juditCredenciais } = await import("../../drizzle/schema");
+          const [cred] = await db.select().from(juditCredenciais)
+            .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
+            .limit(1);
+          if (cred?.juditCredentialId) credential_id = cred.juditCredentialId;
+        }
+      }
+
+      const request = await client.criarRequest({
+        search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
+        ...(credential_id ? { credential_id } : {}),
+      });
+
+      // Polling (max 45s)
+      const startTime = Date.now();
+      while (Date.now() - startTime < 45000) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const status = await client.consultarRequest(request.request_id);
+        if (status.status === "completed") {
+          const responses = await client.buscarRespostas(request.request_id, 1, 10);
+          const lawsuit = responses.page_data.find((r: any) => r.response_type === "lawsuit");
+          if (lawsuit?.response_data) return { processo: lawsuit.response_data, encontrado: true };
+          return { processo: null, encontrado: false, mensagem: "Processo não encontrado ou sem acesso." };
+        }
+      }
+      return { processo: null, encontrado: false, mensagem: "Consulta em andamento. Tente novamente." };
+    }),
+
+  /**
+   * Gera resumo IA detalhado de um processo.
+   *
+   * Fluxo:
+   * 1. Busca processo COMPLETO na Judit (todos os autos/movimentações)
+   * 2. Se agente IA configurado → manda pro OpenAI pra análise profunda
+   * 3. Se não → monta resumo estruturado com os dados da Judit
+   *
+   * Cobra 1 crédito.
    */
   resumoIA: protectedProcedure
     .input(z.object({ cnj: z.string().min(15).max(30) }))
@@ -368,55 +421,117 @@ export const juditProcessosRouter = router({
       if (!esc) throw new Error("Escritório não encontrado.");
       const client = await getJuditClientOrThrow();
 
-      // Cobra 1 crédito
       await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.resumo_ia, "resumo_ia", `Resumo IA: ${input.cnj}`);
 
-      // Solicita resumo via Judit
-      const request = await client.solicitarResumoIA(input.cnj);
+      // 1. Buscar processo completo na Judit
+      const request = await client.criarRequest({
+        search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
+      });
 
-      // Polling (max 30s)
+      let processoData: any = null;
       const startTime = Date.now();
       while (Date.now() - startTime < 30000) {
         await new Promise((r) => setTimeout(r, 2000));
         const status = await client.consultarRequest(request.request_id);
         if (status.status === "completed") {
           const responses = await client.buscarRespostas(request.request_id, 1, 10);
-          // Procura resposta tipo ai_summary
-          const summary = responses.page_data.find(
-            (r: any) => r.response_type === "ai_summary" || r.response_type === "lawsuit_summary",
-          );
-          if (summary?.response_data) {
-            const data = summary.response_data as any;
-            return {
-              resumo: data.summary || data.text || data.content || JSON.stringify(data),
-            };
-          }
-          // Se não veio ai_summary, tenta extrair do lawsuit normal
           const lawsuit = responses.page_data.find((r: any) => r.response_type === "lawsuit");
-          if (lawsuit?.response_data) {
-            const d = lawsuit.response_data as any;
-            // Monta resumo a partir dos dados estruturados
-            const partes = (d.parties || []).map((p: any) => `${p.side === "Active" ? "Autor" : "Réu"}: ${p.name}`).join("; ");
-            const lastStep = d.last_step || d.steps?.[0];
-            return {
-              resumo: [
-                `**Processo:** ${d.code || input.cnj}`,
-                d.tribunal_acronym ? `**Tribunal:** ${d.tribunal_acronym}` : null,
-                d.classifications?.[0]?.name ? `**Classe:** ${d.classifications[0].name}` : null,
-                d.subjects?.[0]?.name ? `**Assunto:** ${d.subjects[0].name}` : null,
-                d.amount ? `**Valor:** R$ ${Number(d.amount).toLocaleString("pt-BR")}` : null,
-                partes ? `**Partes:** ${partes}` : null,
-                d.courts?.[0]?.name ? `**Vara:** ${d.courts[0].name}` : null,
-                lastStep?.content ? `**Última movimentação (${lastStep.step_date || ""})**:\n${lastStep.content}` : null,
-                d.steps?.length ? `\n**Total de movimentações:** ${d.steps.length}` : null,
-              ].filter(Boolean).join("\n"),
-            };
-          }
-          return { resumo: "Resumo não disponível para este processo." };
+          if (lawsuit?.response_data) processoData = lawsuit.response_data;
+          break;
         }
       }
 
-      return { resumo: "Resumo em processamento. Tente novamente em alguns segundos." };
+      if (!processoData) {
+        return { resumo: "Não foi possível obter os dados do processo. Tente novamente." };
+      }
+
+      const d = processoData;
+      const partesTexto = (d.parties || []).map((p: any) => {
+        const advs = (p.lawyers || []).map((l: any) => `  - Adv: ${l.name} (OAB ${l.main_document || ""})`).join("\n");
+        return `${p.side === "Active" ? "AUTOR" : "RÉU"}: ${p.name}${p.main_document ? ` (${p.main_document})` : ""}${advs ? "\n" + advs : ""}`;
+      }).join("\n");
+
+      const movsTexto = (d.steps || []).slice(0, 30).map((s: any) =>
+        `${s.step_date || "S/D"} — ${s.content}`
+      ).join("\n");
+
+      const assuntos = (d.subjects || []).map((s: any) => s.name).join(", ");
+      const classe = d.classifications?.[0]?.name || "";
+      const vara = d.courts?.[0]?.name || "";
+
+      // 2. Tentar gerar resumo com IA (se agente configurado)
+      try {
+        const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
+        const config = await obterConfigChatBot(esc.escritorio.id);
+
+        if (config?.openaiApiKey) {
+          const prompt = `Você é um assistente jurídico especialista. Analise DETALHADAMENTE o processo abaixo — entre nos autos, interprete cada movimentação importante, identifique a situação real do caso.
+
+PROCESSO: ${d.code || input.cnj}
+TRIBUNAL: ${d.tribunal_acronym || "N/A"}
+INSTÂNCIA: ${d.instance || "N/A"}ª
+CLASSE: ${classe}
+ASSUNTOS: ${assuntos || "N/A"}
+VARA: ${vara}
+VALOR DA CAUSA: ${d.amount ? `R$ ${Number(d.amount).toLocaleString("pt-BR")}` : "N/A"}
+DISTRIBUIÇÃO: ${d.distribution_date || "N/A"}
+
+PARTES E ADVOGADOS:
+${partesTexto || "N/A"}
+
+MOVIMENTAÇÕES (${d.steps?.length || 0} total, mostrando últimas 30):
+${movsTexto || "Nenhuma"}
+
+Gere um RESUMO EXECUTIVO DETALHADO incluindo:
+1. **Situação atual**: Em que fase está o processo? O que aconteceu recentemente?
+2. **Histórico resumido**: Cronologia dos eventos mais importantes
+3. **Pontos críticos**: Decisões relevantes, liminares, recursos
+4. **Partes e representação**: Quem são as partes e advogados
+5. **Próximos passos prováveis**: O que deve acontecer a seguir
+6. **Risco/Oportunidade**: Avaliação do cenário para o advogado
+
+Seja específico — cite datas e conteúdos das movimentações relevantes.`;
+
+          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages: [{ role: "user", content: prompt }],
+              max_tokens: 1500,
+              temperature: 0.2,
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const resumo = data.choices?.[0]?.message?.content?.trim();
+            if (resumo) return { resumo, fonte: "ia" };
+          }
+        }
+      } catch {
+        // Fallback silencioso para resumo estruturado
+      }
+
+      // 3. Fallback: resumo estruturado sem IA
+      const partesCurto = (d.parties || []).map((p: any) => `${p.side === "Active" ? "Autor" : "Réu"}: ${p.name}`).join("; ");
+      const ultimasMoves = (d.steps || []).slice(0, 5).map((s: any) => `• ${s.step_date || ""} — ${s.content}`).join("\n");
+
+      return {
+        resumo: [
+          `**Processo:** ${d.code || input.cnj}`,
+          `**Tribunal:** ${d.tribunal_acronym || "N/A"} — ${vara}`,
+          classe ? `**Classe:** ${classe}` : null,
+          assuntos ? `**Assuntos:** ${assuntos}` : null,
+          d.amount ? `**Valor:** R$ ${Number(d.amount).toLocaleString("pt-BR")}` : null,
+          d.distribution_date ? `**Distribuição:** ${new Date(d.distribution_date).toLocaleDateString("pt-BR")}` : null,
+          `\n**Partes:** ${partesCurto}`,
+          d.steps?.length ? `\n**Movimentações:** ${d.steps.length} total` : null,
+          ultimasMoves ? `\n**Últimas movimentações:**\n${ultimasMoves}` : null,
+          "\n_Para um resumo analítico detalhado, configure um Agente IA com API Key em Agentes IA._",
+        ].filter(Boolean).join("\n"),
+        fonte: "estruturado",
+      };
     }),
 
   monitorarProcesso: protectedProcedure

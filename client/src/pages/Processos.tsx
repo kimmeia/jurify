@@ -395,23 +395,38 @@ function MonitoramentoCard({
   const status = mon.statusJudit || mon.status || "created";
   const searchKey = mon.searchKey || mon.search?.search_key || "-";
 
+  const [processoCompleto, setProcessoCompleto] = useState<any>(null);
+
   const resumoMut = trpc.juditProcessos.resumoIA.useMutation({
-    onSuccess: (data) => { setResumoIA(data.resumo); toast.success("Resumo gerado (1 crédito)"); },
+    onSuccess: (data: any) => { setResumoIA(data.resumo); toast.success(`Resumo gerado (1 crédito)${data.fonte === "ia" ? " — análise IA" : ""}`); },
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });
+
+  const buscarCompletoMut = trpc.juditProcessos.buscarProcessoCompleto.useMutation({
+    onSuccess: (data: any) => {
+      if (data.encontrado && data.processo) {
+        setProcessoCompleto(data.processo);
+        toast.success("Histórico completo carregado (1 crédito)");
+      } else {
+        toast.error(data.mensagem || "Processo não encontrado");
+      }
+    },
+    onError: (e: any) => toast.error("Erro ao buscar", { description: e.message }),
+  });
+
   const searchType = mon.searchType || mon.search?.search_type || "";
   const st = STATUS_MON[status] || { label: status, cor: "" };
 
-  // Busca o histórico de movimentações quando o card abre (local DB)
+  // Busca o histórico de movimentações quando o card abre (local DB — atualizações do webhook)
   const { data: historico, isLoading: loadingHist } = trpc.juditUsuario.historico.useQuery(
     { monitoramentoId: mon.id, page: 1, pageSize: 50 },
     { enabled: aberto && !!mon.id, retry: false },
   );
 
-  // Extrai movimentações e dados do processo do histórico local
+  // Extrai movimentações e dados do processo do histórico local OU do processo completo
   const respostas = historico?.items || [];
   const ultimaResposta = respostas.find((r: any) => r.responseType === "lawsuit");
-  let processoData: any = null;
+  let processoData: any = processoCompleto || null;
   try {
     if (ultimaResposta?.responseData) {
       processoData = typeof ultimaResposta.responseData === "string"
@@ -449,17 +464,30 @@ function MonitoramentoCard({
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             {searchType === "lawsuit_cnj" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[10px] text-violet-600"
-                title="Gerar resumo IA (1 crédito)"
-                disabled={resumoMut.isPending}
-                onClick={() => resumoMut.mutate({ cnj: searchKey })}
-              >
-                {resumoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileText className="h-3 w-3 mr-1" />}
-                Resumo IA
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px] text-indigo-600"
+                  title="Buscar processo completo na Judit (1 crédito)"
+                  disabled={buscarCompletoMut.isPending}
+                  onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined })}
+                >
+                  {buscarCompletoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
+                  Histórico
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px] text-violet-600"
+                  title="Gerar resumo IA detalhado (1 crédito)"
+                  disabled={resumoMut.isPending}
+                  onClick={() => resumoMut.mutate({ cnj: searchKey })}
+                >
+                  {resumoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileText className="h-3 w-3 mr-1" />}
+                  Resumo IA
+                </Button>
+              </>
             )}
             {(status === "created" || status === "updated" || status === "updating") && (
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" title="Pausar" onClick={onPausar}>
