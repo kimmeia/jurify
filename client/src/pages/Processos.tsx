@@ -201,7 +201,10 @@ function ConsultarTab() {
 
   const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
   const consultarDoc = trpc.juditProcessos.consultarDocumento.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
-  const monitorarMut = trpc.juditProcessos.monitorarProcesso.useMutation({ onSuccess: () => toast.success("Monitoramento criado (5 creditos)"), onError: (e) => toast.error(e.message) });
+  const monitorarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
+    onSuccess: () => toast.success("Processo adicionado às Movimentações (5 cred/mês)"),
+    onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
+  });
 
   const { data: statusData } = trpc.juditProcessos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
 
@@ -352,7 +355,7 @@ function ConsultarTab() {
         <div className="space-y-3">
           <p className="text-sm font-medium">{resultados.all_count || resultados.page_data.length} processo(s) encontrado(s)</p>
           {resultados.page_data.map((item: any, i: number) => (
-            <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => monitorarMut.mutate({ cnj })} />
+            <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined })} />
           ))}
         </div>
       ) : resultados && !buscando ? (
@@ -398,7 +401,14 @@ function MonitoramentoCard({
   const [processoCompleto, setProcessoCompleto] = useState<any>(null);
 
   const resumoMut = trpc.juditProcessos.resumoIA.useMutation({
-    onSuccess: (data: any) => { setResumoIA(data.resumo); toast.success(`Resumo gerado (1 crédito)${data.fonte === "ia" ? " — análise IA" : ""}`); },
+    onSuccess: (data: any) => {
+      setResumoIA(data.resumo);
+      toast.success(`Resumo gerado (1 crédito)${data.fonte === "ia" ? " — análise IA" : ""}`);
+      // Se o resumo buscou dados completos internamente, auto-buscar histórico
+      if (!processoCompleto) {
+        buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined });
+      }
+    },
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });
 
@@ -423,17 +433,21 @@ function MonitoramentoCard({
     { enabled: aberto && !!mon.id, retry: false },
   );
 
-  // Extrai movimentações e dados do processo do histórico local OU do processo completo
+  // Extrai dados do processo: prioridade para busca completa, fallback para webhook local
   const respostas = historico?.items || [];
   const ultimaResposta = respostas.find((r: any) => r.responseType === "lawsuit");
-  let processoData: any = processoCompleto || null;
-  try {
-    if (ultimaResposta?.responseData) {
+  let processoData: any = null;
+  // 1. Prioridade: processo completo buscado sob demanda (botão Histórico)
+  if (processoCompleto) {
+    processoData = processoCompleto;
+  } else if (ultimaResposta?.responseData) {
+    // 2. Fallback: dados do webhook (atualizações)
+    try {
       processoData = typeof ultimaResposta.responseData === "string"
         ? JSON.parse(ultimaResposta.responseData)
         : ultimaResposta.responseData;
-    }
-  } catch { processoData = null; }
+    } catch { /* ignore */ }
+  }
   const steps: any[] = processoData?.steps || [];
   const partes: any[] = processoData?.parties || [];
   const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
@@ -676,7 +690,7 @@ function MonitorarTab() {
                 Requer credencial OAB cadastrada no Cofre.
               </p>
             </div>
-            <Button size="sm" onClick={() => setNovoOpen(true)} disabled={semCredenciais}>
+            <Button size="sm" onClick={() => setNovoOpen(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" />Novo
             </Button>
           </div>
@@ -684,16 +698,12 @@ function MonitorarTab() {
       </Card>
 
       {semCredenciais && (
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-4 flex items-start gap-3">
-          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Credencial OAB necessária</p>
-            <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
-              Para monitorar movimentações processuais, é necessário cadastrar pelo menos uma credencial
-              de advogado (OAB) no <strong>Cofre de Credenciais</strong>. Isso garante que apenas
-              profissionais habilitados acessem dados processuais, em conformidade com a LGPD.
-            </p>
-          </div>
+        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 flex items-start gap-3">
+          <Lock className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-800 dark:text-blue-300">
+            Processos públicos podem ser monitorados sem credencial.
+            Para processos em <strong>segredo de justiça</strong>, cadastre uma credencial OAB no <strong>Cofre</strong>.
+          </p>
         </div>
       )}
 
@@ -773,10 +783,10 @@ function MonitorarTab() {
               onClick={() =>
                 criarMut.mutate({
                   numeroCnj: novoValor.trim(),
-                  credencialId: Number(novoCredencialId),
+                  credencialId: novoCredencialId ? Number(novoCredencialId) : undefined,
                 })
               }
-              disabled={!novoValor.trim() || !novoCredencialId || criarMut.isPending}
+              disabled={!novoValor.trim() || criarMut.isPending}
             >
               {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Radar className="h-4 w-4 mr-2" />}
               Monitorar

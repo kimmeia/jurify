@@ -196,10 +196,8 @@ export const juditUsuarioRouter = router({
     .input(z.object({
       numeroCnj: z.string().min(20).max(25),
       apelido: z.string().max(255).optional(),
-      /** ID de credencial do cofre — OBRIGATÓRIO para LGPD */
-      credencialId: z.number({
-        required_error: "Credencial OAB obrigatória. Cadastre uma no Cofre de Credenciais.",
-      }),
+      /** ID de credencial do cofre — opcional pra processos públicos, necessário pra segredo de justiça */
+      credencialId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { limites } = await verificarPlanoJudit(ctx.user.id);
@@ -207,36 +205,38 @@ export const juditUsuarioRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // ─── SEGURANÇA: Validar credencial OAB ───────────────────────────
-      const { juditCredenciais } = await import("../../drizzle/schema");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
 
-      const [cred] = await db
-        .select()
-        .from(juditCredenciais)
-        .where(
-          and(
-            eq(juditCredenciais.id, input.credencialId),
-            eq(juditCredenciais.escritorioId, esc.escritorio.id),
-          ),
-        )
-        .limit(1);
+      // ─── Resolver credencial OAB (se informada) ───────────────────────
+      let juditCredentialId: string | undefined;
+      if (input.credencialId) {
+        const { juditCredenciais } = await import("../../drizzle/schema");
+        const [cred] = await db
+          .select()
+          .from(juditCredenciais)
+          .where(
+            and(
+              eq(juditCredenciais.id, input.credencialId),
+              eq(juditCredenciais.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
 
-      if (!cred) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Credencial não encontrada ou não pertence ao seu escritório.",
-        });
+        if (!cred) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Credencial não encontrada ou não pertence ao seu escritório.",
+          });
+        }
+        if (cred.status !== "ativa" && cred.status !== "validando") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Credencial "${cred.customerKey}" não pode ser usada (status: ${cred.status}). Verifique no Cofre.`,
+          });
+        }
+        juditCredentialId = cred.juditCredentialId || undefined;
       }
-      if (cred.status !== "ativa" && cred.status !== "validando") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Credencial "${cred.customerKey}" não pode ser usada (status: ${cred.status}). Verifique no Cofre.`,
-        });
-      }
-
-      const juditCredentialId = cred.juditCredentialId;
 
       // Verificar limite de monitoramentos
       const ativos = await contarMonitoramentosAtivos(ctx.user.id);
