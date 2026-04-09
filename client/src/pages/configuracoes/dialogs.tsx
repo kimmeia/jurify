@@ -704,7 +704,7 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
-  const chatgptCanal = (canaisData?.canais || []).find((c: any) => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"));
+  const chatgptCanal = (canaisData?.canais || []).find((c: any) => c.tipo === "chatgpt" || (c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT")));
 
   const criarMut = trpc.configuracoes.criarCanal.useMutation({
     onSuccess: () => { toast.success("Chave OpenAI salva! Agora crie agentes em 'Agentes de IA'."); refetch(); onClose(); setApiKey(""); },
@@ -723,7 +723,7 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
     if (chatgptCanal) {
       atualizarMut.mutate({ canalId: chatgptCanal.id, config });
     } else {
-      criarMut.mutate({ tipo: "whatsapp_api", nome: "ChatGPT Bot", config });
+      criarMut.mutate({ tipo: "chatgpt" as any, nome: "ChatGPT Bot", config });
     }
   };
 

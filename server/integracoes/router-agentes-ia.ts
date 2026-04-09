@@ -104,7 +104,7 @@ async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promis
   // 3. Key do canal ChatGPT Bot (salva em Configurações → Integrações)
   try {
     const { canaisIntegrados } = await import("../../drizzle/schema");
-    const { like } = await import("drizzle-orm");
+    const { or: orOp, like } = await import("drizzle-orm");
     const { decryptConfig } = await import("../escritorio/crypto-utils");
     const canalRows = await db
       .select()
@@ -112,7 +112,10 @@ async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promis
       .where(
         and(
           eq(canaisIntegrados.escritorioId, escritorioId),
-          like(canaisIntegrados.nome, "%ChatGPT%"),
+          orOp(
+            eq(canaisIntegrados.tipo, "chatgpt"),
+            like(canaisIntegrados.nome, "%ChatGPT%"),
+          ),
         ),
       )
       .limit(1);

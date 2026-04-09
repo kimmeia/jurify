@@ -3,7 +3,7 @@
  * Fase 2: WhatsApp, Instagram, Facebook, VoIP
  */
 
-export type TipoCanal = "whatsapp_qr" | "whatsapp_api" | "instagram" | "facebook" | "telefone_voip";
+export type TipoCanal = "whatsapp_qr" | "whatsapp_api" | "instagram" | "facebook" | "telefone_voip" | "calcom" | "chatgpt";
 export type StatusCanal = "conectado" | "desconectado" | "pendente" | "erro" | "banido";
 
 export const TIPO_CANAL_LABELS: Record<TipoCanal, string> = {
@@ -12,6 +12,8 @@ export const TIPO_CANAL_LABELS: Record<TipoCanal, string> = {
   instagram: "Instagram",
   facebook: "Facebook Messenger",
   telefone_voip: "Telefone (VoIP)",
+  calcom: "Cal.com (Agendamento)",
+  chatgpt: "OpenAI / ChatGPT",
 };
 
 export const TIPO_CANAL_DESCRICAO: Record<TipoCanal, string> = {
@@ -20,6 +22,8 @@ export const TIPO_CANAL_DESCRICAO: Record<TipoCanal, string> = {
   instagram: "Mensagens diretas do Instagram via Meta Graph API.",
   facebook: "Messenger da página do Facebook via Meta Graph API.",
   telefone_voip: "Ligações telefônicas via Twilio — gravação e transcrição disponíveis.",
+  calcom: "Agendamento online integrado ao CRM.",
+  chatgpt: "API Key OpenAI para agentes de IA.",
 };
 
 export const TIPO_CANAL_ICONE: Record<TipoCanal, string> = {
@@ -28,6 +32,8 @@ export const TIPO_CANAL_ICONE: Record<TipoCanal, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
   telefone_voip: "Phone",
+  calcom: "Calendar",
+  chatgpt: "Bot",
 };
 
 export const STATUS_CANAL_LABELS: Record<StatusCanal, string> = {

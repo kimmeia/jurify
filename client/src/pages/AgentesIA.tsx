@@ -95,7 +95,7 @@ function AgenteFormDialog({
   // Detectar se API Key OpenAI já está configurada globalmente (Integrações → ChatGPT)
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
   const chatgptConfigurado = (canaisData?.canais || []).some(
-    (c: any) => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT") && c.status === "conectado",
+    (c: any) => (c.tipo === "chatgpt" || (c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"))) && c.status === "conectado",
   );
 
   const { data: existing } = trpc.agentesIa.obter.useQuery(

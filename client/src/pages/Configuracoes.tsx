@@ -487,8 +487,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
 
   const canais = canaisData?.canais || [];
-  // Canal "moderno" WhatsApp = whatsapp_api (qualquer nome, exceto ChatGPT bot)
-  const whatsappCanal = canais.find(c => c.tipo === "whatsapp_api" && !(c.nome || "").includes("ChatGPT"));
+  // Canal "moderno" WhatsApp = whatsapp_api (excluindo integrações internas)
+  const whatsappCanal = canais.find((c: any) => c.tipo === "whatsapp_api");
   const whatsappQrCanal = canais.find(c => c.tipo === "whatsapp_qr");
   const instagramCanal = canais.find(c => c.tipo === "instagram");
   const facebookCanal = canais.find(c => c.tipo === "facebook");
@@ -702,8 +702,8 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
 
   const canais = canaisData?.canais || [];
   const twilioCanal = canais.find((c: any) => c.tipo === "telefone_voip");
-  const chatgptCanal = canais.find((c: any) => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"));
-  const calcomCanal = canais.find((c: any) => (c.nome || "").includes("Cal.com"));
+  const chatgptCanal = canais.find((c: any) => c.tipo === "chatgpt" || (c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT")));
+  const calcomCanal = canais.find((c: any) => c.tipo === "calcom" || (c.nome || "").includes("Cal.com"));
 
   const integracoes = [
     {

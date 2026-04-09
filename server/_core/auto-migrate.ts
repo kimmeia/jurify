@@ -982,6 +982,18 @@ export async function runMigrations(): Promise<void> {
     await ensureAsaasBillingColumns(connection);
     await ensureClienteControlSchema(connection);
     await ensureJuditMonitoramentoColumns(connection);
+
+    // Atualizar enum tipoCanal para incluir calcom e chatgpt
+    try {
+      await connection.query(
+        `ALTER TABLE canais_integrados MODIFY COLUMN tipoCanal ENUM('whatsapp_qr','whatsapp_api','instagram','facebook','telefone_voip','calcom','chatgpt') NOT NULL`,
+      );
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao atualizar enum tipoCanal");
+      }
+    }
+
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

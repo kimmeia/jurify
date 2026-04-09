@@ -61,7 +61,7 @@ export const calcomRouter = router({
       const { criarCanal } = await import("../escritorio/db-canais");
       const canalId = await criarCanal({
         escritorioId: esc.escritorio.id,
-        tipo: "whatsapp_api", // Workaround — será "calcom" no futuro
+        tipo: "calcom",
         nome: `Cal.com (${teste.user})`,
         config: { apiKey: input.apiKey, baseUrl: input.baseUrl, defaultDuration: "30" },
       });
