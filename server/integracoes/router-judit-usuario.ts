@@ -333,13 +333,17 @@ export const juditUsuarioRouter = router({
 
       const searchKeyNorm = input.valor.replace(/\D/g, "");
       const { contatos } = await import("../../drizzle/schema");
+      const { sql } = await import("drizzle-orm");
+
+      // Compara CPF/CNPJ removendo formatação (pontos/traços/barras) de ambos os lados,
+      // porque o campo contatos.cpfCnpj pode estar armazenado com formato (ex: 605.167.503-56)
       const clientesCadastrados = await db
         .select({ id: contatos.id, nome: contatos.nome, cpfCnpj: contatos.cpfCnpj })
         .from(contatos)
         .where(
           and(
             eq(contatos.escritorioId, esc.escritorio.id),
-            like(contatos.cpfCnpj, `%${searchKeyNorm}%`),
+            sql`REPLACE(REPLACE(REPLACE(${contatos.cpfCnpj}, '.', ''), '-', ''), '/', '') = ${searchKeyNorm}`,
           ),
         )
         .limit(1);

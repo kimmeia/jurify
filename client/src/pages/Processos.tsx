@@ -238,8 +238,8 @@ function ConsultarTab() {
                   <div>
                     <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
                     <p className="mt-0.5 text-[10px] opacity-90">
-                      Cobramos <strong>3 créditos base</strong> + <strong>1 crédito por processo encontrado</strong> (teto: 100 créditos).
-                      Se sua busca trouxer 30 processos, custo = 33 créditos. Se não encontrar nada, só os 3 base.
+                      Cobramos <strong>3 créditos base</strong> + <strong>1 crédito por lote de 10 processos</strong> encontrados (sem teto).
+                      Ex: 30 processos = 3 base + 3 lotes = 6 créditos. Se não encontrar nada, só os 3 base.
                     </p>
                     <p className="mt-0.5 text-[10px] opacity-80">
                       Pode levar até 2 minutos.
