@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { eq, desc, and, like } from "drizzle-orm";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { juditCreditos, juditTransacoes } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -361,7 +361,12 @@ export const juditProcessosRouter = router({
       return { trackingId: tracking.tracking_id, status: tracking.status };
     }),
 
-  listarMonitoramentos: protectedProcedure
+  /**
+   * ADMIN ONLY — lista TODOS os monitoramentos na Judit (sem filtro de usuário).
+   * O frontend de usuários usa juditUsuario.meusMonitoramentos (user-scoped).
+   * Mantido apenas para painel administrativo.
+   */
+  listarMonitoramentos: adminProcedure
     .input(z.object({ page: z.number().optional(), tipo: z.string().optional() }).optional())
     .query(async ({ input }) => {
       try {
@@ -375,7 +380,8 @@ export const juditProcessosRouter = router({
       }
     }),
 
-  pausarMonitoramento: protectedProcedure
+  /** ADMIN ONLY — pausa qualquer monitoramento na Judit (sem filtro de owner). */
+  pausarMonitoramento: adminProcedure
     .input(z.object({ trackingId: z.string() }))
     .mutation(async ({ input }) => {
       const client = await getJuditClientOrThrow();
@@ -383,7 +389,8 @@ export const juditProcessosRouter = router({
       return { success: true };
     }),
 
-  reativarMonitoramento: protectedProcedure
+  /** ADMIN ONLY — reativa qualquer monitoramento na Judit (sem filtro de owner). */
+  reativarMonitoramento: adminProcedure
     .input(z.object({ trackingId: z.string() }))
     .mutation(async ({ input }) => {
       const client = await getJuditClientOrThrow();
@@ -391,7 +398,8 @@ export const juditProcessosRouter = router({
       return { success: true };
     }),
 
-  deletarMonitoramento: protectedProcedure
+  /** ADMIN ONLY — deleta qualquer monitoramento na Judit (sem filtro de owner). */
+  deletarMonitoramento: adminProcedure
     .input(z.object({ trackingId: z.string() }))
     .mutation(async ({ input }) => {
       const client = await getJuditClientOrThrow();
@@ -399,7 +407,8 @@ export const juditProcessosRouter = router({
       return { success: true };
     }),
 
-  historicoMonitoramento: protectedProcedure
+  /** ADMIN ONLY — busca histórico de qualquer monitoramento (sem filtro de owner). */
+  historicoMonitoramento: adminProcedure
     .input(z.object({ trackingId: z.string(), page: z.number().optional() }))
     .query(async ({ input }) => {
       try {
