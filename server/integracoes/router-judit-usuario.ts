@@ -454,9 +454,9 @@ export const juditUsuarioRouter = router({
       const { juditNovasAcoes } = await import("../../drizzle/schema");
       const params = input || { limite: 50 };
 
-      // Primeiro pega os monitoramentos COMPLETOS do usuário (pra ter o
+      // Primeiro pega os monitoramentos ATIVOS do usuário (pra ter o
       // apelido, searchKey, searchType — usado pra mostrar contexto
-      // do cliente na lista de novas ações)
+      // do cliente na lista de novas ações). Exclui deletados.
       const mons = await db
         .select()
         .from(juditMonitoramentos)
@@ -464,6 +464,12 @@ export const juditUsuarioRouter = router({
           and(
             eq(juditMonitoramentos.clienteUserId, ctx.user.id),
             eq(juditMonitoramentos.tipoMonitoramento, "novas_acoes"),
+            or(
+              eq(juditMonitoramentos.statusJudit, "created"),
+              eq(juditMonitoramentos.statusJudit, "updating"),
+              eq(juditMonitoramentos.statusJudit, "updated"),
+              eq(juditMonitoramentos.statusJudit, "paused"),
+            ),
           ),
         );
       const monIds = mons.map((m) => m.id);
