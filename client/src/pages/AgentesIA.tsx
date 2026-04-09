@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
-  Send, Sparkles, ExternalLink, BrainCircuit, Play, KeyRound,
+  Send, Sparkles, ExternalLink, BrainCircuit, Play, KeyRound, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -91,6 +91,12 @@ function AgenteFormDialog({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<AgenteForm>(DEFAULT_FORM);
+
+  // Detectar se API Key OpenAI já está configurada globalmente (Integrações → ChatGPT)
+  const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
+  const chatgptConfigurado = (canaisData?.canais || []).some(
+    (c: any) => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT") && c.status === "conectado",
+  );
 
   const { data: existing } = trpc.agentesIa.obter.useQuery(
     { id: agenteId! },
@@ -287,18 +293,25 @@ function AgenteFormDialog({
               <KeyRound className="h-3.5 w-3.5" />
               API Key OpenAI {agenteId ? "(opcional — vazio mantém a atual)" : "(opcional)"}
             </Label>
+            {chatgptConfigurado && !form.openaiApiKey && (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 text-xs text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>Usando API Key configurada em <strong>Integrações → ChatGPT</strong>. Não precisa preencher novamente.</span>
+              </div>
+            )}
             <Input
               type="password"
-              placeholder="sk-..."
+              placeholder={chatgptConfigurado ? "Deixe vazio para usar a key global" : "sk-..."}
               value={form.openaiApiKey}
               onChange={(e) => setForm({ ...form, openaiApiKey: e.target.value })}
               className="font-mono text-xs"
             />
-            <p className="text-[11px] text-muted-foreground">
-              Se não informada, o agente usa a chave global do sistema
-              (configurada pelo admin do Jurify). Custos de uso serão
-              cobrados na mensalidade do seu plano.
-            </p>
+            {!chatgptConfigurado && (
+              <p className="text-[11px] text-muted-foreground">
+                Configure a API Key em <strong>Configurações → Integrações → ChatGPT</strong> para
+                não precisar informar em cada agente.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">

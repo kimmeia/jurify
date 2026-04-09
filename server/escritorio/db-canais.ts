@@ -90,7 +90,7 @@ export async function atualizarConfigCanal(
     configEncrypted: enc.encrypted,
     configIv: enc.iv,
     configTag: enc.tag,
-    status: "pendente",
+    status: "conectado",
   };
 
   if (telefone !== undefined) updateData.telefone = telefone || null;

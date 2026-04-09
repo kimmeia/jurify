@@ -701,8 +701,9 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
   const { data: asaasStatus, refetch: refetchAsaas } = trpc.asaas.status.useQuery(undefined, { retry: false });
 
   const canais = canaisData?.canais || [];
-  const twilioCanal = canais.find(c => c.tipo === "telefone_voip");
-  const chatgptCanal = canais.find(c => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"));
+  const twilioCanal = canais.find((c: any) => c.tipo === "telefone_voip");
+  const chatgptCanal = canais.find((c: any) => c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"));
+  const calcomCanal = canais.find((c: any) => (c.nome || "").includes("Cal.com"));
 
   const integracoes = [
     {
@@ -719,7 +720,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       descricao: "Agendamento online integrado ao CRM. Permita que clientes marquem reuniões automaticamente.",
       logo: "📅",
       cor: "from-blue-500 to-sky-600",
-      conectado: false,
+      conectado: calcomCanal?.status === "conectado",
     },
     {
       id: "chatgpt",
