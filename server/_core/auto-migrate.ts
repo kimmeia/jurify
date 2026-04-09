@@ -994,6 +994,35 @@ export async function runMigrations(): Promise<void> {
       }
     }
 
+    // Criar tabela cliente_processos (processos vinculados a clientes)
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS cliente_processos (
+          id INT NOT NULL AUTO_INCREMENT,
+          escritorioIdCliProc INT NOT NULL,
+          contatoIdCliProc INT NOT NULL,
+          numeroCnjCliProc VARCHAR(30) NOT NULL,
+          apelidoCliProc VARCHAR(255),
+          monitoramentoIdCliProc INT,
+          tribunalCliProc VARCHAR(16),
+          classeCliProc VARCHAR(255),
+          valorCausaCliProc INT,
+          poloCliProc ENUM('ativo','passivo','interessado'),
+          criadoPorCliProc INT,
+          createdAtCliProc TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtCliProc TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_cliproc_escritorio (escritorioIdCliProc),
+          INDEX idx_cliproc_contato (contatoIdCliProc),
+          INDEX idx_cliproc_cnj (numeroCnjCliProc)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar cliente_processos");
+      }
+    }
+
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

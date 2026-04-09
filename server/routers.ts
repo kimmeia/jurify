@@ -26,6 +26,7 @@ import { configuracoesRouter } from "./escritorio/router-configuracoes";
 import { agendamentoRouter } from "./escritorio/router-agendamento";
 import { crmRouter } from "./escritorio/router-crm";
 import { clientesRouter } from "./escritorio/router-clientes";
+import { clienteProcessosRouter } from "./escritorio/router-cliente-processos";
 import { relatoriosRouter } from "./escritorio/router-relatorios";
 import { permissoesRouter } from "./escritorio/router-permissoes";
 import { assinaturasRouter } from "./escritorio/router-assinaturas";
@@ -89,6 +90,7 @@ export const appRouter = router({
   twilio: twilioRouter,
   agentesIa: agentesIaRouter,
   clientes: clientesRouter,
+  clienteProcessos: clienteProcessosRouter,
   relatorios: relatoriosRouter,
   permissoes: permissoesRouter,
   assinaturas: assinaturasRouter,

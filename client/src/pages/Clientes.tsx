@@ -15,12 +15,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
+  Scale, Radar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
@@ -508,7 +512,180 @@ export default function Clientes() {
   );
 }
 
-// ─── Detalhe: 3 abas consolidadas ────────────────────────────────────────────
+// ─── Processos do Cliente ────────────────────────────────────────────────────
+
+function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [novoCnj, setNovoCnj] = useState("");
+  const [novoApelido, setNovoApelido] = useState("");
+  const [novoPolo, setNovoPolo] = useState<string>("");
+  const [novoMonitorar, setNovoMonitorar] = useState(false);
+
+  const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
+  const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r.monitorando ? "Processo vinculado e monitoramento criado!" : "Processo vinculado!");
+      setNovoOpen(false);
+      setNovoCnj("");
+      setNovoApelido("");
+      setNovoPolo("");
+      setNovoMonitorar(false);
+      refetch();
+    },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+  const desvincularMut = (trpc as any).clienteProcessos.desvincular.useMutation({
+    onSuccess: () => { toast.success("Processo desvinculado"); refetch(); },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+
+  const lista = processos || [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Scale className="h-4 w-4 text-indigo-500" />
+            Processos ({lista.length})
+          </p>
+          <p className="text-xs text-muted-foreground">Processos nos quais o escritório representa este cliente</p>
+        </div>
+        <Button size="sm" onClick={() => setNovoOpen(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Vincular processo
+        </Button>
+      </div>
+
+      {lista.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-12 text-center">
+            <Scale className="h-10 w-10 text-muted-foreground/20 mb-3" />
+            <p className="text-sm font-medium">Nenhum processo vinculado</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Vincule processos para acompanhar os casos deste cliente.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {lista.map((p: any) => (
+            <Card key={p.id} className="hover:shadow-sm transition-all">
+              <CardContent className="pt-3 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                    <Scale className="h-4 w-4 text-indigo-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-mono font-medium">{p.numeroCnj}</p>
+                      {p.polo && (
+                        <Badge variant="outline" className="text-[9px]">
+                          {p.polo === "ativo" ? "Polo Ativo" : p.polo === "passivo" ? "Polo Passivo" : "Interessado"}
+                        </Badge>
+                      )}
+                      {p.monitoramentoId && (
+                        <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">
+                          <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
+                        </Badge>
+                      )}
+                    </div>
+                    {p.apelido && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
+                    {p.tribunal && <p className="text-[10px] text-muted-foreground">{p.tribunal}</p>}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-destructive"
+                    title="Desvincular"
+                    onClick={() => {
+                      if (confirm("Desvincular este processo do cliente?")) desvincularMut.mutate({ id: p.id });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog vincular processo */}
+      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vincular processo</DialogTitle>
+            <DialogDescription>
+              Informe o número CNJ do processo para vincular a este cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Número CNJ *</Label>
+              <Input
+                placeholder="0000000-00.0000.0.00.0000"
+                value={novoCnj}
+                onChange={(e) => setNovoCnj(e.target.value)}
+                className="font-mono"
+              />
+            </div>
+            <div>
+              <Label>Descrição (opcional)</Label>
+              <Input
+                placeholder="Ex: Divórcio, Trabalhista, Indenização..."
+                value={novoApelido}
+                onChange={(e) => setNovoApelido(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Polo do cliente</Label>
+              <Select value={novoPolo} onValueChange={setNovoPolo}>
+                <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativo">Polo Ativo (autor)</SelectItem>
+                  <SelectItem value="passivo">Polo Passivo (réu)</SelectItem>
+                  <SelectItem value="interessado">Interessado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50">
+              <input
+                type="checkbox"
+                checked={novoMonitorar}
+                onChange={(e) => setNovoMonitorar(e.target.checked)}
+                className="accent-primary"
+              />
+              <div>
+                <p className="text-xs font-medium">Monitorar movimentações</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Criar monitoramento automático (5 créditos/mês). Receba alertas de novos despachos e sentenças.
+                </p>
+              </div>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => vincularMut.mutate({
+                contatoId,
+                numeroCnj: novoCnj.trim(),
+                apelido: novoApelido || undefined,
+                polo: novoPolo || undefined,
+                monitorar: novoMonitorar,
+              })}
+              disabled={!novoCnj.trim() || novoCnj.trim().length < 15 || vincularMut.isPending}
+            >
+              {vincularMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Detalhe do Cliente ─────────────────────────────────────────────────────
 
 function ClienteDetalhe({
   id,
@@ -635,9 +812,12 @@ function ClienteDetalhe({
 
       {/* 3 abas consolidadas */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-3 h-9">
+        <TabsList className="grid w-full grid-cols-4 h-9">
           <TabsTrigger value="visao-geral" className="text-xs gap-1">
             <User className="h-3 w-3" /> Visão Geral
+          </TabsTrigger>
+          <TabsTrigger value="processos" className="text-xs gap-1">
+            <Scale className="h-3 w-3" /> Processos
           </TabsTrigger>
           <TabsTrigger value="historico" className="text-xs gap-1">
             <MessageCircle className="h-3 w-3" /> Histórico
@@ -653,7 +833,12 @@ function ClienteDetalhe({
           <TarefasClienteTab contatoId={id} />
         </TabsContent>
 
-        {/* Aba 2: Histórico (conversas + leads + notas + timeline) */}
+        {/* Aba 2: Processos */}
+        <TabsContent value="processos" className="mt-4 space-y-4">
+          <ProcessosClienteTab contatoId={id} />
+        </TabsContent>
+
+        {/* Aba 3: Histórico (conversas + leads + notas + timeline) */}
         <TabsContent value="historico" className="mt-4 space-y-4">
           {/* Conversas */}
           <Card>

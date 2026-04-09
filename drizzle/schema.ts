@@ -649,6 +649,36 @@ export const clienteAnotacoes = mysqlTable("cliente_anotacoes", {
 export type ClienteAnotacao = typeof clienteAnotacoes.$inferSelect;
 export type InsertClienteAnotacao = typeof clienteAnotacoes.$inferInsert;
 
+/**
+ * Processos vinculados a um cliente — permite ao escritório registrar
+ * quais processos representam cada cliente, com opção de monitorar.
+ */
+export const clienteProcessos = mysqlTable("cliente_processos", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdCliProc").notNull(),
+  contatoId: int("contatoIdCliProc").notNull(),
+  /** Número CNJ do processo */
+  numeroCnj: varchar("numeroCnjCliProc", { length: 30 }).notNull(),
+  /** Apelido/descrição livre (ex: "Divórcio", "Trabalhista") */
+  apelido: varchar("apelidoCliProc", { length: 255 }),
+  /** ID do monitoramento em judit_monitoramentos (se estiver monitorando) */
+  monitoramentoId: int("monitoramentoIdCliProc"),
+  /** Tribunal identificado */
+  tribunal: varchar("tribunalCliProc", { length: 16 }),
+  /** Classe processual */
+  classe: varchar("classeCliProc", { length: 255 }),
+  /** Valor da causa */
+  valorCausa: int("valorCausaCliProc"),
+  /** Polo do cliente (ativo/passivo) */
+  polo: mysqlEnum("poloCliProc", ["ativo", "passivo", "interessado"]),
+  criadoPor: int("criadoPorCliProc"),
+  createdAt: timestamp("createdAtCliProc").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtCliProc").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ClienteProcesso = typeof clienteProcessos.$inferSelect;
+export type InsertClienteProcesso = typeof clienteProcessos.$inferInsert;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // FASE 6 — PERMISSÕES CUSTOMIZÁVEIS
 // ═══════════════════════════════════════════════════════════════════════════════
