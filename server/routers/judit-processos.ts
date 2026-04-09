@@ -356,6 +356,78 @@ export const juditProcessosRouter = router({
       return resultado;
     }),
 
+  /**
+   * Gera um resumo IA de um processo judicial.
+   * Usa a API Key OpenAI do escritório (configurada nos Agentes IA).
+   * Cobra 1 crédito por resumo.
+   */
+  resumoIA: protectedProcedure
+    .input(z.object({
+      processo: z.object({
+        cnj: z.string().optional(),
+        tribunal: z.string().optional(),
+        classe: z.string().optional(),
+        assunto: z.string().optional(),
+        partes: z.array(z.object({ nome: z.string(), lado: z.string() })).optional(),
+        movimentacoes: z.array(z.object({ data: z.string().optional(), conteudo: z.string() })).optional(),
+        valor: z.number().optional(),
+      }),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      // Cobra 1 crédito
+      await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.resumo_ia, "resumo_ia", `Resumo IA: ${input.processo.cnj || "processo"}`);
+
+      // Buscar config do agente IA do escritório
+      const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
+      const config = await obterConfigChatBot(esc.escritorio.id);
+      if (!config?.openaiApiKey) {
+        throw new Error("Configure um Agente de IA com API Key OpenAI para usar o resumo. Vá em Agentes IA.");
+      }
+
+      // Montar contexto do processo
+      const p = input.processo;
+      const partesTexto = (p.partes || []).map((pt) => `${pt.lado}: ${pt.nome}`).join("\n");
+      const movsTexto = (p.movimentacoes || []).slice(0, 20).map((m) => `${m.data || ""} - ${m.conteudo}`).join("\n");
+
+      const prompt = `Você é um assistente jurídico especialista. Analise o processo abaixo e gere um RESUMO EXECUTIVO claro e objetivo em português para um advogado. Inclua: situação atual, pontos críticos, próximos passos recomendados, e risco estimado.
+
+PROCESSO: ${p.cnj || "N/A"}
+TRIBUNAL: ${p.tribunal || "N/A"}
+CLASSE: ${p.classe || "N/A"}
+ASSUNTO: ${p.assunto || "N/A"}
+VALOR DA CAUSA: ${p.valor ? `R$ ${p.valor.toLocaleString("pt-BR")}` : "N/A"}
+
+PARTES:
+${partesTexto || "N/A"}
+
+ÚLTIMAS MOVIMENTAÇÕES:
+${movsTexto || "Nenhuma disponível"}
+
+Gere o resumo de forma estruturada e concisa (máximo 500 palavras).`;
+
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 800,
+            temperature: 0.3,
+          }),
+        });
+        if (!res.ok) throw new Error(`OpenAI retornou ${res.status}`);
+        const data = await res.json();
+        const resumo = data.choices?.[0]?.message?.content?.trim() || "Não foi possível gerar o resumo.";
+        return { resumo, tokensUsados: data.usage?.total_tokens || 0 };
+      } catch (err: any) {
+        throw new Error(`Erro ao gerar resumo IA: ${err.message}`);
+      }
+    }),
+
   monitorarProcesso: protectedProcedure
     .input(z.object({ cnj: z.string().min(15).max(30) }))
     .mutation(async ({ ctx, input }) => {

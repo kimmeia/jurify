@@ -367,7 +367,7 @@ export const juditUsuarioRouter = router({
       // Normaliza o valor pra CPF/CNPJ (remove formatação)
       const searchKey = input.valor.replace(/\D/g, "");
 
-      // Duplicata
+      // Duplicata — verifica apenas monitoramentos ATIVOS (não deletados)
       const existente = await db
         .select()
         .from(juditMonitoramentos)
@@ -376,6 +376,12 @@ export const juditUsuarioRouter = router({
             eq(juditMonitoramentos.searchKey, searchKey),
             eq(juditMonitoramentos.clienteUserId, ctx.user.id),
             eq(juditMonitoramentos.tipoMonitoramento, "novas_acoes"),
+            or(
+              eq(juditMonitoramentos.statusJudit, "created"),
+              eq(juditMonitoramentos.statusJudit, "updating"),
+              eq(juditMonitoramentos.statusJudit, "updated"),
+              eq(juditMonitoramentos.statusJudit, "paused"),
+            ),
           ),
         )
         .limit(1);
@@ -644,11 +650,12 @@ export const juditUsuarioRouter = router({
 
   /**
    * Remove um monitoramento (somente o próprio).
+   * Best-effort na Judit — se falhar na API, ainda marca como deletado
+   * localmente pra o usuário poder se livrar do card.
    */
   deletar: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const client = await requireJuditDisponivel();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -656,12 +663,27 @@ export const juditUsuarioRouter = router({
         .where(and(eq(juditMonitoramentos.id, input.id), eq(juditMonitoramentos.clienteUserId, ctx.user.id)))
         .limit(1);
 
-      if (!mon) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
 
-      await client.deletarMonitoramento(mon.trackingId);
-      await db.update(juditMonitoramentos).set({ statusJudit: "deleted" }).where(eq(juditMonitoramentos.id, input.id));
+      // Tenta deletar no Judit (best-effort — se falhar, ainda marca
+      // como deletado localmente)
+      let juditErro: string | null = null;
+      try {
+        const client = await requireJuditDisponivel();
+        await client.deletarMonitoramento(mon.trackingId);
+      } catch (err: any) {
+        juditErro = err?.message || "Erro desconhecido";
+      }
 
-      return { success: true };
+      await db
+        .update(juditMonitoramentos)
+        .set({ statusJudit: "deleted" })
+        .where(eq(juditMonitoramentos.id, input.id));
+
+      return {
+        success: true,
+        juditErro,
+      };
     }),
 
   /**

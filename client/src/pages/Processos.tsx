@@ -30,8 +30,14 @@ const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ",
 
 function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: (cnj: string) => void }) {
   const [aberto, setAberto] = useState(false);
+  const [resumoIA, setResumoIA] = useState<string | null>(null);
   const { items: alerts } = useKeywordAlerts();
   const d = processo.response_data || processo;
+
+  const resumoMut = trpc.juditProcessos.resumoIA.useMutation({
+    onSuccess: (data) => { setResumoIA(data.resumo); toast.success("Resumo gerado (1 crédito)"); },
+    onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
+  });
   const ativos = (d.parties || []).filter((p: any) => p.side === "Active").slice(0, 5);
   const passivos = (d.parties || []).filter((p: any) => p.side === "Passive").slice(0, 5);
   const movs = (d.steps || []).slice(0, 10);
@@ -66,6 +72,25 @@ function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: 
                 {movsComAlerta}
               </Badge>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[10px]"
+              disabled={resumoMut.isPending}
+              onClick={() => {
+                const partes = (d.parties || []).map((p: any) => ({ nome: p.name, lado: p.side === "Active" ? "Ativo" : p.side === "Passive" ? "Passivo" : p.side }));
+                const movimentacoes = (d.steps || []).slice(0, 20).map((s: any) => ({ data: s.step_date || "", conteudo: s.content || "" }));
+                resumoMut.mutate({
+                  processo: {
+                    cnj: d.code, tribunal: d.tribunal_acronym, classe: d.classifications?.[0]?.name,
+                    assunto: d.subjects?.[0]?.name, partes, movimentacoes, valor: d.amount,
+                  },
+                });
+              }}
+            >
+              {resumoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileText className="h-3 w-3 mr-1" />}
+              Resumo IA
+            </Button>
             {onMonitorar && d.code && <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => onMonitorar(d.code)}><Radar className="h-3 w-3 mr-1" />Monitorar</Button>}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAberto(!aberto)}>{aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
           </div>
@@ -73,6 +98,18 @@ function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: 
 
         {aberto && (
           <div className="mt-3 pt-3 border-t space-y-4">
+            {/* Resumo IA */}
+            {resumoIA && (
+              <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3">
+                <p className="text-[10px] font-semibold text-violet-600 mb-1.5 flex items-center gap-1">
+                  <FileText className="h-3 w-3" /> RESUMO IA
+                </p>
+                <div className="text-xs leading-relaxed whitespace-pre-line text-violet-900 dark:text-violet-100">
+                  {resumoIA}
+                </div>
+              </div>
+            )}
+
             {d.subjects?.length > 0 && (<div><p className="text-[10px] font-semibold text-muted-foreground mb-1">ASSUNTOS</p><div className="flex flex-wrap gap-1">{d.subjects.map((s: any, i: number) => (<Badge key={i} variant="outline" className="text-[9px]">{s.name}</Badge>))}</div></div>)}
 
             <div className="grid grid-cols-2 gap-4">
