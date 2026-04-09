@@ -193,6 +193,7 @@ function ConsultarTab() {
   const [resultados, setResultados] = useState<any>(null);
   const [tentativas, setTentativas] = useState(0);
   const [credencialId, setCredencialId] = useState<string>("");
+  const [vincularDialog, setVincularDialog] = useState<{ cnj: string; clientes: any[] } | null>(null);
   const history = useSearchHistory();
 
   // Credenciais do cofre para segredo de justiça
@@ -201,10 +202,45 @@ function ConsultarTab() {
 
   const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
   const consultarDoc = trpc.juditProcessos.consultarDocumento.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
+  // Buscar clientes do escritório para verificar se partes do processo são clientes
+  const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });
+  const todosClientes = clientesData?.clientes || [];
+
   const monitorarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
     onSuccess: () => toast.success("Processo adicionado às Movimentações (5 cred/mês)"),
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
+
+  const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r.monitorando ? "Processo vinculado ao cliente e monitoramento criado!" : "Processo vinculado ao cliente!");
+      setVincularDialog(null);
+    },
+    onError: (e: any) => toast.error("Erro ao vincular", { description: e.message }),
+  });
+
+  /** Ao clicar "Monitorar" num ProcessoCard: cria monitoramento E verifica se partes são clientes */
+  const handleMonitorar = (cnj: string, processo?: any) => {
+    // 1. Criar monitoramento
+    monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined });
+
+    // 2. Verificar se alguma parte do processo é cliente cadastrado
+    if (processo && todosClientes.length > 0) {
+      const d = processo.response_data || processo;
+      const parteDocs = (d.parties || [])
+        .map((p: any) => (p.main_document || "").replace(/\D/g, ""))
+        .filter((doc: string) => doc.length >= 11);
+
+      const clientesEncontrados = todosClientes.filter((c: any) => {
+        const cpfClean = (c.cpfCnpj || "").replace(/\D/g, "");
+        return cpfClean && parteDocs.includes(cpfClean);
+      });
+
+      if (clientesEncontrados.length > 0) {
+        setVincularDialog({ cnj, clientes: clientesEncontrados });
+      }
+    }
+  };
 
   const { data: statusData } = trpc.juditProcessos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
 
@@ -365,7 +401,7 @@ function ConsultarTab() {
               <>
                 <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
                 {processos.map((item: any, i: number) => (
-                  <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined })} />
+                  <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => handleMonitorar(cnj, item)} />
                 ))}
               </>
             );
@@ -386,6 +422,48 @@ function ConsultarTab() {
       <div className="hidden lg:block">
         <SearchHistorySidebar onSelect={handleSelectHistorico} />
       </div>
+
+      {/* Dialog: vincular processo a cliente encontrado */}
+      {vincularDialog && (
+        <Dialog open={!!vincularDialog} onOpenChange={() => setVincularDialog(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Cliente encontrado no processo</DialogTitle>
+              <DialogDescription>
+                Identificamos que uma parte deste processo é um cliente cadastrado. Deseja vincular?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              {vincularDialog.clientes.map((c: any) => (
+                <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50">
+                  <div className="h-9 w-9 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700">
+                    {(c.nome || "?")[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.nome}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={vincularMut.isPending}
+                    onClick={() => vincularMut.mutate({
+                      contatoId: c.id,
+                      numeroCnj: vincularDialog.cnj,
+                      monitorar: false,
+                    })}
+                  >
+                    {vincularMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Vincular"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setVincularDialog(null)}>Pular</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

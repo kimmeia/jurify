@@ -92,57 +92,52 @@ export const clienteProcessosRouter = router({
         .limit(1);
       if (existente) throw new TRPCError({ code: "CONFLICT", message: "Este processo já está vinculado a este cliente." });
 
-      // Se pedir monitoramento, criar em juditUsuario
+      // Verificar se já existe monitoramento pra este CNJ (vincula automaticamente)
       let monitoramentoId: number | null = null;
-      if (input.monitorar) {
-        try {
-          // Verificar se já existe monitoramento pra este CNJ
-          const [monExistente] = await db
-            .select({ id: juditMonitoramentos.id })
-            .from(juditMonitoramentos)
-            .where(
-              and(
-                eq(juditMonitoramentos.searchKey, input.numeroCnj),
-                eq(juditMonitoramentos.clienteUserId, ctx.user.id),
-                or(
-                  eq(juditMonitoramentos.statusJudit, "created"),
-                  eq(juditMonitoramentos.statusJudit, "updating"),
-                  eq(juditMonitoramentos.statusJudit, "updated"),
-                ),
+      try {
+        const [monExistente] = await db
+          .select({ id: juditMonitoramentos.id })
+          .from(juditMonitoramentos)
+          .where(
+            and(
+              eq(juditMonitoramentos.searchKey, input.numeroCnj),
+              eq(juditMonitoramentos.clienteUserId, ctx.user.id),
+              or(
+                eq(juditMonitoramentos.statusJudit, "created"),
+                eq(juditMonitoramentos.statusJudit, "updating"),
+                eq(juditMonitoramentos.statusJudit, "updated"),
               ),
-            )
-            .limit(1);
+            ),
+          )
+          .limit(1);
 
-          if (monExistente) {
-            monitoramentoId = monExistente.id;
-          } else {
-            // Criar monitoramento via Judit
-            const { getJuditClient } = await import("../integracoes/judit-webhook");
-            const client = await getJuditClient();
-            if (client) {
-              const tracking = await client.criarMonitoramento({
-                recurrence: 1,
-                search: { search_type: "lawsuit_cnj", search_key: input.numeroCnj },
-                with_attachments: false,
-              });
-
-              const [result] = await db.insert(juditMonitoramentos).values({
-                trackingId: tracking.tracking_id,
-                searchType: "lawsuit_cnj",
-                searchKey: input.numeroCnj,
-                tipoMonitoramento: "movimentacoes",
-                recurrence: 1,
-                statusJudit: tracking.status as any,
-                apelido: input.apelido || null,
-                clienteUserId: ctx.user.id,
-                withAttachments: false,
-              });
-              monitoramentoId = (result as { insertId: number }).insertId;
-            }
+        if (monExistente) {
+          monitoramentoId = monExistente.id;
+        } else if (input.monitorar) {
+          const { getJuditClient } = await import("../integracoes/judit-webhook");
+          const client = await getJuditClient();
+          if (client) {
+            const tracking = await client.criarMonitoramento({
+              recurrence: 1,
+              search: { search_type: "lawsuit_cnj", search_key: input.numeroCnj },
+              with_attachments: false,
+            });
+            const [monResult] = await db.insert(juditMonitoramentos).values({
+              trackingId: tracking.tracking_id,
+              searchType: "lawsuit_cnj",
+              searchKey: input.numeroCnj,
+              tipoMonitoramento: "movimentacoes",
+              recurrence: 1,
+              statusJudit: tracking.status as any,
+              apelido: input.apelido || null,
+              clienteUserId: ctx.user.id,
+              withAttachments: false,
+            });
+            monitoramentoId = (monResult as { insertId: number }).insertId;
           }
-        } catch {
-          // Falha no monitoramento não bloqueia o vínculo
         }
+      } catch {
+        // Falha no monitoramento não bloqueia o vínculo
       }
 
       const [result] = await db.insert(clienteProcessos).values({
