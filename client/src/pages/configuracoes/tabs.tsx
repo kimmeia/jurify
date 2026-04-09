@@ -1,5 +1,5 @@
 /**
- * Tabs avançadas de configuração: Permissões e Agentes IA.
+ * Tabs avançadas de configuração: Permissões.
  *
  * Extraídas de Configuracoes.tsx para reduzir o tamanho do arquivo principal.
  */
@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Trash2, Shield, Bot } from "lucide-react";
+import { Loader2, Plus, Trash2, Shield } from "lucide-react";
 import { toast } from "sonner";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -130,99 +130,3 @@ export function PermissoesTab() {
   </div>);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Aba Agentes IA — Gerenciamento de chatbots multi-agente
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export function AgentesIaTab() {
-  const { data: agentes, refetch } = (trpc as any).agentesIa.listar.useQuery();
-  const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
-  const criarMut = (trpc as any).agentesIa.criar.useMutation({ onSuccess: () => { refetch(); toast.success("Agente criado!"); setShowNovo(false); } });
-  const atualizarMut = (trpc as any).agentesIa.atualizar.useMutation({ onSuccess: () => { refetch(); toast.success("Agente atualizado!"); setEditId(null); } });
-  const excluirMut = (trpc as any).agentesIa.excluir.useMutation({ onSuccess: () => { refetch(); toast.success("Excluído."); } });
-  const toggleMut = (trpc as any).agentesIa.toggleAtivo.useMutation({ onSuccess: () => refetch() });
-
-  const [showNovo, setShowNovo] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<any>({});
-
-  const canais = canaisData?.canais || [];
-
-  const initForm = (a?: any) => ({
-    nome: a?.nome || "", descricao: a?.descricao || "", modelo: a?.modelo || "gpt-4o-mini",
-    prompt: a?.prompt || "Você é um assistente jurídico educado. Responda dúvidas de forma clara e concisa. Se o cliente pedir para falar com um advogado, diga que vai transferir.",
-    canalId: a?.canalId || "", openaiApiKey: "", maxTokens: a?.maxTokens || 500, temperatura: a?.temperatura || "0.70",
-  });
-
-  const editAgente = editId ? (agentes || []).find((a: any) => a.id === editId) : null;
-
-  return (<div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <div><h3 className="text-base font-semibold">Agentes de IA</h3><p className="text-xs text-muted-foreground">Chatbots que respondem automaticamente em cada canal</p></div>
-      <Button size="sm" onClick={() => { setForm(initForm()); setShowNovo(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Agente</Button>
-    </div>
-
-    {!(agentes || []).length ? (
-      <Card><CardContent className="pt-6 text-center py-12">
-        <Bot className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-        <h3 className="text-lg font-semibold">Nenhum agente criado</h3>
-        <p className="text-sm text-muted-foreground mt-1">Crie agentes para responder automaticamente no WhatsApp e outros canais.</p>
-      </CardContent></Card>
-    ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {(agentes || []).map((a: any) => {
-          const canal = canais.find((c: any) => c.id === a.canalId);
-          return (
-            <Card key={a.id} className="hover:border-primary/40 transition-colors">
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white"><Bot className="h-5 w-5" /></div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate">{a.nome}</p><p className="text-[10px] text-muted-foreground">{a.modelo} · {canal?.nome || (a.canalId ? `Canal #${a.canalId}` : "Global")}</p></div>
-                  <Switch checked={a.ativo} onCheckedChange={(v: boolean) => toggleMut.mutate({ id: a.id, ativo: v })} />
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{a.prompt.slice(0, 120)}...</p>
-                <div className="flex items-center gap-2">
-                  {a.temApiKey ? <Badge className="text-[9px] bg-emerald-100 text-emerald-700 border-emerald-200">API Key ✓</Badge> : <Badge variant="outline" className="text-[9px] text-amber-600">Sem API Key</Badge>}
-                  <div className="flex-1" />
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setForm(initForm(a)); setEditId(a.id); }}>Editar</Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => { if (confirm("Excluir agente?")) excluirMut.mutate({ id: a.id }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    )}
-
-    {/* Dialog novo/editar agente */}
-    <Dialog open={showNovo || !!editId} onOpenChange={() => { setShowNovo(false); setEditId(null); }}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{editId ? "Editar Agente" : "Novo Agente"}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label className="text-xs">Nome *</Label><Input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Ex: Recepcionista Virtual" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">Modelo</Label><Select value={form.modelo} onValueChange={v => setForm({ ...form, modelo: v })}><SelectTrigger className="h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="gpt-4o-mini">GPT-4o Mini (rápido)</SelectItem><SelectItem value="gpt-4o">GPT-4o (avançado)</SelectItem><SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem></SelectContent></Select></div>
-          </div>
-          <div className="space-y-1.5"><Label className="text-xs">Canal vinculado</Label><Select value={String(form.canalId || "global")} onValueChange={v => setForm({ ...form, canalId: v === "global" ? "" : Number(v) })}><SelectTrigger className="h-9"><SelectValue placeholder="Global (todos os canais)" /></SelectTrigger><SelectContent><SelectItem value="global">Global (todos)</SelectItem>{canais.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nome || c.tipo} {c.status === "conectado" ? "✓" : ""}</SelectItem>)}</SelectContent></Select></div>
-          <div className="space-y-1.5"><Label className="text-xs">Prompt do Agente *</Label><Textarea value={form.prompt} onChange={e => setForm({ ...form, prompt: e.target.value })} rows={5} placeholder="Você é um assistente jurídico..." /></div>
-          <div className="space-y-1.5"><Label className="text-xs">OpenAI API Key {editId ? "(deixe vazio para manter)" : "*"}</Label><Input type="password" value={form.openaiApiKey} onChange={e => setForm({ ...form, openaiApiKey: e.target.value })} placeholder="sk-..." /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label className="text-xs">Max Tokens</Label><Input type="number" value={form.maxTokens} onChange={e => setForm({ ...form, maxTokens: Number(e.target.value) })} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">Temperatura</Label><Input value={form.temperatura} onChange={e => setForm({ ...form, temperatura: e.target.value })} placeholder="0.70" /></div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => { setShowNovo(false); setEditId(null); }}>Cancelar</Button>
-          <Button onClick={() => {
-            const payload: any = { nome: form.nome, modelo: form.modelo, prompt: form.prompt, maxTokens: form.maxTokens, temperatura: form.temperatura, canalId: form.canalId || undefined };
-            if (form.openaiApiKey) payload.openaiApiKey = form.openaiApiKey;
-            if (editId) atualizarMut.mutate({ id: editId, ...payload });
-            else criarMut.mutate(payload);
-          }} disabled={!form.nome || !form.prompt || criarMut.isPending || atualizarMut.isPending}>
-            {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} {editId ? "Salvar" : "Criar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </div>);
-}

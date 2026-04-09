@@ -177,6 +177,11 @@ function CriarDialog({
 }) {
   const [cnj, setCnj] = useState(cnjInicial);
   const [apelido, setApelido] = useState("");
+  const [credencialId, setCredencialId] = useState<string>("");
+
+  // Credenciais do cofre
+  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
   const criarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
     onSuccess: (data) => {
@@ -184,19 +189,24 @@ function CriarDialog({
       onOpenChange(false);
       setCnj("");
       setApelido("");
+      setCredencialId("");
       onSuccess();
     },
-    onError: (err) => toast.error("Erro", { description: err.message }),
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
   if (cnjInicial && cnjInicial !== cnj && open) setCnj(cnjInicial);
+
+  const semCredenciais = !credsAtivas || credsAtivas.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Novo monitoramento</DialogTitle>
-          <DialogDescription>O processo será monitorado diariamente. Você receberá atualizações de novas movimentações.</DialogDescription>
+          <DialogDescription>
+            O processo será monitorado diariamente. Requer credencial OAB cadastrada no Cofre (LGPD).
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -207,10 +217,33 @@ function CriarDialog({
             <label className="text-sm font-medium">Apelido (opcional)</label>
             <Input placeholder="Ex: Indenização do João" value={apelido} onChange={(e) => setApelido(e.target.value)} className="mt-1" />
           </div>
+          {semCredenciais ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+              <p className="font-semibold">Credencial OAB necessária</p>
+              <p className="mt-0.5">Cadastre uma credencial de advogado no Cofre de Credenciais para poder monitorar processos.</p>
+            </div>
+          ) : (
+            <div>
+              <label className="text-sm font-medium">Credencial OAB *</label>
+              <select
+                value={credencialId}
+                onChange={(e) => setCredencialId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm mt-1"
+              >
+                <option value="">Selecione a credencial</option>
+                {credsAtivas.map((c: any) => (
+                  <option key={c.id} value={String(c.id)}>{c.customerKey} ({c.username})</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => criarMut.mutate({ numeroCnj: cnj.trim(), apelido: apelido || undefined })} disabled={criarMut.isPending || cnj.trim().length < 20}>
+          <Button
+            onClick={() => criarMut.mutate({ numeroCnj: cnj.trim(), credencialId: Number(credencialId), apelido: apelido || undefined })}
+            disabled={criarMut.isPending || cnj.trim().length < 20 || !credencialId}
+          >
             {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
             Monitorar
           </Button>

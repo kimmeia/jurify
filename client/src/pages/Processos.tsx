@@ -306,18 +306,29 @@ function MonitoramentoCard({
   onDeletar: () => void;
 }) {
   const [aberto, setAberto] = useState(false);
-  const st = STATUS_MON[mon.status] || { label: mon.status, cor: "" };
+  // Suporta formato local DB (statusJudit/searchKey) e Judit API (status/search.search_key)
+  const status = mon.statusJudit || mon.status || "created";
+  const searchKey = mon.searchKey || mon.search?.search_key || "-";
+  const searchType = mon.searchType || mon.search?.search_type || "";
+  const st = STATUS_MON[status] || { label: status, cor: "" };
 
-  // Busca o histórico de movimentações quando o card abre
-  const { data: historico, isLoading: loadingHist } = trpc.juditProcessos.historicoMonitoramento.useQuery(
-    { trackingId: mon.tracking_id },
-    { enabled: aberto, retry: false },
+  // Busca o histórico de movimentações quando o card abre (local DB)
+  const { data: historico, isLoading: loadingHist } = trpc.juditUsuario.historico.useQuery(
+    { monitoramentoId: mon.id, page: 1, pageSize: 50 },
+    { enabled: aberto && !!mon.id, retry: false },
   );
 
-  // Extrai movimentações e dados do processo do histórico
-  const respostas = historico?.page_data || [];
-  const ultimaResposta = respostas.find((r: any) => r.response_type === "lawsuit");
-  const processoData: any = ultimaResposta?.response_data || null;
+  // Extrai movimentações e dados do processo do histórico local
+  const respostas = historico?.items || [];
+  const ultimaResposta = respostas.find((r: any) => r.responseType === "lawsuit");
+  let processoData: any = null;
+  try {
+    if (ultimaResposta?.responseData) {
+      processoData = typeof ultimaResposta.responseData === "string"
+        ? JSON.parse(ultimaResposta.responseData)
+        : ultimaResposta.responseData;
+    }
+  } catch { processoData = null; }
   const steps: any[] = processoData?.steps || [];
   const partes: any[] = processoData?.parties || [];
   const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
@@ -328,27 +339,26 @@ function MonitoramentoCard({
       <CardContent className="pt-3 pb-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
           <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
-            {mon.search?.search_type === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
+            {searchType === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-mono font-medium truncate">{mon.search?.search_key || "-"}</p>
-              <Badge variant="outline" className="text-[9px] shrink-0">{TIPO_LABELS[mon.search?.search_type] || mon.search?.search_type}</Badge>
+              <p className="text-sm font-mono font-medium truncate">{mon.apelido || searchKey}</p>
+              <Badge variant="outline" className="text-[9px] shrink-0">{TIPO_LABELS[searchType] || searchType}</Badge>
               <Badge variant="outline" className={`text-[9px] shrink-0 ${st.cor}`}>{st.label}</Badge>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
-              <span>Atualiza a cada {mon.recurrence} dia(s)</span>
-              <span>{mon.tracked_items_count || 0} processo(s)</span>
-              <span>{mon.tracked_items_steps_count || 0} movimentação(ões)</span>
+              <span className="font-mono">{searchKey}</span>
+              <span>{mon.totalAtualizacoes || 0} atualização(ões)</span>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-            {(mon.status === "created" || mon.status === "updated") && (
+            {(status === "created" || status === "updated" || status === "updating") && (
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" title="Pausar" onClick={onPausar}>
                 <Pause className="h-3.5 w-3.5" />
               </Button>
             )}
-            {mon.status === "paused" && (
+            {status === "paused" && (
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Reativar" onClick={onReativar}>
                 <Play className="h-3.5 w-3.5" />
               </Button>
@@ -470,23 +480,40 @@ function MonitoramentoCard({
 
 function MonitorarTab() {
   const [novoOpen, setNovoOpen] = useState(false);
-  const [novoTipo, setNovoTipo] = useState("cpf");
   const [novoValor, setNovoValor] = useState("");
-  const [novoNome, setNovoNome] = useState("");
+  const [novoCredencialId, setNovoCredencialId] = useState<string>("");
 
-  const { data, refetch, isLoading } = trpc.juditProcessos.listarMonitoramentos.useQuery(undefined, { retry: false });
-  const pausarMut = trpc.juditProcessos.pausarMonitoramento.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
-  const reativarMut = trpc.juditProcessos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
-  const deletarMut = trpc.juditProcessos.deletarMonitoramento.useMutation({ onSuccess: () => { toast.success("Removido"); refetch(); } });
-  const monProcesso = trpc.juditProcessos.monitorarProcesso.useMutation({ onSuccess: () => { toast.success("Monitoramento criado"); setNovoOpen(false); setNovoValor(""); setNovoNome(""); refetch(); }, onError: (e) => toast.error(e.message) });
-  const monPessoa = trpc.juditProcessos.monitorarPessoa.useMutation({ onSuccess: () => { toast.success("Monitoramento criado"); setNovoOpen(false); setNovoValor(""); setNovoNome(""); refetch(); }, onError: (e) => toast.error(e.message) });
+  const { data: mons, refetch, isLoading } = trpc.juditUsuario.meusMonitoramentos.useQuery(
+    { tipoMonitoramento: "movimentacoes" },
+    { retry: false },
+  );
+  const listaMons = mons || [];
 
-  const handleCriar = () => {
-    if (novoTipo === "lawsuit_cnj") monProcesso.mutate({ cnj: novoValor });
-    else monPessoa.mutate({ tipo: novoTipo as any, valor: novoValor });
-  };
+  // Credenciais do cofre
+  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
-  const mons = data?.monitoramentos || [];
+  const criarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
+    onSuccess: () => {
+      toast.success("Monitoramento de movimentações criado!");
+      setNovoOpen(false);
+      setNovoValor("");
+      setNovoCredencialId("");
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const pausarMut = trpc.juditUsuario.pausar.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
+  const reativarMut = trpc.juditUsuario.reativar.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
+  const deletarMut = trpc.juditUsuario.deletar.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}` });
+      else toast.success("Removido");
+      refetch();
+    },
+  });
+
+  const semCredenciais = !credsAtivas || credsAtivas.length === 0;
 
   return (
     <div className="space-y-4">
@@ -494,59 +521,115 @@ function MonitorarTab() {
         <CardContent className="pt-4 pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Monitoramento de clientes e processos</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Receba alertas quando houver novas acoes judiciais contra seus clientes ou movimentacoes em processos.</p>
+              <p className="text-sm font-medium">Monitoramento de movimentações processuais</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Acompanhe despachos, sentenças e audiências de processos específicos.
+                Requer credencial OAB cadastrada no Cofre.
+              </p>
             </div>
-            <Button size="sm" onClick={() => setNovoOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />Novo</Button>
+            <Button size="sm" onClick={() => setNovoOpen(true)} disabled={semCredenciais}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Novo
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {isLoading ? <Skeleton className="h-20 w-full" /> : mons.length > 0 ? (
+      {semCredenciais && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-4 flex items-start gap-3">
+          <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Credencial OAB necessária</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+              Para monitorar movimentações processuais, é necessário cadastrar pelo menos uma credencial
+              de advogado (OAB) no <strong>Cofre de Credenciais</strong>. Isso garante que apenas
+              profissionais habilitados acessem dados processuais, em conformidade com a LGPD.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? <Skeleton className="h-20 w-full" /> : listaMons.length > 0 ? (
         <div className="space-y-2">
-          {mons.map((m: any) => (
+          {listaMons.map((m: any) => (
             <MonitoramentoCard
-              key={m.tracking_id}
+              key={m.id}
               mon={m}
-              onPausar={() => pausarMut.mutate({ trackingId: m.tracking_id })}
-              onReativar={() => reativarMut.mutate({ trackingId: m.tracking_id })}
-              onDeletar={() => { if (confirm("Remover monitoramento?")) deletarMut.mutate({ trackingId: m.tracking_id }); }}
+              onPausar={() => pausarMut.mutate({ id: m.id })}
+              onReativar={() => reativarMut.mutate({ id: m.id })}
+              onDeletar={() => { if (confirm("Remover monitoramento?")) deletarMut.mutate({ id: m.id }); }}
             />
           ))}
         </div>
       ) : (
         <div className="text-center py-12 space-y-2">
           <Radar className="h-8 w-8 text-muted-foreground/30 mx-auto" />
-          <p className="text-sm text-muted-foreground">Nenhum monitoramento ativo.</p>
-          <p className="text-xs text-muted-foreground">Adicione CPFs ou CNPJs dos seus clientes para detectar novas acoes judiciais automaticamente.</p>
+          <p className="text-sm text-muted-foreground">Nenhum monitoramento de movimentações ativo.</p>
+          <p className="text-xs text-muted-foreground">
+            {semCredenciais
+              ? "Cadastre uma credencial OAB no Cofre para começar."
+              : "Adicione um número de processo (CNJ) para acompanhar movimentações."}
+          </p>
         </div>
       )}
 
-      {/* Dialog novo monitoramento */}
+      {/* Dialog novo monitoramento — requer credencial OAB */}
       <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Novo monitoramento</DialogTitle>
-            <DialogDescription>Monitore clientes ou processos. Voce sera notificado sobre novas acoes e movimentacoes.</DialogDescription>
+            <DialogTitle>Monitorar movimentações</DialogTitle>
+            <DialogDescription>
+              Informe o número do processo (CNJ) e selecione a credencial OAB para acompanhar movimentações.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
-            <div><Label className="text-xs">O que monitorar?</Label>
-              <Select value={novoTipo} onValueChange={setNovoTipo}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>
-                <SelectItem value="cpf">Cliente (CPF) — 50 cred/mes</SelectItem>
-                <SelectItem value="cnpj">Empresa (CNPJ) — 50 cred/mes</SelectItem>
-                <SelectItem value="oab">Advogado (OAB) — 50 cred/mes</SelectItem>
-                <SelectItem value="lawsuit_cnj">Processo (CNJ) — 5 cred/mes</SelectItem>
-                <SelectItem value="name">Nome — 50 cred/mes</SelectItem>
-              </SelectContent></Select>
+            <div>
+              <Label className="text-xs">Número do processo (CNJ) *</Label>
+              <Input
+                value={novoValor}
+                onChange={(e) => setNovoValor(e.target.value)}
+                className="mt-1"
+                placeholder="0000000-00.0000.0.00.0000"
+              />
             </div>
-            <div><Label className="text-xs">{novoTipo === "lawsuit_cnj" ? "Numero do processo (CNJ)" : novoTipo === "cpf" ? "CPF do cliente" : novoTipo === "cnpj" ? "CNPJ da empresa" : novoTipo === "oab" ? "Numero da OAB" : "Nome completo"}</Label>
-              <Input value={novoValor} onChange={(e) => setNovoValor(e.target.value)} className="mt-1" placeholder={novoTipo === "cpf" ? "000.000.000-00" : novoTipo === "cnpj" ? "00.000.000/0000-00" : novoTipo === "lawsuit_cnj" ? "0000000-00.0000.0.00.0000" : ""} />
+            <div>
+              <Label className="text-xs">Credencial OAB *</Label>
+              <Select value={novoCredencialId} onValueChange={setNovoCredencialId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a credencial" /></SelectTrigger>
+                <SelectContent>
+                  {credsAtivas.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      <span className="flex items-center gap-2">
+                        <KeyRound className="h-3 w-3" />
+                        {c.customerKey} ({c.username})
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+              <div className="text-blue-900 dark:text-blue-200 space-y-1">
+                <p className="font-semibold">Proteção de dados (LGPD)</p>
+                <p>
+                  O monitoramento de movimentações requer credencial OAB para garantir que apenas
+                  advogados habilitados acessem dados processuais. Custo: 5 créditos/mês.
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNovoOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCriar} disabled={(monProcesso.isPending || monPessoa.isPending) || !novoValor.trim()}>
-              {(monProcesso.isPending || monPessoa.isPending) ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Radar className="h-4 w-4 mr-2" />}
+            <Button
+              onClick={() =>
+                criarMut.mutate({
+                  numeroCnj: novoValor.trim(),
+                  credencialId: Number(novoCredencialId),
+                })
+              }
+              disabled={!novoValor.trim() || !novoCredencialId || criarMut.isPending}
+            >
+              {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Radar className="h-4 w-4 mr-2" />}
               Monitorar
             </Button>
           </DialogFooter>
@@ -711,24 +794,30 @@ const AREA_CORES: Record<string, string> = {
 function NovasAcoesTab() {
   const [apenasNaoLidas, setApenasNaoLidas] = useState(false);
   const [novoOpen, setNovoOpen] = useState(false);
-  const [novoTipo, setNovoTipo] = useState<"cpf" | "cnpj" | "oab" | "name">("cpf");
-  const [novoValor, setNovoValor] = useState("");
-  const [novoApelido, setNovoApelido] = useState("");
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
 
   const { data, refetch, isLoading } = trpc.juditUsuario.listarNovasAcoes.useQuery(
     { apenasNaoLidas, limite: 100 },
     { retry: false },
   );
 
+  // Busca clientes cadastrados para seleção
+  const { data: clientesData } = trpc.clientes.listar.useQuery(
+    { busca: buscaCliente || undefined, limite: 20 },
+    { enabled: novoOpen },
+  );
+  const clientes = (clientesData?.clientes || []).filter((c: any) => c.cpfCnpj);
+
   const criarMut = trpc.juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento criado!");
       setNovoOpen(false);
-      setNovoValor("");
-      setNovoApelido("");
+      setBuscaCliente("");
+      setClienteSelecionado(null);
       refetch();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   const marcarLidaMut = trpc.juditUsuario.marcarNovaAcaoLida.useMutation({
@@ -750,7 +839,7 @@ function NovasAcoesTab() {
               <div>
                 <p className="font-semibold text-sm">Alerta de novas ações contra clientes</p>
                 <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
-                  Cadastre CPF/CNPJ/OAB de clientes e seja avisado IMEDIATAMENTE quando
+                  Selecione clientes cadastrados e seja avisado IMEDIATAMENTE quando
                   uma nova ação for distribuída contra eles — antes mesmo da citação chegar.
                   Funciona para ações de busca e apreensão, reclamações trabalhistas, execuções, etc.
                 </p>
@@ -916,53 +1005,77 @@ function NovasAcoesTab() {
         </div>
       )}
 
-      {/* Dialog de novo monitoramento */}
-      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      {/* Dialog de novo monitoramento — apenas para clientes cadastrados */}
+      <Dialog open={novoOpen} onOpenChange={(v) => { setNovoOpen(v); if (!v) { setBuscaCliente(""); setClienteSelecionado(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Monitorar novas ações</DialogTitle>
             <DialogDescription>
-              Cadastre CPF/CNPJ/OAB pra ser avisado quando uma nova ação for distribuída contra essa pessoa/empresa.
+              Selecione um cliente cadastrado para ser avisado quando uma nova ação for distribuída contra ele.
+              Apenas clientes com CPF/CNPJ cadastrado podem ser monitorados.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Tipo *</Label>
-                <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cpf">CPF</SelectItem>
-                    <SelectItem value="cnpj">CNPJ</SelectItem>
-                    <SelectItem value="oab">OAB</SelectItem>
-                    <SelectItem value="name">Nome</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Valor *</Label>
-                <Input
-                  placeholder={novoTipo === "cpf" ? "000.000.000-00" : novoTipo === "cnpj" ? "00.000.000/0000-00" : novoTipo === "oab" ? "SP123456" : "Nome completo"}
-                  value={novoValor}
-                  onChange={(e) => setNovoValor(e.target.value)}
-                />
-              </div>
-            </div>
             <div>
-              <Label>Apelido (opcional)</Label>
+              <Label>Buscar cliente *</Label>
               <Input
-                placeholder="Ex: Cliente João Silva"
-                value={novoApelido}
-                onChange={(e) => setNovoApelido(e.target.value)}
+                placeholder="Buscar por nome, CPF ou CNPJ..."
+                value={buscaCliente}
+                onChange={(e) => { setBuscaCliente(e.target.value); setClienteSelecionado(null); }}
               />
             </div>
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-3 text-xs flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-amber-900 dark:text-amber-200 space-y-1">
-                <p className="font-semibold">Segredo de justiça?</p>
+
+            {/* Lista de clientes encontrados */}
+            {!clienteSelecionado && clientes.length > 0 && (
+              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
+                {clientes.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setClienteSelecionado(c); setBuscaCliente(c.nome); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 text-left transition-colors"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0">
+                      {(c.nome || "?")[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{c.nome}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!clienteSelecionado && buscaCliente && clientes.length === 0 && (
+              <div className="text-center py-4 border rounded-lg">
+                <Users className="h-6 w-6 text-muted-foreground/30 mx-auto mb-1" />
+                <p className="text-xs text-muted-foreground">Nenhum cliente com CPF/CNPJ encontrado.</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Cadastre o cliente primeiro em Clientes.</p>
+              </div>
+            )}
+
+            {/* Cliente selecionado */}
+            {clienteSelecionado && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">{clienteSelecionado.nome}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{clienteSelecionado.cpfCnpj}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}>
+                  Trocar
+                </Button>
+              </div>
+            )}
+
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+              <div className="text-blue-900 dark:text-blue-200 space-y-1">
+                <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
-                  Ações em segredo de justiça só aparecem se você tiver uma credencial de advogado
-                  cadastrada no <strong>Cofre</strong>. Sem credencial, só detectamos ações públicas.
+                  O monitoramento de novas ações é permitido apenas para clientes cadastrados
+                  no seu escritório, garantindo que existe relação jurídica legítima para o
+                  tratamento dos dados processuais. Custo: 35 créditos/mês.
                 </p>
               </div>
             </div>
@@ -970,14 +1083,17 @@ function NovasAcoesTab() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() =>
+              onClick={() => {
+                if (!clienteSelecionado) return;
+                const clean = (clienteSelecionado.cpfCnpj || "").replace(/\D/g, "");
+                const tipo = clean.length === 14 ? "cnpj" : "cpf";
                 criarMut.mutate({
-                  tipo: novoTipo,
-                  valor: novoValor,
-                  apelido: novoApelido || undefined,
-                })
-              }
-              disabled={!novoValor.trim() || criarMut.isPending}
+                  tipo: tipo as any,
+                  valor: clean,
+                  apelido: clienteSelecionado.nome,
+                });
+              }}
+              disabled={!clienteSelecionado || criarMut.isPending}
             >
               {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar monitoramento

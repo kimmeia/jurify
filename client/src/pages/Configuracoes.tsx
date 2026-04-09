@@ -15,7 +15,7 @@ import {
   Settings, Building2, Users, Loader2, Plus, Trash2, Mail,
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
-  ChevronDown, ChevronUp, Calendar, Bot, DollarSign, Plug,
+  ChevronDown, ChevronUp, Calendar, DollarSign, Plug,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA } from "@shared/escritorio-types";
@@ -36,7 +36,7 @@ import {
   ChatGPTDialog,
   CalcomIntegration,
 } from "./configuracoes/dialogs";
-import { PermissoesTab, AgentesIaTab } from "./configuracoes/tabs";
+import { PermissoesTab } from "./configuracoes/tabs";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -206,13 +206,12 @@ export default function Configuracoes() {
       </div>
 
       <Tabs defaultValue="perfil">
-        <TabsList className="grid w-full grid-cols-6 h-10">
+        <TabsList className="grid w-full grid-cols-5 h-10">
           <TabsTrigger value="perfil" className="gap-1.5 text-xs"><Building2 className="h-3.5 w-3.5" /> Escritório</TabsTrigger>
           <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
           <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
           <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
           <TabsTrigger value="integracoes" className="gap-1.5 text-xs"><Link2 className="h-3.5 w-3.5" /> Integrações</TabsTrigger>
-          <TabsTrigger value="agentes" className="gap-1.5 text-xs"><Bot className="h-3.5 w-3.5" /> Agentes IA</TabsTrigger>
         </TabsList>
 
         {/* ─── Perfil ────────────────────────────────────────────────── */}
@@ -474,9 +473,6 @@ export default function Configuracoes() {
           {isDono ? <PermissoesTab /> : <Card><CardContent className="pt-6 text-center py-12"><Shield className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">Apenas o dono do escritório pode gerenciar permissões.</p></CardContent></Card>}
         </TabsContent>
 
-        <TabsContent value="agentes" className="space-y-4">
-          {canEdit ? <AgentesIaTab /> : <Card><CardContent className="pt-6 text-center py-12"><Bot className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">Sem permissão para gerenciar agentes.</p></CardContent></Card>}
-        </TabsContent>
       </Tabs>
     </div>
   );

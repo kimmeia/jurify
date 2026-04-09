@@ -25,6 +25,7 @@ import { eq, and, desc, or, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getJuditClient } from "./judit-webhook";
 import { getLimites } from "../billing/plan-limits";
+import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -184,18 +185,58 @@ export const juditUsuarioRouter = router({
    * Cria monitoramento de MOVIMENTAÇÕES em um processo específico (CNJ).
    * Recebe atualizações (despachos, sentenças, audiências) via webhook.
    */
+  /**
+   * Cria monitoramento de MOVIMENTAÇÕES em um processo específico (CNJ).
+   *
+   * SEGURANÇA (LGPD): Requer credencial OAB válida do cofre. Apenas
+   * advogados habilitados podem acessar dados processuais. A credencial
+   * garante que existe legitimidade para o acesso.
+   */
   criarMonitoramento: protectedProcedure
     .input(z.object({
       numeroCnj: z.string().min(20).max(25),
       apelido: z.string().max(255).optional(),
-      /** ID de credencial do cofre (pra segredo de justiça) */
-      credencialId: z.number().optional(),
+      /** ID de credencial do cofre — OBRIGATÓRIO para LGPD */
+      credencialId: z.number({
+        required_error: "Credencial OAB obrigatória. Cadastre uma no Cofre de Credenciais.",
+      }),
     }))
     .mutation(async ({ ctx, input }) => {
       const { limites } = await verificarPlanoJudit(ctx.user.id);
       const client = await requireJuditDisponivel();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // ─── SEGURANÇA: Validar credencial OAB ───────────────────────────
+      const { juditCredenciais } = await import("../../drizzle/schema");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
+
+      const [cred] = await db
+        .select()
+        .from(juditCredenciais)
+        .where(
+          and(
+            eq(juditCredenciais.id, input.credencialId),
+            eq(juditCredenciais.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!cred) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Credencial não encontrada ou não pertence ao seu escritório.",
+        });
+      }
+      if (cred.status !== "ativa") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Credencial "${cred.customerKey}" não está ativa (status: ${cred.status}). Verifique no Cofre.`,
+        });
+      }
+
+      const juditCredentialId = cred.juditCredentialId;
 
       // Verificar limite de monitoramentos
       const ativos = await contarMonitoramentosAtivos(ctx.user.id);
@@ -228,20 +269,6 @@ export const juditUsuarioRouter = router({
           code: "CONFLICT",
           message: "Você já está monitorando este processo.",
         });
-      }
-
-      // Resolve credencial (se informada)
-      let juditCredentialId: string | undefined;
-      if (input.credencialId) {
-        const { juditCredenciais } = await import("../../drizzle/schema");
-        const [cred] = await db
-          .select()
-          .from(juditCredenciais)
-          .where(eq(juditCredenciais.id, input.credencialId))
-          .limit(1);
-        if (cred?.juditCredentialId) {
-          juditCredentialId = cred.juditCredentialId;
-        }
       }
 
       // Criar na Judit (recorrência diária)
@@ -278,17 +305,18 @@ export const juditUsuarioRouter = router({
 
   /**
    * Cria monitoramento de NOVAS AÇÕES contra uma pessoa/empresa.
-   * Quando uma nova ação for distribuída no futuro contra o CPF/CNPJ/OAB
+   *
+   * SEGURANÇA (LGPD): Para CPF/CNPJ, exige que exista um cliente
+   * cadastrado no escritório com esse documento. Isso garante que
+   * existe relação jurídica legítima para o monitoramento processual.
+   *
+   * Quando uma nova ação for distribuída no futuro contra o CPF/CNPJ
    * monitorado, recebemos um webhook event_type="new_lawsuit" e
    * registramos em `judit_novas_acoes`.
-   *
-   * Use case típico: escritório monitora seu cliente "Empresa X" e é
-   * avisado quando alguém processa a empresa (antes mesmo do cliente
-   * ficar sabendo da citação).
    */
   criarMonitoramentoNovasAcoes: protectedProcedure
     .input(z.object({
-      tipo: z.enum(["cpf", "cnpj", "oab", "name"]),
+      tipo: z.enum(["cpf", "cnpj"]),
       valor: z.string().min(3).max(128),
       apelido: z.string().max(255).optional(),
       credencialId: z.number().optional(),
@@ -299,6 +327,31 @@ export const juditUsuarioRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // ─── SEGURANÇA: Validar que CPF/CNPJ pertence a um cliente cadastrado ──
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
+
+      const searchKeyNorm = input.valor.replace(/\D/g, "");
+      const { contatos } = await import("../../drizzle/schema");
+      const clientesCadastrados = await db
+        .select({ id: contatos.id, nome: contatos.nome, cpfCnpj: contatos.cpfCnpj })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.escritorioId, esc.escritorio.id),
+            like(contatos.cpfCnpj, `%${searchKeyNorm}%`),
+          ),
+        )
+        .limit(1);
+
+      if (clientesCadastrados.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Este CPF/CNPJ não pertence a nenhum cliente cadastrado no seu escritório. " +
+            "Cadastre o cliente primeiro em Clientes para poder monitorá-lo (LGPD).",
+        });
+      }
+
       const ativos = await contarMonitoramentosAtivos(ctx.user.id);
       if (ativos >= limites.maxMonitoramentosJudit) {
         throw new TRPCError({
@@ -308,9 +361,7 @@ export const juditUsuarioRouter = router({
       }
 
       // Normaliza o valor pra CPF/CNPJ (remove formatação)
-      const searchKey = (input.tipo === "cpf" || input.tipo === "cnpj")
-        ? input.valor.replace(/\D/g, "")
-        : input.valor.trim();
+      const searchKey = input.valor.replace(/\D/g, "");
 
       // Duplicata
       const existente = await db
