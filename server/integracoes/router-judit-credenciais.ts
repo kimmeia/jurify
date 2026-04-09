@@ -224,18 +224,15 @@ export const juditCredenciaisRouter = router({
   }),
 
   /**
-   * Cadastra nova credencial no cofre Judit + verifica se foi aceita.
+   * Cadastra nova credencial no cofre Judit.
    *
-   * Fluxo:
-   * 1. Cadastra credencial no cofre (POST /credentials)
-   * 2. Verifica com GET /credentials?customer_key=X se o cofre aceitou
-   * 3. Se o sistema aparece como "active" → marca "ativa"
-   *    Se "not exists" ou não aparece → marca "erro"
+   * LIMITAÇÃO DA API: A Judit aceita qualquer dado no cofre sem validar
+   * se o login/senha funcionam. A validação real só acontece quando uma
+   * consulta on_demand é feita e a Judit tenta logar no tribunal.
    *
-   * IMPORTANTE: isso confirma que a Judit ACEITOU a credencial no cofre,
-   * mas o login real no tribunal só é testado quando uma consulta
-   * on_demand é feita. Se a senha estiver errada, o erro aparece nesse
-   * momento (via webhook application_error).
+   * Por isso salvamos SEMPRE como "validando". O status muda para:
+   * - "ativa" → quando webhook retorna lawsuit com sucesso (login OK)
+   * - "erro" → quando webhook retorna application_error de auth (login falhou)
    */
   cadastrar: protectedProcedure
     .input(
@@ -261,7 +258,7 @@ export const juditCredenciaisRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
-      // 1. Cadastra na Judit
+      // 1. Cadastra na Judit (o cofre aceita qualquer dado)
       try {
         await client.cadastrarCredencial({
           system_name: input.systemName,
@@ -278,74 +275,29 @@ export const juditCredenciaisRouter = router({
         });
       }
 
-      // 2. Verifica se a Judit aceitou: GET /credentials?customer_key=X
-      //    Retorna { systems: [{ name, customer_key, credential_status }] }
-      let cofreAtivo = false;
-      try {
-        await new Promise((r) => setTimeout(r, 2000));
-        const verificacao = await client.verificarCredencial(input.customerKey);
-
-        // A resposta pode ter .systems[] ou ser o array direto
-        const systems: any[] = Array.isArray(verificacao)
-          ? verificacao
-          : verificacao.systems || verificacao;
-
-        for (const item of systems) {
-          const sn = item.name || item.system_name || "";
-          const ck = item.customer_key || "";
-          const st = (item.credential_status || "").toLowerCase();
-
-          // Verifica se o sistema + customer_key batem e status é "active"
-          if (st === "active") {
-            if (input.systemName === "*") {
-              // Curinga: qualquer sistema com essa customer_key ativo
-              if (ck === input.customerKey) { cofreAtivo = true; break; }
-            } else if (sn === input.systemName && ck === input.customerKey) {
-              cofreAtivo = true;
-              break;
-            }
-          }
-        }
-      } catch (err: any) {
-        log.warn({ err: err.message }, "Erro ao verificar credencial no cofre");
-      }
-
-      // 3. Salva localmente
-      const status = cofreAtivo ? "ativa" : "validando";
+      // 2. Salva localmente como "validando" — será confirmada na primeira consulta real
       const [result] = await db.insert(juditCredenciais).values({
         escritorioId: esc.escritorio.id,
         customerKey: input.customerKey,
         systemName: input.systemName,
         username: input.username,
         has2fa: !!input.totpSecret,
-        status: status as any,
-        mensagemErro: cofreAtivo
-          ? null
-          : "Credencial cadastrada mas ainda não confirmada pelo cofre. Será validada na primeira consulta.",
+        status: "validando",
+        mensagemErro: "Aguardando validação. Faça uma consulta a um processo em segredo de justiça para testar o login.",
         juditCredentialId: null,
         criadoPor: ctx.user.id,
       });
-      const credId = (result as { insertId: number }).insertId;
 
       log.info(
-        { escritorioId: esc.escritorio.id, systemName: input.systemName, cofreAtivo },
-        `Credencial cadastrada — cofre ${cofreAtivo ? "confirmou" : "pendente"}`,
+        { escritorioId: esc.escritorio.id, systemName: input.systemName },
+        "Credencial cadastrada no cofre — aguardando validação por consulta real",
       );
-
-      if (cofreAtivo) {
-        return {
-          success: true,
-          id: credId,
-          status: "ativa" as const,
-          mensagem: "Credencial cadastrada e confirmada no cofre da Judit! O login real será validado na primeira consulta a um processo em segredo de justiça.",
-        };
-      }
 
       return {
         success: true,
-        id: credId,
+        id: (result as { insertId: number }).insertId,
         status: "validando" as const,
-        mensagem: "Credencial cadastrada no cofre. A validação do login acontece na primeira consulta a um processo em segredo de justiça.",
+        mensagem: "Credencial salva no cofre. Para validar o login, faça uma consulta a um processo em segredo de justiça usando esta credencial.",
       };
     }),
 

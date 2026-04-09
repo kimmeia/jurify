@@ -353,10 +353,20 @@ function ConsultarTab() {
       {/* Resultados */}
       {resultados && resultados.page_data && resultados.page_data.length > 0 ? (
         <div className="space-y-3">
-          <p className="text-sm font-medium">{resultados.all_count || resultados.page_data.length} processo(s) encontrado(s)</p>
-          {resultados.page_data.map((item: any, i: number) => (
-            <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined })} />
-          ))}
+          {(() => {
+            // Filtra apenas respostas tipo lawsuit (ignora application_info, application_error, etc)
+            const processos = resultados.page_data.filter(
+              (item: any) => item.response_type === "lawsuit" && item.response_data && typeof item.response_data === "object",
+            );
+            return (
+              <>
+                <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
+                {processos.map((item: any, i: number) => (
+                  <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined })} />
+                ))}
+              </>
+            );
+          })()}
         </div>
       ) : resultados && !buscando ? (
         <div className="text-center py-12"><Scale className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhum processo encontrado.</p></div>
@@ -1314,17 +1324,10 @@ function CofreTab() {
 
   const cadastrarMut = (trpc as any).juditCredenciais.cadastrar.useMutation({
     onSuccess: (data: any) => {
-      if (data.status === "ativa") {
-        toast.success("Credencial registrada no cofre!", {
-          description: "Confirmada pela Judit. O login real será testado na primeira consulta a processo em segredo.",
-          duration: 8000,
-        });
-      } else {
-        toast.warning("Credencial cadastrada", {
-          description: data.mensagem,
-          duration: 8000,
-        });
-      }
+      toast.success("Credencial salva no cofre", {
+        description: "Para validar, faça uma consulta a um processo em segredo de justiça usando esta credencial. Se o login falhar, o status mudará para 'erro'.",
+        duration: 10000,
+      });
       setNovoOpen(false);
       setForm({ customerKey: "", systemName: "*", username: "", password: "", totpSecret: "" });
       refetch();
