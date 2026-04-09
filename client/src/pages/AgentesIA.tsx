@@ -166,7 +166,6 @@ function AgenteFormDialog({
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
         ativo: form.ativo,
-        ...(form.openaiApiKey ? { openaiApiKey: form.openaiApiKey } : {}),
       });
     } else {
       criarMut.mutate({
@@ -178,7 +177,6 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
-        openaiApiKey: form.openaiApiKey || undefined,
       });
     }
   };
@@ -288,31 +286,20 @@ function AgenteFormDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" />
-              API Key OpenAI {agenteId ? "(opcional — vazio mantém a atual)" : "(opcional)"}
-            </Label>
-            {chatgptConfigurado && !form.openaiApiKey && (
-              <div className="flex items-center gap-2 p-2 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 text-xs text-emerald-700">
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                <span>Usando API Key configurada em <strong>Integrações → ChatGPT</strong>. Não precisa preencher novamente.</span>
-              </div>
-            )}
-            <Input
-              type="password"
-              placeholder={chatgptConfigurado ? "Deixe vazio para usar a key global" : "sk-..."}
-              value={form.openaiApiKey}
-              onChange={(e) => setForm({ ...form, openaiApiKey: e.target.value })}
-              className="font-mono text-xs"
-            />
-            {!chatgptConfigurado && (
-              <p className="text-[11px] text-muted-foreground">
-                Configure a API Key em <strong>Configurações → Integrações → ChatGPT</strong> para
-                não precisar informar em cada agente.
+          {chatgptConfigurado ? (
+            <div className="flex items-center gap-2 p-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 text-xs text-emerald-700">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>API Key OpenAI configurada em <strong>Integrações → ChatGPT</strong></span>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <p className="font-semibold">API Key OpenAI não configurada</p>
+              <p className="mt-0.5">
+                Vá em <strong>Configurações → Integrações → ChatGPT</strong> e cadastre sua API Key
+                da OpenAI antes de criar agentes.
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Módulos onde este agente será usado</Label>
@@ -347,7 +334,7 @@ function AgenteFormDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={criarMut.isPending || atualizarMut.isPending}>
+          <Button onClick={handleSave} disabled={criarMut.isPending || atualizarMut.isPending || !chatgptConfigurado}>
             {(criarMut.isPending || atualizarMut.isPending) && (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             )}
