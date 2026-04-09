@@ -828,6 +828,13 @@ export const juditMonitoramentos = mysqlTable("judit_monitoramentos", {
   totalNovasAcoes: int("totalNovasAcoes").default(0).notNull(),
   /** Com anexos */
   withAttachments: boolean("withAttachments").default(false).notNull(),
+  /**
+   * Data da última cobrança mensal bem-sucedida via cron. Serve pra
+   * o cron mensal saber quais monitoramentos já foram cobrados no ciclo
+   * atual e evitar cobrar duas vezes. Se null, nunca foi cobrado mensal
+   * ainda (a cobrança inicial é de criação, não mensal).
+   */
+  ultimaCobrancaMensal: timestamp("ultimaCobrancaMensal"),
   createdAt: timestamp("createdAtJuditMon").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtJuditMon").defaultNow().onUpdateNow().notNull(),
 });

@@ -1,16 +1,20 @@
 /**
  * Jobs agendados — Executados periodicamente via setInterval
- * 
+ *
  * - Expirar assinaturas digitais vencidas (a cada 1h)
  * - Limpar sessões WhatsApp desconectadas (a cada 6h)
- * 
+ * - Cobrar monitoramentos Judit mensais (a cada 6h)
+ *
  * Registrar no index.ts: import { iniciarJobs } from "./cron-jobs"; iniciarJobs();
  */
 
 import { getDb } from "../db";
-import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes } from "../../drizzle/schema";
-import { eq, and, lt, sql, or, gte, lte } from "drizzle-orm";
+import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes,
+  juditMonitoramentos, juditCreditos, juditTransacoes } from "../../drizzle/schema";
+import { eq, and, lt, sql, or, gte, lte, isNull } from "drizzle-orm";
 import { syncTodosEscritorios } from "../integracoes/asaas-sync";
+import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { CUSTOS_JUDIT } from "../routers/judit-credit-calc";
 import { createLogger } from "./logger";
 const log = createLogger("_core-cron-jobs");
 
@@ -160,6 +164,154 @@ async function notificarPrazos() {
   }
 }
 
+/**
+ * Cobrança mensal recorrente dos monitoramentos Judit.
+ *
+ * A Judit nos cobra mensalmente por cada monitoramento ativo. Então
+ * precisamos repassar esse custo aos escritórios. O cron roda a cada
+ * 6h e cobra monitoramentos cuja última cobrança foi >= 30 dias atrás
+ * (ou que nunca foram cobrados, ultimaCobrancaMensal = null, E criados
+ * há mais de 30 dias).
+ *
+ * Se o escritório não tem créditos suficientes, o monitoramento é
+ * PAUSADO automaticamente e uma notificação é criada.
+ */
+async function cobrarMonitoramentosMensais() {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    const trintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Busca monitoramentos ativos que precisam de cobrança mensal:
+    // - status ativo (created/updating/updated)
+    // - ultimaCobrancaMensal é null E createdAt < 30 dias atrás (primeira cobrança mensal)
+    //   OU ultimaCobrancaMensal < 30 dias atrás (renovação)
+    const pendentes = await db
+      .select()
+      .from(juditMonitoramentos)
+      .where(
+        and(
+          or(
+            eq(juditMonitoramentos.statusJudit, "created"),
+            eq(juditMonitoramentos.statusJudit, "updating"),
+            eq(juditMonitoramentos.statusJudit, "updated"),
+          ),
+          or(
+            // Nunca cobrou mensal + criado há mais de 30 dias
+            and(
+              isNull(juditMonitoramentos.ultimaCobrancaMensal),
+              lt(juditMonitoramentos.createdAt, trintaDiasAtras),
+            ),
+            // Última cobrança há mais de 30 dias
+            lt(juditMonitoramentos.ultimaCobrancaMensal, trintaDiasAtras),
+          ),
+        ),
+      );
+
+    if (pendentes.length === 0) return;
+
+    let cobrados = 0;
+    let pausados = 0;
+
+    for (const mon of pendentes) {
+      if (!mon.clienteUserId) continue;
+
+      // Resolve escritório
+      const esc = await getEscritorioPorUsuario(mon.clienteUserId);
+      if (!esc) {
+        log.warn({ monId: mon.id, userId: mon.clienteUserId }, "Cron mensal: escritório não encontrado");
+        continue;
+      }
+
+      const custo =
+        mon.tipoMonitoramento === "novas_acoes"
+          ? CUSTOS_JUDIT.monitorar_pessoa_mes
+          : CUSTOS_JUDIT.monitorar_processo_mes;
+
+      // Verifica saldo
+      const [cr] = await db
+        .select()
+        .from(juditCreditos)
+        .where(eq(juditCreditos.escritorioId, esc.escritorio.id))
+        .limit(1);
+      const saldo = cr?.saldo ?? 0;
+
+      if (saldo < custo) {
+        // Créditos insuficientes — pausar monitoramento
+        await db
+          .update(juditMonitoramentos)
+          .set({ statusJudit: "paused" })
+          .where(eq(juditMonitoramentos.id, mon.id));
+
+        // Tenta pausar na Judit também (best-effort)
+        try {
+          const { getJuditClient } = await import("../integracoes/judit-webhook");
+          const client = await getJuditClient();
+          if (client) await client.pausarMonitoramento(mon.trackingId);
+        } catch {
+          /* best-effort */
+        }
+
+        // Notifica o usuário
+        try {
+          await db.insert(notificacoes).values({
+            userId: mon.clienteUserId,
+            titulo: "Monitoramento pausado por falta de créditos",
+            mensagem: `O monitoramento "${mon.apelido || mon.searchKey}" foi pausado porque seu saldo de créditos é insuficiente (necessário: ${custo}, disponível: ${saldo}). Recarregue seus créditos para reativar.`,
+            tipo: "sistema",
+          });
+        } catch {
+          /* best-effort */
+        }
+
+        pausados++;
+        continue;
+      }
+
+      // Cobra os créditos
+      const novoSaldo = saldo - custo;
+      await db
+        .update(juditCreditos)
+        .set({
+          saldo: novoSaldo,
+          totalConsumido: (cr?.totalConsumido || 0) + custo,
+        })
+        .where(eq(juditCreditos.escritorioId, esc.escritorio.id));
+
+      await db.insert(juditTransacoes).values({
+        escritorioId: esc.escritorio.id,
+        tipo: "consumo",
+        quantidade: custo,
+        saldoAnterior: saldo,
+        saldoDepois: novoSaldo,
+        operacao: mon.tipoMonitoramento === "novas_acoes"
+          ? "monitoramento_novas_acoes_mensal"
+          : "monitoramento_processo_mensal",
+        detalhes: `Cobrança mensal: ${mon.apelido || mon.searchKey} (${custo} créditos)`,
+        userId: mon.clienteUserId,
+      });
+
+      // Marca como cobrado
+      await db
+        .update(juditMonitoramentos)
+        .set({ ultimaCobrancaMensal: new Date() })
+        .where(eq(juditMonitoramentos.id, mon.id));
+
+      cobrados++;
+    }
+
+    if (cobrados > 0 || pausados > 0) {
+      log.info(
+        { cobrados, pausados, total: pendentes.length },
+        "[Cron] Cobrança mensal de monitoramentos Judit concluída",
+      );
+    }
+  } catch (err: any) {
+    log.error("[Cron] Erro na cobrança mensal de monitoramentos:", err.message);
+  }
+}
+
 /** Inicializa todos os jobs */
 export function iniciarJobs() {
   log.info("[Cron] Jobs iniciados");
@@ -168,6 +320,7 @@ export function iniciarJobs() {
   setTimeout(() => expirarAssinaturas(), 5000);
   setTimeout(() => syncAsaas(), 15000);
   setTimeout(() => notificarPrazos(), 20000);
+  setTimeout(() => cobrarMonitoramentosMensais(), 30000);
 
   // A cada 1 hora: expirar assinaturas
   setInterval(() => expirarAssinaturas(), 60 * 60 * 1000);
@@ -177,4 +330,7 @@ export function iniciarJobs() {
 
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
+
+  // A cada 6 horas: cobrar monitoramentos mensais da Judit
+  setInterval(() => cobrarMonitoramentosMensais(), 6 * 60 * 60 * 1000);
 }

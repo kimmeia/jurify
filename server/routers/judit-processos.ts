@@ -13,6 +13,7 @@ import { juditCreditos, juditTransacoes } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import {
+  CUSTOS_JUDIT,
   calcularCustoExtraConsultaHistorica,
   estimarCustoConsulta,
 } from "./judit-credit-calc";
@@ -28,27 +29,19 @@ const PACOTES_CREDITOS = [
   { id: "pack_1000", nome: "1000 creditos", creditos: 1000, preco: 499.9, popular: false },
 ] as const;
 
+// Reexportar pra compatibilidade com código antigo que importava CUSTOS_OPERACOES
+// ATENÇÃO: fonte de verdade é `CUSTOS_JUDIT` em ./judit-credit-calc.ts
 const CUSTOS_OPERACOES = {
-  /** Consulta direta por CNJ — resultado único garantido */
-  consulta_cnj: 1,
-  /**
-   * Consulta histórica por CPF/CNPJ/OAB/Nome — custo BASE da requisição
-   * (taxa fixa da Judit). O custo TOTAL é calculado dinamicamente:
-   *   custo_total = consulta_historica_base + (processos_encontrados × consulta_historica_por_processo)
-   * Capped em CONSULTA_HISTORICA_MAX.
-   */
-  consulta_historica_base: 3,
-  /** Custo adicional por processo retornado na busca histórica */
-  consulta_historica_por_processo: 1,
-  /** Teto máximo de créditos por busca histórica (evita sticker shock) */
-  consulta_historica_max: 100,
-  consulta_sintetica: 2,
-  monitorar_processo: 5,
-  monitorar_pessoa: 50,
-  resumo_ia: 1,
-  anexos: 10,
-  // Compatibilidade com UI antiga — label exibido
-  consulta_historica: 3, // legacy, usado só pra exibição; real é calculado
+  consulta_cnj: CUSTOS_JUDIT.consulta_cnj,
+  consulta_historica_base: CUSTOS_JUDIT.consulta_historica_base,
+  consulta_historica_por_lote_10: CUSTOS_JUDIT.consulta_historica_por_lote_10,
+  consulta_sintetica: CUSTOS_JUDIT.consulta_sintetica,
+  monitorar_processo: CUSTOS_JUDIT.monitorar_processo_mes,
+  monitorar_pessoa: CUSTOS_JUDIT.monitorar_pessoa_mes,
+  resumo_ia: CUSTOS_JUDIT.resumo_ia,
+  anexos: CUSTOS_JUDIT.anexos_mes,
+  // Label legacy pra UI antiga
+  consulta_historica: CUSTOS_JUDIT.consulta_historica_base,
 } as const;
 
 const PACOTE_QUANTIDADES: Record<string, number> = {

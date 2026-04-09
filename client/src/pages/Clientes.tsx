@@ -31,9 +31,9 @@ import {
 import { useLocation } from "wouter";
 
 /**
- * Botão "Monitorar na Judit" — cria um monitoramento de NOVAS AÇÕES
- * pra o CPF/CNPJ do cliente. Após criar, é possível ir direto pra
- * aba de Novas Ações em /processos.
+ * Botão "Monitorar na Judit" — cria/remove um monitoramento de NOVAS AÇÕES
+ * pro CPF/CNPJ do cliente. É TOGGLE: se já estiver monitorando, clicar
+ * remove o monitoramento (e interrompe a cobrança mensal recorrente).
  */
 function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
   const clean = cpfCnpj.replace(/\D/g, "");
@@ -41,11 +41,12 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
   const [, setLocation] = useLocation();
 
   // Verifica se já existe monitoramento ativo
-  const { data: monsData } = trpc.juditUsuario.meusMonitoramentos.useQuery(
-    { busca: clean },
-    { retry: false },
-  );
-  const jaMonitorado = (monsData || []).some(
+  const { data: monsData, refetch: refetchMons } =
+    trpc.juditUsuario.meusMonitoramentos.useQuery(
+      { busca: clean, tipoMonitoramento: "novas_acoes" },
+      { retry: false },
+    );
+  const monAtivo = (monsData || []).find(
     (m: any) =>
       m.searchKey === clean &&
       m.tipoMonitoramento === "novas_acoes" &&
@@ -61,20 +62,54 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
           onClick: () => setLocation("/processos"),
         },
       });
+      refetchMons();
     },
-    onError: (e) => toast.error("Erro ao criar monitoramento", { description: e.message }),
+    onError: (e: any) => toast.error("Erro ao criar monitoramento", { description: e.message }),
   });
 
-  if (jaMonitorado) {
+  const deletarMut = trpc.juditUsuario.deletar.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.juditErro) {
+        toast.warning("Monitoramento removido localmente", {
+          description: `Mas falhou na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.`,
+        });
+      } else {
+        toast.success(`Monitoramento de ${nome} removido`, {
+          description: "A cobrança mensal foi interrompida.",
+        });
+      }
+      refetchMons();
+    },
+    onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
+  });
+
+  if (monAtivo) {
     return (
       <Button
         variant="outline"
         size="sm"
-        disabled
-        className="border-emerald-500/30 text-emerald-700"
+        disabled={deletarMut.isPending}
+        onClick={() => {
+          if (
+            confirm(
+              `Parar de monitorar ${nome}?\n\nVocê deixará de ser avisado sobre novas ações e a cobrança mensal recorrente será interrompida.`,
+            )
+          ) {
+            deletarMut.mutate({ id: monAtivo.id });
+          }
+        }}
+        className="border-emerald-500/30 text-emerald-700 hover:bg-red-50 hover:border-red-500/30 hover:text-red-700 group"
       >
-        <CheckCircle2 className="h-4 w-4 mr-1" />
-        Monitorado
+        {deletarMut.isPending ? (
+          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+        ) : (
+          <>
+            <CheckCircle2 className="h-4 w-4 mr-1 group-hover:hidden" />
+            <Trash2 className="h-4 w-4 mr-1 hidden group-hover:block" />
+          </>
+        )}
+        <span className="group-hover:hidden">Monitorado</span>
+        <span className="hidden group-hover:inline">Parar</span>
       </Button>
     );
   }
@@ -84,7 +119,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
       variant="outline"
       size="sm"
       onClick={() => {
-        if (confirm(`Criar monitoramento de novas ações para ${nome}? Você será avisado quando alguém processar este cliente.`)) {
+        if (confirm(`Criar monitoramento de novas ações para ${nome}?\n\nVocê será avisado quando alguém processar este cliente. Cobrança: 35 créditos/mês.`)) {
           criarMut.mutate({
             tipo,
             valor: clean,

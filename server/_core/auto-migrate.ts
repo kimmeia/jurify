@@ -833,6 +833,69 @@ async function ensureContatoColumns(connection: mysql.Connection): Promise<void>
 }
 
 /**
+ * Adiciona a coluna `ultimaCobrancaMensal` em judit_monitoramentos.
+ * Usada pelo cron mensal de cobrança recorrente de monitoramentos —
+ * controla qual monitoramento já foi cobrado no ciclo atual e evita
+ * cobrar duas vezes.
+ */
+async function ensureJuditMonitoramentoColumns(connection: mysql.Connection): Promise<void> {
+  try {
+    const [tables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'judit_monitoramentos'`,
+    );
+    if ((tables as unknown[]).length === 0) {
+      log.debug("Tabela 'judit_monitoramentos' ainda não existe — pulando");
+      return;
+    }
+
+    const [cols] = await connection.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'judit_monitoramentos'`,
+    );
+    const colSet = new Set(
+      (cols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+    );
+
+    if (!colSet.has("ultimaCobrancaMensal")) {
+      try {
+        await connection.query(
+          "ALTER TABLE judit_monitoramentos ADD COLUMN ultimaCobrancaMensal TIMESTAMP NULL",
+        );
+        log.info("ensureJuditMonitoramentoColumns: ultimaCobrancaMensal adicionada");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (!isHarmlessError(msg)) {
+          log.warn(
+            { err: msg },
+            "ensureJuditMonitoramentoColumns: falha ao adicionar ultimaCobrancaMensal",
+          );
+        }
+      }
+    }
+
+    if (!colSet.has("tipoMonitoramento")) {
+      try {
+        await connection.query(
+          "ALTER TABLE judit_monitoramentos ADD COLUMN tipoMonitoramento ENUM('movimentacoes','novas_acoes') NULL",
+        );
+        log.info("ensureJuditMonitoramentoColumns: tipoMonitoramento adicionada");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (!isHarmlessError(msg)) {
+          log.warn(
+            { err: msg },
+            "ensureJuditMonitoramentoColumns: falha ao adicionar tipoMonitoramento",
+          );
+        }
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureJuditMonitoramentoColumns: erro inesperado");
+  }
+}
+
+/**
  * Remove o ON DELETE CASCADE da FK conversas.contatoIdConv — estava
  * perigoso: se alguém deletasse um contato, TODAS as conversas históricas
  * seriam apagadas junto. Agora: ON DELETE NO ACTION (RESTRICT) — banco
@@ -900,6 +963,7 @@ export async function runMigrations(): Promise<void> {
     await ensureContatoColumns(connection);
     await ensureAsaasBillingColumns(connection);
     await ensureClienteControlSchema(connection);
+    await ensureJuditMonitoramentoColumns(connection);
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

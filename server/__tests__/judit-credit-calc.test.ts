@@ -5,9 +5,10 @@
  * de forma errada. Por isso testamos exaustivamente:
  *   - Caso feliz (consulta típica)
  *   - Zero resultados
- *   - Muitos resultados (cap)
+ *   - Muitos resultados (SEM cap — pay-as-you-go puro)
  *   - Valores inválidos (negativos, NaN, Infinity)
  *   - Consistência entre o total e o extra (extra = total - base)
+ *   - Cobrança mensal de monitoramentos
  */
 
 import { describe, it, expect } from "vitest";
@@ -15,6 +16,7 @@ import {
   CUSTOS_JUDIT,
   calcularCustoConsultaHistorica,
   calcularCustoExtraConsultaHistorica,
+  calcularCustoMensalMonitoramentos,
   estimarCustoConsulta,
 } from "../routers/judit-credit-calc";
 
@@ -23,31 +25,36 @@ describe("calcularCustoConsultaHistorica", () => {
     expect(calcularCustoConsultaHistorica(0)).toBe(CUSTOS_JUDIT.consulta_historica_base);
   });
 
-  it("cobra base + por_processo × count pra resultados pequenos", () => {
-    // 5 processos = 3 base + 5×1 = 8
+  it("cobra base + 1 lote pra resultados pequenos (1-10)", () => {
+    // 5 processos = 3 base + ceil(5/10)×1 = 3 + 1 = 4
     expect(calcularCustoConsultaHistorica(5)).toBe(
-      CUSTOS_JUDIT.consulta_historica_base + 5 * CUSTOS_JUDIT.consulta_historica_por_processo,
+      CUSTOS_JUDIT.consulta_historica_base + CUSTOS_JUDIT.consulta_historica_por_lote_10,
     );
   });
 
+  it("cobra exatos 10 processos = 1 lote (mesmo preço de 1 processo)", () => {
+    // 10 processos = 3 + ceil(10/10)×1 = 3 + 1 = 4
+    expect(calcularCustoConsultaHistorica(10)).toBe(4);
+  });
+
+  it("cobra 11 processos = 2 lotes (fronteira do arredondamento)", () => {
+    // 11 processos = 3 + ceil(11/10)×1 = 3 + 2 = 5
+    expect(calcularCustoConsultaHistorica(11)).toBe(5);
+  });
+
   it("cobra correto pra 30 processos (caso típico OAB)", () => {
-    // 30 processos = 3 base + 30×1 = 33
-    expect(calcularCustoConsultaHistorica(30)).toBe(33);
+    // 30 processos = 3 + ceil(30/10)×1 = 3 + 3 = 6
+    expect(calcularCustoConsultaHistorica(30)).toBe(6);
   });
 
-  it("aplica o cap quando resultados excedem o máximo", () => {
-    // 200 processos → seria 3 + 200 = 203, mas cap é 100
-    expect(calcularCustoConsultaHistorica(200)).toBe(CUSTOS_JUDIT.consulta_historica_max);
+  it("NÃO aplica cap — cobra pelo consumo real (500 processos)", () => {
+    // 500 processos = 3 + ceil(500/10)×1 = 3 + 50 = 53. Sem cap.
+    expect(calcularCustoConsultaHistorica(500)).toBe(53);
   });
 
-  it("aplica o cap exato em 97 processos (borda)", () => {
-    // 97 processos = 3 + 97 = 100 (exatamente no cap)
-    expect(calcularCustoConsultaHistorica(97)).toBe(100);
-  });
-
-  it("aplica o cap em 98 processos (passa 1 do cap)", () => {
-    // 98 processos = 3 + 98 = 101 → cap em 100
-    expect(calcularCustoConsultaHistorica(98)).toBe(100);
+  it("cobra pelo consumo real em 1000 processos", () => {
+    // 1000 processos = 3 + ceil(1000/10)×1 = 3 + 100 = 103
+    expect(calcularCustoConsultaHistorica(1000)).toBe(103);
   });
 
   it("trata valores negativos retornando base", () => {
@@ -63,8 +70,8 @@ describe("calcularCustoConsultaHistorica", () => {
   });
 
   it("trunca decimais", () => {
-    // 5.9 → trunca pra 5 → 3 + 5 = 8
-    expect(calcularCustoConsultaHistorica(5.9)).toBe(8);
+    // 5.9 → trunca pra 5 → 3 + ceil(5/10)×1 = 3 + 1 = 4
+    expect(calcularCustoConsultaHistorica(5.9)).toBe(4);
   });
 });
 
@@ -74,20 +81,12 @@ describe("calcularCustoExtraConsultaHistorica", () => {
   });
 
   it("extra = total − base", () => {
-    // 10 processos: total = 13, extra = 10
-    expect(calcularCustoExtraConsultaHistorica(10)).toBe(10);
-  });
-
-  it("extra respeita o cap (máximo cap − base)", () => {
-    // 200 processos: total = 100 (cap), extra = 97
-    const capRestante =
-      CUSTOS_JUDIT.consulta_historica_max - CUSTOS_JUDIT.consulta_historica_base;
-    expect(calcularCustoExtraConsultaHistorica(200)).toBe(capRestante);
+    // 10 processos: total = 3 + 1 = 4, extra = 1
+    expect(calcularCustoExtraConsultaHistorica(10)).toBe(1);
   });
 
   it("consistência: total = base + extra sempre", () => {
-    // Verifica invariante pra vários valores
-    for (const count of [0, 1, 5, 10, 50, 97, 100, 500]) {
+    for (const count of [0, 1, 5, 10, 50, 100, 500, 1000]) {
       const total = calcularCustoConsultaHistorica(count);
       const extra = calcularCustoExtraConsultaHistorica(count);
       expect(extra).toBe(total - CUSTOS_JUDIT.consulta_historica_base);
@@ -95,45 +94,79 @@ describe("calcularCustoExtraConsultaHistorica", () => {
   });
 });
 
+describe("calcularCustoMensalMonitoramentos", () => {
+  it("zero quando não tem monitoramentos", () => {
+    expect(calcularCustoMensalMonitoramentos(0, 0)).toBe(0);
+  });
+
+  it("cobra apenas processos quando só tem processos", () => {
+    // 10 processos × 5 = 50
+    expect(calcularCustoMensalMonitoramentos(10, 0)).toBe(
+      10 * CUSTOS_JUDIT.monitorar_processo_mes,
+    );
+  });
+
+  it("cobra apenas pessoas quando só tem pessoas", () => {
+    // 5 pessoas × 35 = 175
+    expect(calcularCustoMensalMonitoramentos(0, 5)).toBe(
+      5 * CUSTOS_JUDIT.monitorar_pessoa_mes,
+    );
+  });
+
+  it("cobra ambos somados", () => {
+    // 10 processos (50) + 5 pessoas (175) = 225
+    const esperado =
+      10 * CUSTOS_JUDIT.monitorar_processo_mes + 5 * CUSTOS_JUDIT.monitorar_pessoa_mes;
+    expect(calcularCustoMensalMonitoramentos(10, 5)).toBe(esperado);
+  });
+
+  it("trata valores negativos como 0", () => {
+    expect(calcularCustoMensalMonitoramentos(-5, -3)).toBe(0);
+  });
+
+  it("trunca decimais", () => {
+    // 10.7 → 10, 5.9 → 5 → 10×5 + 5×35
+    const esperado =
+      10 * CUSTOS_JUDIT.monitorar_processo_mes + 5 * CUSTOS_JUDIT.monitorar_pessoa_mes;
+    expect(calcularCustoMensalMonitoramentos(10.7, 5.9)).toBe(esperado);
+  });
+});
+
 describe("estimarCustoConsulta", () => {
   it("CNJ tem custo fixo de 1", () => {
     const r = estimarCustoConsulta("lawsuit_cnj");
     expect(r.min).toBe(1);
-    expect(r.max).toBe(1);
     expect(r.tipico).toBe(1);
   });
 
-  it("CPF tem min=base, max=teto", () => {
+  it("CPF tem min=base, típico >= base", () => {
     const r = estimarCustoConsulta("cpf");
     expect(r.min).toBe(CUSTOS_JUDIT.consulta_historica_base);
-    expect(r.max).toBe(CUSTOS_JUDIT.consulta_historica_max);
-    expect(r.tipico).toBeGreaterThan(r.min);
-    expect(r.tipico).toBeLessThan(r.max);
+    expect(r.tipico).toBeGreaterThanOrEqual(r.min);
   });
 
-  it("OAB tem estimativa típica maior que CPF", () => {
+  it("OAB tem estimativa típica maior ou igual a CPF", () => {
     const cpf = estimarCustoConsulta("cpf");
     const oab = estimarCustoConsulta("oab");
     // Advogado em geral tem mais processos que pessoa física
-    expect(oab.tipico).toBeGreaterThan(cpf.tipico);
+    expect(oab.tipico).toBeGreaterThanOrEqual(cpf.tipico);
   });
 
-  it("todas as buscas históricas mencionam o teto na mensagem", () => {
+  it("mensagem menciona os parâmetros de cobrança", () => {
     for (const tipo of ["cpf", "cnpj", "oab", "name"] as const) {
       const r = estimarCustoConsulta(tipo);
-      expect(r.mensagem).toContain("100"); // o cap
       expect(r.mensagem.toLowerCase()).toContain("crédito");
     }
   });
 });
 
 describe("CUSTOS_JUDIT constantes", () => {
-  it("base nunca é maior que o max", () => {
-    expect(CUSTOS_JUDIT.consulta_historica_base).toBeLessThan(CUSTOS_JUDIT.consulta_historica_max);
+  it("base é positivo", () => {
+    expect(CUSTOS_JUDIT.consulta_historica_base).toBeGreaterThan(0);
   });
 
-  it("por_processo é positivo", () => {
-    expect(CUSTOS_JUDIT.consulta_historica_por_processo).toBeGreaterThan(0);
+  it("por_lote_10 é positivo", () => {
+    expect(CUSTOS_JUDIT.consulta_historica_por_lote_10).toBeGreaterThan(0);
   });
 
   it("consulta CNJ é a mais barata", () => {
@@ -142,7 +175,9 @@ describe("CUSTOS_JUDIT constantes", () => {
     );
   });
 
-  it("monitorar pessoa é mais caro que monitorar processo individual", () => {
-    expect(CUSTOS_JUDIT.monitorar_pessoa).toBeGreaterThan(CUSTOS_JUDIT.monitorar_processo);
+  it("monitorar pessoa mensal é mais caro que monitorar processo mensal", () => {
+    expect(CUSTOS_JUDIT.monitorar_pessoa_mes).toBeGreaterThan(
+      CUSTOS_JUDIT.monitorar_processo_mes,
+    );
   });
 });

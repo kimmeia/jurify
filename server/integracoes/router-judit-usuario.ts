@@ -505,6 +505,7 @@ export const juditUsuarioRouter = router({
   meusMonitoramentos: protectedProcedure
     .input(z.object({
       busca: z.string().optional(),
+      tipoMonitoramento: z.enum(["movimentacoes", "novas_acoes"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -519,6 +520,10 @@ export const juditUsuarioRouter = router({
           eq(juditMonitoramentos.statusJudit, "paused")
         ),
       ];
+
+      if (input?.tipoMonitoramento) {
+        conditions.push(eq(juditMonitoramentos.tipoMonitoramento, input.tipoMonitoramento));
+      }
 
       if (input?.busca) {
         const b = `%${input.busca}%`;
