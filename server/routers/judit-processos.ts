@@ -316,7 +316,11 @@ export const juditProcessosRouter = router({
             .limit(1);
 
           if (jaCobrado.length === 0) {
-            const totalProcessos = resultado?.all_count ?? resultado?.page_data?.length ?? 0;
+            // Contar apenas respostas tipo lawsuit (não application_info/application_error)
+            const lawsuits = (resultado?.page_data || []).filter(
+              (r: any) => r.response_type === "lawsuit" || r.response_type === "lawsuits",
+            );
+            const totalProcessos = lawsuits.length;
             // Usa helper puro pra calcular o custo extra (testável)
             const custoExtra = calcularCustoExtraConsultaHistorica(totalProcessos);
 

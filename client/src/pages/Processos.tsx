@@ -354,9 +354,13 @@ function ConsultarTab() {
       {resultados && resultados.page_data && resultados.page_data.length > 0 ? (
         <div className="space-y-3">
           {(() => {
-            // Filtra apenas respostas tipo lawsuit (ignora application_info, application_error, etc)
+            // Filtra respostas com dados de processo (ignora application_info, application_error)
             const processos = resultados.page_data.filter(
-              (item: any) => item.response_type === "lawsuit" && item.response_data && typeof item.response_data === "object",
+              (item: any) =>
+                (item.response_type === "lawsuit" || item.response_type === "lawsuits") &&
+                item.response_data &&
+                typeof item.response_data === "object" &&
+                (item.response_data.code || item.response_data.name),
             );
             return (
               <>
@@ -1324,10 +1328,13 @@ function CofreTab() {
 
   const cadastrarMut = (trpc as any).juditCredenciais.cadastrar.useMutation({
     onSuccess: (data: any) => {
-      toast.success("Credencial salva no cofre", {
-        description: "Para validar, faça uma consulta a um processo em segredo de justiça usando esta credencial. Se o login falhar, o status mudará para 'erro'.",
-        duration: 10000,
-      });
+      if (data.status === "ativa") {
+        toast.success("Credencial válida!", { description: data.mensagem, duration: 8000 });
+      } else if (data.status === "erro") {
+        toast.error("Credencial inválida", { description: data.mensagem, duration: 12000 });
+      } else {
+        toast.warning("Validação pendente", { description: data.mensagem, duration: 10000 });
+      }
       setNovoOpen(false);
       setForm({ customerKey: "", systemName: "*", username: "", password: "", totpSecret: "" });
       refetch();
@@ -1539,10 +1546,10 @@ function CofreTab() {
               {cadastrarMut.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Cadastrando...
+                  Testando login no tribunal...
                 </>
               ) : (
-                "Cadastrar credencial"
+                "Cadastrar e testar login"
               )}
             </Button>
           </DialogFooter>

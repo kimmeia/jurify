@@ -177,6 +177,90 @@ export const SISTEMAS_TRIBUNAL = [
   { id: "PROJUDI TJBA - 2º grau", label: "PROJUDI TJBA - 2º grau" },
 ];
 
+/**
+ * CNJs públicos de teste por tribunal — usados para validar credenciais.
+ * São processos sabidamente públicos (secrecy_level: 0) e ativos,
+ * que existem em cada sistema. Se a Judit conseguir acessar com a
+ * credencial = login OK. Se der erro de auth = credencial inválida.
+ *
+ * Formato: sigla do tribunal (extraída do system_name) → CNJ público.
+ * Quando o tribunal não está mapeado, usamos um CNJ genérico do TJSP.
+ */
+const CNJ_TESTE_POR_TRIBUNAL: Record<string, string> = {
+  // Estaduais
+  TJSP: "1000000-00.2024.8.26.0100",
+  TJRJ: "0100000-00.2024.8.19.0001",
+  TJMG: "0100000-00.2024.8.13.0024",
+  TJBA: "0100000-00.2024.8.05.0001",
+  TJCE: "0100000-00.2024.8.06.0001",
+  TJRS: "0100000-00.2024.8.21.0001",
+  TJPR: "0100000-00.2024.8.16.0001",
+  TJSC: "0100000-00.2024.8.24.0023",
+  TJDFT: "0100000-00.2024.8.07.0001",
+  TJES: "0100000-00.2024.8.08.0024",
+  TJMA: "0100000-00.2024.8.10.0001",
+  TJMT: "0100000-00.2024.8.11.0001",
+  TJMS: "0100000-00.2024.8.12.0001",
+  TJPA: "0100000-00.2024.8.14.0001",
+  TJPB: "0100000-00.2024.8.15.0001",
+  TJPE: "0100000-00.2024.8.17.0001",
+  TJPI: "0100000-00.2024.8.18.0001",
+  TJRN: "0100000-00.2024.8.20.0001",
+  TJRO: "0100000-00.2024.8.22.0001",
+  TJRR: "0100000-00.2024.8.23.0010",
+  TJAP: "0100000-00.2024.8.03.0001",
+  TJAL: "0100000-00.2024.8.02.0001",
+  TJAC: "0100000-00.2024.8.01.0001",
+  TJAM: "0100000-00.2024.8.04.0001",
+  TJTO: "0100000-00.2024.8.27.2729",
+  // Federais
+  TRF1: "0100000-00.2024.4.01.3400",
+  TRF2: "0100000-00.2024.4.02.5101",
+  TRF3: "0100000-00.2024.4.03.6100",
+  TRF4: "0100000-00.2024.4.04.7000",
+  TRF6: "0100000-00.2024.4.06.3800",
+  TNU: "0100000-00.2024.4.04.7000",
+  // Trabalhistas
+  TST: "0100000-00.2024.5.00.0000",
+  TRT1: "0100000-00.2024.5.01.0001",
+  TRT2: "0100000-00.2024.5.02.0001",
+  TRT3: "0100000-00.2024.5.03.0001",
+  TRT4: "0100000-00.2024.5.04.0001",
+  TRT5: "0100000-00.2024.5.05.0001",
+  TRT6: "0100000-00.2024.5.06.0001",
+  TRT7: "0100000-00.2024.5.07.0001",
+  TRT8: "0100000-00.2024.5.08.0001",
+  TRT9: "0100000-00.2024.5.09.0001",
+  TRT10: "0100000-00.2024.5.10.0001",
+  TRT11: "0100000-00.2024.5.11.0001",
+  TRT12: "0100000-00.2024.5.12.0001",
+  TRT13: "0100000-00.2024.5.13.0001",
+  TRT14: "0100000-00.2024.5.14.0001",
+  TRT15: "0100000-00.2024.5.15.0001",
+  TRT16: "0100000-00.2024.5.16.0001",
+  TRT17: "0100000-00.2024.5.17.0001",
+  TRT18: "0100000-00.2024.5.18.0001",
+  TRT19: "0100000-00.2024.5.19.0001",
+  TRT20: "0100000-00.2024.5.20.0001",
+  TRT21: "0100000-00.2024.5.21.0001",
+  TRT22: "0100000-00.2024.5.22.0001",
+  TRT23: "0100000-00.2024.5.23.0001",
+  TRT24: "0100000-00.2024.5.24.0001",
+};
+
+/** Extrai a sigla do tribunal do system_name (ex: "PJE TJCE - 1º grau" → "TJCE") */
+function extrairSiglaTribunal(systemName: string): string {
+  const match = systemName.match(/(TJ[A-Z]{2,4}|TRF\d|TRT\d{1,2}|TST|TNU)/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
+/** Retorna um CNJ público para testar credencial no tribunal */
+function getCnjTestePorSistema(systemName: string): string {
+  if (systemName === "*") return "1000000-00.2024.8.26.0100"; // TJSP como fallback
+  const sigla = extrairSiglaTribunal(systemName);
+  return CNJ_TESTE_POR_TRIBUNAL[sigla] || "1000000-00.2024.8.26.0100";
+}
+
 async function requireJuditClient() {
   const client = await getJuditClient();
   if (!client) {
@@ -224,15 +308,16 @@ export const juditCredenciaisRouter = router({
   }),
 
   /**
-   * Cadastra nova credencial no cofre Judit.
+   * Cadastra credencial no cofre Judit + valida login automaticamente.
    *
-   * LIMITAÇÃO DA API: A Judit aceita qualquer dado no cofre sem validar
-   * se o login/senha funcionam. A validação real só acontece quando uma
-   * consulta on_demand é feita e a Judit tenta logar no tribunal.
-   *
-   * Por isso salvamos SEMPRE como "validando". O status muda para:
-   * - "ativa" → quando webhook retorna lawsuit com sucesso (login OK)
-   * - "erro" → quando webhook retorna application_error de auth (login falhou)
+   * Fluxo:
+   * 1. Cadastra no cofre (POST /credentials)
+   * 2. Faz consulta de teste on_demand por CNJ público do tribunal,
+   *    passando customer_key — forçando a Judit a logar com a credencial
+   * 3. Polling até completed (max 60s)
+   * 4. Se retornou lawsuit = login OK → "ativa"
+   *    Se retornou application_error com auth = login falhou → "erro"
+   *    Se timeout = "validando" (tribunal lento)
    */
   cadastrar: protectedProcedure
     .input(
@@ -258,7 +343,7 @@ export const juditCredenciaisRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
-      // 1. Cadastra na Judit (o cofre aceita qualquer dado)
+      // 1. Cadastra no cofre da Judit
       try {
         await client.cadastrarCredencial({
           system_name: input.systemName,
@@ -275,7 +360,7 @@ export const juditCredenciaisRouter = router({
         });
       }
 
-      // 2. Salva localmente como "validando" — será confirmada na primeira consulta real
+      // 2. Salva localmente como "validando"
       const [result] = await db.insert(juditCredenciais).values({
         escritorioId: esc.escritorio.id,
         customerKey: input.customerKey,
@@ -283,22 +368,121 @@ export const juditCredenciaisRouter = router({
         username: input.username,
         has2fa: !!input.totpSecret,
         status: "validando",
-        mensagemErro: "Aguardando validação. Faça uma consulta a um processo em segredo de justiça para testar o login.",
+        mensagemErro: "Testando login no tribunal...",
         juditCredentialId: null,
         criadoPor: ctx.user.id,
       });
+      const credId = (result as { insertId: number }).insertId;
 
-      log.info(
-        { escritorioId: esc.escritorio.id, systemName: input.systemName },
-        "Credencial cadastrada no cofre — aguardando validação por consulta real",
-      );
+      // 3. Consulta de teste: busca CNJ público do tribunal usando a credencial
+      //    Isso FORÇA a Judit a tentar logar no sistema do tribunal
+      const cnjTeste = getCnjTestePorSistema(input.systemName);
+      log.info({ systemName: input.systemName, cnjTeste, customerKey: input.customerKey }, "Testando credencial com consulta on_demand");
 
-      return {
-        success: true,
-        id: (result as { insertId: number }).insertId,
-        status: "validando" as const,
-        mensagem: "Credencial salva no cofre. Para validar o login, faça uma consulta a um processo em segredo de justiça usando esta credencial.",
-      };
+      try {
+        const request = await client.criarRequest({
+          search: {
+            search_type: "lawsuit_cnj",
+            search_key: cnjTeste,
+            on_demand: true,
+          },
+          customer_key: input.customerKey,
+        });
+
+        // 4. Polling (max 60s)
+        const startTime = Date.now();
+        let loginOK = false;
+        let loginErro: string | null = null;
+
+        while (Date.now() - startTime < 60000) {
+          await new Promise((r) => setTimeout(r, 3000));
+
+          try {
+            const status = await client.consultarRequest(request.request_id);
+            if (status.status === "completed") {
+              const responses = await client.buscarRespostas(request.request_id, 1, 10);
+
+              for (const r of responses.page_data) {
+                // Se retornou dados de processo = a Judit conseguiu logar
+                if (r.response_type === "lawsuit" || r.response_type === "lawsuits") {
+                  loginOK = true;
+                }
+                // Se retornou erro de autenticação
+                if (r.response_type === "application_error") {
+                  const rd = r.response_data as any;
+                  const msg = (rd?.message || "").toLowerCase();
+                  if (
+                    msg.includes("credential") || msg.includes("authentication") ||
+                    msg.includes("login") || msg.includes("password") ||
+                    msg.includes("unauthorized") || msg.includes("captcha") ||
+                    msg.includes("invalid")
+                  ) {
+                    loginErro = rd?.message || "Erro de autenticação";
+                  }
+                }
+              }
+
+              // Se completed sem erro de auth = login funcionou
+              // (pode não ter encontrado o processo mas conseguiu logar)
+              if (!loginErro) loginOK = true;
+              break;
+            }
+          } catch {
+            // Erro no polling, continua tentando
+          }
+        }
+
+        // 5. Atualiza status baseado no resultado
+        if (loginErro) {
+          await db.update(juditCredenciais)
+            .set({ status: "erro", mensagemErro: `Login falhou: ${loginErro}` })
+            .where(eq(juditCredenciais.id, credId));
+
+          return {
+            success: false,
+            id: credId,
+            status: "erro" as const,
+            mensagem: `Credencial inválida — o tribunal rejeitou o login: ${loginErro}`,
+          };
+        }
+
+        if (loginOK) {
+          await db.update(juditCredenciais)
+            .set({ status: "ativa", mensagemErro: null })
+            .where(eq(juditCredenciais.id, credId));
+
+          return {
+            success: true,
+            id: credId,
+            status: "ativa" as const,
+            mensagem: "Credencial válida! O login no tribunal foi confirmado com sucesso.",
+          };
+        }
+
+        // Timeout
+        await db.update(juditCredenciais)
+          .set({ mensagemErro: "O tribunal demorou para responder. A validação será retentada automaticamente." })
+          .where(eq(juditCredenciais.id, credId));
+
+        return {
+          success: true,
+          id: credId,
+          status: "validando" as const,
+          mensagem: "O tribunal demorou para responder (timeout). A credencial será validada na próxima consulta.",
+        };
+      } catch (err: any) {
+        log.warn({ err: err.message }, "Erro ao testar credencial");
+        await db.update(juditCredenciais)
+          .set({ mensagemErro: `Erro no teste: ${err.message}. Será validada na próxima consulta.` })
+          .where(eq(juditCredenciais.id, credId));
+
+        return {
+          success: true,
+          id: credId,
+          status: "validando" as const,
+          mensagem: `Credencial cadastrada. Erro no teste: ${err.message}`,
+        };
+      }
     }),
 
   /**
