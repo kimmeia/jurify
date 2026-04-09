@@ -229,10 +229,10 @@ export const juditUsuarioRouter = router({
           message: "Credencial não encontrada ou não pertence ao seu escritório.",
         });
       }
-      if (cred.status !== "ativa") {
+      if (cred.status !== "ativa" && cred.status !== "validando") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Credencial "${cred.customerKey}" não está ativa (status: ${cred.status}). Verifique no Cofre.`,
+          message: `Credencial "${cred.customerKey}" não pode ser usada (status: ${cred.status}). Verifique no Cofre.`,
         });
       }
 

@@ -491,7 +491,7 @@ function MonitorarTab() {
 
   // Credenciais do cofre
   const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
-  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const criarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
     onSuccess: () => {
@@ -1230,10 +1230,12 @@ function CofreTab() {
                         ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
                         : c.status === "erro"
                         ? "bg-red-500/15 text-red-700 border-red-500/30"
+                        : c.status === "validando"
+                        ? "bg-blue-500/15 text-blue-700 border-blue-500/30"
                         : "bg-amber-500/15 text-amber-700 border-amber-500/30"
                     }`}
                   >
-                    {c.status}
+                    {c.status === "validando" ? "⏳ Validando" : c.status === "ativa" ? "✓ Ativa" : c.status === "erro" ? "✗ Erro" : c.status}
                   </Badge>
                 </div>
                 <div className="mt-2 space-y-1 text-xs">
@@ -1248,7 +1250,7 @@ function CofreTab() {
                     </div>
                   )}
                   {c.mensagemErro && (
-                    <p className="text-red-600 text-[10px]">{c.mensagemErro}</p>
+                    <p className={`text-[10px] ${c.status === "erro" ? "text-red-600" : "text-blue-600"}`}>{c.mensagemErro}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 pt-2 mt-2 border-t">

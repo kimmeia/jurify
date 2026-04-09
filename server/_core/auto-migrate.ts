@@ -890,6 +890,24 @@ async function ensureJuditMonitoramentoColumns(connection: mysql.Connection): Pr
         }
       }
     }
+    // Adicionar "validando" ao enum statusJuditCred (se tabela judit_credenciais existe)
+    const [credTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'judit_credenciais'`,
+    );
+    if ((credTables as unknown[]).length > 0) {
+      try {
+        await connection.query(
+          `ALTER TABLE judit_credenciais MODIFY COLUMN statusJuditCred ENUM('ativa','validando','erro','expirada','removida') NOT NULL DEFAULT 'validando'`,
+        );
+        log.info("ensureJuditMonitoramentoColumns: enum statusJuditCred atualizado com 'validando'");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (!isHarmlessError(msg)) {
+          log.warn({ err: msg }, "ensureJuditMonitoramentoColumns: falha ao atualizar enum statusJuditCred");
+        }
+      }
+    }
   } catch (err) {
     log.error({ err: String(err) }, "ensureJuditMonitoramentoColumns: erro inesperado");
   }

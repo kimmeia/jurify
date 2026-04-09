@@ -181,7 +181,7 @@ function CriarDialog({
 
   // Credenciais do cofre
   const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
-  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const criarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
     onSuccess: (data) => {

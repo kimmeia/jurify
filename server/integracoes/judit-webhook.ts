@@ -267,6 +267,23 @@ export function registerJuditWebhook(app: Express) {
           })
           .where(eq(juditMonitoramentos.id, mon.id));
 
+        // Se o monitoramento usava credencial e ela estava "validando",
+        // agora sabemos que funciona → marcar como "ativa"
+        if (mon.credencialId) {
+          try {
+            const { juditCredenciais } = await import("../../drizzle/schema");
+            await db
+              .update(juditCredenciais)
+              .set({ status: "ativa", mensagemErro: null })
+              .where(
+                and(
+                  eq(juditCredenciais.id, mon.credencialId),
+                  eq(juditCredenciais.status, "validando"),
+                ),
+              );
+          } catch { /* best-effort */ }
+        }
+
         log.info(
           `[Judit Webhook] Processo ${data?.code} atualizado. Última mov: ${lastStep?.content?.slice(0, 60)}...`
         );
@@ -289,6 +306,32 @@ export function registerJuditWebhook(app: Express) {
           responseData: JSON.stringify(payload.response_data),
           stepsCount: 0,
         });
+
+        // Se o erro é de autenticação/credencial, marca a credencial como "erro"
+        const errLower = errMsg.toLowerCase();
+        const isCredentialError =
+          errLower.includes("credential") ||
+          errLower.includes("authentication") ||
+          errLower.includes("login") ||
+          errLower.includes("senha") ||
+          errLower.includes("password") ||
+          errLower.includes("unauthorized") ||
+          errLower.includes("403") ||
+          errLower.includes("captcha");
+
+        if (mon.credencialId && isCredentialError) {
+          try {
+            const { juditCredenciais } = await import("../../drizzle/schema");
+            await db
+              .update(juditCredenciais)
+              .set({ status: "erro", mensagemErro: errMsg })
+              .where(eq(juditCredenciais.id, mon.credencialId));
+            log.warn(
+              { credencialId: mon.credencialId, err: errMsg },
+              "[Judit Webhook] Credencial marcada como erro — login falhou",
+            );
+          } catch { /* best-effort */ }
+        }
       }
 
       return res.status(200).json({ received: true });

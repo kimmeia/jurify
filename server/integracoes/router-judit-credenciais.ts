@@ -134,7 +134,9 @@ export const juditCredenciaisRouter = router({
           ...(input.totpSecret ? { custom_data: { secret: input.totpSecret } } : {}),
         });
 
-        // 2. Salva metadados localmente
+        // 2. Salva metadados localmente com status "validando" (pendente de confirmação)
+        // A credencial só será marcada como "ativa" quando a Judit confirmar
+        // que o login funciona (via webhook de sucesso). Se falhar, status → "erro".
         const juditCredId = resposta.credential_id || resposta.id || null;
         const [result] = await db.insert(juditCredenciais).values({
           escritorioId: esc.escritorio.id,
@@ -142,21 +144,22 @@ export const juditCredenciaisRouter = router({
           systemName: input.systemName,
           username: input.username,
           has2fa: !!input.totpSecret,
-          status: "ativa",
+          status: "validando",
+          mensagemErro: "Aguardando validação pela Judit. O login será testado na próxima consulta.",
           juditCredentialId: juditCredId,
           criadoPor: ctx.user.id,
         });
 
         log.info(
           { escritorioId: esc.escritorio.id, systemName: input.systemName, juditCredId },
-          "Credencial cadastrada com sucesso",
+          "Credencial cadastrada — aguardando validação",
         );
 
         return {
           success: true,
           id: (result as { insertId: number }).insertId,
           juditCredentialId: juditCredId,
-          mensagem: "Credencial cadastrada. A Judit vai validar o login na próxima consulta.",
+          mensagem: "Credencial cadastrada com status 'Validando'. Será confirmada quando a Judit testar o login na próxima consulta.",
         };
       } catch (err: any) {
         log.error({ err: err.message }, "Falha ao cadastrar credencial");

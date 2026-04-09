@@ -883,7 +883,7 @@ export const juditCredenciais = mysqlTable("judit_credenciais", {
    *   - expirada: senha do tribunal vence/mudou, precisa recadastrar
    *   - removida: deletada (soft delete pra preservar auditoria)
    */
-  status: mysqlEnum("statusJuditCred", ["ativa", "erro", "expirada", "removida"]).default("ativa").notNull(),
+  status: mysqlEnum("statusJuditCred", ["ativa", "validando", "erro", "expirada", "removida"]).default("validando").notNull(),
   /** Mensagem do último erro (se status="erro") */
   mensagemErro: text("mensagemErroJuditCred"),
   /**
