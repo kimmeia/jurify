@@ -508,9 +508,10 @@ function MonitorarTab() {
   const deletarMut = trpc.juditUsuario.deletar.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}` });
-      else toast.success("Removido");
+      else toast.success("Monitoramento removido");
       refetch();
     },
+    onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
   });
 
   const semCredenciais = !credsAtivas || credsAtivas.length === 0;
@@ -824,6 +825,18 @@ function NovasAcoesTab() {
     onSuccess: () => refetch(),
   });
 
+  const deletarMonMut = trpc.juditUsuario.deletar.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.juditErro) {
+        toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.` });
+      } else {
+        toast.success("Monitoramento removido", { description: "A cobrança mensal foi interrompida." });
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
+  });
+
   const acoes = data?.acoes || [];
   const monitoramentos = data?.monitoramentos || [];
 
@@ -860,7 +873,7 @@ function NovasAcoesTab() {
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {monitoramentos.map((m: any) => (
-              <Card key={m.id} className="hover:shadow-sm transition-all">
+              <Card key={m.id} className="group hover:shadow-sm transition-all">
                 <CardContent className="pt-3 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
@@ -879,6 +892,19 @@ function NovasAcoesTab() {
                         {m.totalNovasAcoes}
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Remover monitoramento"
+                      onClick={() => {
+                        if (confirm(`Parar de monitorar ${m.apelido || m.searchKey}?\n\nA cobrança mensal será interrompida.`))
+                          deletarMonMut.mutate({ id: m.id });
+                      }}
+                      disabled={deletarMonMut.isPending}
+                    >
+                      {deletarMonMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
