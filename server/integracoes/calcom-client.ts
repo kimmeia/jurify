@@ -24,8 +24,20 @@ export class CalcomClient {
 
   constructor(config: CalcomConfig) {
     const base = config.baseUrl.replace(/\/$/, "");
-    // Cal.com Cloud usa api.cal.com/v2, self-hosted usa {base}/api/v2
-    this.baseUrl = base.includes("api.cal.com") ? "https://api.cal.com/v2" : `${base}/api/v2`;
+    // Detecta e corrige URLs comuns:
+    // - Profile URL (cal.com/usuario) → redireciona pra api.cal.com/v2
+    // - API URL (api.cal.com) → usa direto com /v2
+    // - Self-hosted (meusite.com) → adiciona /api/v2
+    if (base.match(/^https?:\/\/cal\.com\//)) {
+      // URL de perfil ou cal.com genérico → usa API cloud
+      this.baseUrl = "https://api.cal.com/v2";
+    } else if (base.includes("api.cal.com")) {
+      this.baseUrl = "https://api.cal.com/v2";
+    } else if (base.endsWith("/api/v2") || base.endsWith("/api/v1")) {
+      this.baseUrl = base;
+    } else {
+      this.baseUrl = `${base}/api/v2`;
+    }
     this.apiKey = config.apiKey;
     this.headers = {
       "Content-Type": "application/json",

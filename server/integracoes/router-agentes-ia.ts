@@ -101,7 +101,33 @@ async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promis
     }
   }
 
-  // 3. Key admin global
+  // 3. Key do canal ChatGPT Bot (salva em Configurações → Integrações)
+  try {
+    const { canaisIntegrados } = await import("../../drizzle/schema");
+    const { like } = await import("drizzle-orm");
+    const { decryptConfig } = await import("../escritorio/crypto-utils");
+    const canalRows = await db
+      .select()
+      .from(canaisIntegrados)
+      .where(
+        and(
+          eq(canaisIntegrados.escritorioId, escritorioId),
+          like(canaisIntegrados.nome, "%ChatGPT%"),
+        ),
+      )
+      .limit(1);
+    if (canalRows.length > 0) {
+      const row = canalRows[0];
+      if (row.configEncrypted && row.configIv && row.configTag) {
+        const config = decryptConfig(row.configEncrypted, row.configIv, row.configTag);
+        if (config?.openaiApiKey) return config.openaiApiKey;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // 4. Key admin global
   try {
     const [reg] = await db
       .select()
