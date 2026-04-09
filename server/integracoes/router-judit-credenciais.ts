@@ -99,15 +99,18 @@ export const juditCredenciaisRouter = router({
   }),
 
   /**
-   * Cadastra nova credencial no cofre Judit + valida login automaticamente.
+   * Cadastra nova credencial no cofre Judit + verifica se foi aceita.
    *
    * Fluxo:
-   * 1. Cadastra credencial no cofre da Judit (POST /credentials)
-   * 2. Salva localmente com status "validando"
-   * 3. Dispara consulta de teste usando a credencial (POST /requests)
-   * 4. Polling até completed (max 45s)
-   * 5. Se veio lawsuit → credencial funciona → marca "ativa"
-   *    Se veio application_error → login falhou → marca "erro"
+   * 1. Cadastra credencial no cofre (POST /credentials)
+   * 2. Verifica com GET /credentials?customer_key=X se o cofre aceitou
+   * 3. Se o sistema aparece como "active" → marca "ativa"
+   *    Se "not exists" ou não aparece → marca "erro"
+   *
+   * IMPORTANTE: isso confirma que a Judit ACEITOU a credencial no cofre,
+   * mas o login real no tribunal só é testado quando uma consulta
+   * on_demand é feita. Se a senha estiver errada, o erro aparece nesse
+   * momento (via webhook application_error).
    */
   cadastrar: protectedProcedure
     .input(
@@ -150,129 +153,73 @@ export const juditCredenciaisRouter = router({
         });
       }
 
-      // 2. Salva localmente com status "validando"
+      // 2. Verifica se a Judit aceitou: GET /credentials?customer_key=X
+      let cofreAtivo = false;
+      try {
+        // Pequeno delay pra Judit processar
+        await new Promise((r) => setTimeout(r, 2000));
+        const verificacao = await client.verificarCredencial(input.customerKey);
+
+        // Procura o sistema cadastrado na resposta
+        for (const item of verificacao) {
+          const sn = item.system_name || item.systemName || "";
+          const st = item.credential_status || item.status || "";
+          if (
+            (sn === input.systemName || input.systemName === "*") &&
+            st.toLowerCase() === "active"
+          ) {
+            cofreAtivo = true;
+            break;
+          }
+        }
+
+        // Se usou "*" (curinga), qualquer "active" é suficiente
+        if (input.systemName === "*" && !cofreAtivo) {
+          cofreAtivo = verificacao.some(
+            (item: any) => (item.credential_status || item.status || "").toLowerCase() === "active",
+          );
+        }
+      } catch (err: any) {
+        log.warn({ err: err.message }, "Erro ao verificar credencial no cofre");
+      }
+
+      // 3. Salva localmente
+      const status = cofreAtivo ? "ativa" : "validando";
       const [result] = await db.insert(juditCredenciais).values({
         escritorioId: esc.escritorio.id,
         customerKey: input.customerKey,
         systemName: input.systemName,
         username: input.username,
         has2fa: !!input.totpSecret,
-        status: "validando",
-        mensagemErro: "Testando login no tribunal...",
+        status: status as any,
+        mensagemErro: cofreAtivo
+          ? null
+          : "Credencial cadastrada mas ainda não confirmada pelo cofre. Será validada na primeira consulta.",
         juditCredentialId: null,
         criadoPor: ctx.user.id,
       });
       const credId = (result as { insertId: number }).insertId;
 
       log.info(
-        { escritorioId: esc.escritorio.id, systemName: input.systemName },
-        "Credencial cadastrada — iniciando teste de login",
+        { escritorioId: esc.escritorio.id, systemName: input.systemName, cofreAtivo },
+        `Credencial cadastrada — cofre ${cofreAtivo ? "confirmou" : "pendente"}`,
       );
 
-      // 3. Dispara consulta de teste usando a credencial
-      // Usa o username (CPF/OAB do advogado) como busca — assim a Judit
-      // tenta logar no tribunal com a credencial cadastrada
-      try {
-        const searchType = input.username.replace(/\D/g, "").length === 11 ? "cpf" : "oab";
-        const searchKey = searchType === "cpf" ? input.username.replace(/\D/g, "") : input.username;
-
-        const request = await client.criarRequest({
-          search: {
-            search_type: searchType as any,
-            search_key: searchKey,
-            on_demand: true,
-          },
-          customer_key: input.customerKey,
-          cache_ttl_in_days: 7,
-        });
-
-        // 4. Polling (max 45s)
-        const startTime = Date.now();
-        let validado = false;
-        let erroMsg: string | null = null;
-
-        while (Date.now() - startTime < 45000) {
-          await new Promise((r) => setTimeout(r, 3000));
-          const status = await client.consultarRequest(request.request_id);
-
-          if (status.status === "completed") {
-            const responses = await client.buscarRespostas(request.request_id, 1, 10);
-
-            for (const r of responses.page_data) {
-              if (r.response_type === "lawsuit" || r.response_type === "lawsuits") {
-                validado = true;
-              }
-              if (r.response_type === "application_error") {
-                const rd = r.response_data as any;
-                const msg = rd?.message || "UNKNOWN_ERROR";
-                const msgLower = msg.toLowerCase();
-                if (
-                  msgLower.includes("credential") ||
-                  msgLower.includes("authentication") ||
-                  msgLower.includes("login") ||
-                  msgLower.includes("password") ||
-                  msgLower.includes("unauthorized") ||
-                  msgLower.includes("captcha")
-                ) {
-                  erroMsg = msg;
-                }
-              }
-            }
-
-            // Se não teve erro de auth e completed = credencial OK (mesmo sem processos)
-            if (!erroMsg) validado = true;
-            break;
-          }
-        }
-
-        // 5. Atualiza status
-        if (erroMsg) {
-          await db.update(juditCredenciais)
-            .set({ status: "erro", mensagemErro: `Login falhou: ${erroMsg}` })
-            .where(eq(juditCredenciais.id, credId));
-
-          return {
-            success: false,
-            id: credId,
-            status: "erro" as const,
-            mensagem: `Credencial cadastrada mas o login falhou: ${erroMsg}. Verifique os dados e tente novamente.`,
-          };
-        }
-
-        if (validado) {
-          await db.update(juditCredenciais)
-            .set({ status: "ativa", mensagemErro: null })
-            .where(eq(juditCredenciais.id, credId));
-
-          return {
-            success: true,
-            id: credId,
-            status: "ativa" as const,
-            mensagem: "Credencial cadastrada e validada com sucesso! Login no tribunal confirmado.",
-          };
-        }
-
-        // Timeout — não conseguiu validar a tempo, fica "validando"
-        await db.update(juditCredenciais)
-          .set({ mensagemErro: "Validação em andamento — aguarde alguns minutos." })
-          .where(eq(juditCredenciais.id, credId));
-
+      if (cofreAtivo) {
         return {
           success: true,
           id: credId,
-          status: "validando" as const,
-          mensagem: "Credencial cadastrada. A validação está em andamento (pode levar alguns minutos).",
-        };
-      } catch (err: any) {
-        // Erro no teste mas credencial foi cadastrada — fica "validando"
-        log.warn({ err: err.message }, "Erro ao testar credencial — mantém validando");
-        return {
-          success: true,
-          id: credId,
-          status: "validando" as const,
-          mensagem: "Credencial cadastrada. Não foi possível testar agora — será validada na próxima consulta.",
+          status: "ativa" as const,
+          mensagem: "Credencial cadastrada e confirmada no cofre da Judit! O login real será validado na primeira consulta a um processo em segredo de justiça.",
         };
       }
+
+      return {
+        success: true,
+        id: credId,
+        status: "validando" as const,
+        mensagem: "Credencial cadastrada no cofre. A validação do login acontece na primeira consulta a um processo em segredo de justiça.",
+      };
     }),
 
   /**

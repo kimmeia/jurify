@@ -321,6 +321,27 @@ export class JuditClient {
    * Lista todas as credenciais cadastradas no cofre.
    * Útil pra exibir no admin do Jurify quais credenciais já existem.
    */
+  /**
+   * Verifica o status de uma credencial por customer_key.
+   * Retorna um array com o status de cada sistema.
+   * credential_status: "active" ou "not exists"
+   */
+  async verificarCredencial(customerKey: string): Promise<any[]> {
+    try {
+      const res = await this.crawlerApi.get("/credentials", {
+        params: { customer_key: customerKey },
+      });
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      if (data?.credentials && Array.isArray(data.credentials)) return data.credentials;
+      return [data];
+    } catch (err) {
+      const axErr = err as AxiosError<any>;
+      if (axErr.response?.status === 404) return [];
+      throw err;
+    }
+  }
+
   async listarCredenciais(): Promise<JuditCredencialResposta[]> {
     try {
       const res = await this.crawlerApi.get("/credentials");
