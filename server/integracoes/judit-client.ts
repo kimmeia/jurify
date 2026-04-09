@@ -39,6 +39,8 @@ export interface JuditRequestPayload {
   cache_ttl_in_days?: number;
   with_attachments?: boolean;
   callback_url?: string;
+  /** ID da credencial do cofre Judit — necessário pra acessar processos em segredo de justiça */
+  credential_id?: string;
 }
 
 export interface JuditRequestResponse {

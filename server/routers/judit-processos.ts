@@ -189,14 +189,32 @@ export const juditProcessosRouter = router({
     }),
 
   consultarCNJ: protectedProcedure
-    .input(z.object({ cnj: z.string().min(15).max(30) }))
+    .input(z.object({
+      cnj: z.string().min(15).max(30),
+      credencialId: z.number().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
       const client = await getJuditClientOrThrow();
       await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.consulta_cnj, "consulta_cnj", `CNJ: ${input.cnj}`);
+
+      // Resolver credencial do cofre pra segredo de justiça
+      let credential_id: string | undefined;
+      if (input.credencialId) {
+        const db = await getDb();
+        if (db) {
+          const { juditCredenciais } = await import("../../drizzle/schema");
+          const [cred] = await db.select().from(juditCredenciais)
+            .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
+            .limit(1);
+          if (cred?.juditCredentialId) credential_id = cred.juditCredentialId;
+        }
+      }
+
       const request = await client.criarRequest({
         search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
+        ...(credential_id ? { credential_id } : {}),
       });
       return { requestId: request.request_id, status: request.status };
     }),
@@ -210,14 +228,15 @@ export const juditProcessosRouter = router({
     .query(({ input }) => estimarCustoConsulta(input.tipo)),
 
   consultarDocumento: protectedProcedure
-    .input(z.object({ tipo: z.enum(["cpf", "cnpj", "oab", "name"]), valor: z.string().min(3).max(100) }))
+    .input(z.object({
+      tipo: z.enum(["cpf", "cnpj", "name"]),
+      valor: z.string().min(3).max(100),
+      credencialId: z.number().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
       const client = await getJuditClientOrThrow();
-      // Cobra APENAS o custo base aqui (request na Judit). O custo
-      // variável (por processo encontrado) é cobrado em `resultados`
-      // quando a gente sabe quantos resultados vieram.
       await consumirCreditos(
         esc.escritorio.id,
         ctx.user.id,
@@ -225,8 +244,25 @@ export const juditProcessosRouter = router({
         "consulta_historica_base",
         `${input.tipo.toUpperCase()}: ${input.valor}`,
       );
+
+      // Resolver credencial do cofre pra segredo de justiça
+      let credential_id: string | undefined;
+      if (input.credencialId) {
+        const db = await getDb();
+        if (db) {
+          const { juditCredenciais } = await import("../../drizzle/schema");
+          const [cred] = await db.select().from(juditCredenciais)
+            .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
+            .limit(1);
+          if (cred?.juditCredentialId) credential_id = cred.juditCredentialId;
+        }
+      }
+
       const searchKey = input.tipo === "cpf" || input.tipo === "cnpj" ? input.valor.replace(/\D/g, "") : input.valor;
-      const request = await client.criarRequest({ search: { search_type: input.tipo, search_key: searchKey } });
+      const request = await client.criarRequest({
+        search: { search_type: input.tipo, search_key: searchKey },
+        ...(credential_id ? { credential_id } : {}),
+      });
       return { requestId: request.request_id, status: request.status };
     }),
 

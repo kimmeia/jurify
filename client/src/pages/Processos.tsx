@@ -20,7 +20,7 @@ import {
 } from "./processos/search-history";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
-const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", oab: "OAB", name: "Nome" };
+const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", name: "Nome" };
 const STATUS_MON: Record<string, { label: string; cor: string }> = { created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" }, updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" }, updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" }, paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" } };
 const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ", consulta_historica: "Consulta CPF/CNPJ/OAB/Nome", consulta_sintetica: "Consulta sintetica", monitorar_processo: "Monitorar processo", monitorar_pessoa: "Monitorar pessoa/empresa", resumo_ia: "Resumo IA", anexos: "Baixar anexos" };
 
@@ -141,7 +141,12 @@ function ConsultarTab() {
   const [polling, setPolling] = useState(false);
   const [resultados, setResultados] = useState<any>(null);
   const [tentativas, setTentativas] = useState(0);
+  const [credencialId, setCredencialId] = useState<string>("");
   const history = useSearchHistory();
+
+  // Credenciais do cofre para segredo de justiça
+  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
   const consultarDoc = trpc.juditProcessos.consultarDocumento.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
@@ -187,8 +192,9 @@ function ConsultarTab() {
     if (!valor.trim()) return;
     setBuscando(true); setResultados(null); setRequestId(""); setTentativas(0);
     history.add(tipo, valor.trim());
-    if (tipo === "lawsuit_cnj") consultarCNJ.mutate({ cnj: valor.trim() });
-    else consultarDoc.mutate({ tipo: tipo as any, valor: valor.trim() });
+    const credId = credencialId ? Number(credencialId) : undefined;
+    if (tipo === "lawsuit_cnj") consultarCNJ.mutate({ cnj: valor.trim(), credencialId: credId });
+    else consultarDoc.mutate({ tipo: tipo as any, valor: valor.trim(), credencialId: credId });
   };
 
   const handleSelectHistorico = (t: string, v: string) => {
@@ -197,7 +203,7 @@ function ConsultarTab() {
     setResultados(null);
   };
 
-  const placeholders: Record<string, string> = { lawsuit_cnj: "0000000-00.0000.0.00.0000", cpf: "000.000.000-00", cnpj: "00.000.000/0000-00", oab: "SP123456", name: "Nome da parte" };
+  const placeholders: Record<string, string> = { lawsuit_cnj: "0000000-00.0000.0.00.0000", cpf: "000.000.000-00", cnpj: "00.000.000/0000-00", name: "Nome da parte" };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
@@ -212,7 +218,6 @@ function ConsultarTab() {
                 <SelectItem value="lawsuit_cnj">CNJ</SelectItem>
                 <SelectItem value="cpf">CPF</SelectItem>
                 <SelectItem value="cnpj">CNPJ</SelectItem>
-                <SelectItem value="oab">OAB</SelectItem>
                 <SelectItem value="name">Nome</SelectItem>
               </SelectContent>
             </Select>
@@ -226,6 +231,34 @@ function ConsultarTab() {
             </Button>
             <KeywordAlertsButton />
           </div>
+
+          {/* Seletor de credencial para segredo de justiça */}
+          <div className="flex items-center gap-2 mt-2">
+            {credsDisponiveis.length > 0 ? (
+              <div className="flex items-center gap-2 flex-1">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <select
+                  value={credencialId}
+                  onChange={(e) => setCredencialId(e.target.value)}
+                  className="flex h-8 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm flex-1 max-w-xs"
+                >
+                  <option value="">Sem credencial (apenas processos públicos)</option>
+                  {credsDisponiveis.map((c: any) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.customerKey} ({c.username}) {c.status === "validando" ? "— validando" : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[9px] text-muted-foreground shrink-0">Selecione para ver processos em segredo de justiça</span>
+              </div>
+            ) : (
+              <p className="text-[9px] text-muted-foreground flex items-center gap-1">
+                <Lock className="h-3 w-3" />
+                Cadastre uma credencial OAB no Cofre para acessar processos em segredo de justiça.
+              </p>
+            )}
+          </div>
+
           <div className="mt-2">
             {tipo === "lawsuit_cnj" ? (
               <p className="text-[10px] text-muted-foreground">
