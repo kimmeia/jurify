@@ -223,7 +223,7 @@ export default function Kanban() {
               <div className="flex items-center gap-2">
                 <div className="h-2.5 w-2.5 rounded-full" style={{ background: col.cor || "#6b7280" }} />
                 <input
-                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none w-24 hover:bg-muted/50 focus:bg-white focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
+                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none w-40 hover:bg-muted/50 focus:bg-white focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
                   defaultValue={col.nome}
                   onBlur={(e) => {
                     const novo = e.target.value.trim();
