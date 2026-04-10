@@ -59,6 +59,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
 import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
+import { adminJuditRouter } from "./routers/admin-judit";
 
 export const appRouter = router({
   system: systemRouter,
@@ -117,6 +118,7 @@ export const appRouter = router({
   admin: adminRouter,
   adminFinanceiro: adminFinanceiroRouter,
   adminAgentesIa: adminAgentesIaRouter,
+  adminJudit: adminJuditRouter,
 });
 
 export type AppRouter = typeof appRouter;
