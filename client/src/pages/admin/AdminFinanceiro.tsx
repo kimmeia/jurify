@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   DollarSign, TrendingUp, AlertTriangle, Clock, ExternalLink, RefreshCw,
   Loader2, Wallet, Receipt, Repeat, Search, XCircle, ArrowUpRight, CheckCircle2,
-  Hourglass, Ban,
+  Hourglass, Ban, Coins,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -94,6 +94,9 @@ export default function AdminFinanceiro() {
     { meses: 6 },
     { enabled: status?.conectado },
   );
+
+  // Judit credit KPIs (tempo real)
+  const { data: juditKpis } = (trpc as any).adminJudit.kpis.useQuery(undefined, { refetchInterval: 30000 });
 
   const refetchAll = () => {
     refetchKpis();
@@ -206,7 +209,7 @@ export default function AdminFinanceiro() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm text-muted-foreground">MRR</CardTitle>
@@ -256,6 +259,24 @@ export default function AdminFinanceiro() {
             <p className="text-xs text-muted-foreground mt-1">
               Requer cobrança ativa
             </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-indigo-500/20">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm text-muted-foreground">Judit Créditos</CardTitle>
+            <Coins className="h-4 w-4 text-indigo-500" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-indigo-600">{(juditKpis?.creditos?.totalComprado ?? 0).toLocaleString("pt-BR")}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              vendidos · {(juditKpis?.creditos?.totalConsumido ?? 0).toLocaleString("pt-BR")} consumidos
+            </p>
+            {juditKpis?.creditos?.escritoriosSaldoBaixo > 0 && (
+              <p className="text-[10px] text-red-600 mt-0.5">
+                {juditKpis.creditos.escritoriosSaldoBaixo} escritório(s) com saldo baixo
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
