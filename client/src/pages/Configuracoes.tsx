@@ -34,6 +34,7 @@ import {
   TwilioDialog,
   CalcomDialog,
   ChatGPTDialog,
+  ClaudeDialog,
   CalcomIntegration,
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
@@ -703,6 +704,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
   const canais = canaisData?.canais || [];
   const twilioCanal = canais.find((c: any) => c.tipo === "telefone_voip");
   const chatgptCanal = canais.find((c: any) => c.tipo === "chatgpt" || (c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT")));
+  const claudeCanal = canais.find((c: any) => c.tipo === "claude" || (c.nome || "").includes("Claude"));
   const calcomCanal = canais.find((c: any) => c.tipo === "calcom" || (c.nome || "").includes("Cal.com"));
 
   const integracoes = [
@@ -725,10 +727,18 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
     {
       id: "chatgpt",
       nome: "ChatGPT",
-      descricao: "Chatbot com IA para atendimento automático via WhatsApp. Responde clientes 24/7.",
+      descricao: "OpenAI para agentes de IA. Modelos: GPT-4o, GPT-4o-mini.",
       logo: "🤖",
       cor: "from-green-500 to-teal-600",
       conectado: chatgptCanal?.status === "conectado",
+    },
+    {
+      id: "claude",
+      nome: "Claude",
+      descricao: "Anthropic para agentes de IA. Modelos: Claude Sonnet, Claude Haiku.",
+      logo: "🧠",
+      cor: "from-amber-500 to-orange-600",
+      conectado: claudeCanal?.status === "conectado",
     },
     {
       id: "twilio",
@@ -772,6 +782,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       <TwilioDialog open={openDialog === "twilio"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
       <CalcomDialog open={openDialog === "calcom"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
       <ChatGPTDialog open={openDialog === "chatgpt"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
+      <ClaudeDialog open={openDialog === "claude"} onClose={() => setOpenDialog(null)} canEdit={canEdit} />
 
       {/* Audit Log */}
       {auditLog && auditLog.length > 0 && (

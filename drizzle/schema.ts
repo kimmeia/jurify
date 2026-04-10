@@ -411,7 +411,7 @@ export type InsertAgendamentoLembrete = typeof agendamentoLembretes.$inferInsert
 export const canaisIntegrados = mysqlTable("canais_integrados", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioId").notNull(),
-  tipo: mysqlEnum("tipoCanal", ["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "telefone_voip", "calcom", "chatgpt"]).notNull(),
+  tipo: mysqlEnum("tipoCanal", ["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "telefone_voip", "calcom", "chatgpt", "claude"]).notNull(),
   nome: varchar("nomeCanal", { length: 128 }),
   status: mysqlEnum("statusCanal", ["conectado", "desconectado", "pendente", "erro", "banido"]).default("pendente").notNull(),
   configEncrypted: text("configEncrypted"),

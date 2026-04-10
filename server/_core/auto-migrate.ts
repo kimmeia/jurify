@@ -986,7 +986,7 @@ export async function runMigrations(): Promise<void> {
     // Atualizar enum tipoCanal para incluir calcom e chatgpt
     try {
       await connection.query(
-        `ALTER TABLE canais_integrados MODIFY COLUMN tipoCanal ENUM('whatsapp_qr','whatsapp_api','instagram','facebook','telefone_voip','calcom','chatgpt') NOT NULL`,
+        `ALTER TABLE canais_integrados MODIFY COLUMN tipoCanal ENUM('whatsapp_qr','whatsapp_api','instagram','facebook','telefone_voip','calcom','chatgpt','claude') NOT NULL`,
       );
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) {

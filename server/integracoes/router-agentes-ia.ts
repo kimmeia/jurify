@@ -73,39 +73,39 @@ function decryptApiKey(encrypted: string, iv: string, tag: string): string {
  *   2. Qualquer key de outro agente do mesmo escritório (primeiro achado)
  *   3. Key global do admin (admin_integracoes provedor="openai")
  */
-async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promise<string | null> {
-  // 1. Agente tem sua própria key
+/**
+ * Resolve qual API key e provider usar para um agente.
+ * Retorna { provider: "openai"|"anthropic", key: string } ou null.
+ *
+ * Ordem de resolução:
+ *   1. Key individual do agente (se presente)
+ *   2. Canal ChatGPT ou Claude (Configurações → Integrações)
+ *      - Se agente tem provider definido, usa esse
+ *      - Se tem os dois, prioriza pelo provider do agente
+ *   3. Key admin global (fallback)
+ */
+async function resolverAPIKey(
+  escritorioId: number,
+  agenteAtual: any,
+  providerPreferido?: string,
+): Promise<{ provider: "openai" | "anthropic"; key: string } | null> {
+  // 1. Agente tem sua própria key (sempre OpenAI por legado)
   if (agenteAtual?.openaiApiKey && agenteAtual.apiKeyIv && agenteAtual.apiKeyTag) {
     try {
-      return decryptApiKey(agenteAtual.openaiApiKey, agenteAtual.apiKeyIv, agenteAtual.apiKeyTag);
-    } catch {
-      /* fall through */
-    }
+      const key = decryptApiKey(agenteAtual.openaiApiKey, agenteAtual.apiKeyIv, agenteAtual.apiKeyTag);
+      return { provider: "openai", key };
+    } catch { /* fall through */ }
   }
 
   const db = await getDb();
   if (!db) return null;
 
-  // 2. Outro agente do mesmo escritório tem key
-  const outrosAgentes = await db
-    .select()
-    .from(agentesIa)
-    .where(eq(agentesIa.escritorioId, escritorioId));
-  for (const a of outrosAgentes) {
-    if (a.openaiApiKey && a.apiKeyIv && a.apiKeyTag) {
-      try {
-        return decryptApiKey(a.openaiApiKey, a.apiKeyIv, a.apiKeyTag);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  // 3. Key do canal ChatGPT Bot (salva em Configurações → Integrações)
+  // 2. Canais de integração (ChatGPT e/ou Claude)
   try {
     const { canaisIntegrados } = await import("../../drizzle/schema");
     const { or: orOp, like } = await import("drizzle-orm");
     const { decryptConfig } = await import("../escritorio/crypto-utils");
+
     const canalRows = await db
       .select()
       .from(canaisIntegrados)
@@ -114,20 +114,49 @@ async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promis
           eq(canaisIntegrados.escritorioId, escritorioId),
           orOp(
             eq(canaisIntegrados.tipo, "chatgpt"),
+            eq(canaisIntegrados.tipo, "claude"),
             like(canaisIntegrados.nome, "%ChatGPT%"),
+            like(canaisIntegrados.nome, "%Claude%"),
           ),
         ),
-      )
-      .limit(1);
-    if (canalRows.length > 0) {
-      const row = canalRows[0];
+      );
+
+    let openaiKey: string | null = null;
+    let anthropicKey: string | null = null;
+
+    for (const row of canalRows) {
       if (row.configEncrypted && row.configIv && row.configTag) {
-        const config = decryptConfig(row.configEncrypted, row.configIv, row.configTag);
-        if (config?.openaiApiKey) return config.openaiApiKey;
+        try {
+          const config = decryptConfig(row.configEncrypted, row.configIv, row.configTag);
+          if (config?.openaiApiKey) openaiKey = config.openaiApiKey;
+          if (config?.anthropicApiKey) anthropicKey = config.anthropicApiKey;
+        } catch { /* ignore */ }
       }
     }
-  } catch {
-    /* ignore */
+
+    // Se o agente tem provider preferido, usar esse
+    if (providerPreferido === "anthropic" && anthropicKey) {
+      return { provider: "anthropic", key: anthropicKey };
+    }
+    if (providerPreferido === "openai" && openaiKey) {
+      return { provider: "openai", key: openaiKey };
+    }
+    // Sem preferência, usa o que tiver
+    if (anthropicKey) return { provider: "anthropic", key: anthropicKey };
+    if (openaiKey) return { provider: "openai", key: openaiKey };
+  } catch { /* ignore */ }
+
+  // 3. Outro agente do escritório com key
+  const outrosAgentes = await db
+    .select()
+    .from(agentesIa)
+    .where(eq(agentesIa.escritorioId, escritorioId));
+  for (const a of outrosAgentes) {
+    if (a.openaiApiKey && a.apiKeyIv && a.apiKeyTag) {
+      try {
+        return { provider: "openai", key: decryptApiKey(a.openaiApiKey, a.apiKeyIv, a.apiKeyTag) };
+      } catch { /* ignore */ }
+    }
   }
 
   // 4. Key admin global
@@ -138,13 +167,19 @@ async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promis
       .where(eq(adminIntegracoes.provedor, "openai"))
       .limit(1);
     if (reg && reg.apiKeyEncrypted && reg.apiKeyIv && reg.apiKeyTag) {
-      return adminDecrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
+      return { provider: "openai", key: adminDecrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag) };
     }
   } catch (err) {
     log.warn({ err: String(err) }, "Falha ao buscar key admin");
   }
 
   return null;
+}
+
+// Compat: manter resolverOpenAIKey para código legado
+async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promise<string | null> {
+  const result = await resolverAPIKey(escritorioId, agenteAtual);
+  return result?.key || null;
 }
 
 export const agentesIaRouter = router({

@@ -92,11 +92,17 @@ function AgenteFormDialog({
 }) {
   const [form, setForm] = useState<AgenteForm>(DEFAULT_FORM);
 
-  // Detectar se API Key OpenAI já está configurada globalmente (Integrações → ChatGPT)
+  // Detectar quais IAs estão configuradas
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
-  const chatgptConfigurado = (canaisData?.canais || []).some(
+  const canaisIA = canaisData?.canais || [];
+  const chatgptConfigurado = canaisIA.some(
     (c: any) => (c.tipo === "chatgpt" || (c.tipo === "whatsapp_api" && (c.nome || "").includes("ChatGPT"))) && c.status === "conectado",
   );
+  const claudeConfigurado = canaisIA.some(
+    (c: any) => (c.tipo === "claude" || (c.nome || "").includes("Claude")) && c.status === "conectado",
+  );
+  const algumIAConfigurado = chatgptConfigurado || claudeConfigurado;
+  const ambosConfigurados = chatgptConfigurado && claudeConfigurado;
 
   const { data: existing } = trpc.agentesIa.obter.useQuery(
     { id: agenteId! },
@@ -259,10 +265,21 @@ function AgenteFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o-mini">gpt-4o-mini (barato)</SelectItem>
-                  <SelectItem value="gpt-4o">gpt-4o (avançado)</SelectItem>
-                  <SelectItem value="gpt-4-turbo">gpt-4-turbo</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo</SelectItem>
+                  {chatgptConfigurado && (
+                    <>
+                      <SelectItem value="gpt-4o-mini">GPT-4o Mini (OpenAI — barato)</SelectItem>
+                      <SelectItem value="gpt-4o">GPT-4o (OpenAI — avançado)</SelectItem>
+                    </>
+                  )}
+                  {claudeConfigurado && (
+                    <>
+                      <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic — avançado)</SelectItem>
+                      <SelectItem value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Anthropic — rápido)</SelectItem>
+                    </>
+                  )}
+                  {!chatgptConfigurado && !claudeConfigurado && (
+                    <SelectItem value="gpt-4o-mini" disabled>Nenhuma IA configurada</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -286,17 +303,21 @@ function AgenteFormDialog({
             </div>
           </div>
 
-          {chatgptConfigurado ? (
+          {algumIAConfigurado ? (
             <div className="flex items-center gap-2 p-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 text-xs text-emerald-700">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>API Key OpenAI configurada em <strong>Integrações → ChatGPT</strong></span>
+              <span>
+                {ambosConfigurados ? "ChatGPT e Claude configurados — escolha o modelo acima" :
+                 chatgptConfigurado ? "API Key OpenAI configurada em Integrações → ChatGPT" :
+                 "API Key Claude configurada em Integrações → Claude"}
+              </span>
             </div>
           ) : (
             <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-3 text-xs text-amber-900 dark:text-amber-200">
-              <p className="font-semibold">API Key OpenAI não configurada</p>
+              <p className="font-semibold">Nenhuma IA configurada</p>
               <p className="mt-0.5">
-                Vá em <strong>Configurações → Integrações → ChatGPT</strong> e cadastre sua API Key
-                da OpenAI antes de criar agentes.
+                Vá em <strong>Configurações → Integrações</strong> e cadastre a API Key do
+                <strong> ChatGPT (OpenAI)</strong> ou <strong>Claude (Anthropic)</strong> antes de criar agentes.
               </p>
             </div>
           )}
@@ -334,7 +355,7 @@ function AgenteFormDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={criarMut.isPending || atualizarMut.isPending || !chatgptConfigurado}>
+          <Button onClick={handleSave} disabled={criarMut.isPending || atualizarMut.isPending || !algumIAConfigurado}>
             {(criarMut.isPending || atualizarMut.isPending) && (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             )}

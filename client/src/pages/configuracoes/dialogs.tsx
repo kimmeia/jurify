@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  Loader2, Plus, MessageCircle, Wifi, WifiOff, Eye, X,
+  Loader2, Plus, MessageCircle, Wifi, WifiOff, Eye, EyeOff, X,
   Bot, Plug, Shield, CheckCircle, AlertTriangle, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -831,5 +831,94 @@ export function CalcomIntegration({ canEdit }: { canEdit: boolean }) {
         {testResult && <span className={`text-xs ${testResult.ok ? "text-emerald-600" : "text-red-600"}`}>{testResult.ok ? `✓ ${testResult.user}` : testResult.error}</span>}
       </div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLAUDE (ANTHROPIC)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function ClaudeDialog({ open, onClose, canEdit }: { open: boolean; onClose: () => void; canEdit: boolean }) {
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
+  const claudeCanal = (canaisData?.canais || []).find((c: any) => c.tipo === "claude" || (c.nome || "").includes("Claude"));
+
+  const criarMut = trpc.configuracoes.criarCanal.useMutation({
+    onSuccess: () => { toast.success("Chave Claude (Anthropic) salva!"); refetch(); onClose(); setApiKey(""); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const atualizarMut = trpc.configuracoes.atualizarConfigCanal.useMutation({
+    onSuccess: () => { toast.success("Chave Claude atualizada!"); refetch(); onClose(); setApiKey(""); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleSalvar = () => {
+    if (!apiKey || apiKey.trim().length < 20) { toast.error("Informe uma API Key válida (sk-ant-...)"); return; }
+    const config = { anthropicApiKey: apiKey.trim() };
+    if (claudeCanal) {
+      atualizarMut.mutate({ canalId: claudeCanal.id, config });
+    } else {
+      criarMut.mutate({ tipo: "claude" as any, nome: "Claude Anthropic", config });
+    }
+  };
+
+  const conectado = !!claudeCanal;
+  const isPending = criarMut.isPending || atualizarMut.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xl shadow">🧠</div>
+            <div>
+              <span>Claude — Anthropic</span>
+              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Salve a chave da Anthropic para usar Claude nos agentes de IA.
+            Modelos disponíveis: Claude Sonnet 4, Claude Haiku.
+            Obtenha sua chave em <strong>console.anthropic.com</strong>.
+          </p>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">API Key da Anthropic {conectado ? "(deixe vazio para manter)" : "*"}</Label>
+            <div className="flex gap-2">
+              <Input
+                type={showKey ? "text" : "password"}
+                placeholder="sk-ant-..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={!canEdit}
+                className="font-mono text-sm"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="px-2"
+                onClick={() => setShowKey(!showKey)}
+              >
+                {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSalvar} disabled={(!apiKey && !conectado) || isPending || !canEdit}>
+            {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+            {conectado ? "Atualizar chave" : "Salvar chave"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
