@@ -122,6 +122,17 @@ export async function tentarSmartFlow(
   if (!db) return { executou: false, respostas: [] };
 
   try {
+    // Se a conversa está "em_atendimento" (humano assumiu), NÃO executa SmartFlow
+    if (conversaId) {
+      const { conversas } = await import("../../drizzle/schema");
+      const [conv] = await db.select({ status: conversas.status }).from(conversas)
+        .where(eq(conversas.id, conversaId)).limit(1);
+      if (conv?.status === "em_atendimento") {
+        log.debug({ conversaId }, "SmartFlow: conversa em_atendimento (humano) — ignorando");
+        return { executou: false, respostas: [] };
+      }
+    }
+
     // Busca cenários ativos com gatilho whatsapp_mensagem
     const cenarios = await db
       .select()

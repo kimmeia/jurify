@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { getDb } from "../db";
 import { checkPermission } from "./check-permission";
 import {
   criarContato, listarContatos, atualizarContato,
@@ -443,4 +444,123 @@ export const crmRouter = router({
     if (!esc) return null;
     return obterMetricasDetalhadas(esc.escritorio.id);
   }),
+
+  /** Transferir conversa para outro atendente */
+  transferirConversa: protectedProcedure
+    .input(z.object({ conversaId: z.number(), novoAtendenteId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      await atualizarConversa(input.conversaId, esc.escritorio.id, {
+        atendenteId: input.novoAtendenteId,
+        status: "em_atendimento",
+      });
+
+      // Registra a transferência como mensagem de sistema
+      await enviarMensagem({
+        conversaId: input.conversaId,
+        remetenteId: esc.colaborador.id,
+        direcao: "saida",
+        tipo: "texto",
+        conteudo: `[Sistema] Conversa transferida para outro atendente.`,
+      });
+
+      // Notifica via SSE
+      try {
+        const { emitirParaEscritorio } = await import("../_core/sse-notifications");
+        emitirParaEscritorio(esc.escritorio.id, {
+          tipo: "conversa_atribuida",
+          titulo: "Conversa transferida",
+          mensagem: `Conversa transferida para atendente #${input.novoAtendenteId}`,
+          dados: { conversaId: input.conversaId, novoAtendenteId: input.novoAtendenteId },
+        });
+      } catch { /* SSE opcional */ }
+
+      return { success: true };
+    }),
+
+  /** Lista atendentes do escritório (para seletor de transferência) */
+  listarAtendentes: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return [];
+    const db = await getDb();
+    if (!db) return [];
+
+    const { colaboradores, users } = await import("../../drizzle/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const rows = await db
+      .select({
+        id: colaboradores.id,
+        userId: colaboradores.userId,
+        cargo: colaboradores.cargo,
+        nome: users.name,
+        email: users.email,
+      })
+      .from(colaboradores)
+      .innerJoin(users, eq(colaboradores.userId, users.id))
+      .where(and(eq(colaboradores.escritorioId, esc.escritorio.id), eq(colaboradores.ativo, true)));
+
+    return rows;
+  }),
+
+  /** Vincular número de telefone adicional a um contato existente */
+  vincularNumero: protectedProcedure
+    .input(z.object({
+      contatoId: z.number(),
+      telefone: z.string().min(8).max(20),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const { contatos } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+
+      // Buscar contato
+      const [contato] = await db.select().from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contato) throw new Error("Contato não encontrado");
+
+      // Adicionar ao campo telefonesAnteriores (histórico)
+      const anteriores = contato.telefonesAnteriores
+        ? JSON.parse(contato.telefonesAnteriores) as string[]
+        : [];
+
+      // Salvar telefone atual no histórico e colocar o novo como principal
+      if (contato.telefone && !anteriores.includes(contato.telefone)) {
+        anteriores.push(contato.telefone);
+      }
+      if (!anteriores.includes(input.telefone)) {
+        anteriores.push(input.telefone);
+      }
+
+      await db.update(contatos)
+        .set({ telefonesAnteriores: JSON.stringify(anteriores) })
+        .where(eq(contatos.id, input.contatoId));
+
+      return { success: true, telefonesAnteriores: anteriores };
+    }),
+
+  /** Vincular conversa a contato existente (mesclar) */
+  vincularConversaAoContato: protectedProcedure
+    .input(z.object({ conversaId: z.number(), contatoId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const { conversas } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+
+      await db.update(conversas)
+        .set({ contatoId: input.contatoId })
+        .where(eq(conversas.id, input.conversaId));
+
+      return { success: true };
+    }),
 });

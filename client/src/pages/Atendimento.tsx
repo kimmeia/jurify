@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, Mail, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, ExternalLink, Trash2, Calendar, Mic, Square, PlusCircle, Zap } from "lucide-react";
+import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, Mail, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, ExternalLink, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -476,6 +476,22 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showTransferir, setShowTransferir] = useState(false);
+  const [showVincular, setShowVincular] = useState(false);
+  const [buscaVincular, setBuscaVincular] = useState("");
+
+  // Atendentes pra transferência
+  const { data: atendentes } = trpc.crm.listarAtendentes.useQuery();
+  const transferirMut = trpc.crm.transferirConversa.useMutation({
+    onSuccess: () => { toast.success("Conversa transferida!"); setShowTransferir(false); onUpdate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  // Clientes pra vincular
+  const { data: clientesBusca } = (trpc as any).clientes.listar.useQuery({ busca: buscaVincular || undefined, limite: 10 }, { enabled: showVincular });
+  const vincularMut = trpc.crm.vincularConversaAoContato.useMutation({
+    onSuccess: () => { toast.success("Conversa vinculada ao cliente!"); setShowVincular(false); onUpdate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: tplList } = (trpc as any).templates?.listar?.useQuery?.(undefined, { retry: false }) || { data: [] };
   const conv = convs.find((c: any) => c.id === cid);
   const { data: msgs, refetch } = trpc.crm.listarMensagens.useQuery({ conversaId: cid }, { refetchInterval: 3000 });
@@ -563,6 +579,8 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-violet-600 shrink-0" onClick={() => setShowAddLead(true)}><TrendingUp className="h-3 w-3 mr-1" />Pipeline</Button>
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-blue-600 shrink-0" onClick={() => setShowAgendar(true)}><Calendar className="h-3 w-3 mr-1" />Agendar</Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-orange-600 shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3 w-3 mr-1" />Transferir</Button>
+        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-indigo-600 shrink-0" onClick={() => setShowVincular(true)}><Link2 className="h-3 w-3 mr-1" />Vincular</Button>
         <div className="flex-1" />
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-emerald-600 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3 w-3 mr-1" />Resolver</Button>
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3 w-3 mr-1" />Fechar</Button>
@@ -598,6 +616,54 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
       <Button size="sm" onClick={send} disabled={!msg.trim() || enviar.isPending} className="px-4">{enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
     </div>
     {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
+
+    {/* Dialog transferir */}
+    {showTransferir && (
+      <Dialog open={showTransferir} onOpenChange={setShowTransferir}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-5 w-5 text-orange-600" /> Transferir conversa</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Selecione o atendente que receberá esta conversa:</p>
+            {(atendentes || []).map((a: any) => (
+              <button key={a.id} onClick={() => transferirMut.mutate({ conversaId: cid, novoAtendenteId: a.id })}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 text-left transition-colors"
+                disabled={transferirMut.isPending}
+              >
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{(a.nome || "?")[0]}</div>
+                <div className="flex-1"><p className="text-sm font-medium">{a.nome || a.email}</p><p className="text-[10px] text-muted-foreground">{a.cargo}</p></div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+
+    {/* Dialog vincular a cliente */}
+    {showVincular && (
+      <Dialog open={showVincular} onOpenChange={(v) => { setShowVincular(v); setBuscaVincular(""); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-indigo-600" /> Vincular a cliente</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">Busque o cliente cadastrado para vincular esta conversa:</p>
+            <Input placeholder="Buscar por nome, CPF..." value={buscaVincular} onChange={(e) => setBuscaVincular(e.target.value)} />
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {(clientesBusca?.clientes || []).map((c: any) => (
+                <button key={c.id} onClick={() => vincularMut.mutate({ conversaId: cid, contatoId: c.id })}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/50 text-left transition-colors"
+                  disabled={vincularMut.isPending}
+                >
+                  <User className="h-4 w-4 text-violet-500 shrink-0" />
+                  <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{c.nome}</p>{c.cpfCnpj && <p className="text-[9px] text-muted-foreground font-mono">{c.cpfCnpj}</p>}</div>
+                </button>
+              ))}
+              {buscaVincular && (!clientesBusca?.clientes || clientesBusca.clientes.length === 0) && (
+                <p className="text-xs text-muted-foreground text-center py-3">Nenhum cliente encontrado.</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
     {showAgendar && <AgendarFromConversaDialog open={showAgendar} onOpenChange={setShowAgendar} contatoNome={conv?.contatoNome || ""} contatoTelefone={conv?.contatoTelefone || ""} />}
   </>);
 }
