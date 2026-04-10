@@ -41,7 +41,9 @@ export default function Kanban() {
   const [novoCardOpen, setNovoCardOpen] = useState<number | null>(null); // colunaId
   const [novaColunaOpen, setNovaColunaOpen] = useState(false);
   const [novaColunaNome, setNovaColunaNome] = useState("");
-  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "" });
+  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false });
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
 
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
@@ -82,7 +84,7 @@ export default function Kanban() {
     onError: (e: any) => toast.error(e.message),
   });
   const criarCardMut = (trpc as any).kanban.criarCard.useMutation({
-    onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "" }); refetchFunil(); },
+    onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
   const deletarCardMut = (trpc as any).kanban.deletarCard.useMutation({
@@ -91,6 +93,18 @@ export default function Kanban() {
   });
   const moverCardMut = (trpc as any).kanban.moverCard.useMutation({
     onSuccess: () => refetchFunil(),
+  });
+
+  // Busca clientes pra vincular ao card
+  const { data: clientesBusca } = (trpc as any).clientes?.listar?.useQuery?.(
+    { busca: buscaCliente || undefined, limite: 10 },
+    { enabled: !!buscaCliente },
+  ) || { data: undefined };
+
+  // Editar card
+  const editarCardMut = (trpc as any).kanban.editarCard.useMutation({
+    onSuccess: () => { toast.success("Card atualizado!"); refetchFunil(); refetchDetalhe(); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const listaFunis = funis || [];
@@ -303,32 +317,66 @@ export default function Kanban() {
       </Dialog>
 
       {/* Dialog novo card */}
-      <Dialog open={!!novoCardOpen} onOpenChange={() => setNovoCardOpen(null)}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={!!novoCardOpen} onOpenChange={(v) => { if (!v) { setNovoCardOpen(null); setClienteSelecionado(null); setBuscaCliente(""); } }}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Novo card</DialogTitle><DialogDescription>Adicione um processo ou caso ao quadro.</DialogDescription></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">Título *</Label><Input value={cardForm.titulo} onChange={(e) => setCardForm({ ...cardForm, titulo: e.target.value })} placeholder="Ex: Ação trabalhista João Silva" /></div>
             <div><Label className="text-xs">Número CNJ (opcional)</Label><Input value={cardForm.cnj} onChange={(e) => setCardForm({ ...cardForm, cnj: e.target.value })} placeholder="0000000-00.0000.0.00.0000" className="font-mono" /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Prioridade</Label>
-                <Select value={cardForm.prioridade} onValueChange={(v) => setCardForm({ ...cardForm, prioridade: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alta">Alta</SelectItem>
-                    <SelectItem value="media">Média</SelectItem>
-                    <SelectItem value="baixa">Baixa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-xs">Prazo (opcional)</Label><Input type="date" value={cardForm.prazo} onChange={(e) => setCardForm({ ...cardForm, prazo: e.target.value })} /></div>
+
+            {/* Cliente */}
+            <div>
+              <Label className="text-xs">Cliente</Label>
+              {clienteSelecionado ? (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-200/50 mt-1">
+                  <User className="h-4 w-4 text-emerald-600" />
+                  <div className="flex-1"><p className="text-xs font-medium">{clienteSelecionado.nome}</p>{clienteSelecionado.cpfCnpj && <p className="text-[9px] text-muted-foreground">{clienteSelecionado.cpfCnpj}</p>}</div>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}>Trocar</Button>
+                </div>
+              ) : (
+                <div className="mt-1">
+                  <Input placeholder="Buscar cliente por nome, CPF..." value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} />
+                  {buscaCliente && (clientesBusca?.clientes || []).length > 0 && (
+                    <div className="border rounded-lg mt-1 max-h-32 overflow-y-auto divide-y">
+                      {(clientesBusca.clientes || []).map((c: any) => (
+                        <button key={c.id} onClick={() => { setClienteSelecionado(c); setBuscaCliente(""); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
+                          <User className="h-3 w-3 text-violet-500" /><span className="font-medium">{c.nome}</span>{c.cpfCnpj && <span className="text-[9px] text-muted-foreground">{c.cpfCnpj}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div><Label className="text-xs">Tags (separadas por vírgula)</Label><Input value={cardForm.tags} onChange={(e) => setCardForm({ ...cardForm, tags: e.target.value })} placeholder="urgente, família, recurso" /></div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">Prazo (opcional)</Label><Input type="date" value={cardForm.prazo} onChange={(e) => setCardForm({ ...cardForm, prazo: e.target.value })} /></div>
+              <div><Label className="text-xs">Tags (vírgula)</Label><Input value={cardForm.tags} onChange={(e) => setCardForm({ ...cardForm, tags: e.target.value })} placeholder="família, recurso" /></div>
+            </div>
+
+            {/* Urgente toggle */}
+            <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-red-50/50 transition-colors">
+              <input type="checkbox" checked={cardForm.urgente} onChange={(e) => setCardForm({ ...cardForm, urgente: e.target.checked, prioridade: e.target.checked ? "alta" : "media" })} className="accent-red-500 h-4 w-4" />
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3"><span className={`${cardForm.urgente ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75`} /><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" /></span>
+                <div><p className="text-xs font-medium">Marcar como urgente</p><p className="text-[10px] text-muted-foreground">Indicador vermelho pulsante no card</p></div>
+              </div>
+            </label>
+
             <div><Label className="text-xs">Descrição</Label><Textarea value={cardForm.descricao} onChange={(e) => setCardForm({ ...cardForm, descricao: e.target.value })} rows={2} placeholder="Detalhes do caso..." /></div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setNovoCardOpen(null)}>Cancelar</Button>
-            <Button onClick={() => criarCardMut.mutate({ colunaId: novoCardOpen!, ...cardForm, prazo: cardForm.prazo || undefined, tags: cardForm.tags || undefined, descricao: cardForm.descricao || undefined, cnj: cardForm.cnj || undefined })} disabled={!cardForm.titulo || criarCardMut.isPending}>
+            <Button onClick={() => criarCardMut.mutate({
+              colunaId: novoCardOpen!,
+              titulo: cardForm.titulo,
+              prioridade: cardForm.urgente ? "alta" : "media",
+              prazo: cardForm.prazo || undefined,
+              tags: cardForm.tags || undefined,
+              descricao: cardForm.descricao || undefined,
+              cnj: cardForm.cnj || undefined,
+              clienteId: clienteSelecionado?.id,
+            })} disabled={!cardForm.titulo || criarCardMut.isPending}>
               {criarCardMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Criar
             </Button>
           </DialogFooter>
@@ -362,7 +410,7 @@ export default function Kanban() {
         </DialogContent>
       </Dialog>
 
-      {/* Painel lateral: detalhe do card */}
+      {/* Painel lateral: detalhe + edição do card */}
       {cardAberto && cardDetalhe && (
         <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setCardAberto(null)}>
           <div className="absolute inset-0 bg-black/20" />
@@ -370,35 +418,39 @@ export default function Kanban() {
             <div className="p-5 space-y-4">
               {/* Header */}
               <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    {cardDetalhe.prioridade === "alta" && (
-                      <span className="relative flex h-3 w-3 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                      </span>
-                    )}
-                    <h3 className="text-lg font-bold">{cardDetalhe.titulo}</h3>
-                  </div>
-                  {cardDetalhe.cnj && <p className="text-sm font-mono text-muted-foreground mt-0.5">{cardDetalhe.cnj}</p>}
+                <div className="flex items-center gap-2">
+                  {cardDetalhe.prioridade === "alta" && (
+                    <span className="relative flex h-3 w-3 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                    </span>
+                  )}
+                  <h3 className="text-lg font-bold">{cardDetalhe.titulo}</h3>
+                  {cardDetalhe.atrasado && <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px]">Atrasado</Badge>}
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setCardAberto(null)}><X className="h-4 w-4" /></Button>
               </div>
 
-              {/* Badges */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`text-[10px] ${cardDetalhe.prioridade === "alta" ? "bg-red-100 text-red-700 border-red-300" : cardDetalhe.prioridade === "baixa" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                  {PRIORIDADE_LABEL[cardDetalhe.prioridade]}
-                </Badge>
-                {cardDetalhe.atrasado && <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px]">Atrasado</Badge>}
-                {cardDetalhe.prazo && (
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3 w-3" />Prazo: {new Date(cardDetalhe.prazo).toLocaleDateString("pt-BR")}
-                  </span>
-                )}
+              {/* Edição inline */}
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+                <p className="text-[10px] font-semibold text-muted-foreground">EDITAR</p>
+                <div><Label className="text-[10px]">Título</Label><Input defaultValue={cardDetalhe.titulo} onBlur={(e) => { if (e.target.value !== cardDetalhe.titulo) editarCardMut.mutate({ id: cardDetalhe.id, titulo: e.target.value }); }} /></div>
+                <div><Label className="text-[10px]">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value || undefined })} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? new Date(cardDetalhe.prazo).toISOString().split("T")[0] : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || undefined })} /></div>
+                  <div><Label className="text-[10px]">Tags</Label><Input defaultValue={cardDetalhe.tags || ""} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, tags: e.target.value || undefined })} placeholder="tag1, tag2" /></div>
+                </div>
+                <div><Label className="text-[10px]">Descrição</Label><Textarea defaultValue={cardDetalhe.descricao || ""} rows={2} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value || undefined })} /></div>
+
+                {/* Toggle urgente */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={cardDetalhe.prioridade === "alta"} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prioridade: e.target.checked ? "alta" : "media" })} className="accent-red-500 h-4 w-4" />
+                  <span className="relative flex h-2.5 w-2.5"><span className={`${cardDetalhe.prioridade === "alta" ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75`} /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" /></span>
+                  <span className="text-xs font-medium">Urgente</span>
+                </label>
               </div>
 
-              {/* Tags */}
+              {/* Tags visuais */}
               {cardDetalhe.tags && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {cardDetalhe.tags.split(",").map((t: string, i: number) => {
@@ -408,31 +460,35 @@ export default function Kanban() {
                 </div>
               )}
 
-              {/* Descrição */}
-              {cardDetalhe.descricao && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground mb-1">DESCRIÇÃO</p>
-                  <p className="text-xs leading-relaxed">{cardDetalhe.descricao}</p>
-                </div>
-              )}
-
-              {/* Cliente */}
-              {cardDetalhe.clienteNome && (
-                <div className="rounded-lg border p-3">
-                  <p className="text-[10px] font-semibold text-muted-foreground mb-1">CLIENTE</p>
+              {/* Cliente vinculado */}
+              <div className="rounded-lg border p-3">
+                <p className="text-[10px] font-semibold text-muted-foreground mb-2">CLIENTE</p>
+                {cardDetalhe.clienteNome ? (
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{cardDetalhe.clienteNome}</p>
                       {cardDetalhe.clienteCpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{cardDetalhe.clienteCpfCnpj}</p>}
                     </div>
-                    {cardDetalhe.clienteId && (
-                      <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation("/clientes"); }}>
-                        <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro
-                      </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation("/clientes"); }}>
+                      <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2">Nenhum cliente vinculado.</p>
+                    <Input placeholder="Buscar cliente..." value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} className="text-xs" />
+                    {buscaCliente && (clientesBusca?.clientes || []).length > 0 && (
+                      <div className="border rounded mt-1 max-h-32 overflow-y-auto divide-y">
+                        {(clientesBusca.clientes).map((c: any) => (
+                          <button key={c.id} onClick={() => { editarCardMut.mutate({ id: cardDetalhe.id, clienteId: c.id }); setBuscaCliente(""); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
+                            <User className="h-3 w-3 text-violet-500" /><span>{c.nome}</span>
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Histórico de movimentações */}
               {cardDetalhe.movimentacoes?.length > 0 && (
@@ -450,7 +506,6 @@ export default function Kanban() {
                 </div>
               )}
 
-              {/* Info */}
               <div className="text-[10px] text-muted-foreground pt-2 border-t">
                 Criado em {new Date(cardDetalhe.createdAt).toLocaleDateString("pt-BR")}
               </div>
