@@ -1023,6 +1023,60 @@ export async function runMigrations(): Promise<void> {
       }
     }
 
+    // SmartFlow tables
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS smartflow_cenarios (
+          id INT NOT NULL AUTO_INCREMENT,
+          escritorioIdSF INT NOT NULL,
+          nomeSF VARCHAR(128) NOT NULL,
+          descricaoSF VARCHAR(512),
+          gatilhoSF ENUM('whatsapp_mensagem','novo_lead','agendamento_criado','manual') NOT NULL,
+          ativoSF BOOLEAN NOT NULL DEFAULT TRUE,
+          configSF TEXT,
+          criadoPorSF INT,
+          createdAtSF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtSF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_sf_escritorio (escritorioIdSF)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS smartflow_passos (
+          id INT NOT NULL AUTO_INCREMENT,
+          cenarioIdPasso INT NOT NULL,
+          ordemPasso INT NOT NULL DEFAULT 0,
+          tipoPasso ENUM('ia_classificar','ia_responder','calcom_horarios','calcom_agendar','whatsapp_enviar','transferir','condicional','esperar','webhook') NOT NULL,
+          configPasso TEXT,
+          createdAtPasso TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_sfp_cenario (cenarioIdPasso)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS smartflow_execucoes (
+          id INT NOT NULL AUTO_INCREMENT,
+          cenarioIdExec INT NOT NULL,
+          escritorioIdExec INT NOT NULL,
+          contatoIdExec INT,
+          conversaIdExec INT,
+          statusExec ENUM('rodando','concluido','erro','cancelado') NOT NULL DEFAULT 'rodando',
+          passoAtualExec INT NOT NULL DEFAULT 0,
+          contextoExec TEXT,
+          erroExec VARCHAR(512),
+          createdAtExec TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtExec TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_sfe_cenario (cenarioIdExec),
+          INDEX idx_sfe_escritorio (escritorioIdExec)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar tabelas SmartFlow");
+      }
+    }
+
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

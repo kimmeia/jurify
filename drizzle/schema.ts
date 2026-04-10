@@ -1312,4 +1312,85 @@ export const agenteDocumentos = mysqlTable("agente_documentos", {
 });
 
 export type AgenteDocumento = typeof agenteDocumentos.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SMARTFLOW — Automações inteligentes
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cenário de automação — um fluxo completo (ex: "Atendimento + Agendamento").
+ * Cada cenário tem um gatilho e uma sequência de passos.
+ */
+export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdSF").notNull(),
+  nome: varchar("nomeSF", { length: 128 }).notNull(),
+  descricao: varchar("descricaoSF", { length: 512 }),
+  /** Gatilho que inicia o fluxo */
+  gatilho: mysqlEnum("gatilhoSF", [
+    "whatsapp_mensagem",    // nova mensagem WhatsApp
+    "novo_lead",            // novo lead no CRM
+    "agendamento_criado",   // booking criado no Cal.com
+    "manual",               // acionado manualmente
+  ]).notNull(),
+  /** Se o cenário está ativo (recebe eventos) */
+  ativo: boolean("ativoSF").default(true).notNull(),
+  /** Configuração geral do cenário (JSON) */
+  config: text("configSF"),
+  criadoPor: int("criadoPorSF"),
+  createdAt: timestamp("createdAtSF").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SmartflowCenario = typeof smartflowCenarios.$inferSelect;
+
+/**
+ * Passo de um cenário — cada ação no fluxo.
+ */
+export const smartflowPassos = mysqlTable("smartflow_passos", {
+  id: int("id").autoincrement().primaryKey(),
+  cenarioId: int("cenarioIdPasso").notNull(),
+  ordem: int("ordemPasso").default(0).notNull(),
+  /** Tipo do passo */
+  tipo: mysqlEnum("tipoPasso", [
+    "ia_classificar",       // IA classifica intenção da mensagem
+    "ia_responder",         // IA gera resposta contextual
+    "calcom_horarios",      // busca horários disponíveis no Cal.com
+    "calcom_agendar",       // cria agendamento no Cal.com
+    "whatsapp_enviar",      // envia mensagem no WhatsApp
+    "transferir",           // transfere pra humano
+    "condicional",          // if/else baseado em condição
+    "esperar",              // delay (follow-up)
+    "webhook",              // chama webhook externo
+  ]).notNull(),
+  /** Configuração do passo (JSON — prompt, template, condição, etc) */
+  config: text("configPasso"),
+  createdAt: timestamp("createdAtPasso").defaultNow().notNull(),
+});
+
+export type SmartflowPasso = typeof smartflowPassos.$inferSelect;
+
+/**
+ * Execução de um cenário — log de cada vez que o fluxo rodou.
+ */
+export const smartflowExecucoes = mysqlTable("smartflow_execucoes", {
+  id: int("id").autoincrement().primaryKey(),
+  cenarioId: int("cenarioIdExec").notNull(),
+  escritorioId: int("escritorioIdExec").notNull(),
+  /** ID da conversa/contato que iniciou o fluxo */
+  contatoId: int("contatoIdExec"),
+  conversaId: int("conversaIdExec"),
+  /** Status da execução */
+  status: mysqlEnum("statusExec", ["rodando", "concluido", "erro", "cancelado"]).default("rodando").notNull(),
+  /** Passo atual (se rodando) */
+  passoAtual: int("passoAtualExec").default(0).notNull(),
+  /** Contexto da execução — dados coletados ao longo dos passos (JSON) */
+  contexto: text("contextoExec"),
+  /** Mensagem de erro (se status=erro) */
+  erro: varchar("erroExec", { length: 512 }),
+  createdAt: timestamp("createdAtExec").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtExec").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SmartflowExecucao = typeof smartflowExecucoes.$inferSelect;
 export type InsertAgenteDocumento = typeof agenteDocumentos.$inferInsert;

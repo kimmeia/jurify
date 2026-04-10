@@ -57,6 +57,7 @@ import {
   CheckSquare,
   DollarSign,
   BrainCircuit,
+  Zap,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -435,6 +436,22 @@ function AppSidebarContent({
                   <BrainCircuit className={`h-4 w-4 ${location === "/agentes-ia" ? "text-primary" : ""}`} />
                   <span>Agentes IA</span>
                   <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-violet-300 text-violet-600 bg-violet-50 dark:bg-violet-950/20">
+                    Novo
+                  </Badge>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* SmartFlow */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/smartflow"}
+                  onClick={() => navigateOrBlock("/smartflow")}
+                  tooltip="SmartFlow"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <Zap className={`h-4 w-4 ${location === "/smartflow" ? "text-primary" : ""}`} />
+                  <span>SmartFlow</span>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">
                     Novo
                   </Badge>
                 </SidebarMenuButton>
