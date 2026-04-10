@@ -273,9 +273,10 @@ export default function Kanban() {
                       <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
                     )}
                     {card.prazo && (
-                      <span className={`flex items-center gap-0.5 text-[9px] ${isAtrasado ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
-                        <Clock className="h-2.5 w-2.5" />{new Date(card.prazo).toLocaleDateString("pt-BR")}
-                        {isAtrasado && " (atrasado)"}
+                      <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${isAtrasado ? "bg-red-100 text-red-700 font-bold" : "bg-blue-50 text-blue-700 font-medium"}`}>
+                        <Clock className="h-3 w-3" />
+                        {new Date(card.prazo).toLocaleDateString("pt-BR")}
+                        {isAtrasado && " — ATRASADO"}
                       </span>
                     )}
                     {cardTags.map((tagNome: string, i: number) => {
@@ -508,8 +509,8 @@ export default function Kanban() {
                       <p className="text-sm font-medium">{cardDetalhe.clienteNome}</p>
                       {cardDetalhe.clienteCpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{cardDetalhe.clienteCpfCnpj}</p>}
                     </div>
-                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation("/clientes"); }}>
-                      <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro
+                    <Button size="sm" className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation(`/clientes?id=${cardDetalhe.clienteId}`); }}>
+                      <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro do cliente
                     </Button>
                   </div>
                 ) : (

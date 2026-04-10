@@ -219,7 +219,12 @@ export default function Clientes() {
   const [buscaDebounced, setBuscaDebounced] = useState("");
   const [segmento, setSegmento] = useState<Segmento>("todos");
   const [pagina, setPagina] = useState(1);
-  const [selId, setSelId] = useState<number | null>(null);
+  const [selId, setSelId] = useState<number | null>(() => {
+    // Se veio com ?id=X na URL, abre direto no detalhe
+    const params = new URLSearchParams(window.location.search);
+    const idParam = params.get("id");
+    return idParam ? Number(idParam) : null;
+  });
   const [showNovo, setShowNovo] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
 
