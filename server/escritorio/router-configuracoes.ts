@@ -182,9 +182,24 @@ export const configuracoesRouter = router({
         input.departamento,
       );
 
-      // TODO: Fase 2 — enviar email real com link de convite
-      // Por agora retorna o token para copiar manualmente
-      return { token, expiresAt };
+      // Enviar email de convite via Resend
+      const CARGO_LABELS: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
+      let emailEnviado = false;
+      try {
+        const { enviarEmailConvite } = await import("../_core/email");
+        const resultado = await enviarEmailConvite({
+          email: input.email,
+          nomeEscritorio: result.escritorio.nome,
+          cargo: CARGO_LABELS[input.cargo] || input.cargo,
+          token,
+          convidadoPor: ctx.user.name || ctx.user.email || "Admin",
+        });
+        emailEnviado = resultado.success;
+      } catch {
+        // Falha no email não bloqueia o convite
+      }
+
+      return { token, expiresAt, emailEnviado };
     }),
 
   /** Lista convites do escritório */

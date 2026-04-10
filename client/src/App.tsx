@@ -37,6 +37,7 @@ import Financeiro from "./pages/Financeiro";
 import Agenda from "./pages/Agenda";
 import Tarefas from "./pages/Tarefas";
 import AssinarDocumento from "./pages/AssinarDocumento";
+import AceitarConvite from "./pages/AceitarConvite";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import SubscriptionGuard from "./components/SubscriptionGuard";
@@ -65,6 +66,9 @@ function Router() {
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/assinar/:token">
         {(params: any) => <AssinarDocumento token={params.token} />}
+      </Route>
+      <Route path="/convite/:token">
+        {(params: any) => <AceitarConvite token={params.token} />}
       </Route>
 
       {/* Plans - accessible inside layout but without subscription guard */}
