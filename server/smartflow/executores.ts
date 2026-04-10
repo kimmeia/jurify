@@ -103,9 +103,43 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
     },
 
     async criarAgendamento(horario: string, nome: string, email: string): Promise<string> {
-      // TODO: integrar com Cal.com booking API
-      log.info({ horario, nome }, "SmartFlow: agendamento simulado (implementar Cal.com booking)");
-      return `booking_${Date.now()}`;
+      try {
+        const { getDb } = await import("../db");
+        const { canaisIntegrados } = await import("../../drizzle/schema");
+        const { eq, and, or: orOp, like } = await import("drizzle-orm");
+        const { decryptConfig } = await import("../escritorio/crypto-utils");
+        const db = await getDb();
+        if (!db) throw new Error("DB indisponível");
+
+        const [canal] = await db.select().from(canaisIntegrados)
+          .where(and(eq(canaisIntegrados.escritorioId, escritorioId), orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%"))))
+          .limit(1);
+
+        if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) throw new Error("Cal.com não configurado");
+        const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+        if (!cfg?.apiKey) throw new Error("API Key Cal.com não encontrada");
+
+        const { CalcomClient } = await import("../integracoes/calcom-client");
+        const client = new CalcomClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl || "https://api.cal.com/v2", defaultDuration: 30 });
+
+        // Busca event types pra pegar o ID
+        const eventTypes = await client.listarEventTypes();
+        if (eventTypes.length === 0) throw new Error("Nenhum tipo de evento configurado no Cal.com");
+
+        const booking = await client.criarBooking({
+          eventTypeId: eventTypes[0].id,
+          start: horario,
+          name: nome || "Cliente",
+          email: email || "cliente@jurify.com.br",
+        });
+
+        if (!booking) throw new Error("Falha ao criar agendamento no Cal.com");
+        log.info({ bookingId: booking.id, horario, nome }, "SmartFlow: agendamento criado no Cal.com");
+        return String(booking.id);
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao criar agendamento Cal.com");
+        throw err;
+      }
     },
 
     async enviarWhatsApp(telefone: string, mensagem: string): Promise<boolean> {
