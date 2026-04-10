@@ -351,7 +351,30 @@ export default function Kanban() {
 
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Prazo (opcional)</Label><Input type="date" value={cardForm.prazo} onChange={(e) => setCardForm({ ...cardForm, prazo: e.target.value })} /></div>
-              <div><Label className="text-xs">Tags (vírgula)</Label><Input value={cardForm.tags} onChange={(e) => setCardForm({ ...cardForm, tags: e.target.value })} placeholder="família, recurso" /></div>
+              <div>
+                <Label className="text-xs">Tags</Label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {(tags || []).map((t: any) => {
+                    const selecionada = cardForm.tags.split(",").map((s: string) => s.trim()).includes(t.nome);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          const atuais = cardForm.tags.split(",").map((s: string) => s.trim()).filter(Boolean);
+                          const novas = selecionada ? atuais.filter((n: string) => n !== t.nome) : [...atuais, t.nome];
+                          setCardForm({ ...cardForm, tags: novas.join(", ") });
+                        }}
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-all ${selecionada ? "text-white ring-2 ring-offset-1" : "opacity-50 hover:opacity-80"}`}
+                        style={{ background: t.cor }}
+                      >
+                        {t.nome}
+                      </button>
+                    );
+                  })}
+                  {(!tags || tags.length === 0) && <p className="text-[10px] text-muted-foreground">Nenhuma tag criada. Use o botão "Tags" no board.</p>}
+                </div>
+              </div>
             </div>
 
             {/* Urgente toggle */}
@@ -438,7 +461,23 @@ export default function Kanban() {
                 <div><Label className="text-[10px]">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value || undefined })} /></div>
                 <div className="grid grid-cols-2 gap-2">
                   <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? new Date(cardDetalhe.prazo).toISOString().split("T")[0] : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || undefined })} /></div>
-                  <div><Label className="text-[10px]">Tags</Label><Input defaultValue={cardDetalhe.tags || ""} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, tags: e.target.value || undefined })} placeholder="tag1, tag2" /></div>
+                  <div>
+                    <Label className="text-[10px]">Tags</Label>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(tags || []).map((t: any) => {
+                        const atuais = (cardDetalhe.tags || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+                        const sel = atuais.includes(t.nome);
+                        return (
+                          <button key={t.id} type="button" onClick={() => {
+                            const novas = sel ? atuais.filter((n: string) => n !== t.nome) : [...atuais, t.nome];
+                            editarCardMut.mutate({ id: cardDetalhe.id, tags: novas.join(", ") || undefined });
+                          }} className={`text-[9px] px-2 py-0.5 rounded-full font-medium transition-all ${sel ? "text-white ring-2 ring-offset-1" : "opacity-40 hover:opacity-70"}`} style={{ background: t.cor }}>
+                            {t.nome}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 <div><Label className="text-[10px]">Descrição</Label><Textarea defaultValue={cardDetalhe.descricao || ""} rows={2} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value || undefined })} /></div>
 
