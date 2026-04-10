@@ -224,12 +224,12 @@ export const juditProcessosRouter = router({
    * Usado pelo frontend pra mostrar aviso ao usuário.
    */
   estimarCusto: protectedProcedure
-    .input(z.object({ tipo: z.enum(["cpf", "cnpj", "oab", "name", "lawsuit_cnj"]) }))
+    .input(z.object({ tipo: z.enum(["cpf", "cnpj", "lawsuit_cnj"]) }))
     .query(({ input }) => estimarCustoConsulta(input.tipo)),
 
   consultarDocumento: protectedProcedure
     .input(z.object({
-      tipo: z.enum(["cpf", "cnpj", "name"]),
+      tipo: z.enum(["cpf", "cnpj"]),
       valor: z.string().min(3).max(100),
       credencialId: z.number().optional(),
     }))
@@ -491,7 +491,7 @@ export const juditProcessosRouter = router({
 
       // 3. Se Judit retornou resumo IA nativo, usar direto
       if (resumoJudit) {
-        return { resumo: resumoJudit, fonte: "judit_ia", processo: processoData };
+        return { resumo: resumoJudit, fonte: "judit_ia", processo: processoData || null };
       }
 
       // 4. Fallback: se tiver OpenAI configurado, gerar análise detalhada
@@ -527,7 +527,7 @@ Resumo executivo: 1) Situação atual 2) Cronologia importante 3) Pontos crític
             if (res.ok) {
               const data = await res.json();
               const resumo = data.choices?.[0]?.message?.content?.trim();
-              if (resumo) return { resumo, fonte: "ia", processo: processoData };
+              if (resumo) return { resumo, fonte: "ia", processo: processoData || null };
             }
           }
         } catch { /* fallback */ }
@@ -552,7 +552,8 @@ Resumo executivo: 1) Situação atual 2) Cronologia importante 3) Pontos crític
       return { resumo: "Processo não encontrado.", fonte: "erro" };
     }),
 
-  monitorarProcesso: protectedProcedure
+  /** ADMIN ONLY — frontend usa juditUsuario.criarMonitoramento */
+  monitorarProcesso: adminProcedure
     .input(z.object({ cnj: z.string().min(15).max(30) }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);

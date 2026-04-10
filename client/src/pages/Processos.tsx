@@ -260,7 +260,7 @@ function ConsultarTab() {
         );
       }
     },
-    onError: (e) => toast.error("Erro ao buscar resultados: " + e.message),
+    onError: (e) => { toast.error("Erro ao buscar resultados: " + e.message); setBuscando(false); setPolling(false); },
   });
 
   useEffect(() => {
@@ -413,7 +413,7 @@ function ConsultarTab() {
         <div className="text-center py-12 space-y-2">
           <Scale className="h-10 w-10 text-muted-foreground/20 mx-auto" />
           <p className="font-medium">Consulte processos judiciais</p>
-          <p className="text-sm text-muted-foreground">Busque por CNJ, CPF, CNPJ, OAB ou nome em +90 tribunais do Brasil.</p>
+          <p className="text-sm text-muted-foreground">Busque por CNJ, CPF ou CNPJ em +90 tribunais do Brasil.</p>
         </div>
       ) : null}
       </div>

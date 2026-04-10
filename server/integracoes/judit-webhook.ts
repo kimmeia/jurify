@@ -281,7 +281,9 @@ export function registerJuditWebhook(app: Express) {
                   eq(juditCredenciais.status, "validando"),
                 ),
               );
-          } catch { /* best-effort */ }
+          } catch (err: any) {
+            log.warn({ credId: mon.credencialId, err: err?.message }, "[Judit Webhook] Falha ao atualizar credencial para ativa");
+          }
         }
 
         log.info(

@@ -269,7 +269,14 @@ async function cobrarMonitoramentosMensais() {
         continue;
       }
 
-      // Cobra os créditos
+      // 1. Marca como cobrado PRIMEIRO (idempotência — se crashar depois,
+      //    não cobra de novo na próxima execução do cron)
+      await db
+        .update(juditMonitoramentos)
+        .set({ ultimaCobrancaMensal: new Date() })
+        .where(eq(juditMonitoramentos.id, mon.id));
+
+      // 2. Debita créditos
       const novoSaldo = saldo - custo;
       await db
         .update(juditCreditos)
@@ -279,6 +286,7 @@ async function cobrarMonitoramentosMensais() {
         })
         .where(eq(juditCreditos.escritorioId, esc.escritorio.id));
 
+      // 3. Registra transação
       await db.insert(juditTransacoes).values({
         escritorioId: esc.escritorio.id,
         tipo: "consumo",
@@ -291,12 +299,6 @@ async function cobrarMonitoramentosMensais() {
         detalhes: `Cobrança mensal: ${mon.apelido || mon.searchKey} (${custo} créditos)`,
         userId: mon.clienteUserId,
       });
-
-      // Marca como cobrado
-      await db
-        .update(juditMonitoramentos)
-        .set({ ultimaCobrancaMensal: new Date() })
-        .where(eq(juditMonitoramentos.id, mon.id));
 
       cobrados++;
     }

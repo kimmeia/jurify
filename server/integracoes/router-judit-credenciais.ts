@@ -461,14 +461,14 @@ export const juditCredenciaisRouter = router({
 
         // Timeout
         await db.update(juditCredenciais)
-          .set({ mensagemErro: "O tribunal demorou para responder. A validação será retentada automaticamente." })
+          .set({ mensagemErro: "O tribunal demorou para responder. A validação ocorrerá quando você fizer uma consulta usando esta credencial." })
           .where(eq(juditCredenciais.id, credId));
 
         return {
           success: true,
           id: credId,
           status: "validando" as const,
-          mensagem: "O tribunal demorou para responder (timeout). A credencial será validada na próxima consulta.",
+          mensagem: "O tribunal demorou para responder. A credencial será validada quando você fizer uma consulta usando ela.",
         };
       } catch (err: any) {
         log.warn({ err: err.message }, "Erro ao testar credencial");
