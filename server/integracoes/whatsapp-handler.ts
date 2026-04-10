@@ -66,7 +66,26 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     emitirParaEscritorio(escritorioId, { tipo: "nova_mensagem", titulo: "Nova mensagem", mensagem: `${msg.nome || msg.telefone}: ${(msg.conteudo || "").slice(0, 80)}`, dados: { conversaId, contatoId, canal: "whatsapp" } });
   } catch { /* SSE indisponível */ }
 
-  if (msg.tipo === "texto" && msg.conteudo) { try { await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo); } catch (e: any) { log.error(`[ChatBot] Erro:`, e.message); } }
+  // SmartFlow tem prioridade sobre chatbot padrão
+  if (msg.tipo === "texto" && msg.conteudo) {
+    try {
+      const { tentarSmartFlow } = await import("../smartflow/dispatcher");
+      const sf = await tentarSmartFlow(escritorioId, canalId, conversaId, contatoId, msg.conteudo, msg.telefone, msg.nome || "");
+      if (sf.executou) {
+        // SmartFlow assumiu — envia respostas geradas
+        for (const resp of sf.respostas) {
+          await enviarResposta(canalId, conversaId, msg.chatId, resp);
+        }
+      } else {
+        // Sem cenário ativo — usa chatbot padrão
+        await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo);
+      }
+    } catch (e: any) {
+      log.error(`[SmartFlow/ChatBot] Erro:`, e.message);
+      // Fallback: tenta chatbot padrão se SmartFlow falhar
+      try { await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo); } catch { /* ignore */ }
+    }
+  }
   return { contatoId, conversaId, mensagemId };
 }
 
