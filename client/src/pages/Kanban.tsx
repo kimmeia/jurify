@@ -17,7 +17,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
+  ExternalLink, ArrowRight, Tag, X, Settings,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 const PRIORIDADE_COR: Record<string, string> = {
@@ -28,8 +30,13 @@ const PRIORIDADE_COR: Record<string, string> = {
 const PRIORIDADE_LABEL: Record<string, string> = { alta: "Alta", media: "Média", baixa: "Baixa" };
 
 export default function Kanban() {
+  const [, setLocation] = useLocation();
   const [funilAtivo, setFunilAtivo] = useState<number | null>(null);
   const [novoFunilOpen, setNovoFunilOpen] = useState(false);
+  const [cardAberto, setCardAberto] = useState<number | null>(null);
+  const [novaTagOpen, setNovaTagOpen] = useState(false);
+  const [novaTagNome, setNovaTagNome] = useState("");
+  const [novaTagCor, setNovaTagCor] = useState("#6366f1");
   const [novoFunilNome, setNovoFunilNome] = useState("");
   const [novoCardOpen, setNovoCardOpen] = useState<number | null>(null); // colunaId
   const [novaColunaOpen, setNovaColunaOpen] = useState(false);
@@ -40,6 +47,22 @@ export default function Kanban() {
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
     { funilId: funilAtivo! },
     { enabled: !!funilAtivo },
+  );
+
+  // Tags
+  const { data: tags, refetch: refetchTags } = (trpc as any).kanban.listarTags.useQuery();
+  const criarTagMut = (trpc as any).kanban.criarTag.useMutation({
+    onSuccess: () => { toast.success("Tag criada!"); setNovaTagOpen(false); setNovaTagNome(""); refetchTags(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deletarTagMut = (trpc as any).kanban.deletarTag.useMutation({
+    onSuccess: () => refetchTags(),
+  });
+
+  // Detalhe card
+  const { data: cardDetalhe, refetch: refetchDetalhe } = (trpc as any).kanban.detalheCard.useQuery(
+    { id: cardAberto! },
+    { enabled: !!cardAberto },
   );
 
   const criarFunilMut = (trpc as any).kanban.criarFunil.useMutation({
@@ -158,6 +181,9 @@ export default function Kanban() {
           <ChevronLeft className="h-4 w-4 mr-1" /> Funis
         </Button>
         <h2 className="text-lg font-bold flex-1">{funilData?.funil?.nome || "Carregando..."}</h2>
+        <Button size="sm" variant="outline" onClick={() => setNovaTagOpen(true)}>
+          <Tag className="h-3.5 w-3.5 mr-1" /> Tags
+        </Button>
         <Button size="sm" variant="outline" onClick={() => setNovaColunaOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Coluna
         </Button>
@@ -193,35 +219,63 @@ export default function Kanban() {
             </div>
 
             {/* Cards */}
-            {(col.cards || []).map((card: any) => (
-              <div
-                key={card.id}
-                draggable
-                onDragStart={() => setDragCardId(card.id)}
-                onDragEnd={() => setDragCardId(null)}
-                className={`group rounded-lg border border-l-4 p-3 bg-card shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-all ${PRIORIDADE_COR[card.prioridade] || ""}`}
-              >
-                <div className="flex items-start justify-between gap-1">
-                  <p className="text-xs font-semibold leading-tight">{card.titulo}</p>
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => deletarCardMut.mutate({ id: card.id })}>
-                    <Trash2 className="h-2.5 w-2.5" />
-                  </Button>
+            {(col.cards || []).map((card: any) => {
+              const tagsList = tags || [];
+              const cardTags = card.tags ? card.tags.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
+              const isAtrasado = card.atrasado || (card.prazo && new Date(card.prazo) < new Date());
+
+              return (
+                <div
+                  key={card.id}
+                  draggable
+                  onDragStart={() => setDragCardId(card.id)}
+                  onDragEnd={() => setDragCardId(null)}
+                  onClick={() => setCardAberto(card.id)}
+                  className={`group rounded-lg border border-l-4 p-3 bg-card shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${PRIORIDADE_COR[card.prioridade] || ""}`}
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="flex items-center gap-1.5">
+                      {card.prioridade === "alta" && (
+                        <span className="relative flex h-2.5 w-2.5 shrink-0" title="Prioridade alta">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                        </span>
+                      )}
+                      {isAtrasado && !card.prioridade?.includes("alta") && (
+                        <span className="relative flex h-2.5 w-2.5 shrink-0" title="Atrasado!">
+                          <span className="animate-pulse h-2.5 w-2.5 rounded-full bg-amber-500" />
+                        </span>
+                      )}
+                      <p className="text-xs font-semibold leading-tight">{card.titulo}</p>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deletarCardMut.mutate({ id: card.id }); }}>
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </Button>
+                  </div>
+                  {card.cnj && <p className="text-[10px] font-mono text-muted-foreground mt-1">{card.cnj}</p>}
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    {card.clienteNome && (
+                      <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
+                    )}
+                    {card.prazo && (
+                      <span className={`flex items-center gap-0.5 text-[9px] ${isAtrasado ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                        <Clock className="h-2.5 w-2.5" />{new Date(card.prazo).toLocaleDateString("pt-BR")}
+                        {isAtrasado && " (atrasado)"}
+                      </span>
+                    )}
+                    {cardTags.map((tagNome: string, i: number) => {
+                      const tagObj = tagsList.find((t: any) => t.nome === tagNome);
+                      return (
+                        <span key={i} className="text-[8px] px-1.5 py-0.5 rounded-full text-white font-medium" style={{ background: tagObj?.cor || "#6b7280" }}>
+                          {tagNome}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-                {card.cnj && <p className="text-[10px] font-mono text-muted-foreground mt-1">{card.cnj}</p>}
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {card.clienteNome && (
-                    <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
-                  )}
-                  {card.prazo && (
-                    <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><Clock className="h-2.5 w-2.5" />{new Date(card.prazo).toLocaleDateString("pt-BR")}</span>
-                  )}
-                  <Badge variant="outline" className="text-[8px] h-3.5 px-1">{PRIORIDADE_LABEL[card.prioridade]}</Badge>
-                  {card.tags && card.tags.split(",").map((t: string, i: number) => (
-                    <Badge key={i} variant="outline" className="text-[8px] h-3.5 px-1">{t.trim()}</Badge>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Botão add card no fundo */}
             <button
@@ -280,6 +334,130 @@ export default function Kanban() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Dialog gerenciar tags */}
+      <Dialog open={novaTagOpen} onOpenChange={setNovaTagOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="h-5 w-5 text-indigo-600" /> Gerenciar Tags</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input value={novaTagNome} onChange={(e) => setNovaTagNome(e.target.value)} placeholder="Nome da tag" className="flex-1" />
+              <input type="color" value={novaTagCor} onChange={(e) => setNovaTagCor(e.target.value)} className="h-9 w-12 rounded border cursor-pointer" />
+              <Button size="sm" onClick={() => criarTagMut.mutate({ nome: novaTagNome, cor: novaTagCor })} disabled={!novaTagNome || criarTagMut.isPending}>
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {(tags || []).map((t: any) => (
+                <div key={t.id} className="flex items-center gap-2 py-1">
+                  <span className="text-xs px-2 py-0.5 rounded-full text-white font-medium" style={{ background: t.cor }}>{t.nome}</span>
+                  <div className="flex-1" />
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive" onClick={() => deletarTagMut.mutate({ id: t.id })}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              {(!tags || tags.length === 0) && <p className="text-xs text-muted-foreground text-center py-2">Nenhuma tag criada.</p>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Painel lateral: detalhe do card */}
+      {cardAberto && cardDetalhe && (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setCardAberto(null)}>
+          <div className="absolute inset-0 bg-black/20" />
+          <div className="relative w-full max-w-md bg-card border-l shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 space-y-4">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    {cardDetalhe.prioridade === "alta" && (
+                      <span className="relative flex h-3 w-3 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                      </span>
+                    )}
+                    <h3 className="text-lg font-bold">{cardDetalhe.titulo}</h3>
+                  </div>
+                  {cardDetalhe.cnj && <p className="text-sm font-mono text-muted-foreground mt-0.5">{cardDetalhe.cnj}</p>}
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setCardAberto(null)}><X className="h-4 w-4" /></Button>
+              </div>
+
+              {/* Badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className={`text-[10px] ${cardDetalhe.prioridade === "alta" ? "bg-red-100 text-red-700 border-red-300" : cardDetalhe.prioridade === "baixa" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                  {PRIORIDADE_LABEL[cardDetalhe.prioridade]}
+                </Badge>
+                {cardDetalhe.atrasado && <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px]">Atrasado</Badge>}
+                {cardDetalhe.prazo && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />Prazo: {new Date(cardDetalhe.prazo).toLocaleDateString("pt-BR")}
+                  </span>
+                )}
+              </div>
+
+              {/* Tags */}
+              {cardDetalhe.tags && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {cardDetalhe.tags.split(",").map((t: string, i: number) => {
+                    const tagObj = (tags || []).find((tg: any) => tg.nome === t.trim());
+                    return <span key={i} className="text-[9px] px-2 py-0.5 rounded-full text-white font-medium" style={{ background: tagObj?.cor || "#6b7280" }}>{t.trim()}</span>;
+                  })}
+                </div>
+              )}
+
+              {/* Descrição */}
+              {cardDetalhe.descricao && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground mb-1">DESCRIÇÃO</p>
+                  <p className="text-xs leading-relaxed">{cardDetalhe.descricao}</p>
+                </div>
+              )}
+
+              {/* Cliente */}
+              {cardDetalhe.clienteNome && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] font-semibold text-muted-foreground mb-1">CLIENTE</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{cardDetalhe.clienteNome}</p>
+                      {cardDetalhe.clienteCpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{cardDetalhe.clienteCpfCnpj}</p>}
+                    </div>
+                    {cardDetalhe.clienteId && (
+                      <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation("/clientes"); }}>
+                        <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Histórico de movimentações */}
+              {cardDetalhe.movimentacoes?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground mb-2">HISTÓRICO</p>
+                  <div className="space-y-2">
+                    {cardDetalhe.movimentacoes.map((m: any) => (
+                      <div key={m.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <ArrowRight className="h-3 w-3 shrink-0" />
+                        <span>{m.colunaOrigemNome} → {m.colunaDestinoNome}</span>
+                        <span className="text-[9px] ml-auto">{new Date(m.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Info */}
+              <div className="text-[10px] text-muted-foreground pt-2 border-t">
+                Criado em {new Date(cardDetalhe.createdAt).toLocaleDateString("pt-BR")}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

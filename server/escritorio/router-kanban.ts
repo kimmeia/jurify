@@ -6,7 +6,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, contatos, colaboradores } from "../../drizzle/schema";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanTags, contatos, colaboradores } from "../../drizzle/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -301,5 +301,78 @@ export const kanbanRouter = router({
       }
 
       return { success: true };
+    }),
+
+  // ─── TAGS ─────────────────────────────────────────────────────────────────
+
+  listarTags: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return [];
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(kanbanTags).where(eq(kanbanTags.escritorioId, esc.escritorio.id));
+  }),
+
+  criarTag: protectedProcedure
+    .input(z.object({ nome: z.string().min(1).max(32), cor: z.string().min(4).max(16) }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [r] = await db.insert(kanbanTags).values({ escritorioId: esc.escritorio.id, nome: input.nome, cor: input.cor });
+      return { id: (r as { insertId: number }).insertId };
+    }),
+
+  deletarTag: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(kanbanTags).where(and(eq(kanbanTags.id, input.id), eq(kanbanTags.escritorioId, esc.escritorio.id)));
+      return { success: true };
+    }),
+
+  /** Detalhe completo de um card */
+  detalheCard: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return null;
+      const db = await getDb();
+      if (!db) return null;
+
+      const [card] = await db.select().from(kanbanCards)
+        .where(and(eq(kanbanCards.id, input.id), eq(kanbanCards.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!card) return null;
+
+      // Enriquecer
+      let clienteNome: string | null = null;
+      let clienteCpfCnpj: string | null = null;
+      if (card.clienteId) {
+        const [c] = await db.select({ nome: contatos.nome, cpfCnpj: contatos.cpfCnpj }).from(contatos)
+          .where(eq(contatos.id, card.clienteId)).limit(1);
+        clienteNome = c?.nome || null;
+        clienteCpfCnpj = c?.cpfCnpj || null;
+      }
+
+      // Histórico de movimentações
+      const movs = await db.select().from(kanbanMovimentacoes)
+        .where(eq(kanbanMovimentacoes.cardId, input.id))
+        .orderBy(desc(kanbanMovimentacoes.createdAt))
+        .limit(20);
+
+      // Enriquecer movimentações com nomes de colunas
+      const movsEnriquecidos = [];
+      for (const m of movs) {
+        const [orig] = await db.select({ nome: kanbanColunas.nome }).from(kanbanColunas).where(eq(kanbanColunas.id, m.colunaOrigemId)).limit(1);
+        const [dest] = await db.select({ nome: kanbanColunas.nome }).from(kanbanColunas).where(eq(kanbanColunas.id, m.colunaDestinoId)).limit(1);
+        movsEnriquecidos.push({ ...m, colunaOrigemNome: orig?.nome, colunaDestinoNome: dest?.nome });
+      }
+
+      return { ...card, clienteNome, clienteCpfCnpj, movimentacoes: movsEnriquecidos };
     }),
 });

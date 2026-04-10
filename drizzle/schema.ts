@@ -1456,3 +1456,12 @@ export const kanbanMovimentacoes = mysqlTable("kanban_movimentacoes", {
   movidoPorId: int("movidoPorIdKMov"),
   createdAt: timestamp("createdAtKMov").defaultNow().notNull(),
 });
+
+/** Tags padronizadas do escritório com cores */
+export const kanbanTags = mysqlTable("kanban_tags", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdKTag").notNull(),
+  nome: varchar("nomeKTag", { length: 32 }).notNull(),
+  cor: varchar("corKTag", { length: 16 }).notNull(),
+  createdAt: timestamp("createdAtKTag").defaultNow().notNull(),
+});
