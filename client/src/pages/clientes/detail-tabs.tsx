@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
-  Clock, StickyNote, CheckSquare, Check, Calendar,
+  Clock, StickyNote, CheckSquare, Check, Calendar, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -93,7 +93,10 @@ export function ArquivosTab({ contatoId, arquivos, onRefresh }: { contatoId: num
           <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">{a.nome}</a>
           <p className="text-[10px] text-muted-foreground">{a.tipo || "Documento"} {a.tamanho ? `· ${formatSize(a.tamanho)}` : ""} · {new Date(a.createdAt).toLocaleDateString("pt-BR")}</p>
         </div>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: a.id })}><Trash2 className="h-3 w-3" /></Button>
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 shrink-0" title="Baixar" onClick={() => {
+          const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
+        }}><Download className="h-3 w-3" /></Button>
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={() => excluir.mutate({ id: a.id })}><Trash2 className="h-3 w-3" /></Button>
       </div>
     ))}</div>}
   </CardContent></Card>);
