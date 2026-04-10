@@ -1408,6 +1408,8 @@ export const kanbanFunis = mysqlTable("kanban_funis", {
   nome: varchar("nomeKF", { length: 128 }).notNull(),
   descricao: varchar("descricaoKF", { length: 512 }),
   cor: varchar("corKF", { length: 16 }),
+  /** Prazo padrão em dias para cards novos (default 15) */
+  prazoPadraoDias: int("prazoPadraoDiasKF").default(15).notNull(),
   criadoPor: int("criadoPorKF"),
   createdAt: timestamp("createdAtKF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtKF").defaultNow().onUpdateNow().notNull(),
@@ -1438,7 +1440,19 @@ export const kanbanCards = mysqlTable("kanban_cards", {
   tags: varchar("tagsKCard", { length: 255 }),
   /** ID do pagamento Asaas que originou o card (evita duplicata) */
   asaasPaymentId: varchar("asaasPaymentIdKCard", { length: 64 }),
+  /** Se o card está atrasado (prazo vencido sem mover) */
+  atrasado: boolean("atrasadoKCard").default(false).notNull(),
   ordem: int("ordemKCard").default(0).notNull(),
   createdAt: timestamp("createdAtKCard").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtKCard").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Log de movimentações de cards entre colunas — pra medir tempo por etapa */
+export const kanbanMovimentacoes = mysqlTable("kanban_movimentacoes", {
+  id: int("id").autoincrement().primaryKey(),
+  cardId: int("cardIdKMov").notNull(),
+  colunaOrigemId: int("colunaOrigemIdKMov").notNull(),
+  colunaDestinoId: int("colunaDestinoIdKMov").notNull(),
+  movidoPorId: int("movidoPorIdKMov"),
+  createdAt: timestamp("createdAtKMov").defaultNow().notNull(),
 });

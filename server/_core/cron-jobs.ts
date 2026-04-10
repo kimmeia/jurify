@@ -314,6 +314,34 @@ async function cobrarMonitoramentosMensais() {
   }
 }
 
+/**
+ * Marca cards do Kanban como atrasados quando o prazo vence.
+ * Roda a cada 1h.
+ */
+async function verificarPrazosKanban() {
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    const { kanbanCards } = await import("../../drizzle/schema");
+    const now = new Date();
+
+    const result = await db.update(kanbanCards)
+      .set({ atrasado: true })
+      .where(
+        and(
+          eq(kanbanCards.atrasado, false),
+          lt(kanbanCards.prazo, now),
+        ),
+      );
+
+    const count = (result as any)?.[0]?.affectedRows || 0;
+    if (count > 0) log.info(`[Cron] ${count} card(s) Kanban marcado(s) como atrasado(s)`);
+  } catch (err: any) {
+    log.error("[Cron] Erro ao verificar prazos Kanban:", err.message);
+  }
+}
+
 /** Inicializa todos os jobs */
 export function iniciarJobs() {
   log.info("[Cron] Jobs iniciados");
@@ -323,9 +351,11 @@ export function iniciarJobs() {
   setTimeout(() => syncAsaas(), 15000);
   setTimeout(() => notificarPrazos(), 20000);
   setTimeout(() => cobrarMonitoramentosMensais(), 30000);
+  setTimeout(() => verificarPrazosKanban(), 35000);
 
-  // A cada 1 hora: expirar assinaturas
+  // A cada 1 hora: expirar assinaturas + verificar prazos kanban
   setInterval(() => expirarAssinaturas(), 60 * 60 * 1000);
+  setInterval(() => verificarPrazosKanban(), 60 * 60 * 1000);
 
   // A cada 10 minutos: sincronizar cobranças do Asaas
   setInterval(() => syncAsaas(), 10 * 60 * 1000);

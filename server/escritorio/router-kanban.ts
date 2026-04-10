@@ -6,7 +6,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, contatos, colaboradores } from "../../drizzle/schema";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, contatos, colaboradores } from "../../drizzle/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -203,6 +203,23 @@ export const kanbanRouter = router({
       const existentes = await db.select({ ordem: kanbanCards.ordem }).from(kanbanCards)
         .where(eq(kanbanCards.colunaId, input.colunaId)).orderBy(desc(kanbanCards.ordem)).limit(1);
       const ordem = (existentes[0]?.ordem || 0) + 1;
+
+      // Se não informou prazo, aplica prazo padrão do funil
+      let prazo: Date | null = null;
+      if (input.prazo) {
+        prazo = new Date(input.prazo);
+      } else {
+        // Buscar funil da coluna pra pegar prazoPadraoDias
+        const [col] = await db.select({ funilId: kanbanColunas.funilId }).from(kanbanColunas)
+          .where(eq(kanbanColunas.id, input.colunaId)).limit(1);
+        if (col) {
+          const [funil] = await db.select({ prazoPadraoDias: kanbanFunis.prazoPadraoDias }).from(kanbanFunis)
+            .where(eq(kanbanFunis.id, col.funilId)).limit(1);
+          const dias = funil?.prazoPadraoDias || 15;
+          prazo = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+        }
+      }
+
       const [r] = await db.insert(kanbanCards).values({
         escritorioId: esc.escritorio.id,
         colunaId: input.colunaId,
@@ -212,7 +229,7 @@ export const kanbanRouter = router({
         clienteId: input.clienteId || null,
         responsavelId: input.responsavelId || null,
         prioridade: (input.prioridade as any) || "media",
-        prazo: input.prazo ? new Date(input.prazo) : null,
+        prazo,
         tags: input.tags || null,
         ordem,
       });
@@ -257,15 +274,32 @@ export const kanbanRouter = router({
       return { success: true };
     }),
 
-  /** Move card pra outra coluna (e/ou reordena) */
+  /** Move card pra outra coluna (e/ou reordena) — registra movimentação */
   moverCard: protectedProcedure
     .input(z.object({ cardId: z.number(), colunaDestinoId: z.number(), ordem: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Buscar coluna origem antes de mover
+      const [card] = await db.select({ colunaId: kanbanCards.colunaId }).from(kanbanCards)
+        .where(eq(kanbanCards.id, input.cardId)).limit(1);
+
       await db.update(kanbanCards)
         .set({ colunaId: input.colunaDestinoId, ordem: input.ordem ?? 0 })
         .where(eq(kanbanCards.id, input.cardId));
+
+      // Registrar movimentação (pra métricas de tempo por etapa)
+      if (card && card.colunaId !== input.colunaDestinoId) {
+        await db.insert(kanbanMovimentacoes).values({
+          cardId: input.cardId,
+          colunaOrigemId: card.colunaId,
+          colunaDestinoId: input.colunaDestinoId,
+          movidoPorId: esc?.colaborador.id || null,
+        });
+      }
+
       return { success: true };
     }),
 });
