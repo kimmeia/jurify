@@ -142,6 +142,62 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async criarCardKanban(params): Promise<number> {
+      try {
+        const { getDb } = await import("../db");
+        const { kanbanCards, kanbanColunas, kanbanFunis } = await import("../../drizzle/schema");
+        const { eq, and, asc } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new Error("DB indisponível");
+
+        let colunaId = params.colunaId;
+
+        // Se não tem colunaId mas tem funilId, pega a primeira coluna
+        if (!colunaId && params.funilId) {
+          const [col] = await db.select({ id: kanbanColunas.id }).from(kanbanColunas)
+            .where(eq(kanbanColunas.funilId, params.funilId))
+            .orderBy(asc(kanbanColunas.ordem)).limit(1);
+          colunaId = col?.id;
+        }
+
+        // Se não tem funilId nem colunaId, pega o primeiro funil do escritório
+        if (!colunaId) {
+          const [funil] = await db.select({ id: kanbanFunis.id }).from(kanbanFunis)
+            .where(eq(kanbanFunis.escritorioId, escritorioId)).limit(1);
+          if (funil) {
+            const [col] = await db.select({ id: kanbanColunas.id }).from(kanbanColunas)
+              .where(eq(kanbanColunas.funilId, funil.id))
+              .orderBy(asc(kanbanColunas.ordem)).limit(1);
+            colunaId = col?.id;
+          }
+        }
+
+        if (!colunaId) throw new Error("Nenhum funil/coluna encontrado. Crie um funil no Kanban primeiro.");
+
+        // Verificar duplicata por asaasPaymentId
+        if (params.asaasPaymentId) {
+          const [existente] = await db.select({ id: kanbanCards.id }).from(kanbanCards)
+            .where(eq(kanbanCards.asaasPaymentId, params.asaasPaymentId)).limit(1);
+          if (existente) return existente.id; // Já existe, retorna sem duplicar
+        }
+
+        const [r] = await db.insert(kanbanCards).values({
+          escritorioId,
+          colunaId,
+          titulo: params.titulo,
+          descricao: params.descricao || null,
+          clienteId: params.clienteId || null,
+          prioridade: (params.prioridade as any) || "media",
+          asaasPaymentId: params.asaasPaymentId || null,
+          ordem: 0,
+        });
+        return (r as { insertId: number }).insertId;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao criar card Kanban");
+        throw err;
+      }
+    },
+
     async chamarWebhook(url: string, dados: any): Promise<any> {
       const res = await fetch(url, {
         method: "POST",

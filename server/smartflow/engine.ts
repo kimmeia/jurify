@@ -32,6 +32,15 @@ export interface SmartflowContexto {
   transferir?: boolean;
   /** Mensagens enviadas */
   mensagensEnviadas?: string[];
+  /** Dados de pagamento (gatilho pagamento_recebido) */
+  pagamentoId?: string;
+  pagamentoValor?: number;
+  pagamentoDescricao?: string;
+  pagamentoTipo?: string; // "BOLETO", "PIX", etc
+  assinaturaId?: string; // se tiver = é assinatura
+  primeiraCobranca?: boolean;
+  /** ID do card criado no Kanban */
+  kanbanCardId?: number;
   /** Dados livres por passo */
   [key: string]: unknown;
 }
@@ -83,6 +92,8 @@ export interface SmartflowExecutores {
   enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
   /** Chama webhook externo */
   chamarWebhook: (url: string, dados: any) => Promise<any>;
+  /** Cria card no Kanban */
+  criarCardKanban: (params: { funilId?: number; colunaId?: number; titulo: string; descricao?: string; clienteId?: number; prioridade?: string; asaasPaymentId?: string }) => Promise<number>;
 }
 
 // ─── Handlers por tipo de passo ─────────────────────────────────────────────
@@ -227,15 +238,38 @@ function handleCondicional(
   ctx: SmartflowContexto,
 ): PassoResultado {
   const campo = passo.config.campo || "intencao";
+  const operador = (passo.config as any).operador || "igual"; // igual, diferente, existe, nao_existe, verdadeiro
   const valorEsperado = passo.config.valor || "";
-  const valorAtual = String(ctx[campo] || "");
+  const valorAtual = ctx[campo];
 
-  if (valorAtual === valorEsperado) {
+  let condicaoAtendida = false;
+
+  switch (operador) {
+    case "igual":
+      condicaoAtendida = String(valorAtual || "") === valorEsperado;
+      break;
+    case "diferente":
+      condicaoAtendida = String(valorAtual || "") !== valorEsperado;
+      break;
+    case "existe":
+      condicaoAtendida = !!valorAtual && valorAtual !== "" && valorAtual !== "0" && valorAtual !== "false";
+      break;
+    case "nao_existe":
+      condicaoAtendida = !valorAtual || valorAtual === "" || valorAtual === "0" || valorAtual === "false";
+      break;
+    case "verdadeiro":
+      condicaoAtendida = valorAtual === true || valorAtual === "true";
+      break;
+    default:
+      condicaoAtendida = String(valorAtual || "") === valorEsperado;
+  }
+
+  if (condicaoAtendida) {
     return { sucesso: true, contexto: ctx };
   }
 
-  // Condição não atendida — pula pra próximo passo
-  return { sucesso: true, contexto: ctx, parar: false };
+  // Condição não atendida — para o fluxo (não executa passos seguintes)
+  return { sucesso: true, contexto: ctx, parar: true };
 }
 
 function handleEsperar(
@@ -265,6 +299,35 @@ async function handleWebhook(
   }
 }
 
+async function handleKanbanCriarCard(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const titulo = (passo.config as any).titulo
+    || ctx.pagamentoDescricao
+    || `${(ctx.nomeCliente as string) || "Cliente"} — Pagamento recebido`;
+
+  try {
+    const cardId = await exec.criarCardKanban({
+      funilId: (passo.config as any).funilId,
+      colunaId: (passo.config as any).colunaId,
+      titulo,
+      descricao: `Pagamento: R$ ${((ctx.pagamentoValor || 0) / 100).toFixed(2)}\n${ctx.pagamentoDescricao || ""}`.trim(),
+      clienteId: ctx.contatoId as number | undefined,
+      prioridade: (passo.config as any).prioridade || "media",
+      asaasPaymentId: ctx.pagamentoId,
+    });
+    return {
+      sucesso: true,
+      contexto: { ...ctx, kanbanCardId: cardId },
+      resposta: undefined,
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Kanban: ${err.message}` };
+  }
+}
+
 // ─── Engine principal ───────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
@@ -277,6 +340,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   condicional: handleCondicional,
   esperar: handleEsperar,
   webhook: handleWebhook,
+  kanban_criar_card: handleKanbanCriarCard,
 };
 
 export interface ExecutarCenarioResultado {

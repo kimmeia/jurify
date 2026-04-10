@@ -28,6 +28,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
     chamarWebhook: vi.fn().mockResolvedValue({ ok: true }),
+    criarCardKanban: vi.fn().mockResolvedValue(42),
     ...overrides,
   };
 }
@@ -245,6 +246,127 @@ describe("SmartFlow Engine", () => {
       expect(resultado.contexto.respostaIA).toContain("horários");
       expect(resultado.contexto.horariosDisponiveis).toHaveLength(3);
       expect(resultado.respostas).toHaveLength(2); // resposta IA + horários
+    });
+  });
+
+  describe("kanban_criar_card", () => {
+    it("cria card no kanban com sucesso", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_criar_card", config: { prioridade: "alta" } },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { pagamentoDescricao: "Honorários Janeiro", pagamentoValor: 150000, nomeCliente: "João" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.kanbanCardId).toBe(42);
+      expect(exec.criarCardKanban).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("condicional avançada (operadores)", () => {
+    it("nao_existe: para quando campo tem valor", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      // assinaturaId preenchido = É assinatura → condicional "nao_existe" falha → para
+      const resultado = await executarCenario(passos, { assinaturaId: "sub_123" }, exec);
+      expect(resultado.passosExecutados).toBe(1); // parou na condicional
+      expect(exec.criarCardKanban).not.toHaveBeenCalled();
+    });
+
+    it("nao_existe: continua quando campo está vazio", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      // assinaturaId vazio = NÃO é assinatura → condicional passa
+      const resultado = await executarCenario(passos, { assinaturaId: "" }, exec);
+      expect(resultado.passosExecutados).toBe(2);
+      expect(exec.criarCardKanban).toHaveBeenCalledTimes(1);
+    });
+
+    it("verdadeiro: continua quando campo é true", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { primeiraCobranca: true }, exec);
+      expect(resultado.passosExecutados).toBe(2);
+    });
+
+    it("verdadeiro: para quando campo é false", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { primeiraCobranca: false }, exec);
+      expect(resultado.passosExecutados).toBe(1); // parou
+    });
+  });
+
+  describe("fluxo completo: pagamento → kanban", () => {
+    it("primeira cobrança sem assinatura → cria card", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
+        { id: 2, ordem: 2, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
+        { id: 3, ordem: 3, tipo: "kanban_criar_card", config: { prioridade: "media" } },
+      ];
+
+      const resultado = await executarCenario(passos, {
+        assinaturaId: "", primeiraCobranca: true,
+        pagamentoDescricao: "Honorários", pagamentoValor: 200000,
+      }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.passosExecutados).toBe(3);
+      expect(resultado.contexto.kanbanCardId).toBe(42);
+    });
+
+    it("assinatura → NÃO cria card (para no passo 1)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
+        { id: 2, ordem: 2, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
+        { id: 3, ordem: 3, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {
+        assinaturaId: "sub_abc", primeiraCobranca: true,
+      }, exec);
+
+      expect(resultado.passosExecutados).toBe(1);
+      expect(exec.criarCardKanban).not.toHaveBeenCalled();
+    });
+
+    it("segunda cobrança → NÃO cria card (para no passo 2)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
+        { id: 2, ordem: 2, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
+        { id: 3, ordem: 3, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {
+        assinaturaId: "", primeiraCobranca: false, // já tem card
+      }, exec);
+
+      expect(resultado.passosExecutados).toBe(2);
+      expect(exec.criarCardKanban).not.toHaveBeenCalled();
     });
   });
 

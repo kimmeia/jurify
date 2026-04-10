@@ -19,6 +19,7 @@ import {
   Zap, Plus, Trash2, Loader2, MessageCircle, Calendar, Brain,
   ArrowRight, Play, Bot, PhoneCall, Clock, GitBranch,
   Webhook, Users, CheckCircle2, Activity, AlertTriangle, XCircle,
+  LayoutGrid, DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,10 +33,12 @@ const TIPO_PASSO = [
   { id: "condicional", label: "Condição (if/else)", icon: GitBranch, cor: "bg-orange-100 text-orange-700" },
   { id: "esperar", label: "Esperar (delay)", icon: Clock, cor: "bg-gray-100 text-gray-700" },
   { id: "webhook", label: "Webhook externo", icon: Webhook, cor: "bg-pink-100 text-pink-700" },
+  { id: "kanban_criar_card", label: "Criar card Kanban", icon: LayoutGrid, cor: "bg-indigo-100 text-indigo-700" },
 ];
 
 const GATILHOS = [
   { id: "whatsapp_mensagem", label: "Nova mensagem WhatsApp", icon: MessageCircle },
+  { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", icon: CheckCircle2 },
   { id: "novo_lead", label: "Novo lead no CRM", icon: Users },
   { id: "agendamento_criado", label: "Agendamento criado", icon: Calendar },
   { id: "manual", label: "Acionado manualmente", icon: Play },
@@ -67,6 +70,10 @@ export default function SmartFlow() {
     onSuccess: () => { toast.success("Cenário de atendimento criado!"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const criarPgtoKanbanMut = (trpc as any).smartflow.criarTemplatePagamentoKanban.useMutation({
+    onSuccess: () => { toast.success("Cenário Pagamento → Kanban criado!"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const criarMut = (trpc as any).smartflow.criar.useMutation({
     onSuccess: () => { toast.success("Cenário criado!"); setNovoOpen(false); resetForm(); refetch(); },
     onError: (e: any) => toast.error(e.message),
@@ -96,7 +103,11 @@ export default function SmartFlow() {
         </div>
         <Button size="sm" variant="outline" onClick={() => criarTemplateMut.mutate()} disabled={criarTemplateMut.isPending}>
           {criarTemplateMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1" />}
-          Template rápido
+          Atendimento
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => criarPgtoKanbanMut.mutate()} disabled={criarPgtoKanbanMut.isPending}>
+          {criarPgtoKanbanMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1" />}
+          Pagamento → Kanban
         </Button>
         <Button size="sm" onClick={() => { resetForm(); setNovoOpen(true); }}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Novo cenário

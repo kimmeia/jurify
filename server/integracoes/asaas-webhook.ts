@@ -140,6 +140,24 @@ export function registerAsaasWebhook(app: Express) {
           });
           log.info(`[Asaas Webhook] Cobrança ${payment.id} CRIADA localmente`);
         }
+
+        // SmartFlow: disparar cenário "pagamento_recebido" se pagamento confirmado
+        if (payment.status === "RECEIVED" || payment.status === "CONFIRMED" || payment.status === "RECEIVED_IN_CASH") {
+          try {
+            const { dispararPagamentoRecebido } = await import("../smartflow/dispatcher");
+            await dispararPagamentoRecebido(escritorioId, {
+              pagamentoId: payment.id,
+              valor: Math.round((payment.value || 0) * 100),
+              descricao: payment.description || `Pagamento ${payment.id}`,
+              tipo: payment.billingType || "UNDEFINED",
+              assinaturaId: (payment as any).subscription || undefined,
+              clienteNome: payment.customer ? undefined : undefined, // Asaas não envia nome aqui
+              clienteAsaasId: payment.customer,
+            });
+          } catch (err: any) {
+            log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
+          }
+        }
       }
 
       // ─── EVENTOS DE CLIENTE ──────────────────────────────────────────

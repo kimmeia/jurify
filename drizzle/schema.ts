@@ -1328,10 +1328,11 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
   descricao: varchar("descricaoSF", { length: 512 }),
   /** Gatilho que inicia o fluxo */
   gatilho: mysqlEnum("gatilhoSF", [
-    "whatsapp_mensagem",    // nova mensagem WhatsApp
-    "novo_lead",            // novo lead no CRM
-    "agendamento_criado",   // booking criado no Cal.com
-    "manual",               // acionado manualmente
+    "whatsapp_mensagem",
+    "novo_lead",
+    "agendamento_criado",
+    "pagamento_recebido",
+    "manual",
   ]).notNull(),
   /** Se o cenário está ativo (recebe eventos) */
   ativo: boolean("ativoSF").default(true).notNull(),
@@ -1361,7 +1362,8 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "transferir",           // transfere pra humano
     "condicional",          // if/else baseado em condição
     "esperar",              // delay (follow-up)
-    "webhook",              // chama webhook externo
+    "webhook",
+    "kanban_criar_card",    // cria card no Kanban
   ]).notNull(),
   /** Configuração do passo (JSON — prompt, template, condição, etc) */
   config: text("configPasso"),
@@ -1434,6 +1436,8 @@ export const kanbanCards = mysqlTable("kanban_cards", {
   prioridade: mysqlEnum("prioridadeKCard", ["alta", "media", "baixa"]).default("media").notNull(),
   prazo: timestamp("prazoKCard"),
   tags: varchar("tagsKCard", { length: 255 }),
+  /** ID do pagamento Asaas que originou o card (evita duplicata) */
+  asaasPaymentId: varchar("asaasPaymentIdKCard", { length: 64 }),
   ordem: int("ordemKCard").default(0).notNull(),
   createdAt: timestamp("createdAtKCard").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtKCard").defaultNow().onUpdateNow().notNull(),
