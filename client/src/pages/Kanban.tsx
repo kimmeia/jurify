@@ -83,6 +83,9 @@ export default function Kanban() {
     onSuccess: () => { refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const editarColunaMut = (trpc as any).kanban.editarColuna.useMutation({
+    onSuccess: () => refetchFunil(),
+  });
   const criarCardMut = (trpc as any).kanban.criarCard.useMutation({
     onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
@@ -219,7 +222,15 @@ export default function Kanban() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <div className="h-2.5 w-2.5 rounded-full" style={{ background: col.cor || "#6b7280" }} />
-                <p className="text-xs font-semibold uppercase tracking-wide">{col.nome}</p>
+                <input
+                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none w-24 hover:bg-muted/50 focus:bg-white focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
+                  defaultValue={col.nome}
+                  onBlur={(e) => {
+                    const novo = e.target.value.trim();
+                    if (novo && novo !== col.nome) editarColunaMut.mutate({ id: col.id, nome: novo });
+                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                />
                 <Badge variant="outline" className="text-[9px] h-4 px-1">{col.cards?.length || 0}</Badge>
               </div>
               <div className="flex gap-0.5">
