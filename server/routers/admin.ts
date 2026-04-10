@@ -311,6 +311,40 @@ export const adminRouter = router({
       return { success: true, mensagem: "Usuário desbloqueado" };
     }),
 
+  /** Excluir usuário e dados associados */
+  excluirUsuario: adminProcedure
+    .input(z.object({ userId: z.number(), motivo: z.string().max(500).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!target) throw new Error("Usuário não encontrado");
+      if (target.role === "admin") throw new Error("Não é possível excluir um administrador");
+
+      // Excluir colaborador e escritório vinculado
+      try {
+        const { colaboradores: colabTable, escritorios: escTable } = await import("../../drizzle/schema");
+        const colabs = await db.select().from(colabTable).where(eq(colabTable.userId, input.userId));
+        for (const c of colabs) {
+          await db.delete(colabTable).where(eq(colabTable.id, c.id));
+        }
+      } catch { /* ignore */ }
+
+      // Excluir usuário
+      await db.delete(users).where(eq(users.id, input.userId));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.excluir",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: target.name || target.email || undefined,
+        detalhes: input.motivo ? { motivo: input.motivo } : undefined,
+      });
+
+      return { success: true, mensagem: `Usuário ${target.email} excluído` };
+    }),
+
   /**
    * Suspender escritório inteiro (afeta todos os colaboradores).
    * Use pra: inadimplência grave, violação organizacional de termos.

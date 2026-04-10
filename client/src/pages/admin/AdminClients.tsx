@@ -115,6 +115,15 @@ function ClienteDetalheDialog({
     onError: (err) => toast.error("Erro ao bloquear", { description: err.message }),
   });
 
+  const excluirMut = trpc.admin.excluirUsuario.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.mensagem);
+      onOpenChange(false);
+      onRefresh();
+    },
+    onError: (err) => toast.error("Erro ao excluir", { description: err.message }),
+  });
+
   const desbloquearMut = trpc.admin.desbloquearUsuario.useMutation({
     onSuccess: () => {
       toast.success("Usuário desbloqueado");
@@ -554,6 +563,22 @@ function ClienteDetalheDialog({
                     Bloquear conta
                   </Button>
                 )}
+
+                {/* Excluir conta */}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="w-full mt-2"
+                  onClick={() => {
+                    if (confirm("ATENÇÃO: Excluir permanentemente este usuário e todos os dados? Esta ação NÃO pode ser desfeita.")) {
+                      excluirMut.mutate({ userId: userId! });
+                    }
+                  }}
+                  disabled={excluirMut?.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  {excluirMut?.isPending ? "Excluindo..." : "Excluir conta permanentemente"}
+                </Button>
               </div>
             </TabsContent>
           </Tabs>
