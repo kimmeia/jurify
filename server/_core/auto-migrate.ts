@@ -1077,6 +1077,15 @@ export async function runMigrations(): Promise<void> {
       }
     }
 
+    // Kanban tables
+    try {
+      await connection.query(`CREATE TABLE IF NOT EXISTS kanban_funis (id INT NOT NULL AUTO_INCREMENT, escritorioIdKF INT NOT NULL, nomeKF VARCHAR(128) NOT NULL, descricaoKF VARCHAR(512), corKF VARCHAR(16), criadoPorKF INT, createdAtKF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAtKF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_kf_esc (escritorioIdKF)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await connection.query(`CREATE TABLE IF NOT EXISTS kanban_colunas (id INT NOT NULL AUTO_INCREMENT, funilIdKC INT NOT NULL, nomeKC VARCHAR(64) NOT NULL, corKC VARCHAR(16), ordemKC INT NOT NULL DEFAULT 0, createdAtKC TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_kc_funil (funilIdKC)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await connection.query(`CREATE TABLE IF NOT EXISTS kanban_cards (id INT NOT NULL AUTO_INCREMENT, escritorioIdKCard INT NOT NULL, colunaIdKCard INT NOT NULL, tituloKCard VARCHAR(255) NOT NULL, descricaoKCard TEXT, cnjKCard VARCHAR(30), clienteIdKCard INT, responsavelIdKCard INT, prioridadeKCard ENUM('alta','media','baixa') NOT NULL DEFAULT 'media', prazoKCard TIMESTAMP NULL, tagsKCard VARCHAR(255), ordemKCard INT NOT NULL DEFAULT 0, createdAtKCard TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAtKCard TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_kcard_col (colunaIdKCard), INDEX idx_kcard_esc (escritorioIdKCard)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao criar tabelas Kanban");
+    }
+
     await relaxConversasForeignKey(connection);
 
     // ─── 2. Migrations baseadas em arquivo (drizzle/*.sql) ──────────────────

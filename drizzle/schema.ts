@@ -1394,3 +1394,47 @@ export const smartflowExecucoes = mysqlTable("smartflow_execucoes", {
 
 export type SmartflowExecucao = typeof smartflowExecucoes.$inferSelect;
 export type InsertAgenteDocumento = typeof agenteDocumentos.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// KANBAN — Gestão visual de processos em produção
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Funil (board) — um quadro kanban completo */
+export const kanbanFunis = mysqlTable("kanban_funis", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdKF").notNull(),
+  nome: varchar("nomeKF", { length: 128 }).notNull(),
+  descricao: varchar("descricaoKF", { length: 512 }),
+  cor: varchar("corKF", { length: 16 }),
+  criadoPor: int("criadoPorKF"),
+  createdAt: timestamp("createdAtKF").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtKF").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Coluna de um funil */
+export const kanbanColunas = mysqlTable("kanban_colunas", {
+  id: int("id").autoincrement().primaryKey(),
+  funilId: int("funilIdKC").notNull(),
+  nome: varchar("nomeKC", { length: 64 }).notNull(),
+  cor: varchar("corKC", { length: 16 }),
+  ordem: int("ordemKC").default(0).notNull(),
+  createdAt: timestamp("createdAtKC").defaultNow().notNull(),
+});
+
+/** Card (processo/caso) dentro de uma coluna */
+export const kanbanCards = mysqlTable("kanban_cards", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdKCard").notNull(),
+  colunaId: int("colunaIdKCard").notNull(),
+  titulo: varchar("tituloKCard", { length: 255 }).notNull(),
+  descricao: text("descricaoKCard"),
+  cnj: varchar("cnjKCard", { length: 30 }),
+  clienteId: int("clienteIdKCard"),
+  responsavelId: int("responsavelIdKCard"),
+  prioridade: mysqlEnum("prioridadeKCard", ["alta", "media", "baixa"]).default("media").notNull(),
+  prazo: timestamp("prazoKCard"),
+  tags: varchar("tagsKCard", { length: 255 }),
+  ordem: int("ordemKCard").default(0).notNull(),
+  createdAt: timestamp("createdAtKCard").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtKCard").defaultNow().onUpdateNow().notNull(),
+});

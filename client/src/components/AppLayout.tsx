@@ -58,6 +58,7 @@ import {
   DollarSign,
   BrainCircuit,
   Zap,
+  LayoutGrid,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -436,6 +437,22 @@ function AppSidebarContent({
                   <BrainCircuit className={`h-4 w-4 ${location === "/agentes-ia" ? "text-primary" : ""}`} />
                   <span>Agentes IA</span>
                   <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-violet-300 text-violet-600 bg-violet-50 dark:bg-violet-950/20">
+                    Novo
+                  </Badge>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Kanban */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/kanban"}
+                  onClick={() => navigateOrBlock("/kanban")}
+                  tooltip="Kanban"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
+                  <span>Kanban</span>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-indigo-300 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20">
                     Novo
                   </Badge>
                 </SidebarMenuButton>

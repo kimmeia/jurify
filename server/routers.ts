@@ -61,6 +61,7 @@ import { adminFinanceiroRouter } from "./routers/admin-financeiro";
 import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
 import { adminJuditRouter } from "./routers/admin-judit";
 import { smartflowRouter } from "./smartflow/router-smartflow";
+import { kanbanRouter } from "./escritorio/router-kanban";
 
 export const appRouter = router({
   system: systemRouter,
@@ -121,6 +122,7 @@ export const appRouter = router({
   adminAgentesIa: adminAgentesIaRouter,
   adminJudit: adminJuditRouter,
   smartflow: smartflowRouter,
+  kanban: kanbanRouter,
 });
 
 export type AppRouter = typeof appRouter;

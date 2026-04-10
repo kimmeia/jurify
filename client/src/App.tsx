@@ -32,6 +32,7 @@ import Agendamento from "./pages/Agendamento";
 import Atendimento from "./pages/Atendimento";
 import AgentesIA from "./pages/AgentesIA";
 import SmartFlow from "./pages/SmartFlow";
+import Kanban from "./pages/Kanban";
 import Clientes from "./pages/Clientes";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
@@ -215,6 +216,11 @@ function Router() {
       <Route path="/smartflow">
         <ClientArea>
           <SmartFlow />
+        </ClientArea>
+      </Route>
+      <Route path="/kanban">
+        <ClientArea>
+          <Kanban />
         </ClientArea>
       </Route>
       <Route path="/clientes">
