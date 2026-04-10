@@ -130,7 +130,7 @@ export const clientesRouter = router({
     const rows = await db.select().from(clienteArquivos).where(and(eq(clienteArquivos.contatoId, input.contatoId), eq(clienteArquivos.escritorioId, esc.escritorio.id))).orderBy(desc(clienteArquivos.createdAt));
     return rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "" }));
   }),
-  salvarArquivo: protectedProcedure.input(z.object({ contatoId: z.number(), nome: z.string().max(255), tipo: z.string().max(64).optional(), tamanho: z.number().optional(), url: z.string() })).mutation(async ({ ctx, input }) => {
+  salvarArquivo: protectedProcedure.input(z.object({ contatoId: z.number(), nome: z.string().max(255), tipo: z.string().max(255).optional(), tamanho: z.number().optional(), url: z.string() })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
     const [r] = await db.insert(clienteArquivos).values({ escritorioId: esc.escritorio.id, contatoId: input.contatoId, nome: input.nome, tipo: input.tipo || null, tamanho: input.tamanho || null, url: input.url, uploadPor: esc.colaborador.id });
     return { id: (r as { insertId: number }).insertId };

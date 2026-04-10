@@ -625,7 +625,7 @@ export const clienteArquivos = mysqlTable("cliente_arquivos", {
   escritorioId: int("escritorioId").notNull(),
   contatoId: int("contatoId").notNull(),
   nome: varchar("nome", { length: 255 }).notNull(),
-  tipo: varchar("tipo", { length: 64 }),
+  tipo: varchar("tipo", { length: 255 }),
   tamanho: int("tamanho"),
   url: text("url").notNull(),
   uploadPor: int("uploadPor"),

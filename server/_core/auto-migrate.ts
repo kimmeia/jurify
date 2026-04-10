@@ -1093,6 +1093,7 @@ export async function runMigrations(): Promise<void> {
       // Add columns if tables already existed
       try { await connection.query(`ALTER TABLE kanban_cards ADD COLUMN asaasPaymentIdKCard VARCHAR(64) NULL`); } catch { /* exists */ }
       try { await connection.query(`ALTER TABLE kanban_cards ADD COLUMN atrasadoKCard BOOLEAN NOT NULL DEFAULT FALSE`); } catch { /* exists */ }
+      try { await connection.query(`ALTER TABLE cliente_arquivos MODIFY COLUMN tipo VARCHAR(255)`); } catch { /* exists */ }
       try { await connection.query(`ALTER TABLE kanban_funis ADD COLUMN prazoPadraoDiasKF INT NOT NULL DEFAULT 15`); } catch { /* exists */ }
       await connection.query(`CREATE TABLE IF NOT EXISTS kanban_tags (id INT NOT NULL AUTO_INCREMENT, escritorioIdKTag INT NOT NULL, nomeKTag VARCHAR(32) NOT NULL, corKTag VARCHAR(16) NOT NULL, createdAtKTag TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_ktag_esc (escritorioIdKTag)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
       await connection.query(`CREATE TABLE IF NOT EXISTS kanban_movimentacoes (id INT NOT NULL AUTO_INCREMENT, cardIdKMov INT NOT NULL, colunaOrigemIdKMov INT NOT NULL, colunaDestinoIdKMov INT NOT NULL, movidoPorIdKMov INT, createdAtKMov TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_kmov_card (cardIdKMov)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
