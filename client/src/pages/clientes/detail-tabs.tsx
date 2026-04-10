@@ -65,7 +65,10 @@ export function ArquivosTab({ contatoId, arquivos, onRefresh }: { contatoId: num
   return (<Card><CardContent className="pt-4 space-y-4">
     {/* Tabs upload/url */}
     <div className="flex gap-2 mb-2">
-      <Button size="sm" variant={modo === "upload" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setModo("upload")}><Upload className="h-3 w-3 mr-1" /> Upload</Button>
+      <Button size="sm" variant={modo === "upload" ? "default" : "outline"} className="h-7 text-xs" onClick={() => {
+        setModo("upload");
+        const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt"; inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files; if (f) handleFiles(f); }; inp.click();
+      }}><Upload className="h-3 w-3 mr-1" /> Upload</Button>
       <Button size="sm" variant={modo === "url" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setModo("url")}><ExternalLink className="h-3 w-3 mr-1" /> URL</Button>
     </div>
 
