@@ -510,7 +510,6 @@ function AppSidebarContent({
                 >
                   <BarChart3 className={`h-4 w-4 ${location === "/relatorios" ? "text-primary" : ""}`} />
                   <span>Relatórios</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
