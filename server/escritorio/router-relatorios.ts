@@ -24,6 +24,15 @@ const PeriodoInput = z
   .object({ dias: z.number().min(1).max(365).optional() })
   .optional();
 
+const ProducaoInput = z
+  .object({
+    dias: z.number().min(1).max(365).optional(),
+    /** Se presente, filtra os KPIs de Produção ao funil escolhido.
+     *  Ausente/null = todos os funis do escritório. */
+    funilId: z.number().optional(),
+  })
+  .optional();
+
 function desdeDias(dias: number): Date {
   return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 }
@@ -169,8 +178,10 @@ export const relatoriosRouter = router({
     };
   }),
 
-  /** Produção — Kanban, cards, atrasados, movimentações */
-  producao: protectedProcedure.input(PeriodoInput).query(async ({ ctx, input }) => {
+  /** Produção — Kanban, cards, atrasados, movimentações.
+   *  Aceita filtro opcional por `funilId` (ou todos os funis do escritório).
+   */
+  producao: protectedProcedure.input(ProducaoInput).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
     const db = await getDb();
@@ -178,33 +189,51 @@ export const relatoriosRouter = router({
     const eid = esc.escritorio.id;
     const dias = input?.dias || 30;
     const desde = desdeDias(dias);
+    const funilId = input?.funilId;
 
-    const [cardsTotal] = await db
-      .select({ total: sql<number>`COUNT(*)` })
-      .from(kanbanCards)
-      .where(and(eq(kanbanCards.escritorioId, eid), gte(kanbanCards.createdAt, desde)));
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    // Quando há filtro de funil, todos os counts de cards precisam fazer
+    // JOIN com kanbanColunas (pois o funilId mora na coluna, não no card).
 
-    const [cardsAtrasados] = await db
-      .select({ total: sql<number>`COUNT(*)` })
-      .from(kanbanCards)
-      .where(and(eq(kanbanCards.escritorioId, eid), eq(kanbanCards.atrasado, true)));
+    const cardsBase = (extraWhere: any) => {
+      const conditions = [eq(kanbanCards.escritorioId, eid), extraWhere];
+      const q = db
+        .select({ total: sql<number>`COUNT(${kanbanCards.id})` })
+        .from(kanbanCards);
+      if (funilId !== undefined) {
+        return q
+          .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id))
+          .where(and(...conditions, eq(kanbanColunas.funilId, funilId)));
+      }
+      return q.where(and(...conditions));
+    };
 
-    const [cardsDentroPrazo] = await db
-      .select({ total: sql<number>`COUNT(*)` })
-      .from(kanbanCards)
-      .where(
-        and(
-          eq(kanbanCards.escritorioId, eid),
-          eq(kanbanCards.atrasado, false),
-          gte(kanbanCards.createdAt, desde),
-        ),
-      );
+    const [cardsTotal] = await cardsBase(gte(kanbanCards.createdAt, desde));
+    const [cardsAtrasados] = await cardsBase(eq(kanbanCards.atrasado, true));
+    const [cardsDentroPrazo] = await cardsBase(
+      and(eq(kanbanCards.atrasado, false), gte(kanbanCards.createdAt, desde)),
+    );
 
-    const [movsTotal] = await db
-      .select({ total: sql<number>`COUNT(*)` })
+    // ── Movimentações ──────────────────────────────────────────────────────
+    // IMPORTANTE: antes a query não filtrava por escritório, contando movs
+    // de todos os escritórios do sistema. Agora SEMPRE faz JOIN com card +
+    // coluna para garantir isolamento (e aplicar filtro de funil quando vier).
+    const movsQuery = db
+      .select({ total: sql<number>`COUNT(${kanbanMovimentacoes.id})` })
       .from(kanbanMovimentacoes)
-      .where(gte(kanbanMovimentacoes.createdAt, desde));
+      .innerJoin(kanbanCards, eq(kanbanMovimentacoes.cardId, kanbanCards.id))
+      .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id));
 
+    const movsConditions = [
+      gte(kanbanMovimentacoes.createdAt, desde),
+      eq(kanbanCards.escritorioId, eid),
+    ];
+    if (funilId !== undefined) movsConditions.push(eq(kanbanColunas.funilId, funilId));
+    const [movsTotal] = await movsQuery.where(and(...movsConditions));
+
+    // ── Distribuição por etapa (coluna) ────────────────────────────────────
+    const colunasConditions = [eq(kanbanCards.escritorioId, eid)];
+    if (funilId !== undefined) colunasConditions.push(eq(kanbanColunas.funilId, funilId));
     const cardsPorColuna = await db
       .select({
         colunaNome: kanbanColunas.nome,
@@ -212,7 +241,7 @@ export const relatoriosRouter = router({
       })
       .from(kanbanCards)
       .innerJoin(kanbanColunas, eq(kanbanCards.colunaId, kanbanColunas.id))
-      .where(eq(kanbanCards.escritorioId, eid))
+      .where(and(...colunasConditions))
       .groupBy(kanbanColunas.id, kanbanColunas.nome);
 
     const total = Number(cardsTotal?.total || 0);
@@ -220,6 +249,7 @@ export const relatoriosRouter = router({
 
     return {
       periodo: dias,
+      funilId: funilId ?? null,
       cardsTotal: total,
       cardsAtrasados: Number(cardsAtrasados?.total || 0),
       cardsDentroPrazo: dentro,
