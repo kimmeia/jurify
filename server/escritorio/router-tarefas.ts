@@ -11,6 +11,24 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { tarefas, colaboradores, users } from "../../drizzle/schema";
 import { eq, and, desc, or, sql, gte, lte, like } from "drizzle-orm";
+import { checkPermission } from "./check-permission";
+import { TRPCError } from "@trpc/server";
+
+/** Valida ownership de uma tarefa quando a permissão é "verProprios" only.
+ *  Retorna true se o colaborador pode mexer nela. */
+async function podeMexerNaTarefa(
+  db: any,
+  tarefaId: number,
+  escritorioId: number,
+  colaboradorId: number,
+): Promise<boolean> {
+  const [t] = await db.select({ responsavelId: tarefas.responsavelId, criadoPor: tarefas.criadoPor })
+    .from(tarefas)
+    .where(and(eq(tarefas.id, tarefaId), eq(tarefas.escritorioId, escritorioId)))
+    .limit(1);
+  if (!t) return false;
+  return t.responsavelId === colaboradorId || t.criadoPor === colaboradorId;
+}
 
 export const tarefasRouter = router({
   /** Listar tarefas do escritório (com filtros) */
@@ -25,12 +43,20 @@ export const tarefasRouter = router({
       vencimentoAte: z.string().optional(), // ISO date
     }).optional())
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
+      const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+      if (!perm.allowed) return [];
       const db = await getDb();
       if (!db) return [];
 
-      const conditions: any[] = [eq(tarefas.escritorioId, esc.escritorio.id)];
+      const conditions: any[] = [eq(tarefas.escritorioId, perm.escritorioId)];
+
+      // Filtra próprias quando a permissão é ver-próprios only
+      if (!perm.verTodos && perm.verProprios) {
+        conditions.push(or(
+          eq(tarefas.responsavelId, perm.colaboradorId),
+          eq(tarefas.criadoPor, perm.colaboradorId),
+        ));
+      }
 
       if (input?.status && input.status !== "todas") {
         conditions.push(eq(tarefas.status, input.status));
@@ -93,19 +119,19 @@ export const tarefasRouter = router({
       dataVencimento: z.string().optional(), // ISO date
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
+      const perm = await checkPermission(ctx.user.id, "agenda", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
       const [r] = await db.insert(tarefas).values({
-        escritorioId: esc.escritorio.id,
-        criadoPor: esc.colaborador.id,
+        escritorioId: perm.escritorioId,
+        criadoPor: perm.colaboradorId,
         titulo: input.titulo,
         descricao: input.descricao || null,
         contatoId: input.contatoId || null,
         processoId: input.processoId || null,
-        responsavelId: input.responsavelId || esc.colaborador.id,
+        responsavelId: input.responsavelId || perm.colaboradorId,
         prioridade: (input.prioridade || "normal") as any,
         dataVencimento: input.dataVencimento ? new Date(input.dataVencimento) : null,
       });
@@ -125,10 +151,15 @@ export const tarefasRouter = router({
       dataVencimento: z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNaTarefa(db, input.id, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar suas próprias tarefas." });
+      }
 
       const { id, ...dados } = input;
       const update: any = {};
@@ -146,7 +177,7 @@ export const tarefasRouter = router({
       }
 
       await db.update(tarefas).set(update)
-        .where(and(eq(tarefas.id, id), eq(tarefas.escritorioId, esc.escritorio.id)));
+        .where(and(eq(tarefas.id, id), eq(tarefas.escritorioId, perm.escritorioId)));
 
       return { success: true };
     }),
@@ -155,12 +186,17 @@ export const tarefasRouter = router({
   excluir: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
+      const perm = await checkPermission(ctx.user.id, "agenda", "excluir");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
-      await db.delete(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, esc.escritorio.id)));
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNaTarefa(db, input.id, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir suas próprias tarefas." });
+      }
+
+      await db.delete(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 

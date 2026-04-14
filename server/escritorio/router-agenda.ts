@@ -17,6 +17,7 @@ import { agendamentos, agendamentoLembretes, tarefas, contatos, users, colaborad
 import { eq, and, desc, gte, lte, or, like, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
+import { checkPermission } from "./check-permission";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -88,13 +89,17 @@ export const agendaRouter = router({
       busca: z.string().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
+      // Permissão: módulo "agenda" — verTodos permite ver do escritório
+      // inteiro; verProprios restringe a eventos onde o colaborador é o
+      // responsável ou criador.
+      const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+      if (!perm.allowed) return [];
 
       const db = await getDb();
       if (!db) return [];
 
-      const escritorioId = esc.escritorio.id;
+      const escritorioId = perm.escritorioId;
+      const filtrarProprios = !perm.verTodos && perm.verProprios;
       const eventos: EventoUnificado[] = [];
 
       // Mapa de nomes de colaboradores
@@ -118,6 +123,14 @@ export const agendaRouter = router({
       // ─── COMPROMISSOS (agendamentos) ────────────────────────────────────
       if (input?.fonte !== "tarefa") {
         const agConditions: any[] = [eq(agendamentos.escritorioId, escritorioId)];
+
+        // Permissão verProprios: limita a eventos próprios (responsável ou criador)
+        if (filtrarProprios) {
+          agConditions.push(or(
+            eq(agendamentos.responsavelId, perm.colaboradorId),
+            eq(agendamentos.criadoPorId, perm.colaboradorId),
+          ));
+        }
 
         if (input?.dataInicio) agConditions.push(gte(agendamentos.dataInicio, new Date(input.dataInicio)));
         if (input?.dataFim) agConditions.push(lte(agendamentos.dataInicio, new Date(input.dataFim)));
@@ -159,6 +172,13 @@ export const agendaRouter = router({
       // ─── TAREFAS ────────────────────────────────────────────────────────
       if (input?.fonte !== "compromisso") {
         const tConditions: any[] = [eq(tarefas.escritorioId, escritorioId)];
+
+        if (filtrarProprios) {
+          tConditions.push(or(
+            eq(tarefas.responsavelId, perm.colaboradorId),
+            eq(tarefas.criadoPor, perm.colaboradorId),
+          ));
+        }
 
         if (input?.dataInicio && input?.dataFim) {
           tConditions.push(gte(tarefas.dataVencimento, new Date(input.dataInicio)));
@@ -399,14 +419,15 @@ export const agendaRouter = router({
       processoId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await requireEscritorio(ctx.user.id);
+      const perm = await checkPermission(ctx.user.id, "agenda", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar compromissos." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [result] = await db.insert(agendamentos).values({
-        escritorioId: esc.escritorio.id,
-        criadoPorId: esc.colaborador.id,
-        responsavelId: input.responsavelId ?? esc.colaborador.id,
+        escritorioId: perm.escritorioId,
+        criadoPorId: perm.colaboradorId,
+        responsavelId: input.responsavelId ?? perm.colaboradorId,
         tipo: input.tipo,
         titulo: input.titulo,
         descricao: input.descricao,
@@ -436,13 +457,14 @@ export const agendaRouter = router({
       processoId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await requireEscritorio(ctx.user.id);
+      const perm = await checkPermission(ctx.user.id, "agenda", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar tarefas." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [result] = await db.insert(tarefas).values({
-        escritorioId: esc.escritorio.id,
-        criadoPor: esc.colaborador.id,
+        escritorioId: perm.escritorioId,
+        criadoPor: perm.colaboradorId,
         responsavelId: input.responsavelId ?? null,
         titulo: input.titulo,
         descricao: input.descricao,
@@ -465,14 +487,38 @@ export const agendaRouter = router({
       status: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await requireEscritorio(ctx.user.id);
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Se só pode editar próprios, verifica ownership antes de escrever
+      if (!perm.verTodos && perm.verProprios) {
+        if (input.fonte === "compromisso") {
+          const [ag] = await db.select({ responsavelId: agendamentos.responsavelId, criadoPorId: agendamentos.criadoPorId })
+            .from(agendamentos)
+            .where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)))
+            .limit(1);
+          if (!ag) throw new TRPCError({ code: "NOT_FOUND", message: "Compromisso não encontrado." });
+          if (ag.responsavelId !== perm.colaboradorId && ag.criadoPorId !== perm.colaboradorId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios compromissos." });
+          }
+        } else {
+          const [t] = await db.select({ responsavelId: tarefas.responsavelId, criadoPor: tarefas.criadoPor })
+            .from(tarefas)
+            .where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId)))
+            .limit(1);
+          if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Tarefa não encontrada." });
+          if (t.responsavelId !== perm.colaboradorId && t.criadoPor !== perm.colaboradorId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar suas próprias tarefas." });
+          }
+        }
+      }
 
       if (input.fonte === "compromisso") {
         await db.update(agendamentos)
           .set({ status: input.status as any })
-          .where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, esc.escritorio.id)));
+          .where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)));
       } else {
         const statusMap: Record<string, string> = {
           concluido: "concluida",
@@ -485,7 +531,7 @@ export const agendaRouter = router({
             status: (statusMap[input.status] || input.status) as any,
             concluidaAt: input.status === "concluido" ? new Date() : null,
           })
-          .where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, esc.escritorio.id)));
+          .where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId)));
       }
 
       return { success: true };
@@ -500,14 +546,38 @@ export const agendaRouter = router({
       fonte: z.enum(["compromisso", "tarefa"]),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await requireEscritorio(ctx.user.id);
+      const perm = await checkPermission(ctx.user.id, "agenda", "excluir");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Se só pode mexer nos próprios, verifica ownership
+      if (!perm.verTodos && perm.verProprios) {
+        if (input.fonte === "compromisso") {
+          const [ag] = await db.select({ responsavelId: agendamentos.responsavelId, criadoPorId: agendamentos.criadoPorId })
+            .from(agendamentos)
+            .where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)))
+            .limit(1);
+          if (!ag) throw new TRPCError({ code: "NOT_FOUND" });
+          if (ag.responsavelId !== perm.colaboradorId && ag.criadoPorId !== perm.colaboradorId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir seus próprios compromissos." });
+          }
+        } else {
+          const [t] = await db.select({ responsavelId: tarefas.responsavelId, criadoPor: tarefas.criadoPor })
+            .from(tarefas)
+            .where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId)))
+            .limit(1);
+          if (!t) throw new TRPCError({ code: "NOT_FOUND" });
+          if (t.responsavelId !== perm.colaboradorId && t.criadoPor !== perm.colaboradorId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir suas próprias tarefas." });
+          }
+        }
+      }
+
       if (input.fonte === "compromisso") {
-        await db.delete(agendamentos).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, esc.escritorio.id)));
+        await db.delete(agendamentos).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)));
       } else {
-        await db.delete(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, esc.escritorio.id)));
+        await db.delete(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId)));
       }
 
       return { success: true };

@@ -4,7 +4,7 @@
  * Extraídas de Configuracoes.tsx para reduzir o tamanho do arquivo principal.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,8 +45,14 @@ const CORES_CARGO = ["#dc2626", "#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#ec
 export function PermissoesTab() {
   const { data: cargos, refetch } = (trpc as any).permissoes.listarCargos.useQuery();
   const inicializar = (trpc as any).permissoes.inicializarPadrao.useMutation({ onSuccess: () => { refetch(); toast.success("Cargos padrão criados!"); } });
-  const criarMut = (trpc as any).permissoes.criarCargo.useMutation({ onSuccess: () => { refetch(); toast.success("Cargo criado!"); setShowNovo(false); } });
-  const atualizarMut = (trpc as any).permissoes.atualizarCargo.useMutation({ onSuccess: () => { refetch(); toast.success("Permissões salvas!"); } });
+  const criarMut = (trpc as any).permissoes.criarCargo.useMutation({
+    onSuccess: () => { refetch(); toast.success("Cargo criado!"); setShowNovo(false); },
+    onError: (e: any) => toast.error("Erro ao criar cargo", { description: e.message }),
+  });
+  const atualizarMut = (trpc as any).permissoes.atualizarCargo.useMutation({
+    onSuccess: () => { refetch(); toast.success("Permissões salvas!"); setEditId(null); },
+    onError: (e: any) => toast.error("Erro ao salvar", { description: e.message }),
+  });
   const excluirMut = (trpc as any).permissoes.excluirCargo.useMutation({ onSuccess: () => { refetch(); toast.success("Cargo excluído."); }, onError: (e: any) => toast.error(e.message) });
   const atribuirMut = (trpc as any).permissoes.atribuirCargo.useMutation({ onSuccess: () => toast.success("Cargo atribuído!") });
 
@@ -55,6 +61,10 @@ export function PermissoesTab() {
   const [novoNome, setNovoNome] = useState("");
   const [novoCor, setNovoCor] = useState("#8b5cf6");
   const [novoPerms, setNovoPerms] = useState<Record<string, Record<string, boolean>>>({});
+  // Estado local do dialog de edição — evita round-trip por checkbox e
+  // garante que mesmo módulos sem linha no banco tenham as 5 chaves exigidas
+  // pelo backend.
+  const [editPerms, setEditPerms] = useState<Record<string, Record<string, boolean>>>({});
 
   const modulos = Object.keys(MODULOS_LABELS);
   const perms = Object.keys(PERM_LABELS);
@@ -63,6 +73,25 @@ export function PermissoesTab() {
     const p: Record<string, Record<string, boolean>> = {};
     modulos.forEach(m => { p[m] = { verTodos: false, verProprios: true, criar: false, editar: false, excluir: false }; });
     return p;
+  };
+
+  /** Completa as permissões vindas do backend com defaults para módulos
+   *  que nunca tiveram linha em permissoes_cargo. Sem isso, o spread parcial
+   *  no onChange mandava objetos incompletos pro Zod, que rejeitava
+   *  silenciosamente o PUT. */
+  const normalizarPerms = (raw: any): Record<string, Record<string, boolean>> => {
+    const out: Record<string, Record<string, boolean>> = {};
+    for (const m of modulos) {
+      const base = raw?.[m] || {};
+      out[m] = {
+        verTodos: !!base.verTodos,
+        verProprios: !!base.verProprios,
+        criar: !!base.criar,
+        editar: !!base.editar,
+        excluir: !!base.excluir,
+      };
+    }
+    return out;
   };
 
   if (!cargos || cargos.length === 0) {
@@ -75,6 +104,16 @@ export function PermissoesTab() {
   }
 
   const editCargo = editId ? cargos.find((c: any) => c.id === editId) : null;
+
+  // Sincroniza o state local com o cargo sendo editado
+  useEffect(() => {
+    if (editCargo) {
+      setEditPerms(normalizarPerms(editCargo.permissoes));
+    } else {
+      setEditPerms({});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   return (<div className="space-y-4">
     <div className="flex items-center justify-between">
@@ -106,14 +145,43 @@ export function PermissoesTab() {
         {editCargo && <div className="space-y-3">
           <div className="overflow-x-auto"><table className="w-full text-xs">
             <thead><tr className="border-b"><th className="text-left py-2 px-2 font-medium">Módulo</th>{perms.map(p => <th key={p} className="text-center py-2 px-1 font-medium">{PERM_LABELS[p]}</th>)}</tr></thead>
-            <tbody>{modulos.map(m => <tr key={m} className="border-b hover:bg-muted/30"><td className="py-2 px-2 font-medium">{MODULOS_LABELS[m]}</td>
-              {perms.map(p => <td key={p} className="text-center py-2 px-1"><input type="checkbox" checked={editCargo.permissoes[m]?.[p] || false} onChange={(e) => {
-                const updated = { ...editCargo.permissoes, [m]: { ...editCargo.permissoes[m], [p]: e.target.checked } };
-                atualizarMut.mutate({ id: editCargo.id, permissoes: updated });
-              }} className="h-4 w-4 rounded" /></td>)}
+            <tbody>{modulos.map(m => <tr key={m} className="border-b hover:bg-muted/30">
+              <td className="py-2 px-2 font-medium">{MODULOS_LABELS[m]}</td>
+              {perms.map(p => (
+                <td key={p} className="text-center py-2 px-1">
+                  <input
+                    type="checkbox"
+                    checked={editPerms[m]?.[p] || false}
+                    onChange={(e) => setEditPerms(prev => ({
+                      ...prev,
+                      [m]: { ...(prev[m] || { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false }), [p]: e.target.checked },
+                    }))}
+                    className="h-4 w-4 rounded cursor-pointer"
+                  />
+                </td>
+              ))}
             </tr>)}</tbody>
           </table></div>
-          {!editCargo.isDefault && <div className="flex justify-end pt-2"><Button variant="destructive" size="sm" onClick={() => { if (confirm("Excluir cargo?")) { excluirMut.mutate({ id: editCargo.id }); setEditId(null); } }}><Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir Cargo</Button></div>}
+          <div className="flex justify-between items-center pt-2 gap-2">
+            {!editCargo.isDefault ? (
+              <Button variant="destructive" size="sm" onClick={() => { if (confirm("Excluir cargo?")) { excluirMut.mutate({ id: editCargo.id }); setEditId(null); } }}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir Cargo
+              </Button>
+            ) : <div />}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditId(null)} disabled={atualizarMut.isPending}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                disabled={atualizarMut.isPending}
+                onClick={() => atualizarMut.mutate({ id: editCargo.id, permissoes: editPerms })}
+              >
+                {atualizarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                Salvar
+              </Button>
+            </div>
+          </div>
         </div>}
       </DialogContent>
     </Dialog>

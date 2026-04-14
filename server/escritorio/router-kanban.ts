@@ -7,8 +7,25 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanTags, contatos, colaboradores } from "../../drizzle/schema";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { checkPermission } from "./check-permission";
+
+/** Verifica se o colaborador pode mexer nesse card quando a permissão é
+ *  "verProprios" only. Considera owner = responsavelId. */
+async function podeMexerNoCard(
+  db: any,
+  cardId: number,
+  escritorioId: number,
+  colaboradorId: number,
+): Promise<boolean> {
+  const [c] = await db.select({ responsavelId: kanbanCards.responsavelId, escritorioId: kanbanCards.escritorioId })
+    .from(kanbanCards)
+    .where(and(eq(kanbanCards.id, cardId), eq(kanbanCards.escritorioId, escritorioId)))
+    .limit(1);
+  if (!c) return false;
+  return c.responsavelId === colaboradorId;
+}
 
 export const kanbanRouter = router({
   // ─── FUNIS ────────────────────────────────────────────────────────────────
@@ -138,13 +155,13 @@ export const kanbanRouter = router({
   obterFunil: protectedProcedure
     .input(z.object({ funilId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return { funil: null, colunas: [] };
+      const perm = await checkPermission(ctx.user.id, "kanban", "ver");
+      if (!perm.allowed) return { funil: null, colunas: [] };
       const db = await getDb();
       if (!db) return { funil: null, colunas: [] };
 
       const [funil] = await db.select().from(kanbanFunis)
-        .where(and(eq(kanbanFunis.id, input.funilId), eq(kanbanFunis.escritorioId, esc.escritorio.id)))
+        .where(and(eq(kanbanFunis.id, input.funilId), eq(kanbanFunis.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!funil) return { funil: null, colunas: [] };
 
@@ -152,10 +169,13 @@ export const kanbanRouter = router({
         .where(eq(kanbanColunas.funilId, input.funilId))
         .orderBy(asc(kanbanColunas.ordem));
 
+      const filtrarProprios = !perm.verTodos && perm.verProprios;
       const result = [];
       for (const col of colunas) {
+        const cardConditions: any[] = [eq(kanbanCards.colunaId, col.id)];
+        if (filtrarProprios) cardConditions.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
         const cards = await db.select().from(kanbanCards)
-          .where(eq(kanbanCards.colunaId, col.id))
+          .where(and(...cardConditions))
           .orderBy(asc(kanbanCards.ordem));
 
         // Enriquecer cards com nome do cliente
@@ -195,8 +215,8 @@ export const kanbanRouter = router({
       tags: z.string().max(255).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "kanban", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar cards." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // Próxima ordem
@@ -221,13 +241,16 @@ export const kanbanRouter = router({
       }
 
       const [r] = await db.insert(kanbanCards).values({
-        escritorioId: esc.escritorio.id,
+        escritorioId: perm.escritorioId,
         colunaId: input.colunaId,
         titulo: input.titulo,
         descricao: input.descricao || null,
         cnj: input.cnj || null,
         clienteId: input.clienteId || null,
-        responsavelId: input.responsavelId || null,
+        // Se não informado, atribui ao próprio criador (sobretudo importante
+        // pra usuários com permissão verProprios — senão não enxergariam
+        // o card que acabaram de criar).
+        responsavelId: input.responsavelId || perm.colaboradorId,
         prioridade: (input.prioridade as any) || "media",
         prazo,
         tags: input.tags || null,
@@ -249,8 +272,16 @@ export const kanbanRouter = router({
       tags: z.string().max(255).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar cards." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoCard(db, input.id, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios cards." });
+      }
+
       const { id, ...update } = input;
       const setData: any = {};
       if (update.titulo) setData.titulo = update.titulo;
@@ -261,16 +292,27 @@ export const kanbanRouter = router({
       if (update.tags !== undefined) setData.tags = update.tags;
       if (update.clienteId !== undefined) setData.clienteId = update.clienteId;
       if (update.responsavelId !== undefined) setData.responsavelId = update.responsavelId;
-      await db.update(kanbanCards).set(setData).where(eq(kanbanCards.id, id));
+      // Garantir o filtro escritorioId no UPDATE — antes só filtrava por id (vazamento entre escritórios)
+      await db.update(kanbanCards).set(setData)
+        .where(and(eq(kanbanCards.id, id), eq(kanbanCards.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 
   deletarCard: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "excluir");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir cards." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(kanbanCards).where(eq(kanbanCards.id, input.id));
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoCard(db, input.id, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir seus próprios cards." });
+      }
+
+      await db.delete(kanbanCards)
+        .where(and(eq(kanbanCards.id, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 
@@ -278,25 +320,32 @@ export const kanbanRouter = router({
   moverCard: protectedProcedure
     .input(z.object({ cardId: z.number(), colunaDestinoId: z.number(), ordem: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para mover cards." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Buscar coluna origem antes de mover
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoCard(db, input.cardId, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode mover seus próprios cards." });
+      }
+
+      // Buscar coluna origem antes de mover (com filtro por escritório)
       const [card] = await db.select({ colunaId: kanbanCards.colunaId }).from(kanbanCards)
-        .where(eq(kanbanCards.id, input.cardId)).limit(1);
+        .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId))).limit(1);
+      if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
 
       await db.update(kanbanCards)
         .set({ colunaId: input.colunaDestinoId, ordem: input.ordem ?? 0 })
-        .where(eq(kanbanCards.id, input.cardId));
+        .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId)));
 
       // Registrar movimentação (pra métricas de tempo por etapa)
-      if (card && card.colunaId !== input.colunaDestinoId) {
+      if (card.colunaId !== input.colunaDestinoId) {
         await db.insert(kanbanMovimentacoes).values({
           cardId: input.cardId,
           colunaOrigemId: card.colunaId,
           colunaDestinoId: input.colunaDestinoId,
-          movidoPorId: esc?.colaborador.id || null,
+          movidoPorId: perm.colaboradorId,
         });
       }
 
