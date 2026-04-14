@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -33,7 +33,6 @@ import Atendimento from "./pages/Atendimento";
 import AgentesIA from "./pages/AgentesIA";
 import SmartFlow from "./pages/SmartFlow";
 import Kanban from "./pages/Kanban";
-import Metricas from "./pages/Metricas";
 import Clientes from "./pages/Clientes";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
@@ -234,10 +233,9 @@ function Router() {
           <Relatorios />
         </ClientArea>
       </Route>
+      {/* Módulo fundido: Métricas foi incorporado a Relatórios */}
       <Route path="/metricas">
-        <ClientArea>
-          <Metricas />
-        </ClientArea>
+        <Redirect to="/relatorios" />
       </Route>
 
       <Route path="/tarefas">

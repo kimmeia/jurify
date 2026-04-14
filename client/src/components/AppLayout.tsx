@@ -483,20 +483,6 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
-              {/* Métricas */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/metricas"}
-                  onClick={() => navigateOrBlock("/metricas")}
-                  tooltip="Métricas"
-                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                >
-                  <BarChart3 className={`h-4 w-4 ${location === "/metricas" ? "text-primary" : ""}`} />
-                  <span>Métricas</span>
-                  <BetaBadge className="ml-auto" />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
               {/* Financeiro */}
               {canSee("financeiro") && <SidebarMenuItem>
                 <SidebarMenuButton
@@ -507,7 +493,6 @@ function AppSidebarContent({
                 >
                   <DollarSign className={`h-4 w-4 ${location === "/financeiro" ? "text-primary" : ""}`} />
                   <span>Financeiro</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
