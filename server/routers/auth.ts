@@ -24,7 +24,7 @@ import {
   getUserByOpenId,
   getDb,
 } from "../db";
-import { colaboradores } from "../../drizzle/schema";
+import { colaboradores, users } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
 
 /** Bloqueia login de usuário que foi removido de TODOS os escritórios
@@ -166,7 +166,42 @@ export const authRouter = router({
       // Verifica se já existe
       const existing = await getUserByEmail(email);
       if (existing) {
-        throw new Error("Já existe uma conta com este e-mail. Tente fazer login.");
+        // Caso especial: usuário pode ter sido removido como colaborador
+        // antes do hard-delete do PR #33, ficando órfão (sem vínculo
+        // ativo). Permite o re-cadastro nesse caso, deletando o registro
+        // órfão antes de criar o novo.
+        const db = await getDb();
+        let orfao = false;
+        if (db) {
+          const [vincAtivo] = await db
+            .select({ id: colaboradores.id })
+            .from(colaboradores)
+            .where(
+              and(eq(colaboradores.userId, existing.id), eq(colaboradores.ativo, true)),
+            )
+            .limit(1);
+          // Sem vínculo ativo → considera órfão
+          if (!vincAtivo) orfao = true;
+        }
+
+        if (orfao) {
+          // Limpa registros antigos (se houver) e o próprio user
+          if (db) {
+            try {
+              await db.delete(colaboradores).where(eq(colaboradores.userId, existing.id));
+            } catch {}
+            try {
+              await db.delete(users).where(eq(users.id, existing.id));
+            } catch (err: any) {
+              throw new Error(
+                "Não foi possível recriar a conta — entre em contato com o suporte. (FK constraint)",
+              );
+            }
+          }
+          // Continua o fluxo normal de criação abaixo
+        } else {
+          throw new Error("Já existe uma conta com este e-mail. Tente fazer login.");
+        }
       }
 
       const passwordHash = await hashPassword(input.password);

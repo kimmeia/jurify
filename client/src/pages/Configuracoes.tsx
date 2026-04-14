@@ -131,7 +131,7 @@ export default function Configuracoes() {
   });
 
   const enviarConviteMut = trpc.configuracoes.enviarConvite.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       // Auto-copia o link para clipboard + toast claro com próximos passos.
       const link = `${window.location.origin}/convite/${res.token}`;
       navigator.clipboard?.writeText(link).catch(() => {});
@@ -140,10 +140,14 @@ export default function Configuracoes() {
           description: `Email enviado para ${conviteEmail}. Link também copiado.`,
         });
       } else {
+        // Mostra o motivo REAL retornado pelo backend (vem de getResendApiKey
+        // diagnostico ou da resposta do Resend). Fallback se não vier.
+        const motivo =
+          res.emailErro ||
+          "Servidor de email indisponível. Copie o link e envie manualmente.";
         toast.warning("Convite criado — email NÃO enviado", {
-          description:
-            "O servidor de email não está configurado. Copie o link e envie manualmente ao convidado.",
-          duration: 10000,
+          description: motivo,
+          duration: 12000,
         });
       }
       setConviteEmail("");
