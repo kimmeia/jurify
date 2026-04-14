@@ -21,6 +21,7 @@ export default function SubscriptionGuard({
     data: subscription,
     isLoading: subLoading,
     isFetched: subFetched,
+    error: subError,
   } = trpc.subscription.current.useQuery(undefined, {
     enabled: !!user && user.role === "user",
     retry: false,
@@ -31,6 +32,7 @@ export default function SubscriptionGuard({
     data: credits,
     isLoading: creditsLoading,
     isFetched: creditsFetched,
+    error: creditsError,
   } = trpc.dashboard.credits.useQuery(undefined, {
     enabled: !!user && user.role === "user",
     retry: false,
@@ -43,16 +45,25 @@ export default function SubscriptionGuard({
   const hasAccess = hasSubscription || hasCredits;
   const queriesDone = subFetched && creditsFetched;
 
+  // Se as queries falharam por UNAUTHORIZED (ex: colaborador removido),
+  // o handler global em main.tsx faz logout + redirect. NÃO devemos
+  // mandar pra /plans nesse caso — isso confunde o usuário (sugere que
+  // ele só precisa assinar, quando na verdade perdeu acesso ao escritório).
+  const authError =
+    (subError as any)?.data?.code === "UNAUTHORIZED" ||
+    (creditsError as any)?.data?.code === "UNAUTHORIZED";
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) return;
     if (user.role === "admin") return;
+    if (authError) return; // logout em curso
     if (queriesDone && !hasAccess) {
       if (location !== "/plans") {
         setLocation("/plans");
       }
     }
-  }, [isLoading, user, hasAccess, queriesDone, location, setLocation]);
+  }, [isLoading, user, hasAccess, queriesDone, location, setLocation, authError]);
 
   if (isLoading) {
     return (
@@ -67,9 +78,18 @@ export default function SubscriptionGuard({
     );
   }
 
-  if (user?.role === "user" && queriesDone && !hasAccess && location !== "/plans") {
+  // Bloqueia render quando vai redirecionar pra Plans, OU quando há
+  // erro de auth (logout em curso, evita flash de UI sem dados).
+  if (
+    user?.role === "user" &&
+    queriesDone &&
+    !hasAccess &&
+    !authError &&
+    location !== "/plans"
+  ) {
     return null;
   }
+  if (authError) return null;
 
   return <>{children}</>;
 }
