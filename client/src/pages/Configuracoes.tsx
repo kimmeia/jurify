@@ -132,13 +132,26 @@ export default function Configuracoes() {
 
   const enviarConviteMut = trpc.configuracoes.enviarConvite.useMutation({
     onSuccess: (res) => {
-      toast.success("Convite criado!");
+      // Auto-copia o link para clipboard + toast claro com próximos passos.
+      const link = `${window.location.origin}/convite/${res.token}`;
+      navigator.clipboard?.writeText(link).catch(() => {});
+      if (res.emailEnviado) {
+        toast.success("Convite enviado", {
+          description: `Email enviado para ${conviteEmail}. Link também copiado.`,
+        });
+      } else {
+        toast.warning("Convite criado — email NÃO enviado", {
+          description:
+            "O servidor de email não está configurado. Copie o link e envie manualmente ao convidado.",
+          duration: 10000,
+        });
+      }
       setConviteEmail("");
       setConviteDepto("");
       setLastToken(res.token);
       refetchConvites();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error("Não foi possível criar o convite", { description: e.message }),
   });
 
   const cancelarConviteMut = trpc.configuracoes.cancelarConvite.useMutation({
@@ -446,6 +459,21 @@ export default function Configuracoes() {
                       <Badge variant={conv.status === "pendente" ? "outline" : conv.status === "aceito" ? "default" : "secondary"} className="text-xs shrink-0">
                         {conv.status === "pendente" ? "Pendente" : conv.status === "aceito" ? "Aceito" : conv.status === "expirado" ? "Expirado" : "Cancelado"}
                       </Badge>
+                      {conv.status === "pendente" && conv.token && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0"
+                          title="Copiar link do convite"
+                          onClick={() => {
+                            const link = `${window.location.origin}/convite/${conv.token}`;
+                            navigator.clipboard.writeText(link);
+                            toast.success("Link copiado", { description: link });
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {conv.status === "pendente" && (
                         <Button variant="ghost" size="sm" className="text-destructive shrink-0" onClick={() => cancelarConviteMut.mutate({ conviteId: conv.id })}>
                           <Trash2 className="h-3.5 w-3.5" />
@@ -494,6 +522,14 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   const instagramCanal = canais.find(c => c.tipo === "instagram");
   const facebookCanal = canais.find(c => c.tipo === "facebook");
 
+  // Guarda: WhatsApp API só é considerado conectado se TIVER telefone
+  // verificado. Dados antigos com status=conectado mas sem telefone eram
+  // conexões abortadas no meio do Embedded Signup — tratar como não conectado.
+  const whatsappRealmenteConectado =
+    whatsappCanal?.status === "conectado" && !!whatsappCanal?.telefone;
+  const whatsappConexaoIncompleta =
+    whatsappCanal?.status === "conectado" && !whatsappCanal?.telefone;
+
   // Cards principais: Embedded Signup (fluxo moderno)
   const canaisPrincipais = [
     {
@@ -503,8 +539,9 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       logo: "💬",
       cor: "from-emerald-500 to-green-600",
       canal: whatsappCanal,
-      conectado: whatsappCanal?.status === "conectado",
-      comErro: whatsappCanal?.status === "erro",
+      conectado: whatsappRealmenteConectado,
+      // Se o registro ficou no DB sem telefone, mostra como erro (conexão incompleta)
+      comErro: whatsappCanal?.status === "erro" || whatsappConexaoIncompleta,
     },
     {
       id: "instagram" as const,
