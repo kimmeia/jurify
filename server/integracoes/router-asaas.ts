@@ -358,15 +358,28 @@ export const asaasRouter = router({
     }
 
     // Após sincronizar clientes, sincronizar cobranças de todos os vinculados
-    let cobrancasSincronizadas = 0;
+    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
     try {
       const result = await syncCobrancasEscritorio(esc.escritorio.id);
-      cobrancasSincronizadas = result.cobrancas;
+      cobNovas = result.novas;
+      cobAtualizadas = result.atualizadas;
+      cobRemovidas = result.removidas;
     } catch (err: any) {
       log.warn(`[Asaas] Erro ao sincronizar cobranças: ${err.message}`);
     }
 
-    return { vinculados, novos, removidos, total: vinculados + novos, cobrancasSincronizadas };
+    return {
+      vinculados,
+      novos,
+      removidos,
+      total: vinculados + novos,
+      // Contadores granulares de cobranças (toast do frontend usa estes)
+      cobNovas,
+      cobAtualizadas,
+      cobRemovidas,
+      // Mantém legado para retrocompatibilidade (soma total)
+      cobrancasSincronizadas: cobNovas + cobAtualizadas + cobRemovidas,
+    };
   }),
 
   /** Vincula um contato específico ao Asaas (cria cliente no Asaas se não existir) */
@@ -609,8 +622,15 @@ export const asaasRouter = router({
 
       if (!vinculo) throw new TRPCError({ code: "NOT_FOUND", message: "Contato não vinculado ao Asaas" });
 
-      const atualizadas = await syncCobrancasDeCliente(client, esc.escritorio.id, input.contatoId, vinculo.asaasCustomerId);
-      return { atualizadas };
+      const stats = await syncCobrancasDeCliente(client, esc.escritorio.id, input.contatoId, vinculo.asaasCustomerId);
+      // Mantém compatibilidade com o frontend existente (atualizadas = total de mudanças)
+      return {
+        novas: stats.novas,
+        atualizadas: stats.atualizadas,
+        removidas: stats.removidas,
+        // Retrocompat: total geral de mudanças
+        total: stats.novas + stats.atualizadas + stats.removidas,
+      };
     }),
 
   /** Sincronizar tudo: clientes + cobranças do escritório inteiro */

@@ -96,8 +96,17 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
   });
 
   const syncMut = trpc.asaas.syncCobrancasContato.useMutation({
-    onSuccess: (data) => {
-      toast.success(`${data.atualizadas} cobranças sincronizadas`);
+    onSuccess: (data: any) => {
+      const total = (data.total ?? 0);
+      if (total === 0) {
+        toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
+      } else {
+        const parts: string[] = [];
+        if (data.novas > 0) parts.push(`${data.novas} nova(s)`);
+        if (data.atualizadas > 0) parts.push(`${data.atualizadas} atualizada(s)`);
+        if (data.removidas > 0) parts.push(`${data.removidas} removida(s)`);
+        toast.success("Sincronizado", { description: parts.join(" · ") });
+      }
       refetch();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
