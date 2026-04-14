@@ -259,8 +259,18 @@ export function MetaConnectDialog({
     }, loginOptions);
   };
 
-  const conectado = canal?.status === "conectado";
-  const comErro = canal?.status === "erro";
+  // WhatsApp API: só é realmente conectado se tiver telefone verificado.
+  // Conexões abortadas no meio do Embedded Signup deixam registro com
+  // status="conectado" + telefone vazio — tratar como conexão incompleta.
+  const whatsappIncompleto =
+    channel === "whatsapp" &&
+    canal?.status === "conectado" &&
+    !canal?.telefone;
+  const conectado = canal?.status === "conectado" && !whatsappIncompleto;
+  const comErro = canal?.status === "erro" || whatsappIncompleto;
+  const mensagemErro = whatsappIncompleto
+    ? "Conexão não finalizada — o número WhatsApp não foi selecionado. Clique em Reconectar e complete o Embedded Signup até o fim."
+    : canal?.mensagemErro;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -357,8 +367,8 @@ export function MetaConnectDialog({
                 <AlertTriangle className="h-4 w-4 text-red-600" />
                 <p className="text-sm font-medium text-red-800">Conexão falhou</p>
               </div>
-              {canal?.mensagemErro && (
-                <p className="text-xs text-red-700">{canal.mensagemErro}</p>
+              {mensagemErro && (
+                <p className="text-xs text-red-700">{mensagemErro}</p>
               )}
               <Button
                 size="sm"

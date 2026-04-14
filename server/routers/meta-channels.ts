@@ -153,25 +153,41 @@ export const metaChannelsRouter = router({
 
       const accessToken = await exchangeCodeForToken(input.code);
 
+      // Embedded Signup do WhatsApp requer que o usuário selecione um número
+      // e um WABA. Se `phoneNumberId` vier vazio, significa que o usuário só
+      // completou o login OAuth mas NÃO terminou o fluxo de onboarding — não
+      // podemos marcar o canal como "conectado" porque ele não funciona.
+      if (!input.phoneNumberId || !input.wabaId) {
+        throw new Error(
+          "Conexão não finalizada: selecione um número WhatsApp Business e conclua o Embedded Signup da Meta antes de fechar a janela.",
+        );
+      }
+
       // Busca info do telefone
       let telefone = "";
       let nomeVerificado = "";
-      if (input.phoneNumberId) {
-        try {
-          const axios = (await import("axios")).default;
-          const phoneRes = await axios.get(
-            `https://graph.facebook.com/v21.0/${input.phoneNumberId}`,
-            {
-              params: { fields: "display_phone_number,verified_name" },
-              headers: { Authorization: `Bearer ${accessToken}` },
-              timeout: 10000,
-            },
-          );
-          telefone = phoneRes.data?.display_phone_number || "";
-          nomeVerificado = phoneRes.data?.verified_name || "";
-        } catch (err) {
-          log.warn({ err: String(err) }, "Falha ao buscar info do telefone WhatsApp");
-        }
+      try {
+        const axios = (await import("axios")).default;
+        const phoneRes = await axios.get(
+          `https://graph.facebook.com/v21.0/${input.phoneNumberId}`,
+          {
+            params: { fields: "display_phone_number,verified_name" },
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 10000,
+          },
+        );
+        telefone = phoneRes.data?.display_phone_number || "";
+        nomeVerificado = phoneRes.data?.verified_name || "";
+      } catch (err) {
+        log.warn({ err: String(err) }, "Falha ao buscar info do telefone WhatsApp");
+      }
+
+      // Validação final — se mesmo com phoneNumberId não obtivemos número
+      // do Graph API, a conexão está quebrada. Recusa.
+      if (!telefone) {
+        throw new Error(
+          "Não foi possível validar o número WhatsApp na Meta. Verifique se o número está ativo na sua conta WhatsApp Business e tente novamente.",
+        );
       }
 
       const { encryptConfig } = await import("../escritorio/crypto-utils");
