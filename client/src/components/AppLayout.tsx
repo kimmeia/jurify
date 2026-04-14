@@ -64,6 +64,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { BetaBadge } from "./BetaBadge";
 import { toast } from "sonner";
 
 const calculosSubItems = [
@@ -321,7 +322,8 @@ function AppSidebarContent({
                     className={`h-4 w-4 ${location === "/dashboard" ? "text-primary" : ""}`}
                   />
                   <span>Dashboard</span>
-                  {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-auto" />}
+                  <BetaBadge className="ml-auto" />
+                  {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -338,9 +340,10 @@ function AppSidebarContent({
                         className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
                       />
                       <span className="flex-1">Cálculos</span>
-                      {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground mr-1" />}
+                      <BetaBadge />
+                      {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                       <ChevronRight
-                        className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${calculosOpen ? "rotate-90" : ""}`}
+                        className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ml-1 ${calculosOpen ? "rotate-90" : ""}`}
                       />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -376,6 +379,7 @@ function AppSidebarContent({
                 >
                   <Users className={`h-4 w-4 ${location === "/clientes" ? "text-primary" : ""}`} />
                   <span>Clientes</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -389,6 +393,7 @@ function AppSidebarContent({
                 >
                   <CalendarDays className={`h-4 w-4 ${location === "/agenda" ? "text-primary" : ""}`} />
                   <span>Agenda</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -404,9 +409,7 @@ function AppSidebarContent({
                     className={`h-4 w-4 ${location === "/processos" ? "text-primary" : ""}`}
                   />
                   <span>Processos</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">
-                    Beta
-                  </Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -420,9 +423,7 @@ function AppSidebarContent({
                 >
                   <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
                   <span>Atendimento</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">
-                    Beta
-                  </Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -436,9 +437,7 @@ function AppSidebarContent({
                 >
                   <BrainCircuit className={`h-4 w-4 ${location === "/agentes-ia" ? "text-primary" : ""}`} />
                   <span>Agentes IA</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-violet-300 text-violet-600 bg-violet-50 dark:bg-violet-950/20">
-                    Novo
-                  </Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -452,9 +451,7 @@ function AppSidebarContent({
                 >
                   <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
                   <span>Kanban</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-indigo-300 text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20">
-                    Novo
-                  </Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -468,9 +465,7 @@ function AppSidebarContent({
                 >
                   <Zap className={`h-4 w-4 ${location === "/smartflow" ? "text-primary" : ""}`} />
                   <span>SmartFlow</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 ml-auto border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20">
-                    Novo
-                  </Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -484,6 +479,7 @@ function AppSidebarContent({
                 >
                   <BarChart3 className={`h-4 w-4 ${location === "/relatorios" ? "text-primary" : ""}`} />
                   <span>Relatórios</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -497,6 +493,7 @@ function AppSidebarContent({
                 >
                   <BarChart3 className={`h-4 w-4 ${location === "/metricas" ? "text-primary" : ""}`} />
                   <span>Métricas</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -510,6 +507,7 @@ function AppSidebarContent({
                 >
                   <DollarSign className={`h-4 w-4 ${location === "/financeiro" ? "text-primary" : ""}`} />
                   <span>Financeiro</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -523,6 +521,7 @@ function AppSidebarContent({
                 >
                   <Settings className={`h-4 w-4 ${location === "/configuracoes" ? "text-primary" : ""}`} />
                   <span>Configurações</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
