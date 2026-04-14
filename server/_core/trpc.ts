@@ -28,11 +28,11 @@ const requireUser = t.middleware(async opts => {
     });
   }
 
-  // ─── Suspensão do escritório ───────────────────────────────────────
-  // Se o usuário pertence a um escritório suspenso, bloqueia tudo
-  // EXCETO: rotas de auth (logout, me) e admin (que usa adminProcedure).
-  // Isso é checado lazy: só consultamos o escritório se o user não for
-  // admin (admin do Jurify continua acessando tudo).
+  // ─── Suspensão do escritório / Remoção de colaborador ──────────────
+  // Se o usuário pertence a um escritório suspenso OU foi removido
+  // (colaborador.ativo = false sem nenhum vínculo ativo), bloqueia tudo.
+  // EXCETO: rotas admin (que usa adminProcedure).
+  // Auth/me/logout do próprio usuário NÃO chegam aqui — usam publicProcedure.
   if (ctx.user.role !== "admin" && !ctx.user.impersonatedBy) {
     try {
       const { getDb } = await import("../db");
@@ -40,22 +40,44 @@ const requireUser = t.middleware(async opts => {
       const { and, eq } = await import("drizzle-orm");
       const db = await getDb();
       if (db) {
-        const [vinc] = await db
+        // 1. Vínculo ATIVO — verifica suspensão do escritório
+        const [vincAtivo] = await db
           .select({ suspenso: escritorios.suspenso, motivo: escritorios.motivoSuspensao })
           .from(colaboradores)
           .innerJoin(escritorios, eq(colaboradores.escritorioId, escritorios.id))
           .where(and(eq(colaboradores.userId, ctx.user.id), eq(colaboradores.ativo, true)))
           .limit(1);
-        if (vinc?.suspenso) {
+
+        if (vincAtivo?.suspenso) {
           throw new TRPCError({
             code: "FORBIDDEN",
-            message: `Escritório suspenso${vinc.motivo ? `: ${vinc.motivo}` : ""}. Entre em contato com o suporte.`,
+            message: `Escritório suspenso${vincAtivo.motivo ? `: ${vincAtivo.motivo}` : ""}. Entre em contato com o suporte.`,
           });
+        }
+
+        // 2. Sem vínculo ativo — checa se foi removido (existe vínculo
+        //    inativo) vs. se nunca pertenceu a escritório (caso de novo
+        //    usuário em onboarding).
+        if (!vincAtivo) {
+          const [vincInativo] = await db
+            .select({ id: colaboradores.id })
+            .from(colaboradores)
+            .where(and(eq(colaboradores.userId, ctx.user.id), eq(colaboradores.ativo, false)))
+            .limit(1);
+
+          if (vincInativo) {
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message: "Você foi removido do escritório. Faça login novamente para acessar outro escritório.",
+            });
+          }
+          // Sem vínculo nenhum: usuário em onboarding — permite (rotas
+          // públicas como subscription, plans, criar escritório funcionam).
         }
       }
     } catch (err) {
-      // Se a query falhar (ex: tabela não existe ainda), não bloqueia
-      // — preserva o comportamento atual em ambientes parciais.
+      // Re-lança erros de TRPC (suspensão / removido). Outros erros
+      // (ex: tabela não existe ainda em ambiente parcial) não bloqueiam.
       if (err instanceof TRPCError) throw err;
     }
   }

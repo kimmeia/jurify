@@ -94,16 +94,11 @@ export function PermissoesTab() {
     return out;
   };
 
-  if (!cargos || cargos.length === 0) {
-    return (<Card><CardContent className="pt-6 text-center py-12">
-      <Shield className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-      <h3 className="text-lg font-semibold">Sistema de Permissões</h3>
-      <p className="text-sm text-muted-foreground mt-1 mb-4">Crie cargos personalizados para controlar o acesso de cada colaborador.</p>
-      <Button onClick={() => inicializar.mutate()} disabled={inicializar.isPending}>{inicializar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Shield className="h-4 w-4 mr-2" />} Criar Cargos Padrão</Button>
-    </CardContent></Card>);
-  }
-
-  const editCargo = editId ? cargos.find((c: any) => c.id === editId) : null;
+  // Hooks SEMPRE antes de qualquer early return (Regras dos Hooks).
+  // editCargo pode ser null nesta render — useEffect lida com isso.
+  const editCargo = editId && cargos
+    ? cargos.find((c: any) => c.id === editId)
+    : null;
 
   // Sincroniza o state local com o cargo sendo editado
   useEffect(() => {
@@ -113,7 +108,16 @@ export function PermissoesTab() {
       setEditPerms({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId]);
+  }, [editId, cargos]);
+
+  if (!cargos || cargos.length === 0) {
+    return (<Card><CardContent className="pt-6 text-center py-12">
+      <Shield className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
+      <h3 className="text-lg font-semibold">Sistema de Permissões</h3>
+      <p className="text-sm text-muted-foreground mt-1 mb-4">Crie cargos personalizados para controlar o acesso de cada colaborador.</p>
+      <Button onClick={() => inicializar.mutate()} disabled={inicializar.isPending}>{inicializar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Shield className="h-4 w-4 mr-2" />} Criar Cargos Padrão</Button>
+    </CardContent></Card>);
+  }
 
   return (<div className="space-y-4">
     <div className="flex items-center justify-between">
