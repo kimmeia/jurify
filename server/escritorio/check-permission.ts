@@ -37,41 +37,61 @@ export interface PermissionResult {
 const cache = new Map<string, { data: PermissionResult; ts: number }>();
 const CACHE_TTL = 30000; // 30 segundos
 
-// Permissões padrão para cargos legados (quando não tem cargo personalizado)
+// Permissões padrão para cargos legados (quando não tem cargo personalizado).
+// Precisa bater com os MODULOS do router-permissoes.ts e com canSee() do AppLayout.
 const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
   dono: defaultPerm(true, true, true, true, true),
   gestor: {
+    dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, true, true, true),
     clientes: perm(true, true, true, true, false),
     processos: perm(true, true, true, true, false),
     atendimento: perm(true, true, true, true, false),
-    pipeline: perm(true, true, true, true, false),
-    agendamento: perm(true, true, true, true, false),
+    kanban: perm(true, true, true, true, false),
+    agenda: perm(true, true, true, true, false),
+    smartflow: perm(true, true, true, true, false),
+    agentesIa: perm(true, true, true, true, false),
     relatorios: perm(true, true, false, false, false),
+    financeiro: perm(true, true, true, true, false),
     configuracoes: perm(false, false, false, false, false),
     equipe: perm(true, true, false, false, false),
+    // legados mantidos por retrocompat com dados antigos
+    pipeline: perm(true, true, true, true, false),
+    agendamento: perm(true, true, true, true, false),
   },
   atendente: {
+    dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, true, true, false),
     clientes: perm(false, true, true, true, false),
     processos: perm(false, true, true, true, false),
     atendimento: perm(false, true, true, true, false),
-    pipeline: perm(false, true, true, true, false),
-    agendamento: perm(false, true, true, true, false),
+    kanban: perm(false, true, true, true, false),
+    agenda: perm(false, true, true, true, false),
+    smartflow: perm(false, false, false, false, false),
+    agentesIa: perm(false, true, false, false, false),
     relatorios: perm(false, false, false, false, false),
+    financeiro: perm(false, false, false, false, false),
     configuracoes: perm(false, false, false, false, false),
     equipe: perm(false, true, false, false, false),
+    pipeline: perm(false, true, true, true, false),
+    agendamento: perm(false, true, true, true, false),
   },
   estagiario: {
+    dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, false, false, false),
     clientes: perm(false, false, false, false, false),
     processos: perm(false, true, false, false, false),
     atendimento: perm(false, false, false, false, false),
-    pipeline: perm(false, false, false, false, false),
-    agendamento: perm(false, true, false, false, false),
+    kanban: perm(false, false, false, false, false),
+    agenda: perm(false, true, false, false, false),
+    smartflow: perm(false, false, false, false, false),
+    agentesIa: perm(false, false, false, false, false),
     relatorios: perm(false, false, false, false, false),
+    financeiro: perm(false, false, false, false, false),
     configuracoes: perm(false, false, false, false, false),
     equipe: perm(false, true, false, false, false),
+    pipeline: perm(false, false, false, false, false),
+    agendamento: perm(false, true, false, false, false),
   },
 };
 
@@ -80,7 +100,13 @@ function perm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Per
 }
 
 function defaultPerm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Record<string, PermissionResult> {
-  const modules = ["calculos", "clientes", "processos", "atendimento", "pipeline", "agendamento", "relatorios", "configuracoes", "equipe"];
+  const modules = [
+    "dashboard", "calculos", "clientes", "processos", "atendimento",
+    "kanban", "agenda", "smartflow", "agentesIa", "relatorios", "financeiro",
+    "configuracoes", "equipe",
+    // legados
+    "pipeline", "agendamento",
+  ];
   const result: Record<string, PermissionResult> = {};
   for (const m of modules) result[m] = perm(vt, vp, c, e, x);
   return result;

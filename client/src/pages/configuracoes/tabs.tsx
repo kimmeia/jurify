@@ -22,9 +22,22 @@ import { toast } from "sonner";
 // Aba Permissões — Gerenciamento de cargos e permissões customizáveis
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Deve bater com o MODULOS do backend (router-permissoes.ts) e com os
+// canSee() do AppLayout.tsx. Ao adicionar módulo novo, incluir aqui.
 const MODULOS_LABELS: Record<string, string> = {
-  calculos: "Cálculos", clientes: "Clientes", processos: "Processos", atendimento: "Atendimento",
-  pipeline: "Pipeline", agendamento: "Agendamento", relatorios: "Relatórios", configuracoes: "Configurações", equipe: "Equipe",
+  dashboard: "Dashboard",
+  calculos: "Cálculos",
+  clientes: "Clientes",
+  processos: "Processos",
+  atendimento: "Atendimento",
+  kanban: "Kanban",
+  agenda: "Agenda",
+  smartflow: "SmartFlow",
+  agentesIa: "Agentes IA",
+  relatorios: "Relatórios",
+  financeiro: "Financeiro",
+  configuracoes: "Configurações",
+  equipe: "Equipe",
 };
 const PERM_LABELS: Record<string, string> = { verTodos: "Ver todos", verProprios: "Ver próprios", criar: "Criar", editar: "Editar", excluir: "Excluir" };
 const CORES_CARGO = ["#dc2626", "#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];

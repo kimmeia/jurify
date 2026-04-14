@@ -189,12 +189,24 @@ function AppSidebarContent({
   // Items are locked only if user has NEITHER subscription NOR credits
   const itemsLocked = isUser && subFetched && creditsFetched && !hasSubscription && !hasCredits;
 
-  // Permissões do usuário (sidebar dinâmica)
-  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(undefined, { retry: false, refetchOnWindowFocus: false }) || { data: null };
+  // Permissões do usuário (sidebar dinâmica).
+  // Refetch a cada 30s + ao focar a aba garante que o funcionário vê
+  // mudanças feitas pelo dono quase em tempo real, sem reload manual.
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    {
+      retry: false,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
+  ) || { data: null };
   const canSee = (modulo: string) => {
-    if (!minhasPerms?.permissoes) return true; // se não carregou ainda, mostra tudo
+    // Dono nunca é bloqueado pelo sistema de permissões
+    if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
+    if (!minhasPerms?.permissoes) return true; // carregando → mostra tudo pra não flickar
     const p = minhasPerms.permissoes[modulo];
-    if (!p) return true; // módulo sem permissão explícita = visível por padrão
+    if (!p) return true; // módulo desconhecido → visível (não esconde por segurança)
     return p?.verTodos || p?.verProprios;
   };
 
@@ -311,7 +323,7 @@ function AppSidebarContent({
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {/* Dashboard */}
-              <SidebarMenuItem>
+              {canSee("dashboard") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/dashboard"}
                   onClick={() => navigateOrBlock("/dashboard")}
@@ -325,10 +337,10 @@ function AppSidebarContent({
                   <BetaBadge className="ml-auto" />
                   {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>}
 
               {/* Cálculos (collapsible) */}
-              <Collapsible open={calculosOpen} onOpenChange={setCalculosOpen}>
+              {canSee("calculos") && <Collapsible open={calculosOpen} onOpenChange={setCalculosOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
@@ -367,7 +379,7 @@ function AppSidebarContent({
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
-              </Collapsible>
+              </Collapsible>}
 
               {/* Clientes */}
               {canSee("clientes") && <SidebarMenuItem>
@@ -384,7 +396,7 @@ function AppSidebarContent({
               </SidebarMenuItem>}
 
               {/* Agenda (unifica Tarefas + Agendamento) */}
-              <SidebarMenuItem>
+              {canSee("agenda") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/agenda"}
                   onClick={() => navigateOrBlock("/agenda")}
@@ -395,7 +407,7 @@ function AppSidebarContent({
                   <span>Agenda</span>
                   <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>}
 
               {/* Processos */}
               {canSee("processos") && <SidebarMenuItem>
@@ -428,7 +440,7 @@ function AppSidebarContent({
               </SidebarMenuItem>}
 
               {/* Agentes IA */}
-              <SidebarMenuItem>
+              {canSee("agentesIa") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/agentes-ia"}
                   onClick={() => navigateOrBlock("/agentes-ia")}
@@ -439,10 +451,10 @@ function AppSidebarContent({
                   <span>Agentes IA</span>
                   <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>}
 
               {/* Kanban */}
-              <SidebarMenuItem>
+              {canSee("kanban") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/kanban"}
                   onClick={() => navigateOrBlock("/kanban")}
@@ -453,10 +465,10 @@ function AppSidebarContent({
                   <span>Kanban</span>
                   <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>}
 
               {/* SmartFlow */}
-              <SidebarMenuItem>
+              {canSee("smartflow") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/smartflow"}
                   onClick={() => navigateOrBlock("/smartflow")}
@@ -467,7 +479,7 @@ function AppSidebarContent({
                   <span>SmartFlow</span>
                   <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>}
 
               {/* Relatórios */}
               {canSee("relatorios") && <SidebarMenuItem>

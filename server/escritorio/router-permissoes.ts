@@ -20,65 +20,95 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { cargosPersonalizados, permissoesCargo, colaboradores } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { limparCachePermissoes } from "./check-permission";
 
-// Módulos disponíveis no sistema
+// Módulos disponíveis no sistema — precisam bater com os nomes usados
+// no canSee() do AppLayout.tsx. Ao adicionar um módulo no sidebar,
+// obrigatoriamente adicionar aqui (e nas PERMISSOES_PADRAO abaixo).
 const MODULOS = [
+  "dashboard",
   "calculos",
   "clientes",
   "processos",
   "atendimento",
-  "pipeline",
-  "agendamento",
+  "kanban",
+  "agenda",
+  "smartflow",
+  "agentesIa",
   "relatorios",
+  "financeiro",
   "configuracoes",
   "equipe",
 ] as const;
 
-// Permissões padrão para cada cargo default
-const PERMISSOES_PADRAO: Record<string, Record<string, { verTodos: boolean; verProprios: boolean; criar: boolean; editar: boolean; excluir: boolean }>> = {
+type Perm = { verTodos: boolean; verProprios: boolean; criar: boolean; editar: boolean; excluir: boolean };
+function p(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Perm {
+  return { verTodos: vt, verProprios: vp, criar: c, editar: e, excluir: x };
+}
+
+// Permissões padrão para cada cargo default.
+// Mantemos entries para TODOS os módulos do MODULOS para que, ao criar um
+// cargo novo, o admin veja todos os módulos para configurar.
+const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
   "Dono": {
-    calculos: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    clientes: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    processos: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    atendimento: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    pipeline: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    agendamento: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    relatorios: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    configuracoes: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    equipe: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
+    dashboard: p(true, true, true, true, true),
+    calculos: p(true, true, true, true, true),
+    clientes: p(true, true, true, true, true),
+    processos: p(true, true, true, true, true),
+    atendimento: p(true, true, true, true, true),
+    kanban: p(true, true, true, true, true),
+    agenda: p(true, true, true, true, true),
+    smartflow: p(true, true, true, true, true),
+    agentesIa: p(true, true, true, true, true),
+    relatorios: p(true, true, true, true, true),
+    financeiro: p(true, true, true, true, true),
+    configuracoes: p(true, true, true, true, true),
+    equipe: p(true, true, true, true, true),
   },
   "Gestor": {
-    calculos: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: true },
-    clientes: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: false },
-    processos: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: false },
-    atendimento: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: false },
-    pipeline: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: false },
-    agendamento: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: false },
-    relatorios: { verTodos: true, verProprios: true, criar: false, editar: false, excluir: false },
-    configuracoes: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    equipe: { verTodos: true, verProprios: true, criar: false, editar: false, excluir: false },
+    dashboard: p(true, true, false, false, false),
+    calculos: p(true, true, true, true, true),
+    clientes: p(true, true, true, true, false),
+    processos: p(true, true, true, true, false),
+    atendimento: p(true, true, true, true, false),
+    kanban: p(true, true, true, true, false),
+    agenda: p(true, true, true, true, false),
+    smartflow: p(true, true, true, true, false),
+    agentesIa: p(true, true, true, true, false),
+    relatorios: p(true, true, false, false, false),
+    financeiro: p(true, true, true, true, false),
+    configuracoes: p(false, false, false, false, false),
+    equipe: p(true, true, false, false, false),
   },
   "Atendente": {
-    calculos: { verTodos: true, verProprios: true, criar: true, editar: true, excluir: false },
-    clientes: { verTodos: false, verProprios: true, criar: true, editar: true, excluir: false },
-    processos: { verTodos: false, verProprios: true, criar: true, editar: true, excluir: false },
-    atendimento: { verTodos: false, verProprios: true, criar: true, editar: true, excluir: false },
-    pipeline: { verTodos: false, verProprios: true, criar: true, editar: true, excluir: false },
-    agendamento: { verTodos: false, verProprios: true, criar: true, editar: true, excluir: false },
-    relatorios: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    configuracoes: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    equipe: { verTodos: false, verProprios: true, criar: false, editar: false, excluir: false },
+    dashboard: p(true, true, false, false, false),
+    calculos: p(true, true, true, true, false),
+    clientes: p(false, true, true, true, false),
+    processos: p(false, true, true, true, false),
+    atendimento: p(false, true, true, true, false),
+    kanban: p(false, true, true, true, false),
+    agenda: p(false, true, true, true, false),
+    smartflow: p(false, false, false, false, false),
+    agentesIa: p(false, true, false, false, false),
+    relatorios: p(false, false, false, false, false),
+    financeiro: p(false, false, false, false, false),
+    configuracoes: p(false, false, false, false, false),
+    equipe: p(false, true, false, false, false),
   },
   "Estagiário": {
-    calculos: { verTodos: true, verProprios: true, criar: false, editar: false, excluir: false },
-    clientes: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    processos: { verTodos: false, verProprios: true, criar: false, editar: false, excluir: false },
-    atendimento: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    pipeline: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    agendamento: { verTodos: false, verProprios: true, criar: false, editar: false, excluir: false },
-    relatorios: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    configuracoes: { verTodos: false, verProprios: false, criar: false, editar: false, excluir: false },
-    equipe: { verTodos: false, verProprios: true, criar: false, editar: false, excluir: false },
+    dashboard: p(true, true, false, false, false),
+    calculos: p(true, true, false, false, false),
+    clientes: p(false, false, false, false, false),
+    processos: p(false, true, false, false, false),
+    atendimento: p(false, false, false, false, false),
+    kanban: p(false, false, false, false, false),
+    agenda: p(false, true, false, false, false),
+    smartflow: p(false, false, false, false, false),
+    agentesIa: p(false, false, false, false, false),
+    relatorios: p(false, false, false, false, false),
+    financeiro: p(false, false, false, false, false),
+    configuracoes: p(false, false, false, false, false),
+    equipe: p(false, true, false, false, false),
   },
 };
 
@@ -268,6 +298,11 @@ export const permissoesRouter = router({
         }
       }
 
+      // Invalida o cache de 30s em check-permission para que as mudanças
+      // reflitam imediatamente no próximo minhasPermissoes dos colaboradores
+      // afetados.
+      limparCachePermissoes();
+
       return { success: true };
     }),
 
@@ -320,6 +355,9 @@ export const permissoesRouter = router({
       await db.update(colaboradores)
         .set({ cargoPersonalizadoId: input.cargoId })
         .where(and(eq(colaboradores.id, input.colaboradorId), eq(colaboradores.escritorioId, esc.escritorio.id)));
+
+      // Invalida cache — o colaborador afetado deve usar o novo cargo imediatamente
+      limparCachePermissoes();
 
       return { success: true };
     }),
