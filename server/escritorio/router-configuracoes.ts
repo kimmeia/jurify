@@ -185,6 +185,7 @@ export const configuracoesRouter = router({
       // Enviar email de convite via Resend
       const CARGO_LABELS: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
       let emailEnviado = false;
+      let emailErro: string | undefined;
       try {
         const { enviarEmailConvite } = await import("../_core/email");
         const resultado = await enviarEmailConvite({
@@ -195,11 +196,13 @@ export const configuracoesRouter = router({
           convidadoPor: ctx.user.name || ctx.user.email || "Admin",
         });
         emailEnviado = resultado.success;
-      } catch {
-        // Falha no email não bloqueia o convite
+        if (!resultado.success) emailErro = resultado.error;
+      } catch (err: any) {
+        // Falha no email não bloqueia o convite — mas retorna o motivo
+        emailErro = err?.message || "Erro inesperado ao enviar email.";
       }
 
-      return { token, expiresAt, emailEnviado };
+      return { token, expiresAt, emailEnviado, emailErro };
     }),
 
   /** Lista convites do escritório */
