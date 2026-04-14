@@ -24,51 +24,78 @@ interface EmailOptions {
   text?: string;
 }
 
+type ResendKeyResult = {
+  apiKey: string;
+  fonte: "db" | "env" | "vazio";
+  diagnostico?: string;
+};
+
 /**
  * Busca a API key do Resend. Tenta primeiro no banco (admin_integracoes) e
- * cai no ENV como fallback. O resultado é resolvido em cada chamada — se o
- * admin trocar a key no painel, o próximo email já usa a nova.
+ * cai no ENV como fallback. Retorna também a "fonte" e diagnóstico para
+ * troubleshooting (logs + mensagem de erro mais específica pro usuário).
  */
-async function getResendApiKey(): Promise<string> {
+async function getResendApiKey(): Promise<ResendKeyResult> {
+  let dbDiag = "";
   try {
     const { getDb } = await import("../db");
     const { adminIntegracoes } = await import("../../drizzle/schema");
     const { eq } = await import("drizzle-orm");
     const { decrypt } = await import("../escritorio/crypto-utils");
     const db = await getDb();
-    if (db) {
+    if (!db) {
+      dbDiag = "DB indisponível";
+    } else {
       const [reg] = await db
         .select()
         .from(adminIntegracoes)
         .where(eq(adminIntegracoes.provedor, "resend"))
         .limit(1);
-      if (
-        reg?.status === "conectado" &&
-        reg.apiKeyEncrypted &&
-        reg.apiKeyIv &&
-        reg.apiKeyTag
-      ) {
-        return decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
+
+      if (!reg) {
+        dbDiag = "nenhum registro 'resend' em admin_integracoes";
+      } else if (reg.status !== "conectado") {
+        dbDiag = `registro existe mas status='${reg.status}' (esperado 'conectado')`;
+      } else if (!reg.apiKeyEncrypted || !reg.apiKeyIv || !reg.apiKeyTag) {
+        dbDiag = "registro existe mas sem apiKeyEncrypted/iv/tag";
+      } else {
+        try {
+          const apiKey = decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
+          if (apiKey) {
+            log.info({ fonte: "db", preview: apiKey.slice(0, 6) + "…" }, "Resend key resolvida do DB");
+            return { apiKey, fonte: "db" };
+          }
+          dbDiag = "decrypt retornou string vazia";
+        } catch (err: any) {
+          dbDiag = `decrypt falhou: ${err.message} — ENCRYPTION_KEY pode ter mudado`;
+        }
       }
     }
   } catch (err: any) {
-    // Tabela pode não existir (migration pendente) ou erro de decrypt —
-    // cai no fallback do ENV
-    log.warn({ err: err.message }, "Falha ao ler RESEND key do DB, usando ENV");
+    dbDiag = `erro inesperado: ${err.message}`;
   }
-  return process.env.RESEND_API_KEY || "";
+
+  const envKey = process.env.RESEND_API_KEY || "";
+  if (envKey) {
+    log.info({ fonte: "env", dbDiag }, "Resend key resolvida do ENV (fallback)");
+    return { apiKey: envKey, fonte: "env", diagnostico: dbDiag };
+  }
+  log.warn({ dbDiag }, "Nenhuma RESEND key disponível (DB nem ENV)");
+  return { apiKey: "", fonte: "vazio", diagnostico: dbDiag };
 }
 
 export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string }> {
-  const apiKey = await getResendApiKey();
+  const { apiKey, fonte, diagnostico } = await getResendApiKey();
   if (!apiKey) {
-    log.warn("Resend API key não configurada — email não enviado");
+    log.warn({ diagnostico }, "Resend API key não configurada — email não enviado");
     return {
       success: false,
-      error:
-        "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.",
+      error: diagnostico
+        ? `Serviço de email não configurado. ${diagnostico}. Admin → Integrações → Resend.`
+        : "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.",
     };
   }
+  log.debug({ fonte, to: options.to }, "Enviando email via Resend");
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
