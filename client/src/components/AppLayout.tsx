@@ -189,6 +189,18 @@ function AppSidebarContent({
   // Items are locked only if user has NEITHER subscription NOR credits
   const itemsLocked = isUser && subFetched && creditsFetched && !hasSubscription && !hasCredits;
 
+  // Nome do escritório — exibido no header do sidebar para deixar
+  // claro a qual escritório o colaborador pertence.
+  const { data: meuEscritorioData } = (trpc as any).configuracoes?.meuEscritorio?.useQuery?.(
+    undefined,
+    {
+      enabled: !!user && user.role === "user",
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  ) || { data: null };
+  const nomeEscritorio: string | null = meuEscritorioData?.escritorio?.nome || null;
+
   // Permissões do usuário (sidebar dinâmica).
   // Refetch a cada 30s + ao focar a aba garante que o funcionário vê
   // mudanças feitas pelo dono quase em tempo real, sem reload manual.
@@ -300,14 +312,21 @@ function AppSidebarContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate text-foreground">
-                    Cálculos
-                  </span>
-                  {isAdmin && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                      Admin
-                    </Badge>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-semibold tracking-tight truncate text-foreground">
+                      {nomeEscritorio || "Cálculos"}
+                    </span>
+                    {isAdmin && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        Admin
+                      </Badge>
+                    )}
+                  </div>
+                  {nomeEscritorio && (
+                    <span className="text-[10px] text-muted-foreground truncate leading-tight">
+                      Escritório
+                    </span>
                   )}
                 </div>
               ) : null}

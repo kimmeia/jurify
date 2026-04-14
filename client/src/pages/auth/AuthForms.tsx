@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -186,10 +187,32 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
   const isLoading =
     loginEmailMut.isPending || signupMut.isPending || loginGoogleMut.isPending;
 
+  // Mostra o motivo do último logout (ex: "Você foi removido do escritório").
+  // Setado em main.tsx pelo handler de UNAUTHORIZED. Limpa após exibir
+  // pra não ficar persistente entre logins.
+  const [logoutMotivo, setLogoutMotivo] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const m = sessionStorage.getItem("logoutMotivo");
+      if (m && m !== UNAUTHED_ERR_MSG) {
+        setLogoutMotivo(m);
+        sessionStorage.removeItem("logoutMotivo");
+      }
+    } catch {}
+  }, []);
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="w-full max-w-md mx-auto">
+      {logoutMotivo && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{logoutMotivo}</span>
+          </div>
+        </div>
+      )}
       <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="login">Entrar</TabsTrigger>

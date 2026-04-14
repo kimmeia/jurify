@@ -22,7 +22,35 @@ import {
   getUserByEmail,
   getUserByGoogleSub,
   getUserByOpenId,
+  getDb,
 } from "../db";
+import { colaboradores } from "../../drizzle/schema";
+import { and, eq } from "drizzle-orm";
+
+/** Bloqueia login de usuário que foi removido de TODOS os escritórios
+ *  em que tinha vínculo. Mantém o flag de remoção visível pra ele entender
+ *  por que não consegue mais entrar. */
+async function bloquearSeRemovido(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const [ativo] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(eq(colaboradores.userId, userId), eq(colaboradores.ativo, true)))
+    .limit(1);
+  if (ativo) return; // tem vínculo ativo — pode logar
+  const [inativo] = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(and(eq(colaboradores.userId, userId), eq(colaboradores.ativo, false)))
+    .limit(1);
+  if (inativo) {
+    throw new Error(
+      "Você foi removido do escritório. Entre em contato com o responsável para reativar seu acesso.",
+    );
+  }
+  // Sem vínculo nenhum: deixa logar (caso onboarding — usuário criando primeiro escritório)
+}
 import { hashPassword, verifyPassword } from "../_core/password";
 import { createLogger } from "../_core/logger";
 
@@ -181,6 +209,9 @@ export const authRouter = router({
         throw new Error("E-mail ou senha incorretos.");
       }
 
+      // Bloqueia login se o usuário foi removido de todos os escritórios
+      await bloquearSeRemovido(user.id);
+
       // Atualiza lastSignedIn
       await upsertUser({
         openId: user.openId,
@@ -223,6 +254,11 @@ export const authRouter = router({
         loginMethod: "google",
         lastSignedIn: new Date(),
       });
+
+      // Bloqueia login se o usuário foi removido de todos os escritórios
+      // (faz após upsert pra ter o user.id correto, mesmo se foi recém-criado)
+      const userPos = user || (await getUserByEmail(email));
+      if (userPos) await bloquearSeRemovido(userPos.id);
 
       await setSessionCookie(ctx, openId, profile.name);
 
