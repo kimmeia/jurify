@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
   getEscritorioPorUsuario,
   criarEscritorio,
@@ -209,6 +209,49 @@ export const configuracoesRouter = router({
     if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") return [];
     return listarConvites(result.escritorio.id);
   }),
+
+  /** Consulta dados públicos de um convite (sem login).
+   *  Retorna email, cargo e nome do escritório pra pré-preencher o form
+   *  de cadastro na página /convite/:token.
+   *  Não expõe dados sensíveis além do que o próprio convidado precisa ver.
+   */
+  consultarConvite: publicProcedure
+    .input(z.object({ token: z.string() }))
+    .query(async ({ input }) => {
+      const { getDb } = await import("../db");
+      const { convitesColaborador, escritorios } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      const [convite] = await db
+        .select()
+        .from(convitesColaborador)
+        .where(eq(convitesColaborador.token, input.token))
+        .limit(1);
+
+      if (!convite) return { encontrado: false as const };
+
+      const expirado = new Date(convite.expiresAt) < new Date();
+      const status = expirado && convite.status === "pendente" ? "expirado" : convite.status;
+
+      // Busca nome do escritório (informativo, sem expor outros dados)
+      const [esc] = await db
+        .select({ nome: escritorios.nome })
+        .from(escritorios)
+        .where(eq(escritorios.id, convite.escritorioId))
+        .limit(1);
+
+      return {
+        encontrado: true as const,
+        email: convite.email,
+        cargo: convite.cargo,
+        departamento: convite.departamento,
+        status,
+        nomeEscritorio: esc?.nome || "Escritório",
+        expiresAt: convite.expiresAt,
+      };
+    }),
 
   /** Aceita convite (usuário logado clica no link) */
   aceitarConvite: protectedProcedure

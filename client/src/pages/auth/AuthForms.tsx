@@ -22,6 +22,8 @@ interface AuthFormsProps {
   onSuccess?: () => void;
   /** Aba inicial (default: "login") */
   defaultTab?: "login" | "signup";
+  /** Email pré-preenchido (útil em fluxo de aceitar convite). */
+  initialEmail?: string;
 }
 
 // Tipo do Google Identity Services (não declaramos `window.google` global pra
@@ -48,7 +50,7 @@ function getGoogleGIS(): GoogleAccountsId | null {
 let gisInitialized = false;
 let gisCallback: ((response: { credential: string }) => void) | null = null;
 
-export function AuthForms({ onSuccess, defaultTab = "login" }: AuthFormsProps) {
+export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: AuthFormsProps) {
   const [tab, setTab] = useState<"login" | "signup">(defaultTab);
   const utils = trpc.useUtils();
 
@@ -152,10 +154,10 @@ export function AuthForms({ onSuccess, defaultTab = "login" }: AuthFormsProps) {
 
   // ─── Form state ────────────────────────────────────────────────────────────
 
-  const [loginEmail, setLoginEmail] = useState("");
+  const [loginEmail, setLoginEmail] = useState(initialEmail || "");
   const [loginPassword, setLoginPassword] = useState("");
   const [signupName, setSignupName] = useState("");
-  const [signupEmail, setSignupEmail] = useState("");
+  const [signupEmail, setSignupEmail] = useState(initialEmail || "");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
 
@@ -212,6 +214,8 @@ export function AuthForms({ onSuccess, defaultTab = "login" }: AuthFormsProps) {
                   className="pl-9"
                   required
                   autoComplete="email"
+                  readOnly={!!initialEmail}
+                  title={initialEmail ? "Email do convite — use este para aceitar" : undefined}
                 />
               </div>
             </div>
@@ -301,6 +305,8 @@ export function AuthForms({ onSuccess, defaultTab = "login" }: AuthFormsProps) {
                   className="pl-9"
                   required
                   autoComplete="email"
+                  readOnly={!!initialEmail}
+                  title={initialEmail ? "Email do convite — use este para aceitar" : undefined}
                 />
               </div>
             </div>
