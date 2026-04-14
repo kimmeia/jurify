@@ -181,7 +181,19 @@ export async function atualizarColaborador(
     .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)));
 }
 
-/** Remove colaborador (desativa) */
+/** Remove colaborador completamente.
+ *
+ * Hard-delete: a row em `colaboradores` é APAGADA. Se o usuário não
+ * pertence a nenhum outro escritório, a row em `users` também é apagada
+ * — assim ele pode se cadastrar novamente com o mesmo email como se
+ * fosse um novo usuário.
+ *
+ * Os DADOS DO ESCRITÓRIO permanecem intactos (clientes, conversas, leads,
+ * agendamentos, kanban, mensagens, anotações, arquivos, calculos).
+ * Referências por `responsavelId`/`criadoPor` apontando pro colaborador
+ * removido viram órfãs (no JOIN aparecem como "Sem responsável") — isso
+ * é intencional pra não perder histórico do escritório.
+ */
 export async function removerColaborador(colaboradorId: number, escritorioId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -194,9 +206,28 @@ export async function removerColaborador(colaboradorId: number, escritorioId: nu
   if (!colab) throw new Error("Colaborador não encontrado.");
   if (colab.cargo === "dono") throw new Error("O dono do escritório não pode ser removido.");
 
-  await db.update(colaboradores)
-    .set({ ativo: false })
-    .where(eq(colaboradores.id, colaboradorId));
+  const userId = colab.userId;
+
+  // 1. Hard-delete do vínculo
+  await db.delete(colaboradores).where(eq(colaboradores.id, colaboradorId));
+
+  // 2. Se o usuário não tem mais NENHUM vínculo em outros escritórios,
+  //    deleta o usuário do sistema. Isso libera o email pra recadastro.
+  const outrosVinculos = await db
+    .select({ id: colaboradores.id })
+    .from(colaboradores)
+    .where(eq(colaboradores.userId, userId))
+    .limit(1);
+
+  if (outrosVinculos.length === 0) {
+    try {
+      await db.delete(users).where(eq(users.id, userId));
+    } catch (err) {
+      // Se a deleção do user falhar (ex: FK constraint de outras tabelas
+      // que referenciam users.id), não bloqueia — o vínculo já foi removido.
+      // O ex-colaborador apenas não conseguirá usar o sistema.
+    }
+  }
 }
 
 // ─── Convites ────────────────────────────────────────────────────────────────
