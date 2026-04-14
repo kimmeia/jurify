@@ -411,13 +411,51 @@ function AbaComercial({ dias }: { dias: number }) {
 // ───────────────────── aba: Produção ─────────────────────
 
 function AbaProducao({ dias }: { dias: number }) {
+  // "todos" = sem filtro (null no backend); senão, funilId numérico como string
+  const [funilSel, setFunilSel] = useState<string>("todos");
+
+  const { data: funis } = (trpc as any).kanban.listarFunis.useQuery(undefined, {
+    retry: false,
+  });
+
+  const funilIdInput = funilSel === "todos" ? undefined : Number(funilSel);
   const { data, isLoading } = trpc.relatorios.producao.useQuery(
-    { dias },
+    { dias, funilId: funilIdInput } as any,
     { refetchInterval: 60_000 },
   );
-  if (isLoading) return <LoadingBlock />;
-  if (!data) return <Empty />;
 
+  return (
+    <div className="space-y-4">
+      {/* Filtro de funil */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">Funil:</span>
+        <Select value={funilSel} onValueChange={setFunilSel}>
+          <SelectTrigger className="w-56 h-9 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os funis</SelectItem>
+            {(funis || []).map((f: any) => (
+              <SelectItem key={f.id} value={String(f.id)}>
+                {f.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <LoadingBlock />
+      ) : !data ? (
+        <Empty />
+      ) : (
+        <ProducaoConteudo data={data} />
+      )}
+    </div>
+  );
+}
+
+function ProducaoConteudo({ data }: { data: any }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
