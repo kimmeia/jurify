@@ -63,6 +63,14 @@ const PROVEDORES: ProvedorMeta[] = [
     docUrl: "https://platform.openai.com/api-keys",
     services: ["GPT-4", "GPT-3.5", "Assistants", "Embeddings"],
   },
+  {
+    id: "resend",
+    nome: "Resend (E-mail)",
+    descricao:
+      "Servidor de email transacional usado por TODOS os escritórios para enviar convites de equipe e notificações. Configuração global (1 key, todos clientes).",
+    docUrl: "https://resend.com/api-keys",
+    services: ["Convites de equipe", "Notificações", "100/dia grátis"],
+  },
 ];
 
 function getProvedorMeta(provedor: string): ProvedorMeta | undefined {
@@ -133,6 +141,45 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
       } catch (err: any) {
         if (err.name === "AbortError" || err.name === "TimeoutError") {
           return { ok: false, mensagem: "Timeout — OpenAI não respondeu em 10s" };
+        }
+        return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
+      }
+    }
+    case "resend": {
+      // Testa GET /domains — endpoint autenticado mais leve da Resend.
+      // Retorna 401 se key inválida, 200 com lista (pode ser vazia) se OK.
+      try {
+        const res = await fetch("https://api.resend.com/domains", {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.status === 401 || res.status === 403) {
+          return { ok: false, mensagem: "API key Resend inválida ou revogada" };
+        }
+        if (!res.ok) {
+          return {
+            ok: false,
+            mensagem: `Erro HTTP ${res.status}`,
+            detalhes: (await res.text()).slice(0, 200),
+          };
+        }
+        const data = (await res.json()) as { data?: Array<{ name: string; status: string }> };
+        const domains = data.data || [];
+        const verificados = domains.filter((d) => d.status === "verified");
+        if (domains.length === 0) {
+          return {
+            ok: true,
+            mensagem:
+              "Resend conectado — nenhum domínio cadastrado ainda (emails serão enviados via onboarding.resend.dev, limite 100/dia).",
+          };
+        }
+        return {
+          ok: true,
+          mensagem: `Resend conectado. ${domains.length} domínio(s), ${verificados.length} verificado(s).`,
+        };
+      } catch (err: any) {
+        if (err.name === "AbortError" || err.name === "TimeoutError") {
+          return { ok: false, mensagem: "Timeout — Resend não respondeu em 10s" };
         }
         return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
       }
