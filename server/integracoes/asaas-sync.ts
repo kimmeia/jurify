@@ -45,20 +45,38 @@ async function getAsaasClientForEscritorio(escritorioId: number): Promise<AsaasC
 // SYNC DE COBRANÇAS POR CLIENTE VINCULADO
 // ═══════════════════════════════════════════════════════════════════════════════
 
+export type SyncCobrancasStats = {
+  novas: number;        // Cobranças criadas localmente (não existiam)
+  atualizadas: number;  // Mudança real de status/data de pagamento
+  removidas: number;    // Deletadas localmente (apagadas/órfãs no Asaas)
+};
+
+/**
+ * Soma duas stats — útil para agregar resultados de múltiplos clientes.
+ */
+export function somarStats(a: SyncCobrancasStats, b: SyncCobrancasStats): SyncCobrancasStats {
+  return {
+    novas: a.novas + b.novas,
+    atualizadas: a.atualizadas + b.atualizadas,
+    removidas: a.removidas + b.removidas,
+  };
+}
+
 /**
  * Sincroniza cobranças de UM cliente vinculado.
- * Retorna quantidade de cobranças criadas/atualizadas.
+ * Retorna contadores discriminados — permite ao caller saber o que mudou de verdade.
  */
 export async function syncCobrancasDeCliente(
   client: AsaasClient,
   escritorioId: number,
   contatoId: number,
   asaasCustomerId: string
-): Promise<number> {
+): Promise<SyncCobrancasStats> {
   const db = await getDb();
-  if (!db) return 0;
+  const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  if (!db) return zero;
 
-  let atualizadas = 0;
+  const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   let offset = 0;
   let hasMore = true;
   const idsAsaas = new Set<string>(); // Track all IDs from Asaas
@@ -73,7 +91,7 @@ export async function syncCobrancasDeCliente(
           .where(eq(asaasCobrancas.asaasPaymentId, cob.id)).limit(1);
         if (local) {
           await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
-          atualizadas++;
+          stats.removidas++;
           log.info(`[Asaas Sync] Cobrança ${cob.id} deletada localmente (excluida no Asaas)`);
         }
         continue;
@@ -85,13 +103,19 @@ export async function syncCobrancasDeCliente(
         .where(eq(asaasCobrancas.asaasPaymentId, cob.id)).limit(1);
 
       if (local) {
-        if (local.status !== cob.status || local.dataPagamento !== (cob.paymentDate || null)) {
+        // Normaliza datas de pagamento (API pode retornar "" / undefined; DB guarda null)
+        const localDataPag = local.dataPagamento || null;
+        const remotaDataPag = cob.paymentDate || null;
+        const mudouStatus = local.status !== cob.status;
+        const mudouDataPag = localDataPag !== remotaDataPag;
+
+        if (mudouStatus || mudouDataPag) {
           await db.update(asaasCobrancas).set({
             status: cob.status,
-            dataPagamento: cob.paymentDate || null,
+            dataPagamento: remotaDataPag,
             valorLiquido: cob.netValue?.toString() || null,
           }).where(eq(asaasCobrancas.id, local.id));
-          atualizadas++;
+          stats.atualizadas++;
         }
       } else {
         await db.insert(asaasCobrancas).values({
@@ -109,7 +133,7 @@ export async function syncCobrancasDeCliente(
           bankSlipUrl: cob.bankSlipUrl || null,
           dataPagamento: cob.paymentDate || null,
         });
-        atualizadas++;
+        stats.novas++;
       }
     }
 
@@ -126,12 +150,12 @@ export async function syncCobrancasDeCliente(
   for (const local of locais) {
     if (!idsAsaas.has(local.asaasPaymentId)) {
       await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
-      atualizadas++;
+      stats.removidas++;
       log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
     }
   }
 
-  return atualizadas;
+  return stats;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -140,23 +164,32 @@ export async function syncCobrancasDeCliente(
 
 /**
  * Sincroniza TODAS as cobranças de TODOS os clientes vinculados de um escritório.
+ * Retorna contadores discriminados para o caller exibir um toast preciso.
  */
-export async function syncCobrancasEscritorio(escritorioId: number): Promise<{ clientes: number; cobrancas: number }> {
+export async function syncCobrancasEscritorio(
+  escritorioId: number,
+): Promise<{ clientes: number } & SyncCobrancasStats> {
+  const zero = { clientes: 0, novas: 0, atualizadas: 0, removidas: 0 };
   const client = await getAsaasClientForEscritorio(escritorioId);
-  if (!client) return { clientes: 0, cobrancas: 0 };
+  if (!client) return zero;
 
   const db = await getDb();
-  if (!db) return { clientes: 0, cobrancas: 0 };
+  if (!db) return zero;
 
   const vinculos = await db.select().from(asaasClientes)
     .where(eq(asaasClientes.escritorioId, escritorioId));
 
-  let totalCobrancas = 0;
+  let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
 
   for (const vinculo of vinculos) {
     try {
-      const qty = await syncCobrancasDeCliente(client, escritorioId, vinculo.contatoId, vinculo.asaasCustomerId);
-      totalCobrancas += qty;
+      const s = await syncCobrancasDeCliente(
+        client,
+        escritorioId,
+        vinculo.contatoId,
+        vinculo.asaasCustomerId,
+      );
+      totais = somarStats(totais, s);
     } catch (err: any) {
       log.warn(`[Asaas Sync] Erro ao sincronizar cobranças de ${vinculo.asaasCustomerId}: ${err.message}`);
     }
@@ -170,7 +203,7 @@ export async function syncCobrancasEscritorio(escritorioId: number): Promise<{ c
       .where(eq(asaasConfig.escritorioId, escritorioId));
   } catch {}
 
-  return { clientes: vinculos.length, cobrancas: totalCobrancas };
+  return { clientes: vinculos.length, ...totais };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -196,8 +229,11 @@ export async function syncTodosEscritorios(): Promise<void> {
   for (const { escritorioId } of escritorios) {
     try {
       const result = await syncCobrancasEscritorio(escritorioId);
-      if (result.cobrancas > 0) {
-        log.info(`[Asaas Sync] Escritório ${escritorioId}: ${result.cobrancas} cobranças sincronizadas`);
+      const total = result.novas + result.atualizadas + result.removidas;
+      if (total > 0) {
+        log.info(
+          `[Asaas Sync] Escritório ${escritorioId}: ${result.novas} novas, ${result.atualizadas} atualizadas, ${result.removidas} removidas`,
+        );
       }
     } catch (err: any) {
       log.warn(`[Asaas Sync] Erro no escritório ${escritorioId}: ${err.message}`);

@@ -45,30 +45,54 @@ export default function Financeiro() {
   const [periodo, setPeriodo] = useState<3 | 6 | 12>(6);
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
 
+  // Auto-refresh: cron sincroniza a cada 10min; webhook pode atualizar a qualquer
+  // momento. Revalidamos no frontend a cada 60s e quando o usuário volta à aba.
+  const REFRESH_MS = 60_000;
+
   const { data: statusAsaas, isLoading: loadStatus, refetch: refetchStatus } =
     trpc.asaas.status.useQuery(undefined, { retry: false });
   const { data: kpis, refetch: refetchKpis } = trpc.asaas.kpis.useQuery(undefined, {
-    retry: false, enabled: statusAsaas?.conectado,
+    retry: false,
+    enabled: statusAsaas?.conectado,
+    refetchInterval: REFRESH_MS,
+    refetchOnWindowFocus: true,
   });
   const { data: saldo } = trpc.asaas.obterSaldo.useQuery(undefined, {
-    retry: false, enabled: statusAsaas?.conectado,
+    retry: false,
+    enabled: statusAsaas?.conectado,
+    refetchInterval: REFRESH_MS,
   });
   const { data: cashFlow } = trpc.asaas.cashFlowMensal.useQuery(
     { meses: periodo },
-    { retry: false, enabled: statusAsaas?.conectado },
+    {
+      retry: false,
+      enabled: statusAsaas?.conectado,
+      refetchInterval: REFRESH_MS * 2, // 2 min (menos sensível a mudanças)
+    },
   );
   const { data: forecast } = trpc.asaas.forecast.useQuery(
     { dias: 30 },
-    { retry: false, enabled: statusAsaas?.conectado },
+    {
+      retry: false,
+      enabled: statusAsaas?.conectado,
+      refetchInterval: REFRESH_MS * 2,
+    },
   );
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
     trpc.asaas.listarCobrancas.useQuery(
       { status: filtroStatus !== "todos" ? filtroStatus : undefined, limit: 100 },
-      { retry: false, enabled: statusAsaas?.conectado },
+      {
+        retry: false,
+        enabled: statusAsaas?.conectado,
+        refetchInterval: REFRESH_MS,
+        refetchOnWindowFocus: true,
+      },
     );
   const { data: assinaturas, refetch: refetchSubs } =
     trpc.asaas.listarAssinaturas.useQuery(undefined, {
-      retry: false, enabled: statusAsaas?.conectado,
+      retry: false,
+      enabled: statusAsaas?.conectado,
+      refetchInterval: REFRESH_MS,
     });
   const { data: clientesVinculados, refetch: refetchClientes } =
     trpc.asaas.listarClientesVinculados.useQuery(
@@ -77,12 +101,20 @@ export default function Financeiro() {
     );
 
   const syncMut = trpc.asaas.sincronizarClientes.useMutation({
-    onSuccess: (data) => {
-      const p = [];
-      if (data.vinculados > 0) p.push(`${data.vinculados} vinculados`);
-      if (data.novos > 0) p.push(`${data.novos} novos`);
-      if (data.cobrancasSincronizadas > 0) p.push(`${data.cobrancasSincronizadas} cobranças`);
-      toast.success(`Sincronizado: ${p.join(", ") || "tudo em dia"}`);
+    onSuccess: (data: any) => {
+      const p: string[] = [];
+      if (data.novos > 0) p.push(`${data.novos} cliente(s) novo(s)`);
+      if (data.vinculados > 0) p.push(`${data.vinculados} cliente(s) vinculado(s)`);
+      if (data.removidos > 0) p.push(`${data.removidos} cliente(s) removido(s)`);
+      if (data.cobNovas > 0) p.push(`${data.cobNovas} cobrança(s) nova(s)`);
+      if (data.cobAtualizadas > 0) p.push(`${data.cobAtualizadas} cobrança(s) com status alterado`);
+      if (data.cobRemovidas > 0) p.push(`${data.cobRemovidas} cobrança(s) removida(s)`);
+
+      if (p.length === 0) {
+        toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
+      } else {
+        toast.success("Sincronização concluída", { description: p.join(" · ") });
+      }
       refetchAll();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
