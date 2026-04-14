@@ -107,6 +107,10 @@ export async function atualizarEscritorio(
 // ─── Colaboradores ──────────────────────────────────────────────────────────
 
 /** Lista todos os colaboradores do escritório (com dados do user) */
+/** Lista colaboradores ATIVOS do escritório.
+ *  Removidos (ativo=false) ficam no banco apenas para o middleware
+ *  bloquear sessões antigas — não devem aparecer na UI de equipe.
+ */
 export async function listarColaboradores(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -127,7 +131,10 @@ export async function listarColaboradores(escritorioId: number) {
     })
     .from(colaboradores)
     .innerJoin(users, eq(colaboradores.userId, users.id))
-    .where(eq(colaboradores.escritorioId, escritorioId))
+    .where(and(
+      eq(colaboradores.escritorioId, escritorioId),
+      eq(colaboradores.ativo, true),
+    ))
     .orderBy(desc(colaboradores.createdAt));
 
   return rows;
