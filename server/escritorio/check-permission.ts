@@ -139,8 +139,38 @@ export async function checkPermission(
     return result;
   }
 
-  // Tentar cargo personalizado
-  const cargoId = (esc.colaborador as any).cargoPersonalizadoId;
+  // Tentar cargo personalizado — se não tem cargoPersonalizadoId setado,
+  // resolve automaticamente pelo nome do cargo legado (gestor→Gestor,
+  // atendente→Atendente, estagiario→Estagiário). Isso garante que mesmo
+  // colaboradores criados antes do fix de aceitarConvite usem as
+  // permissões customizadas pelo admin no painel.
+  let cargoId = (esc.colaborador as any).cargoPersonalizadoId as number | null | undefined;
+
+  if (!cargoId) {
+    const NOMES_CARGO: Record<string, string> = {
+      dono: "Dono",
+      gestor: "Gestor",
+      atendente: "Atendente",
+      estagiario: "Estagiário",
+    };
+    const nomeCargo = NOMES_CARGO[esc.colaborador.cargo];
+    if (nomeCargo) {
+      const db = await getDb();
+      if (db) {
+        const { cargosPersonalizados } = await import("../../drizzle/schema");
+        const [cp] = await db
+          .select({ id: cargosPersonalizados.id })
+          .from(cargosPersonalizados)
+          .where(and(
+            eq(cargosPersonalizados.escritorioId, esc.escritorio.id),
+            eq(cargosPersonalizados.nome, nomeCargo),
+          ))
+          .limit(1);
+        cargoId = cp?.id ?? null;
+      }
+    }
+  }
+
   if (cargoId) {
     const db = await getDb();
     if (db) {
@@ -161,6 +191,14 @@ export async function checkPermission(
         cache.set(cacheKey, { data: result, ts: Date.now() });
         return applyAction(result, acao);
       }
+      // Cargo personalizado existe mas não tem entry pra este módulo
+      // → tratar como negado (era visível antes pelo fallback "true")
+      const negado: PermissionResult = {
+        allowed: false, verTodos: false, verProprios: false,
+        criar: false, editar: false, excluir: false, ...base,
+      };
+      cache.set(cacheKey, { data: negado, ts: Date.now() });
+      return applyAction(negado, acao);
     }
   }
 

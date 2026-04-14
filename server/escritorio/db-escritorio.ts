@@ -340,11 +340,36 @@ export async function aceitarConvite(token: string, userId: number) {
   const existente = await getEscritorioPorUsuario(userId);
   if (existente) throw new Error("Você já pertence a um escritório. Saia do atual antes de aceitar outro convite.");
 
-  // Criar colaborador
+  // Resolver cargoPersonalizadoId — sem isso o checkPermission cai no
+  // PERMISSOES_LEGADO (hardcoded) e ignora o que o admin configurou no
+  // painel de Permissões. O nome do cargo personalizado padrão segue o
+  // mapa: gestor→Gestor, atendente→Atendente, estagiario→Estagiário.
+  const NOMES_CARGO: Record<string, string> = {
+    gestor: "Gestor",
+    atendente: "Atendente",
+    estagiario: "Estagiário",
+  };
+  let cargoPersonalizadoId: number | null = null;
+  const nomeCargo = NOMES_CARGO[convite.cargo];
+  if (nomeCargo) {
+    const { cargosPersonalizados } = await import("../../drizzle/schema");
+    const [cp] = await db
+      .select({ id: cargosPersonalizados.id })
+      .from(cargosPersonalizados)
+      .where(and(
+        eq(cargosPersonalizados.escritorioId, convite.escritorioId),
+        eq(cargosPersonalizados.nome, nomeCargo),
+      ))
+      .limit(1);
+    cargoPersonalizadoId = cp?.id ?? null;
+  }
+
+  // Criar colaborador (com cargo personalizado vinculado)
   await db.insert(colaboradores).values({
     escritorioId: convite.escritorioId,
     userId,
     cargo: convite.cargo as CargoColaborador,
+    cargoPersonalizadoId,
     departamento: convite.departamento,
     ativo: true,
   });

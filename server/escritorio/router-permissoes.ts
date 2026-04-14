@@ -19,7 +19,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { cargosPersonalizados, permissoesCargo, colaboradores } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or } from "drizzle-orm";
 import { limparCachePermissoes } from "./check-permission";
 
 // Módulos disponíveis no sistema — precisam bater com os nomes usados
@@ -164,6 +164,15 @@ export const permissoesRouter = router({
       .where(eq(cargosPersonalizados.escritorioId, esc.escritorio.id))
       .orderBy(cargosPersonalizados.isDefault, desc(cargosPersonalizados.createdAt));
 
+    // Mapa de nome do cargo personalizado → cargo legado correspondente,
+    // pra contar colaboradores antigos que ainda não têm cargoPersonalizadoId.
+    const NOME_PARA_LEGADO: Record<string, string> = {
+      "Dono": "dono",
+      "Gestor": "gestor",
+      "Atendente": "atendente",
+      "Estagiário": "estagiario",
+    };
+
     // Buscar permissões de cada cargo
     const result = [];
     for (const cargo of cargos) {
@@ -181,9 +190,22 @@ export const permissoesRouter = router({
         };
       }
 
-      // Contar colaboradores com este cargo
+      // Contar colaboradores deste cargo: vinculados explicitamente (cargoPersonalizadoId)
+      // OU vinculados pelo cargo legado correspondente (compatibilidade com colaboradores
+      // criados antes do fix em aceitarConvite).
+      const cargoLegado = NOME_PARA_LEGADO[cargo.nome];
+      const condColaborador = cargoLegado
+        ? or(
+            eq(colaboradores.cargoPersonalizadoId, cargo.id),
+            eq(colaboradores.cargo, cargoLegado as any),
+          )
+        : eq(colaboradores.cargoPersonalizadoId, cargo.id);
       const colabs = await db.select().from(colaboradores)
-        .where(and(eq(colaboradores.escritorioId, esc.escritorio.id), eq(colaboradores.cargoPersonalizadoId, cargo.id)));
+        .where(and(
+          eq(colaboradores.escritorioId, esc.escritorio.id),
+          eq(colaboradores.ativo, true),
+          condColaborador!,
+        ));
 
       result.push({
         id: cargo.id,
@@ -386,11 +408,25 @@ export const permissoesRouter = router({
       return { cargo: "Dono", cor: "#dc2626", permissoes: all };
     }
 
-    // Buscar cargo personalizado
-    const cargoId = (esc.colaborador as any).cargoPersonalizadoId;
+    // Resolve cargo personalizado. Se cargoPersonalizadoId não está
+    // setado (colaborador antigo, criado antes do fix em aceitarConvite),
+    // busca pelo nome do cargo legado correspondente — assim respeita as
+    // permissões que o admin configurou no painel.
+    let cargoId = (esc.colaborador as any).cargoPersonalizadoId as number | null | undefined;
     if (!cargoId) {
-      // Fallback: usar cargo legado
-      const legado = esc.colaborador.cargo; // gestor, atendente, estagiario
+      const nomeMap: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
+      const nomeCargo = nomeMap[esc.colaborador.cargo];
+      if (nomeCargo) {
+        const [cp] = await db.select({ id: cargosPersonalizados.id }).from(cargosPersonalizados)
+          .where(and(eq(cargosPersonalizados.escritorioId, esc.escritorio.id), eq(cargosPersonalizados.nome, nomeCargo)))
+          .limit(1);
+        cargoId = cp?.id ?? null;
+      }
+    }
+
+    if (!cargoId) {
+      // Não encontrou cargo personalizado nem legado conhecido → fallback PADRAO
+      const legado = esc.colaborador.cargo;
       const nomeMap: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
       const perms = PERMISSOES_PADRAO[nomeMap[legado] || "Atendente"];
       return { cargo: nomeMap[legado] || legado, cor: "#6366f1", permissoes: perms || {} };
