@@ -146,36 +146,59 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
       }
     }
     case "resend": {
-      // Testa GET /domains — endpoint autenticado mais leve da Resend.
-      // Retorna 401 se key inválida, 200 com lista (pode ser vazia) se OK.
+      // A API do Resend tem 2 tipos de key: "Full Access" e "Sending access".
+      // Endpoints como GET /domains exigem Full Access, mas nós só precisamos
+      // enviar email — que POST /emails permite em AMBOS os tipos de key.
+      //
+      // Estratégia: faz POST /emails com payload vazio. Resend responde:
+      //   - 401 → key inválida/revogada (é o que queremos detectar)
+      //   - 422 / 400 → key válida, só reclama do payload (o que esperamos)
+      //   - 200 → impossível com body vazio
       try {
-        const res = await fetch("https://api.resend.com/domains", {
-          headers: { Authorization: `Bearer ${apiKey}` },
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
           signal: AbortSignal.timeout(10000),
         });
-        if (res.status === 401 || res.status === 403) {
+
+        if (res.status === 401) {
           return { ok: false, mensagem: "API key Resend inválida ou revogada" };
         }
-        if (!res.ok) {
-          return {
-            ok: false,
-            mensagem: `Erro HTTP ${res.status}`,
-            detalhes: (await res.text()).slice(0, 200),
-          };
+
+        // Qualquer outra resposta confirma que a key foi reconhecida.
+        // 422/400 são esperados (body vazio), 200 seria inesperado mas OK.
+        // Tentamos também descobrir se tem domínios verificados (bonus, não bloqueia).
+        let dominiosInfo = "";
+        try {
+          const domRes = await fetch("https://api.resend.com/domains", {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (domRes.ok) {
+            const data = (await domRes.json()) as {
+              data?: Array<{ name: string; status: string }>;
+            };
+            const domains = data.data || [];
+            const verificados = domains.filter((d) => d.status === "verified");
+            if (domains.length > 0) {
+              dominiosInfo = ` ${domains.length} domínio(s), ${verificados.length} verificado(s).`;
+            }
+          } else if (domRes.status === 401 || domRes.status === 403) {
+            // Key tem só Sending access — não impede o uso
+            dominiosInfo =
+              " Key com permissão de envio (Sending access) — OK para enviar emails.";
+          }
+        } catch {
+          /* listar domínios é best-effort, não falha o teste */
         }
-        const data = (await res.json()) as { data?: Array<{ name: string; status: string }> };
-        const domains = data.data || [];
-        const verificados = domains.filter((d) => d.status === "verified");
-        if (domains.length === 0) {
-          return {
-            ok: true,
-            mensagem:
-              "Resend conectado — nenhum domínio cadastrado ainda (emails serão enviados via onboarding.resend.dev, limite 100/dia).",
-          };
-        }
+
         return {
           ok: true,
-          mensagem: `Resend conectado. ${domains.length} domínio(s), ${verificados.length} verificado(s).`,
+          mensagem: `Resend conectado.${dominiosInfo}`,
         };
       } catch (err: any) {
         if (err.name === "AbortError" || err.name === "TimeoutError") {
