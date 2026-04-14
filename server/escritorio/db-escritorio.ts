@@ -262,13 +262,23 @@ export async function criarConvite(
 }
 
 /** Lista convites do escritório */
+/** Lista convites PENDENTES do escritório.
+ *  Convites aceitos viram colaboradores (visíveis na aba Membros),
+ *  convites expirados/cancelados não precisam ser mostrados.
+ */
 export async function listarConvites(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  return db.select()
+  return db
+    .select()
     .from(convitesColaborador)
-    .where(eq(convitesColaborador.escritorioId, escritorioId))
+    .where(
+      and(
+        eq(convitesColaborador.escritorioId, escritorioId),
+        eq(convitesColaborador.status, "pendente"),
+      ),
+    )
     .orderBy(desc(convitesColaborador.createdAt));
 }
 
@@ -310,12 +320,14 @@ export async function aceitarConvite(token: string, userId: number) {
   return { escritorioId: convite.escritorioId, cargo: convite.cargo };
 }
 
-/** Cancela convite */
+/** Cancela convite — remove do banco para não poluir a listagem.
+ *  Uso: admin clica em cancelar na lista de convites pendentes.
+ */
 export async function cancelarConvite(conviteId: number, escritorioId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
-  await db.update(convitesColaborador)
-    .set({ status: "cancelado" })
+  await db
+    .delete(convitesColaborador)
     .where(and(eq(convitesColaborador.id, conviteId), eq(convitesColaborador.escritorioId, escritorioId)));
 }
