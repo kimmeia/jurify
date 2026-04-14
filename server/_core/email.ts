@@ -2,7 +2,10 @@
  * Serviço de email via Resend API.
  *
  * Usa fetch direto — não precisa de SDK.
- * Configure RESEND_API_KEY no .env.
+ *
+ * A API key pode ser configurada de duas formas, na ordem de prioridade:
+ *   1. Admin → Integrações → Resend (recomendado — trocável sem redeploy)
+ *   2. Variável de ambiente RESEND_API_KEY (fallback/bootstrap)
  *
  * Grátis até 100 emails/dia, 3000/mês.
  * Docs: https://resend.com/docs/api-reference
@@ -11,7 +14,6 @@
 import { createLogger } from "./logger";
 const log = createLogger("email");
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
 const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://app.jurify.com.br";
 const FROM_EMAIL = process.env.FROM_EMAIL || "Jurify <noreply@jurify.com.br>";
 
@@ -22,10 +24,50 @@ interface EmailOptions {
   text?: string;
 }
 
+/**
+ * Busca a API key do Resend. Tenta primeiro no banco (admin_integracoes) e
+ * cai no ENV como fallback. O resultado é resolvido em cada chamada — se o
+ * admin trocar a key no painel, o próximo email já usa a nova.
+ */
+async function getResendApiKey(): Promise<string> {
+  try {
+    const { getDb } = await import("../db");
+    const { adminIntegracoes } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const { decrypt } = await import("../escritorio/crypto-utils");
+    const db = await getDb();
+    if (db) {
+      const [reg] = await db
+        .select()
+        .from(adminIntegracoes)
+        .where(eq(adminIntegracoes.provedor, "resend"))
+        .limit(1);
+      if (
+        reg?.status === "conectado" &&
+        reg.apiKeyEncrypted &&
+        reg.apiKeyIv &&
+        reg.apiKeyTag
+      ) {
+        return decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
+      }
+    }
+  } catch (err: any) {
+    // Tabela pode não existir (migration pendente) ou erro de decrypt —
+    // cai no fallback do ENV
+    log.warn({ err: err.message }, "Falha ao ler RESEND key do DB, usando ENV");
+  }
+  return process.env.RESEND_API_KEY || "";
+}
+
 export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string }> {
-  if (!RESEND_API_KEY) {
-    log.warn("RESEND_API_KEY não configurada — email não enviado");
-    return { success: false, error: "Serviço de email não configurado. Configure RESEND_API_KEY." };
+  const apiKey = await getResendApiKey();
+  if (!apiKey) {
+    log.warn("Resend API key não configurada — email não enviado");
+    return {
+      success: false,
+      error:
+        "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.",
+    };
   }
 
   try {
@@ -33,7 +75,7 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
