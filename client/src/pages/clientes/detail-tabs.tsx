@@ -107,8 +107,19 @@ export function ArquivosTab({ contatoId, arquivos, onRefresh }: { contatoId: num
 
 export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
   const [nome, setNome] = useState(""); const [tel, setTel] = useState(""); const [email, setEmail] = useState(""); const [cpf, setCpf] = useState("");
+  const [responsavelId, setResponsavelId] = useState<string>("");
   const [erros, setErros] = useState<Record<string, string>>({});
-  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
+
+  // Lista de colaboradores ATIVOS — usado pra escolher responsável.
+  // Só dono/gestor (verTodos) consegue atribuir a outro; pra atendentes
+  // o backend ignora esse campo e usa o próprio id.
+  const { data: equipeData } = (trpc as any).configuracoes?.listarColaboradores?.useQuery?.(
+    undefined,
+    { retry: false, enabled: open },
+  ) || { data: null };
+  const colaboradores: any[] = equipeData?.colaboradores || [];
+
+  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
 
   const validar = () => {
     const e: Record<string, string> = {};
@@ -135,7 +146,25 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     <div className="space-y-1.5"><Label>Nome *</Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-red-400" : ""} />{erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}</div>
     <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone</Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="email@exemplo.com" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
     <div className="space-y-1.5"><Label>CPF/CNPJ</Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-red-400" : ""} />{erros.cpf && <p className="text-[10px] text-red-500">{erros.cpf}</p>}</div>
-  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { if (validar()) criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined }); }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
+    {colaboradores.length > 1 && (
+      <div className="space-y-1.5">
+        <Label>Responsável pelo atendimento</Label>
+        <select
+          value={responsavelId}
+          onChange={(e) => setResponsavelId(e.target.value)}
+          className="w-full h-9 px-3 text-sm rounded-md border bg-background"
+        >
+          <option value="">— eu mesmo (padrão) —</option>
+          {colaboradores.filter((c) => c.ativo).map((c) => (
+            <option key={c.id} value={c.id}>{c.userName || c.userEmail}</option>
+          ))}
+        </select>
+        <p className="text-[10px] text-muted-foreground">
+          Quando o cliente entrar em contato novamente, será automaticamente direcionado para este atendente.
+        </p>
+      </div>
+    )}
+  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { if (validar()) criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined, responsavelId: responsavelId ? Number(responsavelId) : undefined }); }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

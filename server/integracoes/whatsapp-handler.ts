@@ -45,7 +45,14 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     conversaId = await buscarConversaExistente(escritorioId, contatoId, canalId, msg.chatId);
   }
   if (!conversaId) {
-    const aid = await distribuirLead(escritorioId, contatoId || undefined, canalId) ?? undefined;
+    // Stickiness: se o contato JÁ tem responsável definido (atribuído
+    // anteriormente), atribuímos a nova conversa pro mesmo atendente
+    // — assim o cliente fala sempre com a mesma pessoa quando volta
+    // a entrar em contato. Só se contato.responsavelId for null
+    // recorremos à distribuição automática.
+    const respExistente = await pegarResponsavelDoContato(contatoId);
+    const aid = respExistente
+      ?? (await distribuirLead(escritorioId, contatoId || undefined, canalId)) ?? undefined;
     conversaId = await criarConversa({
       escritorioId,
       contatoId,
@@ -54,6 +61,11 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       assunto: `WhatsApp: ${msg.nome || msg.telefone || "contato"}`,
       chatIdExterno: msg.chatId,
     });
+    // Se o contato ainda não tinha responsavelId, grava agora pra
+    // próximas conversas continuarem caindo no mesmo atendente.
+    if (!respExistente && aid) {
+      await definirResponsavelDoContato(contatoId, aid);
+    }
   }
   const tipoMsg = mapTipo(msg.tipo);
   const conteudo = msg.mediaUrl ? `${msg.conteudo}\n[media:${msg.mediaUrl}]` : msg.conteudo;
@@ -216,6 +228,46 @@ async function buscarConversaPorChatId(escritorioId: number, canalId: number, ch
   // padrão (buscarContatoPorTelefone).
 
   return null;
+}
+
+/** Lê responsavelId do contato — usado pra "stickiness" de atendimento.
+ *  Se um cliente já foi atendido por alguém antes, próximas conversas
+ *  caem no mesmo atendente.
+ */
+async function pegarResponsavelDoContato(contatoId: number): Promise<number | null> {
+  if (!contatoId) return null;
+  try {
+    const { getDb } = await import("../db");
+    const { contatos } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db.select({ responsavelId: contatos.responsavelId })
+      .from(contatos).where(eq(contatos.id, contatoId)).limit(1);
+    return row?.responsavelId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Grava o responsavelId no contato (chamado quando primeira conversa
+ *  é distribuída) — só seta se ainda for null pra não sobrescrever
+ *  reatribuições manuais feitas pelo admin.
+ */
+async function definirResponsavelDoContato(contatoId: number, colaboradorId: number) {
+  if (!contatoId || !colaboradorId) return;
+  try {
+    const { getDb } = await import("../db");
+    const { contatos } = await import("../../drizzle/schema");
+    const { eq, and, isNull } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return;
+    await db.update(contatos)
+      .set({ responsavelId: colaboradorId })
+      .where(and(eq(contatos.id, contatoId), isNull(contatos.responsavelId)));
+  } catch (err) {
+    log.warn({ err: String(err), contatoId }, "Falha ao definir responsavel do contato");
+  }
 }
 
 async function pegarContatoIdDaConversa(conversaId: number): Promise<number | null> {
