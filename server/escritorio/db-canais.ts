@@ -21,17 +21,18 @@ export async function listarCanais(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
 
-  // Cleanup órfãos: WhatsApp API "conectado" sem telefone = inválido.
-  // Resíduo de tentativas abortadas de Embedded Signup antes da validação
-  // do PR #20. Detectamos via SELECT (Drizzle não tem helper isNull
-  // confortável aqui) e deletamos cada um.
+  // Cleanup órfãos: qualquer canal whatsapp_api SEM telefone preenchido
+  // é inválido. Resíduo de:
+  //   - Tentativas abortadas de Embedded Signup (status=conectado sem telefone)
+  //   - Tentativas que erraram (status=erro com ou sem mensagem)
+  //   - Estados "pendente" antigos sem completar
+  // Sem telefone o canal não funciona — deletar evita poluir a UI.
   const todos = await db.select()
     .from(canaisIntegrados)
     .where(eq(canaisIntegrados.escritorioId, escritorioId));
   const orfaosIds = todos
     .filter((c) =>
       c.tipo === "whatsapp_api" &&
-      c.status === "conectado" &&
       (!c.telefone || c.telefone === "")
     )
     .map((c) => c.id);
