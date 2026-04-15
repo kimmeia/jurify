@@ -486,7 +486,6 @@ function AppSidebarContent({
                 >
                   <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
                   <span>Kanban</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
