@@ -22,7 +22,34 @@ import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritori
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient } from "./asaas-client";
 import { syncCobrancasDeCliente, syncCobrancasEscritorio } from "./asaas-sync";
+import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
+
+/** Helper: retorna IDs dos contatos visíveis ao colaborador atual.
+ *  Se ele tem verTodos no módulo "financeiro" → null (sem filtro).
+ *  Se só verProprios → array de contatoIds onde responsavelId = colabId.
+ *  Se não tem nenhum acesso → array vazio (nada visível).
+ */
+async function contatosVisiveisFinanceiro(
+  userId: number,
+  escritorioId: number,
+): Promise<number[] | null> {
+  const perm = await checkPermission(userId, "financeiro", "ver");
+  if (perm.verTodos) return null;
+  if (!perm.verProprios) return [];
+
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({ id: contatos.id })
+    .from(contatos)
+    .where(and(
+      eq(contatos.escritorioId, escritorioId),
+      eq(contatos.responsavelId, perm.colaboradorId),
+    ));
+  return rows.map((r) => r.id);
+}
 const log = createLogger("integracoes-router-asaas");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -531,6 +558,14 @@ export const asaasRouter = router({
         if (input?.status) conditions.push(eq(asaasCobrancas.status, input.status));
         if (input?.contatoId) conditions.push(eq(asaasCobrancas.contatoId, input.contatoId));
 
+        // Filtro por permissão: se verProprios only, só mostra cobranças
+        // de contatos cujo responsável é o próprio colaborador.
+        const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
+        if (visiveis !== null) {
+          if (visiveis.length === 0) return { items: [], total: 0 };
+          conditions.push(inArray(asaasCobrancas.contatoId, visiveis));
+        }
+
         const items = await db.select().from(asaasCobrancas)
           .where(and(...conditions))
           .orderBy(desc(asaasCobrancas.createdAt))
@@ -651,8 +686,13 @@ export const asaasRouter = router({
     if (!db) return { recebido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
 
     try {
-      const todas = await db.select().from(asaasCobrancas)
-        .where(eq(asaasCobrancas.escritorioId, esc.escritorio.id));
+      const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
+      if (visiveis !== null && visiveis.length === 0) {
+        return { recebido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
+      }
+      const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
+      if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
+      const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
       let recebido = 0, pendente = 0, vencido = 0;
       for (const c of todas) {
@@ -679,8 +719,13 @@ export const asaasRouter = router({
 
       const meses = input?.meses ?? 6;
       try {
-        const todas = await db.select().from(asaasCobrancas)
-          .where(eq(asaasCobrancas.escritorioId, esc.escritorio.id));
+        const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
+        if (visiveis !== null && visiveis.length === 0) {
+          return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+        }
+        const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
+        if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
+        const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
         const porMes = new Map<string, { recebido: number; pendente: number; vencido: number }>();
         const hoje = new Date();
@@ -748,11 +793,16 @@ export const asaasRouter = router({
         const hojeStr = hoje.toISOString().slice(0, 10);
         const fimStr = fim.toISOString().slice(0, 10);
 
-        const pendentes = await db.select().from(asaasCobrancas)
-          .where(and(
-            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-            eq(asaasCobrancas.status, "PENDING"),
-          ));
+        const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
+        if (visiveis !== null && visiveis.length === 0) {
+          return { semanas: [], total: 0, atrasado: 0 };
+        }
+        const condsP: any[] = [
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          eq(asaasCobrancas.status, "PENDING"),
+        ];
+        if (visiveis !== null) condsP.push(inArray(asaasCobrancas.contatoId, visiveis));
+        const pendentes = await db.select().from(asaasCobrancas).where(and(...condsP));
 
         const semanas: { semana: string; label: string; valor: number; quantidade: number }[] = [];
         let total = 0;
@@ -885,7 +935,11 @@ export const asaasRouter = router({
       if (!db) return [];
 
       try {
+        const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
+        if (visiveis !== null && visiveis.length === 0) return [];
+
         const conditions: any[] = [eq(asaasClientes.escritorioId, esc.escritorio.id)];
+        if (visiveis !== null) conditions.push(inArray(asaasClientes.contatoId, visiveis));
         if (input?.busca) {
           const b = `%${input.busca}%`;
           conditions.push(or(like(asaasClientes.nome, b), like(asaasClientes.cpfCnpj, b)));
@@ -1061,9 +1115,13 @@ export const asaasRouter = router({
     if (!db) return [];
 
     try {
-      // Buscar todos os clientes vinculados para filtrar assinaturas
-      const vinculos = await db.select().from(asaasClientes)
-        .where(eq(asaasClientes.escritorioId, esc.escritorio.id));
+      const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
+      if (visiveis !== null && visiveis.length === 0) return [];
+
+      // Buscar clientes vinculados (filtrados por permissão se aplicável)
+      const condsV: any[] = [eq(asaasClientes.escritorioId, esc.escritorio.id)];
+      if (visiveis !== null) condsV.push(inArray(asaasClientes.contatoId, visiveis));
+      const vinculos = await db.select().from(asaasClientes).where(and(...condsV));
 
       const assinaturas = [];
       for (const v of vinculos) {
@@ -1130,10 +1188,15 @@ export const asaasRouter = router({
       return { success: true, parcelamentoId: parcela.id };
     }),
 
-  /** Obter saldo da conta Asaas */
+  /** Obter saldo da conta Asaas — só visível pra quem tem verTodos
+   *  no módulo financeiro. Saldo é informação do escritório, não
+   *  pertence a um colaborador individual. */
   obterSaldo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
+
+    const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
+    if (!perm.verTodos) return null;
 
     const client = await getAsaasClient(esc.escritorio.id);
     if (!client) return null;

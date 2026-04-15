@@ -13,12 +13,13 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
 import {
   conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte } from "drizzle-orm";
+import { eq, and, sql, gte, or } from "drizzle-orm";
 
 const PeriodoInput = z
   .object({ dias: z.number().min(1).max(365).optional() })
@@ -38,7 +39,8 @@ function desdeDias(dias: number): Date {
 }
 
 export const relatoriosRouter = router({
-  /** Atendimento — conversas e mensagens */
+  /** Atendimento — conversas e mensagens.
+   *  Respeita verProprios: filtra conversas por responsavelId. */
   atendimento: protectedProcedure.input(PeriodoInput).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
@@ -48,23 +50,28 @@ export const relatoriosRouter = router({
     const dias = input?.dias || 30;
     const desde = desdeDias(dias);
 
+    const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    const soProprios = !perm.verTodos && perm.verProprios;
+    const colabId = esc.colaborador.id;
+    const filtroResp = soProprios ? [eq(conversas.responsavelId, colabId)] : [];
+
     const statusRows = await db
       .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
       .from(conversas)
-      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde)))
+      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde), ...filtroResp))
       .groupBy(conversas.status);
 
     const msgRows = await db
       .select({ direcao: mensagens.direcao, total: sql<number>`COUNT(*)` })
       .from(mensagens)
       .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-      .where(and(eq(conversas.escritorioId, eid), gte(mensagens.createdAt, desde)))
+      .where(and(eq(conversas.escritorioId, eid), gte(mensagens.createdAt, desde), ...filtroResp))
       .groupBy(mensagens.direcao);
 
     const convsPorDia = await db
       .select({ dia: sql<string>`DATE(createdAtConv)`, total: sql<number>`COUNT(*)` })
       .from(conversas)
-      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde)))
+      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde), ...filtroResp))
       .groupBy(sql`DATE(createdAtConv)`)
       .orderBy(sql`DATE(createdAtConv)`);
 
@@ -72,7 +79,7 @@ export const relatoriosRouter = router({
       .select({ dia: sql<string>`DATE(createdAtMsg)`, total: sql<number>`COUNT(*)` })
       .from(mensagens)
       .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-      .where(and(eq(conversas.escritorioId, eid), gte(mensagens.createdAt, desde)))
+      .where(and(eq(conversas.escritorioId, eid), gte(mensagens.createdAt, desde), ...filtroResp))
       .groupBy(sql`DATE(createdAtMsg)`)
       .orderBy(sql`DATE(createdAtMsg)`);
 
@@ -104,6 +111,14 @@ export const relatoriosRouter = router({
     const dias = input?.dias || 30;
     const desde = desdeDias(dias);
 
+    // Permissão: verProprios filtra leads e contatos por responsável
+    const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    const soProprios = !perm.verTodos && perm.verProprios;
+    const colabId = esc.colaborador.id;
+    const filtroLeadResp = soProprios ? [eq(leads.responsavelId, colabId)] : [];
+    const filtroContResp = soProprios ? [eq(contatos.responsavelId, colabId)] : [];
+    const filtroConvResp = soProprios ? [eq(conversas.responsavelId, colabId)] : [];
+
     // Etapas do funil (com valor estimado)
     const etapaRows = await db
       .select({
@@ -112,7 +127,7 @@ export const relatoriosRouter = router({
         valor: sql<number>`COALESCE(SUM(CAST(valorEstimado AS DECIMAL(14,2))), 0)`,
       })
       .from(leads)
-      .where(and(eq(leads.escritorioId, eid), gte(leads.createdAt, desde)))
+      .where(and(eq(leads.escritorioId, eid), gte(leads.createdAt, desde), ...filtroLeadResp))
       .groupBy(leads.etapaFunil);
 
     // Leads por mês (6m — histórico sempre útil independente do filtro de curto prazo)
@@ -126,6 +141,7 @@ export const relatoriosRouter = router({
         and(
           eq(leads.escritorioId, eid),
           sql`createdAtLead >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)`,
+          ...filtroLeadResp,
         ),
       )
       .groupBy(sql`DATE_FORMAT(createdAtLead,'%Y-%m')`)
@@ -135,14 +151,14 @@ export const relatoriosRouter = router({
     const origemRows = await db
       .select({ origem: contatos.origem, total: sql<number>`COUNT(*)` })
       .from(contatos)
-      .where(eq(contatos.escritorioId, eid))
+      .where(and(eq(contatos.escritorioId, eid), ...filtroContResp))
       .groupBy(contatos.origem);
 
     // Conversas atendidas no período
     const [conversasTotal] = await db
       .select({ total: sql<number>`COUNT(*)` })
       .from(conversas)
-      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde)));
+      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde), ...filtroConvResp));
 
     const etapas: Record<string, { total: number; valor: number }> = {};
     for (const r of etapaRows) {
@@ -191,12 +207,18 @@ export const relatoriosRouter = router({
     const desde = desdeDias(dias);
     const funilId = input?.funilId;
 
+    // Permissão: verProprios filtra cards por responsavelId
+    const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    const soProprios = !perm.verTodos && perm.verProprios;
+    const colabId = esc.colaborador.id;
+    const filtroResp = soProprios ? [eq(kanbanCards.responsavelId, colabId)] : [];
+
     // ── Helpers ─────────────────────────────────────────────────────────────
     // Quando há filtro de funil, todos os counts de cards precisam fazer
     // JOIN com kanbanColunas (pois o funilId mora na coluna, não no card).
 
     const cardsBase = (extraWhere: any) => {
-      const conditions = [eq(kanbanCards.escritorioId, eid), extraWhere];
+      const conditions = [eq(kanbanCards.escritorioId, eid), extraWhere, ...filtroResp];
       const q = db
         .select({ total: sql<number>`COUNT(${kanbanCards.id})` })
         .from(kanbanCards);
@@ -227,12 +249,13 @@ export const relatoriosRouter = router({
     const movsConditions = [
       gte(kanbanMovimentacoes.createdAt, desde),
       eq(kanbanCards.escritorioId, eid),
+      ...filtroResp,
     ];
     if (funilId !== undefined) movsConditions.push(eq(kanbanColunas.funilId, funilId));
     const [movsTotal] = await movsQuery.where(and(...movsConditions));
 
     // ── Distribuição por etapa (coluna) ────────────────────────────────────
-    const colunasConditions = [eq(kanbanCards.escritorioId, eid)];
+    const colunasConditions = [eq(kanbanCards.escritorioId, eid), ...filtroResp];
     if (funilId !== undefined) colunasConditions.push(eq(kanbanColunas.funilId, funilId));
     const cardsPorColuna = await db
       .select({
