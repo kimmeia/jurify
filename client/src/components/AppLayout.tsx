@@ -428,7 +428,6 @@ function AppSidebarContent({
                 >
                   <CalendarDays className={`h-4 w-4 ${location === "/agenda" ? "text-primary" : ""}`} />
                   <span>Agenda</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
