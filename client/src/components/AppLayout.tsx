@@ -540,7 +540,6 @@ function AppSidebarContent({
                 >
                   <Settings className={`h-4 w-4 ${location === "/configuracoes" ? "text-primary" : ""}`} />
                   <span>Configurações</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
