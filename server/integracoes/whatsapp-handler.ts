@@ -72,10 +72,23 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   const mensagemId = await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "entrada", tipo: tipoMsg, conteudo });
   await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
 
-  // Notificar atendente e escritório via SSE
+  // Notificar via SSE APENAS:
+  //   - dono e gestores do escritório
+  //   - o atendente responsável da conversa (se houver)
+  // Atendentes/estagiários NÃO recebem pop-up de mensagens que não são deles.
   try {
-    const { emitirParaEscritorio } = await import("../_core/sse-notifications");
-    emitirParaEscritorio(escritorioId, { tipo: "nova_mensagem", titulo: "Nova mensagem", mensagem: `${msg.nome || msg.telefone}: ${(msg.conteudo || "").slice(0, 80)}`, dados: { conversaId, contatoId, canal: "whatsapp" } });
+    const { emitirParaResponsaveisEMaster } = await import("../_core/sse-notifications");
+    const atendenteId = await pegarAtendenteDaConversa(conversaId);
+    emitirParaResponsaveisEMaster(
+      escritorioId,
+      atendenteId,
+      {
+        tipo: "nova_mensagem",
+        titulo: "Nova mensagem",
+        mensagem: `${msg.nome || msg.telefone}: ${(msg.conteudo || "").slice(0, 80)}`,
+        dados: { conversaId, contatoId, canal: "whatsapp" },
+      },
+    );
   } catch { /* SSE indisponível */ }
 
   // SmartFlow tem prioridade sobre chatbot padrão
@@ -267,6 +280,26 @@ async function definirResponsavelDoContato(contatoId: number, colaboradorId: num
       .where(and(eq(contatos.id, contatoId), isNull(contatos.responsavelId)));
   } catch (err) {
     log.warn({ err: String(err), contatoId }, "Falha ao definir responsavel do contato");
+  }
+}
+
+/** Lê atendenteId da conversa — usado pra notificar via SSE só o
+ *  atendente responsável + dono/gestores (não todos do escritório). */
+async function pegarAtendenteDaConversa(conversaId: number): Promise<number | null> {
+  try {
+    const { getDb } = await import("../db");
+    const { conversas } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select({ atendenteId: conversas.atendenteId })
+      .from(conversas)
+      .where(eq(conversas.id, conversaId))
+      .limit(1);
+    return row?.atendenteId ?? null;
+  } catch {
+    return null;
   }
 }
 

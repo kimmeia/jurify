@@ -565,7 +565,19 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
           </div>
-          {conv?.contatoTelefone && <p className="text-[10px] text-muted-foreground">{conv.contatoTelefone}</p>}
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            {conv?.contatoTelefone && <span>{conv.contatoTelefone}</span>}
+            {/* Responsável pelo atendimento — ajuda gestor a identificar
+                de quem é a conversa no Inbox */}
+            {(conv as any)?.atendenteNome ? (
+              <span className="flex items-center gap-1">
+                <User className="h-2.5 w-2.5" />
+                {(conv as any).atendenteNome}
+              </span>
+            ) : (
+              <span className="italic text-amber-600">sem atendente</span>
+            )}
+          </div>
         </div>
         {conv?.contatoTelefone && (onWA || onTel) && (
           <div className="flex items-center gap-1 shrink-0">

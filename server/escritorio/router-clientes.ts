@@ -25,10 +25,16 @@ export const clientesRouter = router({
   }),
 
   detalhe: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return null;
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return null;
     const db = await getDb(); if (!db) return null;
-    const [c] = await db.select().from(contatos).where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, esc.escritorio.id))).limit(1);
+    const [c] = await db.select().from(contatos).where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId))).limit(1);
     if (!c) return null;
+    // verProprios: bloqueia acesso ao detalhe de cliente que não é seu
+    if (!perm.verTodos && perm.verProprios && c.responsavelId !== perm.colaboradorId) {
+      return null;
+    }
+    const esc = { escritorio: { id: perm.escritorioId } };
     const [cc] = await db.select({ count: sql`COUNT(*)` }).from(conversas).where(and(eq(conversas.contatoId, input.id), eq(conversas.escritorioId, esc.escritorio.id)));
     const [lc] = await db.select({ count: sql`COUNT(*)` }).from(leads).where(and(eq(leads.contatoId, input.id), eq(leads.escritorioId, esc.escritorio.id)));
     const [ac] = await db.select({ count: sql`COUNT(*)` }).from(clienteArquivos).where(and(eq(clienteArquivos.contatoId, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)));

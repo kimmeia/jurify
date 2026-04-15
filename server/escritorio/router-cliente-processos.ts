@@ -12,23 +12,53 @@ import { getDb } from "../db";
 import { clienteProcessos, contatos, juditMonitoramentos } from "../../drizzle/schema";
 import { eq, and, desc, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { checkPermission } from "./check-permission";
+
+/** Verifica que o colaborador pode acessar esse cliente.
+ *  - verTodos: qualquer cliente do escritório
+ *  - verProprios: só se responsavelId === colabId
+ *  Retorna false se não pode (UI não deve mostrar dados).
+ */
+async function podeVerCliente(
+  db: any,
+  contatoId: number,
+  escritorioId: number,
+  colabId: number,
+  verTodos: boolean,
+): Promise<boolean> {
+  const [c] = await db
+    .select({ responsavelId: contatos.responsavelId })
+    .from(contatos)
+    .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+  if (!c) return false;
+  if (verTodos) return true;
+  return c.responsavelId === colabId;
+}
 
 export const clienteProcessosRouter = router({
-  /** Lista processos vinculados a um cliente */
+  /** Lista processos vinculados a um cliente.
+   *  Respeita verProprios: só retorna processos se o colaborador puder
+   *  ver o cliente em questão. */
   listar: protectedProcedure
     .input(z.object({ contatoId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
+      const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+      if (!perm.allowed) return [];
       const db = await getDb();
       if (!db) return [];
+
+      const ok = await podeVerCliente(
+        db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos,
+      );
+      if (!ok) return [];
 
       const rows = await db
         .select()
         .from(clienteProcessos)
         .where(
           and(
-            eq(clienteProcessos.escritorioId, esc.escritorio.id),
+            eq(clienteProcessos.escritorioId, perm.escritorioId),
             eq(clienteProcessos.contatoId, input.contatoId),
           ),
         )

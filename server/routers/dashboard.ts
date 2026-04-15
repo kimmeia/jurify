@@ -152,7 +152,7 @@ export const dashboardRouter = router({
         .where(and(
           eq(conversas.escritorioId, escritorioId),
           eq(conversas.status, "aguardando"),
-          ...(soProprios ? [eq(conversas.responsavelId, colabId)] : []),
+          ...(soProprios ? [eq(conversas.atendenteId, colabId)] : []),
         ));
 
       const conversasAbertas = await db
@@ -161,7 +161,7 @@ export const dashboardRouter = router({
         .where(and(
           eq(conversas.escritorioId, escritorioId),
           eq(conversas.status, "em_atendimento"),
-          ...(soProprios ? [eq(conversas.responsavelId, colabId)] : []),
+          ...(soProprios ? [eq(conversas.atendenteId, colabId)] : []),
         ));
 
       const totalContatos = await db

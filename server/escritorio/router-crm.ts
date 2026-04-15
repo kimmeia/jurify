@@ -258,10 +258,10 @@ export const crmRouter = router({
       const { conversas } = await import("../../drizzle/schema");
       const [conv] = await db.select({
         escritorioId: conversas.escritorioId,
-        responsavelId: conversas.responsavelId,
+        atendenteId: conversas.atendenteId,
       }).from(conversas).where(eq(conversas.id, input.conversaId)).limit(1);
       if (!conv || conv.escritorioId !== perm.escritorioId) return [];
-      if (!perm.verTodos && perm.verProprios && conv.responsavelId !== perm.colaboradorId) {
+      if (!perm.verTodos && perm.verProprios && conv.atendenteId !== perm.colaboradorId) {
         return [];
       }
       return listarMensagens(input.conversaId, input.limite ?? 50);
