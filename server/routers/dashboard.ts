@@ -27,6 +27,7 @@ import {
   notificacoes,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("dashboard-router");
@@ -47,7 +48,12 @@ export const dashboardRouter = router({
     return getUserCreditsInfo(ctx.user.id);
   }),
 
-  /** Resumo do escritório para dashboard inteligente */
+  /** Resumo do escritório para dashboard inteligente.
+   *  Respeita a permissão "dashboard" do colaborador:
+   *  - verTodos → mostra tudo do escritório
+   *  - verProprios only → filtra só o que é do colaborador (responsável
+   *    ou criador). Garante que atendentes/estagiários vejam só seus dados.
+   */
   resumoEscritorio: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
@@ -59,6 +65,11 @@ export const dashboardRouter = router({
     const now = new Date();
     const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const hojeFim = new Date(hojeInicio.getTime() + 86400000);
+
+    // Decide escopo baseado em permissão "dashboard"
+    const perm = await checkPermission(ctx.user.id, "dashboard", "ver");
+    const soProprios = !perm.verTodos && perm.verProprios;
+    const colabId = esc.colaborador.id;
 
     try {
       // ─── Agenda ─────────────────────────────────────────────
@@ -77,6 +88,9 @@ export const dashboardRouter = router({
             gte(agendamentos.dataInicio, hojeInicio),
             lte(agendamentos.dataInicio, hojeFim),
             or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+            ...(soProprios
+              ? [or(eq(agendamentos.responsavelId, colabId), eq(agendamentos.criadoPorId, colabId))!]
+              : []),
           ),
         )
         .orderBy(asc(agendamentos.dataInicio))
@@ -96,6 +110,9 @@ export const dashboardRouter = router({
             gte(tarefas.dataVencimento, hojeInicio),
             lte(tarefas.dataVencimento, hojeFim),
             or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+            ...(soProprios
+              ? [or(eq(tarefas.responsavelId, colabId), eq(tarefas.criadoPor, colabId))!]
+              : []),
           ),
         )
         .limit(5);
@@ -108,6 +125,9 @@ export const dashboardRouter = router({
             eq(tarefas.escritorioId, escritorioId),
             lt(tarefas.dataVencimento, hojeInicio),
             or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+            ...(soProprios
+              ? [or(eq(tarefas.responsavelId, colabId), eq(tarefas.criadoPor, colabId))!]
+              : []),
           ),
         );
 
@@ -119,6 +139,9 @@ export const dashboardRouter = router({
             eq(agendamentos.escritorioId, escritorioId),
             lt(agendamentos.dataInicio, hojeInicio),
             or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+            ...(soProprios
+              ? [or(eq(agendamentos.responsavelId, colabId), eq(agendamentos.criadoPorId, colabId))!]
+              : []),
           ),
         );
 
@@ -126,17 +149,28 @@ export const dashboardRouter = router({
       const conversasAguardando = await db
         .select({ id: conversas.id })
         .from(conversas)
-        .where(and(eq(conversas.escritorioId, escritorioId), eq(conversas.status, "aguardando")));
+        .where(and(
+          eq(conversas.escritorioId, escritorioId),
+          eq(conversas.status, "aguardando"),
+          ...(soProprios ? [eq(conversas.responsavelId, colabId)] : []),
+        ));
 
       const conversasAbertas = await db
         .select({ id: conversas.id })
         .from(conversas)
-        .where(and(eq(conversas.escritorioId, escritorioId), eq(conversas.status, "em_atendimento")));
+        .where(and(
+          eq(conversas.escritorioId, escritorioId),
+          eq(conversas.status, "em_atendimento"),
+          ...(soProprios ? [eq(conversas.responsavelId, colabId)] : []),
+        ));
 
       const totalContatos = await db
         .select({ id: contatos.id })
         .from(contatos)
-        .where(eq(contatos.escritorioId, escritorioId));
+        .where(and(
+          eq(contatos.escritorioId, escritorioId),
+          ...(soProprios ? [eq(contatos.responsavelId, colabId)] : []),
+        ));
 
       // ─── Pipeline / Leads ───────────────────────────────────
       const leadsAbertos = await db
@@ -151,6 +185,7 @@ export const dashboardRouter = router({
               eq(leads.etapaFunil, "proposta"),
               eq(leads.etapaFunil, "negociacao"),
             ),
+            ...(soProprios ? [eq(leads.responsavelId, colabId)] : []),
           ),
         );
 
@@ -160,24 +195,28 @@ export const dashboardRouter = router({
       }
 
       // ─── Financeiro ─────────────────────────────────────────
+      // Dados financeiros são do escritório (não pertencem a um
+      // colaborador). Pra quem tem só verProprios, ocultamos os totais.
       let finRecebido = 0;
       let finPendente = 0;
       let finVencido = 0;
       let finTotal = 0;
-      try {
-        const cobrancasLocal = await db
-          .select()
-          .from(asaasCobrancas)
-          .where(eq(asaasCobrancas.escritorioId, escritorioId));
-        finTotal = cobrancasLocal.length;
-        for (const c of cobrancasLocal) {
-          const val = parseFloat(c.valor) || 0;
-          if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) finRecebido += val;
-          else if (c.status === "PENDING") finPendente += val;
-          else if (c.status === "OVERDUE") finVencido += val;
+      if (!soProprios) {
+        try {
+          const cobrancasLocal = await db
+            .select()
+            .from(asaasCobrancas)
+            .where(eq(asaasCobrancas.escritorioId, escritorioId));
+          finTotal = cobrancasLocal.length;
+          for (const c of cobrancasLocal) {
+            const val = parseFloat(c.valor) || 0;
+            if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) finRecebido += val;
+            else if (c.status === "PENDING") finPendente += val;
+            else if (c.status === "OVERDUE") finVencido += val;
+          }
+        } catch {
+          /* ignore — sem integração asaas */
         }
-      } catch {
-        /* ignore — sem integração asaas */
       }
 
       // ─── Processos ──────────────────────────────────────────
@@ -307,6 +346,13 @@ export const dashboardRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
 
+      // Se só tem verProprios no dashboard, dados financeiros do
+      // escritório não aparecem pra ele — retorna série vazia.
+      const perm = await checkPermission(ctx.user.id, "dashboard", "ver");
+      if (!perm.verTodos && perm.verProprios) {
+        return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      }
+
       const days = input?.days ?? 30;
       const inicio = new Date();
       inicio.setDate(inicio.getDate() - days);
@@ -387,6 +433,11 @@ export const dashboardRouter = router({
 
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return [];
+
+      // Atendente/estagiário com "verProprios" apenas — feed do escritório
+      // inteiro não é pra eles. Retorna vazio.
+      const perm = await checkPermission(ctx.user.id, "dashboard", "ver");
+      if (!perm.verTodos && perm.verProprios) return [];
 
       const limit = input?.limit ?? 20;
       const desde = new Date();

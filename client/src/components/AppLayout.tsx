@@ -544,25 +544,30 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
-              {/* Meu Plano - always accessible */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location === "/plans"}
-                  onClick={() => setLocation("/plans")}
-                  tooltip="Meu Plano"
-                  className="h-10 transition-all font-normal"
-                >
-                  <CreditCard
-                    className={`h-4 w-4 ${location === "/plans" ? "text-primary" : ""}`}
-                  />
-                  <span>Meu Plano</span>
-                  {itemsLocked && (
-                    <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
-                      Assinar
-                    </Badge>
-                  )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/* Meu Plano — visível apenas para Dono do escritório
+                  (e admin do sistema via role). Informação financeira/
+                  contratual não deve estar disponível para gestor,
+                  atendente ou estagiário. */}
+              {(user?.role === "admin" || minhasPerms?.cargo === "Dono") && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={location === "/plans"}
+                    onClick={() => setLocation("/plans")}
+                    tooltip="Meu Plano"
+                    className="h-10 transition-all font-normal"
+                  >
+                    <CreditCard
+                      className={`h-4 w-4 ${location === "/plans" ? "text-primary" : ""}`}
+                    />
+                    <span>Meu Plano</span>
+                    {itemsLocked && (
+                      <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
+                        Assinar
+                      </Badge>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarContent>
 
