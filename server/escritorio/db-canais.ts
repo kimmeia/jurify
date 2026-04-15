@@ -11,10 +11,33 @@ import type { TipoCanal, StatusCanal } from "../../shared/canal-types";
 
 // ─── Canais ──────────────────────────────────────────────────────────────────
 
-/** Lista canais do escritório (sem dados sensíveis) */
+/** Lista canais do escritório (sem dados sensíveis).
+ *  Faz cleanup automático de canais "fantasmas" — registros whatsapp_api
+ *  com status="conectado" mas SEM telefone (resíduo de tentativas
+ *  abortadas no Embedded Signup, antes do PR #20 validar no backend).
+ *  Esses canais não funcionam de jeito nenhum e poluem a UI com "Erro".
+ */
 export async function listarCanais(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
+
+  // Cleanup órfãos: WhatsApp API "conectado" sem telefone = inválido.
+  // Resíduo de tentativas abortadas de Embedded Signup antes da validação
+  // do PR #20. Detectamos via SELECT (Drizzle não tem helper isNull
+  // confortável aqui) e deletamos cada um.
+  const todos = await db.select()
+    .from(canaisIntegrados)
+    .where(eq(canaisIntegrados.escritorioId, escritorioId));
+  const orfaosIds = todos
+    .filter((c) =>
+      c.tipo === "whatsapp_api" &&
+      c.status === "conectado" &&
+      (!c.telefone || c.telefone === "")
+    )
+    .map((c) => c.id);
+  for (const id of orfaosIds) {
+    try { await db.delete(canaisIntegrados).where(eq(canaisIntegrados.id, id)); } catch {}
+  }
 
   const rows = await db.select()
     .from(canaisIntegrados)
