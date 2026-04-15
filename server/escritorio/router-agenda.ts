@@ -14,10 +14,28 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { agendamentos, agendamentoLembretes, tarefas, contatos, users, colaboradores } from "../../drizzle/schema";
-import { eq, and, desc, gte, lte, or, like, asc } from "drizzle-orm";
+import { eq, and, desc, gte, lte, or, like, asc, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
+
+/** Helper: IDs dos contatos cujo responsavelId é o colaborador.
+ *  Usado pra filtro verProprios em agendamentos/tarefas — assim quando
+ *  um cliente é agendado, o atendente "dono" do cliente vê o evento. */
+async function contatoIdsDoColaborador(
+  db: any,
+  escritorioId: number,
+  colaboradorId: number,
+): Promise<number[]> {
+  const rows = await db
+    .select({ id: contatos.id })
+    .from(contatos)
+    .where(and(
+      eq(contatos.escritorioId, escritorioId),
+      eq(contatos.responsavelId, colaboradorId),
+    ));
+  return rows.map((r: any) => r.id);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -120,16 +138,26 @@ export const agendaRouter = router({
         return userId ? userNameMap[userId] : undefined;
       };
 
+      // Pré-calcula clientes do colaborador (uma vez só)
+      const clientesDoColab = filtrarProprios
+        ? await contatoIdsDoColaborador(db, escritorioId, perm.colaboradorId)
+        : [];
+
       // ─── COMPROMISSOS (agendamentos) ────────────────────────────────────
       if (input?.fonte !== "tarefa") {
         const agConditions: any[] = [eq(agendamentos.escritorioId, escritorioId)];
 
-        // Permissão verProprios: limita a eventos próprios (responsável ou criador)
+        // Permissão verProprios: ver próprios = (responsável OR criador
+        // OR cliente vinculado é meu)
         if (filtrarProprios) {
-          agConditions.push(or(
+          const ors: any[] = [
             eq(agendamentos.responsavelId, perm.colaboradorId),
             eq(agendamentos.criadoPorId, perm.colaboradorId),
-          ));
+          ];
+          if (clientesDoColab.length > 0) {
+            ors.push(inArray(agendamentos.contatoId, clientesDoColab));
+          }
+          agConditions.push(or(...ors));
         }
 
         if (input?.dataInicio) agConditions.push(gte(agendamentos.dataInicio, new Date(input.dataInicio)));
@@ -174,10 +202,14 @@ export const agendaRouter = router({
         const tConditions: any[] = [eq(tarefas.escritorioId, escritorioId)];
 
         if (filtrarProprios) {
-          tConditions.push(or(
+          const ors: any[] = [
             eq(tarefas.responsavelId, perm.colaboradorId),
             eq(tarefas.criadoPor, perm.colaboradorId),
-          ));
+          ];
+          if (clientesDoColab.length > 0) {
+            ors.push(inArray(tarefas.contatoId, clientesDoColab));
+          }
+          tConditions.push(or(...ors));
         }
 
         if (input?.dataInicio && input?.dataFim) {
@@ -416,6 +448,7 @@ export const agendaRouter = router({
       local: z.string().max(512).optional(),
       prioridade: z.enum(["baixa", "normal", "alta", "critica"]).optional(),
       responsavelId: z.number().optional(),
+      contatoId: z.number().optional(),
       processoId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -424,10 +457,23 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Se o compromisso é vinculado a um cliente, e o usuário não definiu
+      // explicitamente um responsável, atribui automaticamente ao
+      // responsável do próprio cliente — assim o agendamento "pertence"
+      // a ele desde o início e não some quando outra pessoa cria.
+      let responsavelId = input.responsavelId;
+      if (!responsavelId && input.contatoId) {
+        const [c] = await db.select({ responsavelId: contatos.responsavelId })
+          .from(contatos)
+          .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (c?.responsavelId) responsavelId = c.responsavelId;
+      }
+
       const [result] = await db.insert(agendamentos).values({
         escritorioId: perm.escritorioId,
         criadoPorId: perm.colaboradorId,
-        responsavelId: input.responsavelId ?? perm.colaboradorId,
+        responsavelId: responsavelId ?? perm.colaboradorId,
         tipo: input.tipo,
         titulo: input.titulo,
         descricao: input.descricao,
@@ -436,6 +482,7 @@ export const agendaRouter = router({
         diaInteiro: input.diaInteiro ?? false,
         local: input.local,
         prioridade: input.prioridade ?? "normal",
+        contatoId: input.contatoId,
         processoId: input.processoId,
         corHex: CORES_TIPO[input.tipo] || "#3b82f6",
       }).$returningId();
@@ -462,10 +509,20 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Se vinculada a cliente e sem responsável explícito, herda do cliente
+      let responsavelId = input.responsavelId;
+      if (!responsavelId && input.contatoId) {
+        const [c] = await db.select({ responsavelId: contatos.responsavelId })
+          .from(contatos)
+          .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (c?.responsavelId) responsavelId = c.responsavelId;
+      }
+
       const [result] = await db.insert(tarefas).values({
         escritorioId: perm.escritorioId,
         criadoPor: perm.colaboradorId,
-        responsavelId: input.responsavelId ?? null,
+        responsavelId: responsavelId ?? null,
         titulo: input.titulo,
         descricao: input.descricao,
         dataVencimento: input.dataVencimento ? new Date(input.dataVencimento) : null,
