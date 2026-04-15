@@ -15,6 +15,8 @@ import {
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
+import { conversas } from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
 const log = createLogger("escritorio-router-crm");
@@ -251,16 +253,25 @@ export const crmRouter = router({
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
       if (!perm.allowed) return [];
 
-      // Verifica que a conversa pertence ao escritório E (se verProprios)
-      // que o colaborador é o atendente designado.
       const db = await getDb();
       if (!db) return [];
-      const { conversas } = await import("../../drizzle/schema");
-      const [conv] = await db.select({
-        escritorioId: conversas.escritorioId,
-        atendenteId: conversas.atendenteId,
-      }).from(conversas).where(eq(conversas.id, input.conversaId)).limit(1);
-      if (!conv || conv.escritorioId !== perm.escritorioId) return [];
+
+      // Valida que a conversa pertence ao escritório do colaborador.
+      // Filtra direto no WHERE pra evitar mismatch manual de tipos.
+      const [conv] = await db
+        .select({
+          id: conversas.id,
+          atendenteId: conversas.atendenteId,
+        })
+        .from(conversas)
+        .where(and(
+          eq(conversas.id, input.conversaId),
+          eq(conversas.escritorioId, perm.escritorioId),
+        ))
+        .limit(1);
+      if (!conv) return [];
+
+      // Se só pode ver próprios, conversa precisa estar atribuída a ele
       if (!perm.verTodos && perm.verProprios && conv.atendenteId !== perm.colaboradorId) {
         return [];
       }
