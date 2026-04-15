@@ -528,11 +528,14 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
 
   // Guarda: WhatsApp API só é considerado conectado se TIVER telefone
   // verificado. Dados antigos com status=conectado mas sem telefone eram
-  // conexões abortadas no meio do Embedded Signup — tratar como não conectado.
-  const whatsappRealmenteConectado =
-    whatsappCanal?.status === "conectado" && !!whatsappCanal?.telefone;
-  const whatsappConexaoIncompleta =
-    whatsappCanal?.status === "conectado" && !whatsappCanal?.telefone;
+  // conexões abortadas no meio do Embedded Signup. O backend agora faz
+  // cleanup desses órfãos no listarCanais, mas mantemos a guarda aqui
+  // como segunda camada — se escapar algum, exibimos "Não conectado"
+  // em vez de "Erro" (não foi erro real, foi tentativa abortada).
+  const whatsappValido =
+    whatsappCanal && whatsappCanal.status === "conectado" && !!whatsappCanal.telefone;
+  const whatsappComErroReal =
+    whatsappCanal?.status === "erro" && !!whatsappCanal?.mensagemErro;
 
   // Cards principais: Embedded Signup (fluxo moderno)
   const canaisPrincipais = [
@@ -542,10 +545,11 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       descricao: "Conecte seu WhatsApp com 1 clique via Facebook. API oficial, sem risco de banimento.",
       logo: "💬",
       cor: "from-emerald-500 to-green-600",
-      canal: whatsappCanal,
-      conectado: whatsappRealmenteConectado,
-      // Se o registro ficou no DB sem telefone, mostra como erro (conexão incompleta)
-      comErro: whatsappCanal?.status === "erro" || whatsappConexaoIncompleta,
+      canal: whatsappValido ? whatsappCanal : undefined,
+      conectado: !!whatsappValido,
+      // "Erro" só aparece se o backend marcou explicitamente erro com
+      // mensagem. Órfãos sem telefone passam como "Não conectado".
+      comErro: whatsappComErroReal,
     },
     {
       id: "instagram" as const,
