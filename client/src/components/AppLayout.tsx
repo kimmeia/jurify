@@ -357,7 +357,6 @@ function AppSidebarContent({
                     className={`h-4 w-4 ${location === "/dashboard" ? "text-primary" : ""}`}
                   />
                   <span>Dashboard</span>
-                  <BetaBadge className="ml-auto" />
                   {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                 </SidebarMenuButton>
               </SidebarMenuItem>}
@@ -414,7 +413,6 @@ function AppSidebarContent({
                 >
                   <Users className={`h-4 w-4 ${location === "/clientes" ? "text-primary" : ""}`} />
                   <span>Clientes</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -457,7 +455,6 @@ function AppSidebarContent({
                 >
                   <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
                   <span>Atendimento</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
