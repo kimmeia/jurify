@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
 import { smartflowCenarios, smartflowPassos, smartflowExecucoes } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -17,15 +18,21 @@ const log = createLogger("smartflow");
 export const smartflowRouter = router({
   /** Lista cenários do escritório */
   listar: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return [];
+    const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
+    if (!perm.allowed) return [];
     const db = await getDb();
     if (!db) return [];
+
+    const conds: any[] = [eq(smartflowCenarios.escritorioId, perm.escritorioId)];
+    // verProprios: filtra cenários criados pelo próprio usuário
+    if (!perm.verTodos && perm.verProprios) {
+      conds.push(eq(smartflowCenarios.criadoPor, ctx.user.id));
+    }
 
     const cenarios = await db
       .select()
       .from(smartflowCenarios)
-      .where(eq(smartflowCenarios.escritorioId, esc.escritorio.id))
+      .where(and(...conds))
       .orderBy(desc(smartflowCenarios.updatedAt));
 
     // Buscar passos de cada cenário
@@ -53,13 +60,13 @@ export const smartflowRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "smartflow", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar cenários SmartFlow." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [result] = await db.insert(smartflowCenarios).values({
-        escritorioId: esc.escritorio.id,
+        escritorioId: perm.escritorioId,
         nome: input.nome,
         descricao: input.descricao || null,
         gatilho: input.gatilho,
@@ -85,14 +92,26 @@ export const smartflowRouter = router({
   toggleAtivo: protectedProcedure
     .input(z.object({ id: z.number(), ativo: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "smartflow", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar cenários." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // verProprios: garante que o cenário foi criado pelo próprio usuário
+      if (!perm.verTodos && perm.verProprios) {
+        const [c] = await db.select({ criadoPor: smartflowCenarios.criadoPor })
+          .from(smartflowCenarios)
+          .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+        if (c.criadoPor !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios cenários." });
+        }
+      }
+
       await db.update(smartflowCenarios)
         .set({ ativo: input.ativo })
-        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, esc.escritorio.id)));
+        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
 
       return { success: true };
     }),
@@ -101,14 +120,25 @@ export const smartflowRouter = router({
   deletar: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "smartflow", "excluir");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir cenários." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      if (!perm.verTodos && perm.verProprios) {
+        const [c] = await db.select({ criadoPor: smartflowCenarios.criadoPor })
+          .from(smartflowCenarios)
+          .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+        if (c.criadoPor !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir seus próprios cenários." });
+        }
+      }
+
       await db.delete(smartflowPassos).where(eq(smartflowPassos.cenarioId, input.id));
       await db.delete(smartflowCenarios)
-        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, esc.escritorio.id)));
+        .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
 
       return { success: true };
     }),
