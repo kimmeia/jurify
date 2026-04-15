@@ -109,14 +109,15 @@ export const crmRouter = router({
       atendenteId: z.number().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
-      // Atendentes e estagiários só veem suas conversas
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return [];
       const filtros = input ?? {};
-      if (esc.colaborador.cargo === "atendente" || esc.colaborador.cargo === "estagiario") {
-        filtros.atendenteId = esc.colaborador.id;
+      // Respeita verProprios — força filtro pelo próprio colaborador,
+      // ignorando qualquer atendenteId vindo do client.
+      if (!perm.verTodos && perm.verProprios) {
+        filtros.atendenteId = perm.colaboradorId;
       }
-      return listarConversas(esc.escritorio.id, filtros);
+      return listarConversas(perm.escritorioId, filtros);
     }),
 
   atualizarConversa: protectedProcedure
@@ -247,8 +248,22 @@ export const crmRouter = router({
   listarMensagens: protectedProcedure
     .input(z.object({ conversaId: z.number(), limite: z.number().max(200).optional() }))
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return [];
+
+      // Verifica que a conversa pertence ao escritório E (se verProprios)
+      // que o colaborador é o atendente designado.
+      const db = await getDb();
+      if (!db) return [];
+      const { conversas } = await import("../../drizzle/schema");
+      const [conv] = await db.select({
+        escritorioId: conversas.escritorioId,
+        responsavelId: conversas.responsavelId,
+      }).from(conversas).where(eq(conversas.id, input.conversaId)).limit(1);
+      if (!conv || conv.escritorioId !== perm.escritorioId) return [];
+      if (!perm.verTodos && perm.verProprios && conv.responsavelId !== perm.colaboradorId) {
+        return [];
+      }
       return listarMensagens(input.conversaId, input.limite ?? 50);
     }),
 
@@ -373,7 +388,12 @@ export const crmRouter = router({
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "pipeline", "ver");
       if (!perm.allowed) return [];
-      return listarLeads(perm.escritorioId, input?.etapa);
+      const todos = await listarLeads(perm.escritorioId, input?.etapa);
+      // verProprios: filtra in-memory (lista de leads é pequena por escritório)
+      if (!perm.verTodos && perm.verProprios) {
+        return todos.filter((l: any) => l.responsavelId === perm.colaboradorId);
+      }
+      return todos;
     }),
 
   atualizarLead: protectedProcedure
