@@ -280,68 +280,92 @@ export const agendaRouter = router({
 
   /**
    * Eventos de hoje e amanhã (para a view "Hoje" e notificações).
+   * Respeita verProprios igual ao listar.
    */
   hoje: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return { hoje: [], amanha: [], atrasados: [] };
+    const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+    if (!perm.allowed) return { hoje: [], amanha: [], atrasados: [] };
 
     const db = await getDb();
     if (!db) return { hoje: [], amanha: [], atrasados: [] };
+
+    const escritorioId = perm.escritorioId;
+    const filtrarProprios = !perm.verTodos && perm.verProprios;
+    const clientesDoColab = filtrarProprios
+      ? await contatoIdsDoColaborador(db, escritorioId, perm.colaboradorId)
+      : [];
+
+    // Helpers de filtro reutilizados (compromissos x tarefas)
+    const agOwn = filtrarProprios
+      ? [or(
+          eq(agendamentos.responsavelId, perm.colaboradorId),
+          eq(agendamentos.criadoPorId, perm.colaboradorId),
+          ...(clientesDoColab.length > 0 ? [inArray(agendamentos.contatoId, clientesDoColab)] : []),
+        )!]
+      : [];
+    const tOwn = filtrarProprios
+      ? [or(
+          eq(tarefas.responsavelId, perm.colaboradorId),
+          eq(tarefas.criadoPor, perm.colaboradorId),
+          ...(clientesDoColab.length > 0 ? [inArray(tarefas.contatoId, clientesDoColab)] : []),
+        )!]
+      : [];
 
     const now = new Date();
     const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const hojeFim = new Date(hojeInicio.getTime() + 86400000);
     const amanhaFim = new Date(hojeInicio.getTime() + 172800000);
 
-    // Compromissos de hoje
     const compromissosHoje = await db.select().from(agendamentos)
       .where(and(
-        eq(agendamentos.escritorioId, esc.escritorio.id),
+        eq(agendamentos.escritorioId, escritorioId),
         gte(agendamentos.dataInicio, hojeInicio),
         lte(agendamentos.dataInicio, hojeFim),
-        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))
+        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+        ...agOwn,
       )).orderBy(asc(agendamentos.dataInicio));
 
-    // Compromissos de amanhã
     const compromissosAmanha = await db.select().from(agendamentos)
       .where(and(
-        eq(agendamentos.escritorioId, esc.escritorio.id),
+        eq(agendamentos.escritorioId, escritorioId),
         gte(agendamentos.dataInicio, hojeFim),
         lte(agendamentos.dataInicio, amanhaFim),
-        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))
+        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+        ...agOwn,
       )).orderBy(asc(agendamentos.dataInicio));
 
-    // Tarefas que vencem hoje
     const tarefasHoje = await db.select().from(tarefas)
       .where(and(
-        eq(tarefas.escritorioId, esc.escritorio.id),
+        eq(tarefas.escritorioId, escritorioId),
         gte(tarefas.dataVencimento, hojeInicio),
         lte(tarefas.dataVencimento, hojeFim),
-        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...tOwn,
       ));
 
-    // Tarefas que vencem amanhã
     const tarefasAmanha = await db.select().from(tarefas)
       .where(and(
-        eq(tarefas.escritorioId, esc.escritorio.id),
+        eq(tarefas.escritorioId, escritorioId),
         gte(tarefas.dataVencimento, hojeFim),
         lte(tarefas.dataVencimento, amanhaFim),
-        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...tOwn,
       ));
 
-    // Atrasados (antes de hoje, ainda pendentes)
     const compromissosAtrasados = await db.select().from(agendamentos)
       .where(and(
-        eq(agendamentos.escritorioId, esc.escritorio.id),
+        eq(agendamentos.escritorioId, escritorioId),
         lte(agendamentos.dataInicio, hojeInicio),
-        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))
+        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+        ...agOwn,
       )).orderBy(asc(agendamentos.dataInicio));
 
     const tarefasAtrasadas = await db.select().from(tarefas)
       .where(and(
-        eq(tarefas.escritorioId, esc.escritorio.id),
+        eq(tarefas.escritorioId, escritorioId),
         lte(tarefas.dataVencimento, hojeInicio),
-        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...tOwn,
       ));
 
     const format = (item: any, fonte: "compromisso" | "tarefa") => ({
@@ -375,57 +399,87 @@ export const agendaRouter = router({
 
   /**
    * Contadores unificados para badge no sidebar.
+   * Respeita verProprios.
    */
   contadores: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return { hojeCount: 0, atrasadosCount: 0, pendentesCount: 0 };
+    const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+    if (!perm.allowed) return { hojeCount: 0, atrasadosCount: 0, pendentesCount: 0 };
 
     const db = await getDb();
     if (!db) return { hojeCount: 0, atrasadosCount: 0, pendentesCount: 0 };
+
+    const escritorioId = perm.escritorioId;
+    const filtrarProprios = !perm.verTodos && perm.verProprios;
+    const clientesDoColab = filtrarProprios
+      ? await contatoIdsDoColaborador(db, escritorioId, perm.colaboradorId)
+      : [];
+
+    const agOwn = filtrarProprios
+      ? [or(
+          eq(agendamentos.responsavelId, perm.colaboradorId),
+          eq(agendamentos.criadoPorId, perm.colaboradorId),
+          ...(clientesDoColab.length > 0 ? [inArray(agendamentos.contatoId, clientesDoColab)] : []),
+        )!]
+      : [];
+    const tOwn = filtrarProprios
+      ? [or(
+          eq(tarefas.responsavelId, perm.colaboradorId),
+          eq(tarefas.criadoPor, perm.colaboradorId),
+          ...(clientesDoColab.length > 0 ? [inArray(tarefas.contatoId, clientesDoColab)] : []),
+        )!]
+      : [];
 
     const now = new Date();
     const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const hojeFim = new Date(hojeInicio.getTime() + 86400000);
 
-    // Compromissos hoje
     const agHoje = await db.select({ id: agendamentos.id }).from(agendamentos)
       .where(and(
-        eq(agendamentos.escritorioId, esc.escritorio.id),
+        eq(agendamentos.escritorioId, escritorioId),
         gte(agendamentos.dataInicio, hojeInicio),
         lte(agendamentos.dataInicio, hojeFim),
-        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))
+        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+        ...agOwn,
       ));
 
-    // Tarefas hoje
     const tHoje = await db.select({ id: tarefas.id }).from(tarefas)
       .where(and(
-        eq(tarefas.escritorioId, esc.escritorio.id),
+        eq(tarefas.escritorioId, escritorioId),
         gte(tarefas.dataVencimento, hojeInicio),
         lte(tarefas.dataVencimento, hojeFim),
-        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...tOwn,
       ));
 
-    // Atrasados
     const agAtrasados = await db.select({ id: agendamentos.id }).from(agendamentos)
       .where(and(
-        eq(agendamentos.escritorioId, esc.escritorio.id),
+        eq(agendamentos.escritorioId, escritorioId),
         lte(agendamentos.dataInicio, hojeInicio),
-        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))
+        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+        ...agOwn,
       ));
 
     const tAtrasados = await db.select({ id: tarefas.id }).from(tarefas)
       .where(and(
-        eq(tarefas.escritorioId, esc.escritorio.id),
+        eq(tarefas.escritorioId, escritorioId),
         lte(tarefas.dataVencimento, hojeInicio),
-        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...tOwn,
       ));
 
-    // Pendentes total
     const agPendentes = await db.select({ id: agendamentos.id }).from(agendamentos)
-      .where(and(eq(agendamentos.escritorioId, esc.escritorio.id), or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento"))));
+      .where(and(
+        eq(agendamentos.escritorioId, escritorioId),
+        or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+        ...agOwn,
+      ));
 
     const tPendentes = await db.select({ id: tarefas.id }).from(tarefas)
-      .where(and(eq(tarefas.escritorioId, esc.escritorio.id), or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))));
+      .where(and(
+        eq(tarefas.escritorioId, escritorioId),
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...tOwn,
+      ));
 
     return {
       hojeCount: agHoje.length + tHoje.length,
