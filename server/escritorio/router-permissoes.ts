@@ -451,6 +451,19 @@ export const permissoesRouter = router({
       };
     }
 
+    // Garante que TODOS os módulos do sistema têm entrada no map.
+    // Se não tem row em permissoes_cargo (cargo criado antes de novos
+    // módulos serem adicionados, save parcial, etc.), default = sem
+    // permissão. Isso evita o fallback "ausente = visível" no frontend.
+    for (const m of MODULOS) {
+      if (!permMap[m]) {
+        permMap[m] = {
+          verTodos: false, verProprios: false,
+          criar: false, editar: false, excluir: false,
+        };
+      }
+    }
+
     return { cargo: cargo.nome, cor: cargo.cor || "#6366f1", permissoes: permMap };
   }),
 });

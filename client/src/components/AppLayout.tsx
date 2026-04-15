@@ -214,12 +214,16 @@ function AppSidebarContent({
     },
   ) || { data: null };
   const canSee = (modulo: string) => {
-    // Dono nunca é bloqueado pelo sistema de permissões
+    // Dono e admin do sistema nunca são bloqueados
     if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
-    if (!minhasPerms?.permissoes) return true; // carregando → mostra tudo pra não flickar
+    // Permissões ainda carregando — mostra tudo pra evitar flicker
+    if (!minhasPerms?.permissoes) return true;
     const p = minhasPerms.permissoes[modulo];
-    if (!p) return true; // módulo desconhecido → visível (não esconde por segurança)
-    return p?.verTodos || p?.verProprios;
+    // Permissões carregadas mas módulo ausente do map → NEGAR.
+    // O backend agora preenche todos os módulos com defaults false, então
+    // ausência aqui é intencional (cargo legado sem entry pra esse módulo).
+    if (!p) return false;
+    return !!(p?.verTodos || p?.verProprios);
   };
 
   useEffect(() => {
