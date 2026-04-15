@@ -153,6 +153,54 @@ export async function emitirParaAtendente(colaboradorId: number, notificacao: Om
   }
 }
 
+/** Envia notificação APENAS para o atendente responsável da conversa
+ *  + dono e gestores do escritório. Usado em eventos como "nova mensagem"
+ *  que só interessam a quem cuida do atendimento (não a todos os
+ *  colaboradores, como acontecia com emitirParaEscritorio antes).
+ */
+export async function emitirParaResponsaveisEMaster(
+  escritorioId: number,
+  atendenteResponsavelId: number | null | undefined,
+  notificacao: Omit<Notificacao, "timestamp">,
+) {
+  try {
+    const { getDb } = await import("../db");
+    const { colaboradores } = await import("../../drizzle/schema");
+    const { eq, and, or, inArray } = await import("drizzle-orm");
+
+    const db = await getDb();
+    if (!db) return;
+
+    // Dono + gestores sempre. E o atendente responsável (se houver).
+    const conds: any[] = [
+      eq(colaboradores.cargo, "dono"),
+      eq(colaboradores.cargo, "gestor"),
+    ];
+    if (atendenteResponsavelId) {
+      conds.push(eq(colaboradores.id, atendenteResponsavelId));
+    }
+
+    const alvos = await db
+      .select({ userId: colaboradores.userId })
+      .from(colaboradores)
+      .where(and(
+        eq(colaboradores.escritorioId, escritorioId),
+        eq(colaboradores.ativo, true),
+        or(...conds),
+      ));
+
+    // Dedup por userId (dono pode estar em múltiplas listas)
+    const seen = new Set<number>();
+    for (const a of alvos) {
+      if (!a.userId || seen.has(a.userId)) continue;
+      seen.add(a.userId);
+      emitirNotificacao(a.userId, notificacao);
+    }
+  } catch (err: any) {
+    log.error("[SSE] Erro ao emitir para responsáveis:", err.message);
+  }
+}
+
 /** Retorna total de conexões ativas (para debug) */
 export function totalConexoesSSE(): number {
   let total = 0;

@@ -53,7 +53,7 @@ export const relatoriosRouter = router({
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
-    const filtroResp = soProprios ? [eq(conversas.responsavelId, colabId)] : [];
+    const filtroResp = soProprios ? [eq(conversas.atendenteId, colabId)] : [];
 
     const statusRows = await db
       .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
@@ -117,7 +117,7 @@ export const relatoriosRouter = router({
     const colabId = esc.colaborador.id;
     const filtroLeadResp = soProprios ? [eq(leads.responsavelId, colabId)] : [];
     const filtroContResp = soProprios ? [eq(contatos.responsavelId, colabId)] : [];
-    const filtroConvResp = soProprios ? [eq(conversas.responsavelId, colabId)] : [];
+    const filtroConvResp = soProprios ? [eq(conversas.atendenteId, colabId)] : [];
 
     // Etapas do funil (com valor estimado)
     const etapaRows = await db
