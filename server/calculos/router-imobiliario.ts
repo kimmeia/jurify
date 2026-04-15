@@ -66,14 +66,17 @@ function toParametros(input: z.infer<typeof parametrosSchema>): ParametrosImobil
 }
 
 export const imobiliarioRouter = router({
-  /** Busca a taxa atual do indexador via API BACEN (sem consumir crédito) */
+  /** Busca a taxa atual do indexador via API BACEN (sem consumir crédito).
+   *  Se API indisponível, lança erro claro — UI mostra "tente mais tarde
+   *  ou escolha outro indexador" em vez de exibir um valor inventado. */
   buscarIndexador: protectedProcedure
     .input(z.object({
       indexador: z.enum(["TR", "IPCA", "IGPM", "IPC", "POUPANCA", "NENHUM"]),
     }))
     .query(async ({ input }) => {
-      const resultado = await buscarIndexadorComFallback(input.indexador);
-      return resultado; // null = API indisponível, informar manualmente
+      // buscarIndexadorBACEN lança BacenIndisponivelError se falhar —
+      // erro propaga pra UI via tRPC com mensagem amigável
+      return await buscarIndexadorComFallback(input.indexador);
     }),
 
   calcular: protectedProcedure

@@ -197,52 +197,48 @@ export async function buscarTaxaMediaBACEN(
 }
 
 /**
- * Fallback com taxas médias REALISTAS por modalidade.
- * Baseado em dados históricos do BACEN (médias de 2023-2024).
- * Usado APENAS quando a API está indisponível (timeout, erro de rede).
+ * Erro específico de indisponibilidade BACEN — caller deve traduzir em
+ * mensagem amigável ao usuário ("tente em alguns minutos").
  */
-const FALLBACK_TAXAS_ANUAIS: Record<ModalidadeCredito, number> = {
-  credito_pessoal: 86.0,           // ~5.3% a.m.
-  consignado: 25.0,                // ~1.9% a.m.
-  financiamento_veiculo: 27.0,     // ~2.0% a.m.
-  financiamento_imobiliario: 11.5, // ~0.9% a.m.
-  cartao_credito: 431.0,           // ~14.8% a.m.
-  cheque_especial: 132.0,          // ~7.2% a.m.
-  capital_giro: 22.0,              // ~1.7% a.m.
-};
+export class BacenIndisponivelError extends Error {
+  constructor(modalidade: ModalidadeCredito, causa: string) {
+    super(
+      `Taxa média do BACEN indisponível para ${modalidade} (${causa}). ` +
+      `Sem este dado, não é possível calcular abusividade com base jurídica. ` +
+      `Tente novamente em alguns minutos.`,
+    );
+    this.name = "BacenIndisponivelError";
+  }
+}
 
 /**
- * Busca a taxa média com fallback para valores realistas por modalidade.
- * O fallback só é usado quando a API está INDISPONÍVEL (timeout, erro de rede),
- * NÃO quando os dados são inválidos ou a data é futura.
+ * Busca a taxa média do BACEN.
+ * A partir de 2026-04 (auditoria), NÃO existe mais fallback inventado.
+ * Se a API estiver indisponível, lança BacenIndisponivelError — a UI
+ * deve informar o usuário pra tentar novamente ou desabilitar o cálculo.
+ *
+ * Motivo: parecer jurídico citando "taxa média BACEN" usando valor
+ * hardcoded de 2024 não se sustenta em juízo.
  */
 export async function buscarTaxaMediaComFallback(
   modalidade: ModalidadeCredito,
   dataContrato: string,
   tipoPessoa?: TipoPessoa,
   tipoVinculoConsignado?: TipoVinculoConsignado
-): Promise<{ taxaMensal: number; taxaAnual: number; dataReferencia: string; fonte: "bacen" | "fallback" }> {
+): Promise<{ taxaMensal: number; taxaAnual: number; dataReferencia: string; fonte: "bacen" }> {
   try {
-    const resultado = await buscarTaxaMediaBACEN(modalidade, dataContrato, tipoPessoa, tipoVinculoConsignado);
+    const resultado = await buscarTaxaMediaBACEN(
+      modalidade, dataContrato, tipoPessoa, tipoVinculoConsignado,
+    );
     return { ...resultado, fonte: "bacen" };
   } catch (err: any) {
     const msg = (err as Error).message || "";
-
-    // Erros de validação ou data futura: NÃO usar fallback, propagar o erro
+    // Erros de validação ou data futura: propagar (mensagem clara)
     if (msg.includes("futura") || msg.includes("validação") || msg.includes("rejeitada")) {
       throw err;
     }
-
-    // Apenas erros de rede/timeout usam fallback
-    log.warn({ modalidade, msg }, "BACEN API indisponível, usando fallback");
-
-    const fallbackAnual = FALLBACK_TAXAS_ANUAIS[modalidade] ?? 30.0;
-    const taxaMensal = anualParaMensal(fallbackAnual);
-    return {
-      taxaMensal: round4(taxaMensal),
-      taxaAnual: round4(fallbackAnual),
-      dataReferencia: dataContrato,
-      fonte: "fallback",
-    };
+    // Erros de rede/timeout: agora também propagam — NÃO inventamos valor
+    log.warn({ modalidade, msg }, "BACEN API indisponível — calculo bloqueado (sem fallback)");
+    throw new BacenIndisponivelError(modalidade, msg);
   }
 }
