@@ -376,6 +376,9 @@ export const agendamentos = mysqlTable("agendamentos", {
   local: varchar("local", { length: 512 }),
   prioridade: mysqlEnum("prioridade", ["baixa", "normal", "alta", "critica"]).default("normal").notNull(),
   status: mysqlEnum("statusAgendamento", ["pendente", "em_andamento", "concluido", "cancelado", "atrasado"]).default("pendente").notNull(),
+  /** Cliente vinculado (opcional). Permite que o "responsável do cliente"
+   *  veja o agendamento mesmo não tendo sido o criador/responsável direto. */
+  contatoId: int("contatoIdAgend"),
   processoId: int("processoIdAgend"),
   corHex: varchar("corHex", { length: 7 }).default("#3b82f6").notNull(),
   createdAt: timestamp("createdAtAgend").defaultNow().notNull(),
