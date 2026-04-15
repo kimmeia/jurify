@@ -33,6 +33,7 @@ import {
   asaasCobrancas,
   processosMonitorados,
   juditMonitoramentos,
+  clienteProcessos,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
@@ -286,30 +287,31 @@ export const customer360Router = router({
           .orderBy(desc(conversas.ultimaMensagemAt))
           .limit(5);
 
-        // ─── Processos das DUAS fontes (DataJud + Judit.IO) ──────────────
-        // Mescla processos monitorados via DataJud (tabela processosMonitorados)
-        // com os monitorados via Judit.IO (tabela juditMonitoramentos).
-        // Frontend renderiza todos juntos com badge de "fonte".
-        const processosDataJud = await db
+        // ─── Processos VINCULADOS AO CLIENTE ─────────────────────────
+        // IMPORTANTE: antes a query buscava processos do usuário logado
+        // (processosMonitorados.userId = ctx.user.id) sem filtrar pelo
+        // contatoId — resultado: quando dono abria conversa, painel
+        // mostrava TODOS os processos dele (não só do cliente em questão).
+        // Agora usamos clienteProcessos que é a tabela de vínculo
+        // cliente↔processo criada especificamente pra isso.
+        const vinculados = await db
           .select({
-            id: processosMonitorados.id,
-            numeroCnj: processosMonitorados.numeroCnj,
-            classe: processosMonitorados.classe,
-            tribunal: processosMonitorados.tribunal,
-            ultimaMovimentacao: processosMonitorados.ultimaMovimentacao,
-            ultimaMovimentacaoData: processosMonitorados.ultimaMovimentacaoData,
-            status: processosMonitorados.status,
+            id: clienteProcessos.id,
+            numeroCnj: clienteProcessos.numeroCnj,
+            apelido: clienteProcessos.apelido,
+            monitoramentoId: clienteProcessos.monitoramentoId,
+            tribunalV: clienteProcessos.tribunal,
+            classeV: clienteProcessos.classe,
           })
-          .from(processosMonitorados)
+          .from(clienteProcessos)
           .where(
             and(
-              eq(processosMonitorados.userId, ctx.user.id),
-              eq(processosMonitorados.status, "ativo"),
+              eq(clienteProcessos.escritorioId, esc.escritorio.id),
+              eq(clienteProcessos.contatoId, contato.id),
             ),
           )
           .limit(10);
 
-        // Shape unificada que aceita campos nullable de qualquer fonte
         type ProcessoNoCard = {
           id: number;
           numeroCnj: string;
@@ -321,54 +323,72 @@ export const customer360Router = router({
           fonte: "datajud" | "judit";
         };
 
-        const processosNormalizados: ProcessoNoCard[] = processosDataJud.map((p) => ({
-          id: p.id,
-          numeroCnj: p.numeroCnj,
-          classe: p.classe,
-          tribunal: p.tribunal,
-          ultimaMovimentacao: p.ultimaMovimentacao,
-          ultimaMovimentacaoData: p.ultimaMovimentacaoData,
-          status: p.status,
-          fonte: "datajud",
-        }));
+        const processosNormalizados: ProcessoNoCard[] = [];
 
-        try {
-          const monsJudit = await db
+        // Enriquece cada vinculo com dados do monitoramento Judit (se tiver).
+        // Também cruza com processosMonitorados (DataJud) se o CNJ bater.
+        for (const v of vinculados) {
+          // 1) Se tem monitoramentoId (Judit) — dados mais atualizados
+          if (v.monitoramentoId) {
+            try {
+              const [m] = await db
+                .select({
+                  tribunal: juditMonitoramentos.tribunal,
+                  ultimaMov: juditMonitoramentos.ultimaMovimentacao,
+                  ultimaMovData: juditMonitoramentos.ultimaMovimentacaoData,
+                  statusJudit: juditMonitoramentos.statusJudit,
+                })
+                .from(juditMonitoramentos)
+                .where(eq(juditMonitoramentos.id, v.monitoramentoId))
+                .limit(1);
+              processosNormalizados.push({
+                id: v.id,
+                numeroCnj: v.numeroCnj,
+                classe: v.classeV,
+                tribunal: m?.tribunal || v.tribunalV,
+                ultimaMovimentacao: m?.ultimaMov || null,
+                ultimaMovimentacaoData: m?.ultimaMovData || null,
+                status: m?.statusJudit === "paused" ? "pausado" : "ativo",
+                fonte: "judit",
+              });
+              continue;
+            } catch {
+              /* Judit indisponível — cai no fallback abaixo */
+            }
+          }
+
+          // 2) Fallback: tenta achar processoMonitorado com mesmo CNJ (DataJud)
+          const cnjLimpo = v.numeroCnj.replace(/\D/g, "");
+          const [p] = await db
             .select({
-              id: juditMonitoramentos.id,
-              searchKey: juditMonitoramentos.searchKey,
-              tribunal: juditMonitoramentos.tribunal,
-              ultimaMovJudit: juditMonitoramentos.ultimaMovimentacao,
-              ultimaMovDataJudit: juditMonitoramentos.ultimaMovimentacaoData,
-              statusJudit: juditMonitoramentos.statusJudit,
+              classe: processosMonitorados.classe,
+              tribunal: processosMonitorados.tribunal,
+              ultimaMovimentacao: processosMonitorados.ultimaMovimentacao,
+              ultimaMovimentacaoData: processosMonitorados.ultimaMovimentacaoData,
+              status: processosMonitorados.status,
             })
-            .from(juditMonitoramentos)
+            .from(processosMonitorados)
             .where(
               and(
-                eq(juditMonitoramentos.clienteUserId, ctx.user.id),
                 or(
-                  eq(juditMonitoramentos.statusJudit, "created"),
-                  eq(juditMonitoramentos.statusJudit, "updating"),
-                  eq(juditMonitoramentos.statusJudit, "updated"),
+                  eq(processosMonitorados.numeroCnj, v.numeroCnj),
+                  eq(processosMonitorados.numeroCnjLimpo, cnjLimpo),
                 ),
+                eq(processosMonitorados.userId, ctx.user.id),
               ),
             )
-            .limit(10);
+            .limit(1);
 
-          for (const m of monsJudit) {
-            processosNormalizados.push({
-              id: -m.id, // negativo pra não colidir com IDs DataJud no React key
-              numeroCnj: m.searchKey,
-              classe: null,
-              tribunal: m.tribunal,
-              ultimaMovimentacao: m.ultimaMovJudit,
-              ultimaMovimentacaoData: m.ultimaMovDataJudit,
-              status: "ativo",
-              fonte: "judit",
-            });
-          }
-        } catch (err) {
-          log.warn({ err: String(err) }, "Falha ao buscar monitoramentos Judit");
+          processosNormalizados.push({
+            id: v.id,
+            numeroCnj: v.numeroCnj,
+            classe: p?.classe || v.classeV,
+            tribunal: p?.tribunal || v.tribunalV,
+            ultimaMovimentacao: p?.ultimaMovimentacao || null,
+            ultimaMovimentacaoData: p?.ultimaMovimentacaoData || null,
+            status: p?.status || "ativo",
+            fonte: "datajud",
+          });
         }
 
         const processosDoUser = processosNormalizados.slice(0, 10);
