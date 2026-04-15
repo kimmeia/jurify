@@ -36,7 +36,7 @@ export const clientesRouter = router({
     return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional() }))
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
       if (!perm.allowed) throw new Error("Sem permissão para cadastrar clientes.");
@@ -46,11 +46,16 @@ export const clientesRouter = router({
       if (input.cpfCnpj) { const v = validarCpfCnpj(input.cpfCnpj); if (!v.valido) throw new Error(`${v.tipo === "cpf" ? "CPF" : v.tipo === "cnpj" ? "CNPJ" : "CPF/CNPJ"} inválido.`); }
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido. Use formato (XX) XXXXX-XXXX.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: perm.colaboradorId });
+      // Atendentes/estagiários só conseguem criar contato como próprio responsável.
+      // Dono/Gestor (verTodos) pode atribuir a qualquer colaborador via input.responsavelId.
+      const respId = perm.verTodos
+        ? (input.responsavelId ?? perm.colaboradorId)
+        : perm.colaboradorId;
+      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId });
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -95,6 +100,11 @@ export const clientesRouter = router({
       if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj;
       if (d.observacoes !== undefined) u.observacoes = d.observacoes;
       if (d.tags !== undefined) u.tags = d.tags;
+      // Reatribuição de responsável: só permitida pra quem tem verTodos
+      // (atendente/estagiário não pode "passar" cliente pra outro).
+      if (d.responsavelId !== undefined && perm.verTodos) {
+        u.responsavelId = d.responsavelId;
+      }
       await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
