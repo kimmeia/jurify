@@ -20,9 +20,94 @@ import {
 import { toast } from "sonner";
 
 export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: () => void }) {
-  const [nome, setNome] = useState(cliente.nome || ""); const [tel, setTel] = useState(cliente.telefone || ""); const [email, setEmail] = useState(cliente.email || ""); const [cpf, setCpf] = useState(cliente.cpfCnpj || ""); const [obs, setObs] = useState(cliente.observacoes || ""); const [tags, setTags] = useState(cliente.tags || "");
-  const mut = trpc.clientes.atualizar.useMutation({ onSuccess: () => { toast.success("Atualizado!"); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
-  return (<Card><CardContent className="pt-4 space-y-4"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label className="text-xs">Nome *</Label><Input value={nome} onChange={e => setNome(e.target.value)} /></div><div className="space-y-1.5"><Label className="text-xs">CPF/CNPJ</Label><Input value={cpf} onChange={e => setCpf(e.target.value)} /></div></div><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label className="text-xs">Telefone</Label><Input value={tel} onChange={e => setTel(e.target.value)} /></div><div className="space-y-1.5"><Label className="text-xs">Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div></div><div className="space-y-1.5"><Label className="text-xs">Tags</Label><Input value={tags} onChange={e => setTags(e.target.value)} placeholder="VIP, Trabalhista" /></div><div className="space-y-1.5"><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} /></div><Button size="sm" onClick={() => mut.mutate({ id: cliente.id, nome, telefone: tel, email, cpfCnpj: cpf, observacoes: obs, tags })} disabled={!nome || mut.isPending}>{mut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Salvar</Button></CardContent></Card>);
+  const [nome, setNome] = useState(cliente.nome || "");
+  const [tel, setTel] = useState(cliente.telefone || "");
+  const [email, setEmail] = useState(cliente.email || "");
+  const [cpf, setCpf] = useState(cliente.cpfCnpj || "");
+  const [obs, setObs] = useState(cliente.observacoes || "");
+  const [tags, setTags] = useState(cliente.tags || "");
+  // responsavelId pode ser null (sem responsável) ou number; UI usa string
+  const [responsavelId, setResponsavelId] = useState<string>(
+    cliente.responsavelId ? String(cliente.responsavelId) : "",
+  );
+
+  // Lista de colaboradores ativos pra mostrar no dropdown.
+  // Backend só permite reatribuir pra dono/gestor; pra outros, a query
+  // retorna array vazio (sem permissão de listar equipe) e o campo
+  // mostra só info read-only.
+  const { data: equipeData } = (trpc as any).configuracoes?.listarColaboradores?.useQuery?.(
+    undefined,
+    { retry: false },
+  ) || { data: null };
+  const colaboradores: any[] = equipeData?.colaboradores || [];
+  const podeReatribuir = colaboradores.length > 0;
+
+  // Nome do responsável atual pra exibir mesmo quando não pode reatribuir
+  const responsavelAtualNome = (() => {
+    if (!cliente.responsavelId) return null;
+    const c = colaboradores.find((x) => x.id === cliente.responsavelId);
+    return c?.userName || c?.userEmail || `Colaborador #${cliente.responsavelId}`;
+  })();
+
+  const mut = trpc.clientes.atualizar.useMutation({
+    onSuccess: () => { toast.success("Atualizado!"); onSuccess(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Card>
+      <CardContent className="pt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5"><Label className="text-xs">Nome *</Label><Input value={nome} onChange={e => setNome(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label className="text-xs">CPF/CNPJ</Label><Input value={cpf} onChange={e => setCpf(e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5"><Label className="text-xs">Telefone</Label><Input value={tel} onChange={e => setTel(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
+        </div>
+
+        {/* Responsável pelo atendimento */}
+        <div className="space-y-1.5">
+          <Label className="text-xs">Responsável pelo atendimento</Label>
+          {podeReatribuir ? (
+            <select
+              value={responsavelId}
+              onChange={(e) => setResponsavelId(e.target.value)}
+              className="w-full h-9 px-3 text-sm rounded-md border bg-background"
+            >
+              <option value="">— Sem responsável definido —</option>
+              {colaboradores.filter((c) => c.ativo).map((c) => (
+                <option key={c.id} value={c.id}>{c.userName || c.userEmail}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="h-9 px-3 flex items-center text-sm rounded-md border bg-muted/30 text-muted-foreground">
+              {responsavelAtualNome || "Sem responsável definido"}
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            Quando o cliente entrar em contato (WhatsApp etc.), a conversa cai no responsável definido aqui.
+          </p>
+        </div>
+
+        <div className="space-y-1.5"><Label className="text-xs">Tags</Label><Input value={tags} onChange={e => setTags(e.target.value)} placeholder="VIP, Trabalhista" /></div>
+        <div className="space-y-1.5"><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} /></div>
+        <Button size="sm" onClick={() => mut.mutate({
+          id: cliente.id,
+          nome, telefone: tel, email, cpfCnpj: cpf,
+          observacoes: obs, tags,
+          // Só envia responsavelId se podeReatribuir (UX de leitura
+          // pra atendentes não tenta enviar campo). Empty string vira null
+          // (sem responsável) — backend ignora se não tem verTodos.
+          ...(podeReatribuir
+            ? { responsavelId: responsavelId ? Number(responsavelId) : null }
+            : {}),
+        })} disabled={!nome || mut.isPending}>
+          {mut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Salvar
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: number; anotacoes: any[]; onRefresh: () => void }) {
