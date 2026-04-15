@@ -560,24 +560,32 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
       <div className="flex items-center gap-3">
         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(conv?.contatoNome || "?")}</div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
+            {/* Badge do atendente responsável — bem visível em azul.
+                Ajuda gestor/dono a identificar de quem é a conversa */}
+            {(conv as any)?.atendenteNome ? (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 gap-1 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800"
+              >
+                <User className="h-3 w-3" />
+                {(conv as any).atendenteNome}
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
+              >
+                Sem atendente
+              </Badge>
+            )}
             {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {conv?.contatoTelefone && <span>{conv.contatoTelefone}</span>}
-            {/* Responsável pelo atendimento — ajuda gestor a identificar
-                de quem é a conversa no Inbox */}
-            {(conv as any)?.atendenteNome ? (
-              <span className="flex items-center gap-1">
-                <User className="h-2.5 w-2.5" />
-                {(conv as any).atendenteNome}
-              </span>
-            ) : (
-              <span className="italic text-amber-600">sem atendente</span>
-            )}
-          </div>
+          {conv?.contatoTelefone && (
+            <p className="text-[10px] text-muted-foreground mt-0.5">{conv.contatoTelefone}</p>
+          )}
         </div>
         {conv?.contatoTelefone && (onWA || onTel) && (
           <div className="flex items-center gap-1 shrink-0">
