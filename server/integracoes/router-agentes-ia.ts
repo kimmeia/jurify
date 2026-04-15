@@ -19,9 +19,26 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { checkPermission } from "../escritorio/check-permission";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { agentesIa, agenteIaDocumentos, adminIntegracoes } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
+
+/** Helper: valida ownership de um agente quando verProprios. */
+async function podeMexerNoAgente(
+  db: any,
+  agenteId: number,
+  escritorioId: number,
+  userId: number,
+): Promise<boolean> {
+  const [a] = await db.select({ criadoPor: agentesIa.criadoPor })
+    .from(agentesIa)
+    .where(and(eq(agentesIa.id, agenteId), eq(agentesIa.escritorioId, escritorioId)))
+    .limit(1);
+  if (!a) return false;
+  return a.criadoPor === userId;
+}
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import crypto from "crypto";
 import fs from "fs";
@@ -185,15 +202,23 @@ async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promis
 export const agentesIaRouter = router({
   /** Lista todos os agentes do escritório + contagem de documentos */
   listar: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "agentesIa", "ver");
+    if (!perm.allowed) return [];
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
     const db = await getDb();
     if (!db) return [];
 
+    const conds: any[] = [eq(agentesIa.escritorioId, perm.escritorioId)];
+    // verProprios: filtra agentes criados pelo próprio usuário
+    if (!perm.verTodos && perm.verProprios) {
+      conds.push(eq(agentesIa.criadoPor, ctx.user.id));
+    }
+
     const rows = await db
       .select()
       .from(agentesIa)
-      .where(eq(agentesIa.escritorioId, esc.escritorio.id))
+      .where(and(...conds))
       .orderBy(desc(agentesIa.createdAt));
 
     // Contagem de documentos por agente (só os do próprio escritório)
@@ -284,10 +309,8 @@ export const agentesIaRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor")
-        throw new Error("Sem permissão.");
+      const perm = await checkPermission(ctx.user.id, "agentesIa", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar agentes." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
@@ -302,7 +325,7 @@ export const agentesIaRouter = router({
       }
 
       const [result] = await db.insert(agentesIa).values({
-        escritorioId: esc.escritorio.id,
+        escritorioId: perm.escritorioId,
         nome: input.nome,
         descricao: input.descricao || null,
         areaConhecimento: input.areaConhecimento || null,
@@ -319,6 +342,7 @@ export const agentesIaRouter = router({
             ? input.modulosPermitidos.join(",")
             : null,
         ativo: false,
+        criadoPor: ctx.user.id,
       });
       return { id: (result as { insertId: number }).insertId };
     }),
@@ -341,12 +365,15 @@ export const agentesIaRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor")
-        throw new Error("Sem permissão.");
+      const perm = await checkPermission(ctx.user.id, "agentesIa", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar agentes." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoAgente(db, input.id, perm.escritorioId, ctx.user.id);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios agentes." });
+      }
 
       const u: Record<string, unknown> = {};
       if (input.nome !== undefined) u.nome = input.nome;
@@ -371,17 +398,22 @@ export const agentesIaRouter = router({
       await db
         .update(agentesIa)
         .set(u)
-        .where(and(eq(agentesIa.id, input.id), eq(agentesIa.escritorioId, esc.escritorio.id)));
+        .where(and(eq(agentesIa.id, input.id), eq(agentesIa.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 
   excluir: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
+      const perm = await checkPermission(ctx.user.id, "agentesIa", "excluir");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir agentes." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoAgente(db, input.id, perm.escritorioId, ctx.user.id);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode excluir seus próprios agentes." });
+      }
 
       // Deleta documentos associados (arquivo do disco + DB)
       const docs = await db
@@ -390,7 +422,7 @@ export const agentesIaRouter = router({
         .where(
           and(
             eq(agenteIaDocumentos.agenteId, input.id),
-            eq(agenteIaDocumentos.escritorioId, esc.escritorio.id),
+            eq(agenteIaDocumentos.escritorioId, perm.escritorioId),
           ),
         );
       for (const d of docs) {
@@ -408,12 +440,12 @@ export const agentesIaRouter = router({
         .where(
           and(
             eq(agenteIaDocumentos.agenteId, input.id),
-            eq(agenteIaDocumentos.escritorioId, esc.escritorio.id),
+            eq(agenteIaDocumentos.escritorioId, perm.escritorioId),
           ),
         );
       await db
         .delete(agentesIa)
-        .where(and(eq(agentesIa.id, input.id), eq(agentesIa.escritorioId, esc.escritorio.id)));
+        .where(and(eq(agentesIa.id, input.id), eq(agentesIa.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 
