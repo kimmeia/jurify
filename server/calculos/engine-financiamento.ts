@@ -275,39 +275,42 @@ export function analisarTarifas(p: ParametrosFinanciamento): TarifaIlegal[] {
 // ─── Tetos legais por modalidade ──────────────────────────────────────────────
 
 /**
- * Tetos legais de taxa de juros por modalidade.
- * Retorna undefined se a modalidade não possui teto legal específico (usa regra geral 1,5× BACEN).
+ * Tetos legais de taxa de juros por modalidade (timeline-aware).
  *
- * IMPORTANTE: Tetos de consignado INSS são definidos pelo CNPS e mudam periodicamente.
- * Última atualização: março/2025 (Resolução CNPS 1.368/2025).
- * Servidor público federal: Portaria MGI de dez/2023.
+ * A busca real é feita pelo router (async, via tabela tetos_legais com
+ * vigência temporal). O resultado pre-fetched é passado ao engine como
+ * parâmetro para manter `analisarAbusividade` sync.
+ *
+ * Se o router não passou teto (null), o engine aplica regra geral
+ * (1,5× BACEN). O parecer inclui nota explicando que não há teto legal
+ * específico cadastrado para a data da contratação.
+ *
+ * FALLBACK DE SEGURANÇA: se router não fez pre-fetch (undefined), usa
+ * os valores hardcoded antigos como ÚLTIMO recurso — melhor do que
+ * deixar o cálculo sem nenhum teto quando a tabela ainda não existe.
  */
 function obterTetoLegal(
   params: ParametrosFinanciamento,
+  tetoPreFetched?: { tetoMensal: number; fundamento: string } | null,
 ): { tetoMensal: number; fundamento: string } | undefined {
-  const { modalidadeCredito, tipoVinculoConsignado, dataContrato } = params;
+  // Se o router fez o pre-fetch, usar (pode ser null = sem teto pra essa data)
+  if (tetoPreFetched !== undefined) {
+    return tetoPreFetched ?? undefined;
+  }
 
-  // Cheque especial: 8% a.m. (Resolução CMN 4.765/2019, vigente desde 06/01/2020)
+  // FALLBACK: valores hardcoded (se tabela não existe ainda ou router antigo)
+  const { modalidadeCredito, tipoVinculoConsignado, dataContrato } = params;
   if (modalidadeCredito === "cheque_especial" && dataContrato >= "2020-01-06") {
     return { tetoMensal: 8, fundamento: "Resolução CMN 4.765/2019 — Teto de 8% a.m. para cheque especial (PF e MEI)" };
   }
-
-  // Consignado com vínculo específico
   if (modalidadeCredito === "consignado" && tipoVinculoConsignado) {
-    // INSS (aposentados/pensionistas): 1,85% a.m. (Resolução CNPS 1.368/2025, vigente desde março/2025)
     if (tipoVinculoConsignado === "inss") {
-      return { tetoMensal: 1.85, fundamento: "Resolução CNPS 1.368/2025 — Teto de 1,85% a.m. para consignado de aposentados e pensionistas do INSS" };
+      return { tetoMensal: 1.85, fundamento: "Resolução CNPS 1.368/2025 — Teto de 1,85% a.m. para consignado INSS (fallback)" };
     }
-    // Servidor público federal: 1,80% a.m. (Portaria MGI, dez/2023)
     if (tipoVinculoConsignado === "servidor_publico") {
-      return { tetoMensal: 1.80, fundamento: "Portaria MGI (dez/2023) — Teto de 1,80% a.m. para consignado de servidor público federal (SIAPE)" };
+      return { tetoMensal: 1.80, fundamento: "Portaria MGI (dez/2023) — Teto de 1,80% a.m. para consignado servidor (fallback)" };
     }
-    // Militar: sem teto de taxa de juros específico.
-    // MP 2.215-10/2001 regula margem consignável (70%), não taxa de juros.
-    // Usa regra geral (1,5× BACEN).
-    // CLT: sem teto específico, usa regra geral.
   }
-
   return undefined;
 }
 
@@ -333,14 +336,22 @@ function verificarTetoJurosCartao(
   };
 }
 
-export function analisarAbusividade(params: ParametrosFinanciamento, bacenM: number, bacenA: number): AnaliseAbusividade {
+export function analisarAbusividade(
+  params: ParametrosFinanciamento,
+  bacenM: number,
+  bacenA: number,
+  /** Teto legal pre-fetched da tabela tetos_legais (por data do contrato).
+   *  undefined = router não fez fetch (fallback hardcoded interno).
+   *  null = buscou mas não tem teto pra essa categoria/data. */
+  tetoPreFetched?: { tetoMensal: number; fundamento: string } | null,
+): AnaliseAbusividade {
   // 1. Teto STJ (regra geral): 1,5× média BACEN
   const tetoM = round4(bacenM * 1.5), tetoA = round4(mensalParaAnual(tetoM));
   const abusivaSTJ = params.taxaJurosMensal > tetoM;
   const pctAcima = bacenM > 0 ? round2(((params.taxaJurosMensal - bacenM) / bacenM) * 100) : 0;
 
   // 2. Teto legal específico (cheque especial, consignado servidor/INSS)
-  const tetoLegal = obterTetoLegal(params);
+  const tetoLegal = obterTetoLegal(params, tetoPreFetched);
   const violaTetoLegal = tetoLegal ? params.taxaJurosMensal > tetoLegal.tetoMensal : false;
 
   // 3. Cartão de crédito: juros acumulados > 100% (Lei 14.690/2023)
@@ -579,7 +590,9 @@ export function validarTaxaBACEN(taxaMensal: number, taxaAnual: number, modalida
 export function calcularRevisaoFinanciamento(
   params: ParametrosFinanciamento,
   taxaMediaBACEN_mensal: number,
-  taxaMediaBACEN_anual: number
+  taxaMediaBACEN_anual: number,
+  /** Teto legal pre-fetched (timeline). undefined = sem fetch, null = sem teto. */
+  tetoPreFetched?: { tetoMensal: number; fundamento: string } | null,
 ): Omit<ResultadoFinanciamento, "parecerTecnico"> & {
   verificacaoParcela?: VerificacaoParcela;
   comparativo4Cenarios: ComparativoCenario[];
@@ -597,8 +610,8 @@ export function calcularRevisaoFinanciamento(
   const parcelaCalculada = demonstrativoOriginal[0]?.valorParcela ?? 0;
   const verificacaoParcela = verificarParcela(params, parcelaCalculada);
 
-  // 2. Análise completa
-  const analise = analisarAbusividade(params, taxaMediaBACEN_mensal, taxaMediaBACEN_anual);
+  // 2. Análise completa (com teto legal por data do contrato, se disponível)
+  const analise = analisarAbusividade(params, taxaMediaBACEN_mensal, taxaMediaBACEN_anual, tetoPreFetched);
 
   // 3. Determinar taxa para recálculo
   const { taxa: taxaRecalculo, criterio } = determinarTaxaRecalculo(params, taxaMediaBACEN_mensal, analise);

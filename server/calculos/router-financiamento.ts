@@ -101,7 +101,24 @@ export const financiamentoRouter = router({
         taxaMedia = await buscarTaxaMediaComFallback(params.modalidadeCredito, params.dataContrato, params.tipoPessoa, params.tipoVinculoConsignado);
       }
 
-      const resultado = calcularRevisaoFinanciamento(params, taxaMedia.taxaMensal, taxaMedia.taxaAnual);
+      // Pre-fetch do teto legal por DATA DO CONTRATO (tabela tetos_legais).
+      // Se tabela não existe ou sem registro pra essa data → null → engine
+      // usa regra geral 1,5× BACEN com nota no parecer.
+      let tetoLegalPreFetched: { tetoMensal: number; fundamento: string } | null = null;
+      try {
+        const { obterTetoLegalPorData } = await import("./tetos-legais");
+        tetoLegalPreFetched = await obterTetoLegalPorData(
+          params.modalidadeCredito,
+          params.dataContrato,
+          params.tipoVinculoConsignado,
+        );
+      } catch {
+        // Tabela pode não existir (migration pendente) — engine usa fallback hardcoded
+      }
+
+      const resultado = calcularRevisaoFinanciamento(
+        params, taxaMedia.taxaMensal, taxaMedia.taxaAnual, tetoLegalPreFetched,
+      );
 
       const parecer = gerarParecerTecnico(
         params, resultado.analiseAbusividade, resultado.resumo,
