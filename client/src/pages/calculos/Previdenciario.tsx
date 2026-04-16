@@ -98,7 +98,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
   const [resultado, setResultado] = useState<ResultadoSimulacao | null>(null);
 
   const mutation = trpc.previdenciario.simular.useMutation({
-    onSuccess: (data) => { setResultado(data); setStep(4); toast.success("Simulação realizada! (1 crédito)"); },
+    onSuccess: (data) => { setResultado(data); setStep(3); toast.success("Simulação realizada! (1 crédito)"); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -114,7 +114,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
     mutation.mutate({ sexo, dataNascimento: dataNasc, periodos: validos, continuaContribuindo });
   };
 
-  const stepLabels = ["Dados Pessoais", "Períodos", "Confirmação", "Resultado"];
+  const stepLabels = ["Dados Pessoais", "Períodos", "Resultado"];
 
   return (
     <div className="space-y-4">
@@ -151,110 +151,104 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
         </Card>
       )}
 
-      {/* STEP 2: Períodos de contribuição */}
+      {/* STEP 2: Períodos de contribuição (+ cálculo direto, sem step de confirmação) */}
       {step === 2 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-rose-600" /> Períodos de Contribuição</CardTitle>
-            <CardDescription>Cadastre cada vínculo ou período de trabalho. O sistema calcula o tempo total automaticamente.</CardDescription>
+            <CardDescription>Cadastre cada vínculo. O tempo total é calculado automaticamente.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {periodos.map((p, idx) => (
-              <div key={p.id} className="p-4 rounded-lg border space-y-3 relative">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-muted-foreground">Período {idx + 1}</p>
-                  {periodos.length > 1 && <Button variant="ghost" size="sm" onClick={() => removePeriodo(p.id)}><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label className="text-xs">Data Início *</Label><Input type="date" value={p.dataInicio} onChange={e => updatePeriodo(p.id, "dataInicio", e.target.value)} /></div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Data Fim {p.aindaAtivo ? "(atual)" : "*"}</Label>
-                    <Input type="date" value={p.dataFim} disabled={p.aindaAtivo} onChange={e => updatePeriodo(p.id, "dataFim", e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Switch checked={!!p.aindaAtivo} onCheckedChange={v => updatePeriodo(p.id, "aindaAtivo", v)} />
-                  <Label className="text-xs">Ainda estou neste vínculo</Label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Tipo de Atividade *</Label>
-                    <Select value={p.tipoAtividade} onValueChange={v => updatePeriodo(p.id, "tipoAtividade", v)}>
-                      <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(TIPO_ATIVIDADE_LABELS).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Vínculo</Label>
-                    <Select value={p.categoriaVinculo} onValueChange={v => updatePeriodo(p.id, "categoriaVinculo", v)}>
-                      <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CLT">CLT</SelectItem>
-                        <SelectItem value="CONTRIBUINTE_INDIVIDUAL">Autônomo</SelectItem>
-                        <SelectItem value="FACULTATIVO">Facultativo</SelectItem>
-                        <SelectItem value="MEI">MEI</SelectItem>
-                        <SelectItem value="EMPREGADO_DOMESTICO">Doméstico</SelectItem>
-                        <SelectItem value="AVULSO">Avulso</SelectItem>
-                        <SelectItem value="SEGURADO_ESPECIAL">Segurado Especial</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs">Descrição (opcional)</Label>
-                  <Input placeholder="Ex: Hospital São Lucas — Enfermeiro" value={p.descricao || ""} onChange={e => updatePeriodo(p.id, "descricao", e.target.value)} className="text-xs" />
-                </div>
-              </div>
-            ))}
-
-            <Button variant="outline" onClick={addPeriodo} className="w-full"><Plus className="h-4 w-4 mr-1" /> Adicionar Período</Button>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-              <Button onClick={() => {
-                const validos = periodos.filter(p => p.dataInicio && (p.aindaAtivo || p.dataFim));
-                if (validos.length === 0) { toast.error("Cadastre ao menos um período com datas preenchidas."); return; }
-                setStep(3);
-              }}>Próximo <ArrowRight className="h-4 w-4 ml-1" /></Button>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="p-2 text-left text-xs font-medium">Início *</th>
+                    <th className="p-2 text-left text-xs font-medium">Fim</th>
+                    <th className="p-2 text-left text-xs font-medium">Atual?</th>
+                    <th className="p-2 text-left text-xs font-medium">Atividade *</th>
+                    <th className="p-2 text-left text-xs font-medium">Vínculo</th>
+                    <th className="p-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodos.map((p) => (
+                    <tr key={p.id} className="border-t">
+                      <td className="p-1.5">
+                        <Input className="h-8" type="date" value={p.dataInicio} onChange={e => updatePeriodo(p.id, "dataInicio", e.target.value)} />
+                      </td>
+                      <td className="p-1.5">
+                        <Input className="h-8" type="date" value={p.dataFim} disabled={p.aindaAtivo} onChange={e => updatePeriodo(p.id, "dataFim", e.target.value)} />
+                      </td>
+                      <td className="p-1.5">
+                        <Switch checked={!!p.aindaAtivo} onCheckedChange={v => updatePeriodo(p.id, "aindaAtivo", v)} />
+                      </td>
+                      <td className="p-1.5">
+                        <Select value={p.tipoAtividade} onValueChange={v => updatePeriodo(p.id, "tipoAtividade", v)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(TIPO_ATIVIDADE_LABELS).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1.5">
+                        <Select value={p.categoriaVinculo} onValueChange={v => updatePeriodo(p.id, "categoriaVinculo", v)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CLT">CLT</SelectItem>
+                            <SelectItem value="CONTRIBUINTE_INDIVIDUAL">Autônomo</SelectItem>
+                            <SelectItem value="FACULTATIVO">Facultativo</SelectItem>
+                            <SelectItem value="MEI">MEI</SelectItem>
+                            <SelectItem value="EMPREGADO_DOMESTICO">Doméstico</SelectItem>
+                            <SelectItem value="AVULSO">Avulso</SelectItem>
+                            <SelectItem value="SEGURADO_ESPECIAL">Segurado Especial</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1.5 text-right">
+                        {periodos.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removePeriodo(p.id)} className="h-8 w-8 p-0 text-muted-foreground hover:text-red-700">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* STEP 3: Confirmação */}
-      {step === 3 && (
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-rose-600" /> Confirme os dados</CardTitle><CardDescription>1 crédito será descontado</CardDescription></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-muted/30 rounded-lg text-sm space-y-1">
-              <p>Sexo: <strong>{sexo === "F" ? "Feminino" : "Masculino"}</strong></p>
-              <p>Nascimento: <strong>{dataNasc.split("-").reverse().join("/")}</strong></p>
-              <p>Períodos: <strong>{periodos.filter(p => p.dataInicio).length}</strong></p>
-            </div>
-            {periodos.filter(p => p.dataInicio).map((p, i) => (
-              <div key={p.id} className="p-3 bg-muted/20 rounded-lg text-xs space-y-0.5">
-                <p className="font-semibold">Período {i + 1}: {p.dataInicio.split("-").reverse().join("/")} a {p.aindaAtivo ? "Atual" : (p.dataFim || "?").split("-").reverse().join("/")}</p>
-                <p className="text-muted-foreground">{TIPO_ATIVIDADE_LABELS[p.tipoAtividade]} — {p.categoriaVinculo}{p.descricao ? ` — ${p.descricao}` : ""}</p>
-              </div>
-            ))}
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-              <Button onClick={handleSimular} disabled={mutation.isPending} className="bg-rose-600 hover:bg-rose-700 text-white">
-                {mutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Simulando...</> : <><Calculator className="h-4 w-4 mr-2" /> Simular Aposentadoria</>}
+            <Button variant="outline" onClick={addPeriodo} className="w-full"><Plus className="h-4 w-4 mr-1" /> Adicionar período</Button>
+
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" onClick={() => setStep(1)}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <Button
+                onClick={() => {
+                  const validos = periodos.filter(p => p.dataInicio && (p.aindaAtivo || p.dataFim));
+                  if (validos.length === 0) { toast.error("Cadastre ao menos um período com datas preenchidas."); return; }
+                  handleSimular();
+                }}
+                disabled={mutation.isPending}
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                {mutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Simulando...</>
+                ) : (
+                  <><Calculator className="h-4 w-4 mr-2" /> Simular Aposentadoria</>
+                )}
               </Button>
             </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Cada simulação consome 1 crédito do seu plano
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {/* STEP 4: Resultado */}
-      {step === 4 && resultado && <ResultadoSimulador resultado={resultado} onNovo={() => { setStep(1); setResultado(null); }} onVoltar={onVoltar} />}
+      {/* STEP 3: Resultado (antes era step 4) */}
+      {step === 3 && resultado && <ResultadoSimulador resultado={resultado} onNovo={() => { setStep(1); setResultado(null); }} onVoltar={onVoltar} />}
     </div>
   );
 }
