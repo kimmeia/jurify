@@ -16,9 +16,14 @@ import { registarCalculo, consumirCredito } from "../db";
 
 // ─── Schemas de Validação ─────────────────────────────────────────────────────
 
+// Regex restrita: YYYY-MM-DD com mês 01-12 e dia 01-31.
+// A validação semântica fica em .refine() (ordem, bissexto).
+const dateRegex = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const mesAnoRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 const rescisaoSchema = z.object({
-  dataAdmissao: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  dataDesligamento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dataAdmissao: z.string().regex(dateRegex),
+  dataDesligamento: z.string().regex(dateRegex),
   salarioBruto: z.number().positive(),
   tipoRescisao: z.enum(["sem_justa_causa", "pedido_demissao", "justa_causa", "rescisao_indireta", "acordo_mutuo", "termino_contrato"]),
   tipoContrato: z.enum(["indeterminado", "determinado", "experiencia", "intermitente"]),
@@ -30,10 +35,16 @@ const rescisaoSchema = z.object({
   mediaComissoes: z.number().min(0).optional(),
   saldoFGTS: z.number().min(0).optional(),
   adiantamentos: z.number().min(0).optional(),
-});
+}).refine(
+  (data) => data.dataDesligamento >= data.dataAdmissao,
+  {
+    message: "Data de desligamento não pode ser anterior à admissão",
+    path: ["dataDesligamento"],
+  },
+);
 
 const periodoHESchema = z.object({
-  mesAno: z.string().regex(/^\d{4}-\d{2}$/),
+  mesAno: z.string().regex(mesAnoRegex),
   horasExtras50: z.number().min(0),
   horasExtras100: z.number().min(0),
   horasNoturnas: z.number().min(0).optional(),

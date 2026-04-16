@@ -495,87 +495,57 @@ export default function Imobiliario() {
               </div>
             )}
 
-            <div>
-              <Label className="mb-3 block font-semibold">Sistema de Financiamento</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    (form.enquadramento || (form.valorImovel && parseFloat(form.valorImovel) <= 2250000 ? "SFH" : "SFI")) === "SFH"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20 ring-1 ring-blue-500"
-                      : "border-border hover:border-blue-300"
-                  }`}
-                  onClick={() => updateField("enquadramento", "SFH")}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                      <Home className="h-5 w-5 text-blue-600" />
+            <div className="space-y-1.5">
+              <Label htmlFor="enquadramento">Sistema de Financiamento</Label>
+              <Select
+                value={form.enquadramento || (form.valorImovel && parseFloat(form.valorImovel) <= 2250000 ? "SFH" : "SFI")}
+                onValueChange={(v) => updateField("enquadramento", v)}
+              >
+                <SelectTrigger id="enquadramento"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SFH">
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">SFH — Sistema Financeiro de Habitação</span>
+                      <span className="text-xs text-muted-foreground">Teto de 12% a.a. (Lei 8.692/1993). Permite FGTS.</span>
                     </div>
-                    <span className="font-bold text-lg">SFH</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Sistema Financeiro de Habitação. Teto de 12% a.a. (Lei 8.692/1993). Permite uso de FGTS.</p>
-                </button>
-                <button
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    (form.enquadramento || (form.valorImovel && parseFloat(form.valorImovel) <= 2250000 ? "SFH" : "SFI")) === "SFI"
-                      ? "border-teal-500 bg-teal-50 dark:bg-teal-950/20 ring-1 ring-teal-500"
-                      : "border-border hover:border-teal-300"
-                  }`}
-                  onClick={() => updateField("enquadramento", "SFI")}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/30">
-                      <Building2 className="h-5 w-5 text-teal-600" />
+                  </SelectItem>
+                  <SelectItem value="SFI">
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">SFI — Sistema de Financiamento Imobiliário</span>
+                      <span className="text-xs text-muted-foreground">Sem teto de taxa. Capitalização mensal vedada.</span>
                     </div>
-                    <span className="font-bold text-lg">SFI</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Sistema de Financiamento Imobiliário. Sem teto de taxa. Capitalização mensal vedada (REsp 2.086.650/MG).</p>
-                </button>
-              </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Separator />
 
-            <div>
-              <Label className="mb-3 block font-semibold">Tipo de Credor</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    form.tipoCredor === "INSTITUICAO_SFN"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20 ring-1 ring-blue-500"
-                      : "border-border hover:border-blue-300"
-                  }`}
-                  onClick={() => updateField("tipoCredor", "INSTITUICAO_SFN")}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Landmark className="h-4 w-4 text-blue-600" />
-                    <span className="font-semibold text-sm">Banco / Caixa</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Instituição do SFN (Caixa, Itaú, BB, Bradesco...)</p>
-                </button>
-                <button
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    form.tipoCredor === "ENTIDADE_SFI"
-                      ? "border-teal-500 bg-teal-50 dark:bg-teal-950/20 ring-1 ring-teal-500"
-                      : "border-border hover:border-teal-300"
-                  }`}
-                  onClick={() => updateField("tipoCredor", "ENTIDADE_SFI")}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Briefcase className="h-4 w-4 text-teal-600" />
-                    <span className="font-semibold text-sm">Entidade SFI</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Securitizadoras, fundos (não integram o SFN)</p>
-                </button>
-                <button
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    form.tipoCredor === "INCORPORADORA"
-                      ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20 ring-1 ring-amber-500"
-                      : "border-border hover:border-amber-300"
-                  }`}
-                  onClick={() => updateField("tipoCredor", "INCORPORADORA")}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <HardHat className="h-4 w-4 text-amber-600" />
-                    <span className="font-semibold text-sm">Incorporadora</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Construtora, loteadora (financiamento direto)</p>
-                </button>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tipoCredor">Tipo de Credor</Label>
+              <Select value={form.tipoCredor} onValueChange={(v) => updateField("tipoCredor", v)}>
+                <SelectTrigger id="tipoCredor"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INSTITUICAO_SFN">
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">Banco / Caixa (SFN)</span>
+                      <span className="text-xs text-muted-foreground">Caixa, Itaú, BB, Bradesco...</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ENTIDADE_SFI">
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">Entidade SFI</span>
+                      <span className="text-xs text-muted-foreground">Securitizadoras, fundos</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="INCORPORADORA">
+                    <div className="flex flex-col text-left">
+                      <span className="font-medium">Incorporadora / Construtora</span>
+                      <span className="text-xs text-muted-foreground">Financiamento direto com loteadora</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Separator />
@@ -643,22 +613,27 @@ export default function Imobiliario() {
 
             <Separator />
 
-            <div>
-              <Label className="mb-3 block">Indexador de Correção Monetária *</Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {INDEXADORES.map((idx) => (
-                  <button key={idx.key}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      form.indexador === idx.key
-                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 ring-1 ring-emerald-500"
-                        : "border-border hover:border-emerald-300"
-                    }`}
-                    onClick={() => { updateField("indexador", idx.key); fetchIndexador(idx.key); }}>
-                    <p className="font-medium text-sm">{idx.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{idx.desc}</p>
-                  </button>
-                ))}
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="indexador">Indexador de Correção Monetária *</Label>
+              <Select
+                value={form.indexador}
+                onValueChange={(v) => {
+                  updateField("indexador", v);
+                  fetchIndexador(v as IndexadorCorrecao);
+                }}
+              >
+                <SelectTrigger id="indexador"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INDEXADORES.map((idx) => (
+                    <SelectItem key={idx.key} value={idx.key}>
+                      <div className="flex flex-col text-left">
+                        <span className="font-medium">{idx.label}</span>
+                        <span className="text-xs text-muted-foreground">{idx.desc}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {form.indexador !== "NENHUM" && (

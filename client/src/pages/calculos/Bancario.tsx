@@ -376,31 +376,41 @@ export default function Bancario() {
 
         <StepBar current={1} />
 
-        <div>
-          <h2 className="text-lg font-semibold mb-1">Qual o tipo do seu contrato?</h2>
-          <p className="text-sm text-muted-foreground mb-5">Selecione a modalidade de crédito que consta no seu contrato bancário.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {MODALIDADES.map((mod) => {
-              const selected = form.modalidadeCredito === mod.id;
-              return (
-                <Card key={mod.id} className={`cursor-pointer transition-all hover:shadow-md ${selected ? `${mod.border} ${mod.bg} ring-2 ${mod.ring} shadow-md` : "hover:border-muted-foreground/20"}`} onClick={() => { updateField("modalidadeCredito", mod.id); if (mod.id !== "financiamento_veiculo") updateField("tipoPessoa", "fisica"); if (mod.id !== "consignado") updateField("tipoVinculoConsignado", "clt"); }}>
-                  <CardContent className="pt-5 pb-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`h-10 w-10 rounded-lg ${mod.bg} flex items-center justify-center shrink-0`}>
-                        <mod.icon className={`h-5 w-5 ${mod.color}`} />
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <Label htmlFor="modalidadeCredito" className="text-base font-semibold">
+              Qual o tipo do seu contrato?
+            </Label>
+            <p className="text-sm text-muted-foreground mt-0.5 mb-3">
+              Selecione a modalidade de crédito que consta no contrato.
+            </p>
+            <Select
+              value={form.modalidadeCredito}
+              onValueChange={(v) => {
+                updateField("modalidadeCredito", v);
+                if (v !== "financiamento_veiculo") updateField("tipoPessoa", "fisica");
+                if (v !== "consignado") updateField("tipoVinculoConsignado", "clt");
+              }}
+            >
+              <SelectTrigger id="modalidadeCredito" className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODALIDADES.map((mod) => (
+                  <SelectItem key={mod.id} value={mod.id}>
+                    <div className="flex items-center gap-2.5 py-0.5">
+                      <mod.icon className={`h-4 w-4 ${mod.color}`} />
+                      <div className="flex flex-col text-left">
+                        <span className="font-medium">{mod.label}</span>
+                        <span className="text-xs text-muted-foreground">{mod.desc}</span>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm">{mod.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{mod.desc}</p>
-                      </div>
-                      {selected && <CheckCircle className={`h-5 w-5 ${mod.color} shrink-0 ml-auto`} />}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
 
         {/* Seleção PF/PJ — aparece apenas para Financiamento de Veículo */}
         {form.modalidadeCredito === "financiamento_veiculo" && (
@@ -568,16 +578,15 @@ export default function Bancario() {
                 <Dica>Número total de prestações do contrato</Dica>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="taxaJurosMensal">Taxa mensal (% a.m.) *</Label>
                 <Input id="taxaJurosMensal" type="number" step="0.0001" placeholder="Ex: 1.99" value={form.taxaJurosMensal} onChange={(e) => updateField("taxaJurosMensal", e.target.value)} />
-                <Dica>Juros mensais cobrados pelo banco</Dica>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="taxaJurosAnual">Taxa anual (% a.a.)</Label>
-                <Input id="taxaJurosAnual" type="number" step="0.01" placeholder={taxaAnualCalculada ? `≈ ${taxaAnualCalculada}` : "Ex: 26.82"} value={form.taxaJurosAnual} onChange={(e) => updateField("taxaJurosAnual", e.target.value)} />
-                <Dica>{taxaAnualCalculada && !form.taxaJurosAnual ? `Calculada: ≈ ${taxaAnualCalculada}%` : "Deixe em branco para calcular"}</Dica>
+                <Dica>
+                  {taxaAnualCalculada
+                    ? `Juros mensais — equivale a ≈ ${taxaAnualCalculada}% ao ano`
+                    : "Juros mensais cobrados pelo banco"}
+                </Dica>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="valorParcela">Valor da parcela (R$)</Label>
@@ -600,9 +609,17 @@ export default function Bancario() {
                 <Dica>Quantas parcelas você já pagou até agora</Dica>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3">
+              <Switch checked={form.anatocismoExpressoPactuado} onCheckedChange={(v) => updateField("anatocismoExpressoPactuado", v)} />
+              <div>
+                <Label className="text-sm">Juros sobre juros no contrato</Label>
+                <p className="text-xs text-muted-foreground">Marque se o contrato prevê capitalização composta</p>
+              </div>
+            </div>
+
+            {form.sistemaAmortizacao !== "PRICE" ? (
               <div className="space-y-1.5">
-                <Label>Sistema de amortização *</Label>
+                <Label>Sistema de amortização</Label>
                 <Select value={form.sistemaAmortizacao} onValueChange={(v) => updateField("sistemaAmortizacao", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -611,16 +628,16 @@ export default function Bancario() {
                     <SelectItem value="SACRE">SACRE (parcelas crescentes)</SelectItem>
                   </SelectContent>
                 </Select>
-                <Dica>Na maioria dos contratos é Tabela Price</Dica>
               </div>
-              <div className="flex items-center gap-3 pt-6">
-                <Switch checked={form.anatocismoExpressoPactuado} onCheckedChange={(v) => updateField("anatocismoExpressoPactuado", v)} />
-                <div>
-                  <Label className="text-sm">Juros sobre juros no contrato</Label>
-                  <p className="text-xs text-muted-foreground">Marque se o contrato prevê capitalização composta</p>
-                </div>
-              </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                onClick={() => updateField("sistemaAmortizacao", "SAC")}
+              >
+                Contrato é SAC ou SACRE? Clique para trocar
+              </button>
+            )}
           </CardContent>
         </Card>
 

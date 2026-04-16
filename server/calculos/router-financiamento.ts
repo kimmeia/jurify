@@ -68,7 +68,23 @@ const parametrosSchema = z.object({
       fundamento: z.string().min(10).max(512),
     })
     .optional(),
-});
+})
+  .refine(
+    (data) => data.dataPrimeiroVencimento >= data.dataContrato,
+    {
+      message: "Primeiro vencimento não pode ser anterior à data do contrato",
+      path: ["dataPrimeiroVencimento"],
+    },
+  )
+  .refine(
+    (data) =>
+      data.parcelasJaPagas === undefined ||
+      data.parcelasJaPagas <= data.quantidadeParcelas,
+    {
+      message: "Parcelas já pagas não pode ser maior que a quantidade total de parcelas",
+      path: ["parcelasJaPagas"],
+    },
+  );
 
 function toParametros(input: z.infer<typeof parametrosSchema>): ParametrosFinanciamento {
   return {
