@@ -213,8 +213,7 @@ export default function Bancario() {
   const [form, setForm] = useState<FormData>(initialForm);
   const [resultado, setResultado] = useState<ResultadoFinanciamento | null>(null);
   const [taxaMediaInfo, setTaxaMediaInfo] = useState<{ taxaMensal: number; taxaAnual: number; dataReferencia: string; fonte: string } | null>(null);
-  const [showTarifas, setShowTarifas] = useState(false);
-  const [showMora, setShowMora] = useState(false);
+  const [showCustosExtras, setShowCustosExtras] = useState(false);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
 
   const calcularMutation = trpc.financiamento.calcular.useMutation({
@@ -257,7 +256,7 @@ export default function Bancario() {
       modalidadeCredito: form.modalidadeCredito,
       tipoPessoa: form.modalidadeCredito === "financiamento_veiculo" ? form.tipoPessoa : undefined,
       tipoVinculoConsignado: form.modalidadeCredito === "consignado" ? form.tipoVinculoConsignado : undefined,
-      tarifas: showTarifas ? {
+      tarifas: showCustosExtras ? {
         tac: form.tac ? parseFloat(form.tac) : undefined, tacFinanciada: form.tacFinanciada,
         tec: form.tec ? parseFloat(form.tec) : undefined, tecFinanciada: form.tecFinanciada,
         iof: form.iof ? parseFloat(form.iof) : undefined, iofFinanciado: form.iofFinanciado,
@@ -265,9 +264,9 @@ export default function Bancario() {
         avaliacaoBem: form.avaliacaoBem ? parseFloat(form.avaliacaoBem) : undefined, avaliacaoBemFinanciada: form.avaliacaoBemFinanciada,
         registroContrato: form.registroContrato ? parseFloat(form.registroContrato) : undefined, registroContratoFinanciado: form.registroContratoFinanciado,
       } : undefined,
-      comissaoPermanencia: showMora && form.comissaoPermanencia ? parseFloat(form.comissaoPermanencia) : undefined,
-      multaMora: showMora && form.multaMora ? parseFloat(form.multaMora) : undefined,
-      jurosMora: showMora && form.jurosMora ? parseFloat(form.jurosMora) : undefined,
+      comissaoPermanencia: showCustosExtras && form.comissaoPermanencia ? parseFloat(form.comissaoPermanencia) : undefined,
+      multaMora: showCustosExtras && form.multaMora ? parseFloat(form.multaMora) : undefined,
+      jurosMora: showCustosExtras && form.jurosMora ? parseFloat(form.jurosMora) : undefined,
       taxaRecalculo: form.taxaRecalculo,
       taxaManual: form.taxaRecalculo === "manual" && form.taxaManual ? parseFloat(form.taxaManual) : undefined,
       anatocismoExpressoPactuado: form.anatocismoExpressoPactuado,
@@ -376,31 +375,41 @@ export default function Bancario() {
 
         <StepBar current={1} />
 
-        <div>
-          <h2 className="text-lg font-semibold mb-1">Qual o tipo do seu contrato?</h2>
-          <p className="text-sm text-muted-foreground mb-5">Selecione a modalidade de crédito que consta no seu contrato bancário.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {MODALIDADES.map((mod) => {
-              const selected = form.modalidadeCredito === mod.id;
-              return (
-                <Card key={mod.id} className={`cursor-pointer transition-all hover:shadow-md ${selected ? `${mod.border} ${mod.bg} ring-2 ${mod.ring} shadow-md` : "hover:border-muted-foreground/20"}`} onClick={() => { updateField("modalidadeCredito", mod.id); if (mod.id !== "financiamento_veiculo") updateField("tipoPessoa", "fisica"); if (mod.id !== "consignado") updateField("tipoVinculoConsignado", "clt"); }}>
-                  <CardContent className="pt-5 pb-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`h-10 w-10 rounded-lg ${mod.bg} flex items-center justify-center shrink-0`}>
-                        <mod.icon className={`h-5 w-5 ${mod.color}`} />
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <Label htmlFor="modalidadeCredito" className="text-base font-semibold">
+              Qual o tipo do seu contrato?
+            </Label>
+            <p className="text-sm text-muted-foreground mt-0.5 mb-3">
+              Selecione a modalidade de crédito que consta no contrato.
+            </p>
+            <Select
+              value={form.modalidadeCredito}
+              onValueChange={(v) => {
+                updateField("modalidadeCredito", v);
+                if (v !== "financiamento_veiculo") updateField("tipoPessoa", "fisica");
+                if (v !== "consignado") updateField("tipoVinculoConsignado", "clt");
+              }}
+            >
+              <SelectTrigger id="modalidadeCredito" className="h-12">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODALIDADES.map((mod) => (
+                  <SelectItem key={mod.id} value={mod.id}>
+                    <div className="flex items-center gap-2.5 py-0.5">
+                      <mod.icon className={`h-4 w-4 ${mod.color}`} />
+                      <div className="flex flex-col text-left">
+                        <span className="font-medium">{mod.label}</span>
+                        <span className="text-xs text-muted-foreground">{mod.desc}</span>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm">{mod.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{mod.desc}</p>
-                      </div>
-                      {selected && <CheckCircle className={`h-5 w-5 ${mod.color} shrink-0 ml-auto`} />}
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
 
         {/* Seleção PF/PJ — aparece apenas para Financiamento de Veículo */}
         {form.modalidadeCredito === "financiamento_veiculo" && (
@@ -568,16 +577,15 @@ export default function Bancario() {
                 <Dica>Número total de prestações do contrato</Dica>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="taxaJurosMensal">Taxa mensal (% a.m.) *</Label>
                 <Input id="taxaJurosMensal" type="number" step="0.0001" placeholder="Ex: 1.99" value={form.taxaJurosMensal} onChange={(e) => updateField("taxaJurosMensal", e.target.value)} />
-                <Dica>Juros mensais cobrados pelo banco</Dica>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="taxaJurosAnual">Taxa anual (% a.a.)</Label>
-                <Input id="taxaJurosAnual" type="number" step="0.01" placeholder={taxaAnualCalculada ? `≈ ${taxaAnualCalculada}` : "Ex: 26.82"} value={form.taxaJurosAnual} onChange={(e) => updateField("taxaJurosAnual", e.target.value)} />
-                <Dica>{taxaAnualCalculada && !form.taxaJurosAnual ? `Calculada: ≈ ${taxaAnualCalculada}%` : "Deixe em branco para calcular"}</Dica>
+                <Dica>
+                  {taxaAnualCalculada
+                    ? `Juros mensais — equivale a ≈ ${taxaAnualCalculada}% ao ano`
+                    : "Juros mensais cobrados pelo banco"}
+                </Dica>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="valorParcela">Valor da parcela (R$)</Label>
@@ -600,9 +608,17 @@ export default function Bancario() {
                 <Dica>Quantas parcelas você já pagou até agora</Dica>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3">
+              <Switch checked={form.anatocismoExpressoPactuado} onCheckedChange={(v) => updateField("anatocismoExpressoPactuado", v)} />
+              <div>
+                <Label className="text-sm">Juros sobre juros no contrato</Label>
+                <p className="text-xs text-muted-foreground">Marque se o contrato prevê capitalização composta</p>
+              </div>
+            </div>
+
+            {form.sistemaAmortizacao !== "PRICE" ? (
               <div className="space-y-1.5">
-                <Label>Sistema de amortização *</Label>
+                <Label>Sistema de amortização</Label>
                 <Select value={form.sistemaAmortizacao} onValueChange={(v) => updateField("sistemaAmortizacao", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -611,89 +627,95 @@ export default function Bancario() {
                     <SelectItem value="SACRE">SACRE (parcelas crescentes)</SelectItem>
                   </SelectContent>
                 </Select>
-                <Dica>Na maioria dos contratos é Tabela Price</Dica>
               </div>
-              <div className="flex items-center gap-3 pt-6">
-                <Switch checked={form.anatocismoExpressoPactuado} onCheckedChange={(v) => updateField("anatocismoExpressoPactuado", v)} />
-                <div>
-                  <Label className="text-sm">Juros sobre juros no contrato</Label>
-                  <p className="text-xs text-muted-foreground">Marque se o contrato prevê capitalização composta</p>
-                </div>
-              </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                onClick={() => updateField("sistemaAmortizacao", "SAC")}
+              >
+                Contrato é SAC ou SACRE? Clique para trocar
+              </button>
+            )}
           </CardContent>
         </Card>
 
-        {/* Tarifas */}
+        {/* Custos Extras do Contrato — toggle único */}
         <Card>
-          <CardHeader className="pb-3 cursor-pointer" onClick={() => setShowTarifas(!showTarifas)}>
+          <CardHeader className="pb-3 cursor-pointer" onClick={() => setShowCustosExtras(!showCustosExtras)}>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4 text-muted-foreground" /> Tarifas e Custos <Badge variant="outline" className="text-xs font-normal">Opcional</Badge></CardTitle>
-                <CardDescription>TAC, TEC, seguro, IOF — verifique se foram cobrados indevidamente</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  Custos extras do contrato
+                  <Badge variant="outline" className="text-xs font-normal">Opcional</Badge>
+                </CardTitle>
+                <CardDescription>
+                  Tarifas (TAC, TEC, IOF, seguro) e encargos de atraso — só preencha se constam no contrato
+                </CardDescription>
               </div>
-              {showTarifas ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+              {showCustosExtras ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
             </div>
           </CardHeader>
-          {showTarifas && (
-            <CardContent className="space-y-4">
-              <div className="p-3 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900">
-                <p className="text-xs text-blue-800 dark:text-blue-300 flex items-start gap-1.5">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  Tarifas como TAC e TEC cobradas <strong>após abril/2008</strong> são consideradas ilegais pelo STJ.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <TarifaField label="TAC" id="tac" value={form.tac} financiada={form.tacFinanciada} onValueChange={(v) => updateField("tac", v)} onFinanciadaChange={(v) => updateField("tacFinanciada", v)} />
-                <TarifaField label="TEC" id="tec" value={form.tec} financiada={form.tecFinanciada} onValueChange={(v) => updateField("tec", v)} onFinanciadaChange={(v) => updateField("tecFinanciada", v)} />
-                <TarifaField label="IOF" id="iof" value={form.iof} financiada={form.iofFinanciado} onValueChange={(v) => updateField("iof", v)} onFinanciadaChange={(v) => updateField("iofFinanciado", v)} />
-                <div className="space-y-1.5">
-                  <Label htmlFor="seguro">Seguro (R$)</Label>
-                  <Input id="seguro" type="number" step="0.01" placeholder="0,00" value={form.seguro} onChange={(e) => updateField("seguro", e.target.value)} />
-                  <div className="flex items-center gap-2 mt-1">
-                    <Checkbox id="seguro-fin" checked={form.seguroFinanciado} onCheckedChange={(v) => updateField("seguroFinanciado", v === true)} disabled={!form.seguro || parseFloat(form.seguro) <= 0} />
-                    <Label htmlFor="seguro-fin" className="text-xs text-muted-foreground cursor-pointer">Incluída no financiamento</Label>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Checkbox id="seguro-livre" checked={form.seguroLivreEscolha} onCheckedChange={(v) => updateField("seguroLivreEscolha", v === true)} disabled={!form.seguro || parseFloat(form.seguro) <= 0} />
-                    <Label htmlFor="seguro-livre" className="text-xs text-muted-foreground cursor-pointer">Pude escolher a seguradora</Label>
-                  </div>
+          {showCustosExtras && (
+            <CardContent className="space-y-6">
+              {/* Tarifas */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-semibold text-sm">Tarifas e custos acessórios</h4>
                 </div>
-                <TarifaField label="Avaliação do Bem" id="avaliacaoBem" value={form.avaliacaoBem} financiada={form.avaliacaoBemFinanciada} onValueChange={(v) => updateField("avaliacaoBem", v)} onFinanciadaChange={(v) => updateField("avaliacaoBemFinanciada", v)} />
-                <TarifaField label="Registro" id="registroContrato" value={form.registroContrato} financiada={form.registroContratoFinanciado} onValueChange={(v) => updateField("registroContrato", v)} onFinanciadaChange={(v) => updateField("registroContratoFinanciado", v)} />
+                <div className="p-3 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900">
+                  <p className="text-xs text-blue-800 dark:text-blue-300 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    Tarifas como TAC e TEC cobradas <strong>após abril/2008</strong> são consideradas ilegais pelo STJ.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  <TarifaField label="TAC" id="tac" value={form.tac} financiada={form.tacFinanciada} onValueChange={(v) => updateField("tac", v)} onFinanciadaChange={(v) => updateField("tacFinanciada", v)} />
+                  <TarifaField label="TEC" id="tec" value={form.tec} financiada={form.tecFinanciada} onValueChange={(v) => updateField("tec", v)} onFinanciadaChange={(v) => updateField("tecFinanciada", v)} />
+                  <TarifaField label="IOF" id="iof" value={form.iof} financiada={form.iofFinanciado} onValueChange={(v) => updateField("iof", v)} onFinanciadaChange={(v) => updateField("iofFinanciado", v)} />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="seguro">Seguro (R$)</Label>
+                    <Input id="seguro" type="number" step="0.01" placeholder="0,00" value={form.seguro} onChange={(e) => updateField("seguro", e.target.value)} />
+                    <div className="flex items-center gap-2 mt-1">
+                      <Checkbox id="seguro-fin" checked={form.seguroFinanciado} onCheckedChange={(v) => updateField("seguroFinanciado", v === true)} disabled={!form.seguro || parseFloat(form.seguro) <= 0} />
+                      <Label htmlFor="seguro-fin" className="text-xs text-muted-foreground cursor-pointer">Incluída no financiamento</Label>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Checkbox id="seguro-livre" checked={form.seguroLivreEscolha} onCheckedChange={(v) => updateField("seguroLivreEscolha", v === true)} disabled={!form.seguro || parseFloat(form.seguro) <= 0} />
+                      <Label htmlFor="seguro-livre" className="text-xs text-muted-foreground cursor-pointer">Pude escolher a seguradora</Label>
+                    </div>
+                  </div>
+                  <TarifaField label="Avaliação do Bem" id="avaliacaoBem" value={form.avaliacaoBem} financiada={form.avaliacaoBemFinanciada} onValueChange={(v) => updateField("avaliacaoBem", v)} onFinanciadaChange={(v) => updateField("avaliacaoBemFinanciada", v)} />
+                  <TarifaField label="Registro" id="registroContrato" value={form.registroContrato} financiada={form.registroContratoFinanciado} onValueChange={(v) => updateField("registroContrato", v)} onFinanciadaChange={(v) => updateField("registroContratoFinanciado", v)} />
+                </div>
               </div>
-            </CardContent>
-          )}
-        </Card>
 
-        {/* Encargos Mora */}
-        <Card>
-          <CardHeader className="pb-3 cursor-pointer" onClick={() => setShowMora(!showMora)}>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-muted-foreground" /> Encargos de Atraso <Badge variant="outline" className="text-xs font-normal">Opcional</Badge></CardTitle>
-                <CardDescription>Multa e juros cobrados em caso de atraso no pagamento</CardDescription>
-              </div>
-              {showMora ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
-            </div>
-          </CardHeader>
-          {showMora && (
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="multaMora">Multa por atraso (%)</Label>
-                  <Input id="multaMora" type="number" step="0.01" placeholder="2.00" value={form.multaMora} onChange={(e) => updateField("multaMora", e.target.value)} />
-                  <Dica>O limite legal é de 2%</Dica>
+              <Separator />
+
+              {/* Encargos de mora */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="font-semibold text-sm">Encargos de atraso</h4>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="jurosMora">Juros de mora (% a.m.)</Label>
-                  <Input id="jurosMora" type="number" step="0.01" placeholder="1.00" value={form.jurosMora} onChange={(e) => updateField("jurosMora", e.target.value)} />
-                  <Dica>O limite legal é de 1% ao mês</Dica>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="comissaoPermanencia">Comissão de permanência (% a.m.)</Label>
-                  <Input id="comissaoPermanencia" type="number" step="0.01" placeholder="0.00" value={form.comissaoPermanencia} onChange={(e) => updateField("comissaoPermanencia", e.target.value)} />
-                  <Dica>Não pode ser cobrada junto com multa e juros</Dica>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="multaMora">Multa por atraso (%)</Label>
+                    <Input id="multaMora" type="number" step="0.01" placeholder="2.00" value={form.multaMora} onChange={(e) => updateField("multaMora", e.target.value)} />
+                    <Dica>O limite legal é de 2%</Dica>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="jurosMora">Juros de mora (% a.m.)</Label>
+                    <Input id="jurosMora" type="number" step="0.01" placeholder="1.00" value={form.jurosMora} onChange={(e) => updateField("jurosMora", e.target.value)} />
+                    <Dica>O limite legal é de 1% ao mês</Dica>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="comissaoPermanencia">Comissão de permanência (% a.m.)</Label>
+                    <Input id="comissaoPermanencia" type="number" step="0.01" placeholder="0.00" value={form.comissaoPermanencia} onChange={(e) => updateField("comissaoPermanencia", e.target.value)} />
+                    <Dica>Não pode ser cobrada junto com multa e juros</Dica>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -861,9 +883,9 @@ export default function Bancario() {
         <Tabs defaultValue="analise" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="analise" className="text-xs sm:text-sm">Análise</TabsTrigger>
-            <TabsTrigger value="demonstrativo" className="text-xs sm:text-sm">Demonstrativos</TabsTrigger>
-            <TabsTrigger value="comparativo" className="text-xs sm:text-sm">Comparativo</TabsTrigger>
             <TabsTrigger value="parecer" className="text-xs sm:text-sm">Parecer</TabsTrigger>
+            <TabsTrigger value="comparativo" className="text-xs sm:text-sm">Comparativo</TabsTrigger>
+            <TabsTrigger value="demonstrativo" className="text-xs sm:text-sm">Demonstrativos</TabsTrigger>
           </TabsList>
 
           {/* Análise */}

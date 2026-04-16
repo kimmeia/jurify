@@ -36,7 +36,29 @@ const parametrosSchema = z.object({
   taxaManualAnual: z.number().optional(),
   indexadorRecalculo: z.enum(["TR", "IPCA", "IGPM", "IPC", "POUPANCA", "NENHUM"]).optional(),
   taxaIndexadorRecalculoAnual: z.number().min(0).optional(),
-});
+})
+  .refine(
+    (data) => data.dataPrimeiroVencimento >= data.dataContrato,
+    {
+      message: "Primeiro vencimento não pode ser anterior à data do contrato",
+      path: ["dataPrimeiroVencimento"],
+    },
+  )
+  .refine(
+    (data) =>
+      data.parcelasJaPagas === undefined || data.parcelasJaPagas <= data.prazoMeses,
+    {
+      message: "Parcelas já pagas não pode ser maior que o prazo",
+      path: ["parcelasJaPagas"],
+    },
+  )
+  .refine(
+    (data) => data.valorFinanciado <= data.valorImovel,
+    {
+      message: "Valor financiado não pode ser maior que o valor do imóvel",
+      path: ["valorFinanciado"],
+    },
+  );
 
 function toParametros(input: z.infer<typeof parametrosSchema>): ParametrosImobiliario {
   return {

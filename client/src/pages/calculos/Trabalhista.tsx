@@ -448,22 +448,32 @@ export default function Trabalhista() {
               <CardDescription>Informe o salário e a carga horária para calcular as horas extras</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Salário Bruto (R$) *</Label>
                   <Input type="number" step="0.01" placeholder="3500.00" value={heForm.salarioBruto} onChange={(e) => setHEForm((f) => ({ ...f, salarioBruto: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Carga Horária Mensal</Label>
-                  <Select value={heForm.cargaHorariaMensal} onValueChange={(v) => setHEForm((f) => ({ ...f, cargaHorariaMensal: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="220">220h (padrão CLT)</SelectItem>
-                      <SelectItem value="180">180h</SelectItem>
-                      <SelectItem value="200">200h</SelectItem>
-                      <SelectItem value="150">150h</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {heForm.cargaHorariaMensal === "220" ? (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                      onClick={() => setHEForm((f) => ({ ...f, cargaHorariaMensal: "200" }))}
+                    >
+                      Carga horária diferente de 220h? Clique para ajustar
+                    </button>
+                  ) : (
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Carga Horária Mensal</Label>
+                      <Select value={heForm.cargaHorariaMensal} onValueChange={(v) => setHEForm((f) => ({ ...f, cargaHorariaMensal: v }))}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="220">220h (padrão CLT)</SelectItem>
+                          <SelectItem value="180">180h</SelectItem>
+                          <SelectItem value="200">200h</SelectItem>
+                          <SelectItem value="150">150h</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 pt-6">
                   <Switch checked={heForm.incluirAdicionalNoturno} onCheckedChange={(v) => setHEForm((f) => ({ ...f, incluirAdicionalNoturno: v }))} />
@@ -471,49 +481,60 @@ export default function Trabalhista() {
                 </div>
               </div>
 
-              {/* Períodos */}
+              {/* Períodos em tabela compacta */}
               <Separator />
               <div className="flex items-center justify-between">
                 <p className="font-medium">Períodos de Horas Extras</p>
                 <Button variant="outline" size="sm" onClick={addPeriodo} className="flex items-center gap-1">
-                  <Plus className="h-4 w-4" /> Adicionar Período
+                  <Plus className="h-4 w-4" /> Adicionar período
                 </Button>
               </div>
 
-              <div className="space-y-4">
-                {heForm.periodos.map((p, i) => (
-                  <div key={i} className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end p-3 border rounded-lg bg-muted/30">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Mês/Ano *</Label>
-                      <Input type="month" value={p.mesAno} onChange={(e) => updatePeriodo(i, "mesAno", e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">HE 50% (horas)</Label>
-                      <Input type="number" step="0.5" placeholder="0" value={p.horasExtras50} onChange={(e) => updatePeriodo(i, "horasExtras50", e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">HE 100% (horas)</Label>
-                      <Input type="number" step="0.5" placeholder="0" value={p.horasExtras100} onChange={(e) => updatePeriodo(i, "horasExtras100", e.target.value)} />
-                    </div>
-                    {heForm.incluirAdicionalNoturno && (
-                      <div className="space-y-1">
-                        <Label className="text-xs">H. Noturnas</Label>
-                        <Input type="number" step="0.5" placeholder="0" value={p.horasNoturnas} onChange={(e) => updatePeriodo(i, "horasNoturnas", e.target.value)} />
-                      </div>
-                    )}
-                    <div className="space-y-1">
-                      <Label className="text-xs">Salário Base (R$)</Label>
-                      <Input type="number" step="0.01" placeholder="Mesmo" value={p.salarioBase} onChange={(e) => updatePeriodo(i, "salarioBase", e.target.value)} />
-                    </div>
-                    <div>
-                      {heForm.periodos.length > 1 && (
-                        <Button variant="ghost" size="sm" onClick={() => removePeriodo(i)} className="text-red-500 hover:text-red-700">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="p-2 text-left font-medium text-xs">Mês/Ano *</th>
+                      <th className="p-2 text-left font-medium text-xs">HE 50%</th>
+                      <th className="p-2 text-left font-medium text-xs">HE 100%</th>
+                      {heForm.incluirAdicionalNoturno && (
+                        <th className="p-2 text-left font-medium text-xs">H. Noturnas</th>
                       )}
-                    </div>
-                  </div>
-                ))}
+                      <th className="p-2 text-left font-medium text-xs">Salário base</th>
+                      <th className="p-2 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heForm.periodos.map((p, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="p-1.5">
+                          <Input className="h-8" type="month" value={p.mesAno} onChange={(e) => updatePeriodo(i, "mesAno", e.target.value)} />
+                        </td>
+                        <td className="p-1.5">
+                          <Input className="h-8" type="number" step="0.5" placeholder="0" value={p.horasExtras50} onChange={(e) => updatePeriodo(i, "horasExtras50", e.target.value)} />
+                        </td>
+                        <td className="p-1.5">
+                          <Input className="h-8" type="number" step="0.5" placeholder="0" value={p.horasExtras100} onChange={(e) => updatePeriodo(i, "horasExtras100", e.target.value)} />
+                        </td>
+                        {heForm.incluirAdicionalNoturno && (
+                          <td className="p-1.5">
+                            <Input className="h-8" type="number" step="0.5" placeholder="0" value={p.horasNoturnas} onChange={(e) => updatePeriodo(i, "horasNoturnas", e.target.value)} />
+                          </td>
+                        )}
+                        <td className="p-1.5">
+                          <Input className="h-8" type="number" step="0.01" placeholder="igual ao base" value={p.salarioBase} onChange={(e) => updatePeriodo(i, "salarioBase", e.target.value)} />
+                        </td>
+                        <td className="p-1.5 text-right">
+                          {heForm.periodos.length > 1 && (
+                            <Button variant="ghost" size="sm" onClick={() => removePeriodo(i)} className="h-8 w-8 p-0 text-red-500 hover:text-red-700">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               <Button onClick={handleCalcHE} disabled={calcHE.isPending} className="w-full">
