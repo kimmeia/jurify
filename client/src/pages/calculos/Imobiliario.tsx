@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Streamdown } from "streamdown";
+import { ParecerEditor } from "@/components/calculos/ParecerEditor";
 import {
   Building2, Calculator, AlertTriangle, CheckCircle, FileText, Loader2,
-  ChevronDown, Info, Download, ArrowLeft, ArrowRight, Check, Mail, Share2,
+  ChevronDown, Info, Download, ArrowLeft, ArrowRight, Check,
   Home, Shield, DollarSign, TrendingUp, Calendar, Landmark, HardHat, Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -188,7 +188,6 @@ export default function Imobiliario() {
   } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
-  const [isShareLoading, setIsShareLoading] = useState(false);
   const [indexadorLoading, setIndexadorLoading] = useState(false);
   const [indexadorInfo, setIndexadorInfo] = useState<string>("");
 
@@ -308,62 +307,6 @@ export default function Imobiliario() {
 
     calcularMutation.mutate(params as any);
   };
-
-  async function exportPDF(markdown: string, protocolo?: string) {
-    setIsPdfLoading(true);
-    try {
-      toast.info("Gerando PDF do parecer técnico imobiliário...");
-      const response = await fetch("/api/export/parecer-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parecerMarkdown: markdown, protocolo }),
-      });
-      if (!response.ok) throw new Error("Erro ao gerar PDF");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = protocolo ? `parecer-imobiliario-${protocolo}.pdf` : `parecer-imobiliario-${new Date().toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success(`PDF "${a.download}" gerado com sucesso!`);
-    } catch {
-      toast.error("Erro ao gerar PDF. Verifique a conexão e tente novamente.");
-    } finally {
-      setIsPdfLoading(false);
-    }
-  }
-
-  async function sharePDF(markdown: string, protocolo?: string, channel: "email" | "whatsapp" = "email") {
-    setIsShareLoading(true);
-    try {
-      toast.info("Gerando link de compartilhamento...");
-      const response = await fetch("/api/export/parecer-pdf/share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parecerMarkdown: markdown, protocolo }),
-      });
-      if (!response.ok) throw new Error("Erro ao gerar link");
-      const { url } = await response.json();
-
-      if (channel === "whatsapp") {
-        const text = `Parecer Técnico Imobiliário${protocolo ? ` (${protocolo})` : ""}\n\nAcesse o documento: ${url}`;
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
-        toast.success("WhatsApp aberto para compartilhamento!");
-      } else {
-        const subject = `Parecer Técnico Imobiliário${protocolo ? ` - ${protocolo}` : ""}`;
-        const body = `Segue em anexo o parecer técnico imobiliário${protocolo ? ` (protocolo: ${protocolo})` : ""}.\n\nAcesse o documento: ${url}\n\nAtenciosamente.`;
-        window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_self");
-        toast.success("Cliente de e-mail aberto para compartilhamento!");
-      }
-    } catch {
-      toast.error("Erro ao gerar link de compartilhamento. Tente novamente.");
-    } finally {
-      setIsShareLoading(false);
-    }
-  }
 
   async function exportDemonstrativoImobPDF(linhas: LinhaImobiliario[], titulo: string, subtitulo: string) {
     if (!resultado || linhas.length === 0) return;
@@ -1178,37 +1121,12 @@ export default function Imobiliario() {
 
             {/* Tab: Parecer Técnico */}
             <TabsContent value="parecer">
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <CardTitle className="text-base">Parecer Técnico</CardTitle>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Button variant="outline" size="sm" disabled={isPdfLoading}
-                        onClick={() => exportPDF(resultado.parecerTecnico, resultado.protocoloCalculo || undefined)}>
-                        {isPdfLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Gerando...</> : <><Download className="h-4 w-4 mr-1" /> Exportar PDF</>}
-                      </Button>
-                      <div className="h-4 w-px bg-border hidden sm:block" />
-                      <Button variant="ghost" size="sm" disabled={isShareLoading}
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => sharePDF(resultado.parecerTecnico, resultado.protocoloCalculo || undefined, "email")}>
-                        {isShareLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Mail className="h-4 w-4 mr-1" /> E-mail</>}
-                      </Button>
-                      <Button variant="ghost" size="sm" disabled={isShareLoading}
-                        className="text-muted-foreground hover:text-green-600 dark:hover:text-green-400"
-                        onClick={() => sharePDF(resultado.parecerTecnico, resultado.protocoloCalculo || undefined, "whatsapp")}>
-                        {isShareLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Share2 className="h-4 w-4 mr-1" /> WhatsApp</>}
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[600px] pr-4">
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <Streamdown>{resultado.parecerTecnico}</Streamdown>
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+              <ParecerEditor
+                parecerOriginal={resultado.parecerTecnico}
+                protocolo={resultado.protocoloCalculo || undefined}
+                filenamePrefix="parecer-imobiliario"
+                habilitarCompartilhamento
+              />
             </TabsContent>
           </Tabs>
 
