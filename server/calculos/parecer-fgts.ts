@@ -120,5 +120,7 @@ ${multaSection}
 
 *Parecer técnico gerado eletronicamente em ${hoje}.*
 *Protocolo: ${resultado.protocoloCalculo}*
+
+${require("./disclaimer-legal").DISCLAIMER_LEGAL}
 `;
 }

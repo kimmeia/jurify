@@ -261,5 +261,9 @@ export function gerarParecerTecnico(
   s.push(`---\n`);
   s.push(`*Parecer técnico elaborado com base na legislação vigente, jurisprudência do STJ e dados oficiais do Banco Central do Brasil.*`);
 
+  // Disclaimer legal obrigatório (limitações, responsabilidade do advogado)
+  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
+  s.push("\n\n" + DISCLAIMER_LEGAL);
+
   return s.join("\n");
 }

@@ -95,5 +95,8 @@ export function gerarParecerSimulacao(params: ParametrosSimulacao, resultado: Re
   s.push(``);
   s.push(`---\n*Parecer gerado automaticamente pelo SaaS de Cálculos Jurídicos.*`);
 
+  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
+  s.push("\n\n" + DISCLAIMER_LEGAL);
+
   return s.join("\n");
 }
