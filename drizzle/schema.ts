@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1468,3 +1468,31 @@ export const kanbanTags = mysqlTable("kanban_tags", {
   cor: varchar("corKTag", { length: 16 }).notNull(),
   createdAt: timestamp("createdAtKTag").defaultNow().notNull(),
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TETOS LEGAIS COM TIMELINE
+// Armazena limites de taxa de juros que mudam ao longo do tempo via
+// resolução/portaria. O engine de cálculos busca o teto vigente na data
+// do contrato — evita aplicar norma nova retroativamente.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const tetosLegais = mysqlTable("tetos_legais", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Categoria do teto (identifica a combinação modalidade+vínculo):
+   *  'cheque_especial', 'consignado_inss', 'consignado_servidor',
+   *  'cartao_credito_100pct', etc. */
+  categoria: varchar("categoriaTetoLeg", { length: 64 }).notNull(),
+  /** Taxa mensal máxima permitida (% a.m.) Ex: 1.8500 */
+  tetoMensal: varchar("tetoMensalLeg", { length: 20 }).notNull(),
+  /** Fundamentação legal completa (norma, número, ano) */
+  fundamento: varchar("fundamentoLeg", { length: 512 }).notNull(),
+  /** Data de início da vigência (YYYY-MM-DD) */
+  vigenciaDe: varchar("vigenciaDeLeg", { length: 10 }).notNull(),
+  /** Data de fim da vigência (YYYY-MM-DD). NULL = vigente até hoje */
+  vigenciaAte: varchar("vigenciaAteLeg", { length: 10 }),
+  /** Observação adicional (ex: "Aplica-se a PF e MEI") */
+  observacao: text("observacaoLeg"),
+  createdAt: timestamp("createdAtTetoLeg").defaultNow().notNull(),
+});
+
+export type TetoLegal = typeof tetosLegais.$inferSelect;
