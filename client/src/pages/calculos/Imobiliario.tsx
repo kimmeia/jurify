@@ -812,9 +812,9 @@ export default function Imobiliario() {
           <Tabs defaultValue="analise">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="analise">Análise</TabsTrigger>
-              <TabsTrigger value="demonstrativo">Demonstrativo</TabsTrigger>
-              <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
               <TabsTrigger value="parecer">Parecer</TabsTrigger>
+              <TabsTrigger value="comparativo">Comparativo</TabsTrigger>
+              <TabsTrigger value="demonstrativo">Demonstrativo</TabsTrigger>
             </TabsList>
 
             {/* Tab: Análise */}

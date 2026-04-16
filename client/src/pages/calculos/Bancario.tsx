@@ -883,9 +883,9 @@ export default function Bancario() {
         <Tabs defaultValue="analise" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="analise" className="text-xs sm:text-sm">Análise</TabsTrigger>
-            <TabsTrigger value="demonstrativo" className="text-xs sm:text-sm">Demonstrativos</TabsTrigger>
-            <TabsTrigger value="comparativo" className="text-xs sm:text-sm">Comparativo</TabsTrigger>
             <TabsTrigger value="parecer" className="text-xs sm:text-sm">Parecer</TabsTrigger>
+            <TabsTrigger value="comparativo" className="text-xs sm:text-sm">Comparativo</TabsTrigger>
+            <TabsTrigger value="demonstrativo" className="text-xs sm:text-sm">Demonstrativos</TabsTrigger>
           </TabsList>
 
           {/* Análise */}
