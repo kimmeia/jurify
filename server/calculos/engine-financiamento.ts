@@ -293,7 +293,18 @@ function obterTetoLegal(
   params: ParametrosFinanciamento,
   tetoPreFetched?: { tetoMensal: number; fundamento: string } | null,
 ): { tetoMensal: number; fundamento: string } | undefined {
-  // Se o router fez o pre-fetch, usar (pode ser null = sem teto pra essa data)
+  // PRIORIDADE 1: Teto personalizado declarado pelo advogado (regulamento
+  // próprio da categoria — militar, magistrado, estadual, etc).
+  // Prevalece sobre TUDO porque o advogado conhece a norma específica
+  // do cliente que o sistema não tem cadastrada.
+  if (params.tetoPersonalizado) {
+    return {
+      tetoMensal: params.tetoPersonalizado.tetoMensal,
+      fundamento: params.tetoPersonalizado.fundamento + " (informado pelo advogado)",
+    };
+  }
+
+  // PRIORIDADE 2: Pre-fetch da tabela tetos_legais (timeline por data do contrato)
   if (tetoPreFetched !== undefined) {
     return tetoPreFetched ?? undefined;
   }
