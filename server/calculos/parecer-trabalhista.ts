@@ -125,6 +125,9 @@ export function gerarParecerRescisao(params: ParametrosRescisao, resultado: Resu
   parecer += `> **Nota:** Este parecer técnico tem caráter informativo e não substitui a orientação de um advogado trabalhista. `;
   parecer += `Os valores podem sofrer variações conforme convenções coletivas, acordos sindicais e decisões judiciais aplicáveis ao caso concreto.\n`;
 
+  const { DISCLAIMER_LEGAL: D1 } = require("./disclaimer-legal");
+  parecer += "\n\n" + D1;
+
   return parecer;
 }
 
@@ -198,6 +201,9 @@ export function gerarParecerHorasExtras(params: ParametrosHorasExtras, resultado
   parecer += `---\n\n`;
   parecer += `> **Nota:** Este parecer técnico tem caráter informativo e não substitui a orientação de um advogado trabalhista. `;
   parecer += `Os valores podem sofrer variações conforme convenções coletivas e acordos sindicais aplicáveis.\n`;
+
+  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
+  parecer += "\n\n" + DISCLAIMER_LEGAL;
 
   return parecer;
 }
