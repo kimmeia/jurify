@@ -97,6 +97,15 @@ export interface ParametrosFinanciamento {
 
   // Flag para anatocismo expressamente pactuado
   anatocismoExpressoPactuado?: boolean;
+
+  /** Categoria com regulamento próprio (declarado pelo advogado).
+   *  Quando informado, prevalece sobre tetos da timeline e regra geral.
+   *  Útil para militares, magistrados, servidores estaduais/municipais,
+   *  empregados de estatais com ACT específico, etc. */
+  tetoPersonalizado?: {
+    tetoMensal: number;
+    fundamento: string;
+  };
 }
 
 // ─── Verificação de Equivalência de Taxas ─────────────────────────────────────

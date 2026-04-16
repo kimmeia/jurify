@@ -57,6 +57,17 @@ const parametrosSchema = z.object({
   taxaRecalculo: z.enum(["media_bacen", "teto_stj", "manual"]).optional(),
   taxaManual: z.number().optional(),
   anatocismoExpressoPactuado: z.boolean().optional(),
+  /** Categoria profissional com regulamento próprio — advogado declara
+   *  o teto e o fundamento legal. Quando informado, PREVALECE sobre os
+   *  tetos cadastrados (timeline) e sobre a regra geral 1,5× BACEN.
+   *  Útil para militares, magistrados, servidores estaduais/municipais,
+   *  empregados de estatais, etc. */
+  tetoPersonalizado: z
+    .object({
+      tetoMensal: z.number().min(0.01).max(50),
+      fundamento: z.string().min(10).max(512),
+    })
+    .optional(),
 });
 
 function toParametros(input: z.infer<typeof parametrosSchema>): ParametrosFinanciamento {
@@ -80,6 +91,7 @@ function toParametros(input: z.infer<typeof parametrosSchema>): ParametrosFinanc
     taxaRecalculo: input.taxaRecalculo,
     taxaManual: input.taxaManual,
     anatocismoExpressoPactuado: input.anatocismoExpressoPactuado,
+    tetoPersonalizado: input.tetoPersonalizado,
   };
 }
 
