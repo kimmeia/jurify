@@ -13,6 +13,7 @@ import type {
 } from "../../shared/financiamento-types";
 import { MODALIDADE_LABELS } from "../../shared/financiamento-types";
 import { round2 } from "./engine-financiamento";
+import { DISCLAIMER_LEGAL } from "./disclaimer-legal";
 
 function formatBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -262,7 +263,6 @@ export function gerarParecerTecnico(
   s.push(`*Parecer técnico elaborado com base na legislação vigente, jurisprudência do STJ e dados oficiais do Banco Central do Brasil.*`);
 
   // Disclaimer legal obrigatório (limitações, responsabilidade do advogado)
-  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
   s.push("\n\n" + DISCLAIMER_LEGAL);
 
   return s.join("\n");
