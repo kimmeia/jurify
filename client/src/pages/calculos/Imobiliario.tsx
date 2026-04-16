@@ -240,7 +240,7 @@ export default function Imobiliario() {
     onSuccess: (data) => {
       setResultado(data.resultado);
       setTaxaMediaInfo(data.taxaMediaBACEN);
-      setStep(5);
+      setStep(4);
       toast.success("Cálculo realizado com sucesso! (1 crédito descontado)");
     },
     onError: (error) => {
@@ -361,7 +361,7 @@ export default function Imobiliario() {
     return analise.irregularidades.length;
   }, [analise]);
 
-  const stepLabels = ["Dados do Imóvel", "Enquadramento", "Contrato", "Confirmação", "Resultado"];
+  const stepLabels = ["Dados do Imóvel", "Enquadramento", "Contrato", "Resultado"];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -773,83 +773,21 @@ export default function Imobiliario() {
               <Button variant="outline" onClick={() => setStep(2)}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
               </Button>
-              <Button onClick={() => {
-                if (!form.dataContrato || !form.dataPrimeiroVencimento) {
-                  toast.error("Preencha as datas obrigatórias.");
-                  return;
-                }
-                if (form.indexador !== "NENHUM" && !form.taxaIndexadorAnual) {
-                  toast.error("Informe a taxa do indexador ou clique em 'Buscar BACEN'.");
-                  return;
-                }
-                setStep(4);
-              }}>
-                Próximo <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─── STEP 4: Confirmação ──────────────────────────────────────────── */}
-      {step === 4 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-emerald-600" />
-              Confirme os Dados
-            </CardTitle>
-            <CardDescription>Revise os dados antes de executar o cálculo (1 crédito será descontado)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-muted/30 rounded-lg space-y-2">
-                <h4 className="font-semibold text-sm flex items-center gap-2"><Home className="h-4 w-4" /> Imóvel</h4>
-                <div className="text-sm space-y-1">
-                  <p>Valor do Imóvel: <strong>{formatBRL(parseFloat(form.valorImovel))}</strong></p>
-                  <p>Valor Financiado: <strong>{formatBRL(parseFloat(form.valorFinanciado))}</strong></p>
-                  <p>Entrada: <strong>{formatBRL(parseFloat(form.valorImovel) - parseFloat(form.valorFinanciado))}</strong></p>
-                </div>
-              </div>
-              <div className="p-4 bg-muted/30 rounded-lg space-y-2">
-                <h4 className="font-semibold text-sm flex items-center gap-2"><FileText className="h-4 w-4" /> Contrato</h4>
-                <div className="text-sm space-y-1">
-                  <p>Sistema: <strong>{form.sistemaAmortizacao}</strong></p>
-                  <p>Taxa: <strong>{form.taxaJurosAnual}% a.a.</strong> ({taxaMensalCalculada}% a.m.)</p>
-                  <p>Prazo: <strong>{form.prazoMeses} meses</strong> ({(parseInt(form.prazoMeses) / 12).toFixed(1)} anos)</p>
-                  <p>Contrato: <strong>{form.dataContrato.split("-").reverse().join("/")}</strong></p>
-                </div>
-              </div>
-              <div className="p-4 bg-muted/30 rounded-lg space-y-2">
-                <h4 className="font-semibold text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Correção</h4>
-                <div className="text-sm space-y-1">
-                  <p>Indexador: <strong>{INDEXADOR_LABELS[form.indexador]}</strong></p>
-                  {form.indexador !== "NENHUM" && <p>Taxa: <strong>{form.taxaIndexadorAnual}% a.a.</strong></p>}
-                </div>
-              </div>
-              <div className="p-4 bg-muted/30 rounded-lg space-y-2">
-                <h4 className="font-semibold text-sm flex items-center gap-2"><Shield className="h-4 w-4" /> Seguros</h4>
-                <div className="text-sm space-y-1">
-                  <p>Idade: <strong>{form.idadeComprador} anos</strong></p>
-                  <p>MIP: <strong>{form.taxaMIP ? `${form.taxaMIP}%` : "Tabela automática"}</strong></p>
-                  <p>DFI: <strong>{form.taxaDFI ? `${form.taxaDFI}%` : "Referência de mercado"}</strong></p>
-                  <p>Tx. Admin: <strong>R$ {form.taxaAdministracao || "25,00"}/mês</strong></p>
-                </div>
-              </div>
-            </div>
-
-            {form.parcelasJaPagas && parseInt(form.parcelasJaPagas) > 0 && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg text-sm">
-                <strong>Parcelas já pagas:</strong> {form.parcelasJaPagas} — será calculado o valor pago a mais
-              </div>
-            )}
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(3)}>
-                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-              </Button>
-              <Button onClick={handleSubmit} disabled={calcularMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button
+                onClick={() => {
+                  if (!form.dataContrato || !form.dataPrimeiroVencimento) {
+                    toast.error("Preencha as datas obrigatórias.");
+                    return;
+                  }
+                  if (form.indexador !== "NENHUM" && !form.taxaIndexadorAnual) {
+                    toast.error("Informe a taxa do indexador ou clique em 'Buscar BACEN'.");
+                    return;
+                  }
+                  handleSubmit();
+                }}
+                disabled={calcularMutation.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
                 {calcularMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculando...</>
                 ) : (
@@ -857,12 +795,15 @@ export default function Imobiliario() {
                 )}
               </Button>
             </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Cada análise consome 1 crédito do seu plano
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {/* ─── STEP 5: Resultado ────────────────────────────────────────────── */}
-      {step === 5 && resultado && analise && resumo && (
+      {/* ─── STEP 4: Resultado ────────────────────────────────────────────── */}
+      {step === 4 && resultado && analise && resumo && (
         <div className="space-y-4">
           {/* Resumo rápido */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
