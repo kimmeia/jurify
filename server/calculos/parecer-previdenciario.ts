@@ -4,6 +4,7 @@
 
 import type { ParametrosSimulacao, ResultadoSimulacao } from "../../shared/previdenciario-types";
 import { TIPO_ATIVIDADE_LABELS } from "../../shared/previdenciario-types";
+import { DISCLAIMER_LEGAL } from "./disclaimer-legal";
 
 function fmtDate(s: string): string { const [y, m, d] = s.split("-"); return `${d}/${m}/${y}`; }
 function fmtMeses(m: number): string { const a = Math.floor(m / 12); const r = m % 12; return r > 0 ? `${a} anos e ${r} meses` : `${a} anos`; }
@@ -95,7 +96,6 @@ export function gerarParecerSimulacao(params: ParametrosSimulacao, resultado: Re
   s.push(``);
   s.push(`---\n*Parecer gerado automaticamente pelo SaaS de Cálculos Jurídicos.*`);
 
-  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
   s.push("\n\n" + DISCLAIMER_LEGAL);
 
   return s.join("\n");

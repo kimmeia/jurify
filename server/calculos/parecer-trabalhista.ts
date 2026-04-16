@@ -8,6 +8,7 @@
 import type { ResultadoRescisao, ParametrosRescisao } from "../../shared/trabalhista-types";
 import { TIPO_RESCISAO_LABELS, TIPO_CONTRATO_LABELS } from "../../shared/trabalhista-types";
 import type { ResultadoHorasExtras, ParametrosHorasExtras } from "../../shared/trabalhista-types";
+import { DISCLAIMER_LEGAL } from "./disclaimer-legal";
 
 function formatBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -125,8 +126,7 @@ export function gerarParecerRescisao(params: ParametrosRescisao, resultado: Resu
   parecer += `> **Nota:** Este parecer técnico tem caráter informativo e não substitui a orientação de um advogado trabalhista. `;
   parecer += `Os valores podem sofrer variações conforme convenções coletivas, acordos sindicais e decisões judiciais aplicáveis ao caso concreto.\n`;
 
-  const { DISCLAIMER_LEGAL: D1 } = require("./disclaimer-legal");
-  parecer += "\n\n" + D1;
+  parecer += "\n\n" + DISCLAIMER_LEGAL;
 
   return parecer;
 }
@@ -202,7 +202,6 @@ export function gerarParecerHorasExtras(params: ParametrosHorasExtras, resultado
   parecer += `> **Nota:** Este parecer técnico tem caráter informativo e não substitui a orientação de um advogado trabalhista. `;
   parecer += `Os valores podem sofrer variações conforme convenções coletivas e acordos sindicais aplicáveis.\n`;
 
-  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
   parecer += "\n\n" + DISCLAIMER_LEGAL;
 
   return parecer;
