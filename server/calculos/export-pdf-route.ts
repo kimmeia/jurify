@@ -25,6 +25,34 @@ function generateStorageKey(protocolo?: string): string {
   return `pareceres/${slug}-${timestamp}-${rand}.pdf`;
 }
 
+/**
+ * Anexa bloco "Revisado por" ao final do markdown.
+ *
+ * O bloco identifica o advogado humano que revisou e validou o parecer
+ * gerado automaticamente. Crítico para responsabilidade profissional —
+ * o sistema gera, mas é o advogado que assina e responde por isso.
+ */
+function appendRevisadoPor(
+  markdown: string,
+  revisadoPor: { nome: string; oab?: string } | undefined,
+): string {
+  if (!revisadoPor || !revisadoPor.nome || !revisadoPor.nome.trim()) {
+    return markdown;
+  }
+  const nome = revisadoPor.nome.trim();
+  const oab = revisadoPor.oab?.trim();
+  const dataRevisao = new Date().toLocaleDateString("pt-BR");
+
+  const bloco =
+    `\n\n---\n\n## Revisão Profissional\n\n` +
+    `**Revisado por:** ${nome}${oab ? `  \n**OAB:** ${oab}` : ""}  \n` +
+    `**Data da revisão:** ${dataRevisao}\n\n` +
+    `> Este parecer foi gerado automaticamente pelo sistema e revisado pelo(a) advogado(a) ` +
+    `acima identificado(a), que assume a responsabilidade técnica pela análise apresentada.\n`;
+
+  return markdown + bloco;
+}
+
 export function registerPDFExportRoute(app: Express) {
   // ─── Download direto do PDF ─────────────────────────────────────────────────
   app.post("/api/export/parecer-pdf", async (req: Request, res: Response) => {
@@ -36,14 +64,15 @@ export function registerPDFExportRoute(app: Express) {
         return;
       }
 
-      const { parecerMarkdown, protocolo } = req.body;
+      const { parecerMarkdown, protocolo, revisadoPor } = req.body;
 
       if (!parecerMarkdown || typeof parecerMarkdown !== "string") {
         res.status(400).json({ error: "parecerMarkdown é obrigatório" });
         return;
       }
 
-      const pdfBuffer = await gerarPDF(parecerMarkdown);
+      const markdownComRevisao = appendRevisadoPor(parecerMarkdown, revisadoPor);
+      const pdfBuffer = await gerarPDF(markdownComRevisao);
       const filename = generateFilename(protocolo);
 
       res.setHeader("Content-Type", "application/pdf");
@@ -66,7 +95,7 @@ export function registerPDFExportRoute(app: Express) {
         return;
       }
 
-      const { parecerMarkdown, protocolo } = req.body;
+      const { parecerMarkdown, protocolo, revisadoPor } = req.body;
 
       if (!parecerMarkdown || typeof parecerMarkdown !== "string") {
         res.status(400).json({ error: "parecerMarkdown é obrigatório" });
@@ -74,7 +103,8 @@ export function registerPDFExportRoute(app: Express) {
       }
 
       // Gerar PDF
-      const pdfBuffer = await gerarPDF(parecerMarkdown);
+      const markdownComRevisao = appendRevisadoPor(parecerMarkdown, revisadoPor);
+      const pdfBuffer = await gerarPDF(markdownComRevisao);
       const filename = generateFilename(protocolo);
       const storageKey = generateStorageKey(protocolo);
 

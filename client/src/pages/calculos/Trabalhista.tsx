@@ -10,9 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Streamdown } from "streamdown";
+import { ParecerEditor } from "@/components/calculos/ParecerEditor";
 import {
-  Briefcase, Calculator, FileText, Loader2, Plus, Trash2, Clock, Download, Hash,
+  Briefcase, Calculator, FileText, Loader2, Plus, Trash2, Clock, Hash,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { TipoRescisao, TipoContrato } from "../../../../shared/trabalhista-types";
@@ -98,8 +98,9 @@ export default function Trabalhista() {
   const [heForm, setHEForm] = useState<HorasExtrasForm>(defaultHorasExtrasForm);
   const [resultadoRescisao, setResultadoRescisao] = useState<any>(null);
   const [resultadoHE, setResultadoHE] = useState<any>(null);
-  const [isPdfLoadingRescisao, setIsPdfLoadingRescisao] = useState(false);
-  const [isPdfLoadingHE, setIsPdfLoadingHE] = useState(false);
+  // Revisor compartilhado entre os dois pareceres (mesma sessão de trabalho)
+  const [revisorNome, setRevisorNome] = useState("");
+  const [revisorOab, setRevisorOab] = useState("");
 
   const calcRescisao = trpc.trabalhista.calcularRescisao.useMutation({
     onSuccess: (data) => {
@@ -180,35 +181,6 @@ export default function Trabalhista() {
         salarioBase: parseFloat(p.salarioBase) || undefined,
       })),
     });
-  }
-
-  // ─── Export PDF ───────────────────────────────────────────────────────────
-
-  async function exportPDF(markdown: string, protocolo?: string, setLoading?: (v: boolean) => void) {
-    setLoading?.(true);
-    try {
-      toast.info("Gerando PDF...", { description: "Aguarde enquanto o parecer é preparado." });
-      const response = await fetch("/api/export/parecer-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parecerMarkdown: markdown, protocolo }),
-      });
-      if (!response.ok) throw new Error("Erro ao gerar PDF");
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = protocolo ? `parecer-${protocolo}.pdf` : `parecer-trabalhista-${new Date().toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("PDF gerado com sucesso!", { description: `Ficheiro: ${a.download}` });
-    } catch {
-      toast.error("Erro ao gerar PDF", { description: "Verifique a sua ligação e tente novamente." });
-    } finally {
-      setLoading?.(false);
-    }
   }
 
   return (
@@ -453,29 +425,15 @@ export default function Trabalhista() {
                 </TabsContent>
 
                 <TabsContent value="parecer">
-                  <Card>
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                      <CardTitle className="text-base">Parecer Técnico</CardTitle>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isPdfLoadingRescisao}
-                        onClick={() => exportPDF(resultadoRescisao.parecerTecnico, resultadoRescisao.protocoloCalculo, setIsPdfLoadingRescisao)}
-                        className="flex items-center gap-2"
-                      >
-                        {isPdfLoadingRescisao
-                          ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
-                          : <><Download className="h-4 w-4" /> Exportar PDF</>}
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      <ScrollArea className="h-[600px] pr-4">
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <Streamdown>{resultadoRescisao.parecerTecnico}</Streamdown>
-                        </div>
-                      </ScrollArea>
-                    </CardContent>
-                  </Card>
+                  <ParecerEditor
+                    parecerOriginal={resultadoRescisao.parecerTecnico}
+                    protocolo={resultadoRescisao.protocoloCalculo}
+                    filenamePrefix="parecer-rescisao"
+                    revisadoPorNome={revisorNome}
+                    onRevisadoPorNomeChange={setRevisorNome}
+                    revisadoPorOab={revisorOab}
+                    onRevisadoPorOabChange={setRevisorOab}
+                  />
                 </TabsContent>
               </Tabs>
             </div>
@@ -675,29 +633,15 @@ export default function Trabalhista() {
                 </TabsContent>
 
                 <TabsContent value="parecer-he">
-                  <Card>
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                      <CardTitle className="text-base">Parecer Técnico</CardTitle>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isPdfLoadingHE}
-                        onClick={() => exportPDF(resultadoHE.parecerTecnico, resultadoHE.protocoloCalculo, setIsPdfLoadingHE)}
-                        className="flex items-center gap-2"
-                      >
-                        {isPdfLoadingHE
-                          ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
-                          : <><Download className="h-4 w-4" /> Exportar PDF</>}
-                      </Button>
-                    </CardHeader>
-                    <CardContent>
-                      <ScrollArea className="h-[600px] pr-4">
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <Streamdown>{resultadoHE.parecerTecnico}</Streamdown>
-                        </div>
-                      </ScrollArea>
-                    </CardContent>
-                  </Card>
+                  <ParecerEditor
+                    parecerOriginal={resultadoHE.parecerTecnico}
+                    protocolo={resultadoHE.protocoloCalculo}
+                    filenamePrefix="parecer-horas-extras"
+                    revisadoPorNome={revisorNome}
+                    onRevisadoPorNomeChange={setRevisorNome}
+                    revisadoPorOab={revisorOab}
+                    onRevisadoPorOabChange={setRevisorOab}
+                  />
                 </TabsContent>
               </Tabs>
             </div>

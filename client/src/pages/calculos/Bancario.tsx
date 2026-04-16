@@ -4,14 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ParecerEditor } from "@/components/calculos/ParecerEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Streamdown } from "streamdown";
 import {
   Landmark, Calculator, AlertTriangle, CheckCircle, FileText, Loader2,
   ChevronDown, ChevronUp, ChevronLeft, Info, CreditCard, ShieldAlert,
@@ -1074,19 +1073,11 @@ export default function Bancario() {
 
           {/* Parecer */}
           <TabsContent value="parecer">
-            <Card>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <div><CardTitle className="text-base">Parecer Técnico</CardTitle><CardDescription>Documento com fundamentação jurídica para ações revisionais</CardDescription></div>
-                <Button variant="outline" size="sm" disabled={isPdfLoading} onClick={exportPDF} className="flex items-center gap-2">
-                  {isPdfLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</> : <><Download className="h-4 w-4" /> Exportar PDF</>}
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px] pr-4">
-                  <div className="prose prose-sm dark:prose-invert max-w-none"><Streamdown>{resultado.parecerTecnico}</Streamdown></div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+            <ParecerEditor
+              parecerOriginal={resultado.parecerTecnico}
+              protocolo={resultado.protocoloCalculo}
+              filenamePrefix="parecer-tecnico"
+            />
           </TabsContent>
         </Tabs>
       </div>
