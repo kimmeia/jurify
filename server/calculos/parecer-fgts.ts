@@ -6,6 +6,7 @@
  */
 
 import type { ParametrosFGTS, ResultadoFGTS } from "./engine-fgts";
+import { DISCLAIMER_LEGAL } from "./disclaimer-legal";
 
 const TIPO_MULTA_LABEL: Record<string, string> = {
   sem_justa_causa: "Demissão sem Justa Causa (art. 18 § 1º Lei 8.036/1990)",
@@ -121,6 +122,6 @@ ${multaSection}
 *Parecer técnico gerado eletronicamente em ${hoje}.*
 *Protocolo: ${resultado.protocoloCalculo}*
 
-${require("./disclaimer-legal").DISCLAIMER_LEGAL}
+${DISCLAIMER_LEGAL}
 `;
 }

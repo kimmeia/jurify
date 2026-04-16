@@ -11,6 +11,7 @@ import type {
 } from "../../shared/imobiliario-types";
 import { INDEXADOR_LABELS } from "../../shared/imobiliario-types";
 import { round2 } from "./engine-imobiliario";
+import { DISCLAIMER_LEGAL } from "./disclaimer-legal";
 
 function formatBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -219,7 +220,6 @@ export function gerarParecerImobiliario(
   s.push(`---\n`);
   s.push(`*Parecer gerado automaticamente pelo SaaS de Cálculos Jurídicos.*`);
 
-  const { DISCLAIMER_LEGAL } = require("./disclaimer-legal");
   s.push("\n\n" + DISCLAIMER_LEGAL);
 
   return s.join("\n");
