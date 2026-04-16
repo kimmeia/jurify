@@ -64,6 +64,10 @@ interface FormData {
   comissaoPermanencia: string; multaMora: string; jurosMora: string;
   taxaRecalculo: CriterioRecalculo; taxaManual: string;
   anatocismoExpressoPactuado: boolean;
+  // Regulamento próprio da categoria (militar, magistrado, servidor estadual, etc)
+  temTetoPersonalizado: boolean;
+  tetoPersonalizadoMensal: string;
+  tetoPersonalizadoFundamento: string;
 }
 
 const initialForm: FormData = {
@@ -80,6 +84,9 @@ const initialForm: FormData = {
   comissaoPermanencia: "", multaMora: "", jurosMora: "",
   taxaRecalculo: "media_bacen", taxaManual: "",
   anatocismoExpressoPactuado: false,
+  temTetoPersonalizado: false,
+  tetoPersonalizadoMensal: "",
+  tetoPersonalizadoFundamento: "",
 };
 
 // ─── Small Components ──────────────────────────────────────────────────────────
@@ -265,6 +272,16 @@ export default function Bancario() {
       taxaRecalculo: form.taxaRecalculo,
       taxaManual: form.taxaRecalculo === "manual" && form.taxaManual ? parseFloat(form.taxaManual) : undefined,
       anatocismoExpressoPactuado: form.anatocismoExpressoPactuado,
+      tetoPersonalizado:
+        form.modalidadeCredito === "consignado"
+          && form.temTetoPersonalizado
+          && form.tetoPersonalizadoMensal
+          && form.tetoPersonalizadoFundamento.trim().length >= 10
+          ? {
+              tetoMensal: parseFloat(form.tetoPersonalizadoMensal),
+              fundamento: form.tetoPersonalizadoFundamento.trim(),
+            }
+          : undefined,
     });
   };
 
@@ -450,6 +467,58 @@ export default function Bancario() {
               })}
             </div>
           </div>
+        )}
+
+        {/* Regulamento próprio da categoria — opcional, prevalece sobre regra geral */}
+        {form.modalidadeCredito === "consignado" && (
+          <Card className="border-dashed">
+            <CardContent className="pt-5">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  id="temTetoPersonalizado"
+                  checked={form.temTetoPersonalizado}
+                  onCheckedChange={(v) => updateField("temTetoPersonalizado", v === true)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">A categoria profissional tem regulamento próprio?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Marque se o cliente é militar, magistrado, servidor estadual/municipal, empregado de
+                    estatal com ACT específico ou outra categoria com norma própria. O teto informado
+                    prevalecerá sobre a regra geral (1,5× BACEN).
+                  </p>
+                </div>
+              </label>
+
+              {form.temTetoPersonalizado && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tetoPersonalizadoMensal">Teto mensal (% a.m.) *</Label>
+                    <Input
+                      id="tetoPersonalizadoMensal"
+                      type="number"
+                      step="0.0001"
+                      placeholder="Ex: 2.05"
+                      value={form.tetoPersonalizadoMensal}
+                      onChange={(e) => updateField("tetoPersonalizadoMensal", e.target.value)}
+                    />
+                    <Dica>Limite máximo permitido pela norma da categoria</Dica>
+                  </div>
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <Label htmlFor="tetoPersonalizadoFundamento">Fundamento legal *</Label>
+                    <Input
+                      id="tetoPersonalizadoFundamento"
+                      type="text"
+                      placeholder="Ex: Portaria Normativa MD 1234/2024 — consignado militar"
+                      value={form.tetoPersonalizadoFundamento}
+                      onChange={(e) => updateField("tetoPersonalizadoFundamento", e.target.value)}
+                    />
+                    <Dica>Norma que estabelece o teto (lei, portaria, resolução, ACT)</Dica>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <Button size="lg" className="w-full" onClick={() => setStep(2)}>
