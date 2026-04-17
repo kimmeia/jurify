@@ -195,6 +195,121 @@ export async function atualizarContato(id: number, escritorioId: number, dados: 
     .where(and(eq(contatos.id, id), eq(contatos.escritorioId, escritorioId)));
 }
 
+/**
+ * Unifica dois contatos: move todas as referências do duplicado pro principal,
+ * consolida telefones, e exclui o duplicado.
+ *
+ * Atualiza FK em: conversas, leads, clienteArquivos, clienteAnotacoes,
+ * clienteProcessos, assinaturasDigitais, tarefas, asaasClientes,
+ * asaasCobrancas, smartflowExecucoes, agendamentos.
+ */
+export async function unificarContatos(
+  escritorioId: number,
+  principalId: number,
+  duplicadoId: number,
+): Promise<{ tabelasAtualizadas: string[] }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  if (principalId === duplicadoId) throw new Error("IDs iguais");
+
+  const [principal] = await db.select().from(contatos)
+    .where(and(eq(contatos.id, principalId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+  const [duplicado] = await db.select().from(contatos)
+    .where(and(eq(contatos.id, duplicadoId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+
+  if (!principal) throw new Error("Contato principal não encontrado");
+  if (!duplicado) throw new Error("Contato duplicado não encontrado");
+
+  const tabelasAtualizadas: string[] = [];
+
+  const tabelas = [
+    "conversas", "leads", "cliente_arquivos", "cliente_anotacoes",
+    "cliente_processos", "assinaturas_digitais", "tarefas",
+    "asaas_clientes", "asaas_cobrancas", "smartflow_execucoes",
+  ];
+
+  for (const tabela of tabelas) {
+    try {
+      const colName = tabela === "conversas" ? "contatoIdConv"
+        : tabela === "leads" ? "contatoIdLead"
+        : tabela === "cliente_processos" ? "contatoIdCliProc"
+        : tabela === "asaas_clientes" ? "contatoIdAsaas"
+        : tabela === "asaas_cobrancas" ? "contatoIdAsaasCob"
+        : tabela === "smartflow_execucoes" ? "contatoIdExec"
+        : tabela === "tarefas" ? "contatoIdTarefa"
+        : "contatoId";
+
+      const result = await db.execute(
+        sql.raw(`UPDATE \`${tabela}\` SET \`${colName}\` = ${principalId} WHERE \`${colName}\` = ${duplicadoId}`),
+      );
+      if ((result as any)?.[0]?.affectedRows > 0) {
+        tabelasAtualizadas.push(tabela);
+      }
+    } catch {
+      // Tabela pode não existir (migration pendente) — seguir
+    }
+  }
+
+  // Agendamentos tem campo diferente
+  try {
+    const r = await db.execute(
+      sql.raw(`UPDATE agendamentos SET contatoIdAgend = ${principalId} WHERE contatoIdAgend = ${duplicadoId}`),
+    );
+    if ((r as any)?.[0]?.affectedRows > 0) tabelasAtualizadas.push("agendamentos");
+  } catch { /* migration pode estar pendente */ }
+
+  // Consolidar telefones: move telefone do duplicado pra secundários do principal
+  const telefonesSecPrincipal: string[] = principal.telefonesSecundarios
+    ? JSON.parse(principal.telefonesSecundarios as string)
+    : [];
+  if (duplicado.telefone && duplicado.telefone !== principal.telefone) {
+    if (!telefonesSecPrincipal.includes(duplicado.telefone)) {
+      telefonesSecPrincipal.push(duplicado.telefone);
+    }
+  }
+  // Mover secundários do duplicado também
+  const telefonesSecDuplicado: string[] = duplicado.telefonesSecundarios
+    ? JSON.parse(duplicado.telefonesSecundarios as string)
+    : [];
+  for (const tel of telefonesSecDuplicado) {
+    if (tel !== principal.telefone && !telefonesSecPrincipal.includes(tel)) {
+      telefonesSecPrincipal.push(tel);
+    }
+  }
+
+  // Atualizar principal com telefones consolidados e dados complementares
+  const updatePrincipal: Record<string, unknown> = {};
+  if (telefonesSecPrincipal.length > 0) {
+    updatePrincipal.telefonesSecundarios = JSON.stringify(telefonesSecPrincipal.slice(0, 5));
+  }
+  if (!principal.email && duplicado.email) updatePrincipal.email = duplicado.email;
+  if (!principal.cpfCnpj && duplicado.cpfCnpj) updatePrincipal.cpfCnpj = duplicado.cpfCnpj;
+  if (!principal.observacoes && duplicado.observacoes) updatePrincipal.observacoes = duplicado.observacoes;
+
+  if (Object.keys(updatePrincipal).length > 0) {
+    await db.update(contatos).set(updatePrincipal)
+      .where(eq(contatos.id, principalId));
+  }
+
+  // Excluir duplicado
+  await db.delete(contatos)
+    .where(and(eq(contatos.id, duplicadoId), eq(contatos.escritorioId, escritorioId)));
+  tabelasAtualizadas.push("contatos (excluído)");
+
+  log.info({
+    principalId,
+    duplicadoId,
+    escritorioId,
+    tabelasAtualizadas,
+    telefonesConsolidados: telefonesSecPrincipal,
+  }, "Contatos unificados com sucesso");
+
+  return { tabelasAtualizadas };
+}
+
 export async function excluirContato(id: number, escritorioId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
