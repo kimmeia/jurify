@@ -8,6 +8,70 @@ import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 
+/**
+ * Busca contato existente por telefone normalizado (exato).
+ *
+ * Verifica no campo principal `telefone` E no histórico `telefonesAnteriores`.
+ * Retorna o primeiro match (mais recente) ou null.
+ *
+ * Crítico para evitar duplicação de contatos: SEMPRE chamar antes de criarContato.
+ */
+export async function buscarContatoPorTelefone(
+  escritorioId: number,
+  telefoneNormalizado: string,
+): Promise<{ id: number; nome: string; telefone: string | null } | null> {
+  const db = await getDb();
+  if (!db || !telefoneNormalizado) return null;
+
+  const rows = await db
+    .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
+    .from(contatos)
+    .where(
+      and(
+        eq(contatos.escritorioId, escritorioId),
+        or(
+          eq(contatos.telefone, telefoneNormalizado),
+          like(contatos.telefonesAnteriores, `%${telefoneNormalizado}%`),
+        ),
+      ),
+    )
+    .orderBy(desc(contatos.createdAt))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
+ * Busca contato existente por CPF/CNPJ normalizado (exato).
+ *
+ * Retorna o primeiro match ou null. Usado na vinculação financeira (Asaas)
+ * pra evitar duplicar cliente.
+ */
+export async function buscarContatoPorCpfCnpj(
+  escritorioId: number,
+  cpfCnpj: string,
+): Promise<{ id: number; nome: string; cpfCnpj: string | null; telefone: string | null } | null> {
+  const db = await getDb();
+  if (!db || !cpfCnpj) return null;
+
+  const limpo = cpfCnpj.replace(/\D/g, "");
+  if (!limpo) return null;
+
+  const rows = await db
+    .select({ id: contatos.id, nome: contatos.nome, cpfCnpj: contatos.cpfCnpj, telefone: contatos.telefone })
+    .from(contatos)
+    .where(
+      and(
+        eq(contatos.escritorioId, escritorioId),
+        eq(contatos.cpfCnpj, limpo),
+      ),
+    )
+    .orderBy(desc(contatos.createdAt))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
 const log = createLogger("crm");
 
 // Tipos compartilhados para validação de entrada
