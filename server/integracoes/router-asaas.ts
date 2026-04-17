@@ -433,7 +433,7 @@ export const asaasRouter = router({
         .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)))
         .limit(1);
 
-      if (jaVinculado) return { success: true, asaasCustomerId: jaVinculado.asaasCustomerId, jaExistia: true };
+      if (jaVinculado) return { success: true, asaasCustomerId: jaVinculado.asaasCustomerId, jaExistia: true, novoClienteCriado: false, cobrancasSincronizadas: 0 };
 
       // 2. Verificar se OUTRO contato com mesmo CPF já está vinculado localmente
       //    (evita duplicar no Asaas quando há contatos duplicados no CRM)
@@ -450,7 +450,13 @@ export const asaasRouter = router({
           cpfCnpj: cpfLimpo,
           nome: contato.nome,
         });
-        return { success: true, asaasCustomerId: mesmoCpfVinculado.asaasCustomerId, jaExistia: true };
+        // Sync cobranças do customer reutilizado
+        let cobSync = 0;
+        try {
+          const r = await syncCobrancasDeCliente(client, esc.escritorio.id, input.contatoId, mesmoCpfVinculado.asaasCustomerId);
+          cobSync = r.novas + r.atualizadas;
+        } catch { /* não bloqueia */ }
+        return { success: true, asaasCustomerId: mesmoCpfVinculado.asaasCustomerId, jaExistia: true, novoClienteCriado: false, cobrancasSincronizadas: cobSync };
       }
 
       // 3. Buscar no Asaas por CPF/CNPJ (API)
@@ -466,6 +472,7 @@ export const asaasRouter = router({
       }
 
       // 4. Se não existe no Asaas, validar dados mínimos e criar
+      let novoClienteCriado = false;
       if (!asaasCli) {
         if (!contato.nome || contato.nome.length < 2) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Preencha o nome do contato antes de vincular ao financeiro." });
@@ -476,6 +483,7 @@ export const asaasRouter = router({
           email: contato.email || undefined,
           mobilePhone: contato.telefone?.replace(/\D/g, "") || undefined,
         });
+        novoClienteCriado = true;
       }
 
       // Salvar vínculo
@@ -487,7 +495,22 @@ export const asaasRouter = router({
         nome: asaasCli.name,
       });
 
-      return { success: true, asaasCustomerId: asaasCli.id, jaExistia: false };
+      // Puxar cobranças existentes deste cliente no Asaas
+      let cobrancasSincronizadas = 0;
+      try {
+        const resultado = await syncCobrancasDeCliente(client, esc.escritorio.id, input.contatoId, asaasCli.id);
+        cobrancasSincronizadas = resultado.novas + resultado.atualizadas;
+      } catch (err: any) {
+        log.warn({ err: err.message }, "Sync de cobranças após vincular falhou (não bloqueia)");
+      }
+
+      return {
+        success: true,
+        asaasCustomerId: asaasCli.id,
+        jaExistia: false,
+        novoClienteCriado,
+        cobrancasSincronizadas,
+      };
     }),
 
   // ─── COBRANÇAS ───────────────────────────────────────────────────────────
@@ -1067,7 +1090,7 @@ export const asaasRouter = router({
       if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
 
       await client.excluirCobranca(cob.asaasPaymentId);
-      await db.update(asaasCobrancas).set({ status: "CANCELLED" }).where(eq(asaasCobrancas.id, input.id));
+      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, input.id));
 
       return { success: true };
     }),

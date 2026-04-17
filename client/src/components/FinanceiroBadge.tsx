@@ -88,8 +88,16 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
   const [cobrancaOpen, setCobrancaOpen] = useState(false);
 
   const vincularMut = trpc.asaas.vincularContato.useMutation({
-    onSuccess: (data) => {
-      toast.success(data.jaExistia ? "Contato já vinculado" : "Contato vinculado ao Asaas");
+    onSuccess: (data: any) => {
+      const msg = data.jaExistia
+        ? "Contato já estava vinculado"
+        : data.novoClienteCriado
+        ? "Novo cliente criado no Asaas"
+        : "Vinculado a cliente existente no Asaas";
+      const desc = data.cobrancasSincronizadas > 0
+        ? `${data.cobrancasSincronizadas} cobrança(s) sincronizada(s)`
+        : undefined;
+      toast.success(msg, { description: desc });
       refetch();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
