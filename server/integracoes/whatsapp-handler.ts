@@ -1,6 +1,6 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
-import { criarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
 import { obterConfigChatBot, gerarRespostaChatBot, converterHistoricoParaChatBot } from "./chatbot-openai";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
@@ -35,12 +35,13 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     // real, salvamos o telefone vazio (não o LID) para evitar poluir o
     // cadastro com identificadores opacos.
     const telefoneParaSalvar = isLidJid(msg.chatId) && !msg.telefone ? "" : msg.telefone;
-    contatoId = await criarContato({
+    const resultado = await criarOuReutilizarContato({
       escritorioId,
       nome: msg.nome || telefoneParaSalvar || "Contato WhatsApp",
       telefone: telefoneParaSalvar,
       origem: "whatsapp",
     });
+    contatoId = resultado.id;
   }
 
   if (!conversaId) {
