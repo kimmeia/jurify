@@ -15,6 +15,7 @@ import {
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import {
   DollarSign, AlertTriangle, CheckCircle2, Loader2, Plus, Link, Copy, ExternalLink,
   QrCode,
@@ -86,6 +87,17 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
     { retry: false, enabled: !!asaasStatus?.conectado && !!contatoId }
   );
   const [cobrancaOpen, setCobrancaOpen] = useState(false);
+  const [dadosFaltantes, setDadosFaltantes] = useState(false);
+  const [cpfInput, setCpfInput] = useState("");
+  const [telInput, setTelInput] = useState("");
+
+  const atualizarContatoMut = trpc.crm.atualizarContato.useMutation({
+    onSuccess: () => {
+      setDadosFaltantes(false);
+      vincularMut.mutate({ contatoId });
+    },
+    onError: (err) => toast.error("Erro ao salvar dados", { description: err.message }),
+  });
 
   const vincularMut = trpc.asaas.vincularContato.useMutation({
     onSuccess: (data: any) => {
@@ -100,7 +112,13 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
       toast.success(msg, { description: desc });
       refetch();
     },
-    onError: (err) => toast.error("Erro", { description: err.message }),
+    onError: (err) => {
+      if (err.message.includes("CPF") || err.message.includes("cpf")) {
+        setDadosFaltantes(true);
+      } else {
+        toast.error("Erro", { description: err.message });
+      }
+    },
   });
 
   const syncMut = trpc.asaas.syncCobrancasContato.useMutation({
@@ -219,6 +237,54 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
           onSuccess={() => refetch()}
         />
       )}
+
+      {/* Dialog pra preencher CPF/telefone quando faltam */}
+      <Dialog open={dadosFaltantes} onOpenChange={setDadosFaltantes}>
+        <DialogContent className="sm:max-w-[380px]">
+          <DialogHeader>
+            <DialogTitle>Dados obrigatórios</DialogTitle>
+            <DialogDescription>
+              Para vincular ao financeiro, preencha o CPF/CNPJ do contato.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="cpf-vincular">CPF ou CNPJ *</Label>
+              <Input
+                id="cpf-vincular"
+                placeholder="000.000.000-00"
+                value={cpfInput}
+                onChange={(e) => setCpfInput(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tel-vincular">Telefone</Label>
+              <Input
+                id="tel-vincular"
+                placeholder="(85) 99999-9999"
+                value={telInput}
+                onChange={(e) => setTelInput(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              size="sm"
+              disabled={!cpfInput.replace(/\D/g, "") || cpfInput.replace(/\D/g, "").length < 11 || atualizarContatoMut.isPending}
+              onClick={() => {
+                atualizarContatoMut.mutate({
+                  id: contatoId,
+                  cpfCnpj: cpfInput.replace(/\D/g, ""),
+                  ...(telInput ? { telefone: telInput.replace(/\D/g, "") } : {}),
+                });
+              }}
+            >
+              {atualizarContatoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+              Salvar e vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
