@@ -55,6 +55,7 @@ export const crmRouter = router({
       id: z.number(),
       nome: z.string().min(1).max(255).optional(),
       telefone: z.string().max(20).optional(),
+      telefonesSecundarios: z.array(z.string().max(20)).max(5).optional(),
       email: z.string().email().optional().or(z.literal("")),
       cpfCnpj: z.string().max(18).optional(),
       tags: z.array(z.string()).optional(),
