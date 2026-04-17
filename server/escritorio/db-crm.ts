@@ -32,6 +32,7 @@ export async function buscarContatoPorTelefone(
         or(
           eq(contatos.telefone, telefoneNormalizado),
           like(contatos.telefonesAnteriores, `%${telefoneNormalizado}%`),
+          like(contatos.telefonesSecundarios, `%${telefoneNormalizado}%`),
         ),
       ),
     )
@@ -130,6 +131,7 @@ export async function listarContatos(escritorioId: number, busca?: string) {
   return rows.map((r) => ({
     ...r,
     tags: r.tags ? JSON.parse(r.tags as string) : [],
+    telefonesSecundarios: r.telefonesSecundarios ? JSON.parse(r.telefonesSecundarios as string) : [],
     createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
   }));
 }
@@ -180,6 +182,11 @@ export async function atualizarContato(id: number, escritorioId: number, dados: 
   }
   if (dados.email !== undefined) updateData.email = dados.email || null;
   if (dados.cpfCnpj !== undefined) updateData.cpfCnpj = dados.cpfCnpj || null;
+  if (dados.telefonesSecundarios !== undefined) {
+    updateData.telefonesSecundarios = Array.isArray(dados.telefonesSecundarios) && dados.telefonesSecundarios.length > 0
+      ? JSON.stringify(dados.telefonesSecundarios)
+      : null;
+  }
   if (dados.tags !== undefined) updateData.tags = JSON.stringify(dados.tags);
   if (dados.observacoes !== undefined) updateData.observacoes = dados.observacoes || null;
   if (dados.responsavelId !== undefined) updateData.responsavelId = dados.responsavelId;

@@ -465,6 +465,10 @@ export const contatos = mysqlTable("contatos", {
    * acrescentamos no início quando o telefone é atualizado.
    */
   telefonesAnteriores: text("telefonesAnteriores"),
+  /** Telefones secundários (JSON array). Permite cadastrar múltiplos números
+   *  pro mesmo contato (ex: pessoal + comercial). A busca por telefone
+   *  verifica principal + secundários + histórico. */
+  telefonesSecundarios: text("telefonesSecundarios"),
   email: varchar("emailContato", { length: 320 }),
   cpfCnpj: varchar("cpfCnpj", { length: 18 }),
   origem: mysqlEnum("origemContato", ["whatsapp", "instagram", "facebook", "telefone", "manual", "site"]).default("manual").notNull(),
