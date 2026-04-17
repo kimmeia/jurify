@@ -750,6 +750,11 @@ function ClienteDetalhe({
                 <Phone className="h-3 w-3" /> {cliente.telefone}
               </span>
             )}
+            {(cliente as any).telefonesSecundarios?.length > 0 && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                +{(cliente as any).telefonesSecundarios.length} tel
+              </span>
+            )}
             {cliente.email && (
               <span className="flex items-center gap-1">
                 <Mail className="h-3 w-3" /> {cliente.email}
