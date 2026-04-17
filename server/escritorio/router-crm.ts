@@ -9,7 +9,7 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { checkPermission } from "./check-permission";
 import {
-  criarContato, listarContatos, atualizarContato,
+  criarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
   criarConversa, listarConversas, atualizarConversa, excluirConversa,
   enviarMensagem, listarMensagens,
@@ -67,6 +67,20 @@ export const crmRouter = router({
       const { id, ...dados } = input;
       await atualizarContato(id, esc.escritorio.id, dados);
       return { success: true };
+    }),
+
+  unificarContatos: protectedProcedure
+    .input(z.object({
+      principalId: z.number(),
+      duplicadoId: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
+        throw new Error("Apenas dono ou gestor pode unificar contatos.");
+      }
+      return unificarContatos(esc.escritorio.id, input.principalId, input.duplicadoId);
     }),
 
   excluirContato: protectedProcedure
