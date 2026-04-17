@@ -426,19 +426,50 @@ export const asaasRouter = router({
       if (!contato) throw new TRPCError({ code: "NOT_FOUND", message: "Contato não encontrado" });
       if (!contato.cpfCnpj) throw new TRPCError({ code: "BAD_REQUEST", message: "Contato sem CPF/CNPJ. Preencha o CPF/CNPJ primeiro." });
 
-      // Verificar se já vinculado
+      const cpfLimpo = contato.cpfCnpj.replace(/\D/g, "");
+
+      // 1. Verificar se este contato já está vinculado localmente
       const [jaVinculado] = await db.select().from(asaasClientes)
         .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)))
         .limit(1);
 
       if (jaVinculado) return { success: true, asaasCustomerId: jaVinculado.asaasCustomerId, jaExistia: true };
 
-      // Buscar no Asaas por CPF/CNPJ
-      const cpfLimpo = contato.cpfCnpj.replace(/\D/g, "");
-      let asaasCli = await client.buscarClientePorCpfCnpj(cpfLimpo);
+      // 2. Verificar se OUTRO contato com mesmo CPF já está vinculado localmente
+      //    (evita duplicar no Asaas quando há contatos duplicados no CRM)
+      const [mesmoCpfVinculado] = await db.select().from(asaasClientes)
+        .where(and(eq(asaasClientes.cpfCnpj, cpfLimpo), eq(asaasClientes.escritorioId, esc.escritorio.id)))
+        .limit(1);
 
-      // Se não existe no Asaas, criar
+      if (mesmoCpfVinculado) {
+        // Já existe vínculo com esse CPF — reusar o customer do Asaas
+        await db.insert(asaasClientes).values({
+          escritorioId: esc.escritorio.id,
+          contatoId: input.contatoId,
+          asaasCustomerId: mesmoCpfVinculado.asaasCustomerId,
+          cpfCnpj: cpfLimpo,
+          nome: contato.nome,
+        });
+        return { success: true, asaasCustomerId: mesmoCpfVinculado.asaasCustomerId, jaExistia: true };
+      }
+
+      // 3. Buscar no Asaas por CPF/CNPJ (API)
+      let asaasCli: { id: string; name: string } | null = null;
+      try {
+        asaasCli = await client.buscarClientePorCpfCnpj(cpfLimpo);
+      } catch (err: any) {
+        log.warn({ err: err.message, cpf: cpfLimpo }, "Busca Asaas por CPF falhou — NÃO criando duplicata");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Não foi possível verificar se o cliente já existe no Asaas. Tente novamente em alguns minutos.",
+        });
+      }
+
+      // 4. Se não existe no Asaas, validar dados mínimos e criar
       if (!asaasCli) {
+        if (!contato.nome || contato.nome.length < 2) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Preencha o nome do contato antes de vincular ao financeiro." });
+        }
         asaasCli = await client.criarCliente({
           name: contato.nome,
           cpfCnpj: cpfLimpo,
@@ -870,9 +901,28 @@ export const asaasRouter = router({
 
       const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
 
-      // Verificar se já existe no Asaas
-      let asaasCli = await client.buscarClientePorCpfCnpj(cpfLimpo);
+      // 1. Verificar se já vinculado localmente por CPF
+      const [localExistente] = await db.select().from(asaasClientes)
+        .where(and(eq(asaasClientes.cpfCnpj, cpfLimpo), eq(asaasClientes.escritorioId, esc.escritorio.id)))
+        .limit(1);
 
+      // 2. Buscar no Asaas por CPF
+      let asaasCli: { id: string; name: string } | null = null;
+      try {
+        asaasCli = await client.buscarClientePorCpfCnpj(cpfLimpo);
+      } catch (err: any) {
+        log.warn({ err: err.message, cpf: cpfLimpo }, "Busca Asaas por CPF falhou");
+        if (localExistente) {
+          asaasCli = { id: localExistente.asaasCustomerId, name: localExistente.nome || input.nome };
+        } else {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Não foi possível verificar se o cliente já existe no Asaas. Tente novamente.",
+          });
+        }
+      }
+
+      // 3. Se não existe, criar
       if (!asaasCli) {
         asaasCli = await client.criarCliente({
           name: input.nome,
