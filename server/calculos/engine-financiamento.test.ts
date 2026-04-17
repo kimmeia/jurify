@@ -14,6 +14,8 @@ import {
   round2,
   round8,
   addMonths,
+  calcularMesesCarencia,
+  ajustarPVCarencia,
   mensalParaAnual,
   anualParaMensal,
   verificarEquivalenciaTaxas,
@@ -76,6 +78,57 @@ describe("Utilitários de precisão", () => {
     expect(addMonths("2024-01-31", 1)).toBe("2024-02-29"); // ano bissexto
     expect(addMonths("2023-03-31", 1)).toBe("2023-04-30");
     expect(addMonths("2023-05-31", 1)).toBe("2023-06-30");
+  });
+});
+
+// ─── Carência ─────────────────────────────────────────────────────────────────
+
+describe("Carência (gap entre contrato e 1º vencimento)", () => {
+  it("gap de 1 mês (padrão) = 0 meses de carência", () => {
+    expect(calcularMesesCarencia("2024-01-15", "2024-02-15")).toBe(0);
+  });
+
+  it("gap de 2 meses = 1 mês de carência", () => {
+    expect(calcularMesesCarencia("2024-01-15", "2024-03-15")).toBe(1);
+  });
+
+  it("gap de 4 meses = 3 meses de carência", () => {
+    expect(calcularMesesCarencia("2024-01-15", "2024-05-15")).toBe(3);
+  });
+
+  it("PV ajustado = PV × (1+i)^carência", () => {
+    const pv = 50000, i = 0.025, carencia = 3;
+    const pvEfetivo = ajustarPVCarencia(pv, i, carencia);
+    const esperado = round2(50000 * Math.pow(1.025, 3));
+    expect(pvEfetivo).toBe(esperado);
+  });
+
+  it("carência 0 = PV inalterado", () => {
+    expect(ajustarPVCarencia(50000, 0.025, 0)).toBe(50000);
+  });
+
+  it("calcularRevisaoFinanciamento com carência ajusta demonstrativo", () => {
+    // Contrato Jan/2024, 1º vencimento Mai/2024 = gap 4m, carência = 3m
+    const params: ParametrosFinanciamento = {
+      ...baseParams,
+      dataContrato: "2024-01-15",
+      dataPrimeiroVencimento: "2024-05-15",
+    };
+    const resultado = calcularRevisaoFinanciamento(params, 1.5, 19.56);
+
+    // Deve ter info de carência
+    expect(resultado.infoCarencia).toBeDefined();
+    expect(resultado.infoCarencia!.mesesCarencia).toBe(3);
+    expect(resultado.infoCarencia!.pvOriginal).toBe(50000);
+    expect(resultado.infoCarencia!.pvEfetivo).toBeGreaterThan(50000);
+
+    // PMT deve ser maior que sem carência (PV efetivo maior)
+    const semCarencia = calcularRevisaoFinanciamento(
+      { ...baseParams, dataContrato: "2024-01-15", dataPrimeiroVencimento: "2024-02-15" },
+      1.5, 19.56,
+    );
+    expect(resultado.demonstrativoOriginal[0].valorParcela)
+      .toBeGreaterThan(semCarencia.demonstrativoOriginal[0].valorParcela);
   });
 });
 

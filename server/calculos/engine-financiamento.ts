@@ -32,6 +32,34 @@ export function addMonths(dateStr: string, months: number): string {
 export function mensalParaAnual(t: number): number { return round4((Math.pow(1 + t / 100, 12) - 1) * 100); }
 export function anualParaMensal(t: number): number { return round4((Math.pow(1 + t / 100, 1 / 12) - 1) * 100); }
 
+/**
+ * Calcula meses de carência entre data do contrato e primeiro vencimento.
+ * Carência = gap > 1 mês. Durante a carência, juros capitalizam sobre
+ * o saldo devedor (prática bancária padrão).
+ *
+ * Retorna 0 se gap ≤ 1 mês (prazo normal entre contrato e 1º vencimento).
+ */
+export function calcularMesesCarencia(dataContrato: string, dataPrimeiroVencimento: string): number {
+  const dc = new Date(dataContrato + "T00:00:00");
+  const dv = new Date(dataPrimeiroVencimento + "T00:00:00");
+  const diffMs = dv.getTime() - dc.getTime();
+  const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const meses = Math.round(diffDias / 30.44);
+  return Math.max(0, meses - 1);
+}
+
+/**
+ * Ajusta o PV considerando capitalização de juros durante o período
+ * de carência. O banco cobra juros sobre o saldo durante a carência,
+ * então o saldo devedor efetivo no início da amortização é maior.
+ *
+ *   PV_efetivo = PV × (1 + i)^carência
+ */
+export function ajustarPVCarencia(pv: number, taxaMensal: number, mesesCarencia: number): number {
+  if (mesesCarencia <= 0) return pv;
+  return round2(pv * Math.pow(1 + taxaMensal, mesesCarencia));
+}
+
 // ─── Validação de Datas ──────────────────────────────────────────────────────
 
 export function validarDatas(params: ParametrosFinanciamento): string[] {
@@ -614,10 +642,18 @@ export function calcularRevisaoFinanciamento(
     throw new Error(`Erro de validação: ${errosDatas.join(" | ")}`);
   }
 
-  // 1. Demonstrativo Original
-  const demonstrativoOriginal = gerarDemonstrativoOriginal(params);
+  // 0.5 Carência: detectar gap entre contrato e primeiro vencimento
+  const mesesCarencia = calcularMesesCarencia(params.dataContrato, params.dataPrimeiroVencimento);
+  const taxaDecimal = params.taxaJurosMensal / 100;
+  const pvEfetivo = ajustarPVCarencia(params.valorFinanciado, taxaDecimal, mesesCarencia);
 
-  // 1.5 Verificação da parcela declarada
+  // 1. Demonstrativo Original — usa PV efetivo (com carência capitalizada)
+  const paramsComCarencia = mesesCarencia > 0
+    ? { ...params, valorFinanciado: pvEfetivo }
+    : params;
+  const demonstrativoOriginal = gerarDemonstrativoOriginal(paramsComCarencia);
+
+  // 1.5 Verificação da parcela declarada (agora com PV ajustado)
   const parcelaCalculada = demonstrativoOriginal[0]?.valorParcela ?? 0;
   const verificacaoParcela = verificarParcela(params, parcelaCalculada);
 
@@ -646,10 +682,18 @@ export function calcularRevisaoFinanciamento(
   // 8. Comparativo 4 cenários
   const comparativo4Cenarios = gerarComparativo4Cenarios(params, taxaMediaBACEN_mensal, taxaMediaBACEN_anual);
 
+  // 9. Info de carência (pra exibir no frontend)
+  const infoCarencia = mesesCarencia > 0 ? {
+    mesesCarencia,
+    pvOriginal: params.valorFinanciado,
+    pvEfetivo,
+    jurosCarencia: round2(pvEfetivo - params.valorFinanciado),
+  } : undefined;
+
   return {
     demonstrativoOriginal, demonstrativoRecalculado, resumo, analiseAbusividade: analise,
     taxaRecalculoAplicada: taxaRecalculo * 100, criterioRecalculo: criterio,
     protocoloCalculo: gerarProtocolo(), dadosParcelasPagas,
-    verificacaoParcela, comparativo4Cenarios,
+    verificacaoParcela, comparativo4Cenarios, infoCarencia,
   };
 }

@@ -258,6 +258,13 @@ export interface ComparativoCenario {
 
 // ─── Resultado Final ───────────────────────────────────────────────────────────
 
+export interface InfoCarencia {
+  mesesCarencia: number;
+  pvOriginal: number;
+  pvEfetivo: number;
+  jurosCarencia: number;
+}
+
 export interface ResultadoFinanciamento {
   demonstrativoOriginal: LinhaFinanciamento[];
   demonstrativoRecalculado: LinhaFinanciamento[];
@@ -270,6 +277,7 @@ export interface ResultadoFinanciamento {
   dadosParcelasPagas?: DadosRecalculoParcelasPagas;
   verificacaoParcela?: VerificacaoParcela;
   comparativo4Cenarios?: ComparativoCenario[];
+  infoCarencia?: InfoCarencia;
 }
 
 // ─── Mapeamento de Séries SGS do BACEN ─────────────────────────────────────────
