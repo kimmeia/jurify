@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { checkPermission } from "./check-permission";
 import {
   criarContato, listarContatos, atualizarContato,
+  buscarContatoPorTelefone,
   criarConversa, listarConversas, atualizarConversa, excluirConversa,
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
@@ -300,17 +301,12 @@ export const crmRouter = router({
         throw new Error("Telefone inválido. Informe DDD + número.");
       }
 
-      // 1. Buscar ou criar contato
-      const contatos = await listarContatos(esc.escritorio.id, cleanPhone);
-      let contatoId: number | null = null;
-      for (const c of contatos) {
-        const cPhone = (c.telefone || "").replace(/\D/g, "");
-        if (cPhone === cleanPhone || cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone)) {
-          contatoId = c.id;
-          break;
-        }
-      }
-      if (!contatoId) {
+      // 1. Buscar contato existente por telefone (query exata, não .endsWith)
+      const contatoExistente = await buscarContatoPorTelefone(esc.escritorio.id, cleanPhone);
+      let contatoId: number;
+      if (contatoExistente) {
+        contatoId = contatoExistente.id;
+      } else {
         contatoId = await criarContato({
           escritorioId: esc.escritorio.id,
           nome: input.nome || cleanPhone,

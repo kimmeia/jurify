@@ -1,6 +1,6 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
-import { criarContato, listarContatos, criarConversa, listarConversas, enviarMensagem as salvarMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
+import { criarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
 import { obterConfigChatBot, gerarRespostaChatBot, converterHistoricoParaChatBot } from "./chatbot-openai";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
@@ -25,7 +25,9 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   // novo: ainda assim tentamos um lookup por telefone (caso senderPn tenha
   // funcionado) — senão, criamos um contato novo com nome do pushName.
   if (!contatoId && msg.telefone) {
-    contatoId = await buscarContatoPorTelefone(escritorioId, msg.telefone) ?? 0;
+    const clean = msg.telefone.replace(/\D/g, "");
+    const existente = await buscarContatoPorTelefoneDB(escritorioId, clean);
+    contatoId = existente?.id ?? 0;
   }
 
   if (!contatoId) {
@@ -133,80 +135,9 @@ async function enviarResposta(canalId: number, conversaId: number, chatIdExterno
   try { const { getWhatsappManager } = await import("./whatsapp-baileys"); const m = getWhatsappManager(); if (m.isConectado(canalId)) await m.enviarMensagemJid(canalId, chatIdExterno, resposta); } catch (e: any) { log.error(`[ChatBot] Envio WA erro:`, e.message); }
 }
 
-/**
- * Busca um contato pelo telefone.
- *
- * Faz matching fuzzy (endsWith) contra o telefone atual E os telefones
- * anteriores do contato (histórico). Isso garante que, quando o usuário
- * altera o número do contato no cadastro, mensagens do número antigo
- * ainda caem no mesmo contato — preservando o histórico de conversa.
- */
-async function buscarContatoPorTelefone(escritorioId: number, telefone: string) {
-  const clean = telefone.replace(/\D/g, "");
-  if (!clean) return null;
-
-  // Busca ampla no banco (not strict — o listarContatos faz LIKE)
-  const contatosRaw = await listarContatos(escritorioId, clean);
-
-  const match = (p: string) => {
-    const pClean = (p || "").replace(/\D/g, "");
-    if (!pClean) return false;
-    return pClean === clean || pClean.endsWith(clean) || clean.endsWith(pClean);
-  };
-
-  // 1. Telefone atual
-  for (const c of contatosRaw) {
-    if (c.telefone && match(c.telefone)) return c.id;
-  }
-
-  // 2. Telefones anteriores (histórico separado por vírgula)
-  for (const c of contatosRaw) {
-    const historico = (c as { telefonesAnteriores?: string | null }).telefonesAnteriores;
-    if (!historico) continue;
-    const anteriores = historico.split(",").map((t) => t.trim()).filter(Boolean);
-    for (const ant of anteriores) {
-      if (match(ant)) {
-        log.info({
-          contatoId: c.id,
-          telefoneRecebido: telefone,
-          telefoneHistorico: ant,
-        }, "Contato reconhecido via telefone histórico");
-        return c.id;
-      }
-    }
-  }
-
-  // 3. Última tentativa: busca sem filtro na tabela inteira (caso o contato
-  // não tenha nome similar ao telefone — listarContatos usa LIKE no nome tb)
-  try {
-    const { getDb } = await import("../db");
-    const { contatos: contatosTable } = await import("../../drizzle/schema");
-    const { eq } = await import("drizzle-orm");
-    const db = await getDb();
-    if (db) {
-      const all = await db.select({
-        id: contatosTable.id,
-        telefone: contatosTable.telefone,
-        telefonesAnteriores: contatosTable.telefonesAnteriores,
-      }).from(contatosTable).where(eq(contatosTable.escritorioId, escritorioId));
-
-      for (const c of all) {
-        if (c.telefone && match(c.telefone)) return c.id;
-        if (c.telefonesAnteriores) {
-          const ants = c.telefonesAnteriores.split(",").map((t) => t.trim()).filter(Boolean);
-          if (ants.some(match)) {
-            log.info({ contatoId: c.id }, "Contato reconhecido via histórico (fallback full scan)");
-            return c.id;
-          }
-        }
-      }
-    }
-  } catch (err) {
-    log.warn({ err: String(err) }, "Fallback full scan falhou");
-  }
-
-  return null;
-}
+// buscarContatoPorTelefone agora é centralizada em db-crm.ts
+// (buscarContatoPorTelefoneDB importada no topo do arquivo)
+// Faz query SQL exata em vez de loop JS com .endsWith().
 
 async function buscarConversaExistente(escritorioId: number, contatoId: number, canalId: number, chatIdExterno?: string) {
   const all = await listarConversas(escritorioId, {});
