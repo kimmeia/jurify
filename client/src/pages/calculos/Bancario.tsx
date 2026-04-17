@@ -577,20 +577,31 @@ export default function Bancario() {
                 <Dica>Número total de prestações do contrato</Dica>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="taxaJurosMensal">Taxa mensal (% a.m.) *</Label>
                 <Input id="taxaJurosMensal" type="number" step="0.0001" placeholder="Ex: 1.99" value={form.taxaJurosMensal} onChange={(e) => updateField("taxaJurosMensal", e.target.value)} />
+                <Dica>Juros mensais que constam no contrato</Dica>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="taxaJurosAnual">Taxa anual do contrato (% a.a.)</Label>
+                <Input id="taxaJurosAnual" type="number" step="0.01" placeholder={taxaAnualCalculada ? `Equivalente: ${taxaAnualCalculada}%` : "Para verificação"} value={form.taxaJurosAnual} onChange={(e) => updateField("taxaJurosAnual", e.target.value)} />
                 <Dica>
-                  {taxaAnualCalculada
-                    ? `Juros mensais — equivale a ≈ ${taxaAnualCalculada}% ao ano`
-                    : "Juros mensais cobrados pelo banco"}
+                  {!form.taxaJurosAnual && taxaAnualCalculada
+                    ? "Informe a do contrato para verificar se bate com a mensal"
+                    : form.taxaJurosAnual && taxaAnualCalculada
+                    ? Math.abs(parseFloat(form.taxaJurosAnual) - parseFloat(taxaAnualCalculada)) < 0.05
+                      ? "✓ Taxas equivalentes — capitalização mensal regular"
+                      : parseFloat(form.taxaJurosAnual) > parseFloat(taxaAnualCalculada)
+                      ? "✗ Anual maior que a equivalente — possível capitalização diária"
+                      : "✗ Taxas não equivalentes — divergência detectada"
+                    : "Preencha para verificar equivalência"}
                 </Dica>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="valorParcela">Valor da parcela (R$)</Label>
-                <Input id="valorParcela" type="number" step="0.01" placeholder="Opcional" value={form.valorParcela} onChange={(e) => updateField("valorParcela", e.target.value)} />
-                <Dica>Valor que você paga mensalmente</Dica>
+                <Input id="valorParcela" type="number" step="0.01" placeholder="Para verificação" value={form.valorParcela} onChange={(e) => updateField("valorParcela", e.target.value)} />
+                <Dica>Informe para verificar se o banco calculou corretamente</Dica>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

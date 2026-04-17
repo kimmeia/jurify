@@ -374,7 +374,7 @@ function AppSidebarContent({
                         className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
                       />
                       <span className="flex-1">Cálculos</span>
-                      <BetaBadge />
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-950/20">Em revisão</Badge>
                       {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                       <ChevronRight
                         className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ml-1 ${calculosOpen ? "rotate-90" : ""}`}
