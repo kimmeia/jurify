@@ -94,25 +94,67 @@ function validarOrigem(v: string | undefined): OrigemContato {
   return "manual";
 }
 
-export async function criarContato(dados: {
+/**
+ * Cria contato OU retorna ID do existente se já houver match por
+ * telefone ou CPF no mesmo escritório.
+ *
+ * Regra: Rafael Almeida da Rocha (CPF 60516750356, tel 85996042189) e
+ * Rafael Rocha (CPF 605.167.503-56, tel 5585996042189) = MESMO CLIENTE.
+ * O nome pode mudar, mas CPF e telefone (normalizado) identificam a pessoa.
+ *
+ * Retorna { id, jaCadastrado } — jaCadastrado=true se reusou existente.
+ */
+export async function criarOuReutilizarContato(dados: {
   escritorioId: number; nome: string; telefone?: string; email?: string;
   cpfCnpj?: string; origem?: string; tags?: string[]; observacoes?: string;
   responsavelId?: number;
-}) {
+}): Promise<{ id: number; jaCadastrado: boolean }> {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+
+  // 1. Buscar por CPF (mais forte — identifica a pessoa)
+  const cpfLimpo = (dados.cpfCnpj || "").replace(/\D/g, "");
+  if (cpfLimpo.length >= 11) {
+    const existente = await buscarContatoPorCpfCnpj(dados.escritorioId, cpfLimpo);
+    if (existente) {
+      log.info({ contatoId: existente.id, cpf: cpfLimpo }, "Contato reutilizado por CPF");
+      return { id: existente.id, jaCadastrado: true };
+    }
+  }
+
+  // 2. Buscar por telefone
+  const telLimpo = (dados.telefone || "").replace(/\D/g, "");
+  if (telLimpo.length >= 10) {
+    const existente = await buscarContatoPorTelefone(dados.escritorioId, telLimpo);
+    if (existente) {
+      log.info({ contatoId: existente.id, tel: telLimpo }, "Contato reutilizado por telefone");
+      return { id: existente.id, jaCadastrado: true };
+    }
+  }
+
+  // 3. Não encontrou — criar novo
   const [result] = await db.insert(contatos).values({
     escritorioId: dados.escritorioId,
     nome: dados.nome,
     telefone: dados.telefone || null,
     email: dados.email || null,
-    cpfCnpj: dados.cpfCnpj || null,
+    cpfCnpj: cpfLimpo || null,
     origem: validarOrigem(dados.origem),
     tags: dados.tags ? JSON.stringify(dados.tags) : null,
     observacoes: dados.observacoes || null,
     responsavelId: dados.responsavelId ?? null,
   });
-  return (result as { insertId: number }).insertId;
+  return { id: (result as { insertId: number }).insertId, jaCadastrado: false };
+}
+
+/** @deprecated Use criarOuReutilizarContato — mantido pra backward compat */
+export async function criarContato(dados: {
+  escritorioId: number; nome: string; telefone?: string; email?: string;
+  cpfCnpj?: string; origem?: string; tags?: string[]; observacoes?: string;
+  responsavelId?: number;
+}) {
+  const { id } = await criarOuReutilizarContato(dados);
+  return id;
 }
 
 export async function listarContatos(escritorioId: number, busca?: string) {

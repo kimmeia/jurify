@@ -9,7 +9,7 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { checkPermission } from "./check-permission";
 import {
-  criarContato, listarContatos, atualizarContato, unificarContatos,
+  criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
   criarConversa, listarConversas, atualizarConversa, excluirConversa,
   enviarMensagem, listarMensagens,
@@ -316,19 +316,13 @@ export const crmRouter = router({
         throw new Error("Telefone inválido. Informe DDD + número.");
       }
 
-      // 1. Buscar contato existente por telefone (query exata, não .endsWith)
-      const contatoExistente = await buscarContatoPorTelefone(esc.escritorio.id, cleanPhone);
-      let contatoId: number;
-      if (contatoExistente) {
-        contatoId = contatoExistente.id;
-      } else {
-        contatoId = await criarContato({
-          escritorioId: esc.escritorio.id,
-          nome: input.nome || cleanPhone,
-          telefone: cleanPhone,
-          origem: "whatsapp",
-        });
-      }
+      // 1. Buscar ou reutilizar contato (verifica CPF + telefone antes de criar)
+      const { id: contatoId } = await criarOuReutilizarContato({
+        escritorioId: esc.escritorio.id,
+        nome: input.nome || cleanPhone,
+        telefone: cleanPhone,
+        origem: "whatsapp",
+      });
 
       // 2. Verificar se já existe conversa aberta com este contato+canal
       const jid = `${cleanPhone}@s.whatsapp.net`;

@@ -583,16 +583,21 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
             )}
             {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
           </div>
-          {conv?.contatoTelefone && (
-            <p className="text-[10px] text-muted-foreground mt-0.5">{conv.contatoTelefone}</p>
+          {(conv?.contatoTelefone || conv?.chatIdExterno) && (
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
+            </p>
           )}
         </div>
-        {conv?.contatoTelefone && (onWA || onTel) && (
-          <div className="flex items-center gap-1 shrink-0">
-            {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="WhatsApp" onClick={() => onWA(conv.contatoTelefone)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
-            {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ligar" onClick={() => onTel(conv.contatoTelefone)}><Phone className="h-3.5 w-3.5" /></Button>}
-          </div>
-        )}
+        {(conv?.contatoTelefone || conv?.chatIdExterno) && (onWA || onTel) && (() => {
+          const tel = conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "";
+          return (
+            <div className="flex items-center gap-1 shrink-0">
+              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
+              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ligar" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
+            </div>
+          );
+        })()}
       </div>
       {/* Header linha 2: acoes */}
       <div className="flex items-center gap-1 mt-1.5 -mb-0.5 overflow-x-auto">
