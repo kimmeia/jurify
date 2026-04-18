@@ -31,6 +31,7 @@ import Configuracoes from "./pages/Configuracoes";
 import Agendamento from "./pages/Agendamento";
 import Atendimento from "./pages/Atendimento";
 import AgentesIA from "./pages/AgentesIA";
+import AgenteChat from "./pages/AgenteChat";
 import SmartFlow from "./pages/SmartFlow";
 import Kanban from "./pages/Kanban";
 import Clientes from "./pages/Clientes";
@@ -211,6 +212,11 @@ function Router() {
       <Route path="/agentes-ia">
         <ClientArea>
           <AgentesIA />
+        </ClientArea>
+      </Route>
+      <Route path="/agentes-ia/:id/chat">
+        <ClientArea>
+          <AgenteChat />
         </ClientArea>
       </Route>
       <Route path="/smartflow">

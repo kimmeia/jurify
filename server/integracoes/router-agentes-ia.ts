@@ -101,7 +101,7 @@ function decryptApiKey(encrypted: string, iv: string, tag: string): string {
  *      - Se tem os dois, prioriza pelo provider do agente
  *   3. Key admin global (fallback)
  */
-async function resolverAPIKey(
+export async function resolverAPIKey(
   escritorioId: number,
   agenteAtual: any,
   providerPreferido?: string,
@@ -194,14 +194,14 @@ async function resolverAPIKey(
 }
 
 /** Detecta o provider preferido pelo nome do modelo */
-function providerDoModelo(modelo: string | null | undefined): "openai" | "anthropic" {
+export function providerDoModelo(modelo: string | null | undefined): "openai" | "anthropic" {
   const m = (modelo || "").toLowerCase();
   if (m.startsWith("claude") || m.includes("anthropic")) return "anthropic";
   return "openai";
 }
 
 /** Monta o bloco de contexto com documentos de treinamento do agente. */
-async function montarContextoDocumentos(
+export async function montarContextoDocumentos(
   db: any,
   agenteId: number,
   escritorioId: number,

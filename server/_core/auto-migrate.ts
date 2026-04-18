@@ -668,6 +668,47 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
       }
     }
 
+    // ─── agente_chat_threads + agente_chat_mensagens: chat interno ────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agente_chat_threads (
+          id INT NOT NULL AUTO_INCREMENT,
+          agenteIdThread INT NOT NULL,
+          escritorioIdThread INT NOT NULL,
+          usuarioIdThread INT NOT NULL,
+          tituloThread VARCHAR(200) NOT NULL DEFAULT 'Nova conversa',
+          arquivadaThread BOOLEAN NOT NULL DEFAULT false,
+          createdAtThread TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtThread TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_act_agente (agenteIdThread),
+          INDEX idx_act_usuario (usuarioIdThread),
+          INDEX idx_act_escritorio (escritorioIdThread)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agente_chat_mensagens (
+          id INT NOT NULL AUTO_INCREMENT,
+          threadIdMsg INT NOT NULL,
+          roleMsg ENUM('user','assistant','system') NOT NULL,
+          conteudoMsg TEXT NOT NULL,
+          anexoUrlMsg VARCHAR(1024),
+          anexoNomeMsg VARCHAR(255),
+          anexoMimeMsg VARCHAR(128),
+          anexoConteudoMsg TEXT,
+          tokensUsadosMsg INT NOT NULL DEFAULT 0,
+          createdAtMsg TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_acm_thread (threadIdMsg)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("agente_chat_threads + agente_chat_mensagens criadas (ou já existiam)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar agente_chat_*");
+      }
+    }
+
     // ─── judit_monitoramentos: colunas novas (tipoMonitoramento, etc) ──
     try {
       const [tables] = await connection.query(
