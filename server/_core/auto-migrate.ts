@@ -628,6 +628,15 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
                 log.warn({ err: err.message }, "Falha ao adicionar modulosPermitidosAgenteIa");
             });
         }
+        if (!colSet.has("criadoPorAgenteIa")) {
+          await connection
+            .query("ALTER TABLE agentes_ia ADD COLUMN criadoPorAgenteIa INT NULL")
+            .then(() => log.info("agentes_ia.criadoPorAgenteIa adicionada"))
+            .catch((err: any) => {
+              if (!isHarmlessError(err.message || String(err)))
+                log.warn({ err: err.message }, "Falha ao adicionar criadoPorAgenteIa");
+            });
+        }
       }
     } catch (err: any) {
       log.warn({ err: err.message }, "Falha ao atualizar agentes_ia columns");

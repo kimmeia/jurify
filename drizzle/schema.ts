@@ -592,6 +592,11 @@ export const agentesIa = mysqlTable("agentes_ia", {
    * Null/vazio = disponível em todos os módulos que suportarem agentes.
    */
   modulosPermitidos: varchar("modulosPermitidosAgenteIa", { length: 500 }),
+  /**
+   * ID do usuário (colaborador) que criou o agente. Usado pelo controle de
+   * permissões `verProprios` — colaboradores só podem editar seus próprios agentes.
+   */
+  criadoPor: int("criadoPorAgenteIa"),
   createdAt: timestamp("createdAtAgente").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgente").defaultNow().onUpdateNow().notNull(),
 });

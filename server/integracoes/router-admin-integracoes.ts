@@ -64,6 +64,13 @@ const PROVEDORES: ProvedorMeta[] = [
     services: ["GPT-4", "GPT-3.5", "Assistants", "Embeddings"],
   },
   {
+    id: "anthropic",
+    nome: "Anthropic (Claude)",
+    descricao: "API key do Claude usada pelos Agentes IA do admin configurados com modelos Claude.",
+    docUrl: "https://console.anthropic.com/settings/keys",
+    services: ["Claude Sonnet", "Claude Haiku", "Claude Opus"],
+  },
+  {
     id: "resend",
     nome: "Resend (E-mail)",
     descricao:
@@ -141,6 +148,38 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
       } catch (err: any) {
         if (err.name === "AbortError" || err.name === "TimeoutError") {
           return { ok: false, mensagem: "Timeout — OpenAI não respondeu em 10s" };
+        }
+        return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
+      }
+    }
+    case "anthropic": {
+      // Testa chamando /v1/messages com payload mínimo — 401 = key inválida,
+      // 400 = payload inválido mas key OK, 200 = OK.
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 1,
+            messages: [{ role: "user", content: "ok" }],
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.status === 401) return { ok: false, mensagem: "API key Anthropic inválida ou revogada" };
+        if (res.status === 403) return { ok: false, mensagem: "API key sem permissão" };
+        if (!res.ok && res.status >= 500) {
+          return { ok: false, mensagem: `Anthropic retornou ${res.status}` };
+        }
+        // 200 ou 400 (model desconhecido) confirma que a key é válida
+        return { ok: true, mensagem: "Anthropic (Claude) conectado." };
+      } catch (err: any) {
+        if (err.name === "AbortError" || err.name === "TimeoutError") {
+          return { ok: false, mensagem: "Timeout — Anthropic não respondeu em 10s" };
         }
         return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
       }

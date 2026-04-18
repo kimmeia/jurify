@@ -40,16 +40,16 @@ function ensureDir(dir: string) {
 }
 
 /**
- * Helper: retorna a API key do OpenAI da integração admin, ou null.
- * Usado pelos endpoints que consultam OpenAI (ex: testar agente).
+ * Helper: retorna a API key de um provedor admin, ou null.
+ * Usado pelos endpoints que consultam IA (ex: testar agente).
  */
-async function getOpenAIKey(): Promise<string | null> {
+async function getAdminKey(provedor: "openai" | "anthropic"): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
   const [reg] = await db
     .select()
     .from(adminIntegracoes)
-    .where(eq(adminIntegracoes.provedor, "openai"))
+    .where(eq(adminIntegracoes.provedor, provedor))
     .limit(1);
   if (!reg || !reg.apiKeyEncrypted || !reg.apiKeyIv || !reg.apiKeyTag) {
     return null;
@@ -57,16 +57,29 @@ async function getOpenAIKey(): Promise<string | null> {
   try {
     return decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
   } catch (err) {
-    log.error({ err: String(err) }, "Falha ao decifrar OpenAI key");
+    log.error({ err: String(err), provedor }, "Falha ao decifrar key");
     return null;
   }
 }
 
+/** Detecta o provider do modelo ("claude-*" → anthropic, senão openai) */
+function providerDoModelo(modelo: string | null | undefined): "openai" | "anthropic" {
+  const m = (modelo || "").toLowerCase();
+  if (m.startsWith("claude") || m.includes("anthropic")) return "anthropic";
+  return "openai";
+}
+
 export const adminAgentesIaRouter = router({
-  /** Status da integração OpenAI (true se configurada e conectada) */
+  /** Status das integrações de IA (OpenAI e Anthropic) */
   status: adminProcedure.query(async () => {
-    const key = await getOpenAIKey();
-    return { openaiConfigurado: !!key };
+    const [openaiKey, anthropicKey] = await Promise.all([
+      getAdminKey("openai"),
+      getAdminKey("anthropic"),
+    ]);
+    return {
+      openaiConfigurado: !!openaiKey,
+      anthropicConfigurado: !!anthropicKey,
+    };
   }),
 
   /** Lista todos os agentes admin, mais recentes primeiro */
@@ -126,7 +139,14 @@ export const adminAgentesIaRouter = router({
       nome: z.string().min(2).max(128),
       descricao: z.string().max(512).optional(),
       areaConhecimento: z.string().max(128).optional(),
-      modelo: z.enum(["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]).default("gpt-4o-mini"),
+      modelo: z.enum([
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo",
+        "claude-sonnet-4-20250514",
+        "claude-haiku-4-5-20251001",
+      ]).default("gpt-4o-mini"),
       prompt: z.string().min(10).max(8000),
       temperatura: z.string().default("0.70"),
       maxTokens: z.number().min(50).max(4000).default(800),
@@ -173,7 +193,14 @@ export const adminAgentesIaRouter = router({
       nome: z.string().min(2).max(128).optional(),
       descricao: z.string().max(512).nullable().optional(),
       areaConhecimento: z.string().max(128).nullable().optional(),
-      modelo: z.enum(["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]).optional(),
+      modelo: z.enum([
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-turbo",
+        "gpt-3.5-turbo",
+        "claude-sonnet-4-20250514",
+        "claude-haiku-4-5-20251001",
+      ]).optional(),
       prompt: z.string().min(10).max(8000).optional(),
       temperatura: z.string().optional(),
       maxTokens: z.number().min(50).max(4000).optional(),
@@ -425,18 +452,21 @@ export const adminAgentesIaRouter = router({
       pergunta: z.string().min(1).max(2000),
     }))
     .mutation(async ({ input }) => {
-      const apiKey = await getOpenAIKey();
-      if (!apiKey) {
-        throw new Error(
-          "OpenAI não configurado em /admin/integrations. Configure antes de testar agentes.",
-        );
-      }
-
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
       const [agente] = await db.select().from(agentesAdmin).where(eq(agentesAdmin.id, input.agenteId)).limit(1);
       if (!agente) throw new Error("Agente não encontrado");
+
+      const provider = providerDoModelo(agente.modelo);
+      const apiKey = await getAdminKey(provider);
+      if (!apiKey) {
+        throw new Error(
+          provider === "anthropic"
+            ? "Anthropic (Claude) não configurado em /admin/integrations. Configure antes de testar agentes com modelos Claude."
+            : "OpenAI não configurado em /admin/integrations. Configure antes de testar agentes.",
+        );
+      }
 
       // Busca documentos de treinamento pra incluir como contexto
       const docs = await db
@@ -462,8 +492,43 @@ export const adminAgentesIaRouter = router({
         : "";
 
       const systemPrompt = agente.prompt + contextoStr;
+      const temperatura = parseFloat(agente.temperatura);
 
       try {
+        if (provider === "anthropic") {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: agente.modelo,
+              system: systemPrompt,
+              messages: [{ role: "user", content: input.pergunta }],
+              max_tokens: agente.maxTokens,
+              temperature: temperatura,
+            }),
+            signal: AbortSignal.timeout(30000),
+          });
+
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Claude retornou ${res.status}: ${text.slice(0, 300)}`);
+          }
+
+          const data = (await res.json()) as {
+            content?: Array<{ text?: string }>;
+            usage?: { input_tokens?: number; output_tokens?: number };
+          };
+
+          return {
+            resposta: data.content?.[0]?.text?.trim() || "(sem resposta)",
+            tokensUsados: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+          };
+        }
+
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -476,7 +541,7 @@ export const adminAgentesIaRouter = router({
               { role: "system", content: systemPrompt },
               { role: "user", content: input.pergunta },
             ],
-            temperature: parseFloat(agente.temperatura),
+            temperature: temperatura,
             max_tokens: agente.maxTokens,
           }),
           signal: AbortSignal.timeout(30000),
@@ -498,9 +563,9 @@ export const adminAgentesIaRouter = router({
         };
       } catch (err: any) {
         if (err.name === "AbortError" || err.name === "TimeoutError") {
-          throw new Error("OpenAI timeout — verifique a conexão");
+          throw new Error(`${provider === "anthropic" ? "Claude" : "OpenAI"} timeout — verifique a conexão`);
         }
-        throw new Error(err.message || "Falha ao chamar OpenAI");
+        throw new Error(err.message || "Falha ao chamar IA");
       }
     }),
 });
