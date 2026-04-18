@@ -628,6 +628,46 @@ export const agenteIaDocumentos = mysqlTable("agente_ia_documentos", {
 export type AgenteIaDocumento = typeof agenteIaDocumentos.$inferSelect;
 export type InsertAgenteIaDocumento = typeof agenteIaDocumentos.$inferInsert;
 
+/**
+ * Chat interno dos agentes IA — threads (conversas) + mensagens.
+ *
+ * Usado pela tela /agentes-ia/:id/chat onde o advogado conversa direto com
+ * o agente (confecção de peças, análise de casos, pesquisa, etc). Separado
+ * das tabelas `conversas`/`mensagens` porque aquelas são do Atendimento ao
+ * cliente final (exigem canalId, status de atendimento, etc) — o chat
+ * interno é muito mais simples e não compartilha semântica.
+ */
+export const agenteChatThreads = mysqlTable("agente_chat_threads", {
+  id: int("id").autoincrement().primaryKey(),
+  agenteId: int("agenteIdThread").notNull(),
+  escritorioId: int("escritorioIdThread").notNull(),
+  usuarioId: int("usuarioIdThread").notNull(),
+  titulo: varchar("tituloThread", { length: 200 }).notNull().default("Nova conversa"),
+  arquivada: boolean("arquivadaThread").notNull().default(false),
+  createdAt: timestamp("createdAtThread").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtThread").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AgenteChatThread = typeof agenteChatThreads.$inferSelect;
+export type InsertAgenteChatThread = typeof agenteChatThreads.$inferInsert;
+
+export const agenteChatMensagens = mysqlTable("agente_chat_mensagens", {
+  id: int("id").autoincrement().primaryKey(),
+  threadId: int("threadIdMsg").notNull(),
+  role: mysqlEnum("roleMsg", ["user", "assistant", "system"]).notNull(),
+  conteudo: text("conteudoMsg").notNull(),
+  anexoUrl: varchar("anexoUrlMsg", { length: 1024 }),
+  anexoNome: varchar("anexoNomeMsg", { length: 255 }),
+  anexoMime: varchar("anexoMimeMsg", { length: 128 }),
+  /** Texto extraído do anexo p/ passar como contexto quando possível (TXT/MD/CSV/JSON) */
+  anexoConteudo: text("anexoConteudoMsg"),
+  tokensUsados: int("tokensUsadosMsg").notNull().default(0),
+  createdAt: timestamp("createdAtMsg").defaultNow().notNull(),
+});
+
+export type AgenteChatMensagem = typeof agenteChatMensagens.$inferSelect;
+export type InsertAgenteChatMensagem = typeof agenteChatMensagens.$inferInsert;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // FASE 5 — MÓDULO CLIENTES (Arquivos + Anotações)
 // ═══════════════════════════════════════════════════════════════════════════════

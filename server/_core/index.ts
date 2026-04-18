@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
+import { registerAgenteChatPDFRoute } from "../integracoes/agente-chat-pdf-route";
 import { registerCalcomWebhook } from "../integracoes/calcom-webhook";
 import { registerJuditWebhook } from "../integracoes/judit-webhook";
 import { registerAsaasWebhook } from "../integracoes/asaas-webhook";
@@ -81,6 +82,8 @@ async function startServer() {
   app.use("/api/webhooks/asaas-billing", rateLimit({ name: "webhook-asaas-billing", max: 120 }));
   // PDF export route
   registerPDFExportRoute(app);
+  // PDF export — chat interno de agentes IA
+  registerAgenteChatPDFRoute(app);
   // Cal.com webhook
   registerCalcomWebhook(app);
   // Judit.IO webhook
