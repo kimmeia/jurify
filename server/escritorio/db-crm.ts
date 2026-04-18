@@ -457,13 +457,55 @@ export async function listarConversas(escritorioId: number, filtros?: {
     }
   }
 
+  // Conta mensagens não lidas por conversa (1 query agregada).
+  // Não-lidas = direção entrada + status != "lida".
+  const conversaIds = rows.map(r => r.id);
+  const naoLidasMap: Record<number, number> = {};
+  if (conversaIds.length > 0) {
+    const naoLidasRows = await db
+      .select({
+        conversaId: mensagens.conversaId,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(mensagens)
+      .where(and(
+        sql`${mensagens.conversaId} IN (${sql.join(conversaIds.map(id => sql`${id}`), sql`, `)})`,
+        eq(mensagens.direcao, "entrada"),
+        sql`${mensagens.status} <> 'lida'`,
+      ))
+      .groupBy(mensagens.conversaId);
+    for (const r of naoLidasRows) naoLidasMap[r.conversaId] = Number(r.total || 0);
+  }
+
   return rows.map((r) => ({
     ...r,
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
+    naoLidas: naoLidasMap[r.id] || 0,
     ultimaMensagemAt: r.ultimaMensagemAt ? (r.ultimaMensagemAt as Date).toISOString() : undefined,
     createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
   }));
+}
+
+/**
+ * Marca todas as mensagens de entrada de uma conversa como lidas.
+ * Usado quando o atendente abre a conversa no inbox.
+ */
+export async function marcarConversaComoLida(conversaId: number, escritorioId: number) {
+  const db = await getDb();
+  if (!db) return;
+  // Garante que a conversa pertence ao escritório (evita update cross-tenant)
+  const [conv] = await db.select({ id: conversas.id }).from(conversas)
+    .where(and(eq(conversas.id, conversaId), eq(conversas.escritorioId, escritorioId)))
+    .limit(1);
+  if (!conv) return;
+  await db.update(mensagens)
+    .set({ status: "lida" })
+    .where(and(
+      eq(mensagens.conversaId, conversaId),
+      eq(mensagens.direcao, "entrada"),
+      sql`${mensagens.status} <> 'lida'`,
+    ));
 }
 
 export async function atualizarConversa(id: number, escritorioId: number, dados: Record<string, any>) {

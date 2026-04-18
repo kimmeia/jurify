@@ -455,8 +455,7 @@ function AppSidebarContent({
                   className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
                 >
                   <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
-                  <span className="flex-1">Atendimento</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-950/20">Em revisão</Badge>
+                  <span>Atendimento</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 

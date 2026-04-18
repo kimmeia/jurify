@@ -25,6 +25,8 @@ const ALLOWED_TYPES = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/plain", "text/csv",
+  // Áudio (notas de voz do Atendimento)
+  "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav",
 ];
 
 function ensureDir(dir: string) {

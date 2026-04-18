@@ -78,7 +78,8 @@ export interface ConversaInfo {
   assunto?: string;
   ultimaMensagemAt?: string;
   ultimaMensagemPreview?: string;
-  naoLidas: number;
+  naoLidas?: number;
+  temAtraso?: boolean;
   createdAt: string;
 }
 

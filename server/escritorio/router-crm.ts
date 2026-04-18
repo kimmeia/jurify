@@ -12,7 +12,7 @@ import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
   criarConversa, listarConversas, atualizarConversa, excluirConversa,
-  enviarMensagem, listarMensagens,
+  enviarMensagem, listarMensagens, marcarConversaComoLida,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
@@ -170,6 +170,7 @@ export const crmRouter = router({
       conversaId: z.number(),
       conteudo: z.string().min(1).max(5000),
       tipo: z.enum(["texto", "imagem", "audio", "video", "documento"]).optional(),
+      mediaUrl: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -182,6 +183,7 @@ export const crmRouter = router({
         direcao: "saida",
         tipo: input.tipo,
         conteudo: input.conteudo,
+        mediaUrl: input.mediaUrl,
       });
 
       // Marcar conversa como em_atendimento se estava aguardando
@@ -222,8 +224,14 @@ export const crmRouter = router({
             if (manager.isConectado(convData.canalId)) {
               const destinatario = convData.chatIdExterno || convData.telefone;
               if (destinatario) {
-                await manager.enviarMensagemJid(convData.canalId, destinatario, input.conteudo);
-                log.info(`[CRM] Mensagem enviada via WhatsApp QR para ${destinatario}`);
+                // Anexa origem do servidor à URL relativa pra o Baileys conseguir baixar.
+                const mediaUrlAbs = input.mediaUrl
+                  ? (input.mediaUrl.startsWith("http")
+                    ? input.mediaUrl
+                    : `${process.env.APP_BASE_URL || "http://localhost:5000"}${input.mediaUrl}`)
+                  : undefined;
+                await manager.enviarMensagemJid(convData.canalId, destinatario, input.conteudo, input.tipo, mediaUrlAbs);
+                log.info(`[CRM] Mensagem enviada via WhatsApp QR para ${destinatario}${input.tipo ? ` (tipo=${input.tipo})` : ""}`);
               } else {
                 log.warn(`[CRM] Sem destinatário para conversa ${input.conversaId}`);
               }
@@ -292,6 +300,20 @@ export const crmRouter = router({
         return [];
       }
       return listarMensagens(input.conversaId, input.limite ?? 50);
+    }),
+
+  /**
+   * Marca todas as mensagens de entrada de uma conversa como lidas.
+   * Chamado pelo frontend quando o atendente abre a conversa no inbox —
+   * zera o badge de "não lidas".
+   */
+  marcarConversaComoLida: protectedProcedure
+    .input(z.object({ conversaId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) throw new Error("Sem permissão.");
+      await marcarConversaComoLida(input.conversaId, perm.escritorioId);
+      return { success: true };
     }),
 
   /** Inicia nova conversa: cria contato (se não existe) + conversa + envia 1ª mensagem */

@@ -16,10 +16,10 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, Mail, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, ExternalLink, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User } from "lucide-react";
+import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
-import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
+import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS } from "@shared/crm-types";
 import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -40,8 +40,8 @@ function WhatsAppCallPopup({ phone, onClose }: { phone: string; onClose: () => v
   const clean = phone.replace(/\D/g, "");
   useEffect(() => {
     window.open("https://wa.me/" + clean, "_blank");
+    onClose();
   }, []);
-  onClose();
   return null;
 }
 
@@ -238,22 +238,28 @@ function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, onSuccess }
   </DialogContent></Dialog>);
 }
 
-function NovoContatoDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
-  const [nome, setNome] = useState(""); const [tel, setTel] = useState(""); const [email, setEmail] = useState(""); const [orig, setOrig] = useState("manual");
-  const criar = trpc.crm.criarContato.useMutation({ onSuccess: () => { toast.success("Contato criado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Novo Contato</DialogTitle></DialogHeader><div className="space-y-3 py-2"><div className="space-y-1.5"><Label>Nome *</Label><Input placeholder="Nome completo" value={nome} onChange={(e) => setNome(e.target.value)} /></div><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone</Label><Input placeholder="(85) 99999-0000" value={tel} onChange={(e) => setTel(e.target.value)} /></div><div className="space-y-1.5"><Label>Email</Label><Input type="email" placeholder="email@..." value={email} onChange={(e) => setEmail(e.target.value)} /></div></div><div className="space-y-1.5"><Label>Origem</Label><Select value={orig} onValueChange={setOrig}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="manual">Manual</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="instagram">Instagram</SelectItem><SelectItem value="facebook">Facebook</SelectItem><SelectItem value="telefone">Telefone</SelectItem><SelectItem value="site">Site</SelectItem></SelectContent></Select></div></div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, origem: orig as any })} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null} Criar</Button></DialogFooter></DialogContent></Dialog>);
-}
-
 export default function Atendimento() {
   const [tab, setTab] = useState("inbox"); const [selId, setSelId] = useState<number | null>(null);
-  const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
-  const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
+  const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
+  const [filtro, setFiltro] = useState("todos");
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
+  const utils = trpc.useUtils();
   const { data: metricas } = trpc.crm.metricas.useQuery(undefined, { refetchInterval: 10000 });
   const { data: convs, refetch: rC } = trpc.crm.listarConversas.useQuery(filtro !== "todos" ? { status: filtro as StatusConversa } : undefined, { refetchInterval: 5000 });
-  const { data: contatos, refetch: rCt } = trpc.crm.listarContatos.useQuery(busca ? { busca } : undefined);
   const { data: leads, refetch: rL } = trpc.crm.listarLeads.useQuery(undefined, { refetchInterval: 8000 });
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
+  const marcarLidaMut = trpc.crm.marcarConversaComoLida.useMutation({
+    onSuccess: () => { utils.crm.listarConversas.invalidate(); },
+  });
+
+  // Marca como lida ao selecionar uma conversa
+  useEffect(() => {
+    if (!selId) return;
+    const c = (convs || []).find((x: any) => x.id === selId);
+    if (c && (c.naoLidas ?? 0) > 0) {
+      marcarLidaMut.mutate({ conversaId: selId });
+    }
+  }, [selId, convs]);
 
   const hasWhatsapp = (canaisData?.canais || []).some((c: any) => (c.tipo === "whatsapp_qr" || c.tipo === "whatsapp_api") && c.status === "conectado");
   const hasTwilio = (canaisData?.canais || []).some((c: any) => c.tipo === "telefone_voip" && (c.status === "conectado" || c.temConfig));
@@ -315,17 +321,24 @@ export default function Atendimento() {
                       onClick={() => setSelId(c.id)}
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                          {initials(c.contatoNome || "?")}
+                        <div className="relative shrink-0">
+                          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary">
+                            {initials(c.contatoNome || "?")}
+                          </div>
+                          {((c as any).naoLidas ?? 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow ring-2 ring-card">
+                              {(c as any).naoLidas > 9 ? "9+" : (c as any).naoLidas}
+                            </span>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium truncate">{c.contatoNome}</p>
+                            <p className={"text-sm truncate " + (((c as any).naoLidas ?? 0) > 0 ? "font-bold" : "font-medium")}>{c.contatoNome}</p>
                             <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
                               {timeAgo(c.ultimaMensagemAt)}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <p className={"text-xs truncate mt-0.5 " + (((c as any).naoLidas ?? 0) > 0 ? "text-foreground font-medium" : "text-muted-foreground")}>
                             {c.ultimaMensagemPreview || "Sem mensagens"}
                           </p>
                           <div className="flex items-center gap-1 mt-1">
@@ -637,7 +650,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
         </PopoverContent>
       </Popover>
       <Input placeholder="Digite sua mensagem..." value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} className="bg-background" />
-      <AudioRecordButton onSend={(text) => enviar.mutate({ conversaId: cid, conteudo: text })} />
+      <AudioRecordButton
+        onSend={({ conteudo, mediaUrl, tipo, duracao }) =>
+          enviar.mutate({
+            conversaId: cid,
+            conteudo: conteudo || `🎤 Nota de voz (${duracao}s)`,
+            tipo,
+            mediaUrl,
+          })
+        }
+      />
       <Button size="sm" onClick={send} disabled={!msg.trim() || enviar.isPending} className="px-4">{enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
     </div>
     {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
@@ -737,30 +759,171 @@ function AgendarFromConversaDialog({ open, onOpenChange, contatoNome, contatoTel
   </DialogContent></Dialog>);
 }
 
-function AudioRecordButton({ onSend }: { onSend: (text: string) => void }) {
+/**
+ * Gravação real de áudio via MediaRecorder API.
+ *
+ * Fluxo: clica → pede permissão de microfone → grava → ao parar, faz upload
+ * pelo tRPC `upload.enviar` (audio/webm) e dispara `onSend` com mediaUrl +
+ * tipo "audio". Se o navegador não suportar MediaRecorder ou o usuário negar
+ * o microfone, o botão fica desabilitado com tooltip explicativo.
+ */
+function AudioRecordButton({
+  onSend,
+}: {
+  onSend: (msg: { conteudo?: string; mediaUrl?: string; tipo?: "audio"; duracao: number }) => void;
+}) {
   const [recording, setRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [supported] = useState(() =>
+    typeof window !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof (window as any).MediaRecorder !== "undefined"
+  );
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  const handleToggle = () => {
-    if (recording) {
-      setRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-      const dur = duration;
-      setDuration(0);
-      onSend(`🎵 Nota de voz (${dur}s)`);
-    } else {
+  const uploadMut = trpc.upload.enviar.useMutation();
+
+  const cleanup = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    recorderRef.current = null;
+  };
+
+  useEffect(() => () => cleanup(), []);
+
+  const start = async () => {
+    if (!supported) {
+      toast.error("Seu navegador não suporta gravação de áudio.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      // Negocia o melhor mimetype suportado pelo navegador
+      const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"].find(
+        (m) => (window as any).MediaRecorder?.isTypeSupported?.(m),
+      ) || "audio/webm";
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.start();
+      recorderRef.current = recorder;
       setRecording(true);
       setDuration(0);
-      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+    } catch (err: any) {
+      toast.error("Permissão de microfone negada ou indisponível.");
+      cleanup();
     }
   };
 
-  useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+  const stopAndSend = async () => {
+    const recorder = recorderRef.current;
+    if (!recorder) { cleanup(); setRecording(false); return; }
+
+    const dur = duration;
+
+    const finalBlob: Blob = await new Promise((resolve) => {
+      recorder.onstop = () => {
+        const type = recorder.mimeType || "audio/webm";
+        resolve(new Blob(chunksRef.current, { type }));
+      };
+      recorder.stop();
+    });
+
+    cleanup();
+    setRecording(false);
+
+    if (finalBlob.size === 0) {
+      toast.error("Gravação vazia.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Converte para base64 (data URL) — endpoint upload aceita assim
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(finalBlob);
+      });
+
+      const ext = finalBlob.type.includes("webm") ? "webm"
+        : finalBlob.type.includes("ogg") ? "ogg"
+        : finalBlob.type.includes("mp4") ? "m4a"
+        : "wav";
+      const result = await uploadMut.mutateAsync({
+        nome: `nota-voz-${Date.now()}.${ext}`,
+        tipo: finalBlob.type,
+        base64,
+        tamanho: finalBlob.size,
+      });
+      onSend({ tipo: "audio", mediaUrl: result.url, duracao: dur, conteudo: `🎤 Nota de voz (${dur}s)` });
+    } catch (err: any) {
+      toast.error("Falha ao enviar áudio: " + (err?.message || "erro desconhecido"));
+    } finally {
+      setUploading(false);
+      setDuration(0);
+    }
+  };
+
+  const cancel = () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      try { recorder.stop(); } catch { /* ignore */ }
+    }
+    cleanup();
+    setRecording(false);
+    setDuration(0);
+    chunksRef.current = [];
+  };
+
+  if (uploading) {
+    return (
+      <Button size="sm" variant="ghost" disabled className="px-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </Button>
+    );
+  }
+
+  if (recording) {
+    return (
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="ghost" onClick={cancel} className="h-9 w-9 p-0" title="Cancelar gravação">
+          <X className="h-4 w-4 text-muted-foreground" />
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={stopAndSend}
+          className="px-3 animate-pulse"
+          title="Parar e enviar"
+        >
+          <Square className="h-3.5 w-3.5 mr-1" /> {duration}s
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <Button size="sm" variant={recording ? "destructive" : "ghost"} onClick={handleToggle} className={recording ? "px-3 animate-pulse" : "px-2"} title={recording ? "Parar gravação" : "Gravar áudio"}>
-      {recording ? (<><Square className="h-3.5 w-3.5 mr-1" /> {duration}s</>) : (<Mic className="h-4 w-4" />)}
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={start}
+      disabled={!supported}
+      className="h-9 w-9 p-0 shrink-0"
+      title={supported ? "Gravar nota de voz" : "Gravação não suportada neste navegador"}
+    >
+      <Mic className="h-4 w-4" />
     </Button>
   );
 }
