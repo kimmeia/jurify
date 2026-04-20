@@ -54,10 +54,14 @@ import {
   TIPO_PASSO_META,
   GATILHO_META,
   TIPO_CANAL_META,
+  GRUPO_META,
   getTipoPassoMeta,
   getGatilhoMeta,
   CAMPOS_CONDICIONAL,
+  type GatilhoMeta,
   type GatilhoSmartflow,
+  type GrupoSmartflow,
+  type TipoPassoMeta,
   type TipoPasso,
   type TipoCanalMensagem,
 } from "@shared/smartflow-types";
@@ -258,6 +262,24 @@ function passoNodesOrdenados(nodes: AnyNode[]): PassoNode[] {
     .filter((n): n is PassoNode => n.type === "passo")
     .slice()
     .sort((a, b) => a.position.y - b.position.y);
+}
+
+/**
+ * Agrupa um array de metas por `grupo` e devolve na ordem definida por
+ * `GRUPO_META.ordem`. Grupos vazios são omitidos. Usado pra renderizar a
+ * paleta do editor com seções por provider/categoria.
+ */
+function agrupar<T extends { grupo: GrupoSmartflow }>(
+  itens: ReadonlyArray<T>,
+): Array<{ id: GrupoSmartflow; label: string; itens: T[] }> {
+  const porGrupo = new Map<GrupoSmartflow, T[]>();
+  for (const item of itens) {
+    if (!porGrupo.has(item.grupo)) porGrupo.set(item.grupo, []);
+    porGrupo.get(item.grupo)!.push(item);
+  }
+  return GRUPO_META
+    .filter((g) => porGrupo.has(g.id))
+    .map((g) => ({ id: g.id, label: g.label, itens: porGrupo.get(g.id)! }));
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────
@@ -498,45 +520,64 @@ export default function SmartFlowEditor() {
         {/* Paleta esquerda */}
         <div className="w-60 border-r bg-muted/20 p-3 overflow-y-auto">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Gatilho</p>
-          <div className="space-y-1.5 mb-5">
-            {GATILHO_META.map((g) => {
-              const Icon = GATILHO_ICON[g.id];
-              const ativo = gatilhoNode?.data.gatilho === g.id;
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => trocarGatilho(g.id)}
-                  className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border transition-all text-left ${
-                    ativo
-                      ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm"
-                      : "border-dashed border-border hover:border-solid hover:shadow-sm bg-background"
-                  }`}
-                  title={g.descricao}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
-                  <span className="text-xs font-medium leading-tight flex-1">{g.label}</span>
-                  {ativo && <Zap className="h-3 w-3 shrink-0 mt-0.5 text-amber-500 fill-amber-500" />}
-                </button>
-              );
-            })}
+          <div className="mb-5 space-y-3">
+            {agrupar<GatilhoMeta>(GATILHO_META).map((g) => (
+              <div key={g.id}>
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1 font-semibold px-0.5">
+                  {g.label}
+                </p>
+                <div className="space-y-1.5">
+                  {g.itens.map((item) => {
+                    const Icon = GATILHO_ICON[item.id];
+                    const ativo = gatilhoNode?.data.gatilho === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => trocarGatilho(item.id)}
+                        className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border transition-all text-left ${
+                          ativo
+                            ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm"
+                            : "border-dashed border-border hover:border-solid hover:shadow-sm bg-background"
+                        }`}
+                        title={item.descricao}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
+                        <span className="text-xs font-medium leading-tight flex-1">{item.label}</span>
+                        {ativo && <Zap className="h-3 w-3 shrink-0 mt-0.5 text-amber-500 fill-amber-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
+
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Adicionar passo</p>
-          <div className="space-y-1.5">
-            {TIPO_PASSO_META.map((t) => {
-              const Icon = TIPO_ICON[t.id];
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => adicionarPasso(t.id)}
-                  className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left ${t.cor}`}
-                  title={t.descricao}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span className="text-xs font-medium leading-tight">{t.label}</span>
-                  <Plus className="h-3 w-3 shrink-0 ml-auto mt-0.5 opacity-60" />
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            {agrupar<TipoPassoMeta>(TIPO_PASSO_META).map((g) => (
+              <div key={g.id}>
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1 font-semibold px-0.5">
+                  {g.label}
+                </p>
+                <div className="space-y-1.5">
+                  {g.itens.map((t) => {
+                    const Icon = TIPO_ICON[t.id];
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => adicionarPasso(t.id)}
+                        className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left ${t.cor}`}
+                        title={t.descricao}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <span className="text-xs font-medium leading-tight">{t.label}</span>
+                        <Plus className="h-3 w-3 shrink-0 ml-auto mt-0.5 opacity-60" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
