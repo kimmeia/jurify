@@ -94,6 +94,16 @@ async function requireAsaasClient(escritorioId: number) {
 }
 
 /**
+ * Resultado do sync de cobranças que acompanha a conclusão da vinculação.
+ * `erroSync` é null quando tudo OK e string quando a API do Asaas falhou —
+ * permite o frontend distinguir "sem cobranças" (0 + null) de "falhou" (0 + msg).
+ */
+type SyncResult = {
+  cobrancasSincronizadas: number;
+  erroSync: string | null;
+};
+
+/**
  * Fecha o ciclo de vinculação: escreve no CRM (contatos) o que veio do
  * Asaas como fonte de verdade, grava o vínculo na tabela asaas_clientes e
  * tenta puxar as cobranças existentes do cliente no Asaas.
@@ -101,7 +111,8 @@ async function requireAsaasClient(escritorioId: number) {
  * Nome/CPF/email/telefone do Asaas têm precedência; se algum campo faltar
  * no Asaas, o valor atual do CRM é preservado (fallback com ||).
  *
- * O sync de cobranças é best-effort: uma falha aqui não bloqueia o vínculo.
+ * O sync de cobranças é best-effort: uma falha aqui não bloqueia o vínculo,
+ * mas é reportada de volta no `erroSync` do retorno pra UI poder alertar.
  */
 async function finalizarVinculacao(
   client: AsaasClient,
@@ -111,7 +122,7 @@ async function finalizarVinculacao(
   contato: { nome: string; cpfCnpj: string | null; email: string | null; telefone: string | null },
   asaasCli: AsaasCustomer,
   cpfLimpo: string,
-): Promise<number> {
+): Promise<SyncResult> {
   await db.update(contatos).set({
     nome: asaasCli.name || contato.nome,
     cpfCnpj: (asaasCli.cpfCnpj || cpfLimpo).replace(/\D/g, ""),
@@ -132,10 +143,16 @@ async function finalizarVinculacao(
 
   try {
     const r = await syncCobrancasDeCliente(client, escritorioId, contatoId, asaasCli.id);
-    return r.novas + r.atualizadas;
+    return { cobrancasSincronizadas: r.novas + r.atualizadas, erroSync: null };
   } catch (err: any) {
-    log.warn({ err: err.message }, "Sync de cobranças após vincular falhou (não bloqueia)");
-    return 0;
+    log.warn(
+      { err: err.message, contatoId, asaasCustomerId: asaasCli.id },
+      "Sync de cobranças após vincular falhou (não bloqueia o vínculo)",
+    );
+    return {
+      cobrancasSincronizadas: 0,
+      erroSync: err?.message || "Erro desconhecido ao sincronizar cobranças",
+    };
   }
 }
 
@@ -499,6 +516,7 @@ export const asaasRouter = router({
           jaExistia: true,
           novoClienteCriado: false,
           cobrancasSincronizadas: 0,
+          erroSync: null,
         };
       }
 
@@ -517,7 +535,7 @@ export const asaasRouter = router({
       }
 
       if (asaasCli) {
-        const cobrancasSincronizadas = await finalizarVinculacao(
+        const { cobrancasSincronizadas, erroSync } = await finalizarVinculacao(
           client,
           db,
           esc.escritorio.id,
@@ -532,6 +550,7 @@ export const asaasRouter = router({
           jaExistia: true,
           novoClienteCriado: false,
           cobrancasSincronizadas,
+          erroSync,
         };
       }
 
@@ -585,7 +604,7 @@ export const asaasRouter = router({
         ...(contato.telefone ? { mobilePhone: contato.telefone.replace(/\D/g, "") } : {}),
       });
 
-      const cobrancasSincronizadas = await finalizarVinculacao(
+      const { cobrancasSincronizadas, erroSync } = await finalizarVinculacao(
         client,
         db,
         esc.escritorio.id,
@@ -601,6 +620,7 @@ export const asaasRouter = router({
         jaExistia: false,
         novoClienteCriado: true,
         cobrancasSincronizadas,
+        erroSync,
       };
     }),
 
@@ -647,6 +667,7 @@ export const asaasRouter = router({
           jaExistia: true,
           novoClienteCriado: false,
           cobrancasSincronizadas: 0,
+          erroSync: null,
         };
       }
 
@@ -703,7 +724,7 @@ export const asaasRouter = router({
           });
         }
 
-        const cobrancasSincronizadas = await finalizarVinculacao(
+        const { cobrancasSincronizadas, erroSync } = await finalizarVinculacao(
           client,
           db,
           esc.escritorio.id,
@@ -718,6 +739,7 @@ export const asaasRouter = router({
           jaExistia: true,
           novoClienteCriado: false,
           cobrancasSincronizadas,
+          erroSync,
         };
       }
 
@@ -740,7 +762,7 @@ export const asaasRouter = router({
         });
       }
 
-      const cobrancasSincronizadas = await finalizarVinculacao(
+      const { cobrancasSincronizadas, erroSync } = await finalizarVinculacao(
         client,
         db,
         esc.escritorio.id,
@@ -755,6 +777,7 @@ export const asaasRouter = router({
         jaExistia: false,
         novoClienteCriado: true,
         cobrancasSincronizadas,
+        erroSync,
       };
     }),
 

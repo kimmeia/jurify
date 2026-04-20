@@ -90,8 +90,9 @@ type CandidatoAsaas = {
 };
 
 export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
+  const utils = trpc.useUtils();
   const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
-  const { data: resumo, refetch } = trpc.asaas.resumoContato.useQuery(
+  const { data: resumo } = trpc.asaas.resumoContato.useQuery(
     { contatoId },
     { retry: false, enabled: !!asaasStatus?.conectado && !!contatoId }
   );
@@ -101,21 +102,56 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
   const [telInput, setTelInput] = useState("");
   const [candidatos, setCandidatos] = useState<CandidatoAsaas[] | null>(null);
 
+  // Invalida as queries afetadas pelo vínculo. Cobre:
+  // - popover financeiro (resumoContato)
+  // - telas que listam cobranças (listarCobrancas / KPIs)
+  // - nome do cliente no detalhe e na lista do CRM (trpc.clientes)
+  // - lista de contatos no /atendimento (trpc.crm.listarContatos)
+  const invalidarAposVincular = () => {
+    utils.asaas.resumoContato.invalidate({ contatoId });
+    utils.asaas.listarCobrancas.invalidate();
+    utils.clientes.detalhe.invalidate({ id: contatoId });
+    utils.clientes.listar.invalidate();
+    // `crm.listarContatos` pode não existir dependendo do contexto — fallback suave.
+    try { (utils as any).crm?.listarContatos?.invalidate?.(); } catch { /* noop */ }
+  };
+
+  // Invalidação "leve" para ações que mexem só em cobranças (sync manual,
+  // criar cobrança): atualiza popover financeiro + telas que listam cobranças.
+  const refetch = () => {
+    utils.asaas.resumoContato.invalidate({ contatoId });
+    utils.asaas.listarCobrancas.invalidate();
+  };
+
   const tratarSucessoVinculo = (data: any) => {
     if (data?.status === "precisa_decidir") {
       setCandidatos(data.candidatos || []);
       return;
     }
-    const msg = data?.jaExistia
+    const titulo = data?.jaExistia
       ? "Contato já estava vinculado"
       : data?.novoClienteCriado
       ? "Novo cliente criado no Asaas"
       : "Vinculado a cliente existente no Asaas";
-    const desc = data?.cobrancasSincronizadas > 0
-      ? `${data.cobrancasSincronizadas} cobrança(s) sincronizada(s)`
-      : undefined;
-    toast.success(msg, { description: desc });
-    refetch();
+
+    // Três estados possíveis do sync de cobranças:
+    //  1. erroSync com mensagem → avisa em warning (não bloqueia o vínculo).
+    //  2. cobrancasSincronizadas === 0 e sem erro → informa que não havia
+    //     cobranças (caso feliz, mas o usuário pensaria que falhou sem aviso).
+    //  3. cobrancasSincronizadas > 0 → mostra quantas foram trazidas.
+    if (data?.erroSync) {
+      toast.warning(titulo, {
+        description: `Falha ao sincronizar cobranças: ${data.erroSync}`,
+      });
+    } else if (!data?.cobrancasSincronizadas) {
+      toast.success(titulo, { description: "Nenhuma cobrança existente encontrada." });
+    } else {
+      toast.success(titulo, {
+        description: `${data.cobrancasSincronizadas} cobrança(s) sincronizada(s).`,
+      });
+    }
+
+    invalidarAposVincular();
   };
 
   const atualizarContatoMut = trpc.crm.atualizarContato.useMutation({

@@ -108,3 +108,81 @@ describe("AsaasClient.buscarClientesPorTelefone", () => {
     expect(resultado).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// listarCobrancas: garante o filtro por customer (regressão do bug onde
+// o sync pós-vinculação não puxava cobranças existentes).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("AsaasClient.listarCobrancas", () => {
+  let client: AsaasClient;
+  let getMock: MockGet;
+
+  beforeEach(() => {
+    getMock = vi.fn();
+    vi.spyOn(axios, "create").mockReturnValue({
+      get: getMock,
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+    } as any);
+    client = new AsaasClient("$aact_sandbox_fakekey", "sandbox");
+  });
+
+  it("passa o parâmetro customer como query string quando fornecido", async () => {
+    getMock.mockResolvedValue({ data: { data: [], hasMore: false, limit: 100, offset: 0 } });
+
+    await client.listarCobrancas({ customer: "cus_abc123", limit: 100, offset: 0 });
+
+    expect(getMock).toHaveBeenCalledTimes(1);
+    const [url, config] = getMock.mock.calls[0];
+    expect(url).toBe("/payments");
+    expect(config.params).toMatchObject({ customer: "cus_abc123", limit: 100, offset: 0 });
+  });
+
+  it("propaga o erro em vez de silenciar — permite ao caller decidir", async () => {
+    const erro = new Error("Asaas 503");
+    getMock.mockRejectedValue(erro);
+
+    await expect(
+      client.listarCobrancas({ customer: "cus_abc123" }),
+    ).rejects.toThrow("Asaas 503");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// buscarCliente: usado no confirmarVinculacao quando o usuário escolhe
+// "vincular existente" no diálogo de decisão.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("AsaasClient.buscarCliente", () => {
+  let client: AsaasClient;
+  let getMock: MockGet;
+
+  beforeEach(() => {
+    getMock = vi.fn();
+    vi.spyOn(axios, "create").mockReturnValue({
+      get: getMock,
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+    } as any);
+    client = new AsaasClient("$aact_sandbox_fakekey", "sandbox");
+  });
+
+  it("busca o cliente por ID e retorna os dados completos", async () => {
+    const cliente = criarClienteMock({
+      id: "cus_abc123",
+      name: "JOAO DA SILVA FILHO",
+      email: "joao@exemplo.com",
+    });
+    getMock.mockResolvedValue({ data: cliente });
+
+    const resultado = await client.buscarCliente("cus_abc123");
+    expect(getMock).toHaveBeenCalledWith("/customers/cus_abc123");
+    expect(resultado.id).toBe("cus_abc123");
+    expect(resultado.name).toBe("JOAO DA SILVA FILHO");
+  });
+});
