@@ -30,6 +30,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     contatoId = existente?.id ?? 0;
   }
 
+  let contatoFoiCriado = false;
   if (!contatoId) {
     // Sem contato conhecido — cria um. Se o JID é LID e não temos telefone
     // real, salvamos o telefone vazio (não o LID) para evitar poluir o
@@ -42,6 +43,9 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       origem: "whatsapp",
     });
     contatoId = resultado.id;
+    // `criarOuReutilizarContato` reaproveita por CPF/telefone. Só consideramos
+    // "lead novo" quando a função de fato inseriu — jaCadastrado=false.
+    contatoFoiCriado = !resultado.jaCadastrado;
   }
 
   if (!conversaId) {
@@ -93,6 +97,25 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       },
     );
   } catch { /* SSE indisponível */ }
+
+  // Lead novo via WhatsApp: dispara SmartFlow com gatilho novo_lead.
+  // Fire-and-forget — não bloqueia o fluxo de mensagem.
+  if (contatoFoiCriado) {
+    (async () => {
+      try {
+        const { dispararNovoLead } = await import("../smartflow/dispatcher");
+        await dispararNovoLead(escritorioId, {
+          contatoId,
+          nome: msg.nome,
+          telefone: msg.telefone,
+          origem: "whatsapp",
+          conversaId,
+        });
+      } catch (e: any) {
+        log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar novo_lead");
+      }
+    })();
+  }
 
   // SmartFlow tem prioridade sobre chatbot padrão
   if (msg.tipo === "texto" && msg.conteudo) {

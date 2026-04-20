@@ -365,4 +365,9 @@ export function iniciarJobs() {
 
   // A cada 6 horas: cobrar monitoramentos mensais da Judit
   setInterval(() => cobrarMonitoramentosMensais(), 6 * 60 * 60 * 1000);
+
+  // SmartFlow scheduler — retoma execuções pausadas no passo "esperar"
+  import("../smartflow/scheduler")
+    .then(({ iniciarSchedulerSmartFlow }) => iniciarSchedulerSmartFlow())
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow scheduler"));
 }
