@@ -80,6 +80,15 @@ export function FinanceiroBadge({ contatoId }: { contatoId: number }) {
 // POPOVER COM DETALHES (para CRM / Clientes)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+type CandidatoAsaas = {
+  id: string;
+  name: string;
+  cpfCnpj: string | null;
+  email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
+};
+
 export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
   const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
   const { data: resumo, refetch } = trpc.asaas.resumoContato.useQuery(
@@ -90,6 +99,24 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
   const [dadosFaltantes, setDadosFaltantes] = useState(false);
   const [cpfInput, setCpfInput] = useState("");
   const [telInput, setTelInput] = useState("");
+  const [candidatos, setCandidatos] = useState<CandidatoAsaas[] | null>(null);
+
+  const tratarSucessoVinculo = (data: any) => {
+    if (data?.status === "precisa_decidir") {
+      setCandidatos(data.candidatos || []);
+      return;
+    }
+    const msg = data?.jaExistia
+      ? "Contato já estava vinculado"
+      : data?.novoClienteCriado
+      ? "Novo cliente criado no Asaas"
+      : "Vinculado a cliente existente no Asaas";
+    const desc = data?.cobrancasSincronizadas > 0
+      ? `${data.cobrancasSincronizadas} cobrança(s) sincronizada(s)`
+      : undefined;
+    toast.success(msg, { description: desc });
+    refetch();
+  };
 
   const atualizarContatoMut = trpc.crm.atualizarContato.useMutation({
     onSuccess: () => {
@@ -100,18 +127,7 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
   });
 
   const vincularMut = trpc.asaas.vincularContato.useMutation({
-    onSuccess: (data: any) => {
-      const msg = data.jaExistia
-        ? "Contato já estava vinculado"
-        : data.novoClienteCriado
-        ? "Novo cliente criado no Asaas"
-        : "Vinculado a cliente existente no Asaas";
-      const desc = data.cobrancasSincronizadas > 0
-        ? `${data.cobrancasSincronizadas} cobrança(s) sincronizada(s)`
-        : undefined;
-      toast.success(msg, { description: desc });
-      refetch();
-    },
+    onSuccess: tratarSucessoVinculo,
     onError: (err) => {
       if (err.message.includes("CPF") || err.message.includes("cpf")) {
         setDadosFaltantes(true);
@@ -119,6 +135,14 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
         toast.error("Erro", { description: err.message });
       }
     },
+  });
+
+  const confirmarMut = trpc.asaas.confirmarVinculacao.useMutation({
+    onSuccess: (data) => {
+      setCandidatos(null);
+      tratarSucessoVinculo(data);
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
   const syncMut = trpc.asaas.syncCobrancasContato.useMutation({
@@ -237,6 +261,18 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
           onSuccess={() => refetch()}
         />
       )}
+
+      {/* Dialog de escolha quando há candidatos por telefone */}
+      <DecisaoVinculoDialog
+        open={candidatos !== null}
+        candidatos={candidatos || []}
+        isSubmitting={confirmarMut.isPending}
+        onCancel={() => setCandidatos(null)}
+        onCriarNovo={() => confirmarMut.mutate({ contatoId, acao: "criar_novo" })}
+        onVincularExistente={(asaasCustomerId) =>
+          confirmarMut.mutate({ contatoId, acao: "vincular_existente", asaasCustomerId })
+        }
+      />
 
       {/* Dialog pra preencher CPF/telefone quando faltam */}
       <Dialog open={dadosFaltantes} onOpenChange={setDadosFaltantes}>
@@ -389,6 +425,104 @@ export function CobrancaRapidaDialog({
             </DialogFooter>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIALOG: DECISÃO DE VÍNCULO (quando há candidatos por telefone)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function mascararCpf(cpf: string | null): string {
+  if (!cpf) return "sem CPF/CNPJ";
+  const d = cpf.replace(/\D/g, "");
+  if (d.length === 11) return `${d.slice(0, 3)}.***.***-${d.slice(9)}`;
+  if (d.length === 14) return `${d.slice(0, 2)}.***.***/****-${d.slice(12)}`;
+  return cpf;
+}
+
+function formatarTelefoneExibicao(...valores: (string | null)[]): string | null {
+  for (const v of valores) {
+    if (!v) continue;
+    const d = v.replace(/\D/g, "");
+    if (d.length >= 10 && d.length <= 13) {
+      const ddd = d.slice(-11, -9);
+      const parte1 = d.slice(-9, -4);
+      const parte2 = d.slice(-4);
+      return ddd ? `(${ddd}) ${parte1}-${parte2}` : `${parte1}-${parte2}`;
+    }
+  }
+  return null;
+}
+
+function DecisaoVinculoDialog({
+  open,
+  candidatos,
+  isSubmitting,
+  onCancel,
+  onCriarNovo,
+  onVincularExistente,
+}: {
+  open: boolean;
+  candidatos: CandidatoAsaas[];
+  isSubmitting: boolean;
+  onCancel: () => void;
+  onCriarNovo: () => void;
+  onVincularExistente: (asaasCustomerId: string) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !isSubmitting) onCancel(); }}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Cliente com telefone em comum</DialogTitle>
+          <DialogDescription>
+            Encontramos {candidatos.length === 1 ? "um cliente" : `${candidatos.length} clientes`} no Asaas com o mesmo telefone.
+            Pode ser a mesma pessoa ou alguém ligado a ela (responsável legal, familiar).
+            Escolha como proceder:
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 py-1 max-h-64 overflow-y-auto">
+          {candidatos.map((c) => {
+            const tel = formatarTelefoneExibicao(c.mobilePhone, c.phone);
+            return (
+              <div
+                key={c.id}
+                className="flex items-center gap-3 rounded-md border p-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{c.name}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {mascararCpf(c.cpfCnpj)}
+                    {tel ? ` · ${tel}` : ""}
+                    {c.email ? ` · ${c.email}` : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs shrink-0"
+                  disabled={isSubmitting}
+                  onClick={() => onVincularExistente(c.id)}
+                >
+                  {isSubmitting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                  É este
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button size="sm" onClick={onCriarNovo} disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Plus className="h-3 w-3 mr-1" />}
+            Cadastrar novo cliente
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
