@@ -257,6 +257,81 @@ async function executarCenarioCarregado(
  * - primeiraCobranca: true se não existe card no Kanban pra esse cliente
  * - assinaturaId: preenchido se é pagamento de assinatura (pra filtrar)
  */
+/**
+ * Calcula resumo financeiro do contato pra enriquecer o contexto dos gatilhos
+ * de pagamento — usado nas condições do passo `condicional` (`valorTotalCliente`,
+ * `percentualPago`).
+ *
+ * - `valorTotalCliente`: soma de `asaas_cobrancas.valor` com status=RECEIVED
+ *   (ou CONFIRMED / RECEIVED_IN_CASH) do contato, em centavos. Usa o mesmo
+ *   formato de `pagamentoValor` pra permitir comparações numéricas diretas
+ *   (ex: `valorTotalCliente > 100000` = mais de R$ 1.000).
+ * - `percentualPago`: `recebido / total` × 100, arredondado. Total = qualquer
+ *   cobrança com status diferente de REFUNDED/DELETED.
+ *
+ * Retorna `{ valorTotalCliente: 0, percentualPago: 0 }` se não achar contato
+ * ou se não há cobranças. Nunca lança — usado em fire-and-forget.
+ */
+async function calcularResumoFinanceiroContato(
+  escritorioId: number,
+  opts: { contatoId?: number; clienteAsaasId?: string },
+): Promise<{ valorTotalCliente: number; percentualPago: number }> {
+  const db = await getDb();
+  if (!db) return { valorTotalCliente: 0, percentualPago: 0 };
+
+  try {
+    const { asaasCobrancas, asaasClientes } = await import("../../drizzle/schema");
+
+    // Resolve o asaasCustomerId a partir de contatoId, se necessário.
+    let customerId = opts.clienteAsaasId;
+    if (!customerId && opts.contatoId) {
+      const [vinc] = await db
+        .select({ asaasCustomerId: asaasClientes.asaasCustomerId })
+        .from(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, escritorioId),
+            eq(asaasClientes.contatoId, opts.contatoId),
+          ),
+        )
+        .limit(1);
+      customerId = vinc?.asaasCustomerId;
+    }
+    if (!customerId) return { valorTotalCliente: 0, percentualPago: 0 };
+
+    const cobrancas = await db
+      .select({ valor: asaasCobrancas.valor, status: asaasCobrancas.status })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasCustomerId, customerId),
+        ),
+      );
+
+    if (cobrancas.length === 0) return { valorTotalCliente: 0, percentualPago: 0 };
+
+    const statusPago = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]);
+    const statusIgnorar = new Set(["REFUNDED", "DELETED"]);
+
+    let totalEmitido = 0;
+    let totalRecebido = 0;
+    for (const c of cobrancas) {
+      if (statusIgnorar.has(c.status)) continue;
+      const valor = Math.round(Number(c.valor || 0) * 100);
+      if (Number.isNaN(valor)) continue;
+      totalEmitido += valor;
+      if (statusPago.has(c.status)) totalRecebido += valor;
+    }
+
+    const percentual = totalEmitido > 0 ? Math.round((totalRecebido / totalEmitido) * 100) : 0;
+    return { valorTotalCliente: totalRecebido, percentualPago: percentual };
+  } catch (err: any) {
+    log.warn({ err: err.message }, "SmartFlow: falha no resumo financeiro");
+    return { valorTotalCliente: 0, percentualPago: 0 };
+  }
+}
+
 export async function dispararPagamentoRecebido(
   escritorioId: number,
   params: {
@@ -286,6 +361,10 @@ export async function dispararPagamentoRecebido(
       .where(eq(kanbanCards.asaasPaymentId, params.pagamentoId))
       .limit(1);
 
+    const resumo = await calcularResumoFinanceiroContato(escritorioId, {
+      clienteAsaasId: params.clienteAsaasId,
+    });
+
     const contexto: SmartflowContexto = {
       mensagem: `Pagamento recebido: ${params.descricao}`,
       pagamentoId: params.pagamentoId,
@@ -295,6 +374,8 @@ export async function dispararPagamentoRecebido(
       assinaturaId: params.assinaturaId || "",
       primeiraCobranca: !cardExistente,
       nomeCliente: params.clienteNome,
+      valorTotalCliente: resumo.valorTotalCliente,
+      percentualPago: resumo.percentualPago,
     };
 
     const r = await executarCenarioPorGatilho(escritorioId, "pagamento_recebido", contexto);
@@ -369,6 +450,11 @@ export async function dispararPagamentoVencido(
         continue;
       }
 
+      const resumo = await calcularResumoFinanceiroContato(escritorioId, {
+        contatoId: params.contatoId,
+        clienteAsaasId: params.clienteAsaasId,
+      });
+
       const contexto: SmartflowContexto = {
         mensagem: `Cobrança vencida: ${params.descricao}`,
         pagamentoId: params.pagamentoId,
@@ -378,6 +464,8 @@ export async function dispararPagamentoVencido(
         diasAtraso: diasAtrasoAtual,
         nomeCliente: params.clienteNome,
         contatoId: params.contatoId,
+        valorTotalCliente: resumo.valorTotalCliente,
+        percentualPago: resumo.percentualPago,
       };
 
       await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
@@ -425,6 +513,10 @@ export async function dispararProximoVencimento(
 
       if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) continue;
 
+      const resumo = await calcularResumoFinanceiroContato(escritorioId, {
+        contatoId: params.contatoId,
+      });
+
       const contexto: SmartflowContexto = {
         mensagem: `Cobrança vence em ${diasAteVencer} dia(s): ${params.descricao}`,
         pagamentoId: params.pagamentoId,
@@ -434,6 +526,8 @@ export async function dispararProximoVencimento(
         diasAteVencer,
         nomeCliente: params.clienteNome,
         contatoId: params.contatoId,
+        valorTotalCliente: resumo.valorTotalCliente,
+        percentualPago: resumo.percentualPago,
       };
 
       await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
