@@ -22,6 +22,14 @@ import { eq, and, inArray, gte } from "drizzle-orm";
 import { executarCenario, Passo, SmartflowContexto, ExecutarCenarioResultado } from "./engine";
 import { criarExecutoresReais } from "./executores";
 import { createLogger } from "../_core/logger";
+import {
+  aceitaCanal,
+  contextoContemPagamento,
+  deveDispararProximo,
+  deveDispararVencido,
+  diasEntre,
+  parseVencimento,
+} from "./dispatcher-helpers";
 import type {
   GatilhoSmartflow,
   TipoCanalMensagem,
@@ -304,21 +312,7 @@ async function jaDisparadoPagamento(
     );
   // O contexto é JSON serializado — uma checagem por substring basta
   // pra dedupe, não precisa parsear.
-  const alvo = `"pagamentoId":"${pagamentoId}"`;
-  return execs.some((r) => (r.contexto || "").includes(alvo));
-}
-
-function diasEntre(a: Date, b: Date): number {
-  const ms = a.getTime() - b.getTime();
-  return Math.floor(ms / (24 * 60 * 60 * 1000));
-}
-
-function parseVencimento(iso: string): Date | null {
-  // Asaas envia `dueDate` como `YYYY-MM-DD`. new Date("YYYY-MM-DD") é UTC;
-  // adicionamos T00:00 local pra evitar off-by-one em timezone -03:00.
-  if (!iso || typeof iso !== "string") return null;
-  const d = new Date(`${iso}T00:00:00`);
-  return isNaN(d.getTime()) ? null : d;
+  return execs.some((r) => contextoContemPagamento(r.contexto, pagamentoId));
 }
 
 /**
@@ -351,8 +345,7 @@ export async function dispararPagamentoVencido(
     let disparados = 0;
     for (const c of cenarios) {
       const cfg = c.configGatilho as ConfigGatilhoPagamentoVencido;
-      const minAtraso = Math.max(0, Number(cfg.diasAtraso ?? 0));
-      if (diasAtrasoAtual < minAtraso) continue;
+      if (!deveDispararVencido(cfg, diasAtrasoAtual)) continue;
 
       if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) {
         log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId }, "SmartFlow: pagamento_vencido já disparado — skip");
@@ -411,8 +404,7 @@ export async function dispararProximoVencimento(
     let disparados = 0;
     for (const c of cenarios) {
       const cfg = c.configGatilho as ConfigGatilhoPagamentoProximoVencimento;
-      const diasAntes = Math.max(0, Number(cfg.diasAntes ?? 3));
-      if (diasAteVencer > diasAntes) continue;
+      if (!deveDispararProximo(cfg, diasAteVencer)) continue;
 
       if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) continue;
 
@@ -492,12 +484,9 @@ export async function dispararMensagemCanal(
 
     // 1. Tenta cenários `mensagem_canal` com filtro de canal
     const cenariosMC = await carregarCenariosAtivos(escritorioId, ["mensagem_canal"]);
-    const aceitos = cenariosMC.filter((c) => {
-      const cfg = c.configGatilho as ConfigGatilhoMensagemCanal;
-      const canais = Array.isArray(cfg.canais) ? cfg.canais : [];
-      if (canais.length === 0) return true;
-      return canais.includes(params.canalTipo);
-    });
+    const aceitos = cenariosMC.filter((c) =>
+      aceitaCanal(c.configGatilho as ConfigGatilhoMensagemCanal, params.canalTipo),
+    );
 
     if (aceitos.length > 0) {
       const escolhido = aceitos[0];

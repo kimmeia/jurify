@@ -46,16 +46,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   TIPO_PASSO_META,
   GATILHO_META,
+  TIPO_CANAL_META,
   getTipoPassoMeta,
+  getGatilhoMeta,
   CAMPOS_CONDICIONAL,
   type GatilhoSmartflow,
   type TipoPasso,
+  type TipoCanalMensagem,
 } from "@shared/smartflow-types";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
@@ -84,7 +88,7 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   manual: Play,
 };
 
-// ─── Tipagem do nó ─────────────────────────────────────────────────────────
+// ─── Tipagem dos nós ───────────────────────────────────────────────────────
 
 interface PassoNodeData extends Record<string, unknown> {
   tipo: TipoPasso;
@@ -92,9 +96,20 @@ interface PassoNodeData extends Record<string, unknown> {
   label: string;
 }
 
-type PassoNode = Node<PassoNodeData, "passo">;
+interface GatilhoNodeData extends Record<string, unknown> {
+  gatilho: GatilhoSmartflow;
+  configGatilho: Record<string, unknown>;
+  label: string;
+}
 
-// ─── Nó visual ─────────────────────────────────────────────────────────────
+type PassoNode = Node<PassoNodeData, "passo">;
+type GatilhoNode = Node<GatilhoNodeData, "gatilho">;
+type AnyNode = PassoNode | GatilhoNode;
+
+/** ID fixo do nó de gatilho — permite identificá-lo sem ambiguidade. */
+const GATILHO_NODE_ID = "__gatilho__";
+
+// ─── Nós visuais ───────────────────────────────────────────────────────────
 
 function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
@@ -122,9 +137,55 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   );
 }
 
-const nodeTypes = { passo: PassoNodeView };
+function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
+  const meta = getGatilhoMeta(data.gatilho);
+  const Icon = GATILHO_ICON[data.gatilho] ?? Zap;
+  const resumo = resumirConfigGatilho(data.gatilho, data.configGatilho);
+
+  return (
+    <div
+      className={`rounded-xl border-2 shadow-md bg-card min-w-[220px] max-w-[280px] ring-2 ring-offset-2 ring-offset-background transition-all ${
+        selected ? "ring-amber-500 border-amber-500" : "ring-amber-500/40 border-amber-500/60"
+      }`}
+    >
+      <div className="flex items-center gap-1.5 px-3 py-2 rounded-t-[10px] bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 text-amber-900 dark:text-amber-200">
+        <Zap className="h-3.5 w-3.5 shrink-0" />
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="text-xs font-bold truncate">{meta.label}</span>
+      </div>
+      {resumo && (
+        <div className="px-3 py-1.5 text-[10px] text-muted-foreground border-t bg-muted/30 rounded-b-[10px]">
+          {resumo}
+        </div>
+      )}
+      <Handle type="source" position={Position.Bottom} className="!bg-amber-500" />
+    </div>
+  );
+}
+
+const nodeTypes = { passo: PassoNodeView, gatilho: GatilhoNodeView };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
+
+function resumirConfigGatilho(g: GatilhoSmartflow, cfg: Record<string, unknown>): string {
+  if (!cfg) return "";
+  if (g === "mensagem_canal") {
+    const canais = Array.isArray(cfg.canais) ? (cfg.canais as string[]) : [];
+    if (canais.length === 0) return "Qualquer canal";
+    return canais
+      .map((c) => TIPO_CANAL_META.find((m) => m.id === c)?.label || c)
+      .join(", ");
+  }
+  if (g === "pagamento_vencido") {
+    const d = Number(cfg.diasAtraso ?? 0);
+    return d > 0 ? `≥ ${d} dia(s) de atraso` : "Qualquer atraso";
+  }
+  if (g === "pagamento_proximo_vencimento") {
+    const d = Number(cfg.diasAntes ?? 3);
+    return `${d} dia(s) antes`;
+  }
+  return "";
+}
 
 function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string {
   if (!config) return "";
@@ -172,12 +233,30 @@ function criarNode(tipo: TipoPasso, y: number, config: Record<string, unknown> =
   };
 }
 
-/** Serializa nós em passos ordenados pela posição Y (top-to-bottom). */
-function nodesParaPassos(nodes: PassoNode[]) {
+function criarGatilhoNode(
+  gatilho: GatilhoSmartflow,
+  configGatilho: Record<string, unknown> = {},
+): GatilhoNode {
+  const meta = getGatilhoMeta(gatilho);
+  return {
+    id: GATILHO_NODE_ID,
+    type: "gatilho",
+    position: { x: 80, y: 10 },
+    data: { gatilho, configGatilho, label: meta.label },
+    deletable: false,
+  };
+}
+
+function isGatilhoNode(n: AnyNode): n is GatilhoNode {
+  return n.type === "gatilho";
+}
+
+/** Extrai só os nós de passo, ordenados pela posição Y (top-to-bottom). */
+function passoNodesOrdenados(nodes: AnyNode[]): PassoNode[] {
   return nodes
+    .filter((n): n is PassoNode => n.type === "passo")
     .slice()
-    .sort((a, b) => a.position.y - b.position.y)
-    .map((n) => ({ tipo: n.data.tipo, config: n.data.config }));
+    .sort((a, b) => a.position.y - b.position.y);
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────
@@ -190,13 +269,14 @@ export default function SmartFlowEditor() {
   const editandoId = params.id ? Number(params.id) : null;
   const novo = !editandoId;
 
-  // Dados gerais do cenário
+  // Dados gerais do cenário (gatilho vive como nó no canvas)
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [gatilho, setGatilho] = useState<GatilhoSmartflow>("whatsapp_mensagem");
 
-  // Estado do canvas
-  const [nodes, setNodes] = useState<PassoNode[]>([]);
+  // Canvas começa com um nó de gatilho default (mensagem_canal).
+  // O nó de gatilho tem ID fixo e não é deletável — usuário só troca o tipo
+  // clicando na paleta.
+  const [nodes, setNodes] = useState<AnyNode[]>(() => [criarGatilhoNode("mensagem_canal")]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -210,23 +290,32 @@ export default function SmartFlowEditor() {
     if (!cenario) return;
     setNome(cenario.nome || "");
     setDescricao(cenario.descricao || "");
-    setGatilho(cenario.gatilho);
+    const gatilhoAtual = (cenario.gatilho as GatilhoSmartflow) || "mensagem_canal";
+    const configGatilhoAtual = (cenario.configGatilho as Record<string, unknown>) || {};
+    const gatilhoNode = criarGatilhoNode(gatilhoAtual, configGatilhoAtual);
+
     const passos = (cenario.passos || []) as Array<{ id: number; tipo: TipoPasso; config: string | null }>;
-    const ns: PassoNode[] = passos.map((p, i) => {
+    const passosNodes: PassoNode[] = passos.map((p, i) => {
       let cfg: Record<string, unknown> = {};
       try { cfg = p.config ? JSON.parse(p.config) : {}; } catch { cfg = {}; }
       return {
         id: `p${p.id}`,
         type: "passo",
-        position: { x: 80, y: 40 + i * 120 },
+        position: { x: 80, y: 140 + i * 120 },
         data: { tipo: p.tipo, config: cfg, label: getTipoPassoMeta(p.tipo).label },
       };
     });
+
     const es: Edge[] = [];
-    for (let i = 0; i < ns.length - 1; i++) {
-      es.push({ id: `e${ns[i].id}-${ns[i + 1].id}`, source: ns[i].id, target: ns[i + 1].id });
+    // Conecta gatilho ao primeiro passo
+    if (passosNodes.length > 0) {
+      es.push({ id: `e-gatilho-${passosNodes[0].id}`, source: GATILHO_NODE_ID, target: passosNodes[0].id });
     }
-    setNodes(ns);
+    for (let i = 0; i < passosNodes.length - 1; i++) {
+      es.push({ id: `e${passosNodes[i].id}-${passosNodes[i + 1].id}`, source: passosNodes[i].id, target: passosNodes[i + 1].id });
+    }
+
+    setNodes([gatilhoNode, ...passosNodes]);
     setEdges(es);
   }, [cenario]);
 
@@ -250,10 +339,11 @@ export default function SmartFlowEditor() {
   });
 
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
+  const gatilhoNode = nodes.find(isGatilhoNode) || null;
 
   // Callbacks canvas
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds) as PassoNode[]),
+    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds) as AnyNode[]),
     [],
   );
   const onEdgesChange = useCallback(
@@ -266,20 +356,43 @@ export default function SmartFlowEditor() {
   );
 
   const adicionarPasso = (tipo: TipoPasso) => {
-    const ultimaY = nodes.length ? Math.max(...nodes.map((n) => n.position.y)) : 0;
+    const passos = nodes.filter((n) => n.type === "passo");
+    const ultimaY = passos.length
+      ? Math.max(...passos.map((n) => n.position.y))
+      : 120; // abaixo do gatilho
     const novoNode = criarNode(tipo, ultimaY + 120);
+    const ultimoId = passos.length > 0
+      ? passos[passos.length - 1].id
+      : GATILHO_NODE_ID;
     setNodes((nds) => [...nds, novoNode]);
-    // Liga sequencialmente
-    setEdges((eds) => {
-      if (nodes.length === 0) return eds;
-      const ultimoId = nodes[nodes.length - 1].id;
-      return [...eds, { id: `e${ultimoId}-${novoNode.id}`, source: ultimoId, target: novoNode.id, animated: true }];
-    });
+    setEdges((eds) => [
+      ...eds,
+      { id: `e${ultimoId}-${novoNode.id}`, source: ultimoId, target: novoNode.id, animated: true },
+    ]);
     setSelectedId(novoNode.id);
+  };
+
+  /** Troca o tipo de gatilho (mantém o mesmo nó, só muda os dados). */
+  const trocarGatilho = (novoGatilho: GatilhoSmartflow) => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        isGatilhoNode(n)
+          ? {
+              ...n,
+              data: { ...n.data, gatilho: novoGatilho, configGatilho: {}, label: getGatilhoMeta(novoGatilho).label },
+            }
+          : n,
+      ),
+    );
+    setSelectedId(GATILHO_NODE_ID);
   };
 
   const removerSelecionado = () => {
     if (!selectedId) return;
+    if (selectedId === GATILHO_NODE_ID) {
+      toast.error("O gatilho não pode ser removido. Troque o tipo na paleta à esquerda.");
+      return;
+    }
     setNodes((nds) => nds.filter((n) => n.id !== selectedId));
     setEdges((eds) => eds.filter((e) => e.source !== selectedId && e.target !== selectedId));
     setSelectedId(null);
@@ -288,11 +401,16 @@ export default function SmartFlowEditor() {
   const atualizarConfigSelecionado = (patch: Record<string, unknown>) => {
     if (!selectedId) return;
     setNodes((nds) =>
-      nds.map((n) =>
-        n.id === selectedId
-          ? { ...n, data: { ...n.data, config: { ...n.data.config, ...patch } } }
-          : n,
-      ),
+      nds.map((n) => {
+        if (n.id !== selectedId) return n;
+        if (isGatilhoNode(n)) {
+          return {
+            ...n,
+            data: { ...n.data, configGatilho: { ...n.data.configGatilho, ...patch } },
+          };
+        }
+        return { ...n, data: { ...n.data, config: { ...n.data.config, ...patch } } };
+      }),
     );
   };
 
@@ -301,15 +419,29 @@ export default function SmartFlowEditor() {
       toast.error("Nome é obrigatório (mínimo 2 caracteres).");
       return;
     }
-    if (nodes.length === 0) {
+    if (!gatilhoNode) {
+      toast.error("Selecione um gatilho.");
+      return;
+    }
+    const passosList = passoNodesOrdenados(nodes);
+    if (passosList.length === 0) {
       toast.error("Adicione pelo menos um passo.");
       return;
     }
-    const passos = nodesParaPassos(nodes);
+    const passos = passosList.map((n) => ({ tipo: n.data.tipo, config: n.data.config }));
+    const base = {
+      nome,
+      descricao: descricao || undefined,
+      gatilho: gatilhoNode.data.gatilho,
+      configGatilho: Object.keys(gatilhoNode.data.configGatilho).length > 0
+        ? gatilhoNode.data.configGatilho
+        : undefined,
+      passos,
+    };
     if (editandoId) {
-      atualizarMut.mutate({ id: editandoId, nome, descricao: descricao || undefined, gatilho, passos });
+      atualizarMut.mutate({ id: editandoId, ...base });
     } else {
-      criarMut.mutate({ nome, descricao: descricao || undefined, gatilho, passos });
+      criarMut.mutate(base);
     }
   };
 
@@ -343,24 +475,6 @@ export default function SmartFlowEditor() {
             placeholder="Nome do cenário"
             className="max-w-xs font-semibold"
           />
-          <Select value={gatilho} onValueChange={(v) => setGatilho(v as GatilhoSmartflow)}>
-            <SelectTrigger className="max-w-[220px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {GATILHO_META.map((g) => {
-                const Icon = GATILHO_ICON[g.id];
-                return (
-                  <SelectItem key={g.id} value={g.id}>
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5" />
-                      {g.label}
-                    </div>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
         </div>
         <Button onClick={salvar} disabled={salvando} size="sm" className="gap-1">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -381,7 +495,30 @@ export default function SmartFlowEditor() {
       {/* Workspace */}
       <div className="flex flex-1 min-h-0">
         {/* Paleta esquerda */}
-        <div className="w-56 border-r bg-muted/20 p-3 overflow-y-auto">
+        <div className="w-60 border-r bg-muted/20 p-3 overflow-y-auto">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Gatilho</p>
+          <div className="space-y-1.5 mb-5">
+            {GATILHO_META.map((g) => {
+              const Icon = GATILHO_ICON[g.id];
+              const ativo = gatilhoNode?.data.gatilho === g.id;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => trocarGatilho(g.id)}
+                  className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border transition-all text-left ${
+                    ativo
+                      ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm"
+                      : "border-dashed border-border hover:border-solid hover:shadow-sm bg-background"
+                  }`}
+                  title={g.descricao}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
+                  <span className="text-xs font-medium leading-tight flex-1">{g.label}</span>
+                  {ativo && <Zap className="h-3 w-3 shrink-0 mt-0.5 text-amber-500 fill-amber-500" />}
+                </button>
+              );
+            })}
+          </div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Adicionar passo</p>
           <div className="space-y-1.5">
             {TIPO_PASSO_META.map((t) => {
@@ -421,14 +558,14 @@ export default function SmartFlowEditor() {
             <MiniMap pannable zoomable className="!bg-background !border" />
           </ReactFlow>
 
-          {nodes.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          {passoNodesOrdenados(nodes).length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-32">
               <Card className="max-w-sm pointer-events-auto">
-                <CardContent className="py-8 text-center">
-                  <Zap className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
-                  <p className="text-sm font-medium">Canvas vazio</p>
+                <CardContent className="py-6 text-center">
+                  <Zap className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                  <p className="text-sm font-medium">Sem passos ainda</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Clique em um passo na coluna à esquerda para adicionar ao fluxo.
+                    Escolha um passo na coluna à esquerda para continuar a partir do gatilho.
                   </p>
                 </CardContent>
               </Card>
@@ -456,15 +593,37 @@ export default function SmartFlowEditor() {
   );
 }
 
-// ─── Painel de config por tipo de passo ────────────────────────────────────
+// ─── Painel de config (gatilho ou passo) ──────────────────────────────────
 
 interface PainelConfigProps {
-  node: PassoNode;
+  node: AnyNode;
   onChange: (patch: Record<string, unknown>) => void;
   onRemove: () => void;
 }
 
 function PainelConfig({ node, onChange, onRemove }: PainelConfigProps) {
+  if (isGatilhoNode(node)) {
+    const meta = getGatilhoMeta(node.data.gatilho);
+    const Icon = GATILHO_ICON[node.data.gatilho] ?? Zap;
+    return (
+      <div className="p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 text-amber-700 dark:text-amber-300">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{meta.label}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{meta.descricao}</p>
+          </div>
+        </div>
+        <ConfigGatilhoFields node={node} onChange={onChange} />
+        <p className="text-[10px] text-muted-foreground pt-2 border-t">
+          Para trocar o tipo de gatilho, clique em outra opção na paleta à esquerda.
+        </p>
+      </div>
+    );
+  }
+
   const meta = getTipoPassoMeta(node.data.tipo);
   const Icon = TIPO_ICON[node.data.tipo] ?? Zap;
 
@@ -488,6 +647,112 @@ function PainelConfig({ node, onChange, onRemove }: PainelConfigProps) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function ConfigGatilhoFields({
+  node,
+  onChange,
+}: {
+  node: GatilhoNode;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const cfg = node.data.configGatilho;
+
+  if (node.data.gatilho === "mensagem_canal") {
+    const atuais = new Set<string>(Array.isArray(cfg.canais) ? (cfg.canais as string[]) : []);
+    const toggle = (id: TipoCanalMensagem, checked: boolean) => {
+      const prox = new Set(atuais);
+      if (checked) prox.add(id);
+      else prox.delete(id);
+      onChange({ canais: Array.from(prox) });
+    };
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">Canais que disparam o fluxo</Label>
+        <div className="space-y-1.5">
+          {TIPO_CANAL_META.map((c) => {
+            const checked = atuais.has(c.id);
+            const disabled = !!c.emBreve;
+            return (
+              <label
+                key={c.id}
+                className={`flex items-center gap-2 px-2 py-1.5 rounded border text-xs cursor-pointer ${
+                  disabled
+                    ? "opacity-50 cursor-not-allowed border-dashed"
+                    : checked
+                    ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                    : "border-border hover:bg-muted/40"
+                }`}
+              >
+                <Checkbox
+                  checked={checked}
+                  disabled={disabled}
+                  onCheckedChange={(v) => toggle(c.id, v === true)}
+                />
+                <span className="flex-1">{c.label}</span>
+                {c.emBreve && <Badge variant="outline" className="text-[9px] ml-auto">Em breve</Badge>}
+              </label>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Sem seleção = dispara em qualquer canal conectado.
+        </p>
+      </div>
+    );
+  }
+
+  if (node.data.gatilho === "pagamento_vencido") {
+    return (
+      <div>
+        <Label className="text-xs">Dias mínimos de atraso</Label>
+        <Input
+          type="number"
+          min={0}
+          max={365}
+          value={Number(cfg.diasAtraso ?? 0)}
+          onChange={(e) => onChange({ diasAtraso: Math.max(0, Number(e.target.value) || 0) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          O cenário só dispara se o pagamento estiver atrasado há pelo menos N dias.
+          <br /> <strong>0</strong> = dispara imediatamente ao vencer.
+        </p>
+      </div>
+    );
+  }
+
+  if (node.data.gatilho === "pagamento_proximo_vencimento") {
+    return (
+      <div>
+        <Label className="text-xs">Dias antes do vencimento</Label>
+        <Input
+          type="number"
+          min={1}
+          max={60}
+          value={Number(cfg.diasAntes ?? 3)}
+          onChange={(e) => onChange({ diasAntes: Math.max(1, Number(e.target.value) || 1) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Dispara o cenário quando a cobrança vence em até N dias. Roda 1×/dia via job.
+        </p>
+      </div>
+    );
+  }
+
+  if (node.data.gatilho === "whatsapp_mensagem") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Gatilho legado, restrito a WhatsApp QR (Baileys). Prefira o gatilho
+        <strong> Mensagem recebida </strong>, que aceita qualquer canal.
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-xs text-muted-foreground">
+      Este gatilho não tem configurações adicionais.
+    </p>
   );
 }
 
