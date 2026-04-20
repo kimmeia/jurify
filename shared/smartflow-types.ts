@@ -27,6 +27,34 @@ export type TipoCanalMensagem =
   | "instagram"
   | "facebook";
 
+/**
+ * Agrupa gatilhos e passos por provider/categoria. Puramente visual — a UX
+ * da paleta do editor usa isso pra renderizar seções. O modelo de dados
+ * permanece flat.
+ */
+export type GrupoSmartflow = "mensagem" | "asaas" | "calcom" | "crm" | "ia" | "kanban" | "fluxo";
+
+export interface GrupoMeta {
+  id: GrupoSmartflow;
+  label: string;
+  /** Ordem de exibição na paleta (menor primeiro). */
+  ordem: number;
+}
+
+export const GRUPO_META: ReadonlyArray<GrupoMeta> = [
+  { id: "mensagem", label: "Mensagem", ordem: 1 },
+  { id: "asaas", label: "Asaas (financeiro)", ordem: 2 },
+  { id: "calcom", label: "Cal.com (agenda)", ordem: 3 },
+  { id: "crm", label: "CRM", ordem: 4 },
+  { id: "ia", label: "Inteligência artificial", ordem: 5 },
+  { id: "kanban", label: "Kanban", ordem: 6 },
+  { id: "fluxo", label: "Controle de fluxo", ordem: 7 },
+];
+
+export function getGrupoMeta(id: string): GrupoMeta | null {
+  return GRUPO_META.find((g) => g.id === id) ?? null;
+}
+
 export type TipoPasso =
   | "ia_classificar"
   | "ia_responder"
@@ -151,12 +179,16 @@ export interface TipoPassoMeta {
   descricao: string;
   /** Classe Tailwind para background/texto do chip. */
   cor: string;
+  /** Grupo para agrupar visualmente na paleta. */
+  grupo: GrupoSmartflow;
 }
 
 export interface GatilhoMeta {
   id: GatilhoSmartflow;
   label: string;
   descricao: string;
+  /** Grupo para agrupar visualmente na paleta. */
+  grupo: GrupoSmartflow;
 }
 
 export interface TipoCanalMeta {
@@ -193,27 +225,27 @@ export type ConfigGatilhoByTipo =
   | { gatilho: Exclude<GatilhoSmartflow, "mensagem_canal" | "pagamento_vencido" | "pagamento_proximo_vencimento">; config: Record<string, unknown> };
 
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
-  { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
-  { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-  { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-  { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" },
-  { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300" },
-  { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
-  { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
-  { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
-  { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300" },
-  { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" },
+  { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
+  { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
+  { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "calcom" },
+  { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "calcom" },
+  { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
+  { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
+  { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
+  { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
+  { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300", grupo: "fluxo" },
+  { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "kanban" },
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
-  { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem em qualquer canal (WhatsApp, Instagram, Facebook)." },
-  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo, específico de WhatsApp QR. Prefira 'Mensagem recebida'." },
-  { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", descricao: "Dispara no webhook do Asaas." },
-  { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias." },
-  { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer." },
-  { id: "novo_lead", label: "Novo lead no CRM", descricao: "Dispara quando um contato novo é criado." },
-  { id: "agendamento_criado", label: "Agendamento criado", descricao: "Dispara quando booking Cal.com é confirmado." },
-  { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'." },
+  { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem em qualquer canal (WhatsApp, Instagram, Facebook).", grupo: "mensagem" },
+  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo, específico de WhatsApp QR. Prefira 'Mensagem recebida'.", grupo: "mensagem" },
+  { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", descricao: "Dispara no webhook do Asaas.", grupo: "asaas" },
+  { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias.", grupo: "asaas" },
+  { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer.", grupo: "asaas" },
+  { id: "novo_lead", label: "Novo lead no CRM", descricao: "Dispara quando um contato novo é criado.", grupo: "crm" },
+  { id: "agendamento_criado", label: "Agendamento criado", descricao: "Dispara quando booking Cal.com é confirmado.", grupo: "calcom" },
+  { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'.", grupo: "fluxo" },
 ];
 
 export const TIPO_CANAL_META: ReadonlyArray<TipoCanalMeta> = [
@@ -230,6 +262,7 @@ export function getTipoPassoMeta(tipo: string): TipoPassoMeta {
       label: tipo,
       descricao: "",
       cor: "bg-gray-100 text-gray-700",
+      grupo: "fluxo",
     }
   );
 }
@@ -240,6 +273,7 @@ export function getGatilhoMeta(id: string): GatilhoMeta {
       id: id as GatilhoSmartflow,
       label: id,
       descricao: "",
+      grupo: "fluxo",
     }
   );
 }
