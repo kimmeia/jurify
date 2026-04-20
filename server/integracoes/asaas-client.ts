@@ -294,6 +294,40 @@ export class AsaasClient {
     return res.data.data.length > 0 ? res.data.data[0] : null;
   }
 
+  /**
+   * Busca clientes no Asaas por telefone (phone ou mobilePhone).
+   * Asaas pode retornar múltiplos (ex.: responsável legal ou familiar
+   * compartilhando telefone). A chamada é feita separada por campo e a
+   * conferência final é local, apenas com dígitos, para evitar match
+   * parcial caso a API faça prefix search.
+   */
+  async buscarClientesPorTelefone(telefone: string): Promise<AsaasCustomer[]> {
+    const telLimpo = telefone.replace(/\D/g, "");
+    if (!telLimpo) return [];
+
+    const resultados = new Map<string, AsaasCustomer>();
+
+    for (const campo of ["phone", "mobilePhone"] as const) {
+      try {
+        const res = await this.api.get<AsaasListResponse<AsaasCustomer>>("/customers", {
+          params: { [campo]: telLimpo },
+        });
+        for (const c of res.data.data) {
+          if (c.deleted) continue;
+          const phoneMatch = (c.phone || "").replace(/\D/g, "");
+          const mobileMatch = (c.mobilePhone || "").replace(/\D/g, "");
+          if (phoneMatch === telLimpo || mobileMatch === telLimpo) {
+            resultados.set(c.id, c);
+          }
+        }
+      } catch {
+        /* tenta próximo campo */
+      }
+    }
+
+    return Array.from(resultados.values());
+  }
+
   async criarCliente(input: AsaasCustomerInput): Promise<AsaasCustomer> {
     const res = await this.api.post("/customers", input);
     return res.data;
