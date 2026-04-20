@@ -65,6 +65,7 @@ import {
   type TipoPasso,
   type TipoCanalMensagem,
 } from "@shared/smartflow-types";
+import { validarGrafo } from "@shared/smartflow-graph-validation";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
 
@@ -620,6 +621,29 @@ export default function SmartFlowEditor() {
         proximoSe: mapa && Object.keys(mapa).length > 0 ? mapa : undefined,
       };
     });
+    // Validação de grafo antes de persistir — detecta ciclos (bloqueia),
+    // órfãos e condicionais sem saída (apenas aviso).
+    const passosParaValidar = passosList.map((n) => ({
+      nodeId: n.id,
+      clienteId: n.data.clienteId,
+      tipo: n.data.tipo,
+      config: n.data.config,
+      temProximoSe: !!proximoSePorNodeId.get(n.id),
+    }));
+    const edgesParaValidar = edges.map((e) => ({
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle ?? null,
+    }));
+    const validacao = validarGrafo(GATILHO_NODE_ID, passosParaValidar, edgesParaValidar);
+    if (validacao.erros.length > 0) {
+      toast.error(validacao.erros.join(" "));
+      return;
+    }
+    for (const aviso of validacao.avisos) {
+      toast.warning(aviso);
+    }
+
     const base = {
       nome,
       descricao: descricao || undefined,
