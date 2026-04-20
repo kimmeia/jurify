@@ -124,15 +124,56 @@ async function resolverEscritorioPorOrganizador(email?: string): Promise<number 
 }
 
 async function handleBookingCancelled(payload: CalcomWebhookPayload) {
-  const { uid, title } = payload.payload;
+  const { id, uid, title, startTime, endTime, attendees, organizer } = payload.payload;
+  const motivo = (payload.payload as any).cancellationReason as string | undefined;
   log.info(`[Cal.com] Booking cancelado: "${title}" (${uid})`);
 
-  // TODO: Buscar agendamento pelo uid do Cal.com e cancelar
+  const escritorioId = await resolverEscritorioPorOrganizador(organizer?.email);
+  if (!escritorioId) return;
+
+  try {
+    const { dispararAgendamentoCancelado } = await import("../smartflow/dispatcher");
+    await dispararAgendamentoCancelado(escritorioId, {
+      bookingId: uid || id,
+      titulo: title,
+      startTime,
+      endTime,
+      participanteNome: attendees?.[0]?.name,
+      participanteEmail: attendees?.[0]?.email,
+      organizadorEmail: organizer?.email,
+      motivo,
+    });
+  } catch (e: any) {
+    log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar agendamento_cancelado");
+  }
 }
 
 async function handleBookingRescheduled(payload: CalcomWebhookPayload) {
-  const { uid, title, startTime, endTime } = payload.payload;
+  const { id, uid, title, startTime, endTime, attendees, organizer } = payload.payload;
+  // Cal.com inclui `rescheduleStartTime` no payload antigo; nomes variam entre
+  // versões, buscamos os dois shapes mais comuns.
+  const startAntigo =
+    (payload.payload as any).rescheduleStartTime ||
+    (payload.payload as any).previousStartTime ||
+    undefined;
   log.info(`[Cal.com] Booking reagendado: "${title}" → ${startTime}`);
 
-  // TODO: Buscar agendamento pelo uid e atualizar data
+  const escritorioId = await resolverEscritorioPorOrganizador(organizer?.email);
+  if (!escritorioId) return;
+
+  try {
+    const { dispararAgendamentoRemarcado } = await import("../smartflow/dispatcher");
+    await dispararAgendamentoRemarcado(escritorioId, {
+      bookingId: uid || id,
+      titulo: title,
+      startTimeNovo: startTime,
+      startTimeAntigo: startAntigo,
+      endTimeNovo: endTime,
+      participanteNome: attendees?.[0]?.name,
+      participanteEmail: attendees?.[0]?.email,
+      organizadorEmail: organizer?.email,
+    });
+  } catch (e: any) {
+    log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar agendamento_remarcado");
+  }
 }

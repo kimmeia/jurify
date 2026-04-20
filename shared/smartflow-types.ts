@@ -12,6 +12,8 @@ export type GatilhoSmartflow =
   | "mensagem_canal"
   | "novo_lead"
   | "agendamento_criado"
+  | "agendamento_cancelado"
+  | "agendamento_remarcado"
   | "pagamento_recebido"
   | "pagamento_vencido"
   | "pagamento_proximo_vencimento"
@@ -60,6 +62,9 @@ export type TipoPasso =
   | "ia_responder"
   | "calcom_horarios"
   | "calcom_agendar"
+  | "calcom_listar"
+  | "calcom_cancelar"
+  | "calcom_remarcar"
   | "whatsapp_enviar"
   | "transferir"
   | "condicional"
@@ -97,6 +102,29 @@ export interface ConfigCalcomHorarios {
 export interface ConfigCalcomAgendar {
   /** reservado para futuras configs (eventTypeId, email padrão, etc.) */
 }
+export interface ConfigCalcomListar {
+  /** Filtro de status — default: upcoming. */
+  status?: "upcoming" | "past" | "cancelled" | "unconfirmed";
+}
+export interface ConfigCalcomCancelar {
+  /**
+   * ID do booking a cancelar. Se vazio, usa `ctx.agendamentoId` (default
+   * quando o cenário foi disparado por gatilho de agendamento).
+   */
+  bookingId?: string;
+  /** Motivo do cancelamento (opcional, enviado ao Cal.com). */
+  motivo?: string;
+}
+export interface ConfigCalcomRemarcar {
+  /** ID do booking. Se vazio, usa `ctx.agendamentoId`. */
+  bookingId?: string;
+  /**
+   * Novo horário. Se vazio, usa `ctx.horarioEscolhido` (preenchido por um
+   * passo `calcom_horarios` anterior ou pelo contexto do gatilho).
+   */
+  novoHorario?: string;
+  motivo?: string;
+}
 export interface ConfigWhatsappEnviar {
   template?: string;
 }
@@ -131,6 +159,9 @@ export type PassoConfigByTipo =
   | { tipo: "ia_responder"; config: ConfigIaResponder }
   | { tipo: "calcom_horarios"; config: ConfigCalcomHorarios }
   | { tipo: "calcom_agendar"; config: ConfigCalcomAgendar }
+  | { tipo: "calcom_listar"; config: ConfigCalcomListar }
+  | { tipo: "calcom_cancelar"; config: ConfigCalcomCancelar }
+  | { tipo: "calcom_remarcar"; config: ConfigCalcomRemarcar }
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "condicional"; config: ConfigCondicional }
@@ -229,6 +260,9 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
   { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "calcom" },
   { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "calcom" },
+  { id: "calcom_listar", label: "Listar agendamentos", descricao: "Busca bookings no Cal.com e grava no contexto.", cor: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300", grupo: "calcom" },
+  { id: "calcom_cancelar", label: "Cancelar agendamento", descricao: "Cancela um booking pelo ID.", cor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300", grupo: "calcom" },
+  { id: "calcom_remarcar", label: "Remarcar agendamento", descricao: "Reagenda um booking para novo horário.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "calcom" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
@@ -245,6 +279,8 @@ export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer.", grupo: "asaas" },
   { id: "novo_lead", label: "Novo lead no CRM", descricao: "Dispara quando um contato novo é criado.", grupo: "crm" },
   { id: "agendamento_criado", label: "Agendamento criado", descricao: "Dispara quando booking Cal.com é confirmado.", grupo: "calcom" },
+  { id: "agendamento_cancelado", label: "Agendamento cancelado", descricao: "Dispara quando booking Cal.com é cancelado.", grupo: "calcom" },
+  { id: "agendamento_remarcado", label: "Agendamento remarcado", descricao: "Dispara quando booking Cal.com é reagendado.", grupo: "calcom" },
   { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'.", grupo: "fluxo" },
 ];
 

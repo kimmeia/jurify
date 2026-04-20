@@ -204,6 +204,27 @@ export class CalcomClient {
     }
   }
 
+  /**
+   * Reagenda um booking para um novo horário. A API v2 do Cal.com trata
+   * "reschedule" via POST /bookings/{id}/reschedule com o novo `start` no
+   * corpo (não é PATCH no booking original).
+   */
+  async reagendarBooking(
+    bookingId: number,
+    params: { start: string; reason?: string },
+  ): Promise<CalcomBooking | null> {
+    try {
+      const data = await this.request("POST", `/bookings/${bookingId}/reschedule`, {
+        start: params.start,
+        reschedulingReason: params.reason || "Reagendado pelo sistema",
+      });
+      return this.mapBooking(data.data || data);
+    } catch (err: any) {
+      log.error("[CalcomClient v2] Erro reagendar:", err.message);
+      return null;
+    }
+  }
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   private mapBooking(raw: any): CalcomBooking | null {

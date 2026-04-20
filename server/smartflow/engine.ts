@@ -94,6 +94,31 @@ export interface SmartflowExecutores {
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
   criarAgendamento: (horario: string, nome: string, email: string) => Promise<string>;
+  /**
+   * Lista bookings do Cal.com (usado pelo passo `calcom_listar`). O resultado
+   * vai para `ctx.bookings` sem formatação específica.
+   */
+  listarBookings: (params: {
+    status?: "upcoming" | "past" | "cancelled" | "unconfirmed";
+  }) => Promise<
+    Array<{
+      id: number | string;
+      titulo?: string;
+      startTime?: string;
+      endTime?: string;
+      status?: string;
+      attendeeNome?: string;
+      attendeeEmail?: string;
+    }>
+  >;
+  /** Cancela um booking por ID. Retorna true se sucesso. */
+  cancelarBooking: (bookingId: number | string, motivo?: string) => Promise<boolean>;
+  /** Reagenda um booking para um novo horário. Retorna true se sucesso. */
+  reagendarBooking: (
+    bookingId: number | string,
+    novoHorario: string,
+    motivo?: string,
+  ) => Promise<boolean>;
   /** Envia mensagem WhatsApp */
   enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
   /** Chama webhook externo */
@@ -211,6 +236,92 @@ async function handleCalcomAgendar(
     };
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `Agendamento: ${err.message}` };
+  }
+}
+
+async function handleCalcomListar(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const status = ((passo.config as any).status as
+    | "upcoming"
+    | "past"
+    | "cancelled"
+    | "unconfirmed"
+    | undefined) || "upcoming";
+
+  try {
+    const bookings = await exec.listarBookings({ status });
+    return {
+      sucesso: true,
+      contexto: { ...ctx, bookings, bookingsQuantidade: bookings.length },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com listar: ${err.message}` };
+  }
+}
+
+async function handleCalcomCancelar(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const bookingId =
+    ((passo.config as any).bookingId as string | undefined) ||
+    (ctx.agendamentoId as string | undefined);
+  if (!bookingId) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem bookingId para cancelar" };
+  }
+  const motivo = ((passo.config as any).motivo as string | undefined) || undefined;
+
+  try {
+    const ok = await exec.cancelarBooking(bookingId, motivo);
+    if (!ok) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "Cal.com recusou o cancelamento" };
+    }
+    return {
+      sucesso: true,
+      contexto: { ...ctx, bookingCancelado: bookingId },
+      resposta: "Agendamento cancelado com sucesso.",
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com cancelar: ${err.message}` };
+  }
+}
+
+async function handleCalcomRemarcar(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const bookingId =
+    ((passo.config as any).bookingId as string | undefined) ||
+    (ctx.agendamentoId as string | undefined);
+  const novoHorario =
+    ((passo.config as any).novoHorario as string | undefined) ||
+    (ctx.horarioEscolhido as string | undefined);
+
+  if (!bookingId) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem bookingId para remarcar" };
+  }
+  if (!novoHorario) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem novo horário para remarcar" };
+  }
+  const motivo = ((passo.config as any).motivo as string | undefined) || undefined;
+
+  try {
+    const ok = await exec.reagendarBooking(bookingId, novoHorario, motivo);
+    if (!ok) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "Cal.com recusou o reagendamento" };
+    }
+    return {
+      sucesso: true,
+      contexto: { ...ctx, horarioEscolhido: novoHorario },
+      resposta: `Agendamento remarcado para ${novoHorario}.`,
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Cal.com remarcar: ${err.message}` };
   }
 }
 
@@ -352,6 +463,9 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   ia_responder: handleIAResponder,
   calcom_horarios: handleCalcomHorarios,
   calcom_agendar: handleCalcomAgendar,
+  calcom_listar: handleCalcomListar,
+  calcom_cancelar: handleCalcomCancelar,
+  calcom_remarcar: handleCalcomRemarcar,
   whatsapp_enviar: handleWhatsAppEnviar,
   transferir: handleTransferir,
   condicional: handleCondicional,
