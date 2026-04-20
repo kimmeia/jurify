@@ -193,6 +193,7 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
     case "ia_classificar":
       return Array.isArray(config.categorias) ? (config.categorias as string[]).join(", ") : "";
     case "ia_responder":
+      if (typeof config.agenteId === "number" && config.agenteId > 0) return `Agente #${config.agenteId}`;
       return typeof config.prompt === "string" ? truncar(config.prompt, 60) : "";
     case "calcom_horarios":
       return config.duracao ? `${config.duracao} min` : "";
@@ -756,6 +757,66 @@ function ConfigGatilhoFields({
   );
 }
 
+function ConfigIaResponderFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const agenteId = typeof cfg.agenteId === "number" ? cfg.agenteId : 0;
+  const { data: agentes, isLoading } = (trpc as any).agentesIa.listar.useQuery();
+
+  const agentesAtivos: Array<{ id: number; nome: string; modelo: string; ativo: boolean; temApiKey: boolean }> =
+    (agentes || []).filter((a: any) => a.ativo);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">Agente de IA</Label>
+        <Select
+          value={String(agenteId || "__livre__")}
+          onValueChange={(v) => onChange({ agenteId: v === "__livre__" ? undefined : Number(v) })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={isLoading ? "Carregando…" : "Escolha um agente"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__livre__">
+              <span className="text-muted-foreground">— Prompt livre (sem agente) —</span>
+            </SelectItem>
+            {agentesAtivos.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {a.nome} <span className="text-muted-foreground ml-2 text-[10px]">{a.modelo}</span>
+                {!a.temApiKey && <span className="ml-2 text-[9px] text-destructive">sem API key</span>}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Usa o prompt, modelo e documentos de treinamento já cadastrados no agente. Crie/edite agentes em
+          <strong> Integrações → Agentes de IA</strong>.
+        </p>
+      </div>
+
+      {!agenteId && (
+        <div>
+          <Label className="text-xs">Prompt adicional</Label>
+          <Textarea
+            value={String(cfg.prompt || "")}
+            onChange={(e) => onChange({ prompt: e.target.value })}
+            placeholder="Ex: Você é um recepcionista de advocacia. Seja educado e objetivo."
+            rows={5}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Preenchido apenas se nenhum agente for selecionado acima.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: Record<string, unknown>) => void }) {
   const cfg = node.data.config;
 
@@ -783,17 +844,7 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       );
     }
     case "ia_responder":
-      return (
-        <div>
-          <Label className="text-xs">Prompt adicional</Label>
-          <Textarea
-            value={String(cfg.prompt || "")}
-            onChange={(e) => onChange({ prompt: e.target.value })}
-            placeholder="Ex: Você é um recepcionista de advocacia. Seja educado e objetivo."
-            rows={5}
-          />
-        </div>
-      );
+      return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
     case "calcom_horarios":
       return (
         <div>

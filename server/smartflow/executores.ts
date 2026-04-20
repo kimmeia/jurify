@@ -63,6 +63,53 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       throw new Error("Nenhuma IA configurada. Configure em Integrações → ChatGPT ou Claude.");
     },
 
+    async executarAgente(agenteId: number, mensagem: string): Promise<string> {
+      const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
+      const cfg = await obterAgentePorId(escritorioId, agenteId);
+      if (!cfg) {
+        throw new Error(`Agente ${agenteId} não encontrado, inativo ou sem API key configurada.`);
+      }
+
+      // Concatena prompt do agente + bloco de docs RAG já formatado.
+      const systemPrompt = [cfg.prompt, cfg.contextoDocumentos].filter(Boolean).join("\n\n");
+
+      if (cfg.provider === "anthropic") {
+        const { gerarRespostaAnthropic } = await import("../integracoes/chatbot-openai");
+        const r = await gerarRespostaAnthropic(
+          cfg.anthropicApiKey!,
+          cfg.modelo,
+          systemPrompt,
+          [],
+          mensagem,
+          cfg.maxTokens,
+          cfg.temperatura,
+        );
+        if (r.erro) throw new Error(`Agente Anthropic: ${r.erro}`);
+        return r.resposta || "";
+      }
+
+      // OpenAI
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cfg.openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: cfg.modelo || "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: mensagem },
+          ],
+          max_tokens: cfg.maxTokens,
+          temperature: cfg.temperatura,
+        }),
+      });
+      if (!res.ok) throw new Error(`Agente OpenAI: ${res.status}`);
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || "";
+    },
+
     async buscarHorarios(duracao: number): Promise<string[]> {
       try {
         const { getDb } = await import("../db");

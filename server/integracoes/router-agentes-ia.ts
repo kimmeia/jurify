@@ -815,6 +815,33 @@ export async function obterAgenteParaCanal(
   return extrairConfig(escritorioId, agente);
 }
 
+/**
+ * Busca um agente por ID dentro do escritório e devolve a config completa
+ * (provider resolvido + API key + docs RAG), no mesmo shape usado por
+ * `obterAgenteParaCanal`. Usada pelo SmartFlow (passo `ia_responder` com
+ * `agenteId` no config).
+ */
+export async function obterAgentePorId(
+  escritorioId: number,
+  agenteId: number,
+): Promise<AgenteCanalConfig | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [agente] = await db
+    .select()
+    .from(agentesIa)
+    .where(
+      and(
+        eq(agentesIa.escritorioId, escritorioId),
+        eq(agentesIa.id, agenteId),
+        eq(agentesIa.ativo, true),
+      ),
+    )
+    .limit(1);
+  if (!agente) return null;
+  return extrairConfig(escritorioId, agente);
+}
+
 async function extrairConfig(
   escritorioId: number,
   a: any,
