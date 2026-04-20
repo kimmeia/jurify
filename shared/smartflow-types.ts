@@ -9,10 +9,23 @@ import type { LucideIcon } from "lucide-react";
 
 export type GatilhoSmartflow =
   | "whatsapp_mensagem"
+  | "mensagem_canal"
   | "novo_lead"
   | "agendamento_criado"
   | "pagamento_recebido"
+  | "pagamento_vencido"
+  | "pagamento_proximo_vencimento"
   | "manual";
+
+/**
+ * Tipos de canal que podem disparar o gatilho `mensagem_canal`.
+ * Alinhado com o enum `tipoCanal` em `canais_integrados` (drizzle/schema.ts).
+ */
+export type TipoCanalMensagem =
+  | "whatsapp_qr"
+  | "whatsapp_api"
+  | "instagram"
+  | "facebook";
 
 export type TipoPasso =
   | "ia_classificar"
@@ -139,6 +152,39 @@ export interface GatilhoMeta {
   descricao: string;
 }
 
+export interface TipoCanalMeta {
+  id: TipoCanalMensagem;
+  label: string;
+  /** true = canal ainda não tem integração de entrada funcionando. */
+  emBreve?: boolean;
+}
+
+/**
+ * Configuração específica do gatilho — persistida em `configGatilhoSF` como
+ * JSON. Cada gatilho tem um shape próprio; o editor e o dispatcher fazem
+ * narrowing pelo valor de `gatilho`.
+ */
+export interface ConfigGatilhoMensagemCanal {
+  /** Canais permitidos. Vazio/ausente = aceita qualquer canal. */
+  canais?: TipoCanalMensagem[];
+}
+
+export interface ConfigGatilhoPagamentoVencido {
+  /** Dispara só se a cobrança estiver atrasada há pelo menos N dias. Default: 0 */
+  diasAtraso?: number;
+}
+
+export interface ConfigGatilhoPagamentoProximoVencimento {
+  /** Dispara se a cobrança vence em até N dias. Default: 3 */
+  diasAntes?: number;
+}
+
+export type ConfigGatilhoByTipo =
+  | { gatilho: "mensagem_canal"; config: ConfigGatilhoMensagemCanal }
+  | { gatilho: "pagamento_vencido"; config: ConfigGatilhoPagamentoVencido }
+  | { gatilho: "pagamento_proximo_vencimento"; config: ConfigGatilhoPagamentoProximoVencimento }
+  | { gatilho: Exclude<GatilhoSmartflow, "mensagem_canal" | "pagamento_vencido" | "pagamento_proximo_vencimento">; config: Record<string, unknown> };
+
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
@@ -153,11 +199,21 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
-  { id: "whatsapp_mensagem", label: "Nova mensagem WhatsApp", descricao: "Dispara quando chega mensagem no canal." },
+  { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem em qualquer canal (WhatsApp, Instagram, Facebook)." },
+  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo, específico de WhatsApp QR. Prefira 'Mensagem recebida'." },
   { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", descricao: "Dispara no webhook do Asaas." },
+  { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias." },
+  { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer." },
   { id: "novo_lead", label: "Novo lead no CRM", descricao: "Dispara quando um contato novo é criado." },
   { id: "agendamento_criado", label: "Agendamento criado", descricao: "Dispara quando booking Cal.com é confirmado." },
   { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'." },
+];
+
+export const TIPO_CANAL_META: ReadonlyArray<TipoCanalMeta> = [
+  { id: "whatsapp_qr", label: "WhatsApp QR (Baileys)" },
+  { id: "whatsapp_api", label: "WhatsApp API (Meta Cloud)" },
+  { id: "instagram", label: "Instagram", emBreve: true },
+  { id: "facebook", label: "Facebook", emBreve: true },
 ];
 
 export function getTipoPassoMeta(tipo: string): TipoPassoMeta {

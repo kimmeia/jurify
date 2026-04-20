@@ -15,7 +15,16 @@ import { createLogger } from "../_core/logger";
 
 const log = createLogger("smartflow");
 
-const GATILHOS = ["whatsapp_mensagem", "novo_lead", "agendamento_criado", "pagamento_recebido", "manual"] as const;
+const GATILHOS = [
+  "whatsapp_mensagem",
+  "mensagem_canal",
+  "novo_lead",
+  "agendamento_criado",
+  "pagamento_recebido",
+  "pagamento_vencido",
+  "pagamento_proximo_vencimento",
+  "manual",
+] as const;
 const TIPOS_PASSO = [
   "ia_classificar",
   "ia_responder",
@@ -121,7 +130,14 @@ export const smartflowRouter = router({
         .where(eq(smartflowPassos.cenarioId, cenario.id))
         .orderBy(smartflowPassos.ordem);
 
-      return { ...cenario, passos };
+      let configGatilhoParsed: Record<string, unknown> | null = null;
+      try {
+        configGatilhoParsed = cenario.configGatilho ? JSON.parse(cenario.configGatilho) : null;
+      } catch {
+        configGatilhoParsed = null;
+      }
+
+      return { ...cenario, configGatilho: configGatilhoParsed, passos };
     }),
 
   /** Cria cenário com passos */
@@ -130,6 +146,7 @@ export const smartflowRouter = router({
       nome: z.string().min(2).max(128),
       descricao: z.string().max(512).optional(),
       gatilho: z.enum(GATILHOS),
+      configGatilho: z.record(z.any()).optional(),
       passos: z.array(passoInputSchema),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -143,6 +160,7 @@ export const smartflowRouter = router({
         nome: input.nome,
         descricao: input.descricao || null,
         gatilho: input.gatilho,
+        configGatilho: input.configGatilho ? JSON.stringify(input.configGatilho) : null,
         criadoPor: ctx.user.id,
       });
       const cenarioId = (result as { insertId: number }).insertId;
@@ -171,6 +189,7 @@ export const smartflowRouter = router({
       nome: z.string().min(2).max(128),
       descricao: z.string().max(512).optional(),
       gatilho: z.enum(GATILHOS),
+      configGatilho: z.record(z.any()).optional(),
       passos: z.array(passoInputSchema),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -187,6 +206,7 @@ export const smartflowRouter = router({
           nome: input.nome,
           descricao: input.descricao || null,
           gatilho: input.gatilho,
+          configGatilho: input.configGatilho ? JSON.stringify(input.configGatilho) : null,
         })
         .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
 

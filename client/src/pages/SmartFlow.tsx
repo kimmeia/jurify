@@ -32,12 +32,41 @@ import { toast } from "sonner";
 import {
   TIPO_PASSO_META,
   GATILHO_META,
+  TIPO_CANAL_META,
   getTipoPassoMeta,
   getGatilhoMeta,
   type TipoPasso,
   type GatilhoSmartflow,
   type StatusExecucao,
 } from "@shared/smartflow-types";
+
+function resumirGatilho(c: any): string | null {
+  if (!c) return null;
+  if (c.gatilho === "mensagem_canal") {
+    let cfg: any = c.configGatilho;
+    if (typeof cfg === "string") {
+      try { cfg = JSON.parse(cfg); } catch { cfg = null; }
+    }
+    const canais = Array.isArray(cfg?.canais) ? (cfg.canais as string[]) : [];
+    if (canais.length === 0) return "Qualquer canal";
+    return canais
+      .map((k) => TIPO_CANAL_META.find((m) => m.id === k)?.label || k)
+      .join(", ");
+  }
+  if (c.gatilho === "pagamento_vencido") {
+    let cfg: any = c.configGatilho;
+    if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch { cfg = null; } }
+    const d = Number(cfg?.diasAtraso ?? 0);
+    return d > 0 ? `≥ ${d} dia(s) de atraso` : "Qualquer atraso";
+  }
+  if (c.gatilho === "pagamento_proximo_vencimento") {
+    let cfg: any = c.configGatilho;
+    if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch { cfg = null; } }
+    const d = Number(cfg?.diasAntes ?? 3);
+    return `${d} dia(s) antes`;
+  }
+  return null;
+}
 
 // Ícones por tipo de passo / gatilho (locais ao frontend).
 const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
@@ -55,7 +84,10 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
 
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   whatsapp_mensagem: MessageCircle,
+  mensagem_canal: MessageCircle,
   pagamento_recebido: DollarSign,
+  pagamento_vencido: AlertTriangle,
+  pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
   agendamento_criado: Calendar,
   manual: Play,
@@ -163,6 +195,12 @@ export default function SmartFlow() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-semibold">{c.nome}</p>
                             <Badge variant="outline" className="text-[9px] gap-1"><GIcon className="h-2.5 w-2.5" />{gatilho.label}</Badge>
+                            {(() => {
+                              const r = resumirGatilho(c);
+                              return r ? (
+                                <Badge variant="secondary" className="text-[9px]">{r}</Badge>
+                              ) : null;
+                            })()}
                             {c.ativo ? <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">Ativo</Badge> : <Badge variant="outline" className="text-[9px] text-muted-foreground">Inativo</Badge>}
                           </div>
                           {c.descricao && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.descricao}</p>}

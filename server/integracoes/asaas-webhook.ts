@@ -158,6 +158,29 @@ export function registerAsaasWebhook(app: Express) {
             log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
           }
         }
+
+        // SmartFlow: disparar cenário "pagamento_vencido" no PAYMENT_OVERDUE
+        if (body.event === "PAYMENT_OVERDUE" || payment.status === "OVERDUE") {
+          try {
+            const { dispararPagamentoVencido } = await import("../smartflow/dispatcher");
+            const [vinculo2] = await db.select().from(asaasClientes)
+              .where(and(
+                eq(asaasClientes.asaasCustomerId, payment.customer),
+                eq(asaasClientes.escritorioId, escritorioId)
+              )).limit(1);
+            await dispararPagamentoVencido(escritorioId, {
+              pagamentoId: payment.id,
+              valor: Math.round((payment.value || 0) * 100),
+              descricao: payment.description || `Cobrança ${payment.id}`,
+              vencimento: payment.dueDate,
+              clienteAsaasId: payment.customer,
+              clienteNome: vinculo2?.nome || undefined,
+              contatoId: vinculo2?.contatoId || undefined,
+            });
+          } catch (err: any) {
+            log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_vencido falhou (não bloqueia)");
+          }
+        }
       }
 
       // ─── EVENTOS DE CLIENTE ──────────────────────────────────────────

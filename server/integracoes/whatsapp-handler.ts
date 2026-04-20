@@ -1,5 +1,6 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
+import type { TipoCanalMensagem } from "../../shared/smartflow-types";
 import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
 import { obterConfigChatBot, gerarRespostaChatBot, converterHistoricoParaChatBot } from "./chatbot-openai";
 import { createLogger } from "../_core/logger";
@@ -7,6 +8,27 @@ const log = createLogger("integracoes-whatsapp-handler");
 
 /** Intervalo mínimo entre envios automáticos pro WhatsApp não detectar burst. */
 const DELAY_ENTRE_RESPOSTAS_MS = 1500;
+
+/** Converte o tipo do canal armazenado em TipoCanalMensagem (shared). */
+async function buscarTipoDoCanal(canalId: number): Promise<TipoCanalMensagem> {
+  try {
+    const { getDb } = await import("../db");
+    const { canaisIntegrados } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return "whatsapp_qr";
+    const [row] = await db
+      .select({ tipo: canaisIntegrados.tipo })
+      .from(canaisIntegrados)
+      .where(eq(canaisIntegrados.id, canalId))
+      .limit(1);
+    const tipo = row?.tipo;
+    if (tipo === "whatsapp_api" || tipo === "instagram" || tipo === "facebook") return tipo;
+    return "whatsapp_qr";
+  } catch {
+    return "whatsapp_qr";
+  }
+}
 
 export async function processarMensagemRecebida(canalId: number, escritorioId: number, msg: WhatsappMensagemRecebida) {
   if (msg.isGroup) return { contatoId: 0, conversaId: 0, mensagemId: 0 };
@@ -123,8 +145,17 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   // SmartFlow tem prioridade sobre chatbot padrão
   if (msg.tipo === "texto" && msg.conteudo) {
     try {
-      const { tentarSmartFlow } = await import("../smartflow/dispatcher");
-      const sf = await tentarSmartFlow(escritorioId, canalId, conversaId, contatoId, msg.conteudo, msg.telefone, msg.nome || "");
+      const { dispararMensagemCanal } = await import("../smartflow/dispatcher");
+      const canalTipo = await buscarTipoDoCanal(canalId);
+      const sf = await dispararMensagemCanal(escritorioId, {
+        canalTipo,
+        canalId,
+        conversaId,
+        contatoId,
+        mensagem: msg.conteudo,
+        telefone: msg.telefone,
+        nomeCliente: msg.nome || "",
+      });
       if (sf.executou) {
         // SmartFlow assumiu — envia respostas geradas.
         // Espalha os envios no tempo pra não disparar burst-protection do WhatsApp

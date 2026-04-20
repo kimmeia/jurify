@@ -1129,7 +1129,7 @@ export async function runMigrations(): Promise<void> {
 
     // SmartFlow enum updates
     try {
-      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','novo_lead','agendamento_criado','pagamento_recebido','manual') NOT NULL`);
+      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','mensagem_canal','novo_lead','agendamento_criado','pagamento_recebido','pagamento_vencido','pagamento_proximo_vencimento','manual') NOT NULL`);
       await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','calcom_horarios','calcom_agendar','whatsapp_enviar','transferir','condicional','esperar','webhook','kanban_criar_card') NOT NULL`);
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");
@@ -1138,6 +1138,9 @@ export async function runMigrations(): Promise<void> {
     // SmartFlow scheduler — coluna retomarEmExec p/ retomar passos "esperar"
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN retomarEmExec TIMESTAMP NULL`); } catch { /* exists */ }
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD INDEX idx_sfe_retomar (retomarEmExec)`); } catch { /* exists */ }
+
+    // SmartFlow configGatilhoSF — config específica do gatilho (canais, dias, etc.)
+    try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN configGatilhoSF TEXT NULL`); } catch { /* exists */ }
 
     // Kanban tables
     try {

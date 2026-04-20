@@ -1381,15 +1381,20 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
   /** Gatilho que inicia o fluxo */
   gatilho: mysqlEnum("gatilhoSF", [
     "whatsapp_mensagem",
+    "mensagem_canal",
     "novo_lead",
     "agendamento_criado",
     "pagamento_recebido",
+    "pagamento_vencido",
+    "pagamento_proximo_vencimento",
     "manual",
   ]).notNull(),
   /** Se o cenário está ativo (recebe eventos) */
   ativo: boolean("ativoSF").default(true).notNull(),
   /** Configuração geral do cenário (JSON) */
   config: text("configSF"),
+  /** Configuração específica do gatilho (JSON — canais, dias de atraso, etc.) */
+  configGatilho: text("configGatilhoSF"),
   criadoPor: int("criadoPorSF"),
   createdAt: timestamp("createdAtSF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
