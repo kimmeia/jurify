@@ -321,14 +321,17 @@ export default function SmartFlowEditor() {
   const salvando = criarMut.isPending || atualizarMut.isPending;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    // Anula o padding p-6 do <main> do AppLayout e ocupa toda a viewport
+    // (menos o header mobile h-14). Sem altura explícita o ReactFlow
+    // colapsa pra 0px e o canvas fica invisível.
+    <div className="-m-6 flex flex-col h-[calc(100vh-3.5rem)] md:h-screen bg-background">
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b bg-background">
-        <Link href="/smartflow">
-          <Button variant="ghost" size="sm" className="gap-1">
+        <Button variant="ghost" size="sm" className="gap-1" asChild>
+          <Link href="/smartflow">
             <ArrowLeft className="h-4 w-4" /> Voltar
-          </Button>
-        </Link>
+          </Link>
+        </Button>
         <div className="h-8 w-px bg-border" />
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <Input

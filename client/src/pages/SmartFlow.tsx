@@ -120,11 +120,11 @@ export default function SmartFlow() {
           {criarPgtoKanbanMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1" />}
           Pagamento → Kanban
         </Button>
-        <Link href="/smartflow/novo">
-          <Button size="sm">
+        <Button size="sm" asChild>
+          <Link href="/smartflow/novo">
             <Plus className="h-3.5 w-3.5 mr-1" /> Novo cenário
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -181,11 +181,11 @@ export default function SmartFlow() {
                               Executar
                             </Button>
                           )}
-                          <Link href={`/smartflow/${c.id}/editar`}>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Editar">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Editar" asChild>
+                            <Link href={`/smartflow/${c.id}/editar`}>
                               <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          </Link>
+                            </Link>
+                          </Button>
                           <Switch
                             checked={c.ativo}
                             onCheckedChange={(v: boolean) => toggleMut.mutate({ id: c.id, ativo: v })}
