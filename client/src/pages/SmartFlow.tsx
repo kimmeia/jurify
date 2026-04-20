@@ -55,7 +55,10 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
 
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   whatsapp_mensagem: MessageCircle,
+  mensagem_canal: MessageCircle,
   pagamento_recebido: DollarSign,
+  pagamento_vencido: AlertTriangle,
+  pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
   agendamento_criado: Calendar,
   manual: Play,

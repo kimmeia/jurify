@@ -370,4 +370,10 @@ export function iniciarJobs() {
   import("../smartflow/scheduler")
     .then(({ iniciarSchedulerSmartFlow }) => iniciarSchedulerSmartFlow())
     .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow scheduler"));
+
+  // SmartFlow cobranças scheduler — cron diário p/ pagamento_vencido e
+  // pagamento_proximo_vencimento
+  import("../smartflow/cobrancas-scheduler")
+    .then(({ iniciarCobrancasSchedulerSmartFlow }) => iniciarCobrancasSchedulerSmartFlow())
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow cobranças scheduler"));
 }

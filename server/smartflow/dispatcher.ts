@@ -18,53 +18,98 @@
 
 import { getDb } from "../db";
 import { smartflowCenarios, smartflowPassos, smartflowExecucoes } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, gte } from "drizzle-orm";
 import { executarCenario, Passo, SmartflowContexto, ExecutarCenarioResultado } from "./engine";
 import { criarExecutoresReais } from "./executores";
 import { createLogger } from "../_core/logger";
-import type { GatilhoSmartflow } from "../../shared/smartflow-types";
+import type {
+  GatilhoSmartflow,
+  TipoCanalMensagem,
+  ConfigGatilhoMensagemCanal,
+  ConfigGatilhoPagamentoVencido,
+  ConfigGatilhoPagamentoProximoVencimento,
+} from "../../shared/smartflow-types";
 
 const log = createLogger("smartflow-dispatcher");
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+interface CenarioCarregado {
+  cenarioId: number;
+  nome: string;
+  passos: Passo[];
+  gatilho: GatilhoSmartflow;
+  configGatilho: Record<string, unknown>;
+}
+
+function parseConfigGatilho(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 async function carregarCenarioAtivo(
   escritorioId: number,
   gatilho: GatilhoSmartflow,
-): Promise<{ cenarioId: number; nome: string; passos: Passo[] } | null> {
-  const db = await getDb();
-  if (!db) return null;
+): Promise<CenarioCarregado | null> {
+  const todos = await carregarCenariosAtivos(escritorioId, [gatilho]);
+  return todos[0] ?? null;
+}
 
-  const [cenario] = await db
+/**
+ * Carrega todos os cenários ativos do escritório que casam com os gatilhos
+ * informados. Usado pelos dispatchers que podem ter múltiplos cenários
+ * concorrentes (ex: mensagem_canal com filtros de canal diferentes).
+ */
+async function carregarCenariosAtivos(
+  escritorioId: number,
+  gatilhos: GatilhoSmartflow[],
+): Promise<CenarioCarregado[]> {
+  const db = await getDb();
+  if (!db || gatilhos.length === 0) return [];
+
+  const cenarios = await db
     .select()
     .from(smartflowCenarios)
     .where(
       and(
         eq(smartflowCenarios.escritorioId, escritorioId),
-        eq(smartflowCenarios.gatilho, gatilho),
+        inArray(smartflowCenarios.gatilho, gatilhos),
         eq(smartflowCenarios.ativo, true),
       ),
-    )
-    .limit(1);
+    );
 
-  if (!cenario) return null;
+  if (cenarios.length === 0) return [];
 
-  const passos = await db
-    .select()
-    .from(smartflowPassos)
-    .where(eq(smartflowPassos.cenarioId, cenario.id))
-    .orderBy(smartflowPassos.ordem);
+  const resultado: CenarioCarregado[] = [];
+  for (const cenario of cenarios) {
+    const passos = await db
+      .select()
+      .from(smartflowPassos)
+      .where(eq(smartflowPassos.cenarioId, cenario.id))
+      .orderBy(smartflowPassos.ordem);
+    if (passos.length === 0) continue;
 
-  if (passos.length === 0) return null;
+    const passosEngine: Passo[] = passos.map((p) => ({
+      id: p.id,
+      ordem: p.ordem,
+      tipo: p.tipo,
+      config: p.config ? JSON.parse(p.config) : {},
+    }));
 
-  const passosEngine: Passo[] = passos.map((p) => ({
-    id: p.id,
-    ordem: p.ordem,
-    tipo: p.tipo,
-    config: p.config ? JSON.parse(p.config) : {},
-  }));
-
-  return { cenarioId: cenario.id, nome: cenario.nome, passos: passosEngine };
+    resultado.push({
+      cenarioId: cenario.id,
+      nome: cenario.nome,
+      passos: passosEngine,
+      gatilho: cenario.gatilho as GatilhoSmartflow,
+      configGatilho: parseConfigGatilho(cenario.configGatilho),
+    });
+  }
+  return resultado;
 }
 
 async function carregarCenarioPorId(
@@ -152,7 +197,15 @@ async function executarCenarioPorGatilho(
 ): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   const cenario = await carregarCenarioAtivo(escritorioId, gatilho);
   if (!cenario) return { executou: false, respostas: [] };
+  return executarCenarioCarregado(escritorioId, cenario, contexto, refs);
+}
 
+async function executarCenarioCarregado(
+  escritorioId: number,
+  cenario: CenarioCarregado,
+  contexto: SmartflowContexto,
+  refs?: { contatoId?: number; conversaId?: number },
+): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
   const execId = await criarExecucao(escritorioId, cenario.cenarioId, contexto, refs);
   if (!execId) return { executou: false, respostas: [] };
 
@@ -162,8 +215,8 @@ async function executarCenarioPorGatilho(
   await finalizarExecucao(execId, resultado);
 
   log.info(
-    { cenarioId: cenario.cenarioId, execId, gatilho, passos: resultado.passosExecutados, sucesso: resultado.sucesso },
-    `SmartFlow: cenário "${cenario.nome}" executado (${gatilho})`,
+    { cenarioId: cenario.cenarioId, execId, gatilho: cenario.gatilho, passos: resultado.passosExecutados, sucesso: resultado.sucesso },
+    `SmartFlow: cenário "${cenario.nome}" executado (${cenario.gatilho})`,
   );
 
   return { executou: true, respostas: resultado.respostas, execId };
@@ -228,9 +281,254 @@ export async function dispararPagamentoRecebido(
 }
 
 /**
- * Tenta processar uma mensagem WhatsApp via SmartFlow.
- * Retorna executou=true se um cenário foi executado — nesse caso o
- * chatbot padrão NÃO deve responder (SmartFlow assumiu).
+ * Checa se já existe execução do cenário `cenarioId` cujo contexto referencia
+ * o `pagamentoId` informado nas últimas 24h. Evita disparos duplicados quando
+ * o webhook do Asaas chega simultaneamente ao ciclo do cobrancas-scheduler.
+ */
+async function jaDisparadoPagamento(
+  cenarioId: number,
+  pagamentoId: string,
+  janelaHoras = 24,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const desde = new Date(Date.now() - janelaHoras * 60 * 60 * 1000);
+  const execs = await db
+    .select({ contexto: smartflowExecucoes.contexto })
+    .from(smartflowExecucoes)
+    .where(
+      and(
+        eq(smartflowExecucoes.cenarioId, cenarioId),
+        gte(smartflowExecucoes.createdAt, desde),
+      ),
+    );
+  // O contexto é JSON serializado — uma checagem por substring basta
+  // pra dedupe, não precisa parsear.
+  const alvo = `"pagamentoId":"${pagamentoId}"`;
+  return execs.some((r) => (r.contexto || "").includes(alvo));
+}
+
+function diasEntre(a: Date, b: Date): number {
+  const ms = a.getTime() - b.getTime();
+  return Math.floor(ms / (24 * 60 * 60 * 1000));
+}
+
+function parseVencimento(iso: string): Date | null {
+  // Asaas envia `dueDate` como `YYYY-MM-DD`. new Date("YYYY-MM-DD") é UTC;
+  // adicionamos T00:00 local pra evitar off-by-one em timezone -03:00.
+  if (!iso || typeof iso !== "string") return null;
+  const d = new Date(`${iso}T00:00:00`);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Dispara cenários com gatilho `pagamento_vencido`.
+ * Chamado pelo webhook do Asaas (PAYMENT_OVERDUE) e pelo cobrancas-scheduler.
+ *
+ * Cada cenário pode configurar `configGatilho.diasAtraso` (mínimo de atraso
+ * em dias). Só dispara se o atraso atual for maior ou igual.
+ * Dedupe por (cenarioId, pagamentoId) na janela de 24h.
+ */
+export async function dispararPagamentoVencido(
+  escritorioId: number,
+  params: {
+    pagamentoId: string;
+    valor: number;
+    descricao: string;
+    vencimento: string;
+    clienteNome?: string;
+    clienteAsaasId?: string;
+    contatoId?: number;
+  },
+): Promise<{ executou: boolean; cenariosDisparados: number }> {
+  try {
+    const cenarios = await carregarCenariosAtivos(escritorioId, ["pagamento_vencido"]);
+    if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
+
+    const vencimento = parseVencimento(params.vencimento);
+    const diasAtrasoAtual = vencimento ? diasEntre(new Date(), vencimento) : 0;
+
+    let disparados = 0;
+    for (const c of cenarios) {
+      const cfg = c.configGatilho as ConfigGatilhoPagamentoVencido;
+      const minAtraso = Math.max(0, Number(cfg.diasAtraso ?? 0));
+      if (diasAtrasoAtual < minAtraso) continue;
+
+      if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) {
+        log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId }, "SmartFlow: pagamento_vencido já disparado — skip");
+        continue;
+      }
+
+      const contexto: SmartflowContexto = {
+        mensagem: `Cobrança vencida: ${params.descricao}`,
+        pagamentoId: params.pagamentoId,
+        pagamentoValor: params.valor,
+        pagamentoDescricao: params.descricao,
+        vencimento: params.vencimento,
+        diasAtraso: diasAtrasoAtual,
+        nomeCliente: params.clienteNome,
+        contatoId: params.contatoId,
+      };
+
+      await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
+      disparados++;
+    }
+    return { executou: disparados > 0, cenariosDisparados: disparados };
+  } catch (err: any) {
+    log.error({ err: err.message }, "SmartFlow: erro em dispararPagamentoVencido");
+    return { executou: false, cenariosDisparados: 0 };
+  }
+}
+
+/**
+ * Dispara cenários com gatilho `pagamento_proximo_vencimento`.
+ * Chamado pelo cobrancas-scheduler (cron diário).
+ *
+ * Cada cenário pode configurar `configGatilho.diasAntes` (antecedência em
+ * dias). Só dispara se `diasAteVencimento <= diasAntes`. Default: 3 dias.
+ * Dedupe por (cenarioId, pagamentoId) na janela de 24h.
+ */
+export async function dispararProximoVencimento(
+  escritorioId: number,
+  params: {
+    pagamentoId: string;
+    valor: number;
+    descricao: string;
+    vencimento: string;
+    clienteNome?: string;
+    contatoId?: number;
+  },
+): Promise<{ executou: boolean; cenariosDisparados: number }> {
+  try {
+    const cenarios = await carregarCenariosAtivos(escritorioId, ["pagamento_proximo_vencimento"]);
+    if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
+
+    const vencimento = parseVencimento(params.vencimento);
+    if (!vencimento) return { executou: false, cenariosDisparados: 0 };
+    const diasAteVencer = diasEntre(vencimento, new Date());
+    if (diasAteVencer < 0) return { executou: false, cenariosDisparados: 0 }; // já venceu
+
+    let disparados = 0;
+    for (const c of cenarios) {
+      const cfg = c.configGatilho as ConfigGatilhoPagamentoProximoVencimento;
+      const diasAntes = Math.max(0, Number(cfg.diasAntes ?? 3));
+      if (diasAteVencer > diasAntes) continue;
+
+      if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) continue;
+
+      const contexto: SmartflowContexto = {
+        mensagem: `Cobrança vence em ${diasAteVencer} dia(s): ${params.descricao}`,
+        pagamentoId: params.pagamentoId,
+        pagamentoValor: params.valor,
+        pagamentoDescricao: params.descricao,
+        vencimento: params.vencimento,
+        diasAteVencer,
+        nomeCliente: params.clienteNome,
+        contatoId: params.contatoId,
+      };
+
+      await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
+      disparados++;
+    }
+    return { executou: disparados > 0, cenariosDisparados: disparados };
+  } catch (err: any) {
+    log.error({ err: err.message }, "SmartFlow: erro em dispararProximoVencimento");
+    return { executou: false, cenariosDisparados: 0 };
+  }
+}
+
+/**
+ * Dispara cenários quando chega uma mensagem em qualquer canal (WhatsApp QR,
+ * WhatsApp Cloud, Instagram, Facebook).
+ *
+ * Seleção de cenário:
+ *   1. Cenários com gatilho `mensagem_canal` cujo `configGatilho.canais`
+ *      inclua o canalTipo (ou esteja vazio = aceita qualquer canal).
+ *   2. Se nenhum `mensagem_canal` bater e `canalTipo === 'whatsapp_qr'`,
+ *      faz fallback para cenários `whatsapp_mensagem` (backward-compat).
+ *
+ * Retorna `executou=true` se algum cenário rodou — nesse caso o chatbot
+ * padrão NÃO deve responder.
+ */
+export async function dispararMensagemCanal(
+  escritorioId: number,
+  params: {
+    canalTipo: TipoCanalMensagem;
+    canalId: number;
+    conversaId: number;
+    contatoId: number;
+    mensagem: string;
+    telefone: string;
+    nomeCliente: string;
+  },
+): Promise<{ executou: boolean; respostas: string[]; execId?: number }> {
+  const db = await getDb();
+  if (!db) return { executou: false, respostas: [] };
+
+  try {
+    // Humano assumiu a conversa? Ignora SmartFlow.
+    if (params.conversaId) {
+      const { conversas } = await import("../../drizzle/schema");
+      const [conv] = await db
+        .select({ status: conversas.status })
+        .from(conversas)
+        .where(eq(conversas.id, params.conversaId))
+        .limit(1);
+      if (conv?.status === "em_atendimento") {
+        log.debug({ conversaId: params.conversaId }, "SmartFlow: conversa em_atendimento — ignorando");
+        return { executou: false, respostas: [] };
+      }
+    }
+
+    const contexto: SmartflowContexto = {
+      mensagem: params.mensagem,
+      nomeCliente: params.nomeCliente,
+      telefoneCliente: params.telefone,
+      contatoId: params.contatoId,
+      conversaId: params.conversaId,
+      canalId: params.canalId,
+      canalTipo: params.canalTipo,
+    };
+
+    // 1. Tenta cenários `mensagem_canal` com filtro de canal
+    const cenariosMC = await carregarCenariosAtivos(escritorioId, ["mensagem_canal"]);
+    const aceitos = cenariosMC.filter((c) => {
+      const cfg = c.configGatilho as ConfigGatilhoMensagemCanal;
+      const canais = Array.isArray(cfg.canais) ? cfg.canais : [];
+      if (canais.length === 0) return true;
+      return canais.includes(params.canalTipo);
+    });
+
+    if (aceitos.length > 0) {
+      const escolhido = aceitos[0];
+      const r = await executarCenarioCarregado(escritorioId, escolhido, contexto, {
+        contatoId: params.contatoId,
+        conversaId: params.conversaId,
+      });
+      return { executou: true, respostas: r.respostas, execId: r.execId };
+    }
+
+    // 2. Fallback: cenário antigo `whatsapp_mensagem` só pra WhatsApp QR
+    if (params.canalTipo === "whatsapp_qr") {
+      const r = await executarCenarioPorGatilho(
+        escritorioId,
+        "whatsapp_mensagem",
+        contexto,
+        { contatoId: params.contatoId, conversaId: params.conversaId },
+      );
+      return { executou: r.executou, respostas: r.respostas, execId: r.execId };
+    }
+
+    return { executou: false, respostas: [] };
+  } catch (err: any) {
+    log.error({ err: err.message, escritorioId, canalTipo: params.canalTipo }, "SmartFlow: erro em dispararMensagemCanal");
+    return { executou: false, respostas: [] };
+  }
+}
+
+/**
+ * @deprecated Use `dispararMensagemCanal` com `canalTipo` explícito.
+ * Mantido por compatibilidade: assume canalTipo='whatsapp_qr'.
  */
 export async function tentarSmartFlow(
   escritorioId: number,
@@ -241,43 +539,15 @@ export async function tentarSmartFlow(
   telefone: string,
   nomeCliente: string,
 ): Promise<{ executou: boolean; respostas: string[] }> {
-  const db = await getDb();
-  if (!db) return { executou: false, respostas: [] };
-
-  try {
-    // Se a conversa está "em_atendimento" (humano assumiu), NÃO executa SmartFlow
-    if (conversaId) {
-      const { conversas } = await import("../../drizzle/schema");
-      const [conv] = await db
-        .select({ status: conversas.status })
-        .from(conversas)
-        .where(eq(conversas.id, conversaId))
-        .limit(1);
-      if (conv?.status === "em_atendimento") {
-        log.debug({ conversaId }, "SmartFlow: conversa em_atendimento (humano) — ignorando");
-        return { executou: false, respostas: [] };
-      }
-    }
-
-    const contexto: SmartflowContexto = {
-      mensagem,
-      nomeCliente,
-      telefoneCliente: telefone,
-      contatoId,
-      conversaId,
-      canalId,
-    };
-
-    const r = await executarCenarioPorGatilho(escritorioId, "whatsapp_mensagem", contexto, {
-      contatoId,
-      conversaId,
-    });
-
-    return { executou: r.executou, respostas: r.respostas };
-  } catch (err: any) {
-    log.error({ err: err.message, escritorioId }, "SmartFlow: erro no dispatcher");
-    return { executou: false, respostas: [] };
-  }
+  return dispararMensagemCanal(escritorioId, {
+    canalTipo: "whatsapp_qr",
+    canalId,
+    conversaId,
+    contatoId,
+    mensagem,
+    telefone,
+    nomeCliente,
+  });
 }
 
 /**
