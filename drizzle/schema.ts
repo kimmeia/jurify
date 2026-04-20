@@ -1442,6 +1442,12 @@ export const smartflowExecucoes = mysqlTable("smartflow_execucoes", {
   contexto: text("contextoExec"),
   /** Mensagem de erro (se status=erro) */
   erro: varchar("erroExec", { length: 512 }),
+  /**
+   * Quando a execução está em passo "esperar", este timestamp indica
+   * quando o scheduler deve retomar do próximo passo. Null = não está
+   * aguardando delay.
+   */
+  retomarEm: timestamp("retomarEmExec"),
   createdAt: timestamp("createdAtExec").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtExec").defaultNow().onUpdateNow().notNull(),
 });

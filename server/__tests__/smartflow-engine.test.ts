@@ -420,4 +420,54 @@ describe("SmartFlow Engine", () => {
       expect(resultado.contexto.intencao).toBeDefined();
     });
   });
+
+  describe("pausa e retomada (esperar)", () => {
+    it("passo esperar marca contexto com flags de retomada e não executa passos seguintes", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: {} },
+        { id: 2, ordem: 2, tipo: "esperar", config: { delayMinutos: 15 } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", config: { template: "olá {nome}" } },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.passosExecutados).toBe(2); // parou no esperar
+      expect(resultado.contexto.esperando).toBe(true);
+      expect(resultado.contexto.delayMinutos).toBe(15);
+    });
+
+    it("retomada com passos restantes executa a partir do próximo sem re-rodar anteriores", async () => {
+      // Simula o caminho do scheduler: carrega os passos restantes e roda
+      // o engine com o contexto que veio do banco (sem flags de espera).
+      const exec = criarMockExecutores();
+      const todosPassos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: {} },
+        { id: 2, ordem: 2, tipo: "esperar", config: { delayMinutos: 15 } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", config: { template: "oi {nome}" } },
+      ];
+      const passoAtual = 2; // dois passos já rodaram
+      const restantes = todosPassos.slice().sort((a, b) => a.ordem - b.ordem).slice(passoAtual);
+      expect(restantes).toHaveLength(1);
+
+      const contextoSalvo = { mensagem: "oi", respostaIA: "ok", nomeCliente: "Maria" };
+
+      const resultado = await executarCenario(restantes, contextoSalvo, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.passosExecutados).toBe(1);
+      expect(resultado.respostas[0]).toContain("Maria");
+    });
+
+    it("esperar sem delayMinutos configurado usa default 5", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "esperar", config: {} },
+      ];
+      const resultado = await executarCenario(passos, {}, exec);
+      expect(resultado.contexto.delayMinutos).toBe(5);
+      expect(resultado.contexto.esperando).toBe(true);
+    });
+  });
 });

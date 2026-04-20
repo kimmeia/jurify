@@ -1135,6 +1135,10 @@ export async function runMigrations(): Promise<void> {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");
     }
 
+    // SmartFlow scheduler — coluna retomarEmExec p/ retomar passos "esperar"
+    try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN retomarEmExec TIMESTAMP NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_execucoes ADD INDEX idx_sfe_retomar (retomarEmExec)`); } catch { /* exists */ }
+
     // Kanban tables
     try {
       await connection.query(`CREATE TABLE IF NOT EXISTS kanban_funis (id INT NOT NULL AUTO_INCREMENT, escritorioIdKF INT NOT NULL, nomeKF VARCHAR(128) NOT NULL, descricaoKF VARCHAR(512), corKF VARCHAR(16), criadoPorKF INT, createdAtKF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAtKF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_kf_esc (escritorioIdKF)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
