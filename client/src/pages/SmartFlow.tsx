@@ -26,6 +26,7 @@ import {
   ArrowRight, Play, Bot, PhoneCall, Clock, GitBranch,
   Webhook, Users, CheckCircle2, Activity, AlertTriangle, XCircle,
   LayoutGrid, DollarSign, Pencil, FileText,
+  CalendarCheck, CalendarX, CalendarClock, CalendarSearch,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -74,6 +75,9 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_responder: Bot,
   calcom_horarios: Calendar,
   calcom_agendar: CheckCircle2,
+  calcom_listar: CalendarSearch,
+  calcom_cancelar: CalendarX,
+  calcom_remarcar: CalendarClock,
   whatsapp_enviar: MessageCircle,
   transferir: PhoneCall,
   condicional: GitBranch,
@@ -89,7 +93,9 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   pagamento_vencido: AlertTriangle,
   pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
-  agendamento_criado: Calendar,
+  agendamento_criado: CalendarCheck,
+  agendamento_cancelado: CalendarX,
+  agendamento_remarcado: CalendarClock,
   manual: Play,
 };
 

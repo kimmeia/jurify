@@ -1384,6 +1384,8 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
     "mensagem_canal",
     "novo_lead",
     "agendamento_criado",
+    "agendamento_cancelado",
+    "agendamento_remarcado",
     "pagamento_recebido",
     "pagamento_vencido",
     "pagamento_proximo_vencimento",
@@ -1415,6 +1417,9 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "ia_responder",         // IA gera resposta contextual
     "calcom_horarios",      // busca horários disponíveis no Cal.com
     "calcom_agendar",       // cria agendamento no Cal.com
+    "calcom_listar",        // lista bookings do Cal.com (contexto)
+    "calcom_cancelar",      // cancela booking no Cal.com
+    "calcom_remarcar",      // reagenda booking no Cal.com
     "whatsapp_enviar",      // envia mensagem no WhatsApp
     "transferir",           // transfere pra humano
     "condicional",          // if/else baseado em condição

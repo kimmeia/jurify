@@ -13,6 +13,42 @@ import { createLogger } from "../_core/logger";
 const log = createLogger("smartflow-executores");
 
 /**
+ * Resolve o client Cal.com para um escritório — lê o canal com `tipo=calcom`,
+ * descriptografa config e devolve um `CalcomClient` pronto. Retorna `null`
+ * se o escritório não tem canal configurado.
+ */
+async function obterCalcomClient(escritorioId: number, defaultDuration = 30) {
+  const { getDb } = await import("../db");
+  const { canaisIntegrados } = await import("../../drizzle/schema");
+  const { eq, and, or: orOp, like } = await import("drizzle-orm");
+  const { decryptConfig } = await import("../escritorio/crypto-utils");
+  const db = await getDb();
+  if (!db) return null;
+
+  const [canal] = await db
+    .select()
+    .from(canaisIntegrados)
+    .where(
+      and(
+        eq(canaisIntegrados.escritorioId, escritorioId),
+        orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%")),
+      ),
+    )
+    .limit(1);
+
+  if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) return null;
+  const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+  if (!cfg?.apiKey) return null;
+
+  const { CalcomClient } = await import("../integracoes/calcom-client");
+  return new CalcomClient({
+    apiKey: cfg.apiKey,
+    baseUrl: cfg.baseUrl || "https://api.cal.com/v2",
+    defaultDuration,
+  });
+}
+
+/**
  * Cria executores reais para um escritório específico.
  */
 export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
@@ -112,23 +148,8 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
     async buscarHorarios(duracao: number): Promise<string[]> {
       try {
-        const { getDb } = await import("../db");
-        const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and, or: orOp, like } = await import("drizzle-orm");
-        const { decryptConfig } = await import("../escritorio/crypto-utils");
-        const db = await getDb();
-        if (!db) return [];
-
-        const [canal] = await db.select().from(canaisIntegrados)
-          .where(and(eq(canaisIntegrados.escritorioId, escritorioId), orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%"))))
-          .limit(1);
-
-        if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) return [];
-        const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-        if (!cfg?.apiKey) return [];
-
-        const { CalcomClient } = await import("../integracoes/calcom-client");
-        const client = new CalcomClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl || "https://api.cal.com/v2", defaultDuration: duracao });
+        const client = await obterCalcomClient(escritorioId, duracao);
+        if (!client) return [];
         // Busca event types primeiro pra pegar o ID
         const eventTypes = await client.listarEventTypes();
         if (eventTypes.length === 0) return [];
@@ -151,25 +172,9 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
     async criarAgendamento(horario: string, nome: string, email: string): Promise<string> {
       try {
-        const { getDb } = await import("../db");
-        const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and, or: orOp, like } = await import("drizzle-orm");
-        const { decryptConfig } = await import("../escritorio/crypto-utils");
-        const db = await getDb();
-        if (!db) throw new Error("DB indisponível");
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) throw new Error("Cal.com não configurado");
 
-        const [canal] = await db.select().from(canaisIntegrados)
-          .where(and(eq(canaisIntegrados.escritorioId, escritorioId), orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%"))))
-          .limit(1);
-
-        if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) throw new Error("Cal.com não configurado");
-        const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-        if (!cfg?.apiKey) throw new Error("API Key Cal.com não encontrada");
-
-        const { CalcomClient } = await import("../integracoes/calcom-client");
-        const client = new CalcomClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl || "https://api.cal.com/v2", defaultDuration: 30 });
-
-        // Busca event types pra pegar o ID
         const eventTypes = await client.listarEventTypes();
         if (eventTypes.length === 0) throw new Error("Nenhum tipo de evento configurado no Cal.com");
 
@@ -186,6 +191,56 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao criar agendamento Cal.com");
         throw err;
+      }
+    },
+
+    async listarBookings(params) {
+      try {
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) return [];
+        const bookings = await client.listarBookings({ status: params?.status || "upcoming" });
+        return bookings.map((b) => ({
+          id: b.id,
+          titulo: b.title,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          status: b.status,
+          attendeeNome: b.attendees?.[0]?.name,
+          attendeeEmail: b.attendees?.[0]?.email,
+        }));
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao listar bookings Cal.com");
+        return [];
+      }
+    },
+
+    async cancelarBooking(bookingId, motivo) {
+      try {
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) return false;
+        const id = Number(bookingId);
+        if (Number.isNaN(id)) throw new Error(`bookingId inválido: ${bookingId}`);
+        const ok = await client.cancelarBooking(id, motivo);
+        if (ok) log.info({ bookingId: id }, "SmartFlow: booking cancelado no Cal.com");
+        return ok;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao cancelar booking Cal.com");
+        return false;
+      }
+    },
+
+    async reagendarBooking(bookingId, novoHorario, motivo) {
+      try {
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) return false;
+        const id = Number(bookingId);
+        if (Number.isNaN(id)) throw new Error(`bookingId inválido: ${bookingId}`);
+        const res = await client.reagendarBooking(id, { start: novoHorario, reason: motivo });
+        if (res) log.info({ bookingId: id, novoHorario }, "SmartFlow: booking reagendado no Cal.com");
+        return !!res;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao reagendar booking Cal.com");
+        return false;
       }
     },
 

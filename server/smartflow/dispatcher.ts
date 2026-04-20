@@ -611,6 +611,78 @@ export async function dispararAgendamentoCriado(
 }
 
 /**
+ * Dispara cenários com gatilho `agendamento_cancelado`.
+ * Chamado pelo webhook do Cal.com em BOOKING_CANCELLED.
+ */
+export async function dispararAgendamentoCancelado(
+  escritorioId: number,
+  params: {
+    bookingId: string | number;
+    titulo?: string;
+    startTime?: string;
+    endTime?: string;
+    participanteNome?: string;
+    participanteEmail?: string;
+    organizadorEmail?: string;
+    motivo?: string;
+  },
+): Promise<{ executou: boolean }> {
+  try {
+    const contexto: SmartflowContexto = {
+      mensagem: `Agendamento cancelado: ${params.titulo || ""}`.trim(),
+      agendamentoId: String(params.bookingId),
+      horarioEscolhido: params.startTime,
+      agendamentoFim: params.endTime,
+      nomeCliente: params.participanteNome,
+      emailCliente: params.participanteEmail,
+      organizadorEmail: params.organizadorEmail,
+      motivoCancelamento: params.motivo,
+    };
+    const r = await executarCenarioPorGatilho(escritorioId, "agendamento_cancelado", contexto);
+    return { executou: r.executou };
+  } catch (err: any) {
+    log.error({ err: err.message }, "SmartFlow: erro em agendamento_cancelado");
+    return { executou: false };
+  }
+}
+
+/**
+ * Dispara cenários com gatilho `agendamento_remarcado`.
+ * Chamado pelo webhook do Cal.com em BOOKING_RESCHEDULED.
+ */
+export async function dispararAgendamentoRemarcado(
+  escritorioId: number,
+  params: {
+    bookingId: string | number;
+    titulo?: string;
+    startTimeNovo?: string;
+    startTimeAntigo?: string;
+    endTimeNovo?: string;
+    participanteNome?: string;
+    participanteEmail?: string;
+    organizadorEmail?: string;
+  },
+): Promise<{ executou: boolean }> {
+  try {
+    const contexto: SmartflowContexto = {
+      mensagem: `Agendamento remarcado: ${params.titulo || ""}`.trim(),
+      agendamentoId: String(params.bookingId),
+      horarioEscolhido: params.startTimeNovo,
+      horarioAnterior: params.startTimeAntigo,
+      agendamentoFim: params.endTimeNovo,
+      nomeCliente: params.participanteNome,
+      emailCliente: params.participanteEmail,
+      organizadorEmail: params.organizadorEmail,
+    };
+    const r = await executarCenarioPorGatilho(escritorioId, "agendamento_remarcado", contexto);
+    return { executou: r.executou };
+  } catch (err: any) {
+    log.error({ err: err.message }, "SmartFlow: erro em agendamento_remarcado");
+    return { executou: false };
+  }
+}
+
+/**
  * Execução manual — chamada pelo botão "Executar agora" no frontend.
  * Diferente dos outros: precisa de cenarioId (não descobre por gatilho)
  * e aceita contexto arbitrário do usuário.

@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Brain, Bot, Calendar, CheckCircle2, Clock, DollarSign,
   GitBranch, LayoutGrid, Loader2, MessageCircle, PhoneCall, Play,
-  Plus, Save, Users, Webhook, Zap,
+  Plus, Save, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,9 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_responder: Bot,
   calcom_horarios: Calendar,
   calcom_agendar: CheckCircle2,
+  calcom_listar: CalendarSearch,
+  calcom_cancelar: CalendarX,
+  calcom_remarcar: CalendarClock,
   whatsapp_enviar: MessageCircle,
   transferir: PhoneCall,
   condicional: GitBranch,
@@ -88,7 +91,9 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   pagamento_vencido: AlertTriangle,
   pagamento_proximo_vencimento: Clock,
   novo_lead: Users,
-  agendamento_criado: Calendar,
+  agendamento_criado: CalendarCheck,
+  agendamento_cancelado: CalendarX,
+  agendamento_remarcado: CalendarClock,
   manual: Play,
 };
 
@@ -201,6 +206,14 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       return typeof config.prompt === "string" ? truncar(config.prompt, 60) : "";
     case "calcom_horarios":
       return config.duracao ? `${config.duracao} min` : "";
+    case "calcom_listar":
+      return config.status ? String(config.status) : "upcoming";
+    case "calcom_cancelar":
+      return typeof config.bookingId === "string" && config.bookingId ? `#${config.bookingId}` : "usa {agendamentoId}";
+    case "calcom_remarcar":
+      return typeof config.novoHorario === "string" && config.novoHorario
+        ? truncar(String(config.novoHorario), 30)
+        : "usa {horarioEscolhido}";
     case "whatsapp_enviar":
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
     case "condicional": {
@@ -904,6 +917,82 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
         <p className="text-xs text-muted-foreground">
           Confirma o horário escolhido no Cal.com. Requer que exista um passo <strong>Buscar horários</strong> antes.
         </p>
+      );
+    case "calcom_listar":
+      return (
+        <div className="space-y-2">
+          <div>
+            <Label className="text-xs">Status</Label>
+            <Select
+              value={String(cfg.status || "upcoming")}
+              onValueChange={(v) => onChange({ status: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="upcoming">Próximos</SelectItem>
+                <SelectItem value="past">Passados</SelectItem>
+                <SelectItem value="cancelled">Cancelados</SelectItem>
+                <SelectItem value="unconfirmed">Não confirmados</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              A lista de agendamentos vai pro contexto como <code>bookings</code> (quantidade em <code>bookingsQuantidade</code>).
+            </p>
+          </div>
+        </div>
+      );
+    case "calcom_cancelar":
+      return (
+        <div className="space-y-2">
+          <div>
+            <Label className="text-xs">ID do agendamento (opcional)</Label>
+            <Input
+              value={String(cfg.bookingId || "")}
+              onChange={(e) => onChange({ bookingId: e.target.value })}
+              placeholder="Deixe vazio para usar {agendamentoId} do contexto"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Motivo (opcional)</Label>
+            <Input
+              value={String(cfg.motivo || "")}
+              onChange={(e) => onChange({ motivo: e.target.value })}
+              placeholder="Ex: Cliente solicitou cancelamento"
+            />
+          </div>
+        </div>
+      );
+    case "calcom_remarcar":
+      return (
+        <div className="space-y-2">
+          <div>
+            <Label className="text-xs">ID do agendamento (opcional)</Label>
+            <Input
+              value={String(cfg.bookingId || "")}
+              onChange={(e) => onChange({ bookingId: e.target.value })}
+              placeholder="Deixe vazio para usar {agendamentoId} do contexto"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Novo horário (opcional)</Label>
+            <Input
+              value={String(cfg.novoHorario || "")}
+              onChange={(e) => onChange({ novoHorario: e.target.value })}
+              placeholder="ISO 8601. Vazio usa {horarioEscolhido} do contexto"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Use um passo <strong>Buscar horários</strong> antes para popular <code>horarioEscolhido</code>.
+            </p>
+          </div>
+          <div>
+            <Label className="text-xs">Motivo (opcional)</Label>
+            <Input
+              value={String(cfg.motivo || "")}
+              onChange={(e) => onChange({ motivo: e.target.value })}
+              placeholder="Ex: Cliente pediu para remarcar"
+            />
+          </div>
+        </div>
       );
     case "whatsapp_enviar":
       return (
