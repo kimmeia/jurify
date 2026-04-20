@@ -408,6 +408,196 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("branching multi-saída (condicional com proximoSe)", () => {
+    it("segue o ramo da primeira condição que bate", async () => {
+      // intencao=agendar → ramo A (resposta1)
+      // intencao=duvida → ramo B (resposta2)
+      // else → fallback (resposta3)
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "condicional",
+          clienteId: "cond-node",
+          proximoSe: {
+            cond_a: "ramo-a",
+            cond_b: "ramo-b",
+            fallback: "ramo-c",
+          },
+          config: {
+            condicoes: [
+              { id: "a", campo: "intencao", operador: "igual", valor: "agendar" },
+              { id: "b", campo: "intencao", operador: "igual", valor: "duvida" },
+            ],
+          },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "ramo-a",
+          config: { template: "caminho-A" },
+        },
+        {
+          id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "ramo-b",
+          config: { template: "caminho-B" },
+        },
+        {
+          id: 4, ordem: 4, tipo: "whatsapp_enviar", clienteId: "ramo-c",
+          config: { template: "caminho-C" },
+        },
+      ];
+
+      const rA = await executarCenario(passos, { intencao: "agendar" }, exec);
+      expect(rA.respostas.join("|")).toBe("caminho-A");
+
+      const rB = await executarCenario(passos, { intencao: "duvida" }, exec);
+      expect(rB.respostas.join("|")).toBe("caminho-B");
+
+      const rC = await executarCenario(passos, { intencao: "xxx" }, exec);
+      expect(rC.respostas.join("|")).toBe("caminho-C");
+    });
+
+    it("ramo sem target termina o fluxo sem erro", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_a: "alvo-inexistente" },
+          config: {
+            condicoes: [{ id: "a", campo: "x", operador: "igual", valor: "y" }],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "outro", config: { template: "NAO-DEVE" } },
+      ];
+
+      const r = await executarCenario(passos, { x: "y" }, exec);
+      expect(r.sucesso).toBe(true);
+      // O ramo `cond_a` aponta pra alvo inexistente — walker encerra.
+      expect(r.respostas).toHaveLength(0);
+    });
+
+    it("condicional aninhada: ramo leva a outra condicional", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_pagou: "c2", fallback: "fim-sem-pagar" },
+          config: {
+            condicoes: [{ id: "pagou", campo: "pago", operador: "verdadeiro" }],
+          },
+        },
+        {
+          id: 2, ordem: 2, tipo: "condicional", clienteId: "c2",
+          proximoSe: { cond_vip: "vip", fallback: "comum" },
+          config: {
+            condicoes: [{ id: "vip", campo: "valorTotalCliente", operador: "maior", valor: "100000" }],
+          },
+        },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "vip", config: { template: "VIP" } },
+        { id: 4, ordem: 4, tipo: "whatsapp_enviar", clienteId: "comum", config: { template: "COMUM" } },
+        { id: 5, ordem: 5, tipo: "whatsapp_enviar", clienteId: "fim-sem-pagar", config: { template: "NAO-PAGOU" } },
+      ];
+
+      const rVip = await executarCenario(passos, { pago: true, valorTotalCliente: 200000 }, exec);
+      expect(rVip.respostas.join("|")).toBe("VIP");
+
+      const rComum = await executarCenario(passos, { pago: true, valorTotalCliente: 50000 }, exec);
+      expect(rComum.respostas.join("|")).toBe("COMUM");
+
+      const rSemPagar = await executarCenario(passos, { pago: false }, exec);
+      expect(rSemPagar.respostas.join("|")).toBe("NAO-PAGOU");
+    });
+
+    it("operador 'maior' com números", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_a: "alto", fallback: "baixo" },
+          config: {
+            condicoes: [{ id: "a", campo: "valor", operador: "maior", valor: "1000" }],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "alto", config: { template: "ACIMA" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "baixo", config: { template: "ABAIXO" } },
+      ];
+
+      const r1 = await executarCenario(passos, { valor: 2000 }, exec);
+      expect(r1.respostas.join("|")).toBe("ACIMA");
+
+      const r2 = await executarCenario(passos, { valor: 500 }, exec);
+      expect(r2.respostas.join("|")).toBe("ABAIXO");
+    });
+
+    it("operador 'entre' inclusivo", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_r: "dentro", fallback: "fora" },
+          config: {
+            condicoes: [{ id: "r", campo: "idade", operador: "entre", valor: "18", valor2: "65" }],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "dentro", config: { template: "ADULTO" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "fora", config: { template: "FORA" } },
+      ];
+
+      expect((await executarCenario(passos, { idade: 30 }, exec)).respostas.join("|")).toBe("ADULTO");
+      expect((await executarCenario(passos, { idade: 18 }, exec)).respostas.join("|")).toBe("ADULTO");
+      expect((await executarCenario(passos, { idade: 65 }, exec)).respostas.join("|")).toBe("ADULTO");
+      expect((await executarCenario(passos, { idade: 17 }, exec)).respostas.join("|")).toBe("FORA");
+    });
+
+    it("operador 'contem' case-insensitive", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_c: "achou", fallback: "nao" },
+          config: {
+            condicoes: [{ id: "c", campo: "mensagem", operador: "contem", valor: "URGENTE" }],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "achou", config: { template: "ACHOU" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "NAO" } },
+      ];
+
+      const r = await executarCenario(passos, { mensagem: "isso aqui é urgente!!" }, exec);
+      expect(r.respostas.join("|")).toBe("ACHOU");
+    });
+
+    it("guarda contra loop infinito", async () => {
+      // Passo aponta pra si mesmo via "default"
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "whatsapp_enviar", clienteId: "loop",
+          proximoSe: { default: "loop" },
+          config: { template: "x" },
+        },
+      ];
+
+      const r = await executarCenario(passos, {}, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("Limite");
+    });
+
+    it("backward compat: cenário sem proximoSe executa linear", async () => {
+      // Mesmo cenário com 3 passos sem clienteId nem proximoSe — funciona como antes.
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "A" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", config: { template: "B" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", config: { template: "C" } },
+      ];
+
+      const r = await executarCenario(passos, {}, exec);
+      expect(r.sucesso).toBe(true);
+      expect(r.respostas).toEqual(["A", "B", "C"]);
+      expect(r.passosExecutados).toBe(3);
+    });
+  });
+
   describe("fluxo completo: atendimento + agendamento", () => {
     it("classifica → oferece horários → agenda", async () => {
       const exec = criarMockExecutores({

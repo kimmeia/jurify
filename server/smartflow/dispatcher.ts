@@ -50,6 +50,21 @@ interface CenarioCarregado {
   configGatilho: Record<string, unknown>;
 }
 
+function safeParseJson(raw: string | null | undefined): Record<string, string> | null {
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === "string") out[k] = v;
+      }
+      return Object.keys(out).length > 0 ? out : null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function parseConfigGatilho(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
@@ -107,6 +122,8 @@ async function carregarCenariosAtivos(
       ordem: p.ordem,
       tipo: p.tipo,
       config: p.config ? JSON.parse(p.config) : {},
+      clienteId: p.clienteId ?? null,
+      proximoSe: p.proximoSe ? safeParseJson(p.proximoSe) : null,
     }));
 
     resultado.push({

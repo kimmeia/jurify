@@ -46,6 +46,13 @@ const TIPOS_PASSO = [
 const passoInputSchema = z.object({
   tipo: z.enum(TIPOS_PASSO),
   config: z.record(z.any()).optional(),
+  /** UUID estável do passo — referencia alvos em `proximoSe` de outros passos. */
+  clienteId: z.string().max(36).optional(),
+  /**
+   * Mapa ramo → clienteId do passo alvo. Chaves: "default", "fallback",
+   * `cond_<id>`. Omitir = comportamento linear por `ordem`.
+   */
+  proximoSe: z.record(z.string()).optional(),
 });
 
 async function garantirOwnership(
@@ -142,7 +149,20 @@ export const smartflowRouter = router({
         configGatilhoParsed = null;
       }
 
-      return { ...cenario, configGatilho: configGatilhoParsed, passos };
+      // Parse `proximoSe` por passo — o editor precisa do objeto já
+      // estruturado pra reconstruir as edges do ReactFlow.
+      const passosComEdges = passos.map((p) => {
+        let proxSe: Record<string, string> | null = null;
+        if (p.proximoSe) {
+          try {
+            const obj = JSON.parse(p.proximoSe);
+            if (obj && typeof obj === "object") proxSe = obj as Record<string, string>;
+          } catch { /* ignore */ }
+        }
+        return { ...p, proximoSe: proxSe };
+      });
+
+      return { ...cenario, configGatilho: configGatilhoParsed, passos: passosComEdges };
     }),
 
   /** Cria cenário com passos */
@@ -177,6 +197,10 @@ export const smartflowRouter = router({
           ordem: i + 1,
           tipo: p.tipo,
           config: p.config ? JSON.stringify(p.config) : null,
+          clienteId: p.clienteId || null,
+          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
+            ? JSON.stringify(p.proximoSe)
+            : null,
         });
       }
 
@@ -215,7 +239,9 @@ export const smartflowRouter = router({
         })
         .where(and(eq(smartflowCenarios.id, input.id), eq(smartflowCenarios.escritorioId, perm.escritorioId)));
 
-      // Substitui os passos atomicamente (simples: delete + insert).
+      // Substitui os passos atomicamente (delete + insert). Os IDs do DB
+      // mudam, mas `clienteId` (UUID estável gerado pelo editor) sobrevive,
+      // então as edges no `proximoSe` continuam apontando pros passos certos.
       await db.delete(smartflowPassos).where(eq(smartflowPassos.cenarioId, input.id));
       for (let i = 0; i < input.passos.length; i++) {
         const p = input.passos[i];
@@ -224,6 +250,10 @@ export const smartflowRouter = router({
           ordem: i + 1,
           tipo: p.tipo,
           config: p.config ? JSON.stringify(p.config) : null,
+          clienteId: p.clienteId || null,
+          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
+            ? JSON.stringify(p.proximoSe)
+            : null,
         });
       }
 

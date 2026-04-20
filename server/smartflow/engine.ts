@@ -68,6 +68,18 @@ export interface Passo {
   ordem: number;
   tipo: string;
   config: PassoConfig;
+  /**
+   * UUID estável do passo (persistido em `smartflow_passos.clienteIdPasso`).
+   * Usado como alvo das edges — sobrevive a delete+insert no save. Null em
+   * cenários legados; quando null o walker cai no modo linear por `ordem`.
+   */
+  clienteId?: string | null;
+  /**
+   * Mapa ramo→clienteId (alvo). Null = linear por `ordem`. Chaves usadas
+   * hoje: "default" (passo comum, pode pular a ordem natural), `cond_<id>`
+   * (condicional com ramo específico) e "fallback" (nenhuma condição bateu).
+   */
+  proximoSe?: Record<string, string> | null;
 }
 
 export interface PassoResultado {
@@ -78,6 +90,12 @@ export interface PassoResultado {
   parar?: boolean;
   /** Mensagem pra enviar ao cliente */
   resposta?: string;
+  /**
+   * Chave de ramo que o walker deve usar em `proximoSe` pra decidir o
+   * próximo passo. `condicional` retorna `cond_<id>` ou `"fallback"`;
+   * outros handlers podem retornar `"default"` ou omitir (= linear).
+   */
+  proximoRamoId?: string;
 }
 
 /** Funções externas injetadas (pra testar sem I/O real) */
@@ -361,42 +379,119 @@ function handleTransferir(
   };
 }
 
+/**
+ * Avalia uma única condição sobre um contexto. Retorna `true` se bate.
+ * Operadores `maior`, `menor`, `entre` são numéricos; `contem` é string-case
+ * insensitive; os demais preservam semântica legada.
+ */
+function avaliarCondicao(
+  campo: string,
+  operador: string,
+  valor: string,
+  valor2: string | undefined,
+  ctx: SmartflowContexto,
+): boolean {
+  const valorAtual = ctx[campo];
+
+  switch (operador) {
+    case "igual":
+      return String(valorAtual ?? "") === valor;
+    case "diferente":
+      return String(valorAtual ?? "") !== valor;
+    case "existe":
+      return !!valorAtual && valorAtual !== "" && valorAtual !== "0" && valorAtual !== "false";
+    case "nao_existe":
+      return !valorAtual || valorAtual === "" || valorAtual === "0" || valorAtual === "false";
+    case "verdadeiro":
+      return valorAtual === true || valorAtual === "true";
+    case "maior": {
+      const a = Number(valorAtual);
+      const b = Number(valor);
+      return !Number.isNaN(a) && !Number.isNaN(b) && a > b;
+    }
+    case "menor": {
+      const a = Number(valorAtual);
+      const b = Number(valor);
+      return !Number.isNaN(a) && !Number.isNaN(b) && a < b;
+    }
+    case "contem": {
+      const a = String(valorAtual ?? "").toLowerCase();
+      const b = String(valor ?? "").toLowerCase();
+      return b.length > 0 && a.includes(b);
+    }
+    case "entre": {
+      const a = Number(valorAtual);
+      const lo = Number(valor);
+      const hi = Number(valor2);
+      if (Number.isNaN(a) || Number.isNaN(lo) || Number.isNaN(hi)) return false;
+      const [min, max] = lo <= hi ? [lo, hi] : [hi, lo];
+      return a >= min && a <= max;
+    }
+    default:
+      // Operador desconhecido — fallback `igual` para não quebrar cenários
+      // legados que salvaram strings estranhas no campo.
+      return String(valorAtual ?? "") === valor;
+  }
+}
+
+/**
+ * Handler do passo `condicional`.
+ *
+ * Modos de operação:
+ *   1. Shape novo (`config.condicoes[]`): avalia cada condição em ordem;
+ *      primeira que bate → retorna `proximoRamoId = "cond_<id>"`. Se
+ *      nenhuma bate → `"fallback"`.
+ *   2. Shape legado (`config.campo/operador/valor`): converte em 1 condição
+ *      única e replica o comportamento antigo — passa quando verdadeiro;
+ *      `parar: true` quando falso (pra cenários antigos sem `proximoSe`
+ *      continuarem idênticos).
+ *
+ * O walker em `executarCenario` usa `proximoRamoId` junto com `proximoSe`
+ * do passo pra decidir pra onde pular. Se o passo não tem `proximoSe`
+ * configurado (cenário linear), a saída do condicional é ignorada e o
+ * walker usa o fluxo padrão por `ordem`.
+ */
 function handleCondicional(
   passo: Passo,
   ctx: SmartflowContexto,
 ): PassoResultado {
-  const campo = passo.config.campo || "intencao";
-  const operador = (passo.config as any).operador || "igual"; // igual, diferente, existe, nao_existe, verdadeiro
-  const valorEsperado = passo.config.valor || "";
-  const valorAtual = ctx[campo];
+  const cfg = passo.config as {
+    condicoes?: Array<{ id: string; campo: string; operador: string; valor?: string; valor2?: string }>;
+    campo?: string;
+    operador?: string;
+    valor?: string;
+  };
 
-  let condicaoAtendida = false;
+  const condicoes = Array.isArray(cfg.condicoes) ? cfg.condicoes : [];
 
-  switch (operador) {
-    case "igual":
-      condicaoAtendida = String(valorAtual || "") === valorEsperado;
-      break;
-    case "diferente":
-      condicaoAtendida = String(valorAtual || "") !== valorEsperado;
-      break;
-    case "existe":
-      condicaoAtendida = !!valorAtual && valorAtual !== "" && valorAtual !== "0" && valorAtual !== "false";
-      break;
-    case "nao_existe":
-      condicaoAtendida = !valorAtual || valorAtual === "" || valorAtual === "0" || valorAtual === "false";
-      break;
-    case "verdadeiro":
-      condicaoAtendida = valorAtual === true || valorAtual === "true";
-      break;
-    default:
-      condicaoAtendida = String(valorAtual || "") === valorEsperado;
+  // Caminho novo: condicoes[] populadas
+  if (condicoes.length > 0) {
+    for (const c of condicoes) {
+      const bate = avaliarCondicao(
+        c.campo || "intencao",
+        c.operador || "igual",
+        c.valor || "",
+        c.valor2,
+        ctx,
+      );
+      if (bate) {
+        return { sucesso: true, contexto: ctx, proximoRamoId: `cond_${c.id}` };
+      }
+    }
+    // Nenhuma condição bateu — sinaliza fallback.
+    return { sucesso: true, contexto: ctx, proximoRamoId: "fallback" };
   }
 
-  if (condicaoAtendida) {
-    return { sucesso: true, contexto: ctx };
-  }
-
-  // Condição não atendida — para o fluxo (não executa passos seguintes)
+  // Caminho legado: 1 condição inline — mantém semântica if/stop original
+  // pra cenários antigos sem `proximoSe`.
+  const bate = avaliarCondicao(
+    cfg.campo || "intencao",
+    cfg.operador || "igual",
+    cfg.valor || "",
+    undefined,
+    ctx,
+  );
+  if (bate) return { sucesso: true, contexto: ctx };
   return { sucesso: true, contexto: ctx, parar: true };
 }
 
@@ -482,13 +577,32 @@ export interface ExecutarCenarioResultado {
   erro?: string;
 }
 
+/** Guarda contra loops infinitos em grafos malformados. */
+const MAX_PASSOS_EXECUCAO = 50;
+
 /**
- * Executa um cenário completo — processa cada passo em ordem.
- * Retorna o contexto final + respostas coletadas.
+ * Executa um cenário como um walker de grafo.
  *
- * @param passos lista de passos ordenados
- * @param contextoInicial dados de entrada (mensagem, nome, etc)
- * @param executores funções externas injetadas
+ * Comportamento:
+ *   - Começa no passo com menor `ordem`.
+ *   - Após cada handler, se o passo atual tem `proximoSe`, procura o próximo
+ *     passo pelo `clienteId` referenciado na chave apropriada. Chaves:
+ *       · para `condicional`: o `proximoRamoId` retornado pelo handler
+ *         (`cond_<id>` ou `"fallback"`).
+ *       · para outros passos: `"default"`, se existir.
+ *   - Se `proximoSe` não tem a chave esperada ou o passo não tem `proximoSe`,
+ *     cai no comportamento linear — passo com próxima `ordem`.
+ *
+ * Compat:
+ *   - Cenários legados (todos `proximoSe=null`, `clienteId=null`) executam
+ *     exatamente como antes: percorrem por `ordem`.
+ *   - `condicional` legado (sem `condicoes[]`) usa `parar: true` quando falha,
+ *     que o walker respeita.
+ *
+ * Proteções:
+ *   - `MAX_PASSOS_EXECUCAO`: aborta com erro claro se o fluxo passar dele.
+ *   - Próximo passo não encontrado (clienteId inexistente) → encerra com
+ *     sucesso; tratamos como fim natural do ramo.
  */
 export async function executarCenario(
   passos: Passo[],
@@ -500,26 +614,58 @@ export async function executarCenario(
   let passosExecutados = 0;
 
   const passosOrdenados = [...passos].sort((a, b) => a.ordem - b.ordem);
+  if (passosOrdenados.length === 0) {
+    return { sucesso: true, contexto, passosExecutados, respostas };
+  }
 
-  for (const passo of passosOrdenados) {
-    const handler = HANDLERS[passo.tipo];
+  // Detecção de modo:
+  //   - modo grafo: pelo menos um passo tem `proximoSe` preenchido. Saída
+  //     explícita manda; passo sem `proximoSe` = fim do fluxo (sem fallback
+  //     linear — evitaria cair em ramos errados após um branching).
+  //   - modo linear: nenhum passo tem `proximoSe`. Walker percorre por
+  //     `ordem` (comportamento legado idêntico).
+  const modoGrafo = passosOrdenados.some(
+    (p) => p.proximoSe && typeof p.proximoSe === "object" && Object.keys(p.proximoSe).length > 0,
+  );
+
+  // Índices pra lookup O(1) durante o walk.
+  const porClienteId = new Map<string, Passo>();
+  for (const p of passosOrdenados) {
+    if (p.clienteId) porClienteId.set(p.clienteId, p);
+  }
+  const indicePorId = new Map<number, number>();
+  passosOrdenados.forEach((p, i) => indicePorId.set(p.id, i));
+
+  let atual: Passo | null = passosOrdenados[0];
+
+  while (atual !== null) {
+    const passoAtual: Passo = atual;
+    if (passosExecutados >= MAX_PASSOS_EXECUCAO) {
+      return {
+        sucesso: false,
+        contexto,
+        passosExecutados,
+        respostas,
+        erro: `Limite de ${MAX_PASSOS_EXECUCAO} passos excedido — possível loop no cenário.`,
+      };
+    }
+
+    const handler = HANDLERS[passoAtual.tipo];
     if (!handler) {
       return {
         sucesso: false,
         contexto,
         passosExecutados,
         respostas,
-        erro: `Tipo de passo desconhecido: ${passo.tipo}`,
+        erro: `Tipo de passo desconhecido: ${passoAtual.tipo}`,
       };
     }
 
-    const resultado = await handler(passo, contexto, executores);
+    const resultado: PassoResultado = await handler(passoAtual, contexto, executores);
     passosExecutados++;
     contexto = resultado.contexto;
 
-    if (resultado.resposta) {
-      respostas.push(resultado.resposta);
-    }
+    if (resultado.resposta) respostas.push(resultado.resposta);
 
     if (!resultado.sucesso) {
       return {
@@ -527,13 +673,32 @@ export async function executarCenario(
         contexto,
         passosExecutados,
         respostas,
-        erro: resultado.mensagemErro || "Erro no passo " + passo.tipo,
+        erro: resultado.mensagemErro || "Erro no passo " + passoAtual.tipo,
       };
     }
 
-    if (resultado.parar) {
-      break;
+    if (resultado.parar) break;
+
+    // Próximo passo.
+    //   modo grafo: só segue se `proximoSe` declarar o ramo — senão encerra.
+    //   modo linear: sempre tenta a próxima `ordem` (comportamento legado).
+    let proximo: Passo | null = null;
+    const mapa: Record<string, string> | null | undefined = passoAtual.proximoSe;
+
+    if (mapa && typeof mapa === "object") {
+      const chave: string = resultado.proximoRamoId || "default";
+      const alvoClienteId: string | undefined = mapa[chave];
+      if (alvoClienteId) {
+        proximo = porClienteId.get(alvoClienteId) ?? null;
+      }
+    } else if (!modoGrafo) {
+      const idx = indicePorId.get(passoAtual.id);
+      if (idx != null && idx + 1 < passosOrdenados.length) {
+        proximo = passosOrdenados[idx + 1];
+      }
     }
+
+    atual = proximo;
   }
 
   return { sucesso: true, contexto, passosExecutados, respostas };
