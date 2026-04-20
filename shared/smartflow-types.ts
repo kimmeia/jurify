@@ -54,6 +54,13 @@ export interface ConfigIaClassificar {
   categorias?: string[];
 }
 export interface ConfigIaResponder {
+  /**
+   * ID do agente de IA pré-configurado (tabela `agentesIa`). Se preenchido,
+   * o engine usa o prompt, modelo, temperatura e docs RAG do agente — ignora
+   * o campo `prompt` abaixo.
+   */
+  agenteId?: number;
+  /** Fallback: prompt textual livre quando não há agente selecionado. */
   prompt?: string;
 }
 export interface ConfigCalcomHorarios {

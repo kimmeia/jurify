@@ -84,6 +84,12 @@ export interface PassoResultado {
 export interface SmartflowExecutores {
   /** Chama a IA com um prompt e retorna a resposta */
   chamarIA: (prompt: string, mensagem: string) => Promise<string>;
+  /**
+   * Executa um agente IA pré-configurado (prompt + modelo + docs RAG salvos
+   * em `agentesIa`) e retorna a resposta textual. Usado por `ia_responder`
+   * quando o passo tem `config.agenteId`.
+   */
+  executarAgente: (agenteId: number, mensagem: string) => Promise<string>;
   /** Busca horários disponíveis no Cal.com */
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
@@ -127,11 +133,22 @@ async function handleIAResponder(
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
-  const promptExtra = passo.config.prompt || "";
-  const prompt = `Você é um assistente jurídico educado e profissional. ${promptExtra}\n\nResponda de forma clara e concisa.`;
+  const agenteId = (passo.config as any).agenteId;
+  const mensagem = ctx.mensagem || "";
 
   try {
-    const resposta = await exec.chamarIA(prompt, ctx.mensagem || "");
+    // Se o passo tem `agenteId`, usa o agente pré-configurado (prompt +
+    // modelo + docs RAG vêm da tabela `agentesIa`). Caso contrário, fallback
+    // pro fluxo antigo com prompt textual livre.
+    let resposta: string;
+    if (typeof agenteId === "number" && agenteId > 0) {
+      resposta = await exec.executarAgente(agenteId, mensagem);
+    } else {
+      const promptExtra = passo.config.prompt || "";
+      const prompt = `Você é um assistente jurídico educado e profissional. ${promptExtra}\n\nResponda de forma clara e concisa.`;
+      resposta = await exec.chamarIA(prompt, mensagem);
+    }
+
     return {
       sucesso: true,
       contexto: { ...ctx, respostaIA: resposta },

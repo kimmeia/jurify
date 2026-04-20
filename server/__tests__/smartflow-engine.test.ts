@@ -24,6 +24,7 @@ import {
 function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): SmartflowExecutores {
   return {
     chamarIA: vi.fn().mockResolvedValue("duvida"),
+    executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
@@ -90,6 +91,53 @@ describe("SmartFlow Engine", () => {
       expect(resultado.contexto.respostaIA).toBe("Claro! Posso ajudar com sua dúvida.");
       expect(resultado.respostas).toHaveLength(1);
       expect(resultado.respostas[0]).toContain("Posso ajudar");
+    });
+
+    it("usa executarAgente quando config.agenteId está presente", async () => {
+      const chamarIA = vi.fn().mockResolvedValue("nunca-deve-ser-chamado");
+      const executarAgente = vi.fn().mockResolvedValue("resposta do agente 42");
+      const exec = criarMockExecutores({ chamarIA, executarAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { agenteId: 42 } },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(executarAgente).toHaveBeenCalledWith(42, "oi");
+      expect(chamarIA).not.toHaveBeenCalled();
+      expect(resultado.contexto.respostaIA).toBe("resposta do agente 42");
+      expect(resultado.respostas[0]).toBe("resposta do agente 42");
+    });
+
+    it("cai no fallback chamarIA quando agenteId é 0 ou ausente", async () => {
+      const chamarIA = vi.fn().mockResolvedValue("resposta via prompt livre");
+      const executarAgente = vi.fn();
+      const exec = criarMockExecutores({ chamarIA, executarAgente });
+      const passos: Passo[] = [
+        // agenteId=0 é tratado como "sem agente" — usa prompt textual
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { agenteId: 0, prompt: "Seja direto" } },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(executarAgente).not.toHaveBeenCalled();
+      expect(chamarIA).toHaveBeenCalled();
+      expect(resultado.contexto.respostaIA).toBe("resposta via prompt livre");
+    });
+
+    it("propaga erro do executarAgente como falha do passo", async () => {
+      const executarAgente = vi.fn().mockRejectedValue(new Error("Agente inativo"));
+      const exec = criarMockExecutores({ executarAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { agenteId: 99 } },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("Agente inativo");
     });
   });
 
