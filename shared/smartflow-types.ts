@@ -79,7 +79,11 @@ export type OperadorCondicional =
   | "diferente"
   | "existe"
   | "nao_existe"
-  | "verdadeiro";
+  | "verdadeiro"
+  | "maior"
+  | "menor"
+  | "contem"
+  | "entre";
 
 export type PrioridadeCard = "baixa" | "media" | "alta";
 
@@ -131,11 +135,46 @@ export interface ConfigWhatsappEnviar {
 export interface ConfigTransferir {
   /** reservado */
 }
+/**
+ * Uma condição individual avaliada pelo passo `condicional`. Cada condição
+ * tem um `id` estável (UUID do editor) usado pela chave de roteamento em
+ * `proximoSe` — `cond_<id>`. O `valor2` é opcional, usado só pelo operador
+ * `entre` (range numérico inclusivo).
+ */
+export interface ConfigCondicionalItem {
+  id: string;
+  campo: string;
+  operador: OperadorCondicional;
+  valor?: string;
+  /** Limite superior do range para operador `entre`. */
+  valor2?: string;
+}
+
 export interface ConfigCondicional {
+  /**
+   * Lista de condições avaliadas em ordem; primeira que bate determina a
+   * saída. Quando nenhuma bate, o engine segue pela chave "fallback" no
+   * `proximoSe` (se configurada) ou para o fluxo.
+   */
+  condicoes?: ConfigCondicionalItem[];
+  /** @deprecated — shape legado: uma única condição embutida. Ainda
+   * suportado pelo engine (convertido on-the-fly para `condicoes[0]`). */
   campo?: string;
+  /** @deprecated */
   operador?: OperadorCondicional;
+  /** @deprecated */
   valor?: string;
 }
+
+/**
+ * Mapa `ramoId → clienteId do passo alvo`, serializado como JSON na coluna
+ * `smartflow_passos.proximoSe`. Chaves possíveis:
+ *   - "default" — próximo passo linear quando não há condicional.
+ *   - "cond_<id>" — saída quando a condição `<id>` é verdadeira.
+ *   - "fallback" — saída quando nenhuma condição bate.
+ * Se `null` ou mapa vazio, o engine usa `ordem` sequencial (legado).
+ */
+export type ProximoSe = Record<string, string> | null;
 export interface ConfigEsperar {
   delayMinutos?: number;
 }
@@ -323,6 +362,12 @@ export const CAMPOS_CONDICIONAL = [
   "assinaturaId",
   "primeiraCobranca",
   "pagamentoTipo",
+  "pagamentoValor",
+  "valorTotalCliente",
+  "percentualPago",
+  "diasAtraso",
+  "diasAteVencer",
+  "bookingsQuantidade",
   "transferir",
 ] as const;
 

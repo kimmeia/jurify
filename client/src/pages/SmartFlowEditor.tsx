@@ -37,7 +37,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Brain, Bot, Calendar, CheckCircle2, Clock, DollarSign,
   GitBranch, LayoutGrid, Loader2, MessageCircle, PhoneCall, Play,
-  Plus, Save, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch,
+  Plus, Save, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -103,6 +103,12 @@ interface PassoNodeData extends Record<string, unknown> {
   tipo: TipoPasso;
   config: Record<string, unknown>;
   label: string;
+  /**
+   * UUID estável do passo — sobrevive a salvamentos (o backend preserva via
+   * coluna `clienteIdPasso`). As edges do canvas são persistidas em
+   * `proximoSe` referenciando este id, não o id do ReactFlow.
+   */
+  clienteId: string;
 }
 
 interface GatilhoNodeData extends Record<string, unknown> {
@@ -125,6 +131,15 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
   const resumo = resumirConfig(data.tipo, data.config);
 
+  // O condicional ganha um handle por ramo. Cada condição tem um id estável
+  // (`config.condicoes[i].id`), mais o "fallback". Pros demais passos basta
+  // um handle "default".
+  const isCondicional = data.tipo === "condicional";
+  const condicoes = isCondicional && Array.isArray((data.config as any).condicoes)
+    ? ((data.config as any).condicoes as Array<{ id: string }>)
+    : [];
+  const totalHandles = isCondicional ? condicoes.length + 1 : 1;
+
   return (
     <div
       className={`rounded-lg border-2 shadow-sm bg-card min-w-[200px] max-w-[260px] ${
@@ -141,7 +156,48 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
           {resumo}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} className="!bg-muted-foreground/40" />
+
+      {isCondicional ? (
+        <div className="px-2.5 py-2 border-t bg-muted/20 rounded-b-[6px] space-y-1">
+          {condicoes.map((c, idx) => (
+            <div key={c.id} className="flex items-center gap-1.5 text-[9px] relative py-0.5">
+              <span className="flex-1 font-mono text-muted-foreground">cond {idx + 1}</span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`cond_${c.id}`}
+                style={{
+                  right: -6,
+                  top: "50%",
+                  background: "#22c55e",
+                  width: 8,
+                  height: 8,
+                }}
+              />
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5 text-[9px] relative py-0.5">
+            <span className="flex-1 font-mono text-muted-foreground italic">fallback</span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="fallback"
+              style={{
+                right: -6,
+                top: "50%",
+                background: "#f59e0b",
+                width: 8,
+                height: 8,
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <Handle type="source" position={Position.Bottom} id="default" className="!bg-muted-foreground/40" />
+      )}
+
+      {/* Evita warnings do ReactFlow sobre handle não declarado. */}
+      <span aria-hidden className="hidden">{totalHandles}</span>
     </div>
   );
 }
@@ -217,6 +273,11 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
     case "whatsapp_enviar":
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
     case "condicional": {
+      const cs = Array.isArray(config.condicoes) ? (config.condicoes as any[]) : [];
+      if (cs.length > 0) {
+        return `${cs.length} condição(ões) + fallback`;
+      }
+      // Shape legado
       const campo = config.campo || "";
       const op = config.operador || "igual";
       const valor = config.valor || "";
@@ -241,13 +302,27 @@ function novoNodeId() {
   return `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/**
+ * Gera um UUID v4-ish usando `crypto.randomUUID` (navegador moderno) ou
+ * fallback manual quando indisponível. Usado como `clienteId` estável dos
+ * passos — referenciado pelas edges em `proximoSe`.
+ */
+function novoClienteId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch { /* fallback */ }
+  return "cli_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+}
+
 function criarNode(tipo: TipoPasso, y: number, config: Record<string, unknown> = {}): PassoNode {
   const meta = getTipoPassoMeta(tipo);
   return {
     id: novoNodeId(),
     type: "passo",
     position: { x: 80, y },
-    data: { tipo, config, label: meta.label },
+    data: { tipo, config, label: meta.label, clienteId: novoClienteId() },
   };
 }
 
@@ -330,7 +405,14 @@ export default function SmartFlowEditor() {
     const configGatilhoAtual = (cenario.configGatilho as Record<string, unknown>) || {};
     const gatilhoNode = criarGatilhoNode(gatilhoAtual, configGatilhoAtual);
 
-    const passos = (cenario.passos || []) as Array<{ id: number; tipo: TipoPasso; config: string | null }>;
+    const passos = (cenario.passos || []) as Array<{
+      id: number;
+      tipo: TipoPasso;
+      config: string | null;
+      clienteId?: string | null;
+      proximoSe?: Record<string, string> | null;
+    }>;
+
     const passosNodes: PassoNode[] = passos.map((p, i) => {
       let cfg: Record<string, unknown> = {};
       try { cfg = p.config ? JSON.parse(p.config) : {}; } catch { cfg = {}; }
@@ -338,17 +420,63 @@ export default function SmartFlowEditor() {
         id: `p${p.id}`,
         type: "passo",
         position: { x: 80, y: 140 + i * 120 },
-        data: { tipo: p.tipo, config: cfg, label: getTipoPassoMeta(p.tipo).label },
+        data: {
+          tipo: p.tipo,
+          config: cfg,
+          label: getTipoPassoMeta(p.tipo).label,
+          // Cenários legados (pré-branching) não têm clienteId — gera um.
+          clienteId: p.clienteId || novoClienteId(),
+        },
       };
     });
 
+    // clienteId → id do nó ReactFlow, pra reconstruir edges.
+    const porClienteId = new Map<string, string>();
+    for (const n of passosNodes) porClienteId.set(n.data.clienteId, n.id);
+
     const es: Edge[] = [];
-    // Conecta gatilho ao primeiro passo
+    // Conecta gatilho ao primeiro passo visualmente (sempre presente).
     if (passosNodes.length > 0) {
-      es.push({ id: `e-gatilho-${passosNodes[0].id}`, source: GATILHO_NODE_ID, target: passosNodes[0].id });
+      es.push({
+        id: `e-gatilho-${passosNodes[0].id}`,
+        source: GATILHO_NODE_ID,
+        target: passosNodes[0].id,
+      });
     }
-    for (let i = 0; i < passosNodes.length - 1; i++) {
-      es.push({ id: `e${passosNodes[i].id}-${passosNodes[i + 1].id}`, source: passosNodes[i].id, target: passosNodes[i + 1].id });
+
+    // Reconstrói edges a partir de `proximoSe` persistido. Se um passo não
+    // tem `proximoSe`, ligamos linear (passo anterior → este) pra manter o
+    // visual coerente em cenários legados.
+    for (let i = 0; i < passosNodes.length; i++) {
+      const p = passos[i];
+      const node = passosNodes[i];
+      const mapa = p.proximoSe;
+      if (mapa && typeof mapa === "object" && Object.keys(mapa).length > 0) {
+        for (const [chave, alvoClienteId] of Object.entries(mapa)) {
+          const targetNodeId = porClienteId.get(alvoClienteId);
+          if (!targetNodeId) continue;
+          es.push({
+            id: `e-${node.id}-${chave}-${targetNodeId}`,
+            source: node.id,
+            target: targetNodeId,
+            sourceHandle: chave,
+            animated: true,
+          });
+        }
+      } else if (i > 0) {
+        // Sem proximoSe: edge linear com handle "default"
+        const prev = passosNodes[i - 1];
+        const prevMapa = passos[i - 1].proximoSe;
+        // Só desenha edge linear se o anterior também não tiver proximoSe
+        // (senão viraria duplicata visual).
+        if (!prevMapa || Object.keys(prevMapa).length === 0) {
+          es.push({
+            id: `e-${prev.id}-${node.id}`,
+            source: prev.id,
+            target: node.id,
+          });
+        }
+      }
     }
 
     setNodes([gatilhoNode, ...passosNodes]);
@@ -464,7 +592,34 @@ export default function SmartFlowEditor() {
       toast.error("Adicione pelo menos um passo.");
       return;
     }
-    const passos = passosList.map((n) => ({ tipo: n.data.tipo, config: n.data.config }));
+    // Mapa nodeId → clienteId, pra traduzir edges em `proximoSe`.
+    const nodeIdParaCliente = new Map<string, string>();
+    for (const n of passosList) nodeIdParaCliente.set(n.id, n.data.clienteId);
+
+    // Para cada passo, agrega as edges que saem dele em um objeto
+    // `{ sourceHandle: clienteIdAlvo }`. Edges sem sourceHandle usam "default".
+    // Edges cujo source é o nó de gatilho ou cujo target é outro passo não
+    // rastreado pelo mapa são ignoradas.
+    const proximoSePorNodeId = new Map<string, Record<string, string>>();
+    for (const e of edges) {
+      if (e.source === GATILHO_NODE_ID) continue;
+      const alvoCliente = nodeIdParaCliente.get(e.target);
+      if (!alvoCliente) continue;
+      const chave = e.sourceHandle || "default";
+      const atual = proximoSePorNodeId.get(e.source) ?? {};
+      atual[chave] = alvoCliente;
+      proximoSePorNodeId.set(e.source, atual);
+    }
+
+    const passos = passosList.map((n) => {
+      const mapa = proximoSePorNodeId.get(n.id);
+      return {
+        tipo: n.data.tipo,
+        config: n.data.config,
+        clienteId: n.data.clienteId,
+        proximoSe: mapa && Object.keys(mapa).length > 0 ? mapa : undefined,
+      };
+    });
     const base = {
       nome,
       descricao: descricao || undefined,
@@ -871,6 +1026,126 @@ function ConfigIaResponderFields({
   );
 }
 
+interface CondicaoItem {
+  id: string;
+  campo: string;
+  operador: string;
+  valor?: string;
+  valor2?: string;
+}
+
+function ConfigCondicionalFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const condicoes: CondicaoItem[] = Array.isArray(cfg.condicoes)
+    ? (cfg.condicoes as CondicaoItem[])
+    : [];
+
+  const update = (next: CondicaoItem[]) => onChange({ condicoes: next });
+
+  const adicionar = () => {
+    const nova: CondicaoItem = {
+      id: novoClienteId().slice(0, 8),
+      campo: "intencao",
+      operador: "igual",
+      valor: "",
+    };
+    update([...condicoes, nova]);
+  };
+
+  const atualizar = (idx: number, patch: Partial<CondicaoItem>) => {
+    const next = condicoes.map((c, i) => (i === idx ? { ...c, ...patch } : c));
+    update(next);
+  };
+
+  const remover = (idx: number) => {
+    update(condicoes.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">Condições</Label>
+        <Button size="sm" variant="ghost" className="h-6 gap-1 text-[11px]" onClick={adicionar}>
+          <Plus className="h-3 w-3" /> Adicionar
+        </Button>
+      </div>
+
+      {condicoes.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground border border-dashed rounded p-3">
+          Sem condições — clique em <strong>Adicionar</strong>. Cada condição vira uma saída do nó (verde). Quando nenhuma bate, o fluxo segue pela saída <em>fallback</em> (amarela).
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {condicoes.map((c, idx) => (
+            <div key={c.id} className="rounded border p-2 space-y-1.5 bg-muted/20">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-semibold text-muted-foreground flex-1">Condição {idx + 1}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-5 w-5 p-0 text-destructive"
+                  onClick={() => remover(idx)}
+                  title="Remover condição"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+              <Select value={c.campo || "intencao"} onValueChange={(v) => atualizar(idx, { campo: v })}>
+                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CAMPOS_CONDICIONAL.map((k) => (
+                    <SelectItem key={k} value={k}>{k}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={c.operador || "igual"} onValueChange={(v) => atualizar(idx, { operador: v })}>
+                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="igual">igual a</SelectItem>
+                  <SelectItem value="diferente">diferente de</SelectItem>
+                  <SelectItem value="existe">existe (preenchido)</SelectItem>
+                  <SelectItem value="nao_existe">não existe (vazio)</SelectItem>
+                  <SelectItem value="verdadeiro">é verdadeiro</SelectItem>
+                  <SelectItem value="maior">maior que (número)</SelectItem>
+                  <SelectItem value="menor">menor que (número)</SelectItem>
+                  <SelectItem value="contem">contém (texto)</SelectItem>
+                  <SelectItem value="entre">entre (range numérico)</SelectItem>
+                </SelectContent>
+              </Select>
+              {c.operador !== "existe" && c.operador !== "nao_existe" && c.operador !== "verdadeiro" && (
+                <Input
+                  value={String(c.valor || "")}
+                  onChange={(e) => atualizar(idx, { valor: e.target.value })}
+                  placeholder={c.operador === "entre" ? "Mínimo" : "Valor"}
+                  className="h-7 text-xs"
+                />
+              )}
+              {c.operador === "entre" && (
+                <Input
+                  value={String(c.valor2 || "")}
+                  onChange={(e) => atualizar(idx, { valor2: e.target.value })}
+                  placeholder="Máximo"
+                  className="h-7 text-xs"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[10px] text-muted-foreground">
+        As condições são avaliadas em ordem. Conecte cada saída do nó ao próximo passo
+        (ramo verde = condição X; ramo amarelo = fallback). Sem conexão = fim do fluxo.
+      </p>
+    </div>
+  );
+}
+
 function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: Record<string, unknown>) => void }) {
   const cfg = node.data.config;
 
@@ -1017,45 +1292,7 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
         </p>
       );
     case "condicional":
-      return (
-        <div className="space-y-2">
-          <div>
-            <Label className="text-xs">Campo do contexto</Label>
-            <Select value={String(cfg.campo || "intencao")} onValueChange={(v) => onChange({ campo: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CAMPOS_CONDICIONAL.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Operador</Label>
-            <Select value={String(cfg.operador || "igual")} onValueChange={(v) => onChange({ operador: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="igual">igual a</SelectItem>
-                <SelectItem value="diferente">diferente de</SelectItem>
-                <SelectItem value="existe">existe (preenchido)</SelectItem>
-                <SelectItem value="nao_existe">não existe (vazio)</SelectItem>
-                <SelectItem value="verdadeiro">é verdadeiro</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Valor esperado</Label>
-            <Input
-              value={String(cfg.valor || "")}
-              onChange={(e) => onChange({ valor: e.target.value })}
-              placeholder="Ex: agendar"
-            />
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Se a condição não for atendida, o fluxo para.
-            </p>
-          </div>
-        </div>
-      );
+      return <ConfigCondicionalFields cfg={cfg} onChange={onChange} />;
     case "esperar":
       return (
         <div>

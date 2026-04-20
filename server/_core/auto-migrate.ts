@@ -1142,6 +1142,12 @@ export async function runMigrations(): Promise<void> {
     // SmartFlow configGatilhoSF — config específica do gatilho (canais, dias, etc.)
     try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN configGatilhoSF TEXT NULL`); } catch { /* exists */ }
 
+    // SmartFlow branching — UUID estável + mapa de saída por ramo.
+    // Idempotente: catch silencioso se a coluna já existe.
+    try { await connection.query(`ALTER TABLE smartflow_passos ADD COLUMN clienteIdPasso VARCHAR(36) NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_passos ADD COLUMN proximoSePasso TEXT NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_passos ADD INDEX idx_sfp_clienteId (clienteIdPasso)`); } catch { /* exists */ }
+
     // Kanban tables
     try {
       await connection.query(`CREATE TABLE IF NOT EXISTS kanban_funis (id INT NOT NULL AUTO_INCREMENT, escritorioIdKF INT NOT NULL, nomeKF VARCHAR(128) NOT NULL, descricaoKF VARCHAR(512), corKF VARCHAR(16), criadoPorKF INT, createdAtKF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updatedAtKF TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), INDEX idx_kf_esc (escritorioIdKF)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);

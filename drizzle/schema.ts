@@ -1429,6 +1429,18 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
   ]).notNull(),
   /** Configuração do passo (JSON — prompt, template, condição, etc) */
   config: text("configPasso"),
+  /**
+   * UUID estável gerado pelo editor. Permite que edges do ReactFlow
+   * referenciem passos mesmo após delete+insert do save (IDs autoincrement
+   * mudam, `clienteId` não). Null em cenários legados lineares.
+   */
+  clienteId: varchar("clienteIdPasso", { length: 36 }),
+  /**
+   * Mapa de saída por ramo (JSON). Chaves: "default" ou `cond_<id>` ou
+   * "fallback". Valores: `id` do passo alvo. Se null, o engine segue pro
+   * próximo passo por `ordem` (comportamento linear legado).
+   */
+  proximoSe: text("proximoSePasso"),
   createdAt: timestamp("createdAtPasso").defaultNow().notNull(),
 });
 
