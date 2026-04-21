@@ -739,9 +739,14 @@ export default function SmartFlowEditor() {
         addEdge(
           {
             ...conn,
-            // Se o usuário arrastou sem "acertar" um handle específico,
-            // persistimos "default" — mesma chave usada no `proximoSe`.
-            sourceHandle: conn.sourceHandle ?? "default",
+            // Conexões de passos comuns usam o handle "default" por convenção
+            // (mesma chave usada em `proximoSe`). O nó de gatilho, porém, tem
+            // um único source handle sem id — passar sourceHandle aqui faria
+            // o ReactFlow rejeitar a conexão.
+            sourceHandle:
+              conn.source === GATILHO_NODE_ID
+                ? null
+                : conn.sourceHandle ?? "default",
             type: "removivel",
             animated: true,
           },
@@ -1132,7 +1137,12 @@ export default function SmartFlowEditor() {
                     id: `e-${menuConexao.source.nodeId}-${novoNode.id}`,
                     source: menuConexao.source.nodeId,
                     target: novoNode.id,
-                    sourceHandle: menuConexao.source.handleId ?? "default",
+                    // Gatilho não tem id no handle — passar null preserva o
+                    // comportamento do ReactFlow. Passos comuns usam "default".
+                    sourceHandle:
+                      menuConexao.source.nodeId === GATILHO_NODE_ID
+                        ? null
+                        : menuConexao.source.handleId ?? "default",
                     type: "removivel",
                     animated: true,
                   },
