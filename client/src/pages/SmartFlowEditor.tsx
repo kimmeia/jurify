@@ -11,7 +11,7 @@
  * são puramente visuais — a execução do engine é linear.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -25,12 +25,19 @@ import {
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+  useReactFlow,
   type Connection,
   type Edge,
   type EdgeChange,
+  type EdgeProps,
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnConnectEnd,
+  type OnConnectStart,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
@@ -167,13 +174,12 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   // um handle "default".
   const isCondicional = data.tipo === "condicional";
   const condicoes = isCondicional && Array.isArray((data.config as any).condicoes)
-    ? ((data.config as any).condicoes as Array<{ id: string }>)
+    ? ((data.config as any).condicoes as Array<{ id: string; label?: string }>)
     : [];
-  const totalHandles = isCondicional ? condicoes.length + 1 : 1;
 
   return (
     <div
-      className={`rounded-lg border-2 shadow-sm bg-card min-w-[200px] max-w-[260px] ${
+      className={`rounded-lg border-2 shadow-sm bg-card min-w-[220px] max-w-[280px] ${
         selected ? "border-primary" : "border-border"
       }`}
     >
@@ -189,46 +195,65 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
       )}
 
       {isCondicional ? (
-        <div className="px-2.5 py-2 border-t bg-muted/20 rounded-b-[6px] space-y-1">
+        <div className="border-t bg-muted/20 rounded-b-[6px] py-1">
           {condicoes.map((c, idx) => (
-            <div key={c.id} className="flex items-center gap-1.5 text-[9px] relative py-0.5">
-              <span className="flex-1 font-mono text-muted-foreground">cond {idx + 1}</span>
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`cond_${c.id}`}
-                style={{
-                  right: -6,
-                  top: "50%",
-                  background: "#22c55e",
-                  width: 8,
-                  height: 8,
-                }}
-              />
-            </div>
-          ))}
-          <div className="flex items-center gap-1.5 text-[9px] relative py-0.5">
-            <span className="flex-1 font-mono text-muted-foreground italic">fallback</span>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="fallback"
-              style={{
-                right: -6,
-                top: "50%",
-                background: "#f59e0b",
-                width: 8,
-                height: 8,
-              }}
+            <HandleRow
+              key={c.id}
+              handleId={`cond_${c.id}`}
+              label={c.label?.trim() || `Condição ${idx + 1}`}
+              cor="#22c55e"
             />
-          </div>
+          ))}
+          <HandleRow handleId="fallback" label="fallback" italic cor="#f59e0b" />
         </div>
       ) : (
         <Handle type="source" position={Position.Bottom} id="default" className="!bg-muted-foreground/40" />
       )}
+    </div>
+  );
+}
 
-      {/* Evita warnings do ReactFlow sobre handle não declarado. */}
-      <span aria-hidden className="hidden">{totalHandles}</span>
+/**
+ * Linha de um handle de saída no nó condicional. O handle é renderizado
+ * com `position: relative` dentro do flex da linha — o ReactFlow identifica
+ * pelo DOM e posiciona a edge corretamente. Isso evita o bug de todos os
+ * handles caírem em `top: 50%` (sobrepostos).
+ */
+function HandleRow({
+  handleId,
+  label,
+  cor,
+  italic,
+}: {
+  handleId: string;
+  label: string;
+  cor: string;
+  italic?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px]">
+      <span
+        className={`flex-1 truncate ${italic ? "italic text-muted-foreground" : "text-foreground/80"}`}
+      >
+        {label}
+      </span>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={handleId}
+        style={{
+          // `position: relative` sai do default absolute do ReactFlow —
+          // assim o handle fica *nesta* linha, não no centro vertical do nó.
+          position: "relative",
+          top: "auto",
+          right: "auto",
+          transform: "translateX(50%)",
+          background: cor,
+          width: 10,
+          height: 10,
+          border: "2px solid white",
+        }}
+      />
     </div>
   );
 }
@@ -272,6 +297,125 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
 }
 
 const nodeTypes = { passo: PassoNodeView, gatilho: GatilhoNodeView };
+
+/**
+ * Edge customizada "removivel". Renderiza o caminho Bezier padrão + um
+ * botão X no ponto médio, visível somente no hover. Clicar no X remove
+ * a edge via `setEdges` injetado por `useReactFlow`. Também suporta a
+ * tecla Delete/Backspace via `deleteKeyCode` do próprio ReactFlow.
+ */
+function RemovivelEdge(props: EdgeProps) {
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, markerEnd } = props;
+  const { setEdges } = useReactFlow();
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+  });
+  return (
+    <>
+      {/* Caminho mais grosso invisível por cima pra aumentar hit area. */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        style={{ cursor: "pointer" }}
+      />
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      <EdgeLabelRenderer>
+        <div
+          className="smartflow-edge-delete"
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: "all",
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEdges((eds) => eds.filter((ed) => ed.id !== id));
+            }}
+            title="Remover conexão"
+            className="flex items-center justify-center w-5 h-5 rounded-full bg-background border border-destructive/60 text-destructive shadow-sm hover:bg-destructive hover:text-white transition-colors text-[10px]"
+          >
+            ×
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { removivel: RemovivelEdge };
+
+/**
+ * Menu flutuante posicionado em `(x, y)` de tela, com a lista completa de
+ * passos agrupada por categoria. Usado quando o usuário arrasta uma
+ * conexão e solta no canvas vazio — ao escolher um passo, o editor cria
+ * o nó na posição e conecta automaticamente. Fecha em Escape ou clique
+ * fora.
+ */
+function MenuConectarPasso({
+  x,
+  y,
+  onEscolher,
+  onFechar,
+}: {
+  x: number;
+  y: number;
+  onEscolher: (tipo: TipoPasso) => void;
+  onFechar: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onFechar();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onFechar]);
+
+  return (
+    <>
+      <div
+        onClick={onFechar}
+        className="fixed inset-0 z-40"
+        style={{ cursor: "default" }}
+      />
+      <div
+        className="fixed z-50 bg-popover border rounded-md shadow-lg p-2 w-64 max-h-[60vh] overflow-y-auto"
+        style={{ top: y, left: x }}
+      >
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-1 mb-1 font-semibold">
+          Conectar a um novo passo
+        </p>
+        {agrupar<TipoPassoMeta>(TIPO_PASSO_META).map((g) => (
+          <div key={g.id} className="mb-2 last:mb-0">
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 px-1 mb-0.5 font-semibold">
+              {g.label}
+            </p>
+            <div className="space-y-0.5">
+              {g.itens.map((t) => {
+                const Icon = TIPO_ICON[t.id] ?? Zap;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => onEscolher(t.id)}
+                    className="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-accent"
+                    title={t.descricao}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="flex-1 truncate">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -446,6 +590,18 @@ export default function SmartFlowEditor() {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Estado para o menu "conectar a um novo passo": quando o usuário arrasta
+  // uma conexão de um handle e solta no canvas vazio, abrimos uma lista de
+  // passos. Ao escolher, criamos o passo na posição do mouse e conectamos
+  // o handle de origem ao novo nó.
+  const [rfInstance, setRfInstance] = useState<any>(null);
+  const conexaoPendenteRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
+  const [menuConexao, setMenuConexao] = useState<{
+    x: number;
+    y: number;
+    source: { nodeId: string; handleId: string | null };
+  } | null>(null);
+
   // Carrega cenário existente
   const { data: cenario, isLoading } = (trpc as any).smartflow.detalhe.useQuery(
     { id: editandoId },
@@ -496,6 +652,8 @@ export default function SmartFlowEditor() {
         id: `e-gatilho-${passosNodes[0].id}`,
         source: GATILHO_NODE_ID,
         target: passosNodes[0].id,
+        type: "removivel",
+        animated: true,
       });
     }
 
@@ -515,6 +673,7 @@ export default function SmartFlowEditor() {
             source: node.id,
             target: targetNodeId,
             sourceHandle: chave,
+            type: "removivel",
             animated: true,
           });
         }
@@ -529,6 +688,8 @@ export default function SmartFlowEditor() {
             id: `e-${prev.id}-${node.id}`,
             source: prev.id,
             target: node.id,
+            type: "removivel",
+            animated: true,
           });
         }
       }
@@ -570,9 +731,42 @@ export default function SmartFlowEditor() {
     [],
   );
   const onConnect = useCallback(
-    (conn: Connection) => setEdges((eds) => addEdge({ ...conn, animated: true }, eds)),
+    (conn: Connection) => setEdges((eds) => addEdge({ ...conn, type: "removivel", animated: true }, eds)),
     [],
   );
+
+  /** Guarda a origem da conexão pra reaproveitar no `onConnectEnd`. */
+  const onConnectStart = useCallback<OnConnectStart>((_ev, params) => {
+    if (params.nodeId) {
+      conexaoPendenteRef.current = {
+        nodeId: params.nodeId,
+        handleId: params.handleId ?? null,
+      };
+    } else {
+      conexaoPendenteRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Ao soltar uma conexão no **canvas vazio**, abre um menu com a lista de
+   * passos. O passo escolhido é criado na posição do mouse e conectado
+   * automaticamente ao handle de origem.
+   */
+  const onConnectEnd = useCallback<OnConnectEnd>((ev) => {
+    const source = conexaoPendenteRef.current;
+    conexaoPendenteRef.current = null;
+    if (!source) return;
+
+    const target = (ev.target as HTMLElement | null) ?? null;
+    // `react-flow__pane` é o fundo do canvas; qualquer outro alvo significa
+    // que o drop foi em cima de um handle/nó — deixamos o fluxo normal
+    // do ReactFlow tratar.
+    if (!target || !target.classList?.contains("react-flow__pane")) return;
+
+    const x = "clientX" in ev ? ev.clientX : (ev as TouchEvent).changedTouches?.[0]?.clientX ?? 0;
+    const y = "clientY" in ev ? ev.clientY : (ev as TouchEvent).changedTouches?.[0]?.clientY ?? 0;
+    setMenuConexao({ x, y, source });
+  }, []);
 
   const adicionarPasso = (tipo: TipoPasso) => {
     const passos = nodes.filter((n) => n.type === "passo");
@@ -854,7 +1048,13 @@ export default function SmartFlowEditor() {
             onConnect={onConnect}
             onNodeClick={(_e, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
+            onInit={setRfInstance}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultEdgeOptions={{ type: "removivel", animated: true }}
+            deleteKeyCode={["Backspace", "Delete"]}
             fitView
             proOptions={{ hideAttribution: true }}
           >
@@ -864,17 +1064,43 @@ export default function SmartFlowEditor() {
           </ReactFlow>
 
           {passoNodesOrdenados(nodes).length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-32">
-              <Card className="max-w-sm pointer-events-auto">
-                <CardContent className="py-6 text-center">
-                  <Zap className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                  <p className="text-sm font-medium">Sem passos ainda</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Escolha um passo na coluna à esquerda para continuar a partir do gatilho.
-                  </p>
-                </CardContent>
-              </Card>
+            // Hint discreto no rodapé do canvas — não cobre o nó de gatilho.
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
+              <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-background/80 backdrop-blur px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+                <Zap className="h-3 w-3 text-muted-foreground/60" />
+                Adicione um passo pela paleta à esquerda ou arraste a bolinha do gatilho.
+              </div>
             </div>
+          )}
+
+          {/* Menu de "conectar a um novo passo" — aparece quando o usuário
+              solta a conexão no canvas vazio. */}
+          {menuConexao && (
+            <MenuConectarPasso
+              x={menuConexao.x}
+              y={menuConexao.y}
+              onFechar={() => setMenuConexao(null)}
+              onEscolher={(tipo) => {
+                if (!rfInstance) return;
+                const flowPos = rfInstance.screenToFlowPosition({ x: menuConexao.x, y: menuConexao.y });
+                const novoNode = criarNode(tipo, 0);
+                novoNode.position = flowPos;
+                setNodes((nds) => [...nds, novoNode]);
+                setEdges((eds) => [
+                  ...eds,
+                  {
+                    id: `e-${menuConexao.source.nodeId}-${novoNode.id}`,
+                    source: menuConexao.source.nodeId,
+                    target: novoNode.id,
+                    sourceHandle: menuConexao.source.handleId ?? undefined,
+                    type: "removivel",
+                    animated: true,
+                  },
+                ]);
+                setSelectedId(novoNode.id);
+                setMenuConexao(null);
+              }}
+            />
           )}
         </div>
 
@@ -1271,6 +1497,7 @@ function ConfigIaResponderFields({
 
 interface CondicaoItem {
   id: string;
+  label?: string;
   campo: string;
   operador: string;
   valor?: string;
@@ -1327,7 +1554,9 @@ function ConfigCondicionalFields({
           {condicoes.map((c, idx) => (
             <div key={c.id} className="rounded border p-2 space-y-1.5 bg-muted/20">
               <div className="flex items-center gap-1">
-                <span className="text-[10px] font-semibold text-muted-foreground flex-1">Condição {idx + 1}</span>
+                <span className="text-[10px] font-semibold text-muted-foreground flex-1">
+                  {c.label?.trim() || `Condição ${idx + 1}`}
+                </span>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1338,6 +1567,12 @@ function ConfigCondicionalFields({
                   <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
+              <Input
+                value={String(c.label || "")}
+                onChange={(e) => atualizar(idx, { label: e.target.value })}
+                placeholder={`Nome (ex: "Condição ${idx + 1}", "Cliente VIP"…)`}
+                className="h-7 text-xs"
+              />
               <Select value={c.campo || "intencao"} onValueChange={(v) => atualizar(idx, { campo: v })}>
                 <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>

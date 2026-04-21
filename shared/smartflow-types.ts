@@ -144,6 +144,9 @@ export interface ConfigTransferir {
  */
 export interface ConfigCondicionalItem {
   id: string;
+  /** Nome amigável da condição ("Cliente VIP", "Urgente", etc.) — usado no
+   *  nó do canvas e no painel. Quando vazio, o editor mostra "Condição N". */
+  label?: string;
   campo: string;
   operador: OperadorCondicional;
   valor?: string;
