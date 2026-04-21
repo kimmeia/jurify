@@ -21,7 +21,7 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
-import { syncCobrancasDeCliente, syncCobrancasEscritorio } from "./asaas-sync";
+import { syncCobrancasDeCliente, syncCobrancasEscritorio, syncTodasCobrancasDoContato } from "./asaas-sync";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 
@@ -94,6 +94,77 @@ async function requireAsaasClient(escritorioId: number) {
 }
 
 /**
+ * Dado um conjunto de ids de customers do Asaas, devolve o subconjunto
+ * que AINDA NÃO está vinculado a nenhum contato do escritório. Usamos
+ * tanto no fluxo por telefone (buscar duplicatas que podem ser reusadas)
+ * quanto no por CPF (filtrar customers que pertencem a outro contato).
+ */
+async function filtrarCustomersDisponiveis(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  asaasCustomerIds: string[],
+): Promise<Set<string>> {
+  if (asaasCustomerIds.length === 0) return new Set();
+
+  const jaLinkados = await db
+    .select({ asaasCustomerId: asaasClientes.asaasCustomerId })
+    .from(asaasClientes)
+    .where(and(
+      eq(asaasClientes.escritorioId, escritorioId),
+      inArray(asaasClientes.asaasCustomerId, asaasCustomerIds),
+    ));
+
+  const linkadosSet = new Set(jaLinkados.map((r) => r.asaasCustomerId));
+  return new Set(asaasCustomerIds.filter((id) => !linkadosSet.has(id)));
+}
+
+/**
+ * Recebe N customers do Asaas com o mesmo CPF e decide:
+ *  - qual vira primário (usado pra criar cobranças novas).
+ *  - quais viram secundários (mantidos para o histórico de cobranças).
+ *
+ * Heurística: prioriza o customer com MAIS cobranças não-deletadas (quem
+ * tem histórico real); secundários só são mantidos se também tiverem
+ * cobranças (não polui a tabela com customers "vazios"). Se nenhum tiver
+ * cobranças, usa o primeiro e descarta os demais.
+ *
+ * Best-effort: uma falha na contagem por customer não aborta o fluxo.
+ */
+async function escolherPrimarioEhSecundarios(
+  client: AsaasClient,
+  customers: AsaasCustomer[],
+): Promise<{ primario: AsaasCustomer; secundarios: AsaasCustomer[] }> {
+  if (customers.length === 1) {
+    return { primario: customers[0], secundarios: [] };
+  }
+
+  const contagens: { cli: AsaasCustomer; total: number }[] = [];
+  for (const cli of customers) {
+    try {
+      const res = await client.listarCobrancas({ customer: cli.id, limit: 100 });
+      // totalCount é confiável quando vem; senão, conta o que caiu.
+      const total = typeof res.totalCount === "number" ? res.totalCount : res.data.length;
+      contagens.push({ cli, total });
+    } catch (err: any) {
+      log.warn(
+        { err: err.message, asaasCustomerId: cli.id },
+        "Falha ao contar cobranças do customer duplicado — assumindo 0",
+      );
+      contagens.push({ cli, total: 0 });
+    }
+  }
+
+  contagens.sort((a, b) => b.total - a.total);
+  const primario = contagens[0].cli;
+  const secundarios = contagens
+    .slice(1)
+    .filter((c) => c.total > 0)
+    .map((c) => c.cli);
+
+  return { primario, secundarios };
+}
+
+/**
  * Resultado do sync de cobranças que acompanha a conclusão da vinculação.
  * `erroSync` é null quando tudo OK e string quando a API do Asaas falhou —
  * permite o frontend distinguir "sem cobranças" (0 + null) de "falhou" (0 + msg).
@@ -105,11 +176,15 @@ type SyncResult = {
 
 /**
  * Fecha o ciclo de vinculação: escreve no CRM (contatos) o que veio do
- * Asaas como fonte de verdade, grava o vínculo na tabela asaas_clientes e
- * tenta puxar as cobranças existentes do cliente no Asaas.
+ * Asaas como fonte de verdade, grava o vínculo principal + eventuais
+ * vínculos secundários (duplicatas do Asaas com mesmo CPF) e sincroniza
+ * cobranças de todos eles no mesmo contato do CRM.
  *
  * Nome/CPF/email/telefone do Asaas têm precedência; se algum campo faltar
  * no Asaas, o valor atual do CRM é preservado (fallback com ||).
+ *
+ * Secundários recebem `primario=false` e servem só para puxar histórico;
+ * cobranças novas sempre saem do primário (ver criarCobranca).
  *
  * O sync de cobranças é best-effort: uma falha aqui não bloqueia o vínculo,
  * mas é reportada de volta no `erroSync` do retorno pra UI poder alertar.
@@ -122,6 +197,7 @@ async function finalizarVinculacao(
   contato: { nome: string; cpfCnpj: string | null; email: string | null; telefone: string | null },
   asaasCli: AsaasCustomer,
   cpfLimpo: string,
+  secundarios: AsaasCustomer[] = [],
 ): Promise<SyncResult> {
   await db.update(contatos).set({
     nome: asaasCli.name || contato.nome,
@@ -139,10 +215,23 @@ async function finalizarVinculacao(
     asaasCustomerId: asaasCli.id,
     cpfCnpj: cpfLimpo,
     nome: asaasCli.name,
+    primario: true,
   });
 
+  for (const sec of secundarios) {
+    if (sec.id === asaasCli.id) continue;
+    await db.insert(asaasClientes).values({
+      escritorioId,
+      contatoId,
+      asaasCustomerId: sec.id,
+      cpfCnpj: (sec.cpfCnpj || cpfLimpo).replace(/\D/g, ""),
+      nome: sec.name,
+      primario: false,
+    });
+  }
+
   try {
-    const r = await syncCobrancasDeCliente(client, escritorioId, contatoId, asaasCli.id);
+    const r = await syncTodasCobrancasDoContato(client, escritorioId, contatoId);
     return { cobrancasSincronizadas: r.novas + r.atualizadas, erroSync: null };
   } catch (err: any) {
     log.warn(
@@ -522,10 +611,13 @@ export const asaasRouter = router({
 
       const cpfLimpo = contato.cpfCnpj.replace(/\D/g, "");
 
-      // ── Passo 1: buscar por CPF/CNPJ ─────────────────────────────────
-      let asaasCli: AsaasCustomer | null = null;
+      // ── Passo 1: buscar TODOS os customers por CPF/CNPJ ──────────────
+      // O Asaas permite duplicatas com mesmo CPF; consolidamos todos sob
+      // o mesmo contato do CRM. O "primário" (usado pra criar cobranças
+      // novas) é escolhido por heurística em escolherPrimarioEhSecundarios.
+      let customersComCpf: AsaasCustomer[] = [];
       try {
-        asaasCli = await client.buscarClientePorCpfCnpj(cpfLimpo);
+        customersComCpf = await client.buscarTodosClientesPorCpfCnpj(cpfLimpo);
       } catch (err: any) {
         log.warn({ err: err.message, cpf: cpfLimpo }, "Busca Asaas por CPF falhou — NÃO criando duplicata");
         throw new TRPCError({
@@ -534,23 +626,37 @@ export const asaasRouter = router({
         });
       }
 
-      if (asaasCli) {
+      // Filtra customers já vinculados a OUTROS contatos do escritório
+      // (não podemos reutilizar sem quebrar exclusividade desse outro).
+      if (customersComCpf.length > 0) {
+        const idsDisponiveis = await filtrarCustomersDisponiveis(
+          db,
+          esc.escritorio.id,
+          customersComCpf.map((c) => c.id),
+        );
+        customersComCpf = customersComCpf.filter((c) => idsDisponiveis.has(c.id));
+      }
+
+      if (customersComCpf.length > 0) {
+        const { primario, secundarios } = await escolherPrimarioEhSecundarios(client, customersComCpf);
         const { cobrancasSincronizadas, erroSync } = await finalizarVinculacao(
           client,
           db,
           esc.escritorio.id,
           input.contatoId,
           contato,
-          asaasCli,
+          primario,
           cpfLimpo,
+          secundarios,
         );
         return {
           status: "vinculado" as const,
-          asaasCustomerId: asaasCli.id,
+          asaasCustomerId: primario.id,
           jaExistia: true,
           novoClienteCriado: false,
           cobrancasSincronizadas,
           erroSync,
+          customersVinculados: 1 + secundarios.length,
         };
       }
 
@@ -781,6 +887,98 @@ export const asaasRouter = router({
       };
     }),
 
+  /**
+   * Reconcilia o vínculo Asaas de um contato já vinculado: busca todos os
+   * customers do Asaas com o mesmo CPF, adiciona os que ainda não estão
+   * vinculados (como secundários, primario=false) e puxa cobranças de
+   * todos. Usado quando o Asaas tem duplicatas do CPF e o vínculo inicial
+   * pegou um customer "vazio", deixando histórico financeiro de fora.
+   *
+   * Idempotente: rodar várias vezes não cria linhas duplicadas.
+   */
+  reconciliarVinculo: protectedProcedure
+    .input(z.object({ contatoId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      const client = await requireAsaasClient(esc.escritorio.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [contato] = await db.select().from(contatos)
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!contato) throw new TRPCError({ code: "NOT_FOUND", message: "Contato não encontrado" });
+      if (!contato.cpfCnpj) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Contato sem CPF/CNPJ." });
+      }
+
+      const vinculosExistentes = await db.select().from(asaasClientes)
+        .where(and(
+          eq(asaasClientes.contatoId, input.contatoId),
+          eq(asaasClientes.escritorioId, esc.escritorio.id),
+        ));
+      if (vinculosExistentes.length === 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Contato ainda não está vinculado. Use 'Vincular' antes de reconciliar.",
+        });
+      }
+
+      const cpfLimpo = contato.cpfCnpj.replace(/\D/g, "");
+      const idsJaVinculados = new Set(vinculosExistentes.map((v) => v.asaasCustomerId));
+
+      // Busca todos os customers do Asaas com esse CPF. Os que já estão
+      // vinculados a esse próprio contato mantemos; os vinculados a OUTROS
+      // contatos do escritório ficam de fora (não podemos reusá-los).
+      let todosDoCpf: AsaasCustomer[] = [];
+      try {
+        todosDoCpf = await client.buscarTodosClientesPorCpfCnpj(cpfLimpo);
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Falha ao consultar Asaas: ${err.message || "erro desconhecido"}`,
+        });
+      }
+
+      const disponiveisIds = await filtrarCustomersDisponiveis(
+        db,
+        esc.escritorio.id,
+        todosDoCpf.map((c) => c.id).filter((id) => !idsJaVinculados.has(id)),
+      );
+
+      const novos = todosDoCpf.filter((c) => disponiveisIds.has(c.id));
+
+      let customersAdicionados = 0;
+      for (const cli of novos) {
+        await db.insert(asaasClientes).values({
+          escritorioId: esc.escritorio.id,
+          contatoId: input.contatoId,
+          asaasCustomerId: cli.id,
+          cpfCnpj: (cli.cpfCnpj || cpfLimpo).replace(/\D/g, ""),
+          nome: cli.name,
+          primario: false, // reconciliação NUNCA muda o primário existente
+        });
+        customersAdicionados++;
+      }
+
+      // Re-sincroniza cobranças de TODOS os customers vinculados (primário + secundários)
+      let cobrancasSincronizadas = 0;
+      let erroSync: string | null = null;
+      try {
+        const r = await syncTodasCobrancasDoContato(client, esc.escritorio.id, input.contatoId);
+        cobrancasSincronizadas = r.novas + r.atualizadas;
+      } catch (err: any) {
+        erroSync = err?.message || "Erro desconhecido ao sincronizar cobranças";
+      }
+
+      return {
+        customersAdicionados,
+        totalCustomersVinculados: vinculosExistentes.length + customersAdicionados,
+        cobrancasSincronizadas,
+        erroSync,
+      };
+    }),
+
   // ─── COBRANÇAS ───────────────────────────────────────────────────────────
 
   /** Criar cobrança para um contato */
@@ -798,10 +996,28 @@ export const asaasRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Buscar vínculo Asaas do contato
-      const [vinculo] = await db.select().from(asaasClientes)
-        .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)))
+      // Buscar vínculo Asaas primário do contato. Um contato pode ter
+      // múltiplos vínculos (duplicatas no Asaas com mesmo CPF), mas
+      // cobranças novas SEMPRE saem do primário — garante que a cobrança
+      // caia num customer só e não aumente a duplicação.
+      const [vinculoPrimario] = await db.select().from(asaasClientes)
+        .where(and(
+          eq(asaasClientes.contatoId, input.contatoId),
+          eq(asaasClientes.escritorioId, esc.escritorio.id),
+          eq(asaasClientes.primario, true),
+        ))
         .limit(1);
+
+      // Fallback para dados legados (pré-migração): se não há primário
+      // explícito, usa qualquer vínculo. Evita quebrar contatos antigos.
+      const [vinculo] = vinculoPrimario
+        ? [vinculoPrimario]
+        : await db.select().from(asaasClientes)
+            .where(and(
+              eq(asaasClientes.contatoId, input.contatoId),
+              eq(asaasClientes.escritorioId, esc.escritorio.id),
+            ))
+            .limit(1);
 
       if (!vinculo) {
         throw new TRPCError({

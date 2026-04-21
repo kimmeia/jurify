@@ -158,6 +158,44 @@ export async function syncCobrancasDeCliente(
   return stats;
 }
 
+/**
+ * Sincroniza cobranças de TODOS os customers Asaas vinculados a um
+ * contato do CRM. Um contato pode ter múltiplos vínculos (duplicatas do
+ * Asaas com mesmo CPF) — aqui iteramos sobre todos para consolidar o
+ * histórico financeiro num lugar só.
+ */
+export async function syncTodasCobrancasDoContato(
+  client: AsaasClient,
+  escritorioId: number,
+  contatoId: number,
+): Promise<SyncCobrancasStats> {
+  const db = await getDb();
+  const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  if (!db) return zero;
+
+  const vinculos = await db.select({
+    asaasCustomerId: asaasClientes.asaasCustomerId,
+  }).from(asaasClientes)
+    .where(and(
+      eq(asaasClientes.contatoId, contatoId),
+      eq(asaasClientes.escritorioId, escritorioId),
+    ));
+
+  let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  for (const v of vinculos) {
+    try {
+      const s = await syncCobrancasDeCliente(client, escritorioId, contatoId, v.asaasCustomerId);
+      totais = somarStats(totais, s);
+    } catch (err: any) {
+      log.warn(
+        { err: err.message, contatoId, asaasCustomerId: v.asaasCustomerId },
+        "[Asaas Sync] Erro ao sincronizar um dos customers vinculados — prossegue com os demais",
+      );
+    }
+  }
+  return totais;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYNC COMPLETO POR ESCRITÓRIO
 // ═══════════════════════════════════════════════════════════════════════════════

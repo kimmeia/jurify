@@ -1078,7 +1078,15 @@ export type InsertAsaasConfig = typeof asaasConfig.$inferInsert;
 
 /**
  * Vínculo entre contatos do CRM e clientes do Asaas.
- * Linkado por CPF/CNPJ. Cada contato pode ter no máximo 1 vínculo Asaas.
+ *
+ * O Asaas permite múltiplos customers com o mesmo CPF/CNPJ (duplicatas
+ * geradas por imports antigos, cadastro manual, webhooks legados, etc).
+ * No nosso lado unificamos tudo sob UM contato do CRM: pode haver N linhas
+ * aqui com o mesmo contatoId, uma para cada asaasCustomerId.
+ *
+ * `primario` marca qual dos N é usado para CRIAR novas cobranças. Os demais
+ * servem apenas para puxar o histórico financeiro (sync). Sempre deve haver
+ * exatamente um primário por contato; secundários têm primario=false.
  */
 export const asaasClientes = mysqlTable("asaas_clientes", {
   id: int("id").autoincrement().primaryKey(),
@@ -1087,6 +1095,7 @@ export const asaasClientes = mysqlTable("asaas_clientes", {
   asaasCustomerId: varchar("asaasCustomerId", { length: 64 }).notNull(),
   cpfCnpj: varchar("cpfCnpjAsaas", { length: 18 }).notNull(),
   nome: varchar("nomeAsaasCli", { length: 255 }),
+  primario: boolean("primarioAsaasCli").notNull().default(true),
   sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
 });
 
