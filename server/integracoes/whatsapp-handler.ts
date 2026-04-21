@@ -1,9 +1,34 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
-import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
+import type { TipoCanalMensagem } from "../../shared/smartflow-types";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
 import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
+
+/** Intervalo mínimo entre envios automáticos pro WhatsApp não detectar burst. */
+const DELAY_ENTRE_RESPOSTAS_MS = 1500;
+
+/** Converte o tipo do canal armazenado em TipoCanalMensagem (shared). */
+async function buscarTipoDoCanal(canalId: number): Promise<TipoCanalMensagem> {
+  try {
+    const { getDb } = await import("../db");
+    const { canaisIntegrados } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return "whatsapp_qr";
+    const [row] = await db
+      .select({ tipo: canaisIntegrados.tipo })
+      .from(canaisIntegrados)
+      .where(eq(canaisIntegrados.id, canalId))
+      .limit(1);
+    const tipo = row?.tipo;
+    if (tipo === "whatsapp_api" || tipo === "instagram" || tipo === "facebook") return tipo;
+    return "whatsapp_qr";
+  } catch {
+    return "whatsapp_qr";
+  }
+}
 
 export async function processarMensagemRecebida(canalId: number, escritorioId: number, msg: WhatsappMensagemRecebida) {
   if (msg.isGroup) return { contatoId: 0, conversaId: 0, mensagemId: 0 };
@@ -30,6 +55,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     contatoId = existente?.id ?? 0;
   }
 
+  let contatoFoiCriado = false;
   if (!contatoId) {
     // Sem contato conhecido — cria um. Se o JID é LID e não temos telefone
     // real, salvamos o telefone vazio (não o LID) para evitar poluir o
@@ -42,6 +68,9 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       origem: "whatsapp",
     });
     contatoId = resultado.id;
+    // `criarOuReutilizarContato` reaproveita por CPF/telefone. Só consideramos
+    // "lead novo" quando a função de fato inseriu — jaCadastrado=false.
+    contatoFoiCriado = !resultado.jaCadastrado;
   }
 
   if (!conversaId) {
@@ -94,17 +123,48 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     );
   } catch { /* SSE indisponível */ }
 
-  // Agentes IA só podem ser acionados DENTRO do SmartFlow (via passo ia_responder).
+  // Lead novo via WhatsApp: dispara SmartFlow com gatilho novo_lead.
+  // Fire-and-forget — não bloqueia o fluxo de mensagem.
+  if (contatoFoiCriado) {
+    (async () => {
+      try {
+        const { dispararNovoLead } = await import("../smartflow/dispatcher");
+        await dispararNovoLead(escritorioId, {
+          contatoId,
+          nome: msg.nome,
+          telefone: msg.telefone,
+          origem: "whatsapp",
+          conversaId,
+        });
+      } catch (e: any) {
+        log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar novo_lead");
+      }
+    })();
+  }
+
+  // Agentes IA só são acionados DENTRO do SmartFlow (via passo ia_responder).
   // Se nenhum cenário do SmartFlow bate com a mensagem, caímos num auto-reply
   // fixo configurado no canal. Sem IA automática fora do fluxo desenhado.
   if (msg.tipo === "texto" && msg.conteudo) {
     try {
-      const { tentarSmartFlow } = await import("../smartflow/dispatcher");
-      const sf = await tentarSmartFlow(escritorioId, canalId, conversaId, contatoId, msg.conteudo, msg.telefone, msg.nome || "");
+      const { dispararMensagemCanal } = await import("../smartflow/dispatcher");
+      const canalTipo = await buscarTipoDoCanal(canalId);
+      const sf = await dispararMensagemCanal(escritorioId, {
+        canalTipo,
+        canalId,
+        conversaId,
+        contatoId,
+        mensagem: msg.conteudo,
+        telefone: msg.telefone,
+        nomeCliente: msg.nome || "",
+      });
       if (sf.executou) {
-        // SmartFlow assumiu — envia respostas geradas
-        for (const resp of sf.respostas) {
-          await enviarResposta(canalId, conversaId, msg.chatId, resp);
+        // SmartFlow assumiu — envia respostas geradas.
+        // Espalha os envios no tempo pra não disparar burst-protection do WhatsApp
+        // (2+ mensagens no mesmo tick é causa comum de E429 / silently dropped).
+        for (let i = 0; i < sf.respostas.length; i++) {
+          if (i > 0) await new Promise((r) => setTimeout(r, DELAY_ENTRE_RESPOSTAS_MS));
+          await enviarResposta(canalId, conversaId, msg.chatId, sf.respostas[i]);
         }
       } else {
         // Sem cenário ativo — dispara auto-reply fixo do canal (se configurado)
@@ -127,9 +187,76 @@ export async function enviarAutoReply(canalId: number, conversaId: number, chatI
   await enviarResposta(canalId, conversaId, chatIdExterno, texto);
 }
 
+/**
+ * Envia uma resposta automática (chatbot/SmartFlow) pro WhatsApp.
+ *
+ * Fluxo:
+ *   1. Persiste a mensagem com status "pendente" (já aparece na UI com spinner).
+ *   2. Se o chatId é @lid, tenta converter pra telefone real do contato
+ *      (LID nem sempre aceita sendMessage — Baileys retorna "Chat not found").
+ *   3. Valida que a sessão Baileys está viva.
+ *   4. Envia e atualiza status pra "enviada" (ou "falha" com log estruturado).
+ *
+ * A UI lê o campo `status` pra renderizar ícone de sucesso/falha.
+ */
 async function enviarResposta(canalId: number, conversaId: number, chatIdExterno: string, resposta: string) {
-  await salvarMensagem({ conversaId, remetenteId: undefined, direcao: "saida", tipo: "texto", conteudo: resposta });
-  try { const { getWhatsappManager } = await import("./whatsapp-baileys"); const m = getWhatsappManager(); if (m.isConectado(canalId)) await m.enviarMensagemJid(canalId, chatIdExterno, resposta); } catch (e: any) { log.error(`[ChatBot] Envio WA erro:`, e.message); }
+  const msgId = await salvarMensagem({
+    conversaId,
+    remetenteId: undefined,
+    direcao: "saida",
+    tipo: "texto",
+    conteudo: resposta,
+    status: "pendente",
+  });
+
+  try {
+    const { getWhatsappManager } = await import("./whatsapp-baileys");
+    const m = getWhatsappManager();
+    if (!m.isConectado(canalId)) {
+      throw new Error("Sessão WhatsApp desconectada");
+    }
+
+    // Fallback LID → PN: se o chatIdExterno for @lid, buscar telefone
+    // real do contato associado à conversa. Evita "Chat not found".
+    let destinatario = chatIdExterno;
+    if (isLidJid(chatIdExterno)) {
+      const telefonePN = await buscarTelefonePNdaConversa(conversaId);
+      if (telefonePN) {
+        destinatario = `${telefonePN.replace(/\D/g, "")}@s.whatsapp.net`;
+        log.warn({ conversaId, lid: chatIdExterno, pn: destinatario }, "[WhatsApp] Convertendo LID para PN no envio");
+      } else {
+        log.warn({ conversaId, lid: chatIdExterno }, "[WhatsApp] LID sem telefone PN cadastrado — tentando enviar direto no LID");
+      }
+    }
+
+    await m.enviarMensagemJid(canalId, destinatario, resposta);
+    await atualizarStatusMensagem(msgId, "enviada");
+  } catch (e: any) {
+    log.error({ err: e?.message, conversaId, canalId, msgId }, "[ChatBot] Envio WA erro");
+    await atualizarStatusMensagem(msgId, "falha");
+  }
+}
+
+/** Busca o telefone (PN) do contato associado à conversa. Usado pra converter JID @lid. */
+async function buscarTelefonePNdaConversa(conversaId: number): Promise<string | null> {
+  try {
+    const { getDb } = await import("../db");
+    const { conversas, contatos } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select({ telefone: contatos.telefone })
+      .from(conversas)
+      .innerJoin(contatos, eq(contatos.id, conversas.contatoId))
+      .where(eq(conversas.id, conversaId))
+      .limit(1);
+    const tel = row?.telefone?.replace(/\D/g, "") || "";
+    return tel.length >= 10 ? tel : null;
+  } catch (err: any) {
+    log.warn({ err: err?.message, conversaId }, "Falha ao buscar telefone PN da conversa");
+    return null;
+  }
 }
 
 // buscarContatoPorTelefone agora é centralizada em db-crm.ts

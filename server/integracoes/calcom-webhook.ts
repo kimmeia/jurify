@@ -58,34 +58,122 @@ async function handleBookingCreated(payload: CalcomWebhookPayload) {
     log.info(`[Cal.com]   Participante: ${attendees[0].name} (${attendees[0].email})`);
   }
 
-  // TODO: Quando o escritorioId estiver no metadata do booking,
-  // criar automaticamente um agendamento no sistema:
-  //
-  // const escritorioId = payload.payload.metadata?.escritorioId;
-  // if (escritorioId) {
-  //   await criarAgendamento({
-  //     escritorioId,
-  //     criadoPorId: ..., // colaborador que configurou Cal.com
-  //     responsavelId: ...,
-  //     tipo: "reuniao_comercial",
-  //     titulo: title,
-  //     dataInicio: startTime,
-  //     dataFim: endTime,
-  //     descricao: `Booking Cal.com: ${uid}\nParticipante: ${attendees?.[0]?.name} (${attendees?.[0]?.email})`,
-  //   });
-  // }
+  // Dispara cenários SmartFlow com gatilho "agendamento_criado".
+  // Resolve escritório via e-mail do organizador (canal Cal.com registrado).
+  const escritorioId = await resolverEscritorioPorOrganizador(organizer?.email);
+  if (escritorioId) {
+    try {
+      const { dispararAgendamentoCriado } = await import("../smartflow/dispatcher");
+      await dispararAgendamentoCriado(escritorioId, {
+        bookingId: uid || id,
+        titulo: title,
+        startTime,
+        endTime,
+        participanteNome: attendees?.[0]?.name,
+        participanteEmail: attendees?.[0]?.email,
+        organizadorEmail: organizer?.email,
+      });
+    } catch (e: any) {
+      log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar agendamento_criado");
+    }
+  } else {
+    log.debug(
+      { organizadorEmail: organizer?.email },
+      "[Cal.com] Booking sem escritório correspondente — SmartFlow não acionado",
+    );
+  }
+}
+
+/**
+ * Mapeia o email do organizador do Cal.com para um escritorioId, via canal
+ * integrado do tipo "calcom". Retorna null se não encontrar.
+ */
+async function resolverEscritorioPorOrganizador(email?: string): Promise<number | null> {
+  if (!email) return null;
+  try {
+    const { getDb } = await import("../db");
+    const { canaisIntegrados } = await import("../../drizzle/schema");
+    const { eq, and, or: orOp, like } = await import("drizzle-orm");
+    const { decryptConfig } = await import("../escritorio/crypto-utils");
+    const db = await getDb();
+    if (!db) return null;
+
+    // Busca canais Cal.com ativos. Decodifica config pra comparar com email
+    // do organizador (Cal.com armazena email na config do canal).
+    const canais = await db
+      .select()
+      .from(canaisIntegrados)
+      .where(and(
+        orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%")),
+      ));
+
+    for (const canal of canais) {
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) continue;
+      try {
+        const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+        const emailCanal = String(cfg?.email || cfg?.organizerEmail || "").toLowerCase();
+        if (emailCanal && emailCanal === email.toLowerCase()) {
+          return canal.escritorioId;
+        }
+      } catch { /* config corrupta, pula */ }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function handleBookingCancelled(payload: CalcomWebhookPayload) {
-  const { uid, title } = payload.payload;
+  const { id, uid, title, startTime, endTime, attendees, organizer } = payload.payload;
+  const motivo = (payload.payload as any).cancellationReason as string | undefined;
   log.info(`[Cal.com] Booking cancelado: "${title}" (${uid})`);
 
-  // TODO: Buscar agendamento pelo uid do Cal.com e cancelar
+  const escritorioId = await resolverEscritorioPorOrganizador(organizer?.email);
+  if (!escritorioId) return;
+
+  try {
+    const { dispararAgendamentoCancelado } = await import("../smartflow/dispatcher");
+    await dispararAgendamentoCancelado(escritorioId, {
+      bookingId: uid || id,
+      titulo: title,
+      startTime,
+      endTime,
+      participanteNome: attendees?.[0]?.name,
+      participanteEmail: attendees?.[0]?.email,
+      organizadorEmail: organizer?.email,
+      motivo,
+    });
+  } catch (e: any) {
+    log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar agendamento_cancelado");
+  }
 }
 
 async function handleBookingRescheduled(payload: CalcomWebhookPayload) {
-  const { uid, title, startTime, endTime } = payload.payload;
+  const { id, uid, title, startTime, endTime, attendees, organizer } = payload.payload;
+  // Cal.com inclui `rescheduleStartTime` no payload antigo; nomes variam entre
+  // versões, buscamos os dois shapes mais comuns.
+  const startAntigo =
+    (payload.payload as any).rescheduleStartTime ||
+    (payload.payload as any).previousStartTime ||
+    undefined;
   log.info(`[Cal.com] Booking reagendado: "${title}" → ${startTime}`);
 
-  // TODO: Buscar agendamento pelo uid e atualizar data
+  const escritorioId = await resolverEscritorioPorOrganizador(organizer?.email);
+  if (!escritorioId) return;
+
+  try {
+    const { dispararAgendamentoRemarcado } = await import("../smartflow/dispatcher");
+    await dispararAgendamentoRemarcado(escritorioId, {
+      bookingId: uid || id,
+      titulo: title,
+      startTimeNovo: startTime,
+      startTimeAntigo: startAntigo,
+      endTimeNovo: endTime,
+      participanteNome: attendees?.[0]?.name,
+      participanteEmail: attendees?.[0]?.email,
+      organizadorEmail: organizer?.email,
+    });
+  } catch (e: any) {
+    log.warn({ err: e.message }, "[SmartFlow] Falha ao disparar agendamento_remarcado");
+  }
 }

@@ -15,7 +15,8 @@ vi.mock("../escritorio/db-canais", () => ({
 }));
 
 vi.mock("../escritorio/db-crm", () => ({
-  enviarMensagem: vi.fn(),
+  enviarMensagem: vi.fn().mockResolvedValue(999),
+  atualizarStatusMensagem: vi.fn(),
   // Também importadas pelo handler em outras funções — mockar pra não travar o load
   criarOuReutilizarContato: vi.fn(),
   listarContatos: vi.fn(),

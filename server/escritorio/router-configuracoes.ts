@@ -296,7 +296,16 @@ export const configuracoesRouter = router({
   /** Cria novo canal */
   criarCanal: protectedProcedure
     .input(z.object({
-      tipo: z.enum(["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "telefone_voip"]),
+      tipo: z.enum([
+        "whatsapp_qr",
+        "whatsapp_api",
+        "instagram",
+        "facebook",
+        "telefone_voip",
+        "calcom",
+        "chatgpt",
+        "claude",
+      ]),
       nome: z.string().max(128),
       telefone: z.string().max(20).optional(),
       config: z.record(z.string(), z.string()).optional(),

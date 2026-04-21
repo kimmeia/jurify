@@ -668,6 +668,47 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
       }
     }
 
+    // ─── agente_chat_threads + agente_chat_mensagens: chat interno ────
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agente_chat_threads (
+          id INT NOT NULL AUTO_INCREMENT,
+          agenteIdThread INT NOT NULL,
+          escritorioIdThread INT NOT NULL,
+          usuarioIdThread INT NOT NULL,
+          tituloThread VARCHAR(200) NOT NULL DEFAULT 'Nova conversa',
+          arquivadaThread BOOLEAN NOT NULL DEFAULT false,
+          createdAtThread TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updatedAtThread TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_act_agente (agenteIdThread),
+          INDEX idx_act_usuario (usuarioIdThread),
+          INDEX idx_act_escritorio (escritorioIdThread)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS agente_chat_mensagens (
+          id INT NOT NULL AUTO_INCREMENT,
+          threadIdMsg INT NOT NULL,
+          roleMsg ENUM('user','assistant','system') NOT NULL,
+          conteudoMsg TEXT NOT NULL,
+          anexoUrlMsg VARCHAR(1024),
+          anexoNomeMsg VARCHAR(255),
+          anexoMimeMsg VARCHAR(128),
+          anexoConteudoMsg TEXT,
+          tokensUsadosMsg INT NOT NULL DEFAULT 0,
+          createdAtMsg TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          INDEX idx_acm_thread (threadIdMsg)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      log.info("agente_chat_threads + agente_chat_mensagens criadas (ou já existiam)");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "Falha ao criar agente_chat_*");
+      }
+    }
+
     // ─── judit_monitoramentos: colunas novas (tipoMonitoramento, etc) ──
     try {
       const [tables] = await connection.query(
@@ -966,6 +1007,50 @@ async function relaxConversasForeignKey(connection: mysql.Connection): Promise<v
   }
 }
 
+/**
+ * Adiciona a coluna `autoReplyFallback` em `canais_integrados`.
+ *
+ * Usada pelo handler do WhatsApp como resposta fixa quando nenhum cenário do
+ * SmartFlow bate com a mensagem recebida (substitui o antigo fallback que
+ * acionava o chatbot OpenAI/Claude automaticamente). Null/vazio = silêncio.
+ */
+async function ensureCanalAutoReplyColumn(connection: mysql.Connection): Promise<void> {
+  try {
+    const [tables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'canais_integrados'`,
+    );
+    if ((tables as unknown[]).length === 0) {
+      log.debug("Tabela 'canais_integrados' ainda não existe — pulando ensureCanalAutoReplyColumn");
+      return;
+    }
+
+    const [cols] = await connection.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'canais_integrados'`,
+    );
+    const colSet = new Set(
+      (cols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+    );
+
+    if (!colSet.has("autoReplyFallback")) {
+      try {
+        await connection.query(
+          "ALTER TABLE canais_integrados ADD COLUMN autoReplyFallback TEXT NULL",
+        );
+        log.info("ensureCanalAutoReplyColumn: autoReplyFallback adicionada");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (!isHarmlessError(msg)) {
+          log.warn({ err: msg }, "ensureCanalAutoReplyColumn: falha ao adicionar autoReplyFallback");
+        }
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureCanalAutoReplyColumn: erro inesperado");
+  }
+}
+
 export async function runMigrations(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -991,6 +1076,7 @@ export async function runMigrations(): Promise<void> {
     await ensureAsaasBillingColumns(connection);
     await ensureClienteControlSchema(connection);
     await ensureJuditMonitoramentoColumns(connection);
+    await ensureCanalAutoReplyColumn(connection);
 
     // Atualizar enum tipoCanal para incluir calcom e chatgpt
     try {
@@ -1088,11 +1174,24 @@ export async function runMigrations(): Promise<void> {
 
     // SmartFlow enum updates
     try {
-      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','novo_lead','agendamento_criado','pagamento_recebido','manual') NOT NULL`);
-      await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','calcom_horarios','calcom_agendar','whatsapp_enviar','transferir','condicional','esperar','webhook','kanban_criar_card') NOT NULL`);
+      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','mensagem_canal','novo_lead','agendamento_criado','agendamento_cancelado','agendamento_remarcado','agendamento_lembrete','pagamento_recebido','pagamento_vencido','pagamento_proximo_vencimento','manual') NOT NULL`);
+      await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','calcom_horarios','calcom_agendar','calcom_listar','calcom_cancelar','calcom_remarcar','whatsapp_enviar','transferir','condicional','esperar','webhook','kanban_criar_card') NOT NULL`);
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");
     }
+
+    // SmartFlow scheduler — coluna retomarEmExec p/ retomar passos "esperar"
+    try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN retomarEmExec TIMESTAMP NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_execucoes ADD INDEX idx_sfe_retomar (retomarEmExec)`); } catch { /* exists */ }
+
+    // SmartFlow configGatilhoSF — config específica do gatilho (canais, dias, etc.)
+    try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN configGatilhoSF TEXT NULL`); } catch { /* exists */ }
+
+    // SmartFlow branching — UUID estável + mapa de saída por ramo.
+    // Idempotente: catch silencioso se a coluna já existe.
+    try { await connection.query(`ALTER TABLE smartflow_passos ADD COLUMN clienteIdPasso VARCHAR(36) NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_passos ADD COLUMN proximoSePasso TEXT NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_passos ADD INDEX idx_sfp_clienteId (clienteIdPasso)`); } catch { /* exists */ }
 
     // Kanban tables
     try {

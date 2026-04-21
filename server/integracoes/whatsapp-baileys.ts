@@ -181,10 +181,18 @@ class WhatsappSessionManager extends EventEmitter {
     };
   }
 
-  /** Verifica se sessão está conectada */
+  /**
+   * Verifica se sessão está conectada E com socket autenticado.
+   *
+   * O campo `status` é mantido em memória e pode divergir do estado real
+   * (ex: keepalive falhou mas ainda não atualizou o status). Validar
+   * também `socket.user` garante que o socket está de fato autenticado
+   * — Baileys só popula esse campo depois do handshake completo.
+   */
   isConectado(canalId: number): boolean {
     const state = this.sessions.get(canalId);
-    return state?.status === "conectado";
+    if (!state || state.status !== "conectado") return false;
+    return !!state.socket?.user;
   }
 
   /** Envia mensagem de texto via Baileys */

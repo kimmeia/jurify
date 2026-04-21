@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, Mail, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, ExternalLink, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User } from "lucide-react";
+import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, Mail, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, ExternalLink, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -614,7 +614,30 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
     </div>
     {/* Alerta financeiro */}
     {conv?.contatoId && <AlertaFinanceiroChat contatoId={conv.contatoId} contatoNome={conv.contatoNome} />}
-    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2" style={{ minHeight: 360, maxHeight: 420 }}>{!msgs?.length ? <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p> : msgs.map((m: any) => (<div key={m.id} className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}><div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md")}>{m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}{renderMsgContent(m)}<p className={"text-[10px] mt-1 text-right " + (m.direcao === "saida" ? "opacity-50" : "text-muted-foreground")}>{new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></div></div>))}</div>
+    <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2" style={{ minHeight: 360, maxHeight: 420 }}>
+      {!msgs?.length ? (
+        <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
+      ) : (
+        msgs.map((m: any) => (
+          <div key={m.id} className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
+            <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
+              {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}
+              {renderMsgContent(m)}
+              <div className={"flex items-center gap-1 justify-end mt-1 text-[10px] " + (m.direcao === "saida" ? "opacity-70" : "text-muted-foreground")}>
+                <span>{new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
+                {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
+                {m.direcao === "saida" && m.status === "falha" && (
+                  <span title="Falha no envio — veja logs do WhatsApp">
+                    <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
     <div className="p-3 border-t flex gap-2 bg-muted/20">
       <Popover open={showTemplates} onOpenChange={setShowTemplates}>
         <PopoverTrigger asChild>

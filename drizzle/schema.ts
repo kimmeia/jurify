@@ -631,6 +631,46 @@ export const agenteIaDocumentos = mysqlTable("agente_ia_documentos", {
 export type AgenteIaDocumento = typeof agenteIaDocumentos.$inferSelect;
 export type InsertAgenteIaDocumento = typeof agenteIaDocumentos.$inferInsert;
 
+/**
+ * Chat interno dos agentes IA — threads (conversas) + mensagens.
+ *
+ * Usado pela tela /agentes-ia/:id/chat onde o advogado conversa direto com
+ * o agente (confecção de peças, análise de casos, pesquisa, etc). Separado
+ * das tabelas `conversas`/`mensagens` porque aquelas são do Atendimento ao
+ * cliente final (exigem canalId, status de atendimento, etc) — o chat
+ * interno é muito mais simples e não compartilha semântica.
+ */
+export const agenteChatThreads = mysqlTable("agente_chat_threads", {
+  id: int("id").autoincrement().primaryKey(),
+  agenteId: int("agenteIdThread").notNull(),
+  escritorioId: int("escritorioIdThread").notNull(),
+  usuarioId: int("usuarioIdThread").notNull(),
+  titulo: varchar("tituloThread", { length: 200 }).notNull().default("Nova conversa"),
+  arquivada: boolean("arquivadaThread").notNull().default(false),
+  createdAt: timestamp("createdAtThread").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtThread").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AgenteChatThread = typeof agenteChatThreads.$inferSelect;
+export type InsertAgenteChatThread = typeof agenteChatThreads.$inferInsert;
+
+export const agenteChatMensagens = mysqlTable("agente_chat_mensagens", {
+  id: int("id").autoincrement().primaryKey(),
+  threadId: int("threadIdMsg").notNull(),
+  role: mysqlEnum("roleMsg", ["user", "assistant", "system"]).notNull(),
+  conteudo: text("conteudoMsg").notNull(),
+  anexoUrl: varchar("anexoUrlMsg", { length: 1024 }),
+  anexoNome: varchar("anexoNomeMsg", { length: 255 }),
+  anexoMime: varchar("anexoMimeMsg", { length: 128 }),
+  /** Texto extraído do anexo p/ passar como contexto quando possível (TXT/MD/CSV/JSON) */
+  anexoConteudo: text("anexoConteudoMsg"),
+  tokensUsados: int("tokensUsadosMsg").notNull().default(0),
+  createdAt: timestamp("createdAtMsg").defaultNow().notNull(),
+});
+
+export type AgenteChatMensagem = typeof agenteChatMensagens.$inferSelect;
+export type InsertAgenteChatMensagem = typeof agenteChatMensagens.$inferInsert;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // FASE 5 — MÓDULO CLIENTES (Arquivos + Anotações)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1041,7 +1081,15 @@ export type InsertAsaasConfig = typeof asaasConfig.$inferInsert;
 
 /**
  * Vínculo entre contatos do CRM e clientes do Asaas.
- * Linkado por CPF/CNPJ. Cada contato pode ter no máximo 1 vínculo Asaas.
+ *
+ * O Asaas permite múltiplos customers com o mesmo CPF/CNPJ (duplicatas
+ * geradas por imports antigos, cadastro manual, webhooks legados, etc).
+ * No nosso lado unificamos tudo sob UM contato do CRM: pode haver N linhas
+ * aqui com o mesmo contatoId, uma para cada asaasCustomerId.
+ *
+ * `primario` marca qual dos N é usado para CRIAR novas cobranças. Os demais
+ * servem apenas para puxar o histórico financeiro (sync). Sempre deve haver
+ * exatamente um primário por contato; secundários têm primario=false.
  */
 export const asaasClientes = mysqlTable("asaas_clientes", {
   id: int("id").autoincrement().primaryKey(),
@@ -1050,6 +1098,7 @@ export const asaasClientes = mysqlTable("asaas_clientes", {
   asaasCustomerId: varchar("asaasCustomerId", { length: 64 }).notNull(),
   cpfCnpj: varchar("cpfCnpjAsaas", { length: 18 }).notNull(),
   nome: varchar("nomeAsaasCli", { length: 255 }),
+  primario: boolean("primarioAsaasCli").notNull().default(true),
   sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
 });
 
@@ -1344,15 +1393,23 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
   /** Gatilho que inicia o fluxo */
   gatilho: mysqlEnum("gatilhoSF", [
     "whatsapp_mensagem",
+    "mensagem_canal",
     "novo_lead",
     "agendamento_criado",
+    "agendamento_cancelado",
+    "agendamento_remarcado",
+    "agendamento_lembrete",
     "pagamento_recebido",
+    "pagamento_vencido",
+    "pagamento_proximo_vencimento",
     "manual",
   ]).notNull(),
   /** Se o cenário está ativo (recebe eventos) */
   ativo: boolean("ativoSF").default(true).notNull(),
   /** Configuração geral do cenário (JSON) */
   config: text("configSF"),
+  /** Configuração específica do gatilho (JSON — canais, dias de atraso, etc.) */
+  configGatilho: text("configGatilhoSF"),
   criadoPor: int("criadoPorSF"),
   createdAt: timestamp("createdAtSF").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtSF").defaultNow().onUpdateNow().notNull(),
@@ -1373,6 +1430,9 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "ia_responder",         // IA gera resposta contextual
     "calcom_horarios",      // busca horários disponíveis no Cal.com
     "calcom_agendar",       // cria agendamento no Cal.com
+    "calcom_listar",        // lista bookings do Cal.com (contexto)
+    "calcom_cancelar",      // cancela booking no Cal.com
+    "calcom_remarcar",      // reagenda booking no Cal.com
     "whatsapp_enviar",      // envia mensagem no WhatsApp
     "transferir",           // transfere pra humano
     "condicional",          // if/else baseado em condição
@@ -1382,6 +1442,18 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
   ]).notNull(),
   /** Configuração do passo (JSON — prompt, template, condição, etc) */
   config: text("configPasso"),
+  /**
+   * UUID estável gerado pelo editor. Permite que edges do ReactFlow
+   * referenciem passos mesmo após delete+insert do save (IDs autoincrement
+   * mudam, `clienteId` não). Null em cenários legados lineares.
+   */
+  clienteId: varchar("clienteIdPasso", { length: 36 }),
+  /**
+   * Mapa de saída por ramo (JSON). Chaves: "default" ou `cond_<id>` ou
+   * "fallback". Valores: `id` do passo alvo. Se null, o engine segue pro
+   * próximo passo por `ordem` (comportamento linear legado).
+   */
+  proximoSe: text("proximoSePasso"),
   createdAt: timestamp("createdAtPasso").defaultNow().notNull(),
 });
 
@@ -1405,6 +1477,12 @@ export const smartflowExecucoes = mysqlTable("smartflow_execucoes", {
   contexto: text("contextoExec"),
   /** Mensagem de erro (se status=erro) */
   erro: varchar("erroExec", { length: 512 }),
+  /**
+   * Quando a execução está em passo "esperar", este timestamp indica
+   * quando o scheduler deve retomar do próximo passo. Null = não está
+   * aguardando delay.
+   */
+  retomarEm: timestamp("retomarEmExec"),
   createdAt: timestamp("createdAtExec").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtExec").defaultNow().onUpdateNow().notNull(),
 });

@@ -101,7 +101,7 @@ function decryptApiKey(encrypted: string, iv: string, tag: string): string {
  *      - Se tem os dois, prioriza pelo provider do agente
  *   3. Key admin global (fallback)
  */
-async function resolverAPIKey(
+export async function resolverAPIKey(
   escritorioId: number,
   agenteAtual: any,
   providerPreferido?: string,
@@ -194,14 +194,14 @@ async function resolverAPIKey(
 }
 
 /** Detecta o provider preferido pelo nome do modelo */
-function providerDoModelo(modelo: string | null | undefined): "openai" | "anthropic" {
+export function providerDoModelo(modelo: string | null | undefined): "openai" | "anthropic" {
   const m = (modelo || "").toLowerCase();
   if (m.startsWith("claude") || m.includes("anthropic")) return "anthropic";
   return "openai";
 }
 
 /** Monta o bloco de contexto com documentos de treinamento do agente. */
-async function montarContextoDocumentos(
+export async function montarContextoDocumentos(
   db: any,
   agenteId: number,
   escritorioId: number,
@@ -812,6 +812,33 @@ export async function obterAgenteParaCanal(
     if (!global) return null;
     agente = global;
   }
+  return extrairConfig(escritorioId, agente);
+}
+
+/**
+ * Busca um agente por ID dentro do escritório e devolve a config completa
+ * (provider resolvido + API key + docs RAG), no mesmo shape usado por
+ * `obterAgenteParaCanal`. Usada pelo SmartFlow (passo `ia_responder` com
+ * `agenteId` no config).
+ */
+export async function obterAgentePorId(
+  escritorioId: number,
+  agenteId: number,
+): Promise<AgenteCanalConfig | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [agente] = await db
+    .select()
+    .from(agentesIa)
+    .where(
+      and(
+        eq(agentesIa.escritorioId, escritorioId),
+        eq(agentesIa.id, agenteId),
+        eq(agentesIa.ativo, true),
+      ),
+    )
+    .limit(1);
+  if (!agente) return null;
   return extrairConfig(escritorioId, agente);
 }
 

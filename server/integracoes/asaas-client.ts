@@ -294,6 +294,74 @@ export class AsaasClient {
     return res.data.data.length > 0 ? res.data.data[0] : null;
   }
 
+  /**
+   * Retorna TODOS os customers do Asaas com o CPF/CNPJ informado.
+   * O Asaas permite duplicatas (regra de unicidade fraca): um mesmo CPF
+   * pode aparecer em múltiplos customers, geralmente por imports antigos,
+   * cadastro manual ou webhooks que não deduplicaram. Ignora os deletados.
+   *
+   * Usa paginação — caso raro, mas possível em bases grandes.
+   */
+  async buscarTodosClientesPorCpfCnpj(cpfCnpj: string): Promise<AsaasCustomer[]> {
+    const cpfLimpo = cpfCnpj.replace(/\D/g, "");
+    if (!cpfLimpo) return [];
+
+    const resultados: AsaasCustomer[] = [];
+    let offset = 0;
+    const limit = 100;
+    let hasMore = true;
+
+    while (hasMore) {
+      const res = await this.api.get<AsaasListResponse<AsaasCustomer>>("/customers", {
+        params: { cpfCnpj: cpfLimpo, offset, limit },
+      });
+      for (const c of res.data.data) {
+        if (c.deleted) continue;
+        const cpfRemoto = (c.cpfCnpj || "").replace(/\D/g, "");
+        // Conferência final local (Asaas às vezes faz prefix match).
+        if (cpfRemoto === cpfLimpo) resultados.push(c);
+      }
+      hasMore = res.data.hasMore;
+      offset += res.data.limit;
+    }
+
+    return resultados;
+  }
+
+  /**
+   * Busca clientes no Asaas por telefone (phone ou mobilePhone).
+   * Asaas pode retornar múltiplos (ex.: responsável legal ou familiar
+   * compartilhando telefone). A chamada é feita separada por campo e a
+   * conferência final é local, apenas com dígitos, para evitar match
+   * parcial caso a API faça prefix search.
+   */
+  async buscarClientesPorTelefone(telefone: string): Promise<AsaasCustomer[]> {
+    const telLimpo = telefone.replace(/\D/g, "");
+    if (!telLimpo) return [];
+
+    const resultados = new Map<string, AsaasCustomer>();
+
+    for (const campo of ["phone", "mobilePhone"] as const) {
+      try {
+        const res = await this.api.get<AsaasListResponse<AsaasCustomer>>("/customers", {
+          params: { [campo]: telLimpo },
+        });
+        for (const c of res.data.data) {
+          if (c.deleted) continue;
+          const phoneMatch = (c.phone || "").replace(/\D/g, "");
+          const mobileMatch = (c.mobilePhone || "").replace(/\D/g, "");
+          if (phoneMatch === telLimpo || mobileMatch === telLimpo) {
+            resultados.set(c.id, c);
+          }
+        }
+      } catch {
+        /* tenta próximo campo */
+      }
+    }
+
+    return Array.from(resultados.values());
+  }
+
   async criarCliente(input: AsaasCustomerInput): Promise<AsaasCustomer> {
     const res = await this.api.post("/customers", input);
     return res.data;
