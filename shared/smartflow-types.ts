@@ -14,6 +14,7 @@ export type GatilhoSmartflow =
   | "agendamento_criado"
   | "agendamento_cancelado"
   | "agendamento_remarcado"
+  | "agendamento_lembrete"
   | "pagamento_recebido"
   | "pagamento_vencido"
   | "pagamento_proximo_vencimento"
@@ -278,21 +279,50 @@ export interface ConfigGatilhoMensagemCanal {
   canais?: TipoCanalMensagem[];
 }
 
-export interface ConfigGatilhoPagamentoVencido {
+/**
+ * Campos comuns de janela de disparo dos gatilhos Asaas. Todos opcionais —
+ * quando `horarioInicial` está vazio, o scheduler mantém o comportamento
+ * legado (dedupe de 24h, disparo assim que o cron roda).
+ */
+export interface JanelaDisparo {
+  /** Primeiro horário do dia, formato "HH:MM" (timezone America/Sao_Paulo). */
+  horarioInicial?: string;
+  /** Quantos disparos por dia, a partir de `horarioInicial`. Default: 1 */
+  disparosPorDia?: number;
+  /** Minutos entre disparos sucessivos dentro do mesmo dia. Default: 120 */
+  intervaloMinutos?: number;
+  /** Por quantos dias consecutivos repetir. Default: 1 */
+  repetirPorDias?: number;
+}
+
+export interface ConfigGatilhoPagamentoVencido extends JanelaDisparo {
   /** Dispara só se a cobrança estiver atrasada há pelo menos N dias. Default: 0 */
   diasAtraso?: number;
 }
 
-export interface ConfigGatilhoPagamentoProximoVencimento {
+export interface ConfigGatilhoPagamentoProximoVencimento extends JanelaDisparo {
   /** Dispara se a cobrança vence em até N dias. Default: 3 */
   diasAntes?: number;
+}
+
+/**
+ * Lembrete de agendamento do Cal.com — o scheduler dispara quando faltam
+ * `diasAntes` dias pro booking no `horario` configurado. Ex: `diasAntes=1`
+ * + `horario="18:00"` dispara às 18:00 da véspera.
+ */
+export interface ConfigGatilhoAgendamentoLembrete {
+  /** Quantos dias antes do agendamento disparar. Default: 1 */
+  diasAntes?: number;
+  /** Horário de disparo "HH:MM". Default: "18:00" */
+  horario?: string;
 }
 
 export type ConfigGatilhoByTipo =
   | { gatilho: "mensagem_canal"; config: ConfigGatilhoMensagemCanal }
   | { gatilho: "pagamento_vencido"; config: ConfigGatilhoPagamentoVencido }
   | { gatilho: "pagamento_proximo_vencimento"; config: ConfigGatilhoPagamentoProximoVencimento }
-  | { gatilho: Exclude<GatilhoSmartflow, "mensagem_canal" | "pagamento_vencido" | "pagamento_proximo_vencimento">; config: Record<string, unknown> };
+  | { gatilho: "agendamento_lembrete"; config: ConfigGatilhoAgendamentoLembrete }
+  | { gatilho: Exclude<GatilhoSmartflow, "mensagem_canal" | "pagamento_vencido" | "pagamento_proximo_vencimento" | "agendamento_lembrete">; config: Record<string, unknown> };
 
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
@@ -320,6 +350,7 @@ export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "agendamento_criado", label: "Agendamento criado", descricao: "Dispara quando booking Cal.com é confirmado.", grupo: "calcom" },
   { id: "agendamento_cancelado", label: "Agendamento cancelado", descricao: "Dispara quando booking Cal.com é cancelado.", grupo: "calcom" },
   { id: "agendamento_remarcado", label: "Agendamento remarcado", descricao: "Dispara quando booking Cal.com é reagendado.", grupo: "calcom" },
+  { id: "agendamento_lembrete", label: "Lembrete de agendamento", descricao: "Dispara N dias antes do agendamento no horário configurado.", grupo: "calcom" },
   { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'.", grupo: "fluxo" },
 ];
 
@@ -354,7 +385,12 @@ export function getGatilhoMeta(id: string): GatilhoMeta {
 }
 
 /** Variáveis de contexto disponíveis no template de mensagem WhatsApp. */
-export const VARIAVEIS_TEMPLATE = ["{nome}", "{intencao}", "{horario}"] as const;
+export const VARIAVEIS_TEMPLATE = [
+  "{nome}",
+  "{intencao}",
+  "{horario}",
+  "{cobrancasAbertas}",
+] as const;
 
 /** Campos sugeridos no painel de condicional. */
 export const CAMPOS_CONDICIONAL = [

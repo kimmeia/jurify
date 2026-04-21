@@ -96,6 +96,7 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   agendamento_criado: CalendarCheck,
   agendamento_cancelado: CalendarX,
   agendamento_remarcado: CalendarClock,
+  agendamento_lembrete: Clock,
   manual: Play,
 };
 

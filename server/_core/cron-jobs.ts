@@ -376,4 +376,9 @@ export function iniciarJobs() {
   import("../smartflow/cobrancas-scheduler")
     .then(({ iniciarCobrancasSchedulerSmartFlow }) => iniciarCobrancasSchedulerSmartFlow())
     .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow cobranças scheduler"));
+
+  // SmartFlow lembretes Cal.com — cron de 15min p/ agendamento_lembrete
+  import("../smartflow/calcom-lembretes-scheduler")
+    .then(({ iniciarCalcomLembretesScheduler }) => iniciarCalcomLembretesScheduler())
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow lembretes Cal.com"));
 }

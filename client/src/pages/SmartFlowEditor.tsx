@@ -95,6 +95,7 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   agendamento_criado: CalendarCheck,
   agendamento_cancelado: CalendarX,
   agendamento_remarcado: CalendarClock,
+  agendamento_lembrete: Clock,
   manual: Play,
 };
 
@@ -283,13 +284,25 @@ function resumirConfigGatilho(g: GatilhoSmartflow, cfg: Record<string, unknown>)
       .map((c) => TIPO_CANAL_META.find((m) => m.id === c)?.label || c)
       .join(", ");
   }
-  if (g === "pagamento_vencido") {
-    const d = Number(cfg.diasAtraso ?? 0);
-    return d > 0 ? `≥ ${d} dia(s) de atraso` : "Qualquer atraso";
+  if (g === "pagamento_vencido" || g === "pagamento_proximo_vencimento") {
+    const base =
+      g === "pagamento_vencido"
+        ? Number(cfg.diasAtraso ?? 0) > 0
+          ? `≥ ${Number(cfg.diasAtraso)} dia(s) atraso`
+          : "qualquer atraso"
+        : `${Number(cfg.diasAntes ?? 3)} dia(s) antes`;
+    const horario = typeof cfg.horarioInicial === "string" ? cfg.horarioInicial : "";
+    if (!horario) return base;
+    const disparos = Number(cfg.disparosPorDia ?? 1);
+    const dias = Number(cfg.repetirPorDias ?? 1);
+    return `${base} · ${disparos}×/dia das ${horario}${dias > 1 ? ` por ${dias}d` : ""}`;
   }
-  if (g === "pagamento_proximo_vencimento") {
-    const d = Number(cfg.diasAntes ?? 3);
-    return `${d} dia(s) antes`;
+  if (g === "agendamento_lembrete") {
+    const dias = Number(cfg.diasAntes ?? 1);
+    const horario = typeof cfg.horario === "string" ? cfg.horario : "18:00";
+    if (dias === 0) return `No dia às ${horario}`;
+    if (dias === 1) return `Véspera às ${horario}`;
+    return `${dias} dias antes às ${horario}`;
   }
   return "";
 }
@@ -982,6 +995,78 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
   );
 }
 
+/**
+ * Grupo de inputs pra configurar a janela de disparo dos gatilhos Asaas:
+ * horário inicial do dia, quantos disparos/dia, intervalo entre eles, e
+ * por quantos dias repete. Todos opcionais — cenários sem `horarioInicial`
+ * caem no modo legado do scheduler (1×/dia, dedupe 24h).
+ */
+function JanelaDisparoFields({
+  cfg,
+  onChange,
+  rotuloDias,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+  rotuloDias: string;
+}) {
+  return (
+    <div className="rounded border p-2 space-y-2 bg-muted/10">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        Janela de disparo (opcional)
+      </p>
+      <div>
+        <Label className="text-xs">Primeiro horário do dia</Label>
+        <Input
+          type="time"
+          value={String(cfg.horarioInicial || "")}
+          onChange={(e) => onChange({ horarioInicial: e.target.value })}
+          placeholder="09:00"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Em branco = modo antigo (1×/dia, sem horário fixo).
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Disparos/dia</Label>
+          <Input
+            type="number"
+            min={1}
+            max={10}
+            value={Number(cfg.disparosPorDia ?? 1)}
+            onChange={(e) => onChange({ disparosPorDia: Math.max(1, Number(e.target.value) || 1) })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Intervalo (min)</Label>
+          <Input
+            type="number"
+            min={15}
+            max={720}
+            step={15}
+            value={Number(cfg.intervaloMinutos ?? 120)}
+            onChange={(e) => onChange({ intervaloMinutos: Math.max(15, Number(e.target.value) || 120) })}
+          />
+        </div>
+      </div>
+      <div>
+        <Label className="text-xs">{rotuloDias}</Label>
+        <Input
+          type="number"
+          min={1}
+          max={30}
+          value={Number(cfg.repetirPorDias ?? 1)}
+          onChange={(e) => onChange({ repetirPorDias: Math.max(1, Number(e.target.value) || 1) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Após N dias de lembretes, o cenário para de disparar pra essa cobrança.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConfigGatilhoFields({
   node,
   onChange,
@@ -1037,37 +1122,73 @@ function ConfigGatilhoFields({
 
   if (node.data.gatilho === "pagamento_vencido") {
     return (
-      <div>
-        <Label className="text-xs">Dias mínimos de atraso</Label>
-        <Input
-          type="number"
-          min={0}
-          max={365}
-          value={Number(cfg.diasAtraso ?? 0)}
-          onChange={(e) => onChange({ diasAtraso: Math.max(0, Number(e.target.value) || 0) })}
-        />
-        <p className="text-[10px] text-muted-foreground mt-1">
-          O cenário só dispara se o pagamento estiver atrasado há pelo menos N dias.
-          <br /> <strong>0</strong> = dispara imediatamente ao vencer.
-        </p>
+      <div className="space-y-3">
+        <div>
+          <Label className="text-xs">Dias mínimos de atraso</Label>
+          <Input
+            type="number"
+            min={0}
+            max={365}
+            value={Number(cfg.diasAtraso ?? 0)}
+            onChange={(e) => onChange({ diasAtraso: Math.max(0, Number(e.target.value) || 0) })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            O cenário só dispara se o pagamento estiver atrasado há pelo menos N dias.
+          </p>
+        </div>
+        <JanelaDisparoFields cfg={cfg} onChange={onChange} rotuloDias="Repetir por (dias)" />
       </div>
     );
   }
 
   if (node.data.gatilho === "pagamento_proximo_vencimento") {
     return (
-      <div>
-        <Label className="text-xs">Dias antes do vencimento</Label>
-        <Input
-          type="number"
-          min={1}
-          max={60}
-          value={Number(cfg.diasAntes ?? 3)}
-          onChange={(e) => onChange({ diasAntes: Math.max(1, Number(e.target.value) || 1) })}
-        />
-        <p className="text-[10px] text-muted-foreground mt-1">
-          Dispara o cenário quando a cobrança vence em até N dias. Roda 1×/dia via job.
-        </p>
+      <div className="space-y-3">
+        <div>
+          <Label className="text-xs">Dias antes do vencimento</Label>
+          <Input
+            type="number"
+            min={1}
+            max={60}
+            value={Number(cfg.diasAntes ?? 3)}
+            onChange={(e) => onChange({ diasAntes: Math.max(1, Number(e.target.value) || 1) })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Dispara quando a cobrança vence em até N dias.
+          </p>
+        </div>
+        <JanelaDisparoFields cfg={cfg} onChange={onChange} rotuloDias="Lembrar por (dias)" />
+      </div>
+    );
+  }
+
+  if (node.data.gatilho === "agendamento_lembrete") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <Label className="text-xs">Dias antes do agendamento</Label>
+          <Input
+            type="number"
+            min={0}
+            max={30}
+            value={Number(cfg.diasAntes ?? 1)}
+            onChange={(e) => onChange({ diasAntes: Math.max(0, Number(e.target.value) || 0) })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            <strong>0</strong> = no mesmo dia. <strong>1</strong> = véspera.
+          </p>
+        </div>
+        <div>
+          <Label className="text-xs">Horário</Label>
+          <Input
+            type="time"
+            value={String(cfg.horario || "18:00")}
+            onChange={(e) => onChange({ horario: e.target.value })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Momento do dia em que o lembrete é enviado (timezone America/Sao_Paulo).
+          </p>
+        </div>
       </div>
     );
   }

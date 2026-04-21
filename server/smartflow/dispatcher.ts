@@ -24,11 +24,15 @@ import { criarExecutoresReais } from "./executores";
 import { createLogger } from "../_core/logger";
 import {
   aceitaCanal,
+  chaveDiaLocal,
   contextoContemPagamento,
+  contextoContemSlot,
   deveDispararProximo,
   deveDispararVencido,
   diasEntre,
   parseVencimento,
+  slotTimestampChave,
+  temHorarioConfigurado,
 } from "./dispatcher-helpers";
 import type {
   GatilhoSmartflow,
@@ -36,6 +40,7 @@ import type {
   ConfigGatilhoMensagemCanal,
   ConfigGatilhoPagamentoVencido,
   ConfigGatilhoPagamentoProximoVencimento,
+  ConfigGatilhoAgendamentoLembrete,
 } from "../../shared/smartflow-types";
 
 const log = createLogger("smartflow-dispatcher");
@@ -387,18 +392,28 @@ export async function dispararPagamentoRecebido(
 }
 
 /**
- * Checa se já existe execução do cenário `cenarioId` cujo contexto referencia
- * o `pagamentoId` informado nas últimas 24h. Evita disparos duplicados quando
- * o webhook do Asaas chega simultaneamente ao ciclo do cobrancas-scheduler.
+ * Dedupe do disparo de pagamento. Duas estratégias, escolhidas pelo caller:
+ *
+ *   - `slotChave` presente: verifica se **o mesmo slot exato** já disparou
+ *     nos últimos N dias (default 2). Permite várias execuções por dia
+ *     (ex: 09:00, 11:00, 13:00) sem duplicar.
+ *   - `slotChave` ausente: fallback pra janela fixa de 24h via
+ *     `contextoContemPagamento` — comportamento legado, cenários sem
+ *     horário configurado.
  */
-async function jaDisparadoPagamento(
+async function jaDisparouPagamento(
   cenarioId: number,
   pagamentoId: string,
-  janelaHoras = 24,
+  slotChave: string | null,
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+
+  // Janela: 2 dias quando temos slot (cobre atraso do cron entre dias),
+  // 24h quando fallback legado.
+  const janelaHoras = slotChave ? 48 : 24;
   const desde = new Date(Date.now() - janelaHoras * 60 * 60 * 1000);
+
   const execs = await db
     .select({ contexto: smartflowExecucoes.contexto })
     .from(smartflowExecucoes)
@@ -408,9 +423,49 @@ async function jaDisparadoPagamento(
         gte(smartflowExecucoes.createdAt, desde),
       ),
     );
-  // O contexto é JSON serializado — uma checagem por substring basta
-  // pra dedupe, não precisa parsear.
+
+  if (slotChave) {
+    // Dedupe exato: mesmo cenário + mesmo pagamento + mesmo slot.
+    return execs.some(
+      (r) =>
+        contextoContemPagamento(r.contexto, pagamentoId) &&
+        contextoContemSlot(r.contexto, slotChave),
+    );
+  }
+
+  // Fallback legado — 24h por (cenário, pagamento).
   return execs.some((r) => contextoContemPagamento(r.contexto, pagamentoId));
+}
+
+/**
+ * Conta quantos dias distintos o par (cenário, pagamento) já gerou execução.
+ * Usado pra controlar `repetirPorDias` — depois de N dias, paramos de
+ * lembrar, mesmo que a cobrança continue em aberto.
+ */
+async function diasDistintosDisparados(
+  cenarioId: number,
+  pagamentoId: string,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  // Janela ampla (30 dias) — ninguém configura mais que isso.
+  const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const execs = await db
+    .select({ contexto: smartflowExecucoes.contexto, createdAt: smartflowExecucoes.createdAt })
+    .from(smartflowExecucoes)
+    .where(
+      and(
+        eq(smartflowExecucoes.cenarioId, cenarioId),
+        gte(smartflowExecucoes.createdAt, desde),
+      ),
+    );
+  const dias = new Set<string>();
+  for (const r of execs) {
+    if (!contextoContemPagamento(r.contexto, pagamentoId)) continue;
+    const d = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt as any);
+    dias.add(chaveDiaLocal(d));
+  }
+  return dias.size;
 }
 
 /**
@@ -431,6 +486,12 @@ export async function dispararPagamentoVencido(
     clienteNome?: string;
     clienteAsaasId?: string;
     contatoId?: number;
+    /**
+     * Slot que motivou o disparo (vindo do scheduler em modo horário). Se
+     * presente, o dedupe acontece por `(cenário, pagamento, slot)` — o
+     * mesmo pagamento pode disparar em múltiplos slots do mesmo dia.
+     */
+    slotTimestamp?: Date;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
@@ -439,15 +500,33 @@ export async function dispararPagamentoVencido(
 
     const vencimento = parseVencimento(params.vencimento);
     const diasAtrasoAtual = vencimento ? diasEntre(new Date(), vencimento) : 0;
+    const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp) : null;
 
     let disparados = 0;
     for (const c of cenarios) {
       const cfg = c.configGatilho as ConfigGatilhoPagamentoVencido;
       if (!deveDispararVencido(cfg, diasAtrasoAtual)) continue;
 
-      if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) {
-        log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId }, "SmartFlow: pagamento_vencido já disparado — skip");
+      // Webhook imediato (sem slot) é suprimido quando o cenário tem
+      // horário configurado — nesse caso só o scheduler dispara.
+      if (!slotChave && temHorarioConfigurado(cfg)) {
+        log.debug({ cenarioId: c.cenarioId }, "SmartFlow: webhook suprimido — cenário usa horário");
         continue;
+      }
+
+      if (await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) {
+        log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId, slotChave }, "SmartFlow: pagamento_vencido já disparado — skip");
+        continue;
+      }
+
+      // Controle `repetirPorDias`: para de lembrar depois de N dias.
+      const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
+      if (temHorarioConfigurado(cfg)) {
+        const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
+        if (disparadosDias >= limite) {
+          log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId, limite }, "SmartFlow: pagamento_vencido atingiu repetirPorDias");
+          continue;
+        }
       }
 
       const resumo = await calcularResumoFinanceiroContato(escritorioId, {
@@ -466,6 +545,7 @@ export async function dispararPagamentoVencido(
         contatoId: params.contatoId,
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
+        ...(slotChave ? { slotTimestamp: slotChave } : {}),
       };
 
       await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
@@ -495,6 +575,7 @@ export async function dispararProximoVencimento(
     vencimento: string;
     clienteNome?: string;
     contatoId?: number;
+    slotTimestamp?: Date;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
@@ -506,12 +587,20 @@ export async function dispararProximoVencimento(
     const diasAteVencer = diasEntre(vencimento, new Date());
     if (diasAteVencer < 0) return { executou: false, cenariosDisparados: 0 }; // já venceu
 
+    const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp) : null;
+
     let disparados = 0;
     for (const c of cenarios) {
       const cfg = c.configGatilho as ConfigGatilhoPagamentoProximoVencimento;
       if (!deveDispararProximo(cfg, diasAteVencer)) continue;
 
-      if (await jaDisparadoPagamento(c.cenarioId, params.pagamentoId)) continue;
+      if (await jaDisparouPagamento(c.cenarioId, params.pagamentoId, slotChave)) continue;
+
+      const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
+      if (temHorarioConfigurado(cfg)) {
+        const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
+        if (disparadosDias >= limite) continue;
+      }
 
       const resumo = await calcularResumoFinanceiroContato(escritorioId, {
         contatoId: params.contatoId,
@@ -528,6 +617,7 @@ export async function dispararProximoVencimento(
         contatoId: params.contatoId,
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
+        ...(slotChave ? { slotTimestamp: slotChave } : {}),
       };
 
       await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
@@ -537,6 +627,70 @@ export async function dispararProximoVencimento(
   } catch (err: any) {
     log.error({ err: err.message }, "SmartFlow: erro em dispararProximoVencimento");
     return { executou: false, cenariosDisparados: 0 };
+  }
+}
+
+/**
+ * Dispara cenários com gatilho `agendamento_lembrete`. Chamado pelo
+ * calcom-lembretes-scheduler quando a janela de lembrete de um booking
+ * cai no ciclo atual. Dedupe por (cenário, booking) na janela de 48h —
+ * cada booking só recebe 1 lembrete.
+ */
+export async function dispararAgendamentoLembrete(
+  escritorioId: number,
+  params: {
+    bookingId: string | number;
+    titulo?: string;
+    startTime?: string;
+    endTime?: string;
+    participanteNome?: string;
+    participanteEmail?: string;
+    organizadorEmail?: string;
+  },
+): Promise<{ executou: boolean }> {
+  try {
+    const cenarios = await carregarCenariosAtivos(escritorioId, ["agendamento_lembrete"]);
+    if (cenarios.length === 0) return { executou: false };
+
+    const bookingKey = String(params.bookingId);
+    // Dedupe: reusa `jaDisparouPagamento` tratando o bookingId como pagamentoId —
+    // o match por substring `"pagamentoId":"<ID>"` funciona pra qualquer ID no
+    // contexto. Vamos passar bookingKey no pagamentoId do contexto.
+    // Mais simples: checar contexto manualmente aqui.
+
+    const db = await getDb();
+    if (!db) return { executou: false };
+    const desde = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const execs = await db
+      .select({ contexto: smartflowExecucoes.contexto, cenarioId: smartflowExecucoes.cenarioId })
+      .from(smartflowExecucoes)
+      .where(gte(smartflowExecucoes.createdAt, desde));
+
+    let executou = false;
+    for (const c of cenarios) {
+      const duplicado = execs.some(
+        (r) =>
+          r.cenarioId === c.cenarioId &&
+          (r.contexto || "").includes(`"agendamentoId":"${bookingKey}"`),
+      );
+      if (duplicado) continue;
+
+      const contexto: SmartflowContexto = {
+        mensagem: `Lembrete de agendamento: ${params.titulo || ""}`.trim(),
+        agendamentoId: bookingKey,
+        horarioEscolhido: params.startTime,
+        agendamentoFim: params.endTime,
+        nomeCliente: params.participanteNome,
+        emailCliente: params.participanteEmail,
+        organizadorEmail: params.organizadorEmail,
+      };
+      await executarCenarioCarregado(escritorioId, c, contexto);
+      executou = true;
+    }
+    return { executou };
+  } catch (err: any) {
+    log.error({ err: err.message }, "SmartFlow: erro em agendamento_lembrete");
+    return { executou: false };
   }
 }
 

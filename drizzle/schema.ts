@@ -1386,6 +1386,7 @@ export const smartflowCenarios = mysqlTable("smartflow_cenarios", {
     "agendamento_criado",
     "agendamento_cancelado",
     "agendamento_remarcado",
+    "agendamento_lembrete",
     "pagamento_recebido",
     "pagamento_vencido",
     "pagamento_proximo_vencimento",
