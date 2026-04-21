@@ -1007,6 +1007,50 @@ async function relaxConversasForeignKey(connection: mysql.Connection): Promise<v
   }
 }
 
+/**
+ * Adiciona a coluna `autoReplyFallback` em `canais_integrados`.
+ *
+ * Usada pelo handler do WhatsApp como resposta fixa quando nenhum cenário do
+ * SmartFlow bate com a mensagem recebida (substitui o antigo fallback que
+ * acionava o chatbot OpenAI/Claude automaticamente). Null/vazio = silêncio.
+ */
+async function ensureCanalAutoReplyColumn(connection: mysql.Connection): Promise<void> {
+  try {
+    const [tables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'canais_integrados'`,
+    );
+    if ((tables as unknown[]).length === 0) {
+      log.debug("Tabela 'canais_integrados' ainda não existe — pulando ensureCanalAutoReplyColumn");
+      return;
+    }
+
+    const [cols] = await connection.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'canais_integrados'`,
+    );
+    const colSet = new Set(
+      (cols as { COLUMN_NAME: string }[]).map((c) => c.COLUMN_NAME),
+    );
+
+    if (!colSet.has("autoReplyFallback")) {
+      try {
+        await connection.query(
+          "ALTER TABLE canais_integrados ADD COLUMN autoReplyFallback TEXT NULL",
+        );
+        log.info("ensureCanalAutoReplyColumn: autoReplyFallback adicionada");
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        if (!isHarmlessError(msg)) {
+          log.warn({ err: msg }, "ensureCanalAutoReplyColumn: falha ao adicionar autoReplyFallback");
+        }
+      }
+    }
+  } catch (err) {
+    log.error({ err: String(err) }, "ensureCanalAutoReplyColumn: erro inesperado");
+  }
+}
+
 export async function runMigrations(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -1032,6 +1076,7 @@ export async function runMigrations(): Promise<void> {
     await ensureAsaasBillingColumns(connection);
     await ensureClienteControlSchema(connection);
     await ensureJuditMonitoramentoColumns(connection);
+    await ensureCanalAutoReplyColumn(connection);
 
     // Atualizar enum tipoCanal para incluir calcom e chatgpt
     try {

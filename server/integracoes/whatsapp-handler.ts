@@ -1,8 +1,8 @@
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { isLidJid } from "../../shared/whatsapp-types";
 import type { TipoCanalMensagem } from "../../shared/smartflow-types";
-import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, listarMensagens, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
-import { obterConfigChatBot, gerarRespostaChatBot, converterHistoricoParaChatBot } from "./chatbot-openai";
+import { criarOuReutilizarContato, listarContatos, buscarContatoPorTelefone as buscarContatoPorTelefoneDB, criarConversa, listarConversas, enviarMensagem as salvarMensagem, atualizarStatusMensagem, atualizarConversa, distribuirLead } from "../escritorio/db-crm";
+import { obterAutoReplyCanal } from "../escritorio/db-canais";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-handler");
 
@@ -142,7 +142,9 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     })();
   }
 
-  // SmartFlow tem prioridade sobre chatbot padrão
+  // Agentes IA só são acionados DENTRO do SmartFlow (via passo ia_responder).
+  // Se nenhum cenário do SmartFlow bate com a mensagem, caímos num auto-reply
+  // fixo configurado no canal. Sem IA automática fora do fluxo desenhado.
   if (msg.tipo === "texto" && msg.conteudo) {
     try {
       const { dispararMensagemCanal } = await import("../smartflow/dispatcher");
@@ -165,30 +167,24 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
           await enviarResposta(canalId, conversaId, msg.chatId, sf.respostas[i]);
         }
       } else {
-        // Sem cenário ativo — usa chatbot padrão
-        await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo);
+        // Sem cenário ativo — dispara auto-reply fixo do canal (se configurado)
+        await enviarAutoReply(canalId, conversaId, msg.chatId);
       }
     } catch (e: any) {
-      log.error(`[SmartFlow/ChatBot] Erro:`, e.message);
-      // Fallback: tenta chatbot padrão se SmartFlow falhar
-      try { await processarChatBot(escritorioId, canalId, conversaId, msg.chatId, msg.conteudo); } catch { /* ignore */ }
+      log.error(`[SmartFlow] Erro:`, e.message);
+      // Fallback: tenta auto-reply fixo se SmartFlow falhar
+      try { await enviarAutoReply(canalId, conversaId, msg.chatId); } catch { /* ignore */ }
     }
   }
   return { contatoId, conversaId, mensagemId };
 }
 
-async function processarChatBot(escritorioId: number, canalId: number, conversaId: number, chatIdExterno: string, msgCliente: string) {
-  const config = await obterConfigChatBot(escritorioId, canalId);
-  if (!config) return;
-  const conversas = await listarConversas(escritorioId, {});
-  const conv = conversas.find(c => c.id === conversaId);
-  if (conv && conv.status === "em_atendimento") return;
-  const histRaw = await listarMensagens(conversaId, 20);
-  const hist = converterHistoricoParaChatBot(histRaw.map(m => ({ direcao: m.direcao as string, conteudo: m.conteudo, tipo: m.tipo as string })));
-  const result = await gerarRespostaChatBot(config, hist, msgCliente);
-  if (result.erro) return;
-  if (result.transferir) { if (result.resposta) await enviarResposta(canalId, conversaId, chatIdExterno, result.resposta); await atualizarConversa(conversaId, escritorioId, { status: "em_atendimento" }); return; }
-  if (result.resposta) { await enviarResposta(canalId, conversaId, chatIdExterno, result.resposta); }
+/** Envia o auto-reply fixo configurado no canal. Se vazio/null, não envia nada
+ *  (silêncio deliberado — operador atende manualmente pela UI de Atendimento). */
+export async function enviarAutoReply(canalId: number, conversaId: number, chatIdExterno: string) {
+  const texto = await obterAutoReplyCanal(canalId);
+  if (!texto) return;
+  await enviarResposta(canalId, conversaId, chatIdExterno, texto);
 }
 
 /**

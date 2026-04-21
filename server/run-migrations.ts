@@ -66,6 +66,11 @@ const SQLS = [
   //     do Asaas vinculados ao mesmo contato do CRM (Asaas permite duplicatas
   //     com o mesmo CPF). Só o primário é usado ao criar novas cobranças.
   "ALTER TABLE asaas_clientes ADD COLUMN IF NOT EXISTS primarioAsaasCli TINYINT(1) NOT NULL DEFAULT 1 AFTER nomeAsaasCli",
+
+  // 19. Coluna autoReplyFallback em canais_integrados — resposta fixa enviada
+  // quando o SmartFlow não encontra cenário (substitui o fallback antigo que
+  // caía no chatbot de IA). Null/vazio = silêncio.
+  "ALTER TABLE canais_integrados ADD COLUMN IF NOT EXISTS autoReplyFallback TEXT",
 ];
 
 async function main() {

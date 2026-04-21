@@ -159,6 +159,41 @@ export async function obterConfigMascarada(canalId: number, escritorioId: number
   return masked;
 }
 
+/** Lê o texto fixo de auto-reply do canal (fallback quando SmartFlow não responde).
+ *  Usado pelo handler do WhatsApp a cada mensagem recebida sem cenário SmartFlow,
+ *  então evite trabalho pesado aqui — é só um SELECT simples. */
+export async function obterAutoReplyCanal(canalId: number): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [row] = await db
+    .select({ autoReply: canaisIntegrados.autoReplyFallback })
+    .from(canaisIntegrados)
+    .where(eq(canaisIntegrados.id, canalId))
+    .limit(1);
+
+  const texto = row?.autoReply?.trim();
+  return texto || null;
+}
+
+/** Atualiza o auto-reply do canal. Texto vazio/null desativa o envio automático. */
+export async function atualizarAutoReplyCanal(
+  canalId: number,
+  escritorioId: number,
+  texto: string | null,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  const limpo = texto?.trim() || "";
+  const valor = limpo ? limpo.slice(0, 500) : null;
+
+  await db
+    .update(canaisIntegrados)
+    .set({ autoReplyFallback: valor })
+    .where(and(eq(canaisIntegrados.id, canalId), eq(canaisIntegrados.escritorioId, escritorioId)));
+}
+
 /** Atualiza status do canal */
 export async function atualizarStatusCanal(
   canalId: number,

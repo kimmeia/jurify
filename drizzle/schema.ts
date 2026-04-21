@@ -424,6 +424,9 @@ export const canaisIntegrados = mysqlTable("canais_integrados", {
   telefone: varchar("telefoneCanal", { length: 20 }),
   ultimaSync: timestamp("ultimaSyncCanal"),
   mensagemErro: varchar("mensagemErro", { length: 512 }),
+  // Texto fixo enviado quando uma mensagem chega e o SmartFlow não tem cenário
+  // para responder. Se null/vazio, nada é enviado (operador atende manual).
+  autoReplyFallback: text("autoReplyFallback"),
   createdAt: timestamp("createdAtCanal").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtCanal").defaultNow().onUpdateNow().notNull(),
 });
