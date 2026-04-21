@@ -98,6 +98,35 @@ const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   manual: Play,
 };
 
+/**
+ * Ícone representativo por categoria (grupo). Usado na paleta lateral,
+ * que lista categorias em vez de cada operação individual.
+ */
+const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
+  mensagem: MessageCircle,
+  asaas: DollarSign,
+  calcom: Calendar,
+  crm: Users,
+  ia: Bot,
+  kanban: LayoutGrid,
+  fluxo: Play,
+};
+
+/**
+ * Retorna a primeira operação (ordem definida em `GATILHO_META`) da
+ * categoria. Usado quando o usuário clica numa categoria da paleta e
+ * precisamos materializar um gatilho concreto no nó.
+ */
+function primeiraOperacaoDaCategoria(grupo: GrupoSmartflow): GatilhoSmartflow | null {
+  const meta = GATILHO_META.find((g) => g.grupo === grupo);
+  return meta?.id ?? null;
+}
+
+/** Operações (gatilhos) disponíveis numa categoria, mantendo a ordem de `GATILHO_META`. */
+function operacoesDaCategoria(grupo: GrupoSmartflow): GatilhoMeta[] {
+  return GATILHO_META.filter((g) => g.grupo === grupo);
+}
+
 // ─── Tipagem dos nós ───────────────────────────────────────────────────────
 
 interface PassoNodeData extends Record<string, unknown> {
@@ -205,8 +234,10 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
 
 function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
   const meta = getGatilhoMeta(data.gatilho);
-  const Icon = GATILHO_ICON[data.gatilho] ?? Zap;
+  const OpIcon = GATILHO_ICON[data.gatilho] ?? Zap;
   const resumo = resumirConfigGatilho(data.gatilho, data.configGatilho);
+  const grupoMeta = GRUPO_META.find((g) => g.id === meta.grupo);
+  const GrupoIconComp = GRUPO_ICON[meta.grupo] ?? Zap;
 
   return (
     <div
@@ -214,11 +245,21 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
         selected ? "ring-amber-500 border-amber-500" : "ring-amber-500/40 border-amber-500/60"
       }`}
     >
-      <div className="flex items-center gap-1.5 px-3 py-2 rounded-t-[10px] bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 text-amber-900 dark:text-amber-200">
-        <Zap className="h-3.5 w-3.5 shrink-0" />
-        <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-xs font-bold truncate">{meta.label}</span>
+      {/* Linha 1: categoria — tipo "pasta". */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-t-[10px] bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 text-amber-900 dark:text-amber-200">
+        <Zap className="h-3 w-3 shrink-0" />
+        <GrupoIconComp className="h-3 w-3 shrink-0" />
+        <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+          {grupoMeta?.label || "Gatilho"}
+        </span>
       </div>
+
+      {/* Linha 2: operação específica selecionada. */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-t bg-card">
+        <OpIcon className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+        <span className="text-xs font-semibold truncate">{meta.label}</span>
+      </div>
+
       {resumo && (
         <div className="px-3 py-1.5 text-[10px] text-muted-foreground border-t bg-muted/30 rounded-b-[10px]">
           {resumo}
@@ -537,7 +578,10 @@ export default function SmartFlowEditor() {
     setSelectedId(novoNode.id);
   };
 
-  /** Troca o tipo de gatilho (mantém o mesmo nó, só muda os dados). */
+  /**
+   * Troca o tipo de gatilho do nó único. Mantém o mesmo nó — só muda os
+   * dados. Zera `configGatilho` porque a shape muda entre operações.
+   */
   const trocarGatilho = (novoGatilho: GatilhoSmartflow) => {
     setNodes((nds) =>
       nds.map((n) =>
@@ -550,6 +594,22 @@ export default function SmartFlowEditor() {
       ),
     );
     setSelectedId(GATILHO_NODE_ID);
+  };
+
+  /**
+   * Seleciona uma categoria de gatilho. Se o gatilho atual já pertence à
+   * categoria, não faz nada (o usuário troca a operação dentro do painel).
+   * Caso contrário, muda pro primeiro gatilho da categoria.
+   */
+  const trocarCategoria = (grupo: GrupoSmartflow) => {
+    if (!gatilhoNode) return;
+    const grupoAtual = getGatilhoMeta(gatilhoNode.data.gatilho).grupo;
+    if (grupoAtual === grupo) {
+      setSelectedId(GATILHO_NODE_ID);
+      return;
+    }
+    const primeira = primeiraOperacaoDaCategoria(grupo);
+    if (primeira) trocarGatilho(primeira);
   };
 
   const removerSelecionado = () => {
@@ -712,36 +772,34 @@ export default function SmartFlowEditor() {
         {/* Paleta esquerda */}
         <div className="w-60 border-r bg-muted/20 p-3 overflow-y-auto">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Gatilho</p>
-          <div className="mb-5 space-y-3">
-            {agrupar<GatilhoMeta>(GATILHO_META).map((g) => (
-              <div key={g.id}>
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1 font-semibold px-0.5">
-                  {g.label}
-                </p>
-                <div className="space-y-1.5">
-                  {g.itens.map((item) => {
-                    const Icon = GATILHO_ICON[item.id];
-                    const ativo = gatilhoNode?.data.gatilho === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => trocarGatilho(item.id)}
-                        className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border transition-all text-left ${
-                          ativo
-                            ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm"
-                            : "border-dashed border-border hover:border-solid hover:shadow-sm bg-background"
-                        }`}
-                        title={item.descricao}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
-                        <span className="text-xs font-medium leading-tight flex-1">{item.label}</span>
-                        {ativo && <Zap className="h-3 w-3 shrink-0 mt-0.5 text-amber-500 fill-amber-500" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+          <div className="mb-5 space-y-1.5">
+            {/*
+              Paleta lista CATEGORIAS, não operações. Ao clicar, se o gatilho
+              atual já está na categoria, só re-seleciona o nó (a troca de
+              operação acontece no painel direito). Se está em outra, troca
+              pro primeiro gatilho da categoria.
+            */}
+            {GRUPO_META.filter((g) => operacoesDaCategoria(g.id).length > 0).map((grupo) => {
+              const Icon = GRUPO_ICON[grupo.id];
+              const grupoAtualGatilho = gatilhoNode ? getGatilhoMeta(gatilhoNode.data.gatilho).grupo : null;
+              const ativo = grupoAtualGatilho === grupo.id;
+              return (
+                <button
+                  key={grupo.id}
+                  onClick={() => trocarCategoria(grupo.id)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded border transition-all text-left ${
+                    ativo
+                      ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm"
+                      : "border-dashed border-border hover:border-solid hover:shadow-sm bg-background"
+                  }`}
+                  title={`Categoria ${grupo.label} — ${operacoesDaCategoria(grupo.id).length} operação(ões)`}
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span className="text-xs font-semibold leading-tight flex-1">{grupo.label}</span>
+                  {ativo && <Zap className="h-3.5 w-3.5 shrink-0 text-amber-500 fill-amber-500" />}
+                </button>
+              );
+            })}
           </div>
 
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Adicionar passo</p>
@@ -814,6 +872,7 @@ export default function SmartFlowEditor() {
               node={selectedNode}
               onChange={atualizarConfigSelecionado}
               onRemove={removerSelecionado}
+              onChangeGatilho={trocarGatilho}
             />
           ) : (
             <div className="p-4 text-sm text-muted-foreground">
@@ -833,12 +892,17 @@ interface PainelConfigProps {
   node: AnyNode;
   onChange: (patch: Record<string, unknown>) => void;
   onRemove: () => void;
+  /** Troca o tipo do gatilho — usado pelo Select de operação no painel. */
+  onChangeGatilho?: (gatilho: GatilhoSmartflow) => void;
 }
 
-function PainelConfig({ node, onChange, onRemove }: PainelConfigProps) {
+function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfigProps) {
   if (isGatilhoNode(node)) {
     const meta = getGatilhoMeta(node.data.gatilho);
     const Icon = GATILHO_ICON[node.data.gatilho] ?? Zap;
+    const grupo = meta.grupo;
+    const grupoMeta = GRUPO_META.find((g) => g.id === grupo);
+    const operacoes = operacoesDaCategoria(grupo);
     return (
       <div className="p-4 space-y-4">
         <div className="flex items-center gap-2">
@@ -846,13 +910,47 @@ function PainelConfig({ node, onChange, onRemove }: PainelConfigProps) {
             <Icon className="h-4 w-4" />
           </div>
           <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {grupoMeta?.label || "Gatilho"}
+            </p>
             <p className="text-sm font-semibold truncate">{meta.label}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{meta.descricao}</p>
           </div>
         </div>
+
+        {/* Select de operação — só aparece quando há mais de uma na categoria. */}
+        {operacoes.length > 1 && onChangeGatilho && (
+          <div>
+            <Label className="text-xs">Operação</Label>
+            <Select
+              value={node.data.gatilho}
+              onValueChange={(v) => onChangeGatilho(v as GatilhoSmartflow)}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {operacoes.map((op) => {
+                  const OpIcon = GATILHO_ICON[op.id] ?? Zap;
+                  return (
+                    <SelectItem key={op.id} value={op.id}>
+                      <span className="inline-flex items-center gap-2">
+                        <OpIcon className="h-3.5 w-3.5" />
+                        {op.label}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground mt-1">{meta.descricao}</p>
+          </div>
+        )}
+        {operacoes.length <= 1 && (
+          <p className="text-[10px] text-muted-foreground">{meta.descricao}</p>
+        )}
+
         <ConfigGatilhoFields node={node} onChange={onChange} />
+
         <p className="text-[10px] text-muted-foreground pt-2 border-t">
-          Para trocar o tipo de gatilho, clique em outra opção na paleta à esquerda.
+          Para trocar a categoria, clique em outra na paleta à esquerda.
         </p>
       </div>
     );
