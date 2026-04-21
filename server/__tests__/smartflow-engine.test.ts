@@ -33,6 +33,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
     chamarWebhook: vi.fn().mockResolvedValue({ ok: true }),
     criarCardKanban: vi.fn().mockResolvedValue(42),
+    buscarCobrancasAbertas: vi.fn().mockResolvedValue(""),
     ...overrides,
   };
 }
@@ -373,6 +374,54 @@ describe("SmartFlow Engine", () => {
 
       expect(resultado.sucesso).toBe(true);
       expect(resultado.respostas[0]).toBe("Olá Maria, sua consulta será às 15/04 às 10h.");
+    });
+
+    it("expande {cobrancasAbertas} via executor quando presente no template", async () => {
+      const listaFormatada = "• R$ 100,00 — vence 20/04 — https://pay/abc";
+      const buscarCobrancasAbertas = vi.fn().mockResolvedValue(listaFormatada);
+      const exec = criarMockExecutores({ buscarCobrancasAbertas });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_enviar",
+          config: { template: "Oi {nome}, você tem estas pendências:\n{cobrancasAbertas}" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { nomeCliente: "João", contatoId: 42 },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(buscarCobrancasAbertas).toHaveBeenCalledWith({ contatoId: 42, clienteAsaasId: undefined });
+      expect(resultado.respostas[0]).toContain("Oi João");
+      expect(resultado.respostas[0]).toContain(listaFormatada);
+    });
+
+    it("não chama buscarCobrancasAbertas se template não usa a variável", async () => {
+      const buscarCobrancasAbertas = vi.fn();
+      const exec = criarMockExecutores({ buscarCobrancasAbertas });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "Olá {nome}" } },
+      ];
+
+      await executarCenario(passos, { nomeCliente: "X" }, exec);
+      expect(buscarCobrancasAbertas).not.toHaveBeenCalled();
+    });
+
+    it("substitui {cobrancasAbertas} por string vazia se executor falha", async () => {
+      const buscarCobrancasAbertas = vi.fn().mockRejectedValue(new Error("DB down"));
+      const exec = criarMockExecutores({ buscarCobrancasAbertas });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "Pendências:\n{cobrancasAbertas}" } },
+      ];
+
+      const resultado = await executarCenario(passos, { contatoId: 1 }, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.respostas[0]).toBe("Pendências:\n");
     });
   });
 

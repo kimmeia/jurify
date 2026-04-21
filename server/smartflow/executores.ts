@@ -17,7 +17,7 @@ const log = createLogger("smartflow-executores");
  * descriptografa config e devolve um `CalcomClient` pronto. Retorna `null`
  * se o escritório não tem canal configurado.
  */
-async function obterCalcomClient(escritorioId: number, defaultDuration = 30) {
+export async function obterCalcomClient(escritorioId: number, defaultDuration = 30) {
   const { getDb } = await import("../db");
   const { canaisIntegrados } = await import("../../drizzle/schema");
   const { eq, and, or: orOp, like } = await import("drizzle-orm");
@@ -342,6 +342,72 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       });
       if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
       return res.json();
+    },
+
+    async buscarCobrancasAbertas(params): Promise<string> {
+      try {
+        const { getDb } = await import("../db");
+        const { asaasCobrancas, asaasClientes } = await import("../../drizzle/schema");
+        const { eq, and, inArray } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return "";
+
+        // Resolve customerId se só veio contatoId.
+        let customerId = params.clienteAsaasId;
+        if (!customerId && params.contatoId) {
+          const [vinc] = await db
+            .select({ asaasCustomerId: asaasClientes.asaasCustomerId })
+            .from(asaasClientes)
+            .where(
+              and(
+                eq(asaasClientes.escritorioId, escritorioId),
+                eq(asaasClientes.contatoId, params.contatoId),
+              ),
+            )
+            .limit(1);
+          customerId = vinc?.asaasCustomerId;
+        }
+        if (!customerId) return "";
+
+        const cobrancas = await db
+          .select()
+          .from(asaasCobrancas)
+          .where(
+            and(
+              eq(asaasCobrancas.escritorioId, escritorioId),
+              eq(asaasCobrancas.asaasCustomerId, customerId),
+              inArray(asaasCobrancas.status, ["PENDING", "OVERDUE"]),
+            ),
+          );
+
+        if (cobrancas.length === 0) return "Não há cobranças em aberto.";
+
+        // Formata cada linha: "• R$ 1.234,56 — vence 15/04 — <link>"
+        return cobrancas
+          .map((c) => {
+            const valorNum = Number(c.valor || 0);
+            const valorFmt = valorNum.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            });
+            let venceTxt = "";
+            if (c.vencimento) {
+              const d = new Date(`${c.vencimento}T00:00:00`);
+              if (!Number.isNaN(d.getTime())) {
+                venceTxt = `vence ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+              }
+            }
+            const link = c.invoiceUrl || c.bankSlipUrl || "";
+            const partes = [`• ${valorFmt}`];
+            if (venceTxt) partes.push(venceTxt);
+            if (link) partes.push(link);
+            return partes.join(" — ");
+          })
+          .join("\n");
+      } catch (err: any) {
+        log.warn({ err: err.message }, "SmartFlow: erro ao buscar cobranças abertas");
+        return "";
+      }
     },
   };
 }

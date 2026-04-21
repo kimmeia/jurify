@@ -139,6 +139,16 @@ export interface SmartflowExecutores {
   ) => Promise<boolean>;
   /** Envia mensagem WhatsApp */
   enviarWhatsApp: (telefone: string, mensagem: string) => Promise<boolean>;
+  /**
+   * Retorna a lista formatada de cobranças em aberto do cliente (PENDING /
+   * OVERDUE), com link de pagamento quando disponível. Usada pra expandir
+   * a variável `{cobrancasAbertas}` nos templates de mensagem. Retorna
+   * string vazia se não houver cobranças.
+   */
+  buscarCobrancasAbertas: (params: {
+    contatoId?: number;
+    clienteAsaasId?: string;
+  }) => Promise<string>;
   /** Chama webhook externo */
   chamarWebhook: (url: string, dados: any) => Promise<any>;
   /** Cria card no Kanban */
@@ -353,11 +363,26 @@ async function handleWhatsAppEnviar(
     return { sucesso: false, contexto: ctx, mensagemErro: "Sem mensagem para enviar" };
   }
 
-  // Substitui variáveis no template
+  // `{cobrancasAbertas}` é resolvido via executor (faz query em
+  // asaas_cobrancas). Só chama se o template realmente menciona a variável
+  // — evita custo desnecessário.
+  let blocoCobrancas = "";
+  if (/\{cobrancasAbertas\}/.test(template)) {
+    try {
+      blocoCobrancas = await exec.buscarCobrancasAbertas({
+        contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+        clienteAsaasId: typeof ctx.clienteAsaasId === "string" ? ctx.clienteAsaasId : undefined,
+      });
+    } catch {
+      blocoCobrancas = "";
+    }
+  }
+
   const mensagem = template
     .replace(/\{nome\}/g, (ctx.nomeCliente as string) || "")
     .replace(/\{intencao\}/g, ctx.intencao || "")
-    .replace(/\{horario\}/g, ctx.horarioEscolhido || "");
+    .replace(/\{horario\}/g, ctx.horarioEscolhido || "")
+    .replace(/\{cobrancasAbertas\}/g, blocoCobrancas);
 
   const enviadas = ctx.mensagensEnviadas || [];
   return {

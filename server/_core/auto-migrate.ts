@@ -1129,7 +1129,7 @@ export async function runMigrations(): Promise<void> {
 
     // SmartFlow enum updates
     try {
-      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','mensagem_canal','novo_lead','agendamento_criado','agendamento_cancelado','agendamento_remarcado','pagamento_recebido','pagamento_vencido','pagamento_proximo_vencimento','manual') NOT NULL`);
+      await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','mensagem_canal','novo_lead','agendamento_criado','agendamento_cancelado','agendamento_remarcado','agendamento_lembrete','pagamento_recebido','pagamento_vencido','pagamento_proximo_vencimento','manual') NOT NULL`);
       await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','calcom_horarios','calcom_agendar','calcom_listar','calcom_cancelar','calcom_remarcar','whatsapp_enviar','transferir','condicional','esperar','webhook','kanban_criar_card') NOT NULL`);
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");

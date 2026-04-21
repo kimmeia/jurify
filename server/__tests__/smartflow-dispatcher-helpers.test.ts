@@ -13,11 +13,20 @@
 import { describe, it, expect } from "vitest";
 import {
   aceitaCanal,
+  acharSlotAtivo,
+  calcularMomentoLembrete,
+  calcularSlotsDoDia,
+  chaveDiaLocal,
   contextoContemPagamento,
+  contextoContemSlot,
+  deveDispararLembrete,
   deveDispararProximo,
   deveDispararVencido,
   diasEntre,
+  parseHoraHHMM,
   parseVencimento,
+  slotTimestampChave,
+  temHorarioConfigurado,
 } from "../smartflow/dispatcher-helpers";
 
 describe("aceitaCanal (gatilho mensagem_canal)", () => {
@@ -130,5 +139,169 @@ describe("diasEntre / parseVencimento", () => {
     expect(parseVencimento(null)).toBeNull();
     expect(parseVencimento("")).toBeNull();
     expect(parseVencimento("data-invalida")).toBeNull();
+  });
+});
+
+describe("parseHoraHHMM", () => {
+  it("aceita formatos válidos", () => {
+    expect(parseHoraHHMM("09:00")).toEqual({ h: 9, m: 0 });
+    expect(parseHoraHHMM("9:05")).toEqual({ h: 9, m: 5 });
+    expect(parseHoraHHMM("23:59")).toEqual({ h: 23, m: 59 });
+    expect(parseHoraHHMM("00:00")).toEqual({ h: 0, m: 0 });
+  });
+
+  it("rejeita inválidos", () => {
+    expect(parseHoraHHMM("")).toBeNull();
+    expect(parseHoraHHMM(null)).toBeNull();
+    expect(parseHoraHHMM("24:00")).toBeNull();
+    expect(parseHoraHHMM("10:60")).toBeNull();
+    expect(parseHoraHHMM("abc")).toBeNull();
+    expect(parseHoraHHMM("12")).toBeNull();
+  });
+});
+
+describe("temHorarioConfigurado", () => {
+  it("só é true quando horarioInicial é válido", () => {
+    expect(temHorarioConfigurado({ horarioInicial: "09:00" })).toBe(true);
+    expect(temHorarioConfigurado({ horarioInicial: "09:00", disparosPorDia: 3 })).toBe(true);
+    expect(temHorarioConfigurado({})).toBe(false);
+    expect(temHorarioConfigurado(undefined)).toBe(false);
+    expect(temHorarioConfigurado({ horarioInicial: "" })).toBe(false);
+    expect(temHorarioConfigurado({ horarioInicial: "lixo" })).toBe(false);
+  });
+});
+
+describe("calcularSlotsDoDia", () => {
+  const base = new Date("2026-04-20T00:00:00");
+
+  it("retorna 1 slot quando disparosPorDia é default (1)", () => {
+    const slots = calcularSlotsDoDia({ horarioInicial: "09:00" }, base);
+    expect(slots).toHaveLength(1);
+    expect(slots[0].getHours()).toBe(9);
+    expect(slots[0].getMinutes()).toBe(0);
+  });
+
+  it("espalha N slots pelo intervaloMinutos", () => {
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "09:00", disparosPorDia: 3, intervaloMinutos: 120 },
+      base,
+    );
+    expect(slots).toHaveLength(3);
+    expect(slots.map((s) => `${s.getHours()}:${s.getMinutes()}`)).toEqual([
+      "9:0",
+      "11:0",
+      "13:0",
+    ]);
+  });
+
+  it("intervalo de 90min também funciona", () => {
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "08:30", disparosPorDia: 2, intervaloMinutos: 90 },
+      base,
+    );
+    expect(slots).toHaveLength(2);
+    expect(slots[0].getHours()).toBe(8);
+    expect(slots[0].getMinutes()).toBe(30);
+    expect(slots[1].getHours()).toBe(10);
+    expect(slots[1].getMinutes()).toBe(0);
+  });
+
+  it("retorna vazio quando horarioInicial ausente/inválido", () => {
+    expect(calcularSlotsDoDia({}, base)).toEqual([]);
+    expect(calcularSlotsDoDia({ horarioInicial: "lixo" }, base)).toEqual([]);
+    expect(calcularSlotsDoDia(undefined, base)).toEqual([]);
+  });
+});
+
+describe("acharSlotAtivo", () => {
+  const base = new Date("2026-04-20T00:00:00");
+  const slots = calcularSlotsDoDia(
+    { horarioInicial: "09:00", disparosPorDia: 3, intervaloMinutos: 120 },
+    base,
+  );
+
+  it("acha o slot se agora estiver na janela de tolerância", () => {
+    // Scheduler roda 09:05, tolerância 15min → slot 09:00 bate
+    const agora = new Date("2026-04-20T09:05:00");
+    expect(acharSlotAtivo(slots, agora, 15)).not.toBeNull();
+    expect(acharSlotAtivo(slots, agora, 15)!.getHours()).toBe(9);
+  });
+
+  it("ignora slot já passado há muito tempo", () => {
+    // 10:00 está 60min depois do slot 09:00, fora da janela de 15min
+    const agora = new Date("2026-04-20T10:00:00");
+    expect(acharSlotAtivo(slots, agora, 15)).toBeNull();
+  });
+
+  it("ignora slot futuro (agora < slot)", () => {
+    const agora = new Date("2026-04-20T08:45:00");
+    expect(acharSlotAtivo(slots, agora, 15)).toBeNull();
+  });
+
+  it("escolhe o slot mais recente quando vários caem na janela", () => {
+    // Tolerância alta absorve 2 slots — deve retornar o mais próximo de agora.
+    const agora = new Date("2026-04-20T11:05:00");
+    const achado = acharSlotAtivo(slots, agora, 300); // 5h
+    expect(achado).not.toBeNull();
+    expect(achado!.getHours()).toBe(11); // slot 11:00, não 09:00
+  });
+});
+
+describe("slotTimestampChave / contextoContemSlot", () => {
+  it("gera chave estável YYYY-MM-DDTHH:MM", () => {
+    const slot = new Date("2026-04-22T09:00:00");
+    expect(slotTimestampChave(slot)).toBe("2026-04-22T09:00");
+  });
+
+  it("contextoContemSlot faz match exato do slot", () => {
+    const ctx = JSON.stringify({ pagamentoId: "abc", slotTimestamp: "2026-04-22T09:00" });
+    expect(contextoContemSlot(ctx, "2026-04-22T09:00")).toBe(true);
+    expect(contextoContemSlot(ctx, "2026-04-22T11:00")).toBe(false);
+    expect(contextoContemSlot(null, "2026-04-22T09:00")).toBe(false);
+    expect(contextoContemSlot(JSON.stringify({}), "2026-04-22T09:00")).toBe(false);
+  });
+
+  it("não faz match de slot em contexto com pagamentoId só", () => {
+    // Dedupe por slot não deve confundir com dedupe por pagamentoId.
+    const ctx = JSON.stringify({ pagamentoId: "abc" });
+    expect(contextoContemSlot(ctx, "2026-04-22T09:00")).toBe(false);
+  });
+});
+
+describe("chaveDiaLocal", () => {
+  it("formata YYYY-MM-DD no timezone local", () => {
+    const d = new Date(2026, 3, 5, 23, 59); // 5 de abril
+    expect(chaveDiaLocal(d)).toBe("2026-04-05");
+  });
+});
+
+describe("calcularMomentoLembrete / deveDispararLembrete", () => {
+  it("1 dia antes às 18:00 (default)", () => {
+    const startTime = new Date("2026-04-22T14:00:00");
+    const momento = calcularMomentoLembrete(startTime, {})!;
+    expect(momento.getFullYear()).toBe(2026);
+    expect(momento.getMonth()).toBe(3); // abril
+    expect(momento.getDate()).toBe(21);
+    expect(momento.getHours()).toBe(18);
+    expect(momento.getMinutes()).toBe(0);
+  });
+
+  it("2 dias antes às 09:30 via config", () => {
+    const startTime = new Date("2026-04-22T14:00:00");
+    const momento = calcularMomentoLembrete(startTime, { diasAntes: 2, horario: "09:30" })!;
+    expect(momento.getDate()).toBe(20);
+    expect(momento.getHours()).toBe(9);
+    expect(momento.getMinutes()).toBe(30);
+  });
+
+  it("deveDispararLembrete respeita a janela", () => {
+    // Booking às 14:00 de 22/04; lembrete às 18:00 do dia 21.
+    const startTime = new Date("2026-04-22T14:00:00");
+    // Agora está 18:10 → dentro de janela de 15min
+    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T18:10:00"), 15)).toBe(true);
+    // Agora está 17:40 → ainda não alcançou o momento
+    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T17:40:00"), 15)).toBe(false);
+    // Agora está 19:00 → fora da janela (passou há 60min)
+    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T19:00:00"), 15)).toBe(false);
   });
 });
