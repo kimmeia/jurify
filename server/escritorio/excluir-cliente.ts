@@ -34,6 +34,7 @@ import {
   tarefas,
   clienteAnotacoes,
   clienteArquivos,
+  clientePastas,
   assinaturasDigitais,
   asaasClientes,
   asaasCobrancas,
@@ -255,7 +256,10 @@ export async function excluirClienteEmCascata(
     log.warn({ err: err.message }, "Falha ao excluir anotações");
   }
 
-  // ─── 9. Arquivos ─────────────────────────────────────────────────────────
+  // ─── 9. Arquivos + pastas ────────────────────────────────────────────────
+  // Arquivos são deletados por contatoId — cobre tanto os soltos quanto os
+  // dentro de qualquer pasta (independente de profundidade). Depois as
+  // pastas em si são removidas pelo mesmo filtro de contatoId.
   try {
     const delArqs = await db
       .delete(clienteArquivos)
@@ -269,6 +273,19 @@ export async function excluirClienteEmCascata(
       (delArqs as unknown as { affectedRows?: number })?.affectedRows ?? 0;
   } catch (err: any) {
     log.warn({ err: err.message }, "Falha ao excluir arquivos");
+  }
+
+  try {
+    await db
+      .delete(clientePastas)
+      .where(
+        and(
+          eq(clientePastas.escritorioId, escritorioId),
+          eq(clientePastas.contatoId, contatoId),
+        ),
+      );
+  } catch (err: any) {
+    log.warn({ err: err.message }, "Falha ao excluir pastas");
   }
 
   // ─── 10. Assinaturas digitais ───────────────────────────────────────────

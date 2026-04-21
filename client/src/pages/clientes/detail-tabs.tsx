@@ -15,8 +15,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
-  Clock, StickyNote, CheckSquare, Check, Calendar, Download,
+  Clock, StickyNote, CheckSquare, Check, Calendar, Download, Folder,
+  ChevronRight, MoreVertical, FolderPlus, Pencil, ArrowLeft,
 } from "lucide-react";
+import JSZip from "jszip";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: () => void }) {
@@ -117,15 +122,65 @@ export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: n
   return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button></div>))}</div>}</CardContent></Card>);
 }
 
-export function ArquivosTab({ contatoId, arquivos, onRefresh }: { contatoId: number; arquivos: any[]; onRefresh: () => void }) {
+type Breadcrumb = Array<{ id: number | null; nome: string }>;
+
+/**
+ * Aba Documentos — pastas aninhadas (N níveis) + arquivos.
+ *
+ * O componente é auto-suficiente: busca pastas/arquivos do nível atual,
+ * mantém breadcrumb local, suporta criar/renomear/excluir pastas, upload
+ * e URL (herda a `pastaId` atual), mover arquivo para outra pasta, e
+ * baixar uma pasta inteira como ZIP (estrutura recursiva preservada via
+ * `listarConteudoRecursivo`).
+ */
+export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]; onRefresh?: () => void }) {
+  const utils = trpc.useUtils();
+  const [breadcrumb, setBreadcrumb] = useState<Breadcrumb>([{ id: null, nome: "Documentos" }]);
+  const pastaAtualId = breadcrumb[breadcrumb.length - 1].id;
+
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [url, setUrl] = useState(""); const [nome, setNome] = useState("");
+  const [url, setUrl] = useState("");
+  const [nome, setNome] = useState("");
   const [modo, setModo] = useState<"upload" | "url">("upload");
+  const [novaPastaNome, setNovaPastaNome] = useState("");
+  const [criandoPasta, setCriandoPasta] = useState(false);
+  const [renomeando, setRenomeando] = useState<{ id: number; nome: string } | null>(null);
+  const [zipEmProgresso, setZipEmProgresso] = useState<number | null>(null);
+
+  const { data: pastas = [] } = trpc.clientes.listarPastas.useQuery({ contatoId, parentId: pastaAtualId });
+  const { data: arquivos = [] } = trpc.clientes.listarArquivos.useQuery({ contatoId, pastaId: pastaAtualId });
+  // Lista todas as pastas pra usar no menu "Mover para...".
+  const { data: todasPastas = [] } = trpc.clientes.listarPastas.useQuery({ contatoId });
+
+  const invalidar = () => {
+    utils.clientes.listarPastas.invalidate({ contatoId });
+    utils.clientes.listarPastas.invalidate({ contatoId, parentId: pastaAtualId });
+    utils.clientes.listarArquivos.invalidate({ contatoId });
+    utils.clientes.listarArquivos.invalidate({ contatoId, pastaId: pastaAtualId });
+  };
 
   const uploadMut = (trpc as any).upload.enviar.useMutation();
-  const salvar = trpc.clientes.salvarArquivo.useMutation({ onSuccess: () => { setUrl(""); setNome(""); onRefresh(); toast.success("Salvo!"); } });
-  const excluir = trpc.clientes.excluirArquivo.useMutation({ onSuccess: () => onRefresh() });
+  const salvar = trpc.clientes.salvarArquivo.useMutation({
+    onSuccess: () => { setUrl(""); setNome(""); invalidar(); toast.success("Salvo!"); },
+  });
+  const excluirArq = trpc.clientes.excluirArquivo.useMutation({ onSuccess: () => invalidar() });
+  const moverArq = trpc.clientes.moverArquivo.useMutation({
+    onSuccess: () => { invalidar(); toast.success("Arquivo movido"); },
+    onError: (e) => toast.error("Erro ao mover", { description: e.message }),
+  });
+  const criarPastaMut = trpc.clientes.criarPasta.useMutation({
+    onSuccess: () => { setCriandoPasta(false); setNovaPastaNome(""); invalidar(); toast.success("Pasta criada"); },
+    onError: (e) => toast.error("Erro", { description: e.message }),
+  });
+  const renomearMut = trpc.clientes.renomearPasta.useMutation({
+    onSuccess: () => { setRenomeando(null); invalidar(); toast.success("Pasta renomeada"); },
+    onError: (e) => toast.error("Erro", { description: e.message }),
+  });
+  const excluirPastaMut = trpc.clientes.excluirPasta.useMutation({
+    onSuccess: (r) => { invalidar(); toast.success("Pasta excluída", { description: `${r.pastasExcluidas} pasta(s) e ${r.arquivosExcluidos} arquivo(s) removidos.` }); },
+    onError: (e) => toast.error("Erro", { description: e.message }),
+  });
 
   const handleFiles = async (files: FileList | File[]) => {
     setUploading(true);
@@ -134,7 +189,7 @@ export function ArquivosTab({ contatoId, arquivos, onRefresh }: { contatoId: num
       try {
         const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(new Error("Erro ao ler arquivo")); r.readAsDataURL(file); });
         const result = await uploadMut.mutateAsync({ nome: file.name, tipo: file.type, base64, tamanho: file.size });
-        await salvar.mutateAsync({ contatoId, nome: result.nome || file.name, tipo: result.tipo, tamanho: result.tamanho, url: result.url });
+        await salvar.mutateAsync({ contatoId, pastaId: pastaAtualId, nome: result.nome || file.name, tipo: result.tipo, tamanho: result.tamanho, url: result.url });
       } catch (e: any) { toast.error(e.message || `Erro ao enviar ${file.name}`); }
     }
     setUploading(false);
@@ -147,47 +202,263 @@ export function ArquivosTab({ contatoId, arquivos, onRefresh }: { contatoId: num
   const formatSize = (bytes: number) => { if (!bytes) return ""; if (bytes < 1024) return `${bytes}B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`; return `${(bytes / 1024 / 1024).toFixed(1)}MB`; };
   const isImage = (tipo: string) => tipo?.startsWith("image/");
 
-  return (<Card><CardContent className="pt-4 space-y-4">
-    {/* Tabs upload/url */}
-    <div className="flex gap-2 mb-2">
-      <Button size="sm" variant={modo === "upload" ? "default" : "outline"} className="h-7 text-xs" onClick={() => {
-        setModo("upload");
-        const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt"; inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files; if (f) handleFiles(f); }; inp.click();
-      }}><Upload className="h-3 w-3 mr-1" /> Upload</Button>
-      <Button size="sm" variant={modo === "url" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setModo("url")}><ExternalLink className="h-3 w-3 mr-1" /> URL</Button>
-    </div>
+  const entrarNaPasta = (id: number, nomePasta: string) => {
+    setBreadcrumb([...breadcrumb, { id, nome: nomePasta }]);
+  };
+  const navegarPara = (index: number) => {
+    setBreadcrumb(breadcrumb.slice(0, index + 1));
+  };
 
-    {modo === "upload" ? (
-      <div
-        className={`p-6 rounded-lg border-2 border-dashed text-center cursor-pointer transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/20 hover:border-primary/40"}`}
-        onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
-        onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt"; inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files; if (f) handleFiles(f); }; inp.click(); }}
-      >
-        {uploading ? <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /> : <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />}
-        <p className="text-sm font-medium">{uploading ? "Enviando..." : "Arraste arquivos aqui"}</p>
-        <p className="text-[10px] text-muted-foreground mt-1">ou clique para selecionar · PDF, imagens, docs · Máx 10MB</p>
-      </div>
-    ) : (
-      <div className="space-y-2 p-3 rounded-lg border bg-muted/20">
-        <div className="grid grid-cols-2 gap-2"><Input placeholder="Nome" value={nome} onChange={e => setNome(e.target.value)} className="h-8 text-sm" /><Input placeholder="URL do arquivo" value={url} onChange={e => setUrl(e.target.value)} className="h-8 text-sm" /></div>
-        <Button size="sm" onClick={() => salvar.mutate({ contatoId, nome: nome || "Arquivo", url })} disabled={!url || salvar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button>
-      </div>
-    )}
+  // Download de pasta como ZIP: baixa o JSON do conteúdo recursivo e,
+  // pra cada arquivo, faz fetch → blob → add no JSZip com o pathRelativo.
+  const baixarPastaZip = async (pastaId: number, nomePasta: string) => {
+    setZipEmProgresso(pastaId);
+    try {
+      const conteudo = await utils.clientes.listarConteudoRecursivo.fetch({ pastaId });
+      if (!conteudo.arquivos.length) {
+        toast.info("Pasta vazia", { description: "Nenhum arquivo para baixar." });
+        return;
+      }
+      const zip = new JSZip();
+      let sucessos = 0;
+      let falhas = 0;
+      for (const a of conteudo.arquivos) {
+        try {
+          const resp = await fetch(a.url);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const blob = await resp.blob();
+          zip.file(a.pathRelativo, blob);
+          sucessos++;
+        } catch (err: any) {
+          falhas++;
+          // eslint-disable-next-line no-console
+          console.warn(`Falha ao baixar ${a.nome}: ${err?.message}`);
+        }
+      }
+      if (sucessos === 0) {
+        toast.error("Não foi possível baixar a pasta", { description: "Todos os arquivos falharam." });
+        return;
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${nomePasta}.zip`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      if (falhas > 0) toast.warning(`ZIP baixado com ${falhas} falha(s)`, { description: `${sucessos}/${sucessos + falhas} arquivos.` });
+      else toast.success("ZIP baixado", { description: `${sucessos} arquivo(s).` });
+    } catch (e: any) {
+      toast.error("Erro ao gerar ZIP", { description: e?.message });
+    } finally {
+      setZipEmProgresso(null);
+    }
+  };
 
-    {!arquivos.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhum arquivo.</p> : <div className="space-y-2">{arquivos.map((a: any) => (
-      <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-        {isImage(a.tipo) ? <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted shrink-0"><img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} /></div> : <FileText className="h-4 w-4 text-blue-500 shrink-0" />}
-        <div className="flex-1 min-w-0">
-          <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">{a.nome}</a>
-          <p className="text-[10px] text-muted-foreground">{a.tipo || "Documento"} {a.tamanho ? `· ${formatSize(a.tamanho)}` : ""} · {new Date(a.createdAt).toLocaleDateString("pt-BR")}</p>
+  return (
+    <Card>
+      <CardContent className="pt-4 space-y-4">
+        {/* Breadcrumb + ações principais */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {breadcrumb.length > 1 && (
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => navegarPara(breadcrumb.length - 2)} title="Voltar">
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap flex-1 min-w-0">
+            {breadcrumb.map((b, i) => (
+              <span key={`${b.id ?? "root"}-${i}`} className="flex items-center gap-1">
+                {i > 0 && <ChevronRight className="h-3 w-3 shrink-0" />}
+                <button
+                  className={`truncate max-w-[160px] ${i === breadcrumb.length - 1 ? "text-foreground font-medium" : "hover:text-foreground"}`}
+                  onClick={() => navegarPara(i)}
+                >
+                  {b.nome}
+                </button>
+              </span>
+            ))}
+          </div>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCriandoPasta(true)}>
+            <FolderPlus className="h-3 w-3 mr-1" /> Nova pasta
+          </Button>
+          <Button size="sm" variant={modo === "upload" ? "default" : "outline"} className="h-7 text-xs" onClick={() => {
+            setModo("upload");
+            const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt"; inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files; if (f) handleFiles(f); }; inp.click();
+          }}>
+            <Upload className="h-3 w-3 mr-1" /> Upload
+          </Button>
+          <Button size="sm" variant={modo === "url" ? "default" : "outline"} className="h-7 text-xs" onClick={() => setModo("url")}>
+            <ExternalLink className="h-3 w-3 mr-1" /> URL
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 shrink-0" title="Baixar" onClick={() => {
-          const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
-        }}><Download className="h-3 w-3" /></Button>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" title="Excluir" onClick={() => excluir.mutate({ id: a.id })}><Trash2 className="h-3 w-3" /></Button>
-      </div>
-    ))}</div>}
-  </CardContent></Card>);
+
+        {/* Form: nova pasta */}
+        {criandoPasta && (
+          <div className="flex gap-2 p-3 rounded-lg border bg-muted/20">
+            <Input
+              placeholder="Nome da pasta"
+              value={novaPastaNome}
+              onChange={(e) => setNovaPastaNome(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && novaPastaNome.trim()) criarPastaMut.mutate({ contatoId, nome: novaPastaNome, parentId: pastaAtualId }); }}
+              className="h-8 text-sm"
+              autoFocus
+            />
+            <Button size="sm" className="h-8" disabled={!novaPastaNome.trim() || criarPastaMut.isPending}
+              onClick={() => criarPastaMut.mutate({ contatoId, nome: novaPastaNome, parentId: pastaAtualId })}>
+              Criar
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8" onClick={() => { setCriandoPasta(false); setNovaPastaNome(""); }}>
+              Cancelar
+            </Button>
+          </div>
+        )}
+
+        {/* Área de URL (só quando modo=url) */}
+        {modo === "url" && !criandoPasta && (
+          <div className="space-y-2 p-3 rounded-lg border bg-muted/20">
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Nome" value={nome} onChange={e => setNome(e.target.value)} className="h-8 text-sm" />
+              <Input placeholder="URL do arquivo" value={url} onChange={e => setUrl(e.target.value)} className="h-8 text-sm" />
+            </div>
+            <Button size="sm" onClick={() => salvar.mutate({ contatoId, pastaId: pastaAtualId, nome: nome || "Arquivo", url })} disabled={!url || salvar.isPending}>
+              <Plus className="h-3 w-3 mr-1" /> Adicionar
+            </Button>
+          </div>
+        )}
+
+        {/* Dropzone (sempre visível pra facilitar drag-and-drop direto na pasta atual) */}
+        <div
+          className={`p-4 rounded-lg border-2 border-dashed text-center cursor-pointer transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/20 hover:border-primary/40"}`}
+          onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
+          onClick={() => { const inp = document.createElement("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt"; inp.onchange = (e) => { const f = (e.target as HTMLInputElement).files; if (f) handleFiles(f); }; inp.click(); }}
+        >
+          {uploading ? <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-1" /> : <Upload className="h-6 w-6 text-muted-foreground/40 mx-auto mb-1" />}
+          <p className="text-xs font-medium">{uploading ? "Enviando..." : "Arraste arquivos aqui"}</p>
+          <p className="text-[10px] text-muted-foreground">PDF, imagens, docs · Máx 10MB</p>
+        </div>
+
+        {/* Pastas */}
+        {pastas.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Pastas</p>
+            {pastas.map((p: any) => {
+              const r = renomeando;
+              const estaRenomeando = r !== null && r.id === p.id;
+              return (
+              <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/20 transition-colors group">
+                {estaRenomeando && r ? (
+                  <>
+                    <Folder className="h-4 w-4 text-amber-500 shrink-0" />
+                    <Input
+                      value={r.nome}
+                      onChange={(e) => setRenomeando({ id: p.id, nome: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearMut.mutate({ id: p.id, nome: r.nome }); if (e.key === "Escape") setRenomeando(null); }}
+                      className="h-7 text-sm flex-1"
+                      autoFocus
+                    />
+                    <Button size="sm" className="h-7" disabled={!r.nome.trim() || renomearMut.isPending}
+                      onClick={() => renomearMut.mutate({ id: p.id, nome: r.nome })}>
+                      OK
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7" onClick={() => setRenomeando(null)}>
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => entrarNaPasta(p.id, p.nome)}>
+                      <Folder className="h-4 w-4 text-amber-500 shrink-0" />
+                      <span className="text-sm font-medium truncate">{p.nome}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {p.totalSubpastas > 0 ? `${p.totalSubpastas} pasta(s) · ` : ""}{p.totalArquivos} arquivo(s)
+                      </span>
+                    </button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Baixar pasta (ZIP)"
+                      disabled={zipEmProgresso === p.id}
+                      onClick={() => baixarPastaZip(p.id, p.nome)}>
+                      {zipEmProgresso === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setRenomeando({ id: p.id, nome: p.nome })}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => {
+                            if (confirm(`Excluir a pasta "${p.nome}" e tudo dentro dela (incluindo subpastas)?\n\nEsta ação é definitiva e não pode ser desfeita.`)) {
+                              excluirPastaMut.mutate({ id: p.id });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                )}
+              </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Arquivos */}
+        {arquivos.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Arquivos</p>
+            {arquivos.map((a: any) => (
+              <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
+                {isImage(a.tipo)
+                  ? <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted shrink-0"><img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} /></div>
+                  : <FileText className="h-4 w-4 text-blue-500 shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">{a.nome}</a>
+                  <p className="text-[10px] text-muted-foreground">{a.tipo || "Documento"} {a.tamanho ? `· ${formatSize(a.tamanho)}` : ""} · {new Date(a.createdAt).toLocaleDateString("pt-BR")}</p>
+                </div>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 shrink-0" title="Baixar" onClick={() => {
+                  const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
+                }}>
+                  <Download className="h-3 w-3" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0">
+                      <MoreVertical className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                    <DropdownMenuItem onClick={() => moverArq.mutate({ id: a.id, pastaId: null })} disabled={a.pastaId == null}>
+                      Mover para raiz
+                    </DropdownMenuItem>
+                    {todasPastas.length > 0 && <DropdownMenuSeparator />}
+                    {todasPastas.filter((p: any) => p.id !== a.pastaId).map((p: any) => (
+                      <DropdownMenuItem key={p.id} onClick={() => moverArq.mutate({ id: a.id, pastaId: p.id })}>
+                        <Folder className="h-3.5 w-3.5 mr-2 text-amber-500" /> {p.nome}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluirArq.mutate({ id: a.id })}>
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir arquivo
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {pastas.length === 0 && arquivos.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">Nenhuma pasta ou arquivo aqui.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
