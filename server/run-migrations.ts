@@ -61,6 +61,11 @@ const SQLS = [
 
   // 17. Tabela judit_transacoes (log de consumo/compra)
   `CREATE TABLE IF NOT EXISTS judit_transacoes (id INT AUTO_INCREMENT PRIMARY KEY, escritorioIdJTx INT NOT NULL, tipoJTx ENUM('compra','consumo','bonus','estorno') NOT NULL, quantidadeJTx INT NOT NULL, saldoAnteriorJTx INT NOT NULL, saldoDepoisJTx INT NOT NULL, operacaoJTx VARCHAR(64) NOT NULL, detalhesJTx VARCHAR(512), userIdJTx INT NOT NULL, createdAtJTx TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX jtx_escritorio (escritorioIdJTx), INDEX jtx_tipo (tipoJTx))`,
+
+  // 18. asaas_clientes: flag `primarioAsaasCli` — suporta múltiplos customers
+  //     do Asaas vinculados ao mesmo contato do CRM (Asaas permite duplicatas
+  //     com o mesmo CPF). Só o primário é usado ao criar novas cobranças.
+  "ALTER TABLE asaas_clientes ADD COLUMN IF NOT EXISTS primarioAsaasCli TINYINT(1) NOT NULL DEFAULT 1 AFTER nomeAsaasCli",
 ];
 
 async function main() {

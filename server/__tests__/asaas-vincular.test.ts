@@ -186,3 +186,79 @@ describe("AsaasClient.buscarCliente", () => {
     expect(resultado.name).toBe("JOAO DA SILVA FILHO");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// buscarTodosClientesPorCpfCnpj: essencial pro fluxo de múltiplos customers
+// com mesmo CPF (duplicatas permitidas pelo Asaas).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("AsaasClient.buscarTodosClientesPorCpfCnpj", () => {
+  let client: AsaasClient;
+  let getMock: MockGet;
+
+  beforeEach(() => {
+    getMock = vi.fn();
+    vi.spyOn(axios, "create").mockReturnValue({
+      get: getMock,
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+    } as any);
+    client = new AsaasClient("$aact_sandbox_fakekey", "sandbox");
+  });
+
+  it("retorna array vazio quando CPF é vazio", async () => {
+    const res = await client.buscarTodosClientesPorCpfCnpj("");
+    expect(res).toEqual([]);
+    expect(getMock).not.toHaveBeenCalled();
+  });
+
+  it("retorna múltiplos customers com o mesmo CPF (duplicatas do Asaas)", async () => {
+    const a = criarClienteMock({ id: "cus_A", name: "Oficina Damasceno" });
+    const b = criarClienteMock({ id: "cus_B", name: "OFICINA DAMASCENO ME" });
+    getMock.mockResolvedValue({
+      data: { data: [a, b], hasMore: false, limit: 100, offset: 0 },
+    });
+
+    const res = await client.buscarTodosClientesPorCpfCnpj("12345678901");
+    expect(res.map((c) => c.id).sort()).toEqual(["cus_A", "cus_B"]);
+  });
+
+  it("ignora customers deletados", async () => {
+    const ativo = criarClienteMock({ id: "cus_A" });
+    const deletado = criarClienteMock({ id: "cus_B", deleted: true });
+    getMock.mockResolvedValue({
+      data: { data: [ativo, deletado], hasMore: false, limit: 100, offset: 0 },
+    });
+
+    const res = await client.buscarTodosClientesPorCpfCnpj("12345678901");
+    expect(res).toHaveLength(1);
+    expect(res[0].id).toBe("cus_A");
+  });
+
+  it("descarta matches parciais de CPF (Asaas eventualmente faz prefix)", async () => {
+    const cli = criarClienteMock({ id: "cus_X", cpfCnpj: "12345678900" });
+    getMock.mockResolvedValue({
+      data: { data: [cli], hasMore: false, limit: 100, offset: 0 },
+    });
+
+    const res = await client.buscarTodosClientesPorCpfCnpj("12345678901");
+    expect(res).toEqual([]);
+  });
+
+  it("pagina corretamente quando há mais de 100 resultados", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      criarClienteMock({ id: `cus_${i}`, cpfCnpj: "12345678901" }),
+    );
+    const page2 = [criarClienteMock({ id: "cus_X", cpfCnpj: "12345678901" })];
+    getMock
+      .mockResolvedValueOnce({ data: { data: page1, hasMore: true, limit: 100, offset: 0 } })
+      .mockResolvedValueOnce({ data: { data: page2, hasMore: false, limit: 100, offset: 100 } });
+
+    const res = await client.buscarTodosClientesPorCpfCnpj("12345678901");
+    expect(res).toHaveLength(101);
+    expect(getMock).toHaveBeenCalledTimes(2);
+    expect(getMock.mock.calls[1][1].params).toMatchObject({ offset: 100 });
+  });
+});
