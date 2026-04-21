@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
-import { contatos, clienteArquivos, clienteAnotacoes, conversas, leads } from "../../drizzle/schema";
-import { eq, and, desc, like, or, sql } from "drizzle-orm";
+import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads } from "../../drizzle/schema";
+import { eq, and, desc, like, or, sql, inArray, isNull } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
@@ -141,20 +141,281 @@ export const clientesRouter = router({
     return { success: true };
   }),
 
-  listarArquivos: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
+  listarArquivos: protectedProcedure.input(z.object({
+    contatoId: z.number(),
+    // pastaId: undefined = todos (comportamento legado); null = só raiz;
+    // number = só arquivos daquela pasta específica.
+    pastaId: z.number().nullable().optional(),
+  })).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
-    const rows = await db.select().from(clienteArquivos).where(and(eq(clienteArquivos.contatoId, input.contatoId), eq(clienteArquivos.escritorioId, esc.escritorio.id))).orderBy(desc(clienteArquivos.createdAt));
+    const conds: any[] = [
+      eq(clienteArquivos.contatoId, input.contatoId),
+      eq(clienteArquivos.escritorioId, esc.escritorio.id),
+    ];
+    if (input.pastaId === null) conds.push(isNull(clienteArquivos.pastaId));
+    else if (typeof input.pastaId === "number") conds.push(eq(clienteArquivos.pastaId, input.pastaId));
+    const rows = await db.select().from(clienteArquivos).where(and(...conds)).orderBy(desc(clienteArquivos.createdAt));
     return rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "" }));
   }),
-  salvarArquivo: protectedProcedure.input(z.object({ contatoId: z.number(), nome: z.string().max(255), tipo: z.string().max(255).optional(), tamanho: z.number().optional(), url: z.string() })).mutation(async ({ ctx, input }) => {
+  salvarArquivo: protectedProcedure.input(z.object({
+    contatoId: z.number(),
+    pastaId: z.number().nullable().optional(),
+    nome: z.string().max(255),
+    tipo: z.string().max(255).optional(),
+    tamanho: z.number().optional(),
+    url: z.string(),
+  })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
-    const [r] = await db.insert(clienteArquivos).values({ escritorioId: esc.escritorio.id, contatoId: input.contatoId, nome: input.nome, tipo: input.tipo || null, tamanho: input.tamanho || null, url: input.url, uploadPor: esc.colaborador.id });
+    // Se pastaId foi informado, valida que a pasta pertence ao contato/escritório.
+    if (typeof input.pastaId === "number") {
+      const [pasta] = await db.select({ id: clientePastas.id }).from(clientePastas)
+        .where(and(
+          eq(clientePastas.id, input.pastaId),
+          eq(clientePastas.contatoId, input.contatoId),
+          eq(clientePastas.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!pasta) throw new Error("Pasta inválida ou não pertence a este cliente.");
+    }
+    const [r] = await db.insert(clienteArquivos).values({
+      escritorioId: esc.escritorio.id,
+      contatoId: input.contatoId,
+      pastaId: input.pastaId ?? null,
+      nome: input.nome,
+      tipo: input.tipo || null,
+      tamanho: input.tamanho || null,
+      url: input.url,
+      uploadPor: esc.colaborador.id,
+    });
     return { id: (r as { insertId: number }).insertId };
   }),
   excluirArquivo: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
     await db.delete(clienteArquivos).where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)));
     return { success: true };
+  }),
+  moverArquivo: protectedProcedure.input(z.object({
+    id: z.number(),
+    pastaId: z.number().nullable(), // null = mover pra raiz
+  })).mutation(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    // Pega o arquivo + contato pra validar que a pasta destino é do mesmo contato.
+    const [arquivo] = await db.select().from(clienteArquivos)
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)))
+      .limit(1);
+    if (!arquivo) throw new Error("Arquivo não encontrado.");
+    if (input.pastaId !== null) {
+      const [pasta] = await db.select({ id: clientePastas.id }).from(clientePastas)
+        .where(and(
+          eq(clientePastas.id, input.pastaId),
+          eq(clientePastas.contatoId, arquivo.contatoId),
+          eq(clientePastas.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!pasta) throw new Error("Pasta destino inválida.");
+    }
+    await db.update(clienteArquivos).set({ pastaId: input.pastaId })
+      .where(eq(clienteArquivos.id, input.id));
+    return { success: true };
+  }),
+
+  // ─── PASTAS ──────────────────────────────────────────────────────────
+  listarPastas: protectedProcedure.input(z.object({
+    contatoId: z.number(),
+    // parentId: undefined = todas do contato; null = só raiz; number = só filhas diretas.
+    parentId: z.number().nullable().optional(),
+  })).query(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
+    const conds: any[] = [
+      eq(clientePastas.contatoId, input.contatoId),
+      eq(clientePastas.escritorioId, esc.escritorio.id),
+    ];
+    if (input.parentId === null) conds.push(isNull(clientePastas.parentId));
+    else if (typeof input.parentId === "number") conds.push(eq(clientePastas.parentId, input.parentId));
+
+    const pastas = await db.select().from(clientePastas).where(and(...conds)).orderBy(clientePastas.nome);
+
+    // Contagens (arquivos diretos + subpastas diretas) para exibir no card.
+    const ids = pastas.map((p) => p.id);
+    const contagens: Record<number, { arquivos: number; subpastas: number }> = {};
+    if (ids.length > 0) {
+      const arq = await db.select({ pastaId: clienteArquivos.pastaId, total: sql<number>`COUNT(*)` })
+        .from(clienteArquivos)
+        .where(and(eq(clienteArquivos.escritorioId, esc.escritorio.id), inArray(clienteArquivos.pastaId, ids)))
+        .groupBy(clienteArquivos.pastaId);
+      const sub = await db.select({ parentId: clientePastas.parentId, total: sql<number>`COUNT(*)` })
+        .from(clientePastas)
+        .where(and(eq(clientePastas.escritorioId, esc.escritorio.id), inArray(clientePastas.parentId, ids)))
+        .groupBy(clientePastas.parentId);
+      for (const id of ids) contagens[id] = { arquivos: 0, subpastas: 0 };
+      for (const r of arq) if (r.pastaId != null) contagens[r.pastaId].arquivos = Number(r.total);
+      for (const r of sub) if (r.parentId != null) contagens[r.parentId].subpastas = Number(r.total);
+    }
+
+    return pastas.map((p) => ({
+      ...p,
+      createdAt: p.createdAt ? (p.createdAt as Date).toISOString() : "",
+      totalArquivos: contagens[p.id]?.arquivos ?? 0,
+      totalSubpastas: contagens[p.id]?.subpastas ?? 0,
+    }));
+  }),
+
+  criarPasta: protectedProcedure.input(z.object({
+    contatoId: z.number(),
+    nome: z.string().min(1).max(128),
+    parentId: z.number().nullable().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const nomeLimpo = input.nome.trim();
+    if (!nomeLimpo) throw new Error("Nome da pasta não pode ser vazio.");
+
+    // Se parentId foi informado, valida que a pasta mãe pertence ao mesmo contato/escritório.
+    if (typeof input.parentId === "number") {
+      const [mae] = await db.select({ id: clientePastas.id }).from(clientePastas)
+        .where(and(
+          eq(clientePastas.id, input.parentId),
+          eq(clientePastas.contatoId, input.contatoId),
+          eq(clientePastas.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!mae) throw new Error("Pasta mãe inválida.");
+    }
+
+    // Evita duplicata de nome no mesmo nível.
+    const conds: any[] = [
+      eq(clientePastas.contatoId, input.contatoId),
+      eq(clientePastas.escritorioId, esc.escritorio.id),
+      eq(clientePastas.nome, nomeLimpo),
+    ];
+    if (input.parentId == null) conds.push(isNull(clientePastas.parentId));
+    else conds.push(eq(clientePastas.parentId, input.parentId));
+    const [dup] = await db.select({ id: clientePastas.id }).from(clientePastas).where(and(...conds)).limit(1);
+    if (dup) throw new Error("Já existe uma pasta com esse nome neste local.");
+
+    const [r] = await db.insert(clientePastas).values({
+      escritorioId: esc.escritorio.id,
+      contatoId: input.contatoId,
+      parentId: input.parentId ?? null,
+      nome: nomeLimpo,
+      criadoPor: esc.colaborador.id,
+    });
+    return { id: (r as { insertId: number }).insertId };
+  }),
+
+  renomearPasta: protectedProcedure.input(z.object({
+    id: z.number(),
+    nome: z.string().min(1).max(128),
+  })).mutation(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const nomeLimpo = input.nome.trim();
+    if (!nomeLimpo) throw new Error("Nome da pasta não pode ser vazio.");
+    const [atual] = await db.select().from(clientePastas)
+      .where(and(eq(clientePastas.id, input.id), eq(clientePastas.escritorioId, esc.escritorio.id)))
+      .limit(1);
+    if (!atual) throw new Error("Pasta não encontrada.");
+
+    // Checa duplicata de nome no mesmo nível (exceto a própria pasta).
+    const conds: any[] = [
+      eq(clientePastas.contatoId, atual.contatoId),
+      eq(clientePastas.escritorioId, esc.escritorio.id),
+      eq(clientePastas.nome, nomeLimpo),
+    ];
+    if (atual.parentId == null) conds.push(isNull(clientePastas.parentId));
+    else conds.push(eq(clientePastas.parentId, atual.parentId));
+    const [dup] = await db.select({ id: clientePastas.id }).from(clientePastas).where(and(...conds)).limit(1);
+    if (dup && dup.id !== input.id) throw new Error("Já existe uma pasta com esse nome neste local.");
+
+    await db.update(clientePastas).set({ nome: nomeLimpo }).where(eq(clientePastas.id, input.id));
+    return { success: true };
+  }),
+
+  excluirPasta: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const [pasta] = await db.select().from(clientePastas)
+      .where(and(eq(clientePastas.id, input.id), eq(clientePastas.escritorioId, esc.escritorio.id)))
+      .limit(1);
+    if (!pasta) throw new Error("Pasta não encontrada.");
+
+    // BFS para coletar todos os IDs de subpastas (e a própria).
+    const todosIds: number[] = [pasta.id];
+    let fronteira = [pasta.id];
+    while (fronteira.length > 0) {
+      const filhos = await db.select({ id: clientePastas.id }).from(clientePastas)
+        .where(and(
+          eq(clientePastas.escritorioId, esc.escritorio.id),
+          inArray(clientePastas.parentId, fronteira),
+        ));
+      const novos = filhos.map((f) => f.id);
+      if (novos.length === 0) break;
+      todosIds.push(...novos);
+      fronteira = novos;
+    }
+
+    // Exclusão definitiva: primeiro arquivos de todas, depois as pastas.
+    let arquivosExcluidos = 0;
+    const delArq = await db.delete(clienteArquivos)
+      .where(and(
+        eq(clienteArquivos.escritorioId, esc.escritorio.id),
+        inArray(clienteArquivos.pastaId, todosIds),
+      ));
+    arquivosExcluidos = (delArq as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+
+    await db.delete(clientePastas)
+      .where(and(
+        eq(clientePastas.escritorioId, esc.escritorio.id),
+        inArray(clientePastas.id, todosIds),
+      ));
+
+    return { success: true, pastasExcluidas: todosIds.length, arquivosExcluidos };
+  }),
+
+  /**
+   * Lista recursivamente todo o conteúdo de uma pasta (subpastas + arquivos),
+   * devolvendo o path relativo de cada arquivo para montagem do ZIP no
+   * frontend. Pastas vazias não aparecem (jszip as cria implicitamente).
+   */
+  listarConteudoRecursivo: protectedProcedure.input(z.object({
+    pastaId: z.number(),
+  })).query(async ({ ctx, input }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return { nome: "", arquivos: [] as Array<{ nome: string; url: string; pathRelativo: string }> };
+    const db = await getDb(); if (!db) return { nome: "", arquivos: [] };
+
+    const [raiz] = await db.select().from(clientePastas)
+      .where(and(eq(clientePastas.id, input.pastaId), eq(clientePastas.escritorioId, esc.escritorio.id)))
+      .limit(1);
+    if (!raiz) return { nome: "", arquivos: [] };
+
+    // BFS mantendo o caminho relativo de cada pasta.
+    const caminhos = new Map<number, string>();
+    caminhos.set(raiz.id, raiz.nome);
+    const resultado: Array<{ nome: string; url: string; pathRelativo: string }> = [];
+
+    let fronteira: number[] = [raiz.id];
+    while (fronteira.length > 0) {
+      const arquivos = await db.select().from(clienteArquivos)
+        .where(and(
+          eq(clienteArquivos.escritorioId, esc.escritorio.id),
+          inArray(clienteArquivos.pastaId, fronteira),
+        ));
+      for (const a of arquivos) {
+        const base = caminhos.get(a.pastaId as number) || raiz.nome;
+        resultado.push({ nome: a.nome, url: a.url, pathRelativo: `${base}/${a.nome}` });
+      }
+
+      const subs = await db.select().from(clientePastas)
+        .where(and(
+          eq(clientePastas.escritorioId, esc.escritorio.id),
+          inArray(clientePastas.parentId, fronteira),
+        ));
+      if (subs.length === 0) break;
+      for (const s of subs) {
+        const base = caminhos.get(s.parentId as number) || raiz.nome;
+        caminhos.set(s.id, `${base}/${s.nome}`);
+      }
+      fronteira = subs.map((s) => s.id);
+    }
+
+    return { nome: raiz.nome, arquivos: resultado };
   }),
 
   listarConversas: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {

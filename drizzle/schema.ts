@@ -679,6 +679,7 @@ export const clienteArquivos = mysqlTable("cliente_arquivos", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioId").notNull(),
   contatoId: int("contatoId").notNull(),
+  pastaId: int("pastaIdArquivo"), // null = arquivo na raiz (sem pasta)
   nome: varchar("nome", { length: 255 }).notNull(),
   tipo: varchar("tipo", { length: 255 }),
   tamanho: int("tamanho"),
@@ -689,6 +690,25 @@ export const clienteArquivos = mysqlTable("cliente_arquivos", {
 
 export type ClienteArquivo = typeof clienteArquivos.$inferSelect;
 export type InsertClienteArquivo = typeof clienteArquivos.$inferInsert;
+
+/**
+ * Pastas de documentos do cliente — organização em árvore N-ária.
+ * parentId auto-referencial: null = pasta na raiz do cliente; caso contrário,
+ * aponta para a pasta mãe. Exclusão é recursiva e definitiva (apaga subpastas
+ * e arquivos dentro).
+ */
+export const clientePastas = mysqlTable("cliente_pastas", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdPasta").notNull(),
+  contatoId: int("contatoIdPasta").notNull(),
+  parentId: int("parentIdPasta"), // null = pasta na raiz
+  nome: varchar("nomePasta", { length: 128 }).notNull(),
+  criadoPor: int("criadoPorPasta"),
+  createdAt: timestamp("createdAtPasta").defaultNow().notNull(),
+});
+
+export type ClientePasta = typeof clientePastas.$inferSelect;
+export type InsertClientePasta = typeof clientePastas.$inferInsert;
 
 export const clienteAnotacoes = mysqlTable("cliente_anotacoes", {
   id: int("id").autoincrement().primaryKey(),

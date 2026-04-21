@@ -71,6 +71,13 @@ const SQLS = [
   // quando o SmartFlow não encontra cenário (substitui o fallback antigo que
   // caía no chatbot de IA). Null/vazio = silêncio.
   "ALTER TABLE canais_integrados ADD COLUMN IF NOT EXISTS autoReplyFallback TEXT",
+
+  // 20. Tabela cliente_pastas — organização dos documentos do cliente em
+  //     pastas aninhadas (parentId auto-referencial, N níveis).
+  `CREATE TABLE IF NOT EXISTS cliente_pastas (id INT AUTO_INCREMENT PRIMARY KEY, escritorioIdPasta INT NOT NULL, contatoIdPasta INT NOT NULL, parentIdPasta INT NULL, nomePasta VARCHAR(128) NOT NULL, criadoPorPasta INT, createdAtPasta TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX idx_pasta_escritorio (escritorioIdPasta), INDEX idx_pasta_contato (contatoIdPasta), INDEX idx_pasta_parent (parentIdPasta))`,
+
+  // 21. cliente_arquivos: coluna pastaIdArquivo (pastaId=NULL = raiz)
+  "ALTER TABLE cliente_arquivos ADD COLUMN IF NOT EXISTS pastaIdArquivo INT NULL AFTER contatoId",
 ];
 
 async function main() {
