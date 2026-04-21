@@ -423,6 +423,66 @@ describe("SmartFlow Engine", () => {
       expect(resultado.sucesso).toBe(true);
       expect(resultado.respostas[0]).toBe("Pendências:\n");
     });
+
+    it("envia via exec.enviarWhatsApp quando contexto tem telefoneCliente e não tem canalId (gatilho não-mensagem)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "Olá {nome}" } },
+      ];
+
+      const r = await executarCenario(passos, { nomeCliente: "João", telefoneCliente: "5511999" }, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledWith("5511999", "Olá João");
+    });
+
+    it("NÃO chama exec.enviarWhatsApp quando canalId está no contexto (mensagem recebida)", async () => {
+      // Nesse caso o whatsapp-handler é quem entrega as respostas via chatId —
+      // o engine só coleta `resposta` no resultado.
+      const enviarWhatsApp = vi.fn();
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "oi {nome}" } },
+      ];
+
+      const r = await executarCenario(
+        passos,
+        { nomeCliente: "Ana", telefoneCliente: "551122222", canalId: 42 },
+        exec,
+      );
+
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      expect(r.respostas[0]).toBe("oi Ana");
+    });
+
+    it("falha com mensagem clara quando executor retorna false", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(false);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "teste" } },
+      ];
+
+      const r = await executarCenario(passos, { telefoneCliente: "5511" }, exec);
+
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("Falha ao enviar");
+    });
+
+    it("sem telefoneCliente nem canalId: só coleta resposta (comportamento legado)", async () => {
+      const enviarWhatsApp = vi.fn();
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_enviar", config: { template: "teste" } },
+      ];
+
+      const r = await executarCenario(passos, {}, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      expect(r.respostas[0]).toBe("teste");
+    });
   });
 
   describe("condicional", () => {

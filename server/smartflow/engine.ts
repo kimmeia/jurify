@@ -384,6 +384,37 @@ async function handleWhatsAppEnviar(
     .replace(/\{horario\}/g, ctx.horarioEscolhido || "")
     .replace(/\{cobrancasAbertas\}/g, blocoCobrancas);
 
+  // Quando o gatilho veio via `dispararMensagemCanal` (ou legado
+  // `tentarSmartFlow`), o contexto carrega `canalId` — o whatsapp-handler
+  // que chamou o dispatcher vai entregar as `respostas` pelo próprio
+  // `chatId` da conversa. Nesse caso, o handler aqui NÃO deve enviar
+  // diretamente (evita duplicata).
+  //
+  // Pra gatilhos não-mensagem (pagamento_recebido, pagamento_vencido,
+  // agendamento_*, etc.), `canalId` não está no contexto mas `telefoneCliente`
+  // deve ter sido populado pelo dispatcher. Nesse caso, o engine envia
+  // diretamente via executor (que busca o canal WhatsApp ativo do escritório).
+  const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
+  const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
+  if (!temCanal && telefone) {
+    try {
+      const ok = await exec.enviarWhatsApp(telefone, mensagem);
+      if (!ok) {
+        return {
+          sucesso: false,
+          contexto: ctx,
+          mensagemErro: "Falha ao enviar WhatsApp — verifique se há canal conectado.",
+        };
+      }
+    } catch (err: any) {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: `WhatsApp: ${err?.message || String(err)}`,
+      };
+    }
+  }
+
   const enviadas = ctx.mensagensEnviadas || [];
   return {
     sucesso: true,
