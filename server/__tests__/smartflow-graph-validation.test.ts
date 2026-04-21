@@ -66,18 +66,20 @@ describe("validarGrafo", () => {
     expect(r.erros.join("|")).toContain("Ciclo detectado");
   });
 
-  it("aviso — passo órfão (desconectado do gatilho)", () => {
+  it("órfão é permitido (não gera erro nem aviso)", () => {
+    // Passo pode ser alvo só de um ramo específico; a validação não força
+    // alcançabilidade desde o gatilho.
     const passos = [passo("p1", "c1"), passo("p2", "c2")];
     const edges: EdgeValidar[] = [
       { source: "gat", target: "p1" },
-      // p2 não é alcançável
+      // p2 não é alcançável — ok.
     ];
     const r = validarGrafo("gat", passos, edges);
     expect(r.erros).toEqual([]);
-    expect(r.avisos.join("|")).toContain("desconectado");
+    expect(r.avisos).toEqual([]);
   });
 
-  it("aviso — condicional sem saídas conectadas", () => {
+  it("ERRO — condicional sem saídas conectadas", () => {
     const passos = [
       passo("p1", "c1"),
       { nodeId: "pcond", clienteId: "cc", tipo: "condicional" as const, config: {}, temProximoSe: true },
@@ -88,11 +90,10 @@ describe("validarGrafo", () => {
       // pcond sem saída
     ];
     const r = validarGrafo("gat", passos, edges);
-    expect(r.erros).toEqual([]);
-    expect(r.avisos.some((a) => a.includes("condicional"))).toBe(true);
+    expect(r.erros.some((e) => e.includes("condicional"))).toBe(true);
   });
 
-  it("condicional com saída não gera aviso", () => {
+  it("condicional com saída não gera erro nem aviso", () => {
     const passos = [
       { nodeId: "pcond", clienteId: "cc", tipo: "condicional" as const, config: {}, temProximoSe: true },
       passo("p1", "c1"),
@@ -102,6 +103,7 @@ describe("validarGrafo", () => {
       { source: "pcond", target: "p1", sourceHandle: "fallback" },
     ];
     const r = validarGrafo("gat", passos, edges);
+    expect(r.erros).toEqual([]);
     expect(r.avisos).toEqual([]);
   });
 
@@ -125,15 +127,19 @@ describe("validarGrafo", () => {
     expect(r.avisos).toEqual([]);
   });
 
-  it("combina erros e avisos quando aplicável", () => {
-    const passos = [passo("p1", "c1"), passo("p2", "c2"), passo("p3", "c3")];
+  it("múltiplos erros convivem (ciclo + condicional sem saída)", () => {
+    const passos = [
+      passo("p1", "c1"),
+      { nodeId: "pcond", clienteId: "cc", tipo: "condicional" as const, config: {}, temProximoSe: true },
+    ];
     const edges: EdgeValidar[] = [
       { source: "gat", target: "p1" },
       { source: "p1", target: "p1" }, // ciclo → erro
-      // p2, p3 órfãos → aviso
+      { source: "p1", target: "pcond" },
+      // pcond sem saída → erro
     ];
     const r = validarGrafo("gat", passos, edges);
-    expect(r.erros.length).toBeGreaterThan(0);
-    expect(r.avisos.length).toBeGreaterThan(0);
+    expect(r.erros.length).toBeGreaterThanOrEqual(2);
+    expect(r.avisos).toEqual([]);
   });
 });
