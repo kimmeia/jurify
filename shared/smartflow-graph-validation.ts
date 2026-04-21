@@ -80,22 +80,6 @@ function temCiclo(
 }
 
 /**
- * Alcançáveis a partir de `raiz` (BFS). Usado pra detectar órfãos —
- * passos que estão no array mas não são atingíveis desde o gatilho.
- */
-function alcancaveis(raiz: string, adjacencia: Map<string, string[]>): Set<string> {
-  const visitados = new Set<string>();
-  const fila = [raiz];
-  while (fila.length > 0) {
-    const atual = fila.shift()!;
-    if (visitados.has(atual)) continue;
-    visitados.add(atual);
-    for (const viz of adjacencia.get(atual) || []) fila.push(viz);
-  }
-  return visitados;
-}
-
-/**
  * Valida um grafo de cenário SmartFlow. Retorna erros e avisos separados.
  * `erros` bloqueia o save; `avisos` aparece como warning mas deixa salvar.
  *
@@ -132,24 +116,19 @@ export function validarGrafo(
     erros.push("Ciclo detectado no fluxo — um passo aponta (direta ou indiretamente) pra si mesmo.");
   }
 
-  // Órfãos → aviso (passos sem caminho desde o gatilho).
-  const vistos = alcancaveis(gatilhoNodeId, adjacencia);
-  const orfaos = passos.filter((p) => !vistos.has(p.nodeId));
-  if (orfaos.length > 0) {
-    avisos.push(
-      `${orfaos.length} passo(s) desconectado(s) do gatilho — não serão executados. Conecte ou remova.`,
-    );
-  }
-
-  // Condicional sem edges saindo → aviso.
-  const condicionaisOrfaos = passos.filter((p) => {
+  // Condicional sem edges saindo → ERRO (bloqueia salvamento).
+  // Passos comuns podem ser "fim natural" do fluxo (o engine simplesmente
+  // encerra), então não validamos sua saída. Órfãos também são permitidos —
+  // podem ser alcançados só por um ramo específico de condicional. A única
+  // regra rígida é: condicional precisa de pelo menos 1 saída conectada.
+  const condicionaisSemSaida = passos.filter((p) => {
     if (p.tipo !== "condicional") return false;
     const saidas = edges.filter((e) => e.source === p.nodeId);
     return saidas.length === 0;
   });
-  if (condicionaisOrfaos.length > 0) {
-    avisos.push(
-      `${condicionaisOrfaos.length} condicional(is) sem saídas conectadas — o fluxo encerra nesses nós.`,
+  if (condicionaisSemSaida.length > 0) {
+    erros.push(
+      `${condicionaisSemSaida.length} condicional(is) sem saída conectada — conecte pelo menos uma condição ou o fallback.`,
     );
   }
 

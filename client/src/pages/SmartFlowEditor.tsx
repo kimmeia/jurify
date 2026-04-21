@@ -684,10 +684,13 @@ export default function SmartFlowEditor() {
         // Só desenha edge linear se o anterior também não tiver proximoSe
         // (senão viraria duplicata visual).
         if (!prevMapa || Object.keys(prevMapa).length === 0) {
+          // Passos não-condicionais saem do handle "default" (bottom).
+          // Incluir `sourceHandle` explícito garante persistência idempotente.
           es.push({
             id: `e-${prev.id}-${node.id}`,
             source: prev.id,
             target: node.id,
+            sourceHandle: "default",
             type: "removivel",
             animated: true,
           });
@@ -731,7 +734,20 @@ export default function SmartFlowEditor() {
     [],
   );
   const onConnect = useCallback(
-    (conn: Connection) => setEdges((eds) => addEdge({ ...conn, type: "removivel", animated: true }, eds)),
+    (conn: Connection) =>
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...conn,
+            // Se o usuário arrastou sem "acertar" um handle específico,
+            // persistimos "default" — mesma chave usada no `proximoSe`.
+            sourceHandle: conn.sourceHandle ?? "default",
+            type: "removivel",
+            animated: true,
+          },
+          eds,
+        ),
+      ),
     [],
   );
 
@@ -780,7 +796,16 @@ export default function SmartFlowEditor() {
     setNodes((nds) => [...nds, novoNode]);
     setEdges((eds) => [
       ...eds,
-      { id: `e${ultimoId}-${novoNode.id}`, source: ultimoId, target: novoNode.id, animated: true },
+      {
+        id: `e${ultimoId}-${novoNode.id}`,
+        source: ultimoId,
+        target: novoNode.id,
+        // Sempre explícito — evita divergência entre edge criada e edge
+        // recarregada do banco (sourceHandle "default" persistido no proximoSe).
+        sourceHandle: ultimoId === GATILHO_NODE_ID ? undefined : "default",
+        type: "removivel",
+        animated: true,
+      },
     ]);
     setSelectedId(novoNode.id);
   };
@@ -860,9 +885,24 @@ export default function SmartFlowEditor() {
       toast.error("Adicione pelo menos um passo.");
       return;
     }
+
+    // O alvo do gatilho precisa ser o **primeiro** passo na lista salva
+    // (o load reconecta o gatilho → passos[0] automaticamente). Sem isso,
+    // a edge gatilho→alvo "muda" ao salvar+recarregar: o load assume Y
+    // mínimo como alvo. Encontra o target da edge vinda do gatilho e move
+    // pro início.
+    const edgeGatilho = edges.find((e) => e.source === GATILHO_NODE_ID);
+    let passosOrdenados = passosList;
+    if (edgeGatilho) {
+      const alvoNode = passosList.find((n) => n.id === edgeGatilho.target);
+      if (alvoNode && passosList[0]?.id !== alvoNode.id) {
+        passosOrdenados = [alvoNode, ...passosList.filter((n) => n.id !== alvoNode.id)];
+      }
+    }
+
     // Mapa nodeId → clienteId, pra traduzir edges em `proximoSe`.
     const nodeIdParaCliente = new Map<string, string>();
-    for (const n of passosList) nodeIdParaCliente.set(n.id, n.data.clienteId);
+    for (const n of passosOrdenados) nodeIdParaCliente.set(n.id, n.data.clienteId);
 
     // Para cada passo, agrega as edges que saem dele em um objeto
     // `{ sourceHandle: clienteIdAlvo }`. Edges sem sourceHandle usam "default".
@@ -879,7 +919,7 @@ export default function SmartFlowEditor() {
       proximoSePorNodeId.set(e.source, atual);
     }
 
-    const passos = passosList.map((n) => {
+    const passos = passosOrdenados.map((n) => {
       const mapa = proximoSePorNodeId.get(n.id);
       return {
         tipo: n.data.tipo,
@@ -888,9 +928,9 @@ export default function SmartFlowEditor() {
         proximoSe: mapa && Object.keys(mapa).length > 0 ? mapa : undefined,
       };
     });
-    // Validação de grafo antes de persistir — detecta ciclos (bloqueia),
-    // órfãos e condicionais sem saída (apenas aviso).
-    const passosParaValidar = passosList.map((n) => ({
+    // Validação de grafo antes de persistir — detecta ciclos (bloqueia)
+    // e condicional sem saída conectada (bloqueia).
+    const passosParaValidar = passosOrdenados.map((n) => ({
       nodeId: n.id,
       clienteId: n.data.clienteId,
       tipo: n.data.tipo,
@@ -1092,7 +1132,7 @@ export default function SmartFlowEditor() {
                     id: `e-${menuConexao.source.nodeId}-${novoNode.id}`,
                     source: menuConexao.source.nodeId,
                     target: novoNode.id,
-                    sourceHandle: menuConexao.source.handleId ?? undefined,
+                    sourceHandle: menuConexao.source.handleId ?? "default",
                     type: "removivel",
                     animated: true,
                   },
