@@ -888,6 +888,12 @@ export const asaasRouter = router({
     }),
 
   /**
+   * @deprecated Use `syncCobrancasContato` — agora faz a mesma coisa.
+   *
+   * Mantido apenas para rollback seguro / compatibilidade de clientes
+   * antigos. Pode ser removido num refactor futuro quando a certeza de
+   * que nenhum consumidor externo depende dele.
+   *
    * Reconcilia o vínculo Asaas de um contato já vinculado: busca todos os
    * customers do Asaas com o mesmo CPF, adiciona os que ainda não estão
    * vinculados (como secundários, primario=false) e puxa cobranças de
@@ -1180,7 +1186,21 @@ export const asaasRouter = router({
       }
     }),
 
-  /** Sincronizar cobranças de um contato específico com o Asaas (pull) */
+  /**
+   * Sincroniza cobranças de um contato com o Asaas em dois passos:
+   *
+   *   1. Reconciliação por CPF: o Asaas permite duplicatas de customer com
+   *      o mesmo CPF. Se o contato tem CPF cadastrado, busca TODOS os
+   *      customers com esse CPF e adiciona os que ainda não estão
+   *      vinculados (como `primario=false`, não muda o primário).
+   *
+   *   2. Sync das cobranças de TODOS os customers vinculados (primário +
+   *      secundários). Isso garante que o histórico completo apareça mesmo
+   *      quando o vínculo original era num customer "vazio".
+   *
+   * Absorve a função antiga do endpoint `reconciliarVinculo` — um único
+   * clique no frontend ("Sincronizar") cobre os dois fluxos.
+   */
   syncCobrancasContato: protectedProcedure
     .input(z.object({ contatoId: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -1189,20 +1209,81 @@ export const asaasRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const [vinculo] = await db.select().from(asaasClientes)
-        .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)))
+      const vinculosExistentes = await db.select().from(asaasClientes)
+        .where(and(
+          eq(asaasClientes.contatoId, input.contatoId),
+          eq(asaasClientes.escritorioId, esc.escritorio.id),
+        ));
+
+      if (vinculosExistentes.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Contato não vinculado ao Asaas" });
+      }
+
+      // ── Passo 1: reconciliação por CPF ──────────────────────────────
+      // Best-effort: se o CPF estiver vazio ou a busca no Asaas falhar,
+      // prossegue com os vínculos atuais (não aborta o sync).
+      let customersAdicionados = 0;
+      let erroReconciliacao: string | null = null;
+
+      const [contato] = await db.select({ cpfCnpj: contatos.cpfCnpj }).from(contatos)
+        .where(and(
+          eq(contatos.id, input.contatoId),
+          eq(contatos.escritorioId, esc.escritorio.id),
+        ))
         .limit(1);
 
-      if (!vinculo) throw new TRPCError({ code: "NOT_FOUND", message: "Contato não vinculado ao Asaas" });
+      const cpfLimpo = (contato?.cpfCnpj || "").replace(/\D/g, "");
+      if (cpfLimpo) {
+        try {
+          const todosDoCpf = await client.buscarTodosClientesPorCpfCnpj(cpfLimpo);
+          const idsJaVinculados = new Set(vinculosExistentes.map((v) => v.asaasCustomerId));
+          const candidatos = todosDoCpf.filter((c) => !idsJaVinculados.has(c.id));
 
-      const stats = await syncCobrancasDeCliente(client, esc.escritorio.id, input.contatoId, vinculo.asaasCustomerId);
-      // Mantém compatibilidade com o frontend existente (atualizadas = total de mudanças)
+          if (candidatos.length > 0) {
+            const disponiveisIds = await filtrarCustomersDisponiveis(
+              db,
+              esc.escritorio.id,
+              candidatos.map((c) => c.id),
+            );
+            const novos = candidatos.filter((c) => disponiveisIds.has(c.id));
+
+            for (const cli of novos) {
+              await db.insert(asaasClientes).values({
+                escritorioId: esc.escritorio.id,
+                contatoId: input.contatoId,
+                asaasCustomerId: cli.id,
+                cpfCnpj: (cli.cpfCnpj || cpfLimpo).replace(/\D/g, ""),
+                nome: cli.name,
+                primario: false,
+              });
+              customersAdicionados++;
+            }
+          }
+        } catch (err: any) {
+          erroReconciliacao = err?.message || "Erro ao buscar duplicatas no Asaas";
+          log.warn(
+            { err: erroReconciliacao, contatoId: input.contatoId, cpf: cpfLimpo },
+            "Reconciliação por CPF falhou — prosseguindo com vínculos atuais",
+          );
+        }
+      }
+
+      // ── Passo 2: sync de cobranças de TODOS os vínculos ─────────────
+      let stats = { novas: 0, atualizadas: 0, removidas: 0 };
+      let erroSync: string | null = erroReconciliacao;
+      try {
+        stats = await syncTodasCobrancasDoContato(client, esc.escritorio.id, input.contatoId);
+      } catch (err: any) {
+        erroSync = err?.message || "Erro desconhecido ao sincronizar cobranças";
+      }
+
       return {
+        customersAdicionados,
         novas: stats.novas,
         atualizadas: stats.atualizadas,
         removidas: stats.removidas,
-        // Retrocompat: total geral de mudanças
         total: stats.novas + stats.atualizadas + stats.removidas,
+        erroSync,
       };
     }),
 

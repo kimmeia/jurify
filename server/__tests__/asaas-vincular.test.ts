@@ -149,6 +149,35 @@ describe("AsaasClient.listarCobrancas", () => {
       client.listarCobrancas({ customer: "cus_abc123" }),
     ).rejects.toThrow("Asaas 503");
   });
+
+  it("não aplica filtro de data — retorna cobranças de qualquer status (pago, vencido, pendente)", async () => {
+    // Garante que a chamada HTTP não injeta dateCreated[ge]/[le] ou similar,
+    // preservando o histórico completo do customer (regressão do bug onde
+    // cobranças antigas não apareciam após Sincronizar).
+    getMock.mockResolvedValue({
+      data: {
+        data: [
+          { id: "pay_1", status: "RECEIVED", customer: "cus_A", value: 100, dueDate: "2024-01-15", billingType: "PIX", invoiceUrl: "", deleted: false },
+          { id: "pay_2", status: "OVERDUE", customer: "cus_A", value: 200, dueDate: "2025-06-10", billingType: "BOLETO", invoiceUrl: "", deleted: false },
+          { id: "pay_3", status: "PENDING", customer: "cus_A", value: 300, dueDate: "2026-12-20", billingType: "PIX", invoiceUrl: "", deleted: false },
+        ],
+        hasMore: false,
+        limit: 100,
+        offset: 0,
+      },
+    });
+
+    await client.listarCobrancas({ customer: "cus_A", limit: 100, offset: 0 });
+
+    const [, config] = getMock.mock.calls[0];
+    // Nenhum parâmetro de data deve ser injetado automaticamente.
+    expect(config.params).not.toHaveProperty("dateCreated[ge]");
+    expect(config.params).not.toHaveProperty("dateCreated[le]");
+    expect(config.params).not.toHaveProperty("dueDate[ge]");
+    expect(config.params).not.toHaveProperty("dueDate[le]");
+    // Só os filtros explícitos do caller.
+    expect(Object.keys(config.params || {}).sort()).toEqual(["customer", "limit", "offset"]);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
