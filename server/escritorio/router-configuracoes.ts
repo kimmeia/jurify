@@ -28,6 +28,8 @@ import {
   contarCanaisPorTipo,
   registrarAudit,
   listarAuditLog,
+  obterAutoReplyCanal,
+  atualizarAutoReplyCanal,
 } from "./db-canais";
 import type { CargoColaborador } from "../../shared/escritorio-types";
 import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA } from "../../shared/escritorio-types";
@@ -405,6 +407,46 @@ export const configuracoesRouter = router({
         acao: "desconectou",
         detalhes: "Canal excluído",
       });
+      return { success: true };
+    }),
+
+  /** Lê o auto-reply fixo configurado para o canal (usado no fallback do WhatsApp
+   *  quando o SmartFlow não tem cenário pra responder). */
+  obterAutoReply: protectedProcedure
+    .input(z.object({ canalId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { texto: null };
+      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
+        return { texto: null };
+      }
+      const texto = await obterAutoReplyCanal(input.canalId);
+      return { texto };
+    }),
+
+  /** Atualiza o auto-reply fixo do canal. Texto vazio desliga o envio automático. */
+  atualizarAutoReply: protectedProcedure
+    .input(z.object({
+      canalId: z.number(),
+      texto: z.string().max(500).nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
+        throw new Error("Sem permissão.");
+      }
+
+      await atualizarAutoReplyCanal(input.canalId, esc.escritorio.id, input.texto);
+
+      await registrarAudit({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: esc.colaborador.id,
+        canalId: input.canalId,
+        acao: "editou_config",
+        detalhes: "Auto-reply de fallback atualizado",
+      });
+
       return { success: true };
     }),
 

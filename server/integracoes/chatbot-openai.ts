@@ -15,18 +15,6 @@ export interface ChatBotConfig {
   contextoDocumentos?: string;
 }
 export interface ChatBotMessage { role: "system" | "user" | "assistant"; content: string; }
-export interface ChatBotResponse { resposta: string | null; transferir: boolean; tokensUsados: number; nomeAgente?: string; erro?: string; }
-
-const TRANSFER_KEYWORDS = ["atendente","humano","pessoa real","falar com alguém","falar com alguem","atendimento humano","operador","suporte humano","me transfere","transferir","falar com advogado","falar com o doutor","falar com a doutora"];
-
-function detectarTransferencia(msg: string) { const l = msg.toLowerCase().trim(); return TRANSFER_KEYWORDS.some(kw => l.includes(kw)); }
-
-function providerDoConfig(config: ChatBotConfig): "openai" | "anthropic" {
-  if (config.provider) return config.provider;
-  const m = (config.modelo || "").toLowerCase();
-  if (m.startsWith("claude") || m.includes("anthropic")) return "anthropic";
-  return "openai";
-}
 
 /** Gera resposta usando Anthropic Claude API */
 export async function gerarRespostaAnthropic(apiKey: string, modelo: string, prompt: string, historico: ChatBotMessage[], msgCliente: string, maxTokens?: number, temperatura?: number): Promise<{ resposta: string | null; tokensUsados: number; erro?: string }> {
@@ -43,59 +31,6 @@ export async function gerarRespostaAnthropic(apiKey: string, modelo: string, pro
     const tokens = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
     return { resposta: texto, tokensUsados: tokens };
   } catch (err: any) { log.error(`[Claude] Erro:`, err.message); return { resposta: null, tokensUsados: 0, erro: err.message }; }
-}
-
-export async function gerarRespostaChatBot(config: ChatBotConfig, historico: ChatBotMessage[], msgCliente: string): Promise<ChatBotResponse> {
-  if (detectarTransferencia(msgCliente)) return { resposta: null, transferir: true, tokensUsados: 0, nomeAgente: config.nomeAgente };
-
-  const systemPrompt = config.prompt
-    + (config.contextoDocumentos || "")
-    + "\n\nIMPORTANTE: Se o cliente pedir para falar com um humano, responda dizendo que vai transferir e finalize com [TRANSFERIR].";
-
-  const provider = providerDoConfig(config);
-
-  // Roteamento Claude (Anthropic)
-  if (provider === "anthropic") {
-    if (!config.anthropicApiKey) {
-      log.error("ChatBot provider=anthropic mas sem anthropicApiKey");
-      return { resposta: null, transferir: false, tokensUsados: 0, erro: "API Key Claude não encontrada" };
-    }
-    const r = await gerarRespostaAnthropic(
-      config.anthropicApiKey,
-      config.modelo || "claude-haiku-4-5-20251001",
-      systemPrompt,
-      historico,
-      msgCliente,
-      config.maxTokens,
-      config.temperatura,
-    );
-    if (r.erro || !r.resposta) return { resposta: null, transferir: false, tokensUsados: r.tokensUsados, erro: r.erro, nomeAgente: config.nomeAgente };
-    if (r.resposta.includes("[TRANSFERIR]")) {
-      return { resposta: r.resposta.replace("[TRANSFERIR]", "").trim() || "Vou transferir você para um atendente.", transferir: true, tokensUsados: r.tokensUsados, nomeAgente: config.nomeAgente };
-    }
-    return { resposta: r.resposta, transferir: false, tokensUsados: r.tokensUsados, nomeAgente: config.nomeAgente };
-  }
-
-  // Roteamento OpenAI
-  if (!config.openaiApiKey) {
-    log.error("ChatBot provider=openai mas sem openaiApiKey");
-    return { resposta: null, transferir: false, tokensUsados: 0, erro: "API Key OpenAI não encontrada" };
-  }
-
-  const messages: ChatBotMessage[] = [
-    { role: "system", content: systemPrompt },
-    ...historico.slice(-20),
-    { role: "user", content: msgCliente },
-  ];
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` }, body: JSON.stringify({ model: config.modelo || "gpt-4o-mini", messages, max_tokens: config.maxTokens || 500, temperature: config.temperatura || 0.7 }) });
-    if (!res.ok) { const err = await res.text(); log.error({ status: res.status, err }, "OpenAI retornou erro"); return { resposta: null, transferir: false, tokensUsados: 0, erro: `OpenAI ${res.status}` }; }
-    const data = await res.json();
-    const texto = data.choices?.[0]?.message?.content?.trim() || "";
-    const tokens = data.usage?.total_tokens || 0;
-    if (texto.includes("[TRANSFERIR]")) { return { resposta: texto.replace("[TRANSFERIR]", "").trim() || "Vou transferir você para um atendente.", transferir: true, tokensUsados: tokens, nomeAgente: config.nomeAgente }; }
-    return { resposta: texto, transferir: false, tokensUsados: tokens, nomeAgente: config.nomeAgente };
-  } catch (err: any) { log.error(`[ChatBot] Erro:`, err.message); return { resposta: null, transferir: false, tokensUsados: 0, erro: err.message }; }
 }
 
 export async function obterConfigChatBot(escritorioId: number, canalId?: number): Promise<ChatBotConfig | null> {
@@ -139,8 +74,4 @@ export async function obterConfigChatBot(escritorioId: number, canalId?: number)
     log.info({ err: err?.message }, "[ChatBot] obterConfigChatBot falhou, fallback null");
   }
   return null;
-}
-
-export function converterHistoricoParaChatBot(msgs: Array<{ direcao: string; conteudo: string | null; tipo: string }>): ChatBotMessage[] {
-  return msgs.filter(m => m.tipo === "texto" && m.conteudo).map(m => ({ role: (m.direcao === "entrada" ? "user" : "assistant") as "user" | "assistant", content: m.conteudo! }));
 }

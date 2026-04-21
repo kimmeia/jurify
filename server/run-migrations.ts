@@ -61,6 +61,11 @@ const SQLS = [
 
   // 17. Tabela judit_transacoes (log de consumo/compra)
   `CREATE TABLE IF NOT EXISTS judit_transacoes (id INT AUTO_INCREMENT PRIMARY KEY, escritorioIdJTx INT NOT NULL, tipoJTx ENUM('compra','consumo','bonus','estorno') NOT NULL, quantidadeJTx INT NOT NULL, saldoAnteriorJTx INT NOT NULL, saldoDepoisJTx INT NOT NULL, operacaoJTx VARCHAR(64) NOT NULL, detalhesJTx VARCHAR(512), userIdJTx INT NOT NULL, createdAtJTx TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX jtx_escritorio (escritorioIdJTx), INDEX jtx_tipo (tipoJTx))`,
+
+  // 18. Coluna autoReplyFallback em canais_integrados — resposta fixa enviada
+  // quando o SmartFlow não encontra cenário (substitui o fallback antigo que
+  // caía no chatbot de IA). Null/vazio = silêncio.
+  "ALTER TABLE canais_integrados ADD COLUMN IF NOT EXISTS autoReplyFallback TEXT",
 ];
 
 async function main() {
