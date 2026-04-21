@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import {
   DollarSign, AlertTriangle, CheckCircle2, Loader2, Plus, Link, Copy, ExternalLink,
-  QrCode, RefreshCcw,
+  QrCode,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -183,42 +183,35 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
 
   const syncMut = trpc.asaas.syncCobrancasContato.useMutation({
     onSuccess: (data: any) => {
-      const total = (data.total ?? 0);
-      if (total === 0) {
+      // Três dimensões de resultado:
+      //  - customersAdicionados: quantos cadastros duplicados do Asaas
+      //    foram agregados ao contato neste sync (reconciliação por CPF).
+      //  - novas/atualizadas/removidas: mudanças em cobranças.
+      //  - erroSync: algum passo falhou (não bloqueia os que deram certo).
+      const total =
+        (data.novas ?? 0) + (data.atualizadas ?? 0) + (data.removidas ?? 0);
+
+      const partes: string[] = [];
+      if ((data.customersAdicionados ?? 0) > 0) {
+        partes.push(`${data.customersAdicionados} cadastro(s) do Asaas agregado(s)`);
+      }
+      if (data.novas > 0) partes.push(`${data.novas} nova(s)`);
+      if (data.atualizadas > 0) partes.push(`${data.atualizadas} atualizada(s)`);
+      if (data.removidas > 0) partes.push(`${data.removidas} removida(s)`);
+
+      if (data.erroSync) {
+        toast.warning("Sincronizado com falhas", { description: data.erroSync });
+      } else if (partes.length === 0 && total === 0) {
         toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
       } else {
-        const parts: string[] = [];
-        if (data.novas > 0) parts.push(`${data.novas} nova(s)`);
-        if (data.atualizadas > 0) parts.push(`${data.atualizadas} atualizada(s)`);
-        if (data.removidas > 0) parts.push(`${data.removidas} removida(s)`);
-        toast.success("Sincronizado", { description: parts.join(" · ") });
+        toast.success("Sincronizado", { description: partes.join(" · ") });
       }
-      refetch();
-    },
-    onError: (err) => toast.error("Erro", { description: err.message }),
-  });
 
-  const reconciliarMut = trpc.asaas.reconciliarVinculo.useMutation({
-    onSuccess: (data) => {
-      const partes: string[] = [];
-      if (data.customersAdicionados > 0) {
-        partes.push(`${data.customersAdicionados} cadastro(s) duplicado(s) do Asaas agregado(s)`);
-      }
-      if (data.cobrancasSincronizadas > 0) {
-        partes.push(`${data.cobrancasSincronizadas} cobrança(s) sincronizada(s)`);
-      }
-      if (data.erroSync) {
-        toast.warning("Reconciliado com falhas", { description: data.erroSync });
-      } else if (partes.length === 0) {
-        toast.success("Tudo certo", {
-          description: "Nenhum cadastro duplicado e nenhuma cobrança nova encontrada.",
-        });
-      } else {
-        toast.success("Reconciliado", { description: partes.join(" · ") });
-      }
+      // Invalida nome do cliente (pode ter mudado) + cobranças em todas
+      // as telas que mostram resumos, não só o popover.
       invalidarAposVincular();
     },
-    onError: (err) => toast.error("Erro ao reconciliar", { description: err.message }),
+    onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
   if (!asaasStatus?.conectado) return null;
@@ -307,23 +300,6 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
                   Cobrar
                 </Button>
               </div>
-
-              {/* Reconciliar: usa quando o Asaas tem cadastros duplicados
-                  do mesmo CPF e as cobranças não estão aparecendo porque
-                  vinculamos ao cadastro "vazio". Agrega as duplicatas sob
-                  o mesmo contato sem mexer em nada do Asaas. */}
-              <button
-                type="button"
-                className="w-full text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center justify-center gap-1 pt-1 disabled:opacity-50"
-                onClick={() => reconciliarMut.mutate({ contatoId })}
-                disabled={reconciliarMut.isPending}
-                title="Verifica se há cadastros duplicados do mesmo CPF no Asaas e agrega as cobranças neste contato"
-              >
-                {reconciliarMut.isPending
-                  ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  : <RefreshCcw className="h-2.5 w-2.5" />}
-                Reconciliar com Asaas
-              </button>
             </div>
           )}
         </PopoverContent>
