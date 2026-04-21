@@ -263,6 +263,63 @@ async function executarCenarioCarregado(
  * - assinaturaId: preenchido se é pagamento de assinatura (pra filtrar)
  */
 /**
+ * Resolve identificadores e contato do cliente (`contatoId`, nome, telefone)
+ * a partir do `clienteAsaasId` ou `contatoId` conhecido. Usado pra enriquecer
+ * o contexto de gatilhos Asaas com o `telefoneCliente` — crucial pro passo
+ * `whatsapp_enviar` conseguir enviar (gatilhos não-mensagem não têm canalId,
+ * então o engine envia direto via executor, que precisa do telefone).
+ *
+ * Ordem de resolução:
+ *   1. `contatoId` informado → busca `contatos`.
+ *   2. `clienteAsaasId` informado → busca `asaasClientes` → `contatos`.
+ * Retorna `{}` se nada encontrado (chamador continua sem telefone).
+ */
+async function resolverContatoAsaas(
+  escritorioId: number,
+  opts: { contatoId?: number; clienteAsaasId?: string },
+): Promise<{ contatoId?: number; nome?: string; telefone?: string; email?: string }> {
+  const db = await getDb();
+  if (!db) return {};
+  try {
+    const { asaasClientes, contatos } = await import("../../drizzle/schema");
+
+    let contatoIdFinal = opts.contatoId;
+    if (!contatoIdFinal && opts.clienteAsaasId) {
+      const [vinc] = await db
+        .select({ contatoId: asaasClientes.contatoId })
+        .from(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, escritorioId),
+            eq(asaasClientes.asaasCustomerId, opts.clienteAsaasId),
+          ),
+        )
+        .limit(1);
+      contatoIdFinal = vinc?.contatoId ?? undefined;
+    }
+
+    if (!contatoIdFinal) return {};
+
+    const [c] = await db
+      .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone, email: contatos.email })
+      .from(contatos)
+      .where(and(eq(contatos.id, contatoIdFinal), eq(contatos.escritorioId, escritorioId)))
+      .limit(1);
+    if (!c) return {};
+
+    return {
+      contatoId: c.id,
+      nome: c.nome || undefined,
+      telefone: c.telefone || undefined,
+      email: c.email || undefined,
+    };
+  } catch (err: any) {
+    log.warn({ err: err.message }, "SmartFlow: falha ao resolver contato Asaas");
+    return {};
+  }
+}
+
+/**
  * Calcula resumo financeiro do contato pra enriquecer o contexto dos gatilhos
  * de pagamento — usado nas condições do passo `condicional` (`valorTotalCliente`,
  * `percentualPago`).
@@ -369,6 +426,9 @@ export async function dispararPagamentoRecebido(
     const resumo = await calcularResumoFinanceiroContato(escritorioId, {
       clienteAsaasId: params.clienteAsaasId,
     });
+    const contato = await resolverContatoAsaas(escritorioId, {
+      clienteAsaasId: params.clienteAsaasId,
+    });
 
     const contexto: SmartflowContexto = {
       mensagem: `Pagamento recebido: ${params.descricao}`,
@@ -378,12 +438,17 @@ export async function dispararPagamentoRecebido(
       pagamentoTipo: params.tipo,
       assinaturaId: params.assinaturaId || "",
       primeiraCobranca: !cardExistente,
-      nomeCliente: params.clienteNome,
+      nomeCliente: params.clienteNome || contato.nome,
+      telefoneCliente: contato.telefone,
+      emailCliente: contato.email,
+      contatoId: contato.contatoId,
       valorTotalCliente: resumo.valorTotalCliente,
       percentualPago: resumo.percentualPago,
     };
 
-    const r = await executarCenarioPorGatilho(escritorioId, "pagamento_recebido", contexto);
+    const r = await executarCenarioPorGatilho(escritorioId, "pagamento_recebido", contexto, {
+      contatoId: contato.contatoId,
+    });
     return { executou: r.executou };
   } catch (err: any) {
     log.error({ err: err.message }, "SmartFlow: erro ao processar pagamento");
@@ -533,6 +598,10 @@ export async function dispararPagamentoVencido(
         contatoId: params.contatoId,
         clienteAsaasId: params.clienteAsaasId,
       });
+      const contato = await resolverContatoAsaas(escritorioId, {
+        contatoId: params.contatoId,
+        clienteAsaasId: params.clienteAsaasId,
+      });
 
       const contexto: SmartflowContexto = {
         mensagem: `Cobrança vencida: ${params.descricao}`,
@@ -541,14 +610,18 @@ export async function dispararPagamentoVencido(
         pagamentoDescricao: params.descricao,
         vencimento: params.vencimento,
         diasAtraso: diasAtrasoAtual,
-        nomeCliente: params.clienteNome,
-        contatoId: params.contatoId,
+        nomeCliente: params.clienteNome || contato.nome,
+        telefoneCliente: contato.telefone,
+        emailCliente: contato.email,
+        contatoId: contato.contatoId ?? params.contatoId,
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
       };
 
-      await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
+      await executarCenarioCarregado(escritorioId, c, contexto, {
+        contatoId: contato.contatoId ?? params.contatoId,
+      });
       disparados++;
     }
     return { executou: disparados > 0, cenariosDisparados: disparados };
@@ -605,6 +678,9 @@ export async function dispararProximoVencimento(
       const resumo = await calcularResumoFinanceiroContato(escritorioId, {
         contatoId: params.contatoId,
       });
+      const contato = await resolverContatoAsaas(escritorioId, {
+        contatoId: params.contatoId,
+      });
 
       const contexto: SmartflowContexto = {
         mensagem: `Cobrança vence em ${diasAteVencer} dia(s): ${params.descricao}`,
@@ -613,14 +689,18 @@ export async function dispararProximoVencimento(
         pagamentoDescricao: params.descricao,
         vencimento: params.vencimento,
         diasAteVencer,
-        nomeCliente: params.clienteNome,
-        contatoId: params.contatoId,
+        nomeCliente: params.clienteNome || contato.nome,
+        telefoneCliente: contato.telefone,
+        emailCliente: contato.email,
+        contatoId: contato.contatoId ?? params.contatoId,
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
       };
 
-      await executarCenarioCarregado(escritorioId, c, contexto, { contatoId: params.contatoId });
+      await executarCenarioCarregado(escritorioId, c, contexto, {
+        contatoId: contato.contatoId ?? params.contatoId,
+      });
       disparados++;
     }
     return { executou: disparados > 0, cenariosDisparados: disparados };
