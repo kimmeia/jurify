@@ -22,11 +22,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Zap, Plus, Trash2, Loader2, MessageCircle, Calendar, Brain,
-  ArrowRight, Play, Bot, PhoneCall, Clock, GitBranch,
-  Webhook, Users, CheckCircle2, Activity, AlertTriangle, XCircle,
-  LayoutGrid, DollarSign, Pencil, FileText,
-  CalendarCheck, CalendarX, CalendarClock, CalendarSearch,
+  Zap, Plus, Trash2, Loader2, MessageCircle, Calendar,
+  Play, Clock,
+  Users, CheckCircle2, Activity, AlertTriangle, XCircle,
+  DollarSign, Pencil, FileText,
+  CalendarCheck, CalendarX, CalendarClock,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -34,9 +34,7 @@ import {
   TIPO_PASSO_META,
   GATILHO_META,
   TIPO_CANAL_META,
-  getTipoPassoMeta,
   getGatilhoMeta,
-  type TipoPasso,
   type GatilhoSmartflow,
   type StatusExecucao,
 } from "@shared/smartflow-types";
@@ -69,23 +67,7 @@ function resumirGatilho(c: any): string | null {
   return null;
 }
 
-// Ícones por tipo de passo / gatilho (locais ao frontend).
-const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
-  ia_classificar: Brain,
-  ia_responder: Bot,
-  calcom_horarios: Calendar,
-  calcom_agendar: CheckCircle2,
-  calcom_listar: CalendarSearch,
-  calcom_cancelar: CalendarX,
-  calcom_remarcar: CalendarClock,
-  whatsapp_enviar: MessageCircle,
-  transferir: PhoneCall,
-  condicional: GitBranch,
-  esperar: Clock,
-  webhook: Webhook,
-  kanban_criar_card: LayoutGrid,
-};
-
+// Ícone por gatilho (local ao frontend).
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
   whatsapp_mensagem: MessageCircle,
   mensagem_canal: MessageCircle,
@@ -142,7 +124,7 @@ export default function SmartFlow() {
   const execs = execucoes || [];
 
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40">
           <Zap className="h-6 w-6 text-amber-600" />
@@ -186,46 +168,20 @@ export default function SmartFlow() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {lista.map((c: any) => {
                 const gatilho = getGatilhoMeta(c.gatilho);
                 const GIcon = GATILHO_ICON[c.gatilho as GatilhoSmartflow] ?? Play;
-                const passos = c.passos || [];
+                const resumoGat = resumirGatilho(c);
                 return (
-                  <Card key={c.id} className="hover:shadow-sm transition-all">
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center shrink-0">
-                          <Zap className="h-5 w-5 text-violet-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-semibold">{c.nome}</p>
-                            <Badge variant="outline" className="text-[9px] gap-1"><GIcon className="h-2.5 w-2.5" />{gatilho.label}</Badge>
-                            {(() => {
-                              const r = resumirGatilho(c);
-                              return r ? (
-                                <Badge variant="secondary" className="text-[9px]">{r}</Badge>
-                              ) : null;
-                            })()}
-                            {c.ativo ? <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">Ativo</Badge> : <Badge variant="outline" className="text-[9px] text-muted-foreground">Inativo</Badge>}
-                          </div>
-                          {c.descricao && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{c.descricao}</p>}
+                  <Card key={c.id} className="hover:shadow-sm transition-all flex flex-col">
+                    <CardContent className="pt-4 pb-4 flex flex-col gap-3 h-full">
+                      {/* Header: ícone + ações (editar, toggle ativo, excluir) */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center shrink-0">
+                          <Zap className="h-4 w-4 text-violet-600" />
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {c.gatilho === "manual" && c.ativo && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 gap-1 text-xs"
-                              onClick={() => executarMut.mutate({ cenarioId: c.id })}
-                              disabled={executarMut.isPending}
-                              title="Executar este cenário agora"
-                            >
-                              {executarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                              Executar
-                            </Button>
-                          )}
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Editar" asChild>
                             <Link href={`/smartflow/${c.id}/editar`}>
                               <Pencil className="h-3.5 w-3.5" />
@@ -246,21 +202,41 @@ export default function SmartFlow() {
                           </Button>
                         </div>
                       </div>
-                      {passos.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {passos.map((p: any, i: number) => {
-                            const info = getTipoPassoMeta(p.tipo);
-                            const Icon = TIPO_ICON[p.tipo as TipoPasso] ?? Zap;
-                            return (
-                              <div key={p.id} className="flex items-center gap-1.5">
-                                <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium ${info.cor}`}>
-                                  <Icon className="h-3 w-3" />{info.label}
-                                </div>
-                                {i < passos.length - 1 && <ArrowRight className="h-3 w-3 text-muted-foreground/40" />}
-                              </div>
-                            );
-                          })}
-                        </div>
+
+                      {/* Nome + descrição */}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate" title={c.nome}>{c.nome}</p>
+                        {c.descricao && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.descricao}</p>
+                        )}
+                      </div>
+
+                      {/* Badges (gatilho + config + ativo) — alinhadas no rodapé via mt-auto */}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-auto">
+                        <Badge variant="outline" className="text-[9px] gap-1">
+                          <GIcon className="h-2.5 w-2.5" />{gatilho.label}
+                        </Badge>
+                        {resumoGat && (
+                          <Badge variant="secondary" className="text-[9px]">{resumoGat}</Badge>
+                        )}
+                        {c.ativo
+                          ? <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">Ativo</Badge>
+                          : <Badge variant="outline" className="text-[9px] text-muted-foreground">Inativo</Badge>}
+                      </div>
+
+                      {/* Botão "Executar agora" só pra gatilho manual */}
+                      {c.gatilho === "manual" && c.ativo && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 text-xs w-full"
+                          onClick={() => executarMut.mutate({ cenarioId: c.id })}
+                          disabled={executarMut.isPending}
+                          title="Executar este cenário agora"
+                        >
+                          {executarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                          Executar agora
+                        </Button>
                       )}
                     </CardContent>
                   </Card>
