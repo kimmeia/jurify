@@ -1,4 +1,3 @@
-import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
@@ -9,9 +8,6 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  // Importante: NÃO chamar getLoginUrl() no destructuring default — isso
-  // executa em toda render mesmo quando o componente não vai redirecionar.
-  // Calculamos sob demanda apenas dentro do useEffect.
   const redirectOnUnauthenticated = options?.redirectOnUnauthenticated ?? false;
   const explicitRedirectPath = options?.redirectPath;
   const utils = trpc.useUtils();
@@ -65,8 +61,8 @@ export function useAuth(options?: UseAuthOptions) {
     if (state.user) return;
     if (typeof window === "undefined") return;
 
-    const target = explicitRedirectPath ?? getLoginUrl();
-    if (!target || target === "/") return; // sem OAuth configurado: não redireciona
+    const target = explicitRedirectPath;
+    if (!target || target === "/") return;
     if (window.location.pathname === target) return;
 
     window.location.href = target;

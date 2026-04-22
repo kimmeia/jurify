@@ -15,7 +15,7 @@ export const users = mysqlTable("users", {
    * Identificador único do usuário. Pode ser:
    * - `email-{base64email}` para usuários cadastrados via email/senha
    * - `google-{googleSub}` para usuários cadastrados via Google
-   * - O openId real do Manus OAuth (legado)
+   * - openIds legados de OAuth externo (contas antigas)
    */
   openId: varchar("openId", { length: 128 }).notNull().unique(),
   name: text("name"),
@@ -27,7 +27,7 @@ export const users = mysqlTable("users", {
   passwordHash: varchar("passwordHash", { length: 255 }),
   /** Sub do Google (id único do usuário no Google). Null para email/senha. */
   googleSub: varchar("googleSub", { length: 128 }),
-  /** Método de login: 'email', 'google', 'manus' (legado), 'demo' */
+  /** Método de login: 'email', 'google', 'demo' (pode conter valores legados em contas antigas) */
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   /** ID do customer no Asaas (cobrança SaaS Jurify). Substituiu stripeCustomerId. */
