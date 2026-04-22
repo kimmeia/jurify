@@ -100,7 +100,20 @@ export function MetaConnectDialog({
       onClose();
     },
     onError: (e: any) => {
-      toast.error(e.message);
+      // Se for erro de redirect_uri, adiciona descrição com a URI que foi
+      // tentada — usuário compara com o painel Meta Developers e ajusta.
+      const uri = typeof window !== "undefined"
+        ? window.location.href.split("?")[0].split("#")[0]
+        : "";
+      const isRedirectErr = /redirect_uri/i.test(e?.message || "");
+      if (isRedirectErr && uri) {
+        toast.error(e.message, {
+          description: `URI enviada pelo navegador: ${uri}. Cadastre essa URI exata em "URIs de redirecionamento do OAuth válidos" no painel Meta Developers.`,
+          duration: 15000,
+        });
+      } else {
+        toast.error(e.message);
+      }
       setConectando(false);
     },
   });
@@ -113,7 +126,20 @@ export function MetaConnectDialog({
       onClose();
     },
     onError: (e: any) => {
-      toast.error(e.message);
+      // Se for erro de redirect_uri, adiciona descrição com a URI que foi
+      // tentada — usuário compara com o painel Meta Developers e ajusta.
+      const uri = typeof window !== "undefined"
+        ? window.location.href.split("?")[0].split("#")[0]
+        : "";
+      const isRedirectErr = /redirect_uri/i.test(e?.message || "");
+      if (isRedirectErr && uri) {
+        toast.error(e.message, {
+          description: `URI enviada pelo navegador: ${uri}. Cadastre essa URI exata em "URIs de redirecionamento do OAuth válidos" no painel Meta Developers.`,
+          duration: 15000,
+        });
+      } else {
+        toast.error(e.message);
+      }
       setConectando(false);
     },
   });
@@ -126,7 +152,20 @@ export function MetaConnectDialog({
       onClose();
     },
     onError: (e: any) => {
-      toast.error(e.message);
+      // Se for erro de redirect_uri, adiciona descrição com a URI que foi
+      // tentada — usuário compara com o painel Meta Developers e ajusta.
+      const uri = typeof window !== "undefined"
+        ? window.location.href.split("?")[0].split("#")[0]
+        : "";
+      const isRedirectErr = /redirect_uri/i.test(e?.message || "");
+      if (isRedirectErr && uri) {
+        toast.error(e.message, {
+          description: `URI enviada pelo navegador: ${uri}. Cadastre essa URI exata em "URIs de redirecionamento do OAuth válidos" no painel Meta Developers.`,
+          duration: 15000,
+        });
+      } else {
+        toast.error(e.message);
+      }
       setConectando(false);
     },
   });
@@ -238,15 +277,26 @@ export function MetaConnectDialog({
     // redirect_uri que o SDK usou internamente quando abriu o popup.
     // A Meta exige que o mesmo valor seja passado na troca do code no
     // backend (GET /oauth/access_token). Com "modo estrito para URIs"
-    // ativo no painel, o match é caractere a caractere — trailing slash
-    // faz diferença.
+    // ativo no painel, o match é caractere a caractere.
     //
-    // O SDK do Facebook usa `${origin}/` como redirect_uri default
-    // (raiz com barra), que é exatamente o formato que o painel Meta
-    // cadastra por padrão: "https://meu-app.com/". Por isso adicionamos
-    // a barra final aqui pra bater exatamente.
-    const redirectUri =
-      typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
+    // O SDK do Facebook Login usa a URL COMPLETA da página chamadora
+    // (sem query/hash) como redirect_uri — inclui o path onde o popup
+    // foi aberto. Ex: se o popup abre em /configuracoes, o SDK registra
+    // "https://app.com/configuracoes" e a Meta exige esse mesmo valor
+    // no momento da troca.
+    //
+    // Por isso enviamos window.location.href limpo (sem query/hash).
+    // Requer que a URL da página esteja cadastrada na lista de URIs
+    // válidos do painel Meta Developers.
+    const redirectUri = typeof window !== "undefined"
+      ? window.location.href.split("?")[0].split("#")[0]
+      : undefined;
+    // Log ajuda o usuário a conferir qual URI está sendo enviada — útil
+    // pra comparar com a lista cadastrada no painel Meta quando der erro.
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[MetaConnect] redirect_uri =", redirectUri);
+    }
 
     FB.login(function (response: any) {
       if (!response.authResponse?.code) {
