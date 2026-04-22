@@ -215,19 +215,15 @@ export function registerAsaasWebhook(app: Express) {
             }
 
             if (contatoId) {
-              // Contato existe — ATUALIZAR dados com os novos do Asaas (nome novo)
+              // Contato existe — ATUALIZAR dados com os novos do Asaas (nome novo).
+              // NÃO deletamos vínculos antigos: Asaas permite duplicatas de customer
+              // com o mesmo CPF, e o CRM referência todos no mesmo contato (N:1).
               await db.update(contatos).set({
                 nome: customer.name,
                 cpfCnpj: cpfLimpo || null,
                 email: customer.email || null,
                 telefone: customer.mobilePhone || customer.phone || null,
               }).where(eq(contatos.id, contatoId));
-
-              // Remover vínculos antigos para este contato (de Asaas customers anteriores)
-              await db.delete(asaasClientes).where(and(
-                eq(asaasClientes.escritorioId, escritorioId),
-                eq(asaasClientes.contatoId, contatoId)
-              ));
             } else {
               // Criar contato novo no CRM
               const [novo] = await db.insert(contatos).values({
