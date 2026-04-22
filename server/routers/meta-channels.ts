@@ -91,6 +91,35 @@ async function getMetaAppConfig(): Promise<MetaAppConfig | null> {
 }
 
 /**
+ * Extrai mensagem legível de um erro axios ao chamar o Graph API. O Facebook
+ * retorna `{ error: { message, type, code, error_subcode, fbtrace_id } }`
+ * dentro do body da resposta — sem isso, o usuário só vê o genérico
+ * "Request failed with status code 400" do axios.
+ */
+export function explicarErroFacebook(err: unknown, contexto: string): string {
+  const e = err as {
+    response?: {
+      status?: number;
+      data?: { error?: { message?: string; type?: string; code?: number; error_subcode?: number; fbtrace_id?: string } };
+    };
+    message?: string;
+  };
+  const fbError = e?.response?.data?.error;
+  const status = e?.response?.status;
+  if (fbError?.message) {
+    const trace = fbError.fbtrace_id ? ` (fbtrace_id=${fbtrace_id_safe(fbError.fbtrace_id)})` : "";
+    return `${contexto}: ${fbError.message}${trace}`;
+  }
+  if (status) return `${contexto}: Facebook retornou HTTP ${status}.`;
+  return `${contexto}: ${e?.message || "erro desconhecido"}`;
+}
+
+function fbtrace_id_safe(id: string): string {
+  // Sanitiza — mantém só alfanuméricos / underscores / hífens curtos.
+  return id.replace(/[^A-Za-z0-9_\-=]/g, "").slice(0, 48);
+}
+
+/**
  * Troca o `code` OAuth retornado pelo Facebook Login por um access_token
  * de longa duração usando o App Secret do admin.
  */
@@ -103,17 +132,34 @@ async function exchangeCodeForToken(code: string): Promise<string> {
   }
 
   const axios = (await import("axios")).default;
-  const tokenRes = await axios.get("https://graph.facebook.com/v21.0/oauth/access_token", {
-    params: {
-      client_id: config.appId,
-      client_secret: config.appSecret,
-      code,
-    },
-    timeout: 15000,
-  });
-  const accessToken = tokenRes.data?.access_token;
-  if (!accessToken) throw new Error("Falha ao obter access token do Facebook.");
-  return accessToken;
+  try {
+    const tokenRes = await axios.get("https://graph.facebook.com/v21.0/oauth/access_token", {
+      params: {
+        client_id: config.appId,
+        client_secret: config.appSecret,
+        code,
+      },
+      timeout: 15000,
+    });
+    const accessToken = tokenRes.data?.access_token;
+    if (!accessToken) {
+      log.warn({ resp: tokenRes.data }, "oauth/access_token respondeu 200 sem access_token");
+      throw new Error("Falha ao obter access token do Facebook (resposta vazia).");
+    }
+    return accessToken;
+  } catch (err: any) {
+    // Caso já seja o erro específico lançado acima, repropaga.
+    if (err?.message?.startsWith("Falha ao obter access token")) throw err;
+    log.warn(
+      {
+        status: err?.response?.status,
+        fbError: err?.response?.data?.error,
+        appId: config.appId,
+      },
+      "[metaChannels] exchangeCodeForToken falhou",
+    );
+    throw new Error(explicarErroFacebook(err, "Falha na troca do código OAuth com a Meta"));
+  }
 }
 
 // ─── Router ────────────────────────────────────────────────────────────────
@@ -166,6 +212,7 @@ export const metaChannelsRouter = router({
       // Busca info do telefone
       let telefone = "";
       let nomeVerificado = "";
+      let erroTelefone: string | null = null;
       try {
         const axios = (await import("axios")).default;
         const phoneRes = await axios.get(
@@ -178,15 +225,25 @@ export const metaChannelsRouter = router({
         );
         telefone = phoneRes.data?.display_phone_number || "";
         nomeVerificado = phoneRes.data?.verified_name || "";
-      } catch (err) {
-        log.warn({ err: String(err) }, "Falha ao buscar info do telefone WhatsApp");
+      } catch (err: any) {
+        erroTelefone = explicarErroFacebook(err, "Falha ao buscar dados do número WhatsApp");
+        log.warn(
+          {
+            status: err?.response?.status,
+            fbError: err?.response?.data?.error,
+            phoneNumberId: input.phoneNumberId,
+          },
+          "[metaChannels] falha ao buscar info do telefone WhatsApp",
+        );
       }
 
       // Validação final — se mesmo com phoneNumberId não obtivemos número
-      // do Graph API, a conexão está quebrada. Recusa.
+      // do Graph API, a conexão está quebrada. Recusa repassando a mensagem
+      // real da Meta pro usuário (permissão faltando, token revogado, etc).
       if (!telefone) {
         throw new Error(
-          "Não foi possível validar o número WhatsApp na Meta. Verifique se o número está ativo na sua conta WhatsApp Business e tente novamente.",
+          erroTelefone ||
+            "Não foi possível validar o número WhatsApp na Meta. Verifique se o número está ativo na sua conta WhatsApp Business e tente novamente.",
         );
       }
 
@@ -293,10 +350,16 @@ export const metaChannelsRouter = router({
           igUsername = igRes.data?.username || "";
         }
       } catch (err: any) {
-        log.error({ err: err.message }, "Falha ao buscar páginas Instagram");
-        throw new Error(
-          "Não foi possível carregar sua conta Instagram. Verifique se a página do Facebook está conectada a uma conta Instagram Business.",
+        log.error(
+          {
+            status: err?.response?.status,
+            fbError: err?.response?.data?.error,
+          },
+          "[metaChannels] Falha ao buscar páginas Instagram",
         );
+        // "Nenhuma página Facebook..." já é nossa mensagem; repassa.
+        if (err?.message?.startsWith("Nenhuma página")) throw err;
+        throw new Error(explicarErroFacebook(err, "Falha ao carregar conta Instagram"));
       }
 
       if (!igUserId) {
@@ -391,8 +454,15 @@ export const metaChannelsRouter = router({
         pageName = page.name;
         pageAccessToken = page.access_token;
       } catch (err: any) {
-        log.error({ err: err.message }, "Falha ao buscar páginas Messenger");
-        throw new Error("Não foi possível carregar suas páginas do Facebook.");
+        log.error(
+          {
+            status: err?.response?.status,
+            fbError: err?.response?.data?.error,
+          },
+          "[metaChannels] Falha ao buscar páginas Messenger",
+        );
+        if (err?.message?.startsWith("Nenhuma página")) throw err;
+        throw new Error(explicarErroFacebook(err, "Falha ao carregar páginas do Facebook"));
       }
 
       const { encryptConfig } = await import("../escritorio/crypto-utils");
@@ -505,7 +575,16 @@ export const metaChannelsRouter = router({
 
         return { ok: true };
       } catch (err: any) {
-        const msg = err.response?.data?.error?.message || err.message || "Erro desconhecido";
+        const msg = explicarErroFacebook(err, "Falha no teste da conexão");
+        log.warn(
+          {
+            canalId: input.canalId,
+            tipo: canal.tipo,
+            status: err?.response?.status,
+            fbError: err?.response?.data?.error,
+          },
+          "[metaChannels] testConnection falhou",
+        );
         await db
           .update(canaisIntegrados)
           .set({ status: "erro", mensagemErro: msg.slice(0, 500) })
