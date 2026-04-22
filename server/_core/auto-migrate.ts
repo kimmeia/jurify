@@ -429,6 +429,55 @@ async function ensureAsaasIdempotency(connection: mysql.Connection): Promise<voi
 }
 
 /**
+ * Garante UNIQUE(escritorioId, userId) em `colaboradores`.
+ *
+ * O comentário do schema sempre disse que cada pessoa pertence a 1
+ * escritório, mas a constraint nunca foi aplicada — permitindo race em
+ * `aceitarConvite` (duas abas clicando simultaneamente criam 2 vínculos).
+ * Este ensure:
+ *   1. Deduplica vínculos legados (mantém a linha de menor id por
+ *      `(escritorioId, userId)` — preserva histórico do dono/gestor mais
+ *      antigo quando houver conflito).
+ *   2. Aplica `CREATE UNIQUE INDEX` idempotentemente.
+ */
+async function ensureColaboradoresUnique(connection: mysql.Connection): Promise<void> {
+  try {
+    const [tabelas] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'colaboradores'`,
+    );
+    if ((tabelas as unknown[]).length === 0) return;
+
+    try {
+      await connection.query(
+        `DELETE c1 FROM colaboradores c1
+         INNER JOIN colaboradores c2
+           ON c1.escritorioId = c2.escritorioId
+          AND c1.userId = c2.userId
+          AND c1.id > c2.id`,
+      );
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "ensureColaboradoresUnique: dedup legado falhou");
+      }
+    }
+
+    try {
+      await connection.query(
+        `CREATE UNIQUE INDEX colaboradores_escritorio_user_uq ON colaboradores (escritorioId, userId)`,
+      );
+      log.info("ensureColaboradoresUnique: índice único criado");
+    } catch (err: any) {
+      if (!isHarmlessError(err.message || String(err))) {
+        log.warn({ err: err.message }, "ensureColaboradoresUnique: falha ao criar índice");
+      }
+    }
+  } catch (err: any) {
+    log.warn({ err: err.message }, "ensureColaboradoresUnique: inspeção falhou");
+  }
+}
+
+/**
  * Sprint 1 — Controle de cliente:
  *   - users.bloqueado / motivoBloqueio / bloqueadoEm
  *   - escritorios.suspenso / motivoSuspensao / suspensoEm
@@ -1147,6 +1196,7 @@ export async function runMigrations(): Promise<void> {
     await ensureContatoColumns(connection);
     await ensureAsaasBillingColumns(connection);
     await ensureAsaasIdempotency(connection);
+    await ensureColaboradoresUnique(connection);
     await ensureClienteControlSchema(connection);
     await ensureJuditMonitoramentoColumns(connection);
     await ensureCanalAutoReplyColumn(connection);

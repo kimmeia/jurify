@@ -20,8 +20,9 @@
  */
 
 import { getDb } from "../db";
-import { asaasCobrancas, smartflowCenarios, asaasClientes } from "../../drizzle/schema";
+import { asaasCobrancas, smartflowCenarios, asaasClientes, escritorios } from "../../drizzle/schema";
 import { eq, and, ne, inArray } from "drizzle-orm";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { dispararPagamentoVencido, dispararProximoVencimento } from "./dispatcher";
 import {
   acharSlotAtivo,
@@ -128,18 +129,29 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
     const cenarios = await carregarCenariosAtivos();
     if (cenarios.length === 0) return { vencidas: 0, proximas: 0 };
 
-    const escritorios = Array.from(new Set(cenarios.map((c) => c.escritorioId)));
+    const escritoriosIds = Array.from(new Set(cenarios.map((c) => c.escritorioId)));
     const agora = new Date();
     const hoje = new Date(agora);
     hoje.setHours(0, 0, 0, 0);
     const janelaMs = 14 * 24 * 60 * 60 * 1000;
 
+    // Lê o fuso horário configurado por cada escritório — usado pra
+    // materializar slots de disparo no TZ correto (ex: 09:00 SP vs 09:00
+    // Manaus são instantes UTC diferentes).
+    const fusoPorEscritorio = new Map<number, string>();
+    const rowsFuso = await db
+      .select({ id: escritorios.id, fusoHorario: escritorios.fusoHorario })
+      .from(escritorios)
+      .where(inArray(escritorios.id, escritoriosIds));
+    for (const r of rowsFuso) fusoPorEscritorio.set(r.id, r.fusoHorario || FUSO_HORARIO_PADRAO);
+
     let vencidas = 0;
     let proximas = 0;
 
-    for (const escritorioId of escritorios) {
+    for (const escritorioId of escritoriosIds) {
       const cobrancas = await carregarCobrancasDoEscritorio(escritorioId);
       const cenariosDoEscritorio = cenarios.filter((c) => c.escritorioId === escritorioId);
+      const tz = fusoPorEscritorio.get(escritorioId) || FUSO_HORARIO_PADRAO;
 
       for (const cb of cobrancas) {
         const vencStr = cb.vencimento;
@@ -178,9 +190,10 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
 
           // Modo slot: só dispara se o ciclo atual cai dentro de um slot.
           // Modo legado: dispara sem slot (dedupe 24h).
+          // Os slots são materializados no fuso do escritório.
           const params: Parameters<typeof dispararPagamentoVencido>[1] = { ...comuns };
           if (temHorarioConfigurado(cfg)) {
-            const slots = calcularSlotsDoDia(cfg, hoje);
+            const slots = calcularSlotsDoDia(cfg, hoje, tz);
             const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
             if (!slot) continue;
             params.slotTimestamp = slot;

@@ -16,13 +16,14 @@
  */
 
 import { getDb } from "../db";
-import { smartflowCenarios } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { smartflowCenarios, escritorios } from "../../drizzle/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { dispararAgendamentoLembrete } from "./dispatcher";
 import { deveDispararLembrete } from "./dispatcher-helpers";
 import { obterCalcomClient } from "./executores";
 import { createLogger } from "../_core/logger";
 import type { ConfigGatilhoAgendamentoLembrete } from "../../shared/smartflow-types";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 
 const log = createLogger("smartflow-calcom-lembretes-scheduler");
 
@@ -82,9 +83,20 @@ export async function rodarCicloCalcomLembretes(): Promise<{ disparados: number 
       porEscritorio.set(c.escritorioId, list);
     }
 
+    // Fuso de cada escritório — o horário do lembrete ("18:00") só faz
+    // sentido no TZ local do escritório. Em deploy UTC a diferença é
+    // drástica (3h para Brasília).
+    const fusoPorEscritorio = new Map<number, string>();
+    const rowsFuso = await db
+      .select({ id: escritorios.id, fusoHorario: escritorios.fusoHorario })
+      .from(escritorios)
+      .where(inArray(escritorios.id, Array.from(porEscritorio.keys())));
+    for (const r of rowsFuso) fusoPorEscritorio.set(r.id, r.fusoHorario || FUSO_HORARIO_PADRAO);
+
     for (const [escritorioId, cenariosDoEscritorio] of porEscritorio) {
       const client = await obterCalcomClient(escritorioId);
       if (!client) continue;
+      const tz = fusoPorEscritorio.get(escritorioId) || FUSO_HORARIO_PADRAO;
 
       // Pega janela suficiente pra cobrir o maior `diasAntes` configurado.
       const maxDiasAntes = cenariosDoEscritorio.reduce(
@@ -111,7 +123,7 @@ export async function rodarCicloCalcomLembretes(): Promise<{ disparados: number 
         if (diffMs > (maxDiasAntes + 1) * 24 * 60 * 60 * 1000) continue;
 
         for (const cen of cenariosDoEscritorio) {
-          if (!deveDispararLembrete(startTime, cen.configGatilho, agora, TOLERANCIA_MIN)) continue;
+          if (!deveDispararLembrete(startTime, cen.configGatilho, agora, TOLERANCIA_MIN, tz)) continue;
 
           const r = await dispararAgendamentoLembrete(escritorioId, {
             bookingId: b.id,

@@ -31,8 +31,72 @@ import {
   obterAutoReplyCanal,
   atualizarAutoReplyCanal,
 } from "./db-canais";
+import { checkPermission } from "./check-permission";
 import type { CargoColaborador } from "../../shared/escritorio-types";
-import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA } from "../../shared/escritorio-types";
+import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
+
+/**
+ * Checa permissão no módulo `configuracoes` ou `equipe` respeitando o
+ * sistema de cargos customizáveis. O dono do escritório sempre passa
+ * (applyAction com cargo=dono retorna tudo true). Sobe `Error` claro
+ * caso contrário — os chamadores traduziam antes para mensagens
+ * específicas do contexto; preservamos a granularidade via argumento.
+ */
+async function exigirPermissao(
+  userId: number,
+  modulo: "configuracoes" | "equipe",
+  acao: "ver" | "criar" | "editar" | "excluir",
+  mensagemNegado: string,
+): Promise<void> {
+  const perm = await checkPermission(userId, modulo, acao);
+  const autorizado =
+    acao === "ver"
+      ? perm.verTodos || perm.verProprios
+      : acao === "criar"
+        ? perm.criar
+        : acao === "editar"
+          ? perm.editar
+          : perm.excluir;
+  if (!autorizado) throw new Error(mensagemNegado);
+}
+
+/**
+ * Valida que o objeto `config` recebido no criarCanal tem os campos
+ * obrigatórios do tipo selecionado. Sem isso, um canal entraria no banco
+ * com status=conectado mas sem credenciais funcionais — aparece ativo na
+ * UI e falha silenciosamente ao enviar mensagens.
+ *
+ * Para tipos cuja conexão é feita por outro fluxo (QR code presencial,
+ * Meta Embedded Signup, Cal.com direto), a config pode vir vazia aqui.
+ */
+export function validarConfigCanalPorTipo(
+  tipo: string,
+  config: Record<string, string> | undefined,
+): void {
+  // Tipos sem requisitos diretos no criarCanal — a conexão real
+  // acontece via outro fluxo (QR code, Embedded Signup, OAuth Cal.com).
+  const tiposOpcionais = new Set(["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "calcom"]);
+  if (tiposOpcionais.has(tipo)) return;
+
+  const obrigatorios: Record<string, string[]> = {
+    telefone_voip: ["twilioSid", "twilioAuthToken", "twilioPhoneNumber"],
+    chatgpt: ["openaiApiKey"],
+    claude: ["anthropicApiKey"],
+  };
+
+  const campos = obrigatorios[tipo];
+  if (!campos) return;
+
+  const missing = campos.filter((k) => {
+    const v = config?.[k];
+    return typeof v !== "string" || v.trim().length === 0;
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Configuração incompleta para canal ${tipo}. Campos obrigatórios ausentes: ${missing.join(", ")}.`,
+    );
+  }
+}
 
 export const configuracoesRouter = router({
   /** Busca o escritório do usuário logado (ou null se não tem) */
@@ -76,6 +140,18 @@ export const configuracoesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const id = await criarEscritorio(ctx.user.id, input.nome, input.email);
+      // Cria automaticamente os 4 cargos padrão (Dono, Gestor, Atendente,
+      // Estagiário) com permissões default. Sem isso, aceitarConvite não
+      // consegue resolver o cargoPersonalizadoId do convidado e o sistema
+      // de permissões granulares fica inerte até o dono clicar manualmente
+      // em "Criar Cargos Padrão" na aba Permissões.
+      try {
+        const { criarCargosDefault } = await import("./router-permissoes");
+        await criarCargosDefault(id);
+      } catch (err: any) {
+        // Best-effort: se falhar, o escritório foi criado com sucesso e o
+        // dono pode inicializar manualmente depois.
+      }
       return { escritorioId: id };
     }),
 
@@ -87,7 +163,13 @@ export const configuracoesRouter = router({
       telefone: z.string().max(20).optional(),
       email: z.string().email().optional().or(z.literal("")),
       endereco: z.string().max(500).optional(),
-      fusoHorario: z.string().max(64).optional(),
+      fusoHorario: z
+        .string()
+        .max(64)
+        .refine((tz) => FUSOS_HORARIOS_VALIDOS.has(tz), {
+          message: "Fuso horário inválido. Use um dos valores listados em FUSOS_HORARIOS.",
+        })
+        .optional(),
       horarioAbertura: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       horarioFechamento: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       diasFuncionamento: z.array(z.string()).optional(),
@@ -97,9 +179,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);
       if (!result) throw new Error("Escritório não encontrado.");
-      if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") {
-        throw new Error("Apenas donos e gestores podem editar o escritório.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para editar os dados do escritório.",
+      );
       await atualizarEscritorio(result.escritorio.id, input);
       return { success: true };
     }),
@@ -138,9 +221,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);
       if (!result) throw new Error("Escritório não encontrado.");
-      if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "equipe", "editar",
+        "Sem permissão para editar colaboradores.",
+      );
 
       const { colaboradorId, ...dados } = input;
       await atualizarColaborador(colaboradorId, result.escritorio.id, dados);
@@ -153,9 +237,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);
       if (!result) throw new Error("Escritório não encontrado.");
-      if (result.colaborador.cargo !== "dono") {
-        throw new Error("Apenas o dono pode remover colaboradores.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "equipe", "excluir",
+        "Sem permissão para remover colaboradores.",
+      );
       await removerColaborador(input.colaboradorId, result.escritorio.id);
       return { success: true };
     }),
@@ -172,9 +257,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);
       if (!result) throw new Error("Escritório não encontrado.");
-      if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão para convidar.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "equipe", "criar",
+        "Sem permissão para convidar colaboradores.",
+      );
 
       const { token, expiresAt } = await criarConvite(
         result.escritorio.id,
@@ -211,7 +297,8 @@ export const configuracoesRouter = router({
   listarConvites: protectedProcedure.query(async ({ ctx }) => {
     const result = await getEscritorioPorUsuario(ctx.user.id);
     if (!result) return [];
-    if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") return [];
+    const perm = await checkPermission(ctx.user.id, "equipe", "ver");
+    if (!perm.verTodos && !perm.verProprios) return [];
     return listarConvites(result.escritorio.id);
   }),
 
@@ -271,9 +358,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await getEscritorioPorUsuario(ctx.user.id);
       if (!result) throw new Error("Escritório não encontrado.");
-      if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "equipe", "excluir",
+        "Sem permissão para cancelar convites.",
+      );
       await cancelarConvite(input.conviteId, result.escritorio.id);
       return { success: true };
     }),
@@ -313,9 +401,17 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Apenas donos e gestores podem gerenciar canais.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "criar",
+        "Sem permissão para criar canais de integração.",
+      );
+
+      // Valida que a config contém os campos obrigatórios do tipo de canal.
+      // Evita que um canal seja gravado como "conectado" no banco (o insert
+      // no db-canais marca status=conectado quando há config) sem ter as
+      // credenciais reais — depois aparece como conectado na UI mas não
+      // funciona ao disparar mensagens.
+      validarConfigCanalPorTipo(input.tipo, input.config);
 
       // Verificar limite de WhatsApp (DESATIVADO PARA TESTES)
       // if (input.tipo === "whatsapp_qr" || input.tipo === "whatsapp_api") {
@@ -355,9 +451,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para editar a configuração do canal.",
+      );
 
       await atualizarConfigCanal(input.canalId, esc.escritorio.id, input.config, input.telefone);
 
@@ -378,7 +475,8 @@ export const configuracoesRouter = router({
     .query(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return null;
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") return null;
+      const perm = await checkPermission(ctx.user.id, "configuracoes", "ver");
+      if (!perm.verTodos && !perm.verProprios) return null;
       return obterConfigMascarada(input.canalId, esc.escritorio.id);
     }),
 
@@ -388,7 +486,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") throw new Error("Sem permissão.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para desconectar canais.",
+      );
 
       await atualizarStatusCanal(input.canalId, esc.escritorio.id, "desconectado");
       await registrarAudit({
@@ -406,7 +507,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono") throw new Error("Apenas o dono pode excluir canais.");
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "excluir",
+        "Sem permissão para excluir canais.",
+      );
 
       await excluirCanal(input.canalId, esc.escritorio.id);
       await registrarAudit({
@@ -426,9 +530,8 @@ export const configuracoesRouter = router({
     .query(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return { texto: null };
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        return { texto: null };
-      }
+      const perm = await checkPermission(ctx.user.id, "configuracoes", "ver");
+      if (!perm.verTodos && !perm.verProprios) return { texto: null };
       const texto = await obterAutoReplyCanal(input.canalId);
       return { texto };
     }),
@@ -442,9 +545,10 @@ export const configuracoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
+      await exigirPermissao(
+        ctx.user.id, "configuracoes", "editar",
+        "Sem permissão para editar auto-reply de canais.",
+      );
 
       await atualizarAutoReplyCanal(input.canalId, esc.escritorio.id, input.texto);
 
@@ -463,7 +567,8 @@ export const configuracoesRouter = router({
   auditLog: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
-    if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") return [];
+    const perm = await checkPermission(ctx.user.id, "configuracoes", "ver");
+    if (!perm.verTodos && !perm.verProprios) return [];
     return listarAuditLog(esc.escritorio.id);
   }),
 
