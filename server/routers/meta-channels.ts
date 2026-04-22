@@ -138,6 +138,15 @@ async function exchangeCodeForToken(code: string): Promise<string> {
         client_id: config.appId,
         client_secret: config.appSecret,
         code,
+        // Quando o login é feito via FB.login() do SDK JS com
+        // response_type=code, a Meta registra internamente um redirect_uri
+        // e exige que ele bata no momento da troca do code. Passar string
+        // vazia aqui instrui a Meta a usar o mesmo redirect_uri que o SDK
+        // usou no popup — sem isso, o Graph devolve:
+        //   "Error validating verification code. Please make sure your
+        //    redirect_uri is identical to the one you used in the OAuth
+        //    dialog request".
+        redirect_uri: "",
       },
       timeout: 15000,
     });
