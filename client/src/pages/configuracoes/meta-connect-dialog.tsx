@@ -274,28 +274,33 @@ export function MetaConnectDialog({
       if (metaConfig.configId) loginOptions.config_id = metaConfig.configId;
     }
 
-    // redirect_uri que o SDK usou internamente quando abriu o popup.
-    // A Meta exige que o mesmo valor seja passado na troca do code no
-    // backend (GET /oauth/access_token). Com "modo estrito para URIs"
-    // ativo no painel, o match é caractere a caractere.
+    // Dois fluxos distintos determinam se passamos redirect_uri:
     //
-    // O SDK do Facebook Login usa a URL COMPLETA da página chamadora
-    // (sem query/hash) como redirect_uri — inclui o path onde o popup
-    // foi aberto. Ex: se o popup abre em /configuracoes, o SDK registra
-    // "https://app.com/configuracoes" e a Meta exige esse mesmo valor
-    // no momento da troca.
+    //  - Embedded Signup (WhatsApp com config_id): a Meta usa um
+    //    redirect_uri INTERNO opaco no popup. Qualquer valor que a gente
+    //    mande na troca do code dá mismatch. Portanto não enviamos nada —
+    //    o backend omite o parâmetro no exchange.
     //
-    // Por isso enviamos window.location.href limpo (sem query/hash).
-    // Requer que a URL da página esteja cadastrada na lista de URIs
-    // válidos do painel Meta Developers.
-    const redirectUri = typeof window !== "undefined"
-      ? window.location.href.split("?")[0].split("#")[0]
-      : undefined;
-    // Log ajuda o usuário a conferir qual URI está sendo enviada — útil
-    // pra comparar com a lista cadastrada no painel Meta quando der erro.
+    //  - Facebook Login clássico (Instagram / Messenger, ou WhatsApp sem
+    //    config_id): a Meta exige o mesmo redirect_uri usado no popup,
+    //    que o SDK deriva de window.location.href (sem query/hash). A URL
+    //    precisa estar cadastrada na lista de URIs válidos do painel.
+    //
+    // A presença de config_id em loginOptions é o sinal do fluxo.
+    const isEmbeddedSignup = !!loginOptions.config_id;
+    const redirectUri = isEmbeddedSignup
+      ? undefined
+      : typeof window !== "undefined"
+        ? window.location.href.split("?")[0].split("#")[0]
+        : undefined;
     if (typeof window !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[MetaConnect] redirect_uri =", redirectUri);
+      console.info(
+        "[MetaConnect] fluxo =",
+        isEmbeddedSignup ? "Embedded Signup" : "Facebook Login clássico",
+        "| redirect_uri =",
+        redirectUri ?? "<omitido>",
+      );
     }
 
     FB.login(function (response: any) {
