@@ -22,6 +22,7 @@ import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA } 
 import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
+import { FUSOS_BR } from "@shared/timezone";
 import CalcomConfig from "@/components/integracoes/CalcomConfig";
 import WhatsappQR from "@/components/integracoes/WhatsappQR";
 import {
@@ -290,6 +291,26 @@ export default function Configuracoes() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  <Separator />
+                  <p className="text-sm font-medium">Fuso horário</p>
+                  <div className="space-y-1.5">
+                    <Label>Fuso usado em cenários do SmartFlow e lembretes</Label>
+                    <Select
+                      value={formPerfil.fusoHorario}
+                      onValueChange={(v) => setFormPerfil({ ...formPerfil, fusoHorario: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FUSOS_BR.map((f) => (
+                          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Ex: "00:01" num gatilho de cobrança vencida é interpretado neste fuso.
+                    </p>
                   </div>
 
                   <Separator />

@@ -12,6 +12,17 @@ import type {
   JanelaDisparo,
   TipoCanalMensagem,
 } from "../../shared/smartflow-types";
+import {
+  partsInTz,
+  zonedWallTimeToUtc,
+  diaCivilNoTz,
+  inicioDoDiaNoTz,
+  diasCivisEntre,
+} from "../../shared/timezone";
+
+/** Fuso default quando o escritório não tem `fusoHorario` (schema já garante
+ *  NOT NULL DEFAULT, mas helpers devem se proteger caso sejam chamados solto). */
+export const FUSO_DEFAULT = "America/Sao_Paulo";
 
 /**
  * Retorna `true` se o cenário (com gatilho `mensagem_canal`) aceita o canal
@@ -59,14 +70,35 @@ export function contextoContemPagamento(contextoSerializado: string | null | und
   return contextoSerializado.includes(`"pagamentoId":"${pagamentoId}"`);
 }
 
-export function diasEntre(a: Date, b: Date): number {
-  return Math.floor((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
+/**
+ * Diferença em dias civis (a - b), medida no fuso `tz` do escritório.
+ *
+ * Ex: `a = 2026-04-22T01:00:00Z` (= 22:00 BRT de 21-abr), `b = venc 21-abr`
+ *      → 0 dias. Só à meia-noite local vira 1.
+ */
+export function diasEntre(a: Date, b: Date, tz: string = FUSO_DEFAULT): number {
+  return diasCivisEntre(a, b, tz);
 }
 
-export function parseVencimento(iso: string | null | undefined): Date | null {
+/**
+ * Parseia a string de vencimento do Asaas ("YYYY-MM-DD") como meia-noite
+ * CIVIL no fuso `tz`. Sem `tz`, assumia UTC — fazia o vencimento "2026-04-21"
+ * ser meia-noite UTC (= 21h de 20-abr BRT), dando 1 dia de atraso ao tick
+ * 00:15 UTC de 22-abr (= 21:15 de 21-abr BRT).
+ */
+export function parseVencimento(
+  iso: string | null | undefined,
+  tz: string = FUSO_DEFAULT,
+): Date | null {
   if (!iso || typeof iso !== "string") return null;
-  const d = new Date(`${iso}T00:00:00`);
-  return isNaN(d.getTime()) ? null : d;
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const y = Number(match[1]);
+  const mo = Number(match[2]);
+  const d = Number(match[3]);
+  if (!Number.isInteger(y) || !Number.isInteger(mo) || !Number.isInteger(d)) return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return zonedWallTimeToUtc(y, mo, d, 0, 0, 0, tz);
 }
 
 // ─── Janela de disparo (slots de horário) ───────────────────────────────────
@@ -97,10 +129,12 @@ export function temHorarioConfigurado(cfg: JanelaDisparo | undefined | null): bo
 }
 
 /**
- * Dada uma janela de disparo e uma data-base (início do dia), retorna os
- * `disparosPorDia` slots como instâncias Date — cada um é o inicio do
- * horário de disparo naquele dia. Ex: `horarioInicial="09:00"`,
- * `disparosPorDia=3`, `intervaloMinutos=120` → [09:00, 11:00, 13:00].
+ * Dada uma janela de disparo, uma data-base e o fuso do escritório,
+ * retorna os `disparosPorDia` slots como instâncias Date — cada um é o
+ * instante UTC do horário civil de disparo naquele dia no `tz`.
+ *
+ * Ex: `horarioInicial="00:01"`, `tz="America/Sao_Paulo"`, baseDia em
+ * 2026-04-22 → [2026-04-22T03:01:00Z] (00:01 BRT = 03:01 UTC).
  *
  * Se `cfg.horarioInicial` for inválido/ausente, retorna `[]` — caller cai
  * no modo legado.
@@ -108,6 +142,7 @@ export function temHorarioConfigurado(cfg: JanelaDisparo | undefined | null): bo
 export function calcularSlotsDoDia(
   cfg: JanelaDisparo | undefined | null,
   baseDia: Date,
+  tz: string = FUSO_DEFAULT,
 ): Date[] {
   const hora = cfg ? parseHoraHHMM(cfg.horarioInicial) : null;
   if (!hora) return [];
@@ -115,11 +150,15 @@ export function calcularSlotsDoDia(
   const disparos = Math.max(1, Math.floor(Number(cfg?.disparosPorDia ?? 1)));
   const intervaloMin = Math.max(1, Math.floor(Number(cfg?.intervaloMinutos ?? 120)));
 
+  const base = partsInTz(baseDia, tz);
   const slots: Date[] = [];
   for (let i = 0; i < disparos; i++) {
-    const slot = new Date(baseDia);
-    slot.setHours(hora.h, hora.m + i * intervaloMin, 0, 0);
-    slots.push(slot);
+    const minutosTotais = hora.m + i * intervaloMin;
+    const h = hora.h + Math.floor(minutosTotais / 60);
+    const m = minutosTotais % 60;
+    // Usa o ano/mês/dia civil da base no `tz`; `zonedWallTimeToUtc` normaliza
+    // horas ≥ 24 implicitamente (Date.UTC rola o dia).
+    slots.push(zonedWallTimeToUtc(base.y, base.mo, base.d, h, m, 0, tz));
   }
   return slots;
 }
@@ -146,17 +185,21 @@ export function acharSlotAtivo(
 }
 
 /**
- * Serializa um slot como string estável (sem timezone) — usada dentro do
- * contexto da execução pra permitir dedupe por match exato de substring.
- * Formato: "YYYY-MM-DDTHH:MM" (truncando segundos).
+ * Serializa um slot como string estável — usada no contexto da execução pra
+ * permitir dedupe por match exato de substring. Formato:
+ * "YYYY-MM-DDTHH:MM" em horário civil do fuso `tz` (truncando segundos).
+ *
+ * Antes esta função usava `getFullYear/getMonth/.../getHours` que lê no
+ * fuso do processo Node (UTC em produção). A chave ficava inconsistente
+ * com o horário configurado pelo usuário.
  */
-export function slotTimestampChave(slot: Date): string {
-  const y = slot.getFullYear();
-  const mo = String(slot.getMonth() + 1).padStart(2, "0");
-  const d = String(slot.getDate()).padStart(2, "0");
-  const h = String(slot.getHours()).padStart(2, "0");
-  const mi = String(slot.getMinutes()).padStart(2, "0");
-  return `${y}-${mo}-${d}T${h}:${mi}`;
+export function slotTimestampChave(slot: Date, tz: string = FUSO_DEFAULT): string {
+  const p = partsInTz(slot, tz);
+  const mo = String(p.mo).padStart(2, "0");
+  const d = String(p.d).padStart(2, "0");
+  const h = String(p.h).padStart(2, "0");
+  const mi = String(p.mi).padStart(2, "0");
+  return `${p.y}-${mo}-${d}T${h}:${mi}`;
 }
 
 /**
@@ -170,37 +213,38 @@ export function contextoContemSlot(contextoSerializado: string | null | undefine
 }
 
 /**
- * Retorna o "dia" (YYYY-MM-DD) no timezone local a partir de uma Date.
+ * Retorna o "dia civil" (YYYY-MM-DD) de uma Date no fuso `tz` do escritório.
  * Usado pra contar quantos dias distintos um cenário já disparou (limite
  * `repetirPorDias`).
  */
-export function chaveDiaLocal(dt: Date): string {
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, "0");
-  const d = String(dt.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+export function chaveDiaLocal(dt: Date, tz: string = FUSO_DEFAULT): string {
+  return diaCivilNoTz(dt, tz);
 }
 
 // ─── Lembrete de agendamento Cal.com ────────────────────────────────────────
 
 /**
  * Calcula o momento exato em que o lembrete deve disparar. A partir do
- * `startTime` do booking, subtrai `diasAntes` dias e posiciona no `horario`
- * configurado (HH:MM, timezone local).
+ * `startTime` do booking, subtrai `diasAntes` dias civis e posiciona no
+ * `horario` configurado (HH:MM) **no fuso `tz` do escritório**.
  *
- * Ex: booking começa em `2026-04-22 14:00`, `diasAntes=1`, `horario="18:00"`
- *     → lembrete às `2026-04-21 18:00`.
+ * Ex: booking em 2026-04-22T14:00Z, tz="America/Sao_Paulo" (= 11:00 BRT de
+ * 22-abr), `diasAntes=1`, `horario="18:00"` → lembrete às `2026-04-21 18:00`
+ * BRT = `2026-04-21T21:00:00Z`.
  */
 export function calcularMomentoLembrete(
   startTime: Date,
   cfg: ConfigGatilhoAgendamentoLembrete | undefined | null,
+  tz: string = FUSO_DEFAULT,
 ): Date | null {
   const diasAntes = Math.max(0, Math.floor(Number(cfg?.diasAntes ?? 1)));
   const hora = parseHoraHHMM(cfg?.horario || "18:00") ?? { h: 18, m: 0 };
-  const momento = new Date(startTime);
-  momento.setDate(momento.getDate() - diasAntes);
-  momento.setHours(hora.h, hora.m, 0, 0);
-  return momento;
+
+  // Dia civil do booking no `tz`, menos `diasAntes`.
+  const inicioDia = inicioDoDiaNoTz(startTime, tz);
+  const diaAlvo = new Date(inicioDia.getTime() - diasAntes * 24 * 60 * 60 * 1000);
+  const partsAlvo = partsInTz(diaAlvo, tz);
+  return zonedWallTimeToUtc(partsAlvo.y, partsAlvo.mo, partsAlvo.d, hora.h, hora.m, 0, tz);
 }
 
 /**
@@ -212,8 +256,9 @@ export function deveDispararLembrete(
   cfg: ConfigGatilhoAgendamentoLembrete | undefined | null,
   agora: Date,
   toleranciaMin: number,
+  tz: string = FUSO_DEFAULT,
 ): boolean {
-  const momento = calcularMomentoLembrete(startTime, cfg);
+  const momento = calcularMomentoLembrete(startTime, cfg, tz);
   if (!momento) return false;
   // Janela: entre (agora - tolerância) e agora — igual ao slot Asaas.
   const inicioJanela = new Date(agora.getTime() - toleranciaMin * 60 * 1000);

@@ -20,7 +20,7 @@
  */
 
 import { getDb } from "../db";
-import { asaasCobrancas, smartflowCenarios, asaasClientes } from "../../drizzle/schema";
+import { asaasCobrancas, smartflowCenarios, asaasClientes, escritorios } from "../../drizzle/schema";
 import { eq, and, ne, inArray } from "drizzle-orm";
 import { dispararPagamentoVencido, dispararProximoVencimento } from "./dispatcher";
 import {
@@ -28,8 +28,10 @@ import {
   calcularSlotsDoDia,
   parseVencimento,
   diasEntre,
+  FUSO_DEFAULT,
   temHorarioConfigurado,
 } from "./dispatcher-helpers";
+import { inicioDoDiaNoTz } from "../../shared/timezone";
 import { createLogger } from "../_core/logger";
 import type {
   ConfigGatilhoPagamentoVencido,
@@ -119,6 +121,18 @@ async function resolverVinculo(
   return vinc ?? null;
 }
 
+/** Carrega o fuso horário do escritório. Default: America/Sao_Paulo. */
+async function carregarFusoHorario(escritorioId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) return FUSO_DEFAULT;
+  const [linha] = await db
+    .select({ fusoHorario: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  return linha?.fusoHorario || FUSO_DEFAULT;
+}
+
 /** Roda 1 ciclo — público pra testes/ações admin. */
 export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proximas: number }> {
   const db = await getDb();
@@ -128,25 +142,28 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
     const cenarios = await carregarCenariosAtivos();
     if (cenarios.length === 0) return { vencidas: 0, proximas: 0 };
 
-    const escritorios = Array.from(new Set(cenarios.map((c) => c.escritorioId)));
+    const escritoriosIds = Array.from(new Set(cenarios.map((c) => c.escritorioId)));
     const agora = new Date();
-    const hoje = new Date(agora);
-    hoje.setHours(0, 0, 0, 0);
     const janelaMs = 14 * 24 * 60 * 60 * 1000;
 
     let vencidas = 0;
     let proximas = 0;
 
-    for (const escritorioId of escritorios) {
+    for (const escritorioId of escritoriosIds) {
+      // Fuso do escritório — usado em parseVencimento/slots/diasEntre pra
+      // evitar dispararar com base no fuso UTC do processo.
+      const tz = await carregarFusoHorario(escritorioId);
+      const hoje = inicioDoDiaNoTz(agora, tz);
+
       const cobrancas = await carregarCobrancasDoEscritorio(escritorioId);
       const cenariosDoEscritorio = cenarios.filter((c) => c.escritorioId === escritorioId);
 
       for (const cb of cobrancas) {
         const vencStr = cb.vencimento;
         if (!vencStr) continue;
-        const venc = parseVencimento(vencStr);
+        const venc = parseVencimento(vencStr, tz);
         if (!venc) continue;
-        const diffDias = diasEntre(venc, hoje);
+        const diffDias = diasEntre(venc, hoje, tz);
 
         // Pagou entre um lembrete e outro? skip qualquer disparo.
         if (STATUS_PAGO.has(cb.status)) continue;
@@ -160,6 +177,7 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
           clienteNome: vinc?.nome || undefined,
           contatoId: vinc?.contatoId || undefined,
           clienteAsaasId: cb.asaasCustomerId,
+          fusoHorario: tz,
         };
 
         for (const cen of cenariosDoEscritorio) {
@@ -180,7 +198,7 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
           // Modo legado: dispara sem slot (dedupe 24h).
           const params: Parameters<typeof dispararPagamentoVencido>[1] = { ...comuns };
           if (temHorarioConfigurado(cfg)) {
-            const slots = calcularSlotsDoDia(cfg, hoje);
+            const slots = calcularSlotsDoDia(cfg, hoje, tz);
             const slot = acharSlotAtivo(slots, agora, TOLERANCIA_MIN);
             if (!slot) continue;
             params.slotTimestamp = slot;

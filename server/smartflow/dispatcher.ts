@@ -30,6 +30,7 @@ import {
   deveDispararProximo,
   deveDispararVencido,
   diasEntre,
+  FUSO_DEFAULT,
   parseVencimento,
   slotTimestampChave,
   temHorarioConfigurado,
@@ -510,6 +511,7 @@ async function jaDisparouPagamento(
 async function diasDistintosDisparados(
   cenarioId: number,
   pagamentoId: string,
+  tz: string = FUSO_DEFAULT,
 ): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -528,7 +530,7 @@ async function diasDistintosDisparados(
   for (const r of execs) {
     if (!contextoContemPagamento(r.contexto, pagamentoId)) continue;
     const d = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt as any);
-    dias.add(chaveDiaLocal(d));
+    dias.add(chaveDiaLocal(d, tz));
   }
   return dias.size;
 }
@@ -557,15 +559,19 @@ export async function dispararPagamentoVencido(
      * mesmo pagamento pode disparar em múltiplos slots do mesmo dia.
      */
     slotTimestamp?: Date;
+    /** Fuso horário do escritório — usado pra calcular dias de atraso no
+     *  horário civil local, não em UTC. Default: America/Sao_Paulo. */
+    fusoHorario?: string;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
     const cenarios = await carregarCenariosAtivos(escritorioId, ["pagamento_vencido"]);
     if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
 
-    const vencimento = parseVencimento(params.vencimento);
-    const diasAtrasoAtual = vencimento ? diasEntre(new Date(), vencimento) : 0;
-    const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp) : null;
+    const tz = params.fusoHorario || FUSO_DEFAULT;
+    const vencimento = parseVencimento(params.vencimento, tz);
+    const diasAtrasoAtual = vencimento ? diasEntre(new Date(), vencimento, tz) : 0;
+    const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp, tz) : null;
 
     let disparados = 0;
     for (const c of cenarios) {
@@ -587,7 +593,7 @@ export async function dispararPagamentoVencido(
       // Controle `repetirPorDias`: para de lembrar depois de N dias.
       const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
       if (temHorarioConfigurado(cfg)) {
-        const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
+        const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId, tz);
         if (disparadosDias >= limite) {
           log.debug({ cenarioId: c.cenarioId, pagamentoId: params.pagamentoId, limite }, "SmartFlow: pagamento_vencido atingiu repetirPorDias");
           continue;
@@ -649,18 +655,21 @@ export async function dispararProximoVencimento(
     clienteNome?: string;
     contatoId?: number;
     slotTimestamp?: Date;
+    /** Fuso horário do escritório. Default: America/Sao_Paulo. */
+    fusoHorario?: string;
   },
 ): Promise<{ executou: boolean; cenariosDisparados: number }> {
   try {
     const cenarios = await carregarCenariosAtivos(escritorioId, ["pagamento_proximo_vencimento"]);
     if (cenarios.length === 0) return { executou: false, cenariosDisparados: 0 };
 
-    const vencimento = parseVencimento(params.vencimento);
+    const tz = params.fusoHorario || FUSO_DEFAULT;
+    const vencimento = parseVencimento(params.vencimento, tz);
     if (!vencimento) return { executou: false, cenariosDisparados: 0 };
-    const diasAteVencer = diasEntre(vencimento, new Date());
+    const diasAteVencer = diasEntre(vencimento, new Date(), tz);
     if (diasAteVencer < 0) return { executou: false, cenariosDisparados: 0 }; // já venceu
 
-    const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp) : null;
+    const slotChave = params.slotTimestamp ? slotTimestampChave(params.slotTimestamp, tz) : null;
 
     let disparados = 0;
     for (const c of cenarios) {
@@ -671,7 +680,7 @@ export async function dispararProximoVencimento(
 
       const limite = Math.max(1, Math.floor(Number(cfg?.repetirPorDias ?? 1)));
       if (temHorarioConfigurado(cfg)) {
-        const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId);
+        const disparadosDias = await diasDistintosDisparados(c.cenarioId, params.pagamentoId, tz);
         if (disparadosDias >= limite) continue;
       }
 

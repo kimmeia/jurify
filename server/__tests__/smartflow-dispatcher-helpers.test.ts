@@ -118,21 +118,37 @@ describe("contextoContemPagamento (dedupe)", () => {
 });
 
 describe("diasEntre / parseVencimento", () => {
-  it("diasEntre calcula dias inteiros", () => {
-    const hoje = new Date("2026-04-20T12:00:00");
-    const ontem = new Date("2026-04-19T12:00:00");
-    const semanaAtras = new Date("2026-04-13T12:00:00");
+  it("diasEntre calcula dias civis no fuso (default Sao_Paulo)", () => {
+    const hoje = new Date("2026-04-20T15:00:00Z"); // 12:00 BRT de 20-abr
+    const ontem = new Date("2026-04-19T15:00:00Z"); // 12:00 BRT de 19-abr
+    const semanaAtras = new Date("2026-04-13T15:00:00Z");
     expect(diasEntre(hoje, ontem)).toBe(1);
     expect(diasEntre(hoje, semanaAtras)).toBe(7);
     expect(diasEntre(ontem, hoje)).toBe(-1);
   });
 
-  it("parseVencimento aceita formato ISO do Asaas (YYYY-MM-DD)", () => {
-    const d = parseVencimento("2026-04-30");
+  it("diasEntre: 22-abr 01:00 UTC é véspera em BRT — ainda 0 dias de atraso", () => {
+    const agora = new Date("2026-04-22T01:00:00Z"); // 22:00 BRT de 21-abr
+    const venc = parseVencimento("2026-04-21", "America/Sao_Paulo")!;
+    expect(diasEntre(agora, venc, "America/Sao_Paulo")).toBe(0);
+  });
+
+  it("diasEntre: 22-abr 04:00 UTC (01:00 BRT de 22) — 1 dia de atraso em BRT", () => {
+    const agora = new Date("2026-04-22T04:00:00Z");
+    const venc = parseVencimento("2026-04-21", "America/Sao_Paulo")!;
+    expect(diasEntre(agora, venc, "America/Sao_Paulo")).toBe(1);
+  });
+
+  it("parseVencimento retorna meia-noite do dia no fuso informado", () => {
+    const d = parseVencimento("2026-04-30", "America/Sao_Paulo");
     expect(d).not.toBeNull();
-    expect(d!.getFullYear()).toBe(2026);
-    expect(d!.getMonth()).toBe(3); // abril = 3
-    expect(d!.getDate()).toBe(30);
+    // 00:00 BRT de 30-abr = 03:00 UTC de 30-abr.
+    expect(d!.toISOString()).toBe("2026-04-30T03:00:00.000Z");
+  });
+
+  it("parseVencimento em UTC vira meia-noite UTC", () => {
+    const d = parseVencimento("2026-04-30", "UTC");
+    expect(d!.toISOString()).toBe("2026-04-30T00:00:00.000Z");
   });
 
   it("parseVencimento devolve null para inputs inválidos", () => {
@@ -172,85 +188,137 @@ describe("temHorarioConfigurado", () => {
 });
 
 describe("calcularSlotsDoDia", () => {
-  const base = new Date("2026-04-20T00:00:00");
+  // Base: meia-noite BRT de 2026-04-20 = 03:00 UTC.
+  const baseBrt = new Date("2026-04-20T03:00:00Z");
 
   it("retorna 1 slot quando disparosPorDia é default (1)", () => {
-    const slots = calcularSlotsDoDia({ horarioInicial: "09:00" }, base);
+    const slots = calcularSlotsDoDia({ horarioInicial: "09:00" }, baseBrt, "America/Sao_Paulo");
     expect(slots).toHaveLength(1);
-    expect(slots[0].getHours()).toBe(9);
-    expect(slots[0].getMinutes()).toBe(0);
+    // 09:00 BRT = 12:00 UTC.
+    expect(slots[0].toISOString()).toBe("2026-04-20T12:00:00.000Z");
   });
 
   it("espalha N slots pelo intervaloMinutos", () => {
     const slots = calcularSlotsDoDia(
       { horarioInicial: "09:00", disparosPorDia: 3, intervaloMinutos: 120 },
-      base,
+      baseBrt,
+      "America/Sao_Paulo",
     );
-    expect(slots).toHaveLength(3);
-    expect(slots.map((s) => `${s.getHours()}:${s.getMinutes()}`)).toEqual([
-      "9:0",
-      "11:0",
-      "13:0",
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-04-20T12:00:00.000Z",
+      "2026-04-20T14:00:00.000Z",
+      "2026-04-20T16:00:00.000Z",
     ]);
   });
 
-  it("intervalo de 90min também funciona", () => {
+  it("intervalo de 90min com primeiro às 08:30", () => {
     const slots = calcularSlotsDoDia(
       { horarioInicial: "08:30", disparosPorDia: 2, intervaloMinutos: 90 },
-      base,
+      baseBrt,
+      "America/Sao_Paulo",
     );
-    expect(slots).toHaveLength(2);
-    expect(slots[0].getHours()).toBe(8);
-    expect(slots[0].getMinutes()).toBe(30);
-    expect(slots[1].getHours()).toBe(10);
-    expect(slots[1].getMinutes()).toBe(0);
+    expect(slots.map((s) => s.toISOString())).toEqual([
+      "2026-04-20T11:30:00.000Z",
+      "2026-04-20T13:00:00.000Z",
+    ]);
   });
 
   it("retorna vazio quando horarioInicial ausente/inválido", () => {
-    expect(calcularSlotsDoDia({}, base)).toEqual([]);
-    expect(calcularSlotsDoDia({ horarioInicial: "lixo" }, base)).toEqual([]);
-    expect(calcularSlotsDoDia(undefined, base)).toEqual([]);
+    expect(calcularSlotsDoDia({}, baseBrt, "America/Sao_Paulo")).toEqual([]);
+    expect(calcularSlotsDoDia({ horarioInicial: "lixo" }, baseBrt, "America/Sao_Paulo")).toEqual([]);
+    expect(calcularSlotsDoDia(undefined, baseBrt, "America/Sao_Paulo")).toEqual([]);
+  });
+
+  it("BUG DO USER: horarioInicial=00:01 em Sao_Paulo vira 03:01 UTC (não 00:01 UTC)", () => {
+    // Se o scheduler interpretasse em UTC, o slot seria 00:01 UTC — aí o
+    // tick das 00:15 UTC (21:15 Fortaleza véspera) disparava errado.
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "00:01" },
+      new Date("2026-04-22T03:00:00Z"), // meia-noite BRT de 22-abr
+      "America/Sao_Paulo",
+    );
+    expect(slots).toHaveLength(1);
+    expect(slots[0].toISOString()).toBe("2026-04-22T03:01:00.000Z");
+  });
+
+  it("mesmo horario em UTC explícito mantém comportamento antigo", () => {
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "00:01" },
+      new Date("2026-04-22T00:00:00Z"),
+      "UTC",
+    );
+    expect(slots[0].toISOString()).toBe("2026-04-22T00:01:00.000Z");
   });
 });
 
 describe("acharSlotAtivo", () => {
-  const base = new Date("2026-04-20T00:00:00");
+  // Slots 09:00/11:00/13:00 BRT = 12:00/14:00/16:00 UTC de 2026-04-20.
+  const baseBrt = new Date("2026-04-20T03:00:00Z");
   const slots = calcularSlotsDoDia(
     { horarioInicial: "09:00", disparosPorDia: 3, intervaloMinutos: 120 },
-    base,
+    baseBrt,
+    "America/Sao_Paulo",
   );
 
   it("acha o slot se agora estiver na janela de tolerância", () => {
-    // Scheduler roda 09:05, tolerância 15min → slot 09:00 bate
-    const agora = new Date("2026-04-20T09:05:00");
-    expect(acharSlotAtivo(slots, agora, 15)).not.toBeNull();
-    expect(acharSlotAtivo(slots, agora, 15)!.getHours()).toBe(9);
+    // Tick 09:05 BRT = 12:05 UTC. Slot 09:00 BRT = 12:00 UTC. Janela 15min bate.
+    const agora = new Date("2026-04-20T12:05:00Z");
+    const achado = acharSlotAtivo(slots, agora, 15);
+    expect(achado?.toISOString()).toBe("2026-04-20T12:00:00.000Z");
   });
 
   it("ignora slot já passado há muito tempo", () => {
-    // 10:00 está 60min depois do slot 09:00, fora da janela de 15min
-    const agora = new Date("2026-04-20T10:00:00");
+    const agora = new Date("2026-04-20T13:00:00Z"); // 60min depois do slot 12:00
     expect(acharSlotAtivo(slots, agora, 15)).toBeNull();
   });
 
   it("ignora slot futuro (agora < slot)", () => {
-    const agora = new Date("2026-04-20T08:45:00");
+    const agora = new Date("2026-04-20T11:45:00Z");
     expect(acharSlotAtivo(slots, agora, 15)).toBeNull();
   });
 
   it("escolhe o slot mais recente quando vários caem na janela", () => {
-    // Tolerância alta absorve 2 slots — deve retornar o mais próximo de agora.
-    const agora = new Date("2026-04-20T11:05:00");
-    const achado = acharSlotAtivo(slots, agora, 300); // 5h
-    expect(achado).not.toBeNull();
-    expect(achado!.getHours()).toBe(11); // slot 11:00, não 09:00
+    const agora = new Date("2026-04-20T14:05:00Z"); // 11:05 BRT
+    const achado = acharSlotAtivo(slots, agora, 300);
+    expect(achado?.toISOString()).toBe("2026-04-20T14:00:00.000Z"); // slot 11:00 BRT
+  });
+
+  it("BUG DO USER: tick 00:15 UTC não atende horário 00:01 BRT", () => {
+    // 22-abr 00:15 UTC = 21-abr 21:15 BRT (Fortaleza). O slot real de "00:01
+    // BRT de 22-abr" é 03:01 UTC — completamente fora da janela.
+    const slotsBr = calcularSlotsDoDia(
+      { horarioInicial: "00:01" },
+      new Date("2026-04-22T03:00:00Z"),
+      "America/Sao_Paulo",
+    );
+    const agora = new Date("2026-04-22T00:15:00Z");
+    expect(acharSlotAtivo(slotsBr, agora, 15)).toBeNull();
+  });
+
+  it("BUG DO USER: tick 03:15 UTC atende horário 00:01 BRT (=00:15 BRT)", () => {
+    const slotsBr = calcularSlotsDoDia(
+      { horarioInicial: "00:01" },
+      new Date("2026-04-22T03:00:00Z"),
+      "America/Sao_Paulo",
+    );
+    const agora = new Date("2026-04-22T03:15:00Z");
+    expect(acharSlotAtivo(slotsBr, agora, 15)?.toISOString()).toBe(
+      "2026-04-22T03:01:00.000Z",
+    );
   });
 });
 
 describe("slotTimestampChave / contextoContemSlot", () => {
-  it("gera chave estável YYYY-MM-DDTHH:MM", () => {
-    const slot = new Date("2026-04-22T09:00:00");
-    expect(slotTimestampChave(slot)).toBe("2026-04-22T09:00");
+  it("gera chave estável YYYY-MM-DDTHH:MM no fuso informado", () => {
+    // 12:00 UTC de 22-abr = 09:00 BRT.
+    const slot = new Date("2026-04-22T12:00:00Z");
+    expect(slotTimestampChave(slot, "America/Sao_Paulo")).toBe("2026-04-22T09:00");
+    expect(slotTimestampChave(slot, "UTC")).toBe("2026-04-22T12:00");
+  });
+
+  it("slot 03:01 UTC (00:01 BRT) gera chave coerente com o horário do user", () => {
+    const slot = new Date("2026-04-22T03:01:00Z");
+    expect(slotTimestampChave(slot, "America/Sao_Paulo")).toBe("2026-04-22T00:01");
   });
 
   it("contextoContemSlot faz match exato do slot", () => {
@@ -269,39 +337,72 @@ describe("slotTimestampChave / contextoContemSlot", () => {
 });
 
 describe("chaveDiaLocal", () => {
-  it("formata YYYY-MM-DD no timezone local", () => {
-    const d = new Date(2026, 3, 5, 23, 59); // 5 de abril
-    expect(chaveDiaLocal(d)).toBe("2026-04-05");
+  it("formata YYYY-MM-DD no fuso informado", () => {
+    // 02:30 UTC de 22-abr = 23:30 BRT de 21-abr.
+    const d = new Date("2026-04-22T02:30:00Z");
+    expect(chaveDiaLocal(d, "America/Sao_Paulo")).toBe("2026-04-21");
+    expect(chaveDiaLocal(d, "UTC")).toBe("2026-04-22");
   });
 });
 
 describe("calcularMomentoLembrete / deveDispararLembrete", () => {
-  it("1 dia antes às 18:00 (default)", () => {
-    const startTime = new Date("2026-04-22T14:00:00");
-    const momento = calcularMomentoLembrete(startTime, {})!;
-    expect(momento.getFullYear()).toBe(2026);
-    expect(momento.getMonth()).toBe(3); // abril
-    expect(momento.getDate()).toBe(21);
-    expect(momento.getHours()).toBe(18);
-    expect(momento.getMinutes()).toBe(0);
+  it("1 dia antes às 18:00 (default) em Sao_Paulo", () => {
+    // Booking 14:00 UTC de 22-abr = 11:00 BRT. Lembrete default: dia
+    // anterior às 18:00 local = 21-abr 21:00 UTC.
+    const startTime = new Date("2026-04-22T14:00:00Z");
+    const momento = calcularMomentoLembrete(startTime, {}, "America/Sao_Paulo")!;
+    expect(momento.toISOString()).toBe("2026-04-21T21:00:00.000Z");
   });
 
-  it("2 dias antes às 09:30 via config", () => {
-    const startTime = new Date("2026-04-22T14:00:00");
-    const momento = calcularMomentoLembrete(startTime, { diasAntes: 2, horario: "09:30" })!;
-    expect(momento.getDate()).toBe(20);
-    expect(momento.getHours()).toBe(9);
-    expect(momento.getMinutes()).toBe(30);
+  it("2 dias antes às 09:30 em Sao_Paulo", () => {
+    const startTime = new Date("2026-04-22T14:00:00Z");
+    const momento = calcularMomentoLembrete(
+      startTime,
+      { diasAntes: 2, horario: "09:30" },
+      "America/Sao_Paulo",
+    )!;
+    // 20-abr 09:30 BRT = 12:30 UTC.
+    expect(momento.toISOString()).toBe("2026-04-20T12:30:00.000Z");
   });
 
-  it("deveDispararLembrete respeita a janela", () => {
-    // Booking às 14:00 de 22/04; lembrete às 18:00 do dia 21.
-    const startTime = new Date("2026-04-22T14:00:00");
-    // Agora está 18:10 → dentro de janela de 15min
-    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T18:10:00"), 15)).toBe(true);
-    // Agora está 17:40 → ainda não alcançou o momento
-    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T17:40:00"), 15)).toBe(false);
-    // Agora está 19:00 → fora da janela (passou há 60min)
-    expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T19:00:00"), 15)).toBe(false);
+  it("em UTC: 1 dia antes às 18:00 = 21-abr 18:00 UTC", () => {
+    const startTime = new Date("2026-04-22T14:00:00Z");
+    const momento = calcularMomentoLembrete(startTime, {}, "UTC")!;
+    expect(momento.toISOString()).toBe("2026-04-21T18:00:00.000Z");
+  });
+
+  it("deveDispararLembrete respeita a janela no fuso", () => {
+    const startTime = new Date("2026-04-22T14:00:00Z"); // 11:00 BRT de 22
+    // Lembrete default: 21-abr 18:00 BRT = 21-abr 21:00 UTC.
+    // Tick 21:10 UTC → dentro da tolerância de 15min.
+    expect(
+      deveDispararLembrete(
+        startTime,
+        {},
+        new Date("2026-04-21T21:10:00Z"),
+        15,
+        "America/Sao_Paulo",
+      ),
+    ).toBe(true);
+    // Tick 20:40 UTC → ainda não alcançou.
+    expect(
+      deveDispararLembrete(
+        startTime,
+        {},
+        new Date("2026-04-21T20:40:00Z"),
+        15,
+        "America/Sao_Paulo",
+      ),
+    ).toBe(false);
+    // Tick 22:00 UTC → passou 60min, fora da janela.
+    expect(
+      deveDispararLembrete(
+        startTime,
+        {},
+        new Date("2026-04-21T22:00:00Z"),
+        15,
+        "America/Sao_Paulo",
+      ),
+    ).toBe(false);
   });
 });

@@ -16,10 +16,10 @@
  */
 
 import { getDb } from "../db";
-import { smartflowCenarios } from "../../drizzle/schema";
+import { smartflowCenarios, escritorios } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { dispararAgendamentoLembrete } from "./dispatcher";
-import { deveDispararLembrete } from "./dispatcher-helpers";
+import { deveDispararLembrete, FUSO_DEFAULT } from "./dispatcher-helpers";
 import { obterCalcomClient } from "./executores";
 import { createLogger } from "../_core/logger";
 import type { ConfigGatilhoAgendamentoLembrete } from "../../shared/smartflow-types";
@@ -63,6 +63,17 @@ async function carregarCenarios(): Promise<CenarioLembrete[]> {
   });
 }
 
+async function carregarFusoHorario(escritorioId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) return FUSO_DEFAULT;
+  const [linha] = await db
+    .select({ fusoHorario: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  return linha?.fusoHorario || FUSO_DEFAULT;
+}
+
 export async function rodarCicloCalcomLembretes(): Promise<{ disparados: number }> {
   const db = await getDb();
   if (!db) return { disparados: 0 };
@@ -83,6 +94,7 @@ export async function rodarCicloCalcomLembretes(): Promise<{ disparados: number 
     }
 
     for (const [escritorioId, cenariosDoEscritorio] of porEscritorio) {
+      const tz = await carregarFusoHorario(escritorioId);
       const client = await obterCalcomClient(escritorioId);
       if (!client) continue;
 
@@ -111,7 +123,7 @@ export async function rodarCicloCalcomLembretes(): Promise<{ disparados: number 
         if (diffMs > (maxDiasAntes + 1) * 24 * 60 * 60 * 1000) continue;
 
         for (const cen of cenariosDoEscritorio) {
-          if (!deveDispararLembrete(startTime, cen.configGatilho, agora, TOLERANCIA_MIN)) continue;
+          if (!deveDispararLembrete(startTime, cen.configGatilho, agora, TOLERANCIA_MIN, tz)) continue;
 
           const r = await dispararAgendamentoLembrete(escritorioId, {
             bookingId: b.id,

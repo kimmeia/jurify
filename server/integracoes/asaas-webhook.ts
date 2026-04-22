@@ -22,10 +22,12 @@
 
 import type { Express, Request, Response } from "express";
 import { getDb } from "../db";
-import { asaasConfig, asaasCobrancas, asaasClientes, contatos } from "../../drizzle/schema";
+import { asaasConfig, asaasCobrancas, asaasClientes, contatos, escritorios } from "../../drizzle/schema";
 import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-asaas-webhook");
+
+const FUSO_DEFAULT_WEBHOOK = "America/Sao_Paulo";
 
 interface AsaasWebhookPayload {
   event: string;
@@ -168,6 +170,11 @@ export function registerAsaasWebhook(app: Express) {
                 eq(asaasClientes.asaasCustomerId, payment.customer),
                 eq(asaasClientes.escritorioId, escritorioId)
               )).limit(1);
+            const [escr] = await db
+              .select({ fusoHorario: escritorios.fusoHorario })
+              .from(escritorios)
+              .where(eq(escritorios.id, escritorioId))
+              .limit(1);
             await dispararPagamentoVencido(escritorioId, {
               pagamentoId: payment.id,
               valor: Math.round((payment.value || 0) * 100),
@@ -176,6 +183,7 @@ export function registerAsaasWebhook(app: Express) {
               clienteAsaasId: payment.customer,
               clienteNome: vinculo2?.nome || undefined,
               contatoId: vinculo2?.contatoId || undefined,
+              fusoHorario: escr?.fusoHorario || FUSO_DEFAULT_WEBHOOK,
             });
           } catch (err: any) {
             log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_vencido falhou (não bloqueia)");
