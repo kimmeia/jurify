@@ -235,6 +235,15 @@ export function MetaConnectDialog({
       if (metaConfig.configId) loginOptions.config_id = metaConfig.configId;
     }
 
+    // redirect_uri que o SDK usou internamente quando abriu o popup.
+    // A Meta exige que o mesmo valor seja passado na troca do code no
+    // backend (GET /oauth/access_token) — sem isso o Graph devolve:
+    //   "Please make sure your redirect_uri is identical to the one you
+    //    used in the OAuth dialog request".
+    // Em Apps com Embedded Signup puro (com config_id no servidor) bastaria
+    // string vazia, mas no fluxo Facebook Login comum a URL real é exigida.
+    const redirectUri = typeof window !== "undefined" ? window.location.origin : undefined;
+
     FB.login(function (response: any) {
       if (!response.authResponse?.code) {
         setConectando(false);
@@ -250,11 +259,12 @@ export function MetaConnectDialog({
           code,
           wabaId: sig.wabaId || "",
           phoneNumberId: sig.phoneNumberId || "",
+          redirectUri,
         });
       } else if (channel === "instagram") {
-        connectInstagramMut.mutate({ code });
+        connectInstagramMut.mutate({ code, redirectUri });
       } else if (channel === "messenger") {
-        connectMessengerMut.mutate({ code });
+        connectMessengerMut.mutate({ code, redirectUri });
       }
     }, loginOptions);
   };

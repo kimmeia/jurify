@@ -123,13 +123,20 @@ function fbtrace_id_safe(id: string): string {
  * Troca o `code` OAuth retornado pelo Facebook Login por um access_token
  * de longa duração usando o App Secret do admin.
  */
-async function exchangeCodeForToken(code: string): Promise<string> {
+async function exchangeCodeForToken(code: string, redirectUri?: string): Promise<string> {
   const config = await getMetaAppConfig();
   if (!config?.appId || !config?.appSecret) {
     throw new Error(
       "Meta API não configurada. Defina META_APP_ID e META_APP_SECRET nas variáveis de ambiente do servidor.",
     );
   }
+
+  // A Meta compara o `redirect_uri` da troca com o que o SDK registrou no
+  // momento do FB.login. Quando o App tem Embedded Signup configurado
+  // (config_id setado), ela aceita string vazia — mas sem config_id, exige
+  // o valor real (a URL da página que abriu o popup). O frontend envia
+  // `window.location.origin` pra bater exatamente com o que o SDK usou.
+  const redirect_uri = redirectUri ?? "";
 
   const axios = (await import("axios")).default;
   try {
@@ -138,15 +145,7 @@ async function exchangeCodeForToken(code: string): Promise<string> {
         client_id: config.appId,
         client_secret: config.appSecret,
         code,
-        // Quando o login é feito via FB.login() do SDK JS com
-        // response_type=code, a Meta registra internamente um redirect_uri
-        // e exige que ele bata no momento da troca do code. Passar string
-        // vazia aqui instrui a Meta a usar o mesmo redirect_uri que o SDK
-        // usou no popup — sem isso, o Graph devolve:
-        //   "Error validating verification code. Please make sure your
-        //    redirect_uri is identical to the one you used in the OAuth
-        //    dialog request".
-        redirect_uri: "",
+        redirect_uri,
       },
       timeout: 15000,
     });
@@ -164,6 +163,7 @@ async function exchangeCodeForToken(code: string): Promise<string> {
         status: err?.response?.status,
         fbError: err?.response?.data?.error,
         appId: config.appId,
+        redirectUriUsado: redirect_uri,
       },
       "[metaChannels] exchangeCodeForToken falhou",
     );
@@ -197,6 +197,7 @@ export const metaChannelsRouter = router({
         code: z.string().min(10),
         wabaId: z.string().optional(),
         phoneNumberId: z.string().optional(),
+        redirectUri: z.string().url().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -206,7 +207,7 @@ export const metaChannelsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
 
-      const accessToken = await exchangeCodeForToken(input.code);
+      const accessToken = await exchangeCodeForToken(input.code, input.redirectUri);
 
       // Embedded Signup do WhatsApp requer que o usuário selecione um número
       // e um WABA. Se `phoneNumberId` vier vazio, significa que o usuário só
@@ -315,6 +316,7 @@ export const metaChannelsRouter = router({
       z.object({
         code: z.string().min(10),
         pageId: z.string().optional(),
+        redirectUri: z.string().url().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -324,7 +326,7 @@ export const metaChannelsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
 
-      const accessToken = await exchangeCodeForToken(input.code);
+      const accessToken = await exchangeCodeForToken(input.code, input.redirectUri);
 
       // Busca páginas do usuário e o Instagram Business ligado
       const axios = (await import("axios")).default;
@@ -435,6 +437,7 @@ export const metaChannelsRouter = router({
       z.object({
         code: z.string().min(10),
         pageId: z.string().optional(),
+        redirectUri: z.string().url().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -444,7 +447,7 @@ export const metaChannelsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB indisponível");
 
-      const accessToken = await exchangeCodeForToken(input.code);
+      const accessToken = await exchangeCodeForToken(input.code, input.redirectUri);
 
       const axios = (await import("axios")).default;
       let pageId = input.pageId || "";
