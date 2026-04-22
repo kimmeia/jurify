@@ -27,15 +27,10 @@ import WhatsappQR from "@/components/integracoes/WhatsappQR";
 import {
   AsaasDialog,
   WhatsAppQRDialog,
-  WhatsAppCoExDialog,
-  WhatsAppAPIDialog,
-  InstagramDialog,
-  FacebookDialog,
   TwilioDialog,
   CalcomDialog,
   ChatGPTDialog,
   ClaudeDialog,
-  CalcomIntegration,
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";

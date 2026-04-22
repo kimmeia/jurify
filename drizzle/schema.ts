@@ -315,21 +315,33 @@ export type InsertEscritorio = typeof escritorios.$inferInsert;
  * Colaboradores — membros do escritório com cargo e permissões.
  * UNIQUE(escritorioId, userId) — cada pessoa pertence a 1 escritório.
  */
-export const colaboradores = mysqlTable("colaboradores", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorioId").notNull(), // FK → escritorios.id
-  userId: int("userId").notNull(), // FK → users.id
-  cargo: mysqlEnum("cargo", ["dono", "gestor", "atendente", "estagiario"]).notNull(),
-  departamento: varchar("departamento", { length: 64 }),
-  ativo: boolean("ativo").default(true).notNull(),
-  maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),
-  recebeLeadsAutomaticos: boolean("recebeLeadsAutomaticos").default(true).notNull(),
-  ultimaAtividade: timestamp("ultimaAtividade"),
-  ultimaDistribuicao: timestamp("ultimaDistribuicao"),
-  cargoPersonalizadoId: int("cargoPersonalizadoId"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+export const colaboradores = mysqlTable(
+  "colaboradores",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioId").notNull(), // FK → escritorios.id
+    userId: int("userId").notNull(), // FK → users.id
+    cargo: mysqlEnum("cargo", ["dono", "gestor", "atendente", "estagiario"]).notNull(),
+    departamento: varchar("departamento", { length: 64 }),
+    ativo: boolean("ativo").default(true).notNull(),
+    maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),
+    recebeLeadsAutomaticos: boolean("recebeLeadsAutomaticos").default(true).notNull(),
+    ultimaAtividade: timestamp("ultimaAtividade"),
+    ultimaDistribuicao: timestamp("ultimaDistribuicao"),
+    cargoPersonalizadoId: int("cargoPersonalizadoId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    // Barra race em aceitarConvite: se duas abas aceitam o mesmo convite
+    // simultaneamente, a segunda tentativa de INSERT falha com duplicate
+    // key (o código captura e retorna sucesso idempotente).
+    uqEscritorioUser: uniqueIndex("colaboradores_escritorio_user_uq").on(
+      t.escritorioId,
+      t.userId,
+    ),
+  }),
+);
 
 export type Colaborador = typeof colaboradores.$inferSelect;
 export type InsertColaborador = typeof colaboradores.$inferInsert;

@@ -60,6 +60,44 @@ async function exigirPermissao(
   if (!autorizado) throw new Error(mensagemNegado);
 }
 
+/**
+ * Valida que o objeto `config` recebido no criarCanal tem os campos
+ * obrigatórios do tipo selecionado. Sem isso, um canal entraria no banco
+ * com status=conectado mas sem credenciais funcionais — aparece ativo na
+ * UI e falha silenciosamente ao enviar mensagens.
+ *
+ * Para tipos cuja conexão é feita por outro fluxo (QR code presencial,
+ * Meta Embedded Signup, Cal.com direto), a config pode vir vazia aqui.
+ */
+export function validarConfigCanalPorTipo(
+  tipo: string,
+  config: Record<string, string> | undefined,
+): void {
+  // Tipos sem requisitos diretos no criarCanal — a conexão real
+  // acontece via outro fluxo (QR code, Embedded Signup, OAuth Cal.com).
+  const tiposOpcionais = new Set(["whatsapp_qr", "whatsapp_api", "instagram", "facebook", "calcom"]);
+  if (tiposOpcionais.has(tipo)) return;
+
+  const obrigatorios: Record<string, string[]> = {
+    telefone_voip: ["twilioSid", "twilioAuthToken", "twilioPhoneNumber"],
+    chatgpt: ["openaiApiKey"],
+    claude: ["anthropicApiKey"],
+  };
+
+  const campos = obrigatorios[tipo];
+  if (!campos) return;
+
+  const missing = campos.filter((k) => {
+    const v = config?.[k];
+    return typeof v !== "string" || v.trim().length === 0;
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Configuração incompleta para canal ${tipo}. Campos obrigatórios ausentes: ${missing.join(", ")}.`,
+    );
+  }
+}
+
 export const configuracoesRouter = router({
   /** Busca o escritório do usuário logado (ou null se não tem) */
   meuEscritorio: protectedProcedure.query(async ({ ctx }) => {
@@ -367,6 +405,13 @@ export const configuracoesRouter = router({
         ctx.user.id, "configuracoes", "criar",
         "Sem permissão para criar canais de integração.",
       );
+
+      // Valida que a config contém os campos obrigatórios do tipo de canal.
+      // Evita que um canal seja gravado como "conectado" no banco (o insert
+      // no db-canais marca status=conectado quando há config) sem ter as
+      // credenciais reais — depois aparece como conectado na UI mas não
+      // funciona ao disparar mensagens.
+      validarConfigCanalPorTipo(input.tipo, input.config);
 
       // Verificar limite de WhatsApp (DESATIVADO PARA TESTES)
       // if (input.tipo === "whatsapp_qr" || input.tipo === "whatsapp_api") {

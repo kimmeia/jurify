@@ -357,6 +357,28 @@ export async function aceitarConvite(token: string, userId: number) {
     throw new Error("Convite expirado.");
   }
 
+  // Idempotência: se o usuário já é colaborador deste escritório (ex:
+  // aceitou em outra aba milissegundos antes), tratamos como sucesso
+  // em vez de explodir. UNIQUE(escritorioId, userId) no banco garante
+  // que só existe 1 linha mesmo em race.
+  const [jaColab] = await db
+    .select()
+    .from(colaboradores)
+    .where(
+      and(
+        eq(colaboradores.userId, userId),
+        eq(colaboradores.escritorioId, convite.escritorioId),
+      ),
+    )
+    .limit(1);
+  if (jaColab) {
+    await db
+      .update(convitesColaborador)
+      .set({ status: "aceito", aceitoPorUserId: userId })
+      .where(eq(convitesColaborador.id, convite.id));
+    return { escritorioId: convite.escritorioId, cargo: jaColab.cargo };
+  }
+
   // Verificar se já pertence a outro escritório
   const existente = await getEscritorioPorUsuario(userId);
   if (existente) throw new Error("Você já pertence a um escritório. Saia do atual antes de aceitar outro convite.");
@@ -385,15 +407,26 @@ export async function aceitarConvite(token: string, userId: number) {
     cargoPersonalizadoId = cp?.id ?? null;
   }
 
-  // Criar colaborador (com cargo personalizado vinculado)
-  await db.insert(colaboradores).values({
-    escritorioId: convite.escritorioId,
-    userId,
-    cargo: convite.cargo as CargoColaborador,
-    cargoPersonalizadoId,
-    departamento: convite.departamento,
-    ativo: true,
-  });
+  // Criar colaborador (com cargo personalizado vinculado). Em caso de
+  // race com outra aba, UNIQUE(escritorioId, userId) barra o INSERT
+  // duplicado — capturamos e prosseguimos idempotente.
+  try {
+    await db.insert(colaboradores).values({
+      escritorioId: convite.escritorioId,
+      userId,
+      cargo: convite.cargo as CargoColaborador,
+      cargoPersonalizadoId,
+      departamento: convite.departamento,
+      ativo: true,
+    });
+  } catch (err: any) {
+    const msg = String(err?.message || "").toLowerCase();
+    const duplicate =
+      msg.includes("duplicate entry") ||
+      msg.includes("duplicate key") ||
+      err?.code === "ER_DUP_ENTRY";
+    if (!duplicate) throw err;
+  }
 
   // Marcar convite como aceito
   await db.update(convitesColaborador).set({

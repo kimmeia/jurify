@@ -82,6 +82,7 @@ vi.mock("../db", () => ({
 
 const { atualizarColaborador } = await import("../escritorio/db-escritorio");
 const { listarCanais, removerCanaisOrfaos } = await import("../escritorio/db-canais");
+const { validarConfigCanalPorTipo } = await import("../escritorio/router-configuracoes");
 
 beforeEach(() => {
   captured = [];
@@ -191,5 +192,56 @@ describe("db-canais.removerCanaisOrfaos — limpeza explícita", () => {
     const removidos = await removerCanaisOrfaos(1);
     expect(removidos).toBe(0);
     expect(captured.filter((c) => c.op === "delete")).toHaveLength(0);
+  });
+});
+
+describe("validarConfigCanalPorTipo — campos obrigatórios por tipo", () => {
+  it("aceita tipos opcionais (whatsapp_qr) sem config", () => {
+    expect(() => validarConfigCanalPorTipo("whatsapp_qr", undefined)).not.toThrow();
+    expect(() => validarConfigCanalPorTipo("whatsapp_qr", {})).not.toThrow();
+  });
+
+  it("aceita whatsapp_api/instagram/facebook/calcom sem config (conectam via OAuth/QR)", () => {
+    expect(() => validarConfigCanalPorTipo("whatsapp_api", undefined)).not.toThrow();
+    expect(() => validarConfigCanalPorTipo("instagram", undefined)).not.toThrow();
+    expect(() => validarConfigCanalPorTipo("facebook", undefined)).not.toThrow();
+    expect(() => validarConfigCanalPorTipo("calcom", undefined)).not.toThrow();
+  });
+
+  it("rejeita telefone_voip sem twilioSid/twilioAuthToken/twilioPhoneNumber", () => {
+    expect(() => validarConfigCanalPorTipo("telefone_voip", {})).toThrow(/twilioSid/);
+    expect(() =>
+      validarConfigCanalPorTipo("telefone_voip", { twilioSid: "SID" }),
+    ).toThrow(/twilioAuthToken/);
+    expect(() =>
+      validarConfigCanalPorTipo("telefone_voip", {
+        twilioSid: "SID",
+        twilioAuthToken: "TOK",
+        twilioPhoneNumber: "+551199999",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejeita chatgpt sem openaiApiKey", () => {
+    expect(() => validarConfigCanalPorTipo("chatgpt", {})).toThrow(/openaiApiKey/);
+    expect(() =>
+      validarConfigCanalPorTipo("chatgpt", { openaiApiKey: "sk-..." }),
+    ).not.toThrow();
+  });
+
+  it("rejeita claude sem anthropicApiKey", () => {
+    expect(() => validarConfigCanalPorTipo("claude", {})).toThrow(/anthropicApiKey/);
+    expect(() =>
+      validarConfigCanalPorTipo("claude", { anthropicApiKey: "sk-ant-..." }),
+    ).not.toThrow();
+  });
+
+  it("rejeita campos com string vazia (não só ausente)", () => {
+    expect(() =>
+      validarConfigCanalPorTipo("chatgpt", { openaiApiKey: "" }),
+    ).toThrow(/openaiApiKey/);
+    expect(() =>
+      validarConfigCanalPorTipo("chatgpt", { openaiApiKey: "   " }),
+    ).toThrow(/openaiApiKey/);
   });
 });
