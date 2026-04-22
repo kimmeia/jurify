@@ -65,7 +65,7 @@ export interface CheckWhatsappManager {
   checarNumerosWhatsApp(
     canalId: number,
     candidatos: string[],
-  ): Promise<Array<{ jid: string; exists: boolean; lid?: string }>>;
+  ): Promise<Array<{ jid: string; exists: boolean }>>;
 }
 
 /**
@@ -86,8 +86,7 @@ export async function resolverJidWhatsApp(
 
   const results = await manager.checarNumerosWhatsApp(canalId, prep.candidatos);
   const match = results.find((r) => r.exists);
-  if (!match) return null;
-  return match.lid || match.jid;
+  return match ? match.jid : null;
 }
 
 /**

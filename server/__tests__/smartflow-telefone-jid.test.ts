@@ -17,6 +17,39 @@ import {
   resolverJidWhatsApp,
   type CheckWhatsappManager,
 } from "../smartflow/executores";
+import { normalizePhoneBR } from "../../shared/whatsapp-types";
+
+// ─── normalizePhoneBR usado pelo webhook do Asaas ────────────────────────────
+
+describe("normalizePhoneBR (gravação vinda do Asaas)", () => {
+  it("novo padrão 11 dígitos sem DDI → prepend 55", () => {
+    expect(normalizePhoneBR("85996042189")).toBe("5585996042189");
+  });
+
+  it("antigo 10 dígitos sem DDI → prepend 55 (não adiciona 9º)", () => {
+    expect(normalizePhoneBR("8596042189")).toBe("558596042189");
+  });
+
+  it("já com DDI 13 dígitos → mantém", () => {
+    expect(normalizePhoneBR("5585996042189")).toBe("5585996042189");
+  });
+
+  it("já com DDI 12 dígitos (antigo) → mantém (não adiciona 9º)", () => {
+    expect(normalizePhoneBR("558596042189")).toBe("558596042189");
+  });
+
+  it("formato internacional com + e espaços → só dígitos", () => {
+    expect(normalizePhoneBR("+55 (85) 99604-2189")).toBe("5585996042189");
+  });
+
+  it("prefixo 0 de longa distância é removido", () => {
+    expect(normalizePhoneBR("085996042189")).toBe("5585996042189");
+  });
+
+  it("string vazia → string vazia", () => {
+    expect(normalizePhoneBR("")).toBe("");
+  });
+});
 
 // ─── prepararCandidatosJid (função pura) ─────────────────────────────────────
 
@@ -101,7 +134,7 @@ describe("prepararCandidatosJid", () => {
 // ─── resolverJidWhatsApp (integração com manager mockado) ────────────────────
 
 function criarMockManager(
-  handler: (candidatos: string[]) => Array<{ jid: string; exists: boolean; lid?: string }>,
+  handler: (candidatos: string[]) => Array<{ jid: string; exists: boolean }>,
 ): CheckWhatsappManager & { checarNumerosWhatsApp: ReturnType<typeof vi.fn> } {
   return {
     checarNumerosWhatsApp: vi.fn(async (_canalId: number, candidatos: string[]) => handler(candidatos)),
@@ -189,16 +222,4 @@ describe("resolverJidWhatsApp", () => {
     expect(jid).toContain("@s.whatsapp.net");
   });
 
-  it("prefere LID quando o Baileys retorna um", async () => {
-    const manager = criarMockManager((candidatos) =>
-      candidatos.map((c) => ({
-        jid: `${c}@s.whatsapp.net`,
-        exists: c === "5585996042189",
-        lid: c === "5585996042189" ? "987654321@lid" : undefined,
-      })),
-    );
-
-    const jid = await resolverJidWhatsApp(manager, 1, "85996042189");
-    expect(jid).toBe("987654321@lid");
-  });
 });

@@ -25,7 +25,22 @@ import { getDb } from "../db";
 import { asaasConfig, asaasCobrancas, asaasClientes, contatos } from "../../drizzle/schema";
 import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
+import { normalizePhoneBR } from "../../shared/whatsapp-types";
 const log = createLogger("integracoes-asaas-webhook");
+
+/**
+ * Extrai o telefone do payload do Asaas e normaliza — garante DDI 55
+ * em números BR sem DDI. NÃO mexe no 9º dígito: essa ambiguidade é
+ * resolvida no envio por `resolverJidWhatsApp`, que consulta o servidor
+ * do WhatsApp. Assim, sincronizar o Asaas não quebra mensagens pra
+ * contatos cujo número só existe no padrão antigo (8 dígitos).
+ */
+function telefoneDoAsaas(customer: { phone?: string; mobilePhone?: string }): string | null {
+  const raw = customer.mobilePhone || customer.phone;
+  if (!raw) return null;
+  const normalizado = normalizePhoneBR(raw);
+  return normalizado || null;
+}
 
 interface AsaasWebhookPayload {
   event: string;
@@ -220,7 +235,7 @@ export function registerAsaasWebhook(app: Express) {
                 nome: customer.name,
                 cpfCnpj: cpfLimpo || null,
                 email: customer.email || null,
-                telefone: customer.mobilePhone || customer.phone || null,
+                telefone: telefoneDoAsaas(customer),
               }).where(eq(contatos.id, contatoId));
 
               // Remover vínculos antigos para este contato (de Asaas customers anteriores)
@@ -235,7 +250,7 @@ export function registerAsaasWebhook(app: Express) {
                 nome: customer.name,
                 cpfCnpj: cpfLimpo || null,
                 email: customer.email || null,
-                telefone: customer.mobilePhone || customer.phone || null,
+                telefone: telefoneDoAsaas(customer),
                 origem: "manual",
               }).$returningId();
               contatoId = novo.id;

@@ -269,7 +269,7 @@ class WhatsappSessionManager extends EventEmitter {
   async checarNumerosWhatsApp(
     canalId: number,
     candidatos: string[],
-  ): Promise<Array<{ jid: string; exists: boolean; lid?: string }>> {
+  ): Promise<Array<{ jid: string; exists: boolean }>> {
     const state = this.sessions.get(canalId);
     if (!state || state.status !== "conectado" || !state.socket) {
       throw new Error("Sessão WhatsApp não conectada.");
@@ -282,7 +282,6 @@ class WhatsappSessionManager extends EventEmitter {
       return results.map((r: any) => ({
         jid: r.jid,
         exists: !!r.exists,
-        lid: r.lid,
       }));
     } catch (err: any) {
       log.warn(`[WhatsApp] Falha ao checar números no canal ${canalId}: ${err.message}`);
