@@ -32,7 +32,7 @@ import {
   atualizarAutoReplyCanal,
 } from "./db-canais";
 import type { CargoColaborador } from "../../shared/escritorio-types";
-import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA } from "../../shared/escritorio-types";
+import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
 
 export const configuracoesRouter = router({
   /** Busca o escritório do usuário logado (ou null se não tem) */
@@ -87,7 +87,13 @@ export const configuracoesRouter = router({
       telefone: z.string().max(20).optional(),
       email: z.string().email().optional().or(z.literal("")),
       endereco: z.string().max(500).optional(),
-      fusoHorario: z.string().max(64).optional(),
+      fusoHorario: z
+        .string()
+        .max(64)
+        .refine((tz) => FUSOS_HORARIOS_VALIDOS.has(tz), {
+          message: "Fuso horário inválido. Use um dos valores listados em FUSOS_HORARIOS.",
+        })
+        .optional(),
       horarioAbertura: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       horarioFechamento: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       diasFuncionamento: z.array(z.string()).optional(),

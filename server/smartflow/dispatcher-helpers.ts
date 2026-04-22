@@ -69,6 +69,65 @@ export function parseVencimento(iso: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// ─── Helpers de timezone (IANA) ─────────────────────────────────────────────
+
+/**
+ * Offset em minutos entre um timezone IANA e UTC para um instante específico.
+ * Positivo para leste de Greenwich. Ex: `America/Sao_Paulo` retorna `-180`.
+ *
+ * Funciona com DST transparente: usamos a data de referência para decidir
+ * qual offset aplicar.
+ */
+function offsetMinutos(tz: string, d: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(d);
+
+  const m: Record<string, string> = {};
+  for (const p of parts) m[p.type] = p.value;
+
+  const asUTC = Date.UTC(
+    Number(m.year),
+    Number(m.month) - 1,
+    Number(m.day),
+    m.hour === "24" ? 0 : Number(m.hour),
+    Number(m.minute),
+    Number(m.second),
+  );
+  return Math.round((asUTC - d.getTime()) / 60000);
+}
+
+/**
+ * Constrói um `Date` (em UTC) que representa "Y-M-D H:MI" no timezone `tz`.
+ * Usado para materializar slots como "09:00 de hoje em Brasília" —
+ * independente do TZ do servidor (que em deploys Railway/AWS é UTC).
+ */
+export function dateNoFuso(
+  y: number, mo: number, d: number, h: number, mi: number,
+  tz: string,
+): Date {
+  const naive = new Date(Date.UTC(y, mo - 1, d, h, mi, 0));
+  const offset = offsetMinutos(tz, naive);
+  return new Date(naive.getTime() - offset * 60000);
+}
+
+/**
+ * Retorna Y/M/D do `date` observado no timezone `tz`. Usado para chaves
+ * diárias e contagem de dias distintos (`repetirPorDias`) respeitando o
+ * calendário local do escritório.
+ */
+export function ymdNoFuso(date: Date, tz: string): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const r: Record<string, string> = {};
+  for (const p of parts) r[p.type] = p.value;
+  return { y: Number(r.year), m: Number(r.month), d: Number(r.day) };
+}
+
 // ─── Janela de disparo (slots de horário) ───────────────────────────────────
 
 /**
@@ -104,10 +163,16 @@ export function temHorarioConfigurado(cfg: JanelaDisparo | undefined | null): bo
  *
  * Se `cfg.horarioInicial` for inválido/ausente, retorna `[]` — caller cai
  * no modo legado.
+ *
+ * Quando `tz` é passado, os slots são interpretados no timezone IANA do
+ * escritório (ex: "America/Sao_Paulo") — imprescindível em deploys onde o
+ * TZ do servidor é UTC. Sem `tz`, preserva o comportamento legado (usa o
+ * TZ do processo Node via `setHours`).
  */
 export function calcularSlotsDoDia(
   cfg: JanelaDisparo | undefined | null,
   baseDia: Date,
+  tz?: string,
 ): Date[] {
   const hora = cfg ? parseHoraHHMM(cfg.horarioInicial) : null;
   if (!hora) return [];
@@ -116,10 +181,20 @@ export function calcularSlotsDoDia(
   const intervaloMin = Math.max(1, Math.floor(Number(cfg?.intervaloMinutos ?? 120)));
 
   const slots: Date[] = [];
-  for (let i = 0; i < disparos; i++) {
-    const slot = new Date(baseDia);
-    slot.setHours(hora.h, hora.m + i * intervaloMin, 0, 0);
-    slots.push(slot);
+  if (tz) {
+    const { y, m, d } = ymdNoFuso(baseDia, tz);
+    for (let i = 0; i < disparos; i++) {
+      const totalMin = hora.h * 60 + hora.m + i * intervaloMin;
+      const slotH = Math.floor(totalMin / 60);
+      const slotM = totalMin % 60;
+      slots.push(dateNoFuso(y, m, d, slotH, slotM, tz));
+    }
+  } else {
+    for (let i = 0; i < disparos; i++) {
+      const slot = new Date(baseDia);
+      slot.setHours(hora.h, hora.m + i * intervaloMin, 0, 0);
+      slots.push(slot);
+    }
   }
   return slots;
 }
@@ -186,17 +261,27 @@ export function chaveDiaLocal(dt: Date): string {
 /**
  * Calcula o momento exato em que o lembrete deve disparar. A partir do
  * `startTime` do booking, subtrai `diasAntes` dias e posiciona no `horario`
- * configurado (HH:MM, timezone local).
+ * configurado (HH:MM).
  *
  * Ex: booking começa em `2026-04-22 14:00`, `diasAntes=1`, `horario="18:00"`
  *     → lembrete às `2026-04-21 18:00`.
+ *
+ * Quando `tz` é passado, o `horario` é interpretado no timezone IANA do
+ * escritório (ex: "America/Sao_Paulo"). Sem `tz`, preserva o comportamento
+ * legado (TZ do processo Node).
  */
 export function calcularMomentoLembrete(
   startTime: Date,
   cfg: ConfigGatilhoAgendamentoLembrete | undefined | null,
+  tz?: string,
 ): Date | null {
   const diasAntes = Math.max(0, Math.floor(Number(cfg?.diasAntes ?? 1)));
   const hora = parseHoraHHMM(cfg?.horario || "18:00") ?? { h: 18, m: 0 };
+  if (tz) {
+    const base = new Date(startTime.getTime() - diasAntes * 24 * 60 * 60 * 1000);
+    const { y, m, d } = ymdNoFuso(base, tz);
+    return dateNoFuso(y, m, d, hora.h, hora.m, tz);
+  }
   const momento = new Date(startTime);
   momento.setDate(momento.getDate() - diasAntes);
   momento.setHours(hora.h, hora.m, 0, 0);
@@ -212,8 +297,9 @@ export function deveDispararLembrete(
   cfg: ConfigGatilhoAgendamentoLembrete | undefined | null,
   agora: Date,
   toleranciaMin: number,
+  tz?: string,
 ): boolean {
-  const momento = calcularMomentoLembrete(startTime, cfg);
+  const momento = calcularMomentoLembrete(startTime, cfg, tz);
   if (!momento) return false;
   // Janela: entre (agora - tolerância) e agora — igual ao slot Asaas.
   const inicioJanela = new Date(agora.getTime() - toleranciaMin * 60 * 1000);

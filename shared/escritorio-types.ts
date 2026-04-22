@@ -38,6 +38,35 @@ export const PLANO_LIMITES: Record<PlanoAtendimento, { maxColaboradores: number;
 /** Custo por colaborador extra acima do limite do plano */
 export const CUSTO_COLABORADOR_EXTRA = 9.90;
 
+// ─── Fusos horários ───────────────────────────────────────────────────────────
+
+/**
+ * Fusos horários oficiais brasileiros (IANA). O `fusoHorario` do escritório
+ * é usado nos cálculos de agendamento do SmartFlow (slots de horário dos
+ * gatilhos Asaas, lembretes Cal.com). Se o SaaS for aberto a outros países
+ * no futuro, basta acrescentar entradas aqui.
+ *
+ * Mantemos 4 zonas oficiais do Brasil — 1 `timeZone` por UTC offset:
+ *   - UTC-2: Fernando de Noronha
+ *   - UTC-3: Brasília e maior parte dos estados
+ *   - UTC-4: Mato Grosso, Mato Grosso do Sul, Rondônia, Roraima, Amazonas
+ *   - UTC-5: Acre, partes do Amazonas
+ *
+ * Sempre apresentado em ordem decrescente de população (Brasília primeiro).
+ */
+export const FUSOS_HORARIOS: Array<{ valor: string; label: string; utc: string }> = [
+  { valor: "America/Sao_Paulo", label: "Brasília e maior parte do Brasil", utc: "UTC-3" },
+  { valor: "America/Manaus", label: "Mato Grosso, MS, RO, RR, AM", utc: "UTC-4" },
+  { valor: "America/Rio_Branco", label: "Acre e oeste do Amazonas", utc: "UTC-5" },
+  { valor: "America/Noronha", label: "Fernando de Noronha", utc: "UTC-2" },
+];
+
+/** Conjunto de fusos válidos (lookup O(1)). */
+export const FUSOS_HORARIOS_VALIDOS = new Set(FUSOS_HORARIOS.map((f) => f.valor));
+
+/** Fuso padrão quando o escritório não define explicitamente. */
+export const FUSO_HORARIO_PADRAO = "America/Sao_Paulo";
+
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface EscritorioInfo {

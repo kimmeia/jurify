@@ -18,7 +18,7 @@ import {
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA } from "@shared/escritorio-types";
+import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
@@ -270,6 +270,26 @@ export default function Configuracoes() {
 
                   <Separator />
                   <p className="text-sm font-medium">Horário de Funcionamento</p>
+                  <div className="space-y-1.5">
+                    <Label>Fuso horário</Label>
+                    <Select
+                      value={formPerfil.fusoHorario || FUSO_HORARIO_PADRAO}
+                      onValueChange={(v) => setFormPerfil({ ...formPerfil, fusoHorario: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FUSOS_HORARIOS.map((f) => (
+                          <SelectItem key={f.valor} value={f.valor}>
+                            <span className="font-medium">{f.utc}</span>
+                            <span className="text-muted-foreground"> — {f.label}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Usado nos gatilhos com horário (SmartFlow Asaas, lembretes Cal.com).
+                    </p>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label>Abertura</Label>

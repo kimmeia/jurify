@@ -19,6 +19,7 @@ import {
   chaveDiaLocal,
   contextoContemPagamento,
   contextoContemSlot,
+  dateNoFuso,
   deveDispararLembrete,
   deveDispararProximo,
   deveDispararVencido,
@@ -27,6 +28,7 @@ import {
   parseVencimento,
   slotTimestampChave,
   temHorarioConfigurado,
+  ymdNoFuso,
 } from "../smartflow/dispatcher-helpers";
 
 describe("aceitaCanal (gatilho mensagem_canal)", () => {
@@ -303,5 +305,90 @@ describe("calcularMomentoLembrete / deveDispararLembrete", () => {
     expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T17:40:00"), 15)).toBe(false);
     // Agora está 19:00 → fora da janela (passou há 60min)
     expect(deveDispararLembrete(startTime, {}, new Date("2026-04-21T19:00:00"), 15)).toBe(false);
+  });
+});
+
+describe("dateNoFuso / ymdNoFuso — timezone IANA", () => {
+  it("dateNoFuso: '09:00 em America/Sao_Paulo' → 12:00 UTC", () => {
+    // 21 abr 2026, 09:00 em Brasília (UTC-3) == 12:00 UTC
+    const d = dateNoFuso(2026, 4, 21, 9, 0, "America/Sao_Paulo");
+    expect(d.toISOString()).toBe("2026-04-21T12:00:00.000Z");
+  });
+
+  it("dateNoFuso: '09:00 em America/Manaus' → 13:00 UTC (UTC-4)", () => {
+    const d = dateNoFuso(2026, 4, 21, 9, 0, "America/Manaus");
+    expect(d.toISOString()).toBe("2026-04-21T13:00:00.000Z");
+  });
+
+  it("dateNoFuso: '09:00 em America/Noronha' → 11:00 UTC (UTC-2)", () => {
+    const d = dateNoFuso(2026, 4, 21, 9, 0, "America/Noronha");
+    expect(d.toISOString()).toBe("2026-04-21T11:00:00.000Z");
+  });
+
+  it("ymdNoFuso: meia-noite UTC-3 vira o dia correto em Brasília", () => {
+    // 2026-04-22 02:00 UTC == 2026-04-21 23:00 em SP (ainda dia 21)
+    const d = new Date("2026-04-22T02:00:00.000Z");
+    expect(ymdNoFuso(d, "America/Sao_Paulo")).toEqual({ y: 2026, m: 4, d: 21 });
+  });
+});
+
+describe("calcularSlotsDoDia com fuso horário", () => {
+  it("gera slots no fuso do escritório (Brasília), independente do TZ do processo", () => {
+    // baseDia representa qualquer instante — o que importa é o Y/M/D em SP
+    const baseDia = new Date("2026-04-21T15:00:00.000Z"); // 12:00 em SP
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "09:00", disparosPorDia: 3, intervaloMinutos: 120 },
+      baseDia,
+      "America/Sao_Paulo",
+    );
+    expect(slots).toHaveLength(3);
+    // 09:00, 11:00, 13:00 em SP == 12:00, 14:00, 16:00 UTC
+    expect(slots[0].toISOString()).toBe("2026-04-21T12:00:00.000Z");
+    expect(slots[1].toISOString()).toBe("2026-04-21T14:00:00.000Z");
+    expect(slots[2].toISOString()).toBe("2026-04-21T16:00:00.000Z");
+  });
+
+  it("dois escritórios em fusos diferentes disparam em momentos UTC distintos", () => {
+    const baseDia = new Date("2026-04-21T15:00:00.000Z");
+    const cfg = { horarioInicial: "09:00", disparosPorDia: 1 };
+    const slotsSP = calcularSlotsDoDia(cfg, baseDia, "America/Sao_Paulo");
+    const slotsManaus = calcularSlotsDoDia(cfg, baseDia, "America/Manaus");
+    // 09:00 SP = 12:00 UTC ; 09:00 Manaus = 13:00 UTC — 1h de diferença
+    expect(slotsManaus[0].getTime() - slotsSP[0].getTime()).toBe(60 * 60 * 1000);
+  });
+
+  it("sem tz preserva comportamento legado (usa TZ do processo)", () => {
+    const baseDia = new Date("2026-04-21T15:00:00.000Z");
+    const slots = calcularSlotsDoDia(
+      { horarioInicial: "09:00", disparosPorDia: 1 },
+      baseDia,
+    );
+    expect(slots).toHaveLength(1);
+    // Comportamento legado: setHours local. Só conferimos que retornou algo,
+    // o teste do legado acima já cobre o comportamento exato.
+  });
+});
+
+describe("calcularMomentoLembrete com fuso horário", () => {
+  it("'18:00 em Brasília' no dia anterior ao booking (UTC)", () => {
+    const booking = new Date("2026-04-22T14:00:00.000Z");
+    const momento = calcularMomentoLembrete(
+      booking,
+      { diasAntes: 1, horario: "18:00" },
+      "America/Sao_Paulo",
+    );
+    // 21 abr 18:00 SP == 21:00 UTC
+    expect(momento?.toISOString()).toBe("2026-04-21T21:00:00.000Z");
+  });
+
+  it("mesmo booking em Manaus dispara 1h depois (UTC-4)", () => {
+    const booking = new Date("2026-04-22T14:00:00.000Z");
+    const momento = calcularMomentoLembrete(
+      booking,
+      { diasAntes: 1, horario: "18:00" },
+      "America/Manaus",
+    );
+    // 21 abr 18:00 Manaus == 22:00 UTC
+    expect(momento?.toISOString()).toBe("2026-04-21T22:00:00.000Z");
   });
 });
