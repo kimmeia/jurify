@@ -237,12 +237,16 @@ export function MetaConnectDialog({
 
     // redirect_uri que o SDK usou internamente quando abriu o popup.
     // A Meta exige que o mesmo valor seja passado na troca do code no
-    // backend (GET /oauth/access_token) — sem isso o Graph devolve:
-    //   "Please make sure your redirect_uri is identical to the one you
-    //    used in the OAuth dialog request".
-    // Em Apps com Embedded Signup puro (com config_id no servidor) bastaria
-    // string vazia, mas no fluxo Facebook Login comum a URL real é exigida.
-    const redirectUri = typeof window !== "undefined" ? window.location.origin : undefined;
+    // backend (GET /oauth/access_token). Com "modo estrito para URIs"
+    // ativo no painel, o match é caractere a caractere — trailing slash
+    // faz diferença.
+    //
+    // O SDK do Facebook usa `${origin}/` como redirect_uri default
+    // (raiz com barra), que é exatamente o formato que o painel Meta
+    // cadastra por padrão: "https://meu-app.com/". Por isso adicionamos
+    // a barra final aqui pra bater exatamente.
+    const redirectUri =
+      typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
 
     FB.login(function (response: any) {
       if (!response.authResponse?.code) {
