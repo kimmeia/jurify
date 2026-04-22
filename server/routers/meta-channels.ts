@@ -82,7 +82,10 @@ async function getMetaAppConfig(): Promise<MetaAppConfig | null> {
     return {
       appId: config.appId,
       appSecret: config.appSecret,
-      configId: config.configId,
+      // META_CONFIG_ID em env var tem prioridade sobre o do banco — permite
+      // configurar Embedded Signup sem precisar re-salvar credenciais via
+      // painel admin quando o appId/secret já estão persistidos lá.
+      configId: process.env.META_CONFIG_ID || config.configId,
     };
   } catch (err) {
     log.warn({ err: String(err) }, "Falha ao carregar config Meta");
