@@ -152,7 +152,10 @@ export async function contarColaboradoresAtivos(escritorioId: number): Promise<n
   return rows.length;
 }
 
-/** Atualiza dados do colaborador */
+/** Atualiza dados do colaborador.
+ *  Dono é protegido: não pode ser rebaixado nem desativado por esta via.
+ *  Remoção do dono segue passando por removerColaborador (que também barra).
+ */
 export async function atualizarColaborador(
   colaboradorId: number,
   escritorioId: number,
@@ -166,6 +169,24 @@ export async function atualizarColaborador(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+
+  // Verifica se o alvo é o dono antes de aplicar qualquer mudança
+  // sensível. Sem essa guarda, um gestor malicioso poderia mandar
+  // { ativo: false } ou { cargo: "estagiario" } e tirar o dono do ar.
+  const [alvo] = await db
+    .select({ cargo: colaboradores.cargo })
+    .from(colaboradores)
+    .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
+    .limit(1);
+  if (!alvo) throw new Error("Colaborador não encontrado.");
+  if (alvo.cargo === "dono") {
+    if (dados.cargo !== undefined && dados.cargo !== "dono") {
+      throw new Error("O cargo do dono do escritório não pode ser alterado.");
+    }
+    if (dados.ativo === false) {
+      throw new Error("O dono do escritório não pode ser desativado.");
+    }
+  }
 
   const updateData: Record<string, unknown> = {};
   if (dados.cargo !== undefined) updateData.cargo = dados.cargo;

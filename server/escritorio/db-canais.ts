@@ -11,52 +11,72 @@ import type { TipoCanal, StatusCanal } from "../../shared/canal-types";
 
 // ─── Canais ──────────────────────────────────────────────────────────────────
 
-/** Lista canais do escritório (sem dados sensíveis).
- *  Faz cleanup automático de canais "fantasmas" — registros whatsapp_api
- *  com status="conectado" mas SEM telefone (resíduo de tentativas
- *  abortadas no Embedded Signup, antes do PR #20 validar no backend).
- *  Esses canais não funcionam de jeito nenhum e poluem a UI com "Erro".
+/** Lista canais do escritório (sem dados sensíveis). Apenas leitura —
+ *  nenhum efeito colateral destrutivo. Canais órfãos whatsapp_api sem
+ *  telefone são FILTRADOS do retorno (não aparecem na UI) mas
+ *  permanecem no banco para evitar corrida com o fluxo de Embedded
+ *  Signup que pode estar preenchendo o telefone em paralelo. O cleanup
+ *  definitivo desses resíduos vive em `removerCanaisOrfaos`, chamado
+ *  explicitamente por operação admin ou cron.
  */
 export async function listarCanais(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
-
-  // Cleanup órfãos: qualquer canal whatsapp_api SEM telefone preenchido
-  // é inválido. Resíduo de:
-  //   - Tentativas abortadas de Embedded Signup (status=conectado sem telefone)
-  //   - Tentativas que erraram (status=erro com ou sem mensagem)
-  //   - Estados "pendente" antigos sem completar
-  // Sem telefone o canal não funciona — deletar evita poluir a UI.
-  const todos = await db.select()
-    .from(canaisIntegrados)
-    .where(eq(canaisIntegrados.escritorioId, escritorioId));
-  const orfaosIds = todos
-    .filter((c) =>
-      c.tipo === "whatsapp_api" &&
-      (!c.telefone || c.telefone === "")
-    )
-    .map((c) => c.id);
-  for (const id of orfaosIds) {
-    try { await db.delete(canaisIntegrados).where(eq(canaisIntegrados.id, id)); } catch {}
-  }
 
   const rows = await db.select()
     .from(canaisIntegrados)
     .where(eq(canaisIntegrados.escritorioId, escritorioId))
     .orderBy(desc(canaisIntegrados.createdAt));
 
-  return rows.map((r) => ({
-    id: r.id,
-    escritorioId: r.escritorioId,
-    tipo: r.tipo as TipoCanal,
-    nome: r.nome || "",
-    status: r.status as StatusCanal,
-    telefone: r.telefone || undefined,
-    ultimaSync: r.ultimaSync ? (r.ultimaSync as Date).toISOString() : undefined,
-    mensagemErro: r.mensagemErro || undefined,
-    temConfig: !!(r.configEncrypted && r.configIv && r.configTag),
-    createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
-  }));
+  // Filtra órfãos da apresentação sem deletar. Se o usuário está no meio
+  // de um Embedded Signup e o telefone ainda não foi gravado, o registro
+  // simplesmente não aparece até que o fluxo finalize.
+  const ocultarOrfao = (r: (typeof rows)[number]) =>
+    r.tipo === "whatsapp_api" && (!r.telefone || r.telefone === "");
+
+  return rows
+    .filter((r) => !ocultarOrfao(r))
+    .map((r) => ({
+      id: r.id,
+      escritorioId: r.escritorioId,
+      tipo: r.tipo as TipoCanal,
+      nome: r.nome || "",
+      status: r.status as StatusCanal,
+      telefone: r.telefone || undefined,
+      ultimaSync: r.ultimaSync ? (r.ultimaSync as Date).toISOString() : undefined,
+      mensagemErro: r.mensagemErro || undefined,
+      temConfig: !!(r.configEncrypted && r.configIv && r.configTag),
+      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+    }));
+}
+
+/** Remove canais whatsapp_api órfãos (sem telefone) de um escritório.
+ *  Executado explicitamente — não é chamado pela query de listagem.
+ *  Devolve a quantidade de linhas removidas para diagnóstico.
+ */
+export async function removerCanaisOrfaos(escritorioId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const todos = await db
+    .select({ id: canaisIntegrados.id, tipo: canaisIntegrados.tipo, telefone: canaisIntegrados.telefone })
+    .from(canaisIntegrados)
+    .where(eq(canaisIntegrados.escritorioId, escritorioId));
+
+  const orfaosIds = todos
+    .filter((c) => c.tipo === "whatsapp_api" && (!c.telefone || c.telefone === ""))
+    .map((c) => c.id);
+
+  let removidos = 0;
+  for (const id of orfaosIds) {
+    try {
+      await db.delete(canaisIntegrados).where(eq(canaisIntegrados.id, id));
+      removidos++;
+    } catch {
+      /* best-effort */
+    }
+  }
+  return removidos;
 }
 
 /** Cria um novo canal */
