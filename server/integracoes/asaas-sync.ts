@@ -13,7 +13,7 @@
 
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, contatos } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient } from "./asaas-client";
 import { createLogger } from "../_core/logger";
@@ -106,33 +106,65 @@ export async function syncCobrancasDeCliente(
         // Normaliza datas de pagamento (API pode retornar "" / undefined; DB guarda null)
         const localDataPag = local.dataPagamento || null;
         const remotaDataPag = cob.paymentDate || null;
+        const remotaNetValue = cob.netValue?.toString() || null;
         const mudouStatus = local.status !== cob.status;
         const mudouDataPag = localDataPag !== remotaDataPag;
+        const mudouNetValue = (local.valorLiquido || null) !== remotaNetValue;
+        // Reconcilia vínculo: cobrança pode ter sido criada órfã (via webhook
+        // antes do vínculo) ou associada ao contato antigo (quando o primário
+        // do Asaas muda). Aqui reatribuímos contatoId/asaasCustomerId ao caller.
+        const mudouContato = local.contatoId !== contatoId;
+        const mudouCustomer = local.asaasCustomerId !== asaasCustomerId;
 
-        if (mudouStatus || mudouDataPag) {
-          await db.update(asaasCobrancas).set({
+        if (mudouStatus || mudouDataPag || mudouNetValue || mudouContato || mudouCustomer) {
+          const setObj: Record<string, unknown> = {
             status: cob.status,
             dataPagamento: remotaDataPag,
-            valorLiquido: cob.netValue?.toString() || null,
-          }).where(eq(asaasCobrancas.id, local.id));
+            valorLiquido: remotaNetValue,
+          };
+          if (mudouContato) setObj.contatoId = contatoId;
+          if (mudouCustomer) setObj.asaasCustomerId = asaasCustomerId;
+          await db.update(asaasCobrancas).set(setObj).where(eq(asaasCobrancas.id, local.id));
           stats.atualizadas++;
         }
       } else {
-        await db.insert(asaasCobrancas).values({
-          escritorioId,
-          contatoId,
-          asaasPaymentId: cob.id,
-          asaasCustomerId,
-          valor: cob.value.toString(),
-          valorLiquido: cob.netValue?.toString() || null,
-          vencimento: cob.dueDate,
-          formaPagamento: (cob.billingType as any) || "UNDEFINED",
-          status: cob.status,
-          descricao: cob.description || null,
-          invoiceUrl: cob.invoiceUrl,
-          bankSlipUrl: cob.bankSlipUrl || null,
-          dataPagamento: cob.paymentDate || null,
-        });
+        // Upsert protege contra race com webhook concorrente: entre o SELECT
+        // acima e este INSERT, o webhook pode ter criado a mesma linha (a
+        // constraint UNIQUE(escritorioId, asaasPaymentId) impede duplicata).
+        // Em caso de duplicata já escrita, atualizamos os campos para refletir
+        // o snapshot atual do Asaas — é mais recente que o do webhook.
+        await db
+          .insert(asaasCobrancas)
+          .values({
+            escritorioId,
+            contatoId,
+            asaasPaymentId: cob.id,
+            asaasCustomerId,
+            valor: cob.value.toString(),
+            valorLiquido: cob.netValue?.toString() || null,
+            vencimento: cob.dueDate,
+            formaPagamento: (cob.billingType as any) || "UNDEFINED",
+            status: cob.status,
+            descricao: cob.description || null,
+            invoiceUrl: cob.invoiceUrl,
+            bankSlipUrl: cob.bankSlipUrl || null,
+            dataPagamento: cob.paymentDate || null,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              contatoId,
+              asaasCustomerId,
+              status: cob.status,
+              valor: cob.value.toString(),
+              valorLiquido: cob.netValue?.toString() || null,
+              vencimento: cob.dueDate,
+              formaPagamento: (cob.billingType as any) || "UNDEFINED",
+              descricao: cob.description || null,
+              invoiceUrl: cob.invoiceUrl,
+              bankSlipUrl: cob.bankSlipUrl || null,
+              dataPagamento: cob.paymentDate || null,
+            },
+          });
         stats.novas++;
       }
     }
@@ -180,6 +212,26 @@ export async function syncTodasCobrancasDoContato(
       eq(asaasClientes.contatoId, contatoId),
       eq(asaasClientes.escritorioId, escritorioId),
     ));
+
+  // Adoção bulk: cobranças que entraram no banco sem contatoId (via webhook
+  // antes do vínculo) ou apontando para outro contato do mesmo asaasCustomerId
+  // são reatribuídas ao contato atual. O sync por-cliente abaixo também
+  // reconcilia linha a linha, mas este passo único garante a adoção mesmo
+  // quando o pagamento no Asaas não mudou (status/data iguais → o loop
+  // interno não disparia UPDATE).
+  if (vinculos.length > 0) {
+    const customerIds = vinculos.map((v) => v.asaasCustomerId);
+    await db
+      .update(asaasCobrancas)
+      .set({ contatoId })
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          inArray(asaasCobrancas.asaasCustomerId, customerIds),
+          or(isNull(asaasCobrancas.contatoId), ne(asaasCobrancas.contatoId, contatoId)),
+        ),
+      );
+  }
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   for (const v of vinculos) {
@@ -242,6 +294,115 @@ export async function syncCobrancasEscritorio(
   } catch {}
 
   return { clientes: vinculos.length, ...totais };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AGREGAÇÃO N:1 — vários asaas_clientes por contato do CRM
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type VinculoLinha = {
+  id: number;
+  contatoId: number;
+  asaasCustomerId: string;
+  cpfCnpj: string | null;
+  nome: string | null;
+  primario: boolean | null;
+};
+
+export type CobrancaAgg = {
+  asaasCustomerId: string;
+  valor: string;
+  status: string;
+};
+
+export type ContatoMeta = {
+  nome: string;
+  telefone: string | null;
+  email: string | null;
+};
+
+export type ClienteAgregado = {
+  /** ID do vínculo primário (compatibilidade com o frontend que usa como key). */
+  id: number;
+  contatoId: number;
+  /** Todos os asaasCustomerIds vinculados a este contato (N:1 do Asaas). */
+  asaasCustomerIds: string[];
+  /** ID do primário — usado pelo frontend e para criar novas cobranças. */
+  asaasCustomerId: string;
+  cpfCnpj: string;
+  nome: string;
+  contatoNome: string;
+  contatoTelefone: string | null;
+  contatoEmail: string | null;
+  totalCobrancas: number;
+  pendente: number;
+  vencido: number;
+  pago: number;
+};
+
+/**
+ * Agrupa múltiplos vínculos do mesmo contato em UM item. O Asaas permite
+ * cadastros duplicados com o mesmo CPF (ids diferentes) e o CRM referência
+ * todos como secundários. A tela de Clientes agrega tudo sob o contato do
+ * CRM; as cobranças de cada customer secundário entram no agregado.
+ *
+ * Escolha do "primário" na saída (para usar como id na UI e como alvo
+ * padrão ao criar cobranças): o marcado com `primario=true` se houver;
+ * caso contrário, o vínculo mais antigo (menor id) por estabilidade.
+ */
+export function agregarVinculosPorContato(
+  vinculos: VinculoLinha[],
+  cobrancas: CobrancaAgg[],
+  contatosMeta: Record<number, ContatoMeta>,
+): ClienteAgregado[] {
+  const porContato = new Map<number, VinculoLinha[]>();
+  for (const v of vinculos) {
+    const arr = porContato.get(v.contatoId);
+    if (arr) arr.push(v);
+    else porContato.set(v.contatoId, [v]);
+  }
+
+  const result: ClienteAgregado[] = [];
+  for (const [contatoId, vs] of porContato) {
+    const primario =
+      vs.find((v) => v.primario === true) ??
+      vs.slice().sort((a, b) => a.id - b.id)[0];
+    const asaasCustomerIds = vs.map((v) => v.asaasCustomerId);
+    const setIds = new Set(asaasCustomerIds);
+
+    let pendente = 0;
+    let vencido = 0;
+    let pago = 0;
+    let total = 0;
+    for (const c of cobrancas) {
+      if (!setIds.has(c.asaasCustomerId)) continue;
+      total++;
+      const val = parseFloat(c.valor) || 0;
+      if (c.status === "PENDING") pendente += val;
+      else if (c.status === "OVERDUE") vencido += val;
+      else if (c.status === "RECEIVED" || c.status === "CONFIRMED" || c.status === "RECEIVED_IN_CASH") pago += val;
+    }
+
+    const meta = contatosMeta[contatoId];
+    const nomeResolvido = primario.nome ?? "";
+    result.push({
+      id: primario.id,
+      contatoId,
+      asaasCustomerIds,
+      asaasCustomerId: primario.asaasCustomerId,
+      cpfCnpj: primario.cpfCnpj || "",
+      nome: nomeResolvido,
+      contatoNome: meta?.nome ?? nomeResolvido,
+      contatoTelefone: meta?.telefone ?? null,
+      contatoEmail: meta?.email ?? null,
+      totalCobrancas: total,
+      pendente,
+      vencido,
+      pago,
+    });
+  }
+
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

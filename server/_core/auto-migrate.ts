@@ -357,6 +357,78 @@ async function ensureAsaasBillingColumns(connection: mysql.Connection): Promise<
 }
 
 /**
+ * Idempotência Asaas (cobranças + eventos do webhook):
+ *   - UNIQUE em asaas_cobrancas (escritorioIdAsaasCob, asaasPaymentId): uma
+ *     mesma cobrança do Asaas só entra uma vez, mesmo com retries do webhook.
+ *     Cleanup: antes de aplicar o índice, remove duplicatas legadas
+ *     mantendo a linha de menor id (a original).
+ *   - Tabela asaas_webhook_eventos: marca eventos já processados pra o
+ *     SmartFlow não redisparar WhatsApp/e-mail em retries do Asaas.
+ */
+async function ensureAsaasIdempotency(connection: mysql.Connection): Promise<void> {
+  // 1) Cobranças: só faz sentido se a tabela existir.
+  try {
+    const [cobTables] = await connection.query(
+      `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asaas_cobrancas'`,
+    );
+    if ((cobTables as unknown[]).length > 0) {
+      // Dedup legado: mantém a linha com menor id dentro de cada
+      // (escritorio, asaasPaymentId). Se a tabela já não tem duplicatas,
+      // este DELETE é no-op.
+      try {
+        await connection.query(
+          `DELETE c1 FROM asaas_cobrancas c1
+           INNER JOIN asaas_cobrancas c2
+             ON c1.escritorioIdAsaasCob = c2.escritorioIdAsaasCob
+            AND c1.asaasPaymentId = c2.asaasPaymentId
+            AND c1.id > c2.id`,
+        );
+      } catch (err: any) {
+        if (!isHarmlessError(err.message || String(err))) {
+          log.warn({ err: err.message }, "ensureAsaasIdempotency: dedup legado falhou");
+        }
+      }
+
+      // Unique: (escritorioIdAsaasCob, asaasPaymentId). Idempotente —
+      // se o índice já existir, MySQL erra com "Duplicate key name" e é
+      // tratado como harmless.
+      try {
+        await connection.query(
+          `CREATE UNIQUE INDEX asaas_cob_escr_payment_uq ON asaas_cobrancas (escritorioIdAsaasCob, asaasPaymentId)`,
+        );
+        log.info("ensureAsaasIdempotency: índice único criado em asaas_cobrancas");
+      } catch (err: any) {
+        if (!isHarmlessError(err.message || String(err))) {
+          log.warn({ err: err.message }, "ensureAsaasIdempotency: falha ao criar índice único");
+        }
+      }
+    }
+  } catch (err: any) {
+    log.warn({ err: err.message }, "ensureAsaasIdempotency: inspeção de asaas_cobrancas falhou");
+  }
+
+  // 2) Tabela de eventos processados.
+  try {
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS asaas_webhook_eventos (
+        id INT NOT NULL AUTO_INCREMENT,
+        escritorioIdWhEv INT NOT NULL,
+        asaasPaymentIdWhEv VARCHAR(64) NOT NULL,
+        eventTypeWhEv VARCHAR(64) NOT NULL,
+        processedAtWhEv TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY asaas_wh_ev_uq (escritorioIdWhEv, asaasPaymentIdWhEv, eventTypeWhEv)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+  } catch (err: any) {
+    if (!isHarmlessError(err.message || String(err))) {
+      log.warn({ err: err.message }, "ensureAsaasIdempotency: falha ao criar asaas_webhook_eventos");
+    }
+  }
+}
+
+/**
  * Sprint 1 — Controle de cliente:
  *   - users.bloqueado / motivoBloqueio / bloqueadoEm
  *   - escritorios.suspenso / motivoSuspensao / suspensoEm
@@ -1074,6 +1146,7 @@ export async function runMigrations(): Promise<void> {
     await ensureAuthColumns(connection);
     await ensureContatoColumns(connection);
     await ensureAsaasBillingColumns(connection);
+    await ensureAsaasIdempotency(connection);
     await ensureClienteControlSchema(connection);
     await ensureJuditMonitoramentoColumns(connection);
     await ensureCanalAutoReplyColumn(connection);

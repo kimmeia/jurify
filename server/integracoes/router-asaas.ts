@@ -21,7 +21,15 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
-import { syncCobrancasDeCliente, syncCobrancasEscritorio, syncTodasCobrancasDoContato } from "./asaas-sync";
+import {
+  syncCobrancasDeCliente,
+  syncCobrancasEscritorio,
+  syncTodasCobrancasDoContato,
+  agregarVinculosPorContato,
+  type VinculoLinha,
+  type CobrancaAgg,
+  type ContatoMeta,
+} from "./asaas-sync";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 
@@ -292,6 +300,15 @@ export const asaasRouter = router({
   conectar: protectedProcedure
     .input(z.object({ apiKey: z.string().min(10), webhookUrl: z.string().url().optional() }))
     .mutation(async ({ ctx, input }) => {
+      // Conectar/desconectar Asaas é configuração crítica do escritório
+      // (afeta TODO o financeiro). Atendente/estagiário não entra aqui.
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para conectar a conta Asaas do escritório.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -374,6 +391,13 @@ export const asaasRouter = router({
   reconfigurarWebhook: protectedProcedure
     .input(z.object({ webhookUrl: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para reconfigurar o webhook Asaas.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -398,6 +422,13 @@ export const asaasRouter = router({
     }),
 
   desconectar: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para desconectar a conta Asaas do escritório.",
+      });
+    }
     const esc = await requireEscritorio(ctx.user.id);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -474,19 +505,17 @@ export const asaasRouter = router({
           )).limit(1);
 
         if (contato) {
-          // Vincular contato existente — ATUALIZAR dados com nome novo do Asaas
+          // Vincular contato existente — ATUALIZAR dados com nome novo do Asaas.
+          // NÃO deletamos vínculos antigos: o Asaas permite duplicatas com o
+          // mesmo CPF, e o modelo suporta N customers → 1 contato CRM. Só
+          // adicionamos o vínculo novo se ainda não existir (o SELECT em
+          // `jaVinculado` acima já garante isso para o asaasCli atual).
           await db.update(contatos).set({
             nome: asaasCli.name,
             cpfCnpj: cpfLimpo,
             email: asaasCli.email || contato.email,
             telefone: asaasCli.mobilePhone || asaasCli.phone || contato.telefone,
           }).where(eq(contatos.id, contato.id));
-
-          // Remover vínculos antigos para este contato
-          await db.delete(asaasClientes).where(and(
-            eq(asaasClientes.escritorioId, esc.escritorio.id),
-            eq(asaasClientes.contatoId, contato.id)
-          ));
 
           await db.insert(asaasClientes).values({
             escritorioId: esc.escritorio.id,
@@ -997,6 +1026,13 @@ export const asaasRouter = router({
       descricao: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar cobranças no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1482,6 +1518,13 @@ export const asaasRouter = router({
       bairro: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar clientes no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1583,55 +1626,61 @@ export const asaasRouter = router({
           conditions.push(or(like(asaasClientes.nome, b), like(asaasClientes.cpfCnpj, b)));
         }
 
-        const vinculos = await db.select().from(asaasClientes).where(and(...conditions));
+        const vinculosRaw = await db.select().from(asaasClientes).where(and(...conditions));
+        if (vinculosRaw.length === 0) return [];
 
-        // DEDUPLICAR: se houver múltiplos vínculos para o mesmo contatoId,
-        // manter apenas o mais recente (maior id) e DELETAR os antigos
-        const porContato = new Map<number, typeof vinculos[0]>();
-        const idsParaDeletar: number[] = [];
-        for (const v of vinculos) {
-          const existente = porContato.get(v.contatoId);
-          if (!existente || v.id > existente.id) {
-            if (existente) idsParaDeletar.push(existente.id);
-            porContato.set(v.contatoId, v);
-          } else {
-            idsParaDeletar.push(v.id);
-          }
-        }
-        // Limpar duplicatas no banco (silenciosamente)
-        for (const id of idsParaDeletar) {
-          try { await db.delete(asaasClientes).where(eq(asaasClientes.id, id)); } catch {}
-        }
+        // Agrega vários customers Asaas (mesmo CPF, duplicatas permitidas pelo
+        // Asaas) num único item por contato do CRM. Sem deletar nada — o
+        // vínculo N:1 é parte do modelo: ver comentário em agregarVinculosPorContato.
+        const contatoIds = [...new Set(vinculosRaw.map((v) => v.contatoId))];
+        const customerIds = [...new Set(vinculosRaw.map((v) => v.asaasCustomerId))];
 
-        // Enriquecer com dados do contato (apenas únicos)
-        const result = [];
-        for (const v of porContato.values()) {
-          const [contato] = await db.select({ nome: contatos.nome, telefone: contatos.telefone, email: contatos.email })
-            .from(contatos).where(eq(contatos.id, v.contatoId)).limit(1);
-
-          // Contar cobranças
-          const cobrancasLocal = await db.select().from(asaasCobrancas)
-            .where(and(eq(asaasCobrancas.asaasCustomerId, v.asaasCustomerId), eq(asaasCobrancas.escritorioId, esc.escritorio.id)));
-
-          let pendente = 0, vencido = 0, pago = 0;
-          for (const c of cobrancasLocal) {
-            const val = parseFloat(c.valor) || 0;
-            if (c.status === "PENDING") pendente += val;
-            else if (c.status === "OVERDUE") vencido += val;
-            else if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) pago += val;
-          }
-
-          result.push({
-            ...v,
-            contatoNome: contato?.nome || v.nome,
-            contatoTelefone: contato?.telefone,
-            contatoEmail: contato?.email,
-            totalCobrancas: cobrancasLocal.length,
-            pendente, vencido, pago,
-          });
+        const contatosList = await db
+          .select({
+            id: contatos.id,
+            nome: contatos.nome,
+            telefone: contatos.telefone,
+            email: contatos.email,
+          })
+          .from(contatos)
+          .where(and(
+            eq(contatos.escritorioId, esc.escritorio.id),
+            inArray(contatos.id, contatoIds),
+          ));
+        const contatosMeta: Record<number, ContatoMeta> = {};
+        for (const c of contatosList) {
+          contatosMeta[c.id] = { nome: c.nome, telefone: c.telefone, email: c.email };
         }
 
-        return result;
+        const cobrancasRaw = customerIds.length > 0
+          ? await db
+              .select({
+                asaasCustomerId: asaasCobrancas.asaasCustomerId,
+                valor: asaasCobrancas.valor,
+                status: asaasCobrancas.status,
+              })
+              .from(asaasCobrancas)
+              .where(and(
+                eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+                inArray(asaasCobrancas.asaasCustomerId, customerIds),
+              ))
+          : [];
+
+        const vinculos: VinculoLinha[] = vinculosRaw.map((v) => ({
+          id: v.id,
+          contatoId: v.contatoId,
+          asaasCustomerId: v.asaasCustomerId,
+          cpfCnpj: v.cpfCnpj,
+          nome: v.nome,
+          primario: (v as { primario?: boolean | null }).primario ?? null,
+        }));
+        const cobrancas: CobrancaAgg[] = cobrancasRaw.map((c) => ({
+          asaasCustomerId: c.asaasCustomerId,
+          valor: c.valor,
+          status: c.status,
+        }));
+
+        return agregarVinculosPorContato(vinculos, cobrancas, contatosMeta);
       } catch {
         return [];
       }
@@ -1643,6 +1692,13 @@ export const asaasRouter = router({
   excluirCobranca: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para excluir cobranças no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1718,6 +1774,13 @@ export const asaasRouter = router({
       descricao: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar assinaturas no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1783,6 +1846,13 @@ export const asaasRouter = router({
   cancelarAssinatura: protectedProcedure
     .input(z.object({ assinaturaId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para cancelar assinaturas no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
 
@@ -1803,6 +1873,13 @@ export const asaasRouter = router({
       descricao: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar parcelamentos no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
