@@ -131,22 +131,30 @@ async function exchangeCodeForToken(code: string, redirectUri?: string): Promise
     );
   }
 
-  // A Meta compara o `redirect_uri` da troca com o que o SDK registrou no
-  // momento do FB.login. Quando o App tem Embedded Signup configurado
-  // (config_id setado), ela aceita string vazia — mas sem config_id, exige
-  // o valor real (a URL da página que abriu o popup). O frontend envia
-  // `window.location.origin` pra bater exatamente com o que o SDK usou.
-  const redirect_uri = redirectUri ?? "";
+  // Dois fluxos distintos:
+  //
+  //  1. Embedded Signup (WhatsApp com config_id): a Meta usa um redirect_uri
+  //     interno opaco no popup. Passar QUALQUER valor na troca do code
+  //     (vazio ou não) gera mismatch. O correto é OMITIR o parâmetro.
+  //
+  //  2. Facebook Login clássico / Login for Business sem config_id: a Meta
+  //     exige o mesmo redirect_uri usado no login. O frontend envia a URL
+  //     da página (window.location.href) e a gente repassa.
+  //
+  // O frontend sinaliza qual fluxo é enviando (ou omitindo) redirectUri.
+  const params: Record<string, string> = {
+    client_id: config.appId,
+    client_secret: config.appSecret,
+    code,
+  };
+  if (typeof redirectUri === "string" && redirectUri.length > 0) {
+    params.redirect_uri = redirectUri;
+  }
 
   const axios = (await import("axios")).default;
   try {
     const tokenRes = await axios.get("https://graph.facebook.com/v21.0/oauth/access_token", {
-      params: {
-        client_id: config.appId,
-        client_secret: config.appSecret,
-        code,
-        redirect_uri,
-      },
+      params,
       timeout: 15000,
     });
     const accessToken = tokenRes.data?.access_token;
@@ -156,14 +164,13 @@ async function exchangeCodeForToken(code: string, redirectUri?: string): Promise
     }
     return accessToken;
   } catch (err: any) {
-    // Caso já seja o erro específico lançado acima, repropaga.
     if (err?.message?.startsWith("Falha ao obter access token")) throw err;
     log.warn(
       {
         status: err?.response?.status,
         fbError: err?.response?.data?.error,
         appId: config.appId,
-        redirectUriUsado: redirect_uri,
+        redirectUriUsado: params.redirect_uri ?? "<omitido>",
       },
       "[metaChannels] exchangeCodeForToken falhou",
     );
