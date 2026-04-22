@@ -258,6 +258,38 @@ class WhatsappSessionManager extends EventEmitter {
     }
   }
 
+  /**
+   * Consulta o WhatsApp pra saber quais candidatos de número estão
+   * registrados e retorna o JID canônico de cada um.
+   *
+   * Usado antes de enviar mensagens pra resolver o formato real do
+   * número BR (com/sem 9º dígito) — evita adivinhação determinística
+   * que quebra pra contas antigas migradas do padrão de 8 dígitos.
+   */
+  async checarNumerosWhatsApp(
+    canalId: number,
+    candidatos: string[],
+  ): Promise<Array<{ jid: string; exists: boolean; lid?: string }>> {
+    const state = this.sessions.get(canalId);
+    if (!state || state.status !== "conectado" || !state.socket) {
+      throw new Error("Sessão WhatsApp não conectada.");
+    }
+    if (candidatos.length === 0) return [];
+
+    try {
+      const results = await state.socket.onWhatsApp(...candidatos);
+      if (!Array.isArray(results)) return [];
+      return results.map((r: any) => ({
+        jid: r.jid,
+        exists: !!r.exists,
+        lid: r.lid,
+      }));
+    } catch (err: any) {
+      log.warn(`[WhatsApp] Falha ao checar números no canal ${canalId}: ${err.message}`);
+      return [];
+    }
+  }
+
   /** Lista todas as sessões ativas */
   async listarSessoes(): Promise<WhatsappSessionInfo[]> {
     return Promise.all(Array.from(this.sessions.keys()).map((id) => this.getSessionInfo(id)));

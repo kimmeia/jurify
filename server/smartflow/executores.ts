@@ -13,6 +13,84 @@ import { createLogger } from "../_core/logger";
 const log = createLogger("smartflow-executores");
 
 /**
+ * Prepara o telefone pra resolução de JID no WhatsApp.
+ *
+ * - Se o input já é um JID (contém `@`), devolve direto.
+ * - Senão, gera um conjunto de candidatos numéricos cobrindo os dois
+ *   padrões BR (com/sem 9º dígito) e com/sem DDI 55. O chamador
+ *   consulta o Baileys (`onWhatsApp`) pra saber qual existe.
+ *
+ * Retorna `null` pra entradas vazias ou com menos de 8 dígitos.
+ */
+export function prepararCandidatosJid(
+  telefone: string | null | undefined,
+): { jid: string } | { candidatos: string[] } | null {
+  if (!telefone) return null;
+  const raw = String(telefone).trim();
+  if (!raw) return null;
+  if (raw.includes("@")) return { jid: raw };
+
+  const clean = raw.replace(/\D/g, "");
+  if (clean.length < 8) return null;
+
+  const candidatos = new Set<string>();
+  candidatos.add(clean);
+
+  const comDDI = clean.startsWith("55") ? clean : `55${clean}`;
+  candidatos.add(comDDI);
+
+  if (comDDI.length === 13) {
+    const ddd = comDDI.substring(2, 4);
+    const nono = comDDI.charAt(4);
+    const local = comDDI.substring(5);
+    if (nono === "9" && ["6", "7", "8", "9"].includes(local.charAt(0))) {
+      candidatos.add(`55${ddd}${local}`);
+    }
+  } else if (comDDI.length === 12) {
+    const ddd = comDDI.substring(2, 4);
+    const local = comDDI.substring(4);
+    if (["6", "7", "8", "9"].includes(local.charAt(0))) {
+      candidatos.add(`55${ddd}9${local}`);
+    }
+  }
+
+  return { candidatos: Array.from(candidatos) };
+}
+
+/**
+ * Interface mínima do manager de WhatsApp usada por `resolverJidWhatsApp`.
+ * Facilita mocks em testes.
+ */
+export interface CheckWhatsappManager {
+  checarNumerosWhatsApp(
+    canalId: number,
+    candidatos: string[],
+  ): Promise<Array<{ jid: string; exists: boolean; lid?: string }>>;
+}
+
+/**
+ * Resolve o JID canônico de um telefone consultando o servidor do
+ * WhatsApp via `onWhatsApp`. Evita adivinhação determinística — o
+ * servidor devolve qual variação está registrada na conta.
+ *
+ * Retorna `null` se o telefone é inválido ou nenhum candidato existe.
+ */
+export async function resolverJidWhatsApp(
+  manager: CheckWhatsappManager,
+  canalId: number,
+  telefone: string | null | undefined,
+): Promise<string | null> {
+  const prep = prepararCandidatosJid(telefone);
+  if (!prep) return null;
+  if ("jid" in prep) return prep.jid;
+
+  const results = await manager.checarNumerosWhatsApp(canalId, prep.candidatos);
+  const match = results.find((r) => r.exists);
+  if (!match) return null;
+  return match.lid || match.jid;
+}
+
+/**
  * Cria executores reais para um escritório específico.
  */
 export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
@@ -143,7 +221,6 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
     },
 
     async enviarWhatsApp(telefone: string, mensagem: string): Promise<boolean> {
-      // Delega pro manager do WhatsApp já existente
       try {
         const { getDb } = await import("../db");
         const { canaisIntegrados } = await import("../../drizzle/schema");
@@ -151,7 +228,6 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         const db = await getDb();
         if (!db) return false;
 
-        // Busca canal WhatsApp ativo do escritório
         const canais = await db.select().from(canaisIntegrados)
           .where(and(
             eq(canaisIntegrados.escritorioId, escritorioId),
@@ -165,11 +241,16 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
         const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
         const m = getWhatsappManager();
-        if (m.isConectado(canalId)) {
-          await m.enviarMensagemJid(canalId, telefone, mensagem);
-          return true;
+        if (!m.isConectado(canalId)) return false;
+
+        const jid = await resolverJidWhatsApp(m, canalId, telefone);
+        if (!jid) {
+          log.warn({ telefone, canalId }, "SmartFlow: telefone não registrado no WhatsApp");
+          return false;
         }
-        return false;
+
+        await m.enviarMensagemJid(canalId, jid, mensagem);
+        return true;
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao enviar WhatsApp");
         return false;
