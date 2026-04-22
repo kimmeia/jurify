@@ -215,6 +215,7 @@ function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function Clientes() {
+  const [, setLocation] = useLocation();
   const [busca, setBusca] = useState("");
   const [buscaDebounced, setBuscaDebounced] = useState("");
   const [segmento, setSegmento] = useState<Segmento>("todos");
@@ -275,20 +276,25 @@ export default function Clientes() {
     toast.success(`${lista.length} cliente(s) exportado(s)`);
   };
 
-  const handleBulkWhatsApp = () => {
+  const handleBulkInbox = () => {
     const lista = clientesFiltrados.filter((c: any) => selecionados.has(c.id) && c.telefone);
     if (lista.length === 0) {
       toast.error("Nenhum selecionado com telefone");
       return;
     }
-    if (lista.length > 5) {
-      if (!confirm(`Abrir ${lista.length} conversas WhatsApp?`)) return;
+    if (lista.length > 1) {
+      toast.error("Selecione apenas 1 cliente", {
+        description: "O inbox abre uma conversa por vez. Para enviar em massa, use templates no módulo Atendimento.",
+      });
+      return;
     }
-    for (const c of lista) {
-      const tel = (c.telefone || "").replace(/\D/g, "");
-      window.open(`https://wa.me/${tel}`, "_blank");
-    }
+    setLocation(`/atendimento?contatoId=${lista[0].id}`);
   };
+
+  const selecionadosComTelefone = useMemo(
+    () => clientesFiltrados.filter((c: any) => selecionados.has(c.id) && c.telefone).length,
+    [clientesFiltrados, selecionados],
+  );
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
@@ -377,9 +383,11 @@ export default function Clientes() {
                   <Button size="sm" variant="outline" onClick={handleExport}>
                     <Download className="h-3.5 w-3.5 mr-1" /> Exportar
                   </Button>
-                  <Button size="sm" variant="outline" onClick={handleBulkWhatsApp}>
-                    <MessageCircle className="h-3.5 w-3.5 mr-1 text-emerald-600" /> WhatsApp
-                  </Button>
+                  {selecionadosComTelefone > 0 && (
+                    <Button size="sm" variant="outline" onClick={handleBulkInbox}>
+                      <MessageCircle className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Inbox
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -701,6 +709,7 @@ function ClienteDetalhe({
   onVoltar: () => void;
   onUpdate: () => void;
 }) {
+  const [, setLocation] = useLocation();
   const [tab, setTab] = useState("visao-geral");
   const { data: cliente, refetch } = trpc.clientes.detalhe.useQuery({ id });
   const { data: anotacoes, refetch: rN } = trpc.clientes.listarAnotacoes.useQuery({ contatoId: id });
@@ -772,13 +781,10 @@ function ClienteDetalhe({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              const tel = (cliente.telefone || "").replace(/\D/g, "");
-              window.open(`https://wa.me/${tel}`, "_blank");
-            }}
+            onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
           >
-            <Send className="h-4 w-4 mr-1 text-emerald-600" />
-            WhatsApp
+            <MessageCircle className="h-4 w-4 mr-1 text-emerald-600" />
+            Inbox
           </Button>
         )}
         {cliente.cpfCnpj && (

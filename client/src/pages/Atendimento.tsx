@@ -181,11 +181,31 @@ function isValidPhoneBR(value: string): boolean {
   return d.length === 10 || d.length === 11;
 }
 
-function IniciarConversaDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: (id: number) => void }) {
+function IniciarConversaDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  preencherDe,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSuccess: (id: number) => void;
+  /** Pré-preenche nome/telefone quando o diálogo foi acionado vindo de outro
+   *  lugar (ex.: botão "Inbox" na ficha do cliente). Seguro: se o contato
+   *  já tem conversa, iniciarConversa reusa; senão cria. */
+  preencherDe?: { nome?: string; telefone?: string } | null;
+}) {
   const [tel, setTel] = useState(""); const [nome, setNome] = useState(""); const [msg, setMsg] = useState(""); const [canalId, setCanalId] = useState<number | null>(null);
   const { data: canais } = trpc.configuracoes.listarCanais.useQuery();
   const waCh = (canais?.canais || []).filter((c: any) => c.tipo === "whatsapp_qr" && c.status === "conectado");
   useEffect(() => { if (waCh.length > 0 && !canalId) setCanalId(waCh[0].id); }, [waCh, canalId]);
+  // Ao abrir com dados vindos do CRM, pré-popula os campos.
+  useEffect(() => {
+    if (open && preencherDe) {
+      if (preencherDe.telefone) setTel(maskPhoneBR(preencherDe.telefone));
+      if (preencherDe.nome) setNome(preencherDe.nome);
+    }
+  }, [open, preencherDe]);
   const ini = trpc.crm.iniciarConversa.useMutation({ onSuccess: (r: any) => { toast.success("Conversa iniciada!"); onOpenChange(false); setTel(""); setNome(""); setMsg(""); onSuccess(r.conversaId); }, onError: (e: any) => toast.error(e.message) });
   const telDigits = tel.replace(/\D/g, "");
   const telValido = isValidPhoneBR(tel);
@@ -249,6 +269,22 @@ export default function Atendimento() {
   const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
+
+  // Deep link vindo do CRM (ex.: botão "Inbox" na ficha do cliente):
+  // /atendimento?contatoId=X abre automaticamente a conversa existente, ou
+  // pré-preenche o diálogo de Nova Conversa se ainda não houver.
+  const [contatoIdUrl] = useState<number | null>(() => {
+    const p = new URLSearchParams(window.location.search);
+    const raw = p.get("contatoId");
+    return raw ? Number(raw) : null;
+  });
+  const [preencherConversa, setPreencherConversa] = useState<{ nome?: string; telefone?: string } | null>(null);
+  const [contatoUrlConsumido, setContatoUrlConsumido] = useState(false);
+  const { data: contatoUrl } = trpc.clientes.detalhe.useQuery(
+    { id: contatoIdUrl ?? 0 },
+    { enabled: !!contatoIdUrl, retry: false },
+  );
+
   const { data: metricas } = trpc.crm.metricas.useQuery(undefined, { refetchInterval: 10000 });
   const { data: convs, refetch: rC } = trpc.crm.listarConversas.useQuery(filtro !== "todos" ? { status: filtro as StatusConversa } : undefined, { refetchInterval: 5000 });
   const { data: contatos, refetch: rCt } = trpc.crm.listarContatos.useQuery(busca ? { busca } : undefined);
@@ -257,6 +293,28 @@ export default function Atendimento() {
 
   const hasWhatsapp = (canaisData?.canais || []).some((c: any) => (c.tipo === "whatsapp_qr" || c.tipo === "whatsapp_api") && c.status === "conectado");
   const hasTwilio = (canaisData?.canais || []).some((c: any) => c.tipo === "telefone_voip" && (c.status === "conectado" || c.temConfig));
+
+  // Consome o contatoId da URL assim que `convs` carregou. Roda uma vez só
+  // (contatoUrlConsumido evita reabrir o diálogo se o usuário navegar depois).
+  useEffect(() => {
+    if (contatoUrlConsumido || !contatoIdUrl || !convs) return;
+    const conv = convs.find((c: any) => c.contatoId === contatoIdUrl);
+    if (conv) {
+      setSelId(conv.id);
+      setTab("inbox");
+    } else if (contatoUrl) {
+      // Ainda não há conversa com esse contato — abre o diálogo já preenchido.
+      setPreencherConversa({ nome: contatoUrl.nome || "", telefone: contatoUrl.telefone || "" });
+      setShowIniciar(true);
+    } else {
+      return; // aguarda `contatoUrl` carregar
+    }
+    setContatoUrlConsumido(true);
+    // Remove o param da URL pra evitar reabrir em navegação futura.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("contatoId");
+    window.history.replaceState({}, "", url.toString());
+  }, [contatoIdUrl, convs, contatoUrl, contatoUrlConsumido]);
 
   const goToConversaFromLead = useCallback((conversaId: number) => {
     setSelId(conversaId);
@@ -422,7 +480,12 @@ export default function Atendimento() {
       </Tabs>
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}
-      <IniciarConversaDialog open={showIniciar} onOpenChange={setShowIniciar} onSuccess={(id) => { setSelId(id); setTab("inbox"); rC(); }} />
+      <IniciarConversaDialog
+        open={showIniciar}
+        onOpenChange={(v) => { setShowIniciar(v); if (!v) setPreencherConversa(null); }}
+        onSuccess={(id) => { setSelId(id); setTab("inbox"); rC(); setPreencherConversa(null); }}
+        preencherDe={preencherConversa}
+      />
       <NovoLeadDialog open={showNovoLead} onOpenChange={setShowNovoLead} onSuccess={rL} />
     </div>
   );
