@@ -1,7 +1,7 @@
 # Project TODO
 
 ## Autenticação e RBAC
-- [x] Tela de Login segura com Manus OAuth
+- [x] Tela de Login (email/senha + Google Sign-In)
 - [x] Controle de acesso RBAC (Admin / Cliente)
 - [x] Rota protegida para Admin (dashboard exclusivo)
 - [x] Rota protegida para Cliente (dashboard próprio)

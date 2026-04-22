@@ -21,7 +21,7 @@ function createUserContext(
     openId: "test-user-openid",
     email: "test@example.com",
     name: "Test User",
-    loginMethod: "manus",
+    loginMethod: "google",
     role,
     asaasCustomerId: null,
     createdAt: new Date(),

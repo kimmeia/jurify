@@ -3,7 +3,6 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
 import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
 import { registerAgenteChatPDFRoute } from "../integracoes/agente-chat-pdf-route";
@@ -134,8 +133,6 @@ async function startServer() {
     }
   });
 
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
   // SSE real-time notifications
   registrarSSE(app);
   // tRPC API

@@ -141,13 +141,6 @@ function ClienteDetalheDialog({
       // hard reload. Vai pra raiz "/" — Home.tsx cuida do roteamento
       // correto baseado na subscription do usuário impersonado.
       setTimeout(() => {
-        // Limpa localStorage de auth cache pra garantir que auth.me
-        // busque fresco
-        try {
-          localStorage.removeItem("manus-runtime-user-info");
-        } catch {
-          /* ignore */
-        }
         window.location.href = "/";
       }, 600);
     },

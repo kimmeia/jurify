@@ -5,7 +5,6 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -36,8 +35,7 @@ async function forceLogoutAndRedirect(motivo?: string) {
       body: JSON.stringify({ "0": { json: null } }),
     }).catch(() => {});
   } finally {
-    const target = getLoginUrl() || "/";
-    window.location.href = target;
+    window.location.href = "/";
   }
 }
 

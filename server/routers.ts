@@ -6,7 +6,6 @@
  * e compõe o `appRouter` final.
  */
 
-import { systemRouter } from "./_core/systemRouter";
 import { router } from "./_core/trpc";
 
 // Cálculos
@@ -65,8 +64,6 @@ import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
 
 export const appRouter = router({
-  system: systemRouter,
-
   // Autenticação própria — email/senha + Google Sign-In
   auth: authRouter,
 
