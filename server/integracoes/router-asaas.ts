@@ -1003,6 +1003,13 @@ export const asaasRouter = router({
       descricao: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar cobranças no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1655,6 +1662,13 @@ export const asaasRouter = router({
   excluirCobranca: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para excluir cobranças no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1730,6 +1744,13 @@ export const asaasRouter = router({
       descricao: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar assinaturas no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -1795,6 +1816,13 @@ export const asaasRouter = router({
   cancelarAssinatura: protectedProcedure
     .input(z.object({ assinaturaId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para cancelar assinaturas no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
 
@@ -1815,6 +1843,13 @@ export const asaasRouter = router({
       descricao: z.string().max(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar parcelamentos no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
