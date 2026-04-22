@@ -112,3 +112,7 @@ temp/
 uploads/
 node_modules/
 .env
+
+# Manus IDE artifacts (legado)
+.manus/
+.manus-logs/
