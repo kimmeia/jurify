@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
 import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
+import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -707,22 +708,35 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
           <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rapidas"><Zap className="h-4 w-4" /></Button>
         </PopoverTrigger>
         <PopoverContent className="w-72 p-2" align="start" side="top">
-          <p className="text-xs font-medium px-2 pb-1.5 text-muted-foreground">Respostas rapidas</p>
+          <p className="text-xs font-medium px-2 pb-0.5 text-muted-foreground">Respostas rápidas</p>
+          <p className="text-[10px] px-2 pb-1.5 text-muted-foreground/80">
+            Dica: digite <span className="font-mono">/</span> no campo de mensagem para autocompletar.
+          </p>
           {tplList && tplList.length > 0 ? (
             <div className="max-h-48 overflow-y-auto space-y-0.5">
               {tplList.map((t: any) => (
                 <div key={t.id} className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors" onClick={() => { setMsg(t.conteudo); setShowTemplates(false); }}>
-                  <p className="font-medium text-xs">{t.titulo}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-xs">{t.titulo}</p>
+                    {t.atalho && <span className="font-mono text-[10px] text-primary/80">{t.atalho}</span>}
+                  </div>
                   <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configuracoes.</p>
+            <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configurações.</p>
           )}
         </PopoverContent>
       </Popover>
-      <Input placeholder="Digite sua mensagem..." value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} className="bg-background" />
+      <RespostaRapidaAutocomplete
+        value={msg}
+        onChange={setMsg}
+        templates={(tplList || []) as any}
+        onEnter={send}
+        placeholder="Digite sua mensagem..."
+        className="bg-background"
+      />
       <AudioRecordButton onSend={(text) => enviar.mutate({ conversaId: cid, conteudo: text })} />
       <Button size="sm" onClick={send} disabled={!msg.trim() || enviar.isPending} className="px-4">{enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
     </div>
