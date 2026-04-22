@@ -300,6 +300,15 @@ export const asaasRouter = router({
   conectar: protectedProcedure
     .input(z.object({ apiKey: z.string().min(10), webhookUrl: z.string().url().optional() }))
     .mutation(async ({ ctx, input }) => {
+      // Conectar/desconectar Asaas é configuração crítica do escritório
+      // (afeta TODO o financeiro). Atendente/estagiário não entra aqui.
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para conectar a conta Asaas do escritório.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -382,6 +391,13 @@ export const asaasRouter = router({
   reconfigurarWebhook: protectedProcedure
     .input(z.object({ webhookUrl: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para reconfigurar o webhook Asaas.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
@@ -406,6 +422,13 @@ export const asaasRouter = router({
     }),
 
   desconectar: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para desconectar a conta Asaas do escritório.",
+      });
+    }
     const esc = await requireEscritorio(ctx.user.id);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -1495,6 +1518,13 @@ export const asaasRouter = router({
       bairro: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar clientes no módulo Financeiro.",
+        });
+      }
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
