@@ -6,23 +6,20 @@
  */
 
 import type { Express, Request, Response } from "express";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
 import { gerarPDF } from "./export-pdf";
 import { sdk } from "../_core/sdk";
-import { storagePut } from "../storage";
 import { createLogger } from "../_core/logger";
 const log = createLogger("calculos-export-pdf-route");
+
+const PARECERES_DIR = path.resolve("./uploads/pareceres");
 
 function generateFilename(protocolo?: string): string {
   return protocolo
     ? `parecer-tecnico-${protocolo}.pdf`
     : `parecer-tecnico-${new Date().toISOString().slice(0, 10)}.pdf`;
-}
-
-function generateStorageKey(protocolo?: string): string {
-  const timestamp = Date.now();
-  const rand = Math.random().toString(36).substring(2, 8);
-  const slug = protocolo || new Date().toISOString().slice(0, 10);
-  return `pareceres/${slug}-${timestamp}-${rand}.pdf`;
 }
 
 /**
@@ -106,12 +103,21 @@ export function registerPDFExportRoute(app: Express) {
       const markdownComRevisao = appendRevisadoPor(parecerMarkdown, revisadoPor);
       const pdfBuffer = await gerarPDF(markdownComRevisao);
       const filename = generateFilename(protocolo);
-      const storageKey = generateStorageKey(protocolo);
 
-      // Upload ao S3
-      const { url } = await storagePut(storageKey, pdfBuffer, "application/pdf");
+      // Grava em disco sob ./uploads/pareceres/ — a pasta é servida como
+      // estática pelo Express (mesmo padrão de upload-route.ts). Nome do
+      // arquivo carrega hash aleatório de 16 dígitos hex: não enumerável,
+      // link só funciona pra quem o recebe (caso de uso: compartilhar por
+      // WhatsApp/email). Substitui o antigo storagePut da infra Manus que
+      // foi removida no PR #95.
+      if (!fs.existsSync(PARECERES_DIR)) fs.mkdirSync(PARECERES_DIR, { recursive: true });
+      const slug = (protocolo || new Date().toISOString().slice(0, 10)).replace(/[^a-zA-Z0-9._-]/g, "_");
+      const rand = crypto.randomBytes(8).toString("hex");
+      const fileOnDisk = `${slug}-${Date.now()}-${rand}.pdf`;
+      fs.writeFileSync(path.join(PARECERES_DIR, fileOnDisk), pdfBuffer);
+      const url = `/uploads/pareceres/${fileOnDisk}`;
 
-      log.info(`[PDF Share] Parecer "${filename}" uploaded to S3: ${url}`);
+      log.info(`[PDF Share] Parecer "${filename}" salvo em ${url}`);
 
       res.json({
         url,
