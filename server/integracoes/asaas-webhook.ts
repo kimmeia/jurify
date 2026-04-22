@@ -25,6 +25,7 @@ import { getDb } from "../db";
 import { asaasConfig, asaasCobrancas, asaasClientes, contatos } from "../../drizzle/schema";
 import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
+import { marcarEventoProcessado } from "./asaas-idempotency";
 const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
@@ -89,32 +90,16 @@ export function registerAsaasWebhook(app: Express) {
         const payment = body.payment;
         log.info(`[Asaas Webhook] Escritório ${escritorioId} | ${body.event} | Payment: ${payment.id} | Status: ${payment.status}`);
 
-        const [local] = await db.select().from(asaasCobrancas)
-          .where(and(
-            eq(asaasCobrancas.asaasPaymentId, payment.id),
-            eq(asaasCobrancas.escritorioId, escritorioId)
-          ))
-          .limit(1);
-
         if (body.event === "PAYMENT_DELETED" || payment.deleted) {
-          if (local) {
-            await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
-            log.info(`[Asaas Webhook] Cobrança ${payment.id} DELETADA localmente`);
-          }
-        } else if (local) {
-          // Atualizar registro existente
-          await db.update(asaasCobrancas).set({
-            status: payment.status,
-            valor: payment.value.toString(),
-            valorLiquido: payment.netValue?.toString() || local.valorLiquido,
-            vencimento: payment.dueDate,
-            dataPagamento: payment.paymentDate || local.dataPagamento,
-            descricao: payment.description || local.descricao,
-            invoiceUrl: payment.invoiceUrl || local.invoiceUrl,
-            bankSlipUrl: payment.bankSlipUrl || local.bankSlipUrl,
-          }).where(eq(asaasCobrancas.id, local.id));
+          await db.delete(asaasCobrancas).where(and(
+            eq(asaasCobrancas.asaasPaymentId, payment.id),
+            eq(asaasCobrancas.escritorioId, escritorioId),
+          ));
+          log.info(`[Asaas Webhook] Cobrança ${payment.id} DELETADA localmente (ou nada a fazer)`);
         } else {
-          // Criar novo registro (PAYMENT_CREATED, PAYMENT_RECEIVED, PAYMENT_RESTORED, etc)
+          // Upsert idempotente: retry do Asaas não cria duplicata. A constraint
+          // UNIQUE(escritorioId, asaasPaymentId) protege o banco e permite que
+          // o mesmo POST chegando 2× produza no máximo 1 linha.
           const [vinculo] = await db.select().from(asaasClientes)
             .where(and(
               eq(asaasClientes.asaasCustomerId, payment.customer),
@@ -122,63 +107,92 @@ export function registerAsaasWebhook(app: Express) {
             ))
             .limit(1);
 
-          await db.insert(asaasCobrancas).values({
-            escritorioId,
-            contatoId: vinculo?.contatoId || null,
-            asaasPaymentId: payment.id,
-            asaasCustomerId: payment.customer,
-            valor: payment.value.toString(),
-            valorLiquido: payment.netValue?.toString() || null,
-            vencimento: payment.dueDate,
-            formaPagamento: (payment.billingType as any) || "UNDEFINED",
-            status: payment.status,
-            descricao: payment.description || null,
-            invoiceUrl: payment.invoiceUrl || null,
-            bankSlipUrl: payment.bankSlipUrl || null,
-            dataPagamento: payment.paymentDate || null,
-            externalReference: payment.externalReference || null,
-          });
-          log.info(`[Asaas Webhook] Cobrança ${payment.id} CRIADA localmente`);
+          await db
+            .insert(asaasCobrancas)
+            .values({
+              escritorioId,
+              contatoId: vinculo?.contatoId || null,
+              asaasPaymentId: payment.id,
+              asaasCustomerId: payment.customer,
+              valor: payment.value.toString(),
+              valorLiquido: payment.netValue?.toString() || null,
+              vencimento: payment.dueDate,
+              formaPagamento: (payment.billingType as any) || "UNDEFINED",
+              status: payment.status,
+              descricao: payment.description || null,
+              invoiceUrl: payment.invoiceUrl || null,
+              bankSlipUrl: payment.bankSlipUrl || null,
+              dataPagamento: payment.paymentDate || null,
+              externalReference: payment.externalReference || null,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                status: payment.status,
+                valor: payment.value.toString(),
+                valorLiquido: payment.netValue?.toString() || null,
+                vencimento: payment.dueDate,
+                dataPagamento: payment.paymentDate || null,
+                descricao: payment.description || null,
+                invoiceUrl: payment.invoiceUrl || null,
+                bankSlipUrl: payment.bankSlipUrl || null,
+                formaPagamento: (payment.billingType as any) || "UNDEFINED",
+                externalReference: payment.externalReference || null,
+                // Se a cobrança já existia órfã (criada por outro caminho
+                // sem vínculo), adota o contato do vínculo atual.
+                ...(vinculo?.contatoId ? { contatoId: vinculo.contatoId } : {}),
+              },
+            });
+          log.info(`[Asaas Webhook] Cobrança ${payment.id} upsert aplicado`);
         }
 
-        // SmartFlow: disparar cenário "pagamento_recebido" se pagamento confirmado
+        // SmartFlow: disparar cenário "pagamento_recebido" se pagamento confirmado.
+        // Guardado por `marcarEventoProcessado` para retries do Asaas (mesmo
+        // event+paymentId chegando 2-3 vezes) não gerarem WhatsApp/e-mail
+        // duplicado pro cliente.
         if (payment.status === "RECEIVED" || payment.status === "CONFIRMED" || payment.status === "RECEIVED_IN_CASH") {
-          try {
-            const { dispararPagamentoRecebido } = await import("../smartflow/dispatcher");
-            await dispararPagamentoRecebido(escritorioId, {
-              pagamentoId: payment.id,
-              valor: Math.round((payment.value || 0) * 100),
-              descricao: payment.description || `Pagamento ${payment.id}`,
-              tipo: payment.billingType || "UNDEFINED",
-              assinaturaId: (payment as any).subscription || undefined,
-              clienteNome: payment.customer ? undefined : undefined, // Asaas não envia nome aqui
-              clienteAsaasId: payment.customer,
-            });
-          } catch (err: any) {
-            log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
+          const primeiraVez = await marcarEventoProcessado(escritorioId, payment.id, "PAYMENT_RECEIVED");
+          if (primeiraVez) {
+            try {
+              const { dispararPagamentoRecebido } = await import("../smartflow/dispatcher");
+              await dispararPagamentoRecebido(escritorioId, {
+                pagamentoId: payment.id,
+                valor: Math.round((payment.value || 0) * 100),
+                descricao: payment.description || `Pagamento ${payment.id}`,
+                tipo: payment.billingType || "UNDEFINED",
+                assinaturaId: (payment as any).subscription || undefined,
+                clienteNome: payment.customer ? undefined : undefined, // Asaas não envia nome aqui
+                clienteAsaasId: payment.customer,
+              });
+            } catch (err: any) {
+              log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
+            }
           }
         }
 
-        // SmartFlow: disparar cenário "pagamento_vencido" no PAYMENT_OVERDUE
+        // SmartFlow: disparar cenário "pagamento_vencido" no PAYMENT_OVERDUE.
+        // Mesma proteção de idempotência.
         if (body.event === "PAYMENT_OVERDUE" || payment.status === "OVERDUE") {
-          try {
-            const { dispararPagamentoVencido } = await import("../smartflow/dispatcher");
-            const [vinculo2] = await db.select().from(asaasClientes)
-              .where(and(
-                eq(asaasClientes.asaasCustomerId, payment.customer),
-                eq(asaasClientes.escritorioId, escritorioId)
-              )).limit(1);
-            await dispararPagamentoVencido(escritorioId, {
-              pagamentoId: payment.id,
-              valor: Math.round((payment.value || 0) * 100),
-              descricao: payment.description || `Cobrança ${payment.id}`,
-              vencimento: payment.dueDate,
-              clienteAsaasId: payment.customer,
-              clienteNome: vinculo2?.nome || undefined,
-              contatoId: vinculo2?.contatoId || undefined,
-            });
-          } catch (err: any) {
-            log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_vencido falhou (não bloqueia)");
+          const primeiraVez = await marcarEventoProcessado(escritorioId, payment.id, "PAYMENT_OVERDUE");
+          if (primeiraVez) {
+            try {
+              const { dispararPagamentoVencido } = await import("../smartflow/dispatcher");
+              const [vinculo2] = await db.select().from(asaasClientes)
+                .where(and(
+                  eq(asaasClientes.asaasCustomerId, payment.customer),
+                  eq(asaasClientes.escritorioId, escritorioId)
+                )).limit(1);
+              await dispararPagamentoVencido(escritorioId, {
+                pagamentoId: payment.id,
+                valor: Math.round((payment.value || 0) * 100),
+                descricao: payment.description || `Cobrança ${payment.id}`,
+                vencimento: payment.dueDate,
+                clienteAsaasId: payment.customer,
+                clienteNome: vinculo2?.nome || undefined,
+                contatoId: vinculo2?.contatoId || undefined,
+              });
+            } catch (err: any) {
+              log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_vencido falhou (não bloqueia)");
+            }
           }
         }
       }

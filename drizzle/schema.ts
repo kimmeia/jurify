@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, uniqueIndex } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1129,29 +1129,74 @@ export type InsertAsaasCliente = typeof asaasClientes.$inferInsert;
  * Espelho local das cobranças do Asaas.
  * Mantido sincronizado via webhook e polling.
  */
-export const asaasCobrancas = mysqlTable("asaas_cobrancas", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorioIdAsaasCob").notNull(),
-  contatoId: int("contatoIdAsaasCob"),
-  asaasPaymentId: varchar("asaasPaymentId", { length: 64 }).notNull(),
-  asaasCustomerId: varchar("asaasCustomerIdCob", { length: 64 }).notNull(),
-  valor: varchar("valorAsaas", { length: 20 }).notNull(),
-  valorLiquido: varchar("valorLiquidoAsaas", { length: 20 }),
-  vencimento: varchar("vencimentoAsaas", { length: 10 }).notNull(),
-  formaPagamento: mysqlEnum("formaPagAsaas", ["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]).notNull(),
-  status: varchar("statusAsaasCob", { length: 64 }).notNull(),
-  descricao: varchar("descricaoAsaas", { length: 512 }),
-  invoiceUrl: text("invoiceUrlAsaas"),
-  bankSlipUrl: text("bankSlipUrlAsaas"),
-  pixQrCodePayload: text("pixQrCodePayload"),
-  dataPagamento: varchar("dataPagamentoAsaas", { length: 10 }),
-  externalReference: varchar("externalRefAsaas", { length: 255 }),
-  createdAt: timestamp("createdAtAsaasCob").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAtAsaasCob").defaultNow().onUpdateNow().notNull(),
-});
+export const asaasCobrancas = mysqlTable(
+  "asaas_cobrancas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAsaasCob").notNull(),
+    contatoId: int("contatoIdAsaasCob"),
+    asaasPaymentId: varchar("asaasPaymentId", { length: 64 }).notNull(),
+    asaasCustomerId: varchar("asaasCustomerIdCob", { length: 64 }).notNull(),
+    valor: varchar("valorAsaas", { length: 20 }).notNull(),
+    valorLiquido: varchar("valorLiquidoAsaas", { length: 20 }),
+    vencimento: varchar("vencimentoAsaas", { length: 10 }).notNull(),
+    formaPagamento: mysqlEnum("formaPagAsaas", ["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]).notNull(),
+    status: varchar("statusAsaasCob", { length: 64 }).notNull(),
+    descricao: varchar("descricaoAsaas", { length: 512 }),
+    invoiceUrl: text("invoiceUrlAsaas"),
+    bankSlipUrl: text("bankSlipUrlAsaas"),
+    pixQrCodePayload: text("pixQrCodePayload"),
+    dataPagamento: varchar("dataPagamentoAsaas", { length: 10 }),
+    externalReference: varchar("externalRefAsaas", { length: 255 }),
+    createdAt: timestamp("createdAtAsaasCob").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtAsaasCob").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    // Retry do Asaas (rede/timeout) pode reenviar o mesmo PAYMENT_CREATED.
+    // Garante no banco que uma cobrança só existe uma vez por escritório —
+    // o handler usa INSERT ... ON DUPLICATE KEY UPDATE e vira idempotente.
+    uqPayment: uniqueIndex("asaas_cob_escr_payment_uq").on(
+      t.escritorioId,
+      t.asaasPaymentId,
+    ),
+  }),
+);
 
 export type AsaasCobranca = typeof asaasCobrancas.$inferSelect;
 export type InsertAsaasCobranca = typeof asaasCobrancas.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ASAAS WEBHOOK — EVENTOS JÁ PROCESSADOS (idempotência do SmartFlow)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Registro de eventos do webhook Asaas já processados. Evita que retries do
+ * Asaas disparem SmartFlow (WhatsApp/e-mail de confirmação) em duplicata.
+ *
+ * Chave única (escritorio + paymentId + eventType): um mesmo payment pode
+ * legitimamente receber eventos distintos (PAYMENT_RECEIVED, PAYMENT_OVERDUE,
+ * etc.), mas cada combinação processa uma única vez.
+ */
+export const asaasWebhookEventos = mysqlTable(
+  "asaas_webhook_eventos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdWhEv").notNull(),
+    asaasPaymentId: varchar("asaasPaymentIdWhEv", { length: 64 }).notNull(),
+    eventType: varchar("eventTypeWhEv", { length: 64 }).notNull(),
+    processedAt: timestamp("processedAtWhEv").defaultNow().notNull(),
+  },
+  (t) => ({
+    uqEvento: uniqueIndex("asaas_wh_ev_uq").on(
+      t.escritorioId,
+      t.asaasPaymentId,
+      t.eventType,
+    ),
+  }),
+);
+
+export type AsaasWebhookEvento = typeof asaasWebhookEventos.$inferSelect;
+export type InsertAsaasWebhookEvento = typeof asaasWebhookEventos.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TEMPLATES DE MENSAGEM — Respostas rapidas por escritorio

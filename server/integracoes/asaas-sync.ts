@@ -128,21 +128,43 @@ export async function syncCobrancasDeCliente(
           stats.atualizadas++;
         }
       } else {
-        await db.insert(asaasCobrancas).values({
-          escritorioId,
-          contatoId,
-          asaasPaymentId: cob.id,
-          asaasCustomerId,
-          valor: cob.value.toString(),
-          valorLiquido: cob.netValue?.toString() || null,
-          vencimento: cob.dueDate,
-          formaPagamento: (cob.billingType as any) || "UNDEFINED",
-          status: cob.status,
-          descricao: cob.description || null,
-          invoiceUrl: cob.invoiceUrl,
-          bankSlipUrl: cob.bankSlipUrl || null,
-          dataPagamento: cob.paymentDate || null,
-        });
+        // Upsert protege contra race com webhook concorrente: entre o SELECT
+        // acima e este INSERT, o webhook pode ter criado a mesma linha (a
+        // constraint UNIQUE(escritorioId, asaasPaymentId) impede duplicata).
+        // Em caso de duplicata já escrita, atualizamos os campos para refletir
+        // o snapshot atual do Asaas — é mais recente que o do webhook.
+        await db
+          .insert(asaasCobrancas)
+          .values({
+            escritorioId,
+            contatoId,
+            asaasPaymentId: cob.id,
+            asaasCustomerId,
+            valor: cob.value.toString(),
+            valorLiquido: cob.netValue?.toString() || null,
+            vencimento: cob.dueDate,
+            formaPagamento: (cob.billingType as any) || "UNDEFINED",
+            status: cob.status,
+            descricao: cob.description || null,
+            invoiceUrl: cob.invoiceUrl,
+            bankSlipUrl: cob.bankSlipUrl || null,
+            dataPagamento: cob.paymentDate || null,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              contatoId,
+              asaasCustomerId,
+              status: cob.status,
+              valor: cob.value.toString(),
+              valorLiquido: cob.netValue?.toString() || null,
+              vencimento: cob.dueDate,
+              formaPagamento: (cob.billingType as any) || "UNDEFINED",
+              descricao: cob.description || null,
+              invoiceUrl: cob.invoiceUrl,
+              bankSlipUrl: cob.bankSlipUrl || null,
+              dataPagamento: cob.paymentDate || null,
+            },
+          });
         stats.novas++;
       }
     }
