@@ -101,7 +101,7 @@ function decryptApiKey(encrypted: string, iv: string, tag: string): string {
  *      - Se tem os dois, prioriza pelo provider do agente
  *   3. Key admin global (fallback)
  */
-async function resolverAPIKey(
+export async function resolverAPIKey(
   escritorioId: number,
   agenteAtual: any,
   providerPreferido?: string,
@@ -193,10 +193,41 @@ async function resolverAPIKey(
   return null;
 }
 
-// Compat: manter resolverOpenAIKey para código legado
-async function resolverOpenAIKey(escritorioId: number, agenteAtual: any): Promise<string | null> {
-  const result = await resolverAPIKey(escritorioId, agenteAtual);
-  return result?.key || null;
+/** Detecta o provider preferido pelo nome do modelo */
+export function providerDoModelo(modelo: string | null | undefined): "openai" | "anthropic" {
+  const m = (modelo || "").toLowerCase();
+  if (m.startsWith("claude") || m.includes("anthropic")) return "anthropic";
+  return "openai";
+}
+
+/** Monta o bloco de contexto com documentos de treinamento do agente. */
+export async function montarContextoDocumentos(
+  db: any,
+  agenteId: number,
+  escritorioId: number,
+): Promise<string> {
+  const docs = await db
+    .select()
+    .from(agenteIaDocumentos)
+    .where(
+      and(
+        eq(agenteIaDocumentos.agenteId, agenteId),
+        eq(agenteIaDocumentos.escritorioId, escritorioId),
+      ),
+    );
+  const contextos: string[] = [];
+  for (const d of docs) {
+    if (d.tipo === "texto" && d.conteudo) {
+      contextos.push(`[${d.nome}]\n${d.conteudo}`);
+    } else if (d.tipo === "link" && d.url) {
+      contextos.push(`[Link: ${d.nome}] ${d.url}`);
+    } else if (d.tipo === "arquivo") {
+      contextos.push(`[Arquivo anexado: ${d.nome}]`);
+    }
+  }
+  return contextos.length > 0
+    ? `\n\n--- CONHECIMENTO DISPONÍVEL ---\n${contextos.join("\n\n").slice(0, 8000)}`
+    : "";
 }
 
 export const agentesIaRouter = router({
@@ -645,46 +676,65 @@ export const agentesIaRouter = router({
         .limit(1);
       if (!agente) throw new Error("Agente não encontrado");
 
-      const apiKey = await resolverOpenAIKey(esc.escritorio.id, agente);
-      if (!apiKey) {
+      const providerPreferido = providerDoModelo(agente.modelo);
+      const resolved = await resolverAPIKey(esc.escritorio.id, agente, providerPreferido);
+      if (!resolved) {
         throw new Error(
-          "Nenhuma API key do OpenAI disponível. Adicione uma key no agente ou peça ao admin configurar a integração OpenAI.",
+          providerPreferido === "anthropic"
+            ? "Nenhuma API key do Claude (Anthropic) disponível. Configure em Configurações → Integrações → Claude."
+            : "Nenhuma API key do OpenAI disponível. Configure em Configurações → Integrações → ChatGPT ou adicione uma key no agente.",
+        );
+      }
+      if (resolved.provider !== providerPreferido) {
+        throw new Error(
+          `O modelo "${agente.modelo}" requer ${providerPreferido === "anthropic" ? "Claude (Anthropic)" : "OpenAI"}, mas somente ${resolved.provider === "anthropic" ? "Claude" : "OpenAI"} está configurado. Configure a integração correta ou troque o modelo do agente.`,
         );
       }
 
-      // Documentos como contexto
-      const docs = await db
-        .select()
-        .from(agenteIaDocumentos)
-        .where(
-          and(
-            eq(agenteIaDocumentos.agenteId, input.agenteId),
-            eq(agenteIaDocumentos.escritorioId, esc.escritorio.id),
-          ),
-        );
-
-      const contextos: string[] = [];
-      for (const d of docs) {
-        if (d.tipo === "texto" && d.conteudo) {
-          contextos.push(`[${d.nome}]\n${d.conteudo}`);
-        } else if (d.tipo === "link" && d.url) {
-          contextos.push(`[Link: ${d.nome}] ${d.url}`);
-        } else if (d.tipo === "arquivo") {
-          contextos.push(`[Arquivo anexado: ${d.nome}]`);
-        }
-      }
-      const contextoStr =
-        contextos.length > 0
-          ? `\n\n--- CONHECIMENTO DISPONÍVEL ---\n${contextos.join("\n\n").slice(0, 8000)}`
-          : "";
-
+      const contextoStr = await montarContextoDocumentos(db, input.agenteId, esc.escritorio.id);
       const systemPrompt = agente.prompt + contextoStr;
+      const temperatura = parseFloat(agente.temperatura || "0.70");
+      const maxTokens = agente.maxTokens;
 
       try {
+        if (resolved.provider === "anthropic") {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": resolved.key,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: agente.modelo || "claude-haiku-4-5-20251001",
+              system: systemPrompt,
+              messages: [{ role: "user", content: input.pergunta }],
+              max_tokens: maxTokens,
+              temperature: temperatura,
+            }),
+            signal: AbortSignal.timeout(30000),
+          });
+
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Claude retornou ${res.status}: ${text.slice(0, 300)}`);
+          }
+
+          const data = (await res.json()) as {
+            content?: Array<{ text?: string }>;
+            usage?: { input_tokens?: number; output_tokens?: number };
+          };
+
+          return {
+            resposta: data.content?.[0]?.text?.trim() || "(sem resposta)",
+            tokensUsados: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+          };
+        }
+
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${resolved.key}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -693,8 +743,8 @@ export const agentesIaRouter = router({
               { role: "system", content: systemPrompt },
               { role: "user", content: input.pergunta },
             ],
-            temperature: parseFloat(agente.temperatura || "0.70"),
-            max_tokens: agente.maxTokens,
+            temperature: temperatura,
+            max_tokens: maxTokens,
           }),
           signal: AbortSignal.timeout(30000),
         });
@@ -715,17 +765,34 @@ export const agentesIaRouter = router({
         };
       } catch (err: any) {
         if (err.name === "AbortError" || err.name === "TimeoutError") {
-          throw new Error("OpenAI timeout — verifique a conexão");
+          throw new Error(`${resolved.provider === "anthropic" ? "Claude" : "OpenAI"} timeout — verifique a conexão`);
         }
-        throw new Error(err.message || "Falha ao chamar OpenAI");
+        throw new Error(err.message || "Falha ao chamar IA");
       }
     }),
 });
 
-export async function obterAgenteParaCanal(escritorioId: number, canalId: number) {
+export interface AgenteCanalConfig {
+  id: number;
+  nome: string;
+  prompt: string;
+  modelo: string;
+  provider: "openai" | "anthropic";
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  maxTokens: number;
+  temperatura: number;
+  /** Bloco de texto com documentos de treinamento, pronto pra concatenar no system prompt */
+  contextoDocumentos: string;
+}
+
+export async function obterAgenteParaCanal(
+  escritorioId: number,
+  canalId: number,
+): Promise<AgenteCanalConfig | null> {
   const db = await getDb();
   if (!db) return null;
-  const [agente] = await db
+  let [agente] = await db
     .select()
     .from(agentesIa)
     .where(
@@ -743,23 +810,61 @@ export async function obterAgenteParaCanal(escritorioId: number, canalId: number
       .where(and(eq(agentesIa.escritorioId, escritorioId), eq(agentesIa.ativo, true)))
       .limit(1);
     if (!global) return null;
-    return extrairConfig(global);
+    agente = global;
   }
-  return extrairConfig(agente);
+  return extrairConfig(escritorioId, agente);
 }
 
-function extrairConfig(a: any) {
-  if (!a.openaiApiKey || !a.apiKeyIv || !a.apiKeyTag) return null;
-  try {
-    return {
-      nome: a.nome,
-      prompt: a.prompt,
-      modelo: a.modelo,
-      openaiApiKey: decryptApiKey(a.openaiApiKey, a.apiKeyIv, a.apiKeyTag),
-      maxTokens: a.maxTokens || 500,
-      temperatura: parseFloat(a.temperatura || "0.70"),
-    };
-  } catch {
-    return null;
-  }
+/**
+ * Busca um agente por ID dentro do escritório e devolve a config completa
+ * (provider resolvido + API key + docs RAG), no mesmo shape usado por
+ * `obterAgenteParaCanal`. Usada pelo SmartFlow (passo `ia_responder` com
+ * `agenteId` no config).
+ */
+export async function obterAgentePorId(
+  escritorioId: number,
+  agenteId: number,
+): Promise<AgenteCanalConfig | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [agente] = await db
+    .select()
+    .from(agentesIa)
+    .where(
+      and(
+        eq(agentesIa.escritorioId, escritorioId),
+        eq(agentesIa.id, agenteId),
+        eq(agentesIa.ativo, true),
+      ),
+    )
+    .limit(1);
+  if (!agente) return null;
+  return extrairConfig(escritorioId, agente);
+}
+
+async function extrairConfig(
+  escritorioId: number,
+  a: any,
+): Promise<AgenteCanalConfig | null> {
+  const providerPreferido = providerDoModelo(a.modelo);
+  const resolved = await resolverAPIKey(escritorioId, a, providerPreferido);
+  if (!resolved) return null;
+
+  const db = await getDb();
+  const contextoDocumentos = db
+    ? await montarContextoDocumentos(db, a.id, escritorioId)
+    : "";
+
+  return {
+    id: a.id,
+    nome: a.nome,
+    prompt: a.prompt,
+    modelo: a.modelo,
+    provider: resolved.provider,
+    openaiApiKey: resolved.provider === "openai" ? resolved.key : undefined,
+    anthropicApiKey: resolved.provider === "anthropic" ? resolved.key : undefined,
+    maxTokens: a.maxTokens || 500,
+    temperatura: parseFloat(a.temperatura || "0.70"),
+    contextoDocumentos,
+  };
 }

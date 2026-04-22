@@ -249,10 +249,12 @@ function AgenteFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o-mini">gpt-4o-mini (barato)</SelectItem>
-                  <SelectItem value="gpt-4o">gpt-4o (avançado)</SelectItem>
-                  <SelectItem value="gpt-4-turbo">gpt-4-turbo</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo (legado)</SelectItem>
+                  <SelectItem value="gpt-4o-mini">gpt-4o-mini (OpenAI — barato)</SelectItem>
+                  <SelectItem value="gpt-4o">gpt-4o (OpenAI — avançado)</SelectItem>
+                  <SelectItem value="gpt-4-turbo">gpt-4-turbo (OpenAI)</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo (OpenAI — legado)</SelectItem>
+                  <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic)</SelectItem>
+                  <SelectItem value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Anthropic)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -740,16 +742,16 @@ export default function AdminAgentesIA() {
         </Button>
       </div>
 
-      {/* Aviso se OpenAI não estiver configurado */}
-      {status && !status.openaiConfigurado && (
+      {/* Aviso se nenhuma IA estiver configurada */}
+      {status && !status.openaiConfigurado && !status.anthropicConfigurado && (
         <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/10">
           <CardContent className="pt-6 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-foreground">OpenAI não configurado</p>
+              <p className="font-semibold text-foreground">Nenhuma IA configurada</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Você pode criar agentes, mas eles só funcionarão quando você configurar
-                a API key do OpenAI em{" "}
+                Você pode criar agentes, mas eles só funcionarão quando configurar OpenAI ou
+                Anthropic (Claude) em{" "}
                 <a href="/admin/integrations" className="underline text-foreground">
                   /admin/integrations
                 </a>
@@ -760,12 +762,16 @@ export default function AdminAgentesIA() {
         </Card>
       )}
 
-      {status && status.openaiConfigurado && (
+      {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
         <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10">
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <p className="text-sm text-muted-foreground">
-              OpenAI conectado — agentes podem ser testados e usados.
+              {status.openaiConfigurado && status.anthropicConfigurado
+                ? "OpenAI + Claude conectados — agentes GPT e Claude podem ser usados."
+                : status.openaiConfigurado
+                  ? "OpenAI conectado — agentes GPT podem ser testados. Para usar Claude, configure Anthropic."
+                  : "Claude conectado — agentes Claude podem ser testados. Para usar GPT, configure OpenAI."}
             </p>
           </CardContent>
         </Card>

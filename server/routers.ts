@@ -38,6 +38,7 @@ import { calcomRouter } from "./integracoes/router-calcom";
 import { whatsappRouter } from "./integracoes/router-whatsapp";
 import { twilioRouter } from "./integracoes/router-twilio";
 import { agentesIaRouter } from "./integracoes/router-agentes-ia";
+import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { juditOperacoesRouter } from "./integracoes/router-judit-operacoes";
 import { juditUsuarioRouter } from "./integracoes/router-judit-usuario";
@@ -89,6 +90,7 @@ export const appRouter = router({
   whatsapp: whatsappRouter,
   twilio: twilioRouter,
   agentesIa: agentesIaRouter,
+  agenteChat: agenteChatRouter,
   clientes: clientesRouter,
   clienteProcessos: clienteProcessosRouter,
   relatorios: relatoriosRouter,

@@ -365,4 +365,20 @@ export function iniciarJobs() {
 
   // A cada 6 horas: cobrar monitoramentos mensais da Judit
   setInterval(() => cobrarMonitoramentosMensais(), 6 * 60 * 60 * 1000);
+
+  // SmartFlow scheduler — retoma execuções pausadas no passo "esperar"
+  import("../smartflow/scheduler")
+    .then(({ iniciarSchedulerSmartFlow }) => iniciarSchedulerSmartFlow())
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow scheduler"));
+
+  // SmartFlow cobranças scheduler — cron diário p/ pagamento_vencido e
+  // pagamento_proximo_vencimento
+  import("../smartflow/cobrancas-scheduler")
+    .then(({ iniciarCobrancasSchedulerSmartFlow }) => iniciarCobrancasSchedulerSmartFlow())
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow cobranças scheduler"));
+
+  // SmartFlow lembretes Cal.com — cron de 15min p/ agendamento_lembrete
+  import("../smartflow/calcom-lembretes-scheduler")
+    .then(({ iniciarCalcomLembretesScheduler }) => iniciarCalcomLembretesScheduler())
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar SmartFlow lembretes Cal.com"));
 }

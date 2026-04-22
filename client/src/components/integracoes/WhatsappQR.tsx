@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   MessageCircle, Loader2, CheckCircle, XCircle, Wifi, WifiOff,
-  RefreshCw, Power, Smartphone, Clock, AlertTriangle, QrCode,
+  RefreshCw, Power, Smartphone, Clock, AlertTriangle, QrCode, MessageSquareReply, Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -294,7 +296,106 @@ export default function WhatsappQR({ canalId, canalNome, statusInicial }: Whatsa
           </CardContent>
         </Card>
       )}
+
+      {/* Auto-reply fixo — texto enviado quando nenhum cenário do SmartFlow
+          bate com a mensagem recebida. Sem IA automática fora do fluxo. */}
+      <AutoReplyCard canalId={canalId} />
     </div>
+  );
+}
+
+// ─── Auto-reply (fallback sem SmartFlow) ─────────────────────────────────────
+
+const AUTOREPLY_MAX = 500;
+
+function AutoReplyCard({ canalId }: { canalId: number }) {
+  const [texto, setTexto] = useState("");
+  const [carregado, setCarregado] = useState(false);
+
+  const query = trpc.configuracoes.obterAutoReply.useQuery({ canalId });
+  const mutation = trpc.configuracoes.atualizarAutoReply.useMutation({
+    onSuccess: () => {
+      toast.success("Resposta padrão salva");
+      query.refetch();
+    },
+    onError: (err) => {
+      toast.error("Não foi possível salvar", { description: err.message });
+    },
+  });
+
+  // Carrega o valor inicial quando a query resolve
+  useEffect(() => {
+    if (query.data && !carregado) {
+      setTexto(query.data.texto ?? "");
+      setCarregado(true);
+    }
+  }, [query.data, carregado]);
+
+  const valorOriginal = query.data?.texto ?? "";
+  const dirty = texto !== valorOriginal;
+
+  const handleSalvar = () => {
+    const limpo = texto.trim();
+    mutation.mutate({ canalId, texto: limpo ? limpo : null });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <MessageSquareReply className="h-4 w-4 text-emerald-600" />
+          Resposta padrão (fallback)
+        </CardTitle>
+        <CardDescription className="text-xs">
+          Enviada quando o SmartFlow não tem cenário pra responder a mensagem.
+          Deixe em branco pra não enviar nada (operador atende manual pelo Atendimento).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`autoreply-${canalId}`} className="text-xs">
+            Mensagem
+          </Label>
+          <Textarea
+            id={`autoreply-${canalId}`}
+            value={texto}
+            onChange={(e) => setTexto(e.target.value.slice(0, AUTOREPLY_MAX))}
+            placeholder="Ex: Olá! Recebemos sua mensagem. Em breve um de nossos atendentes vai responder."
+            rows={4}
+            disabled={query.isLoading || mutation.isPending}
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>Máx. {AUTOREPLY_MAX} caracteres</span>
+            <span>{texto.length}/{AUTOREPLY_MAX}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={handleSalvar}
+            disabled={!dirty || mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-3 w-3 mr-1" />
+            )}
+            Salvar
+          </Button>
+          {dirty && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTexto(valorOriginal)}
+              disabled={mutation.isPending}
+            >
+              Descartar
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

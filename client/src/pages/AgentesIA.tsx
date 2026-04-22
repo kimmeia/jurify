@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
   Send, Sparkles, ExternalLink, BrainCircuit, Play, KeyRound, CheckCircle2,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -849,6 +851,19 @@ export default function AgentesIA() {
                 </div>
 
                 <div className="flex items-center gap-1 pt-1">
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="default"
+                    className="flex-1 text-[10px] h-7 bg-violet-600 hover:bg-violet-700"
+                    disabled={!a.ativo}
+                    title={a.ativo ? "Abrir chat" : "Ative o agente para conversar"}
+                  >
+                    <Link href={`/agentes-ia/${a.id}/chat`}>
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Conversar
+                    </Link>
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"

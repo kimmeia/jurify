@@ -13,6 +13,42 @@ import { createLogger } from "../_core/logger";
 const log = createLogger("smartflow-executores");
 
 /**
+ * Resolve o client Cal.com para um escritório — lê o canal com `tipo=calcom`,
+ * descriptografa config e devolve um `CalcomClient` pronto. Retorna `null`
+ * se o escritório não tem canal configurado.
+ */
+export async function obterCalcomClient(escritorioId: number, defaultDuration = 30) {
+  const { getDb } = await import("../db");
+  const { canaisIntegrados } = await import("../../drizzle/schema");
+  const { eq, and, or: orOp, like } = await import("drizzle-orm");
+  const { decryptConfig } = await import("../escritorio/crypto-utils");
+  const db = await getDb();
+  if (!db) return null;
+
+  const [canal] = await db
+    .select()
+    .from(canaisIntegrados)
+    .where(
+      and(
+        eq(canaisIntegrados.escritorioId, escritorioId),
+        orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%")),
+      ),
+    )
+    .limit(1);
+
+  if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) return null;
+  const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+  if (!cfg?.apiKey) return null;
+
+  const { CalcomClient } = await import("../integracoes/calcom-client");
+  return new CalcomClient({
+    apiKey: cfg.apiKey,
+    baseUrl: cfg.baseUrl || "https://api.cal.com/v2",
+    defaultDuration,
+  });
+}
+
+/**
  * Cria executores reais para um escritório específico.
  */
 export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
@@ -63,25 +99,57 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       throw new Error("Nenhuma IA configurada. Configure em Integrações → ChatGPT ou Claude.");
     },
 
+    async executarAgente(agenteId: number, mensagem: string): Promise<string> {
+      const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
+      const cfg = await obterAgentePorId(escritorioId, agenteId);
+      if (!cfg) {
+        throw new Error(`Agente ${agenteId} não encontrado, inativo ou sem API key configurada.`);
+      }
+
+      // Concatena prompt do agente + bloco de docs RAG já formatado.
+      const systemPrompt = [cfg.prompt, cfg.contextoDocumentos].filter(Boolean).join("\n\n");
+
+      if (cfg.provider === "anthropic") {
+        const { gerarRespostaAnthropic } = await import("../integracoes/chatbot-openai");
+        const r = await gerarRespostaAnthropic(
+          cfg.anthropicApiKey!,
+          cfg.modelo,
+          systemPrompt,
+          [],
+          mensagem,
+          cfg.maxTokens,
+          cfg.temperatura,
+        );
+        if (r.erro) throw new Error(`Agente Anthropic: ${r.erro}`);
+        return r.resposta || "";
+      }
+
+      // OpenAI
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cfg.openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: cfg.modelo || "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: mensagem },
+          ],
+          max_tokens: cfg.maxTokens,
+          temperature: cfg.temperatura,
+        }),
+      });
+      if (!res.ok) throw new Error(`Agente OpenAI: ${res.status}`);
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || "";
+    },
+
     async buscarHorarios(duracao: number): Promise<string[]> {
       try {
-        const { getDb } = await import("../db");
-        const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and, or: orOp, like } = await import("drizzle-orm");
-        const { decryptConfig } = await import("../escritorio/crypto-utils");
-        const db = await getDb();
-        if (!db) return [];
-
-        const [canal] = await db.select().from(canaisIntegrados)
-          .where(and(eq(canaisIntegrados.escritorioId, escritorioId), orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%"))))
-          .limit(1);
-
-        if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) return [];
-        const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-        if (!cfg?.apiKey) return [];
-
-        const { CalcomClient } = await import("../integracoes/calcom-client");
-        const client = new CalcomClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl || "https://api.cal.com/v2", defaultDuration: duracao });
+        const client = await obterCalcomClient(escritorioId, duracao);
+        if (!client) return [];
         // Busca event types primeiro pra pegar o ID
         const eventTypes = await client.listarEventTypes();
         if (eventTypes.length === 0) return [];
@@ -104,25 +172,9 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
     async criarAgendamento(horario: string, nome: string, email: string): Promise<string> {
       try {
-        const { getDb } = await import("../db");
-        const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and, or: orOp, like } = await import("drizzle-orm");
-        const { decryptConfig } = await import("../escritorio/crypto-utils");
-        const db = await getDb();
-        if (!db) throw new Error("DB indisponível");
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) throw new Error("Cal.com não configurado");
 
-        const [canal] = await db.select().from(canaisIntegrados)
-          .where(and(eq(canaisIntegrados.escritorioId, escritorioId), orOp(eq(canaisIntegrados.tipo, "calcom"), like(canaisIntegrados.nome, "%Cal.com%"))))
-          .limit(1);
-
-        if (!canal?.configEncrypted || !canal.configIv || !canal.configTag) throw new Error("Cal.com não configurado");
-        const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-        if (!cfg?.apiKey) throw new Error("API Key Cal.com não encontrada");
-
-        const { CalcomClient } = await import("../integracoes/calcom-client");
-        const client = new CalcomClient({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl || "https://api.cal.com/v2", defaultDuration: 30 });
-
-        // Busca event types pra pegar o ID
         const eventTypes = await client.listarEventTypes();
         if (eventTypes.length === 0) throw new Error("Nenhum tipo de evento configurado no Cal.com");
 
@@ -139,6 +191,56 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao criar agendamento Cal.com");
         throw err;
+      }
+    },
+
+    async listarBookings(params) {
+      try {
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) return [];
+        const bookings = await client.listarBookings({ status: params?.status || "upcoming" });
+        return bookings.map((b) => ({
+          id: b.id,
+          titulo: b.title,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          status: b.status,
+          attendeeNome: b.attendees?.[0]?.name,
+          attendeeEmail: b.attendees?.[0]?.email,
+        }));
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao listar bookings Cal.com");
+        return [];
+      }
+    },
+
+    async cancelarBooking(bookingId, motivo) {
+      try {
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) return false;
+        const id = Number(bookingId);
+        if (Number.isNaN(id)) throw new Error(`bookingId inválido: ${bookingId}`);
+        const ok = await client.cancelarBooking(id, motivo);
+        if (ok) log.info({ bookingId: id }, "SmartFlow: booking cancelado no Cal.com");
+        return ok;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao cancelar booking Cal.com");
+        return false;
+      }
+    },
+
+    async reagendarBooking(bookingId, novoHorario, motivo) {
+      try {
+        const client = await obterCalcomClient(escritorioId);
+        if (!client) return false;
+        const id = Number(bookingId);
+        if (Number.isNaN(id)) throw new Error(`bookingId inválido: ${bookingId}`);
+        const res = await client.reagendarBooking(id, { start: novoHorario, reason: motivo });
+        if (res) log.info({ bookingId: id, novoHorario }, "SmartFlow: booking reagendado no Cal.com");
+        return !!res;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao reagendar booking Cal.com");
+        return false;
       }
     },
 
@@ -240,6 +342,72 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       });
       if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
       return res.json();
+    },
+
+    async buscarCobrancasAbertas(params): Promise<string> {
+      try {
+        const { getDb } = await import("../db");
+        const { asaasCobrancas, asaasClientes } = await import("../../drizzle/schema");
+        const { eq, and, inArray } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return "";
+
+        // Resolve customerId se só veio contatoId.
+        let customerId = params.clienteAsaasId;
+        if (!customerId && params.contatoId) {
+          const [vinc] = await db
+            .select({ asaasCustomerId: asaasClientes.asaasCustomerId })
+            .from(asaasClientes)
+            .where(
+              and(
+                eq(asaasClientes.escritorioId, escritorioId),
+                eq(asaasClientes.contatoId, params.contatoId),
+              ),
+            )
+            .limit(1);
+          customerId = vinc?.asaasCustomerId;
+        }
+        if (!customerId) return "";
+
+        const cobrancas = await db
+          .select()
+          .from(asaasCobrancas)
+          .where(
+            and(
+              eq(asaasCobrancas.escritorioId, escritorioId),
+              eq(asaasCobrancas.asaasCustomerId, customerId),
+              inArray(asaasCobrancas.status, ["PENDING", "OVERDUE"]),
+            ),
+          );
+
+        if (cobrancas.length === 0) return "Não há cobranças em aberto.";
+
+        // Formata cada linha: "• R$ 1.234,56 — vence 15/04 — <link>"
+        return cobrancas
+          .map((c) => {
+            const valorNum = Number(c.valor || 0);
+            const valorFmt = valorNum.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            });
+            let venceTxt = "";
+            if (c.vencimento) {
+              const d = new Date(`${c.vencimento}T00:00:00`);
+              if (!Number.isNaN(d.getTime())) {
+                venceTxt = `vence ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+              }
+            }
+            const link = c.invoiceUrl || c.bankSlipUrl || "";
+            const partes = [`• ${valorFmt}`];
+            if (venceTxt) partes.push(venceTxt);
+            if (link) partes.push(link);
+            return partes.join(" — ");
+          })
+          .join("\n");
+      } catch (err: any) {
+        log.warn({ err: err.message }, "SmartFlow: erro ao buscar cobranças abertas");
+        return "";
+      }
     },
   };
 }

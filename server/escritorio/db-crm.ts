@@ -499,6 +499,7 @@ const TIPOS_MSG_VALIDOS = new Set<TipoMsg>([
 export async function enviarMensagem(dados: {
   conversaId: number; remetenteId?: number; direcao: string;
   tipo?: string; conteudo: string; mediaUrl?: string;
+  status?: "pendente" | "enviada" | "entregue" | "lida" | "falha";
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -513,7 +514,7 @@ export async function enviarMensagem(dados: {
     tipo: tipoValido,
     conteudo: dados.conteudo,
     mediaUrl: dados.mediaUrl || null,
-    status: "enviada",
+    status: dados.status ?? "enviada",
   });
 
   // Atualizar preview da conversa
@@ -523,6 +524,22 @@ export async function enviarMensagem(dados: {
   }).where(eq(conversas.id, dados.conversaId));
 
   return (result as { insertId: number }).insertId;
+}
+
+/**
+ * Atualiza o status de uma mensagem já persistida. Usado pelo fluxo de
+ * envio automático (chatbot/SmartFlow) pra sinalizar sucesso ou falha
+ * na entrega real via WhatsApp — separado do "salvamento no banco".
+ *
+ * Valores válidos seguem o enum `statusMsg` do schema.
+ */
+export async function atualizarStatusMensagem(
+  id: number,
+  status: "pendente" | "enviada" | "entregue" | "lida" | "falha",
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(mensagens).set({ status }).where(eq(mensagens.id, id));
 }
 
 export async function listarMensagens(conversaId: number, limite = 50) {
