@@ -46,6 +46,12 @@ export interface AsaasCustomerInput {
   addressNumber?: string;
   province?: string;
   externalReference?: string;
+  /**
+   * Agrupador visual no painel Asaas (https://www.asaas.com/api/v3/customers).
+   * Usado para refletir o atendente responsável do cliente — facilita filtros
+   * e recortes no relatório do Asaas.
+   */
+  groupName?: string;
 }
 
 export type AsaasBillingType = "BOLETO" | "CREDIT_CARD" | "PIX" | "UNDEFINED";
