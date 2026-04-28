@@ -34,6 +34,7 @@ import { agendaRouter } from "./escritorio/router-agenda";
 import { templatesRouter } from "./escritorio/router-templates";
 import { financeiroRouter } from "./escritorio/router-financeiro";
 import { comissoesRouter } from "./escritorio/router-comissoes";
+import { despesasRouter } from "./escritorio/router-despesas";
 
 // Integrações
 import { calcomRouter } from "./integracoes/router-calcom";
@@ -104,6 +105,7 @@ export const appRouter = router({
   templates: templatesRouter,
   financeiro: financeiroRouter,
   comissoes: comissoesRouter,
+  despesas: despesasRouter,
 
   // Integrações específicas
   whatsappCoex: whatsappCoexRouter, // legado — mantido para retrocompatibilidade
