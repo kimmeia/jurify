@@ -8,6 +8,7 @@ import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
 import { excluirClienteEmCascata } from "./excluir-cliente";
+import { reconciliarCobrancasOrfas } from "./db-financeiro";
 
 export const clientesRouter = router({
   listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional() }).optional()).query(async ({ ctx, input }) => {
@@ -61,7 +62,7 @@ export const clientesRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), atendenteResponsavelId: z.number().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -111,8 +112,38 @@ export const clientesRouter = router({
       if (d.responsavelId !== undefined && perm.verTodos) {
         u.responsavelId = d.responsavelId;
       }
+      // Atendente responsável pela comissão: mesmo gating (gestão).
+      // Quando muda, dispara reconciliação das cobranças órfãs deste cliente
+      // para que recebam o atendente novo automaticamente.
+      let atendenteMudou = false;
+      let atendenteAlvo: number | null | undefined;
+      if (d.atendenteResponsavelId !== undefined && perm.verTodos) {
+        const [antes] = await db.select({ atual: contatos.atendenteResponsavelId })
+          .from(contatos)
+          .where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
+        const valorAtual = antes?.atual ?? null;
+        atendenteMudou = valorAtual !== (d.atendenteResponsavelId ?? null);
+        atendenteAlvo = d.atendenteResponsavelId;
+        u.atendenteResponsavelId = d.atendenteResponsavelId;
+      }
       await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)));
-      return { success: true };
+
+      // Reconciliação automática: se o atendente responsável mudou, propaga
+      // pro histórico de cobranças deste cliente que ainda estão sem atendente.
+      // Cobranças com atendente já atribuído (manual ou via cascata) são
+      // preservadas — a função reconciliarCobrancasOrfas só toca em órfãs.
+      let reconciliadas = 0;
+      if (atendenteMudou && atendenteAlvo !== null && atendenteAlvo !== undefined) {
+        try {
+          const r = await reconciliarCobrancasOrfas(perm.escritorioId, id);
+          reconciliadas = r.atribuidas;
+        } catch (err) {
+          // Não derruba o update do contato se a reconciliação falhar.
+          // O usuário ainda pode disparar manualmente em "Atribuir cobranças".
+        }
+      }
+      return { success: true, reconciliadas };
     }),
 
   excluir: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {

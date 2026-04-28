@@ -35,6 +35,10 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   const [responsavelId, setResponsavelId] = useState<string>(
     cliente.responsavelId ? String(cliente.responsavelId) : "",
   );
+  // atendenteResponsavelId define quem recebe comissão pelas cobranças deste cliente.
+  const [atendenteResponsavelId, setAtendenteResponsavelId] = useState<string>(
+    cliente.atendenteResponsavelId ? String(cliente.atendenteResponsavelId) : "",
+  );
 
   // Lista de colaboradores ativos pra mostrar no dropdown.
   // Backend só permite reatribuir pra dono/gestor; pra outros, a query
@@ -55,7 +59,17 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   })();
 
   const mut = trpc.clientes.atualizar.useMutation({
-    onSuccess: () => { toast.success("Atualizado!"); onSuccess(); },
+    onSuccess: (data: any) => {
+      const reconc = data?.reconciliadas ?? 0;
+      if (reconc > 0) {
+        toast.success("Atualizado!", {
+          description: `${reconc} cobrança(s) deste cliente foram atribuídas ao atendente.`,
+        });
+      } else {
+        toast.success("Atualizado!");
+      }
+      onSuccess();
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -95,6 +109,30 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
           </p>
         </div>
 
+        {/* Atendente para comissão (financeiro — diferente do responsável de atendimento) */}
+        <div className="space-y-1.5">
+          <Label className="text-xs">Atendente para comissão</Label>
+          {podeReatribuir ? (
+            <select
+              value={atendenteResponsavelId}
+              onChange={(e) => setAtendenteResponsavelId(e.target.value)}
+              className="w-full h-9 px-3 text-sm rounded-md border bg-background"
+            >
+              <option value="">— Sem atendente definido —</option>
+              {colaboradores.filter((c) => c.ativo && c.cargo !== "estagiario").map((c) => (
+                <option key={c.id} value={c.id}>{c.userName || c.userEmail} ({c.cargo})</option>
+              ))}
+            </select>
+          ) : (
+            <div className="h-9 px-3 flex items-center text-sm rounded-md border bg-muted/30 text-muted-foreground">
+              {cliente.atendenteResponsavelId ? `Colaborador #${cliente.atendenteResponsavelId}` : "Sem atendente definido"}
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            Quem recebe comissão pelas cobranças deste cliente. Ao definir/alterar, cobranças deste cliente que ainda estavam sem atendente são atribuídas automaticamente.
+          </p>
+        </div>
+
         <div className="space-y-1.5"><Label className="text-xs">Tags</Label><Input value={tags} onChange={e => setTags(e.target.value)} placeholder="VIP, Trabalhista" /></div>
         <div className="space-y-1.5"><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} /></div>
         <Button size="sm" onClick={() => mut.mutate({
@@ -105,7 +143,12 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
           // pra atendentes não tenta enviar campo). Empty string vira null
           // (sem responsável) — backend ignora se não tem verTodos.
           ...(podeReatribuir
-            ? { responsavelId: responsavelId ? Number(responsavelId) : null }
+            ? {
+                responsavelId: responsavelId ? Number(responsavelId) : null,
+                atendenteResponsavelId: atendenteResponsavelId
+                  ? Number(atendenteResponsavelId)
+                  : null,
+              }
             : {}),
         })} disabled={!nome || mut.isPending}>
           {mut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Salvar
