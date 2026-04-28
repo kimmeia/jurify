@@ -3,11 +3,14 @@
  * Despesas e comissões fechadas têm helpers próprios em fases seguintes.
  */
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
+  asaasCobrancas,
   categoriasCobranca,
   categoriasDespesa,
+  colaboradores,
+  contatos,
   regraComissao,
 } from "../../drizzle/schema";
 
@@ -127,6 +130,152 @@ export async function salvarRegraComissao(
           aliquotaPercentRegraCom = VALUES(aliquotaPercentRegraCom),
           valorMinimoCobRegraCom = VALUES(valorMinimoCobRegraCom)`,
   );
+}
+
+// ─── Cascata de atribuição de atendente em cobranças sincronizadas ───────────
+
+const REGEX_ATENDENTE_REF = /^atendente:(\d+)$/;
+
+/**
+ * Aplica a cascata de inferência para descobrir qual atendente recebe a
+ * comissão de uma cobrança que veio do Asaas (webhook ou sync órfãs):
+ *
+ *   1. externalReference no padrão "atendente:N" — confere que N é colaborador
+ *      ativo do escritório e usa.
+ *   2. Senão, busca atendenteResponsavelId no contato vinculado.
+ *   3. Senão, retorna null (cobrança fica em "sem atribuição" até bulk-edit).
+ *
+ * Idempotente. Não tenta inferir categoria — categorização sempre exige ação
+ * humana, pois o Asaas não tem o conceito de categoria de cobrança.
+ */
+export async function inferirAtendentePorCobranca(
+  escritorioId: number,
+  externalReference: string | null,
+  contatoId: number | null,
+): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  if (externalReference) {
+    const match = REGEX_ATENDENTE_REF.exec(externalReference);
+    if (match) {
+      const candidato = parseInt(match[1], 10);
+      if (Number.isFinite(candidato)) {
+        const [linha] = await db
+          .select({ id: colaboradores.id })
+          .from(colaboradores)
+          .where(
+            and(
+              eq(colaboradores.id, candidato),
+              eq(colaboradores.escritorioId, escritorioId),
+              eq(colaboradores.ativo, true),
+            ),
+          )
+          .limit(1);
+        if (linha) return linha.id;
+      }
+    }
+  }
+
+  if (contatoId !== null) {
+    const [c] = await db
+      .select({ atendenteResponsavelId: contatos.atendenteResponsavelId })
+      .from(contatos)
+      .where(eq(contatos.id, contatoId))
+      .limit(1);
+    if (c?.atendenteResponsavelId) return c.atendenteResponsavelId;
+  }
+
+  return null;
+}
+
+/**
+ * Re-aplica a cascata em todas as cobranças do escritório que ainda estão
+ * órfãs (atendenteId NULL). Filtro opcional por contatoId é usado como
+ * trigger pontual quando o atendente responsável de um cliente muda.
+ *
+ * Cobranças que já têm atendenteId definido — manualmente ou via cascata
+ * anterior — NÃO são alteradas. Atribuição manual sempre vence.
+ */
+export async function reconciliarCobrancasOrfas(
+  escritorioId: number,
+  filtroContatoId?: number,
+): Promise<{ atribuidas: number }> {
+  const db = await getDb();
+  if (!db) return { atribuidas: 0 };
+
+  const conds = [
+    eq(asaasCobrancas.escritorioId, escritorioId),
+    isNull(asaasCobrancas.atendenteId),
+  ];
+  if (filtroContatoId !== undefined) {
+    conds.push(eq(asaasCobrancas.contatoId, filtroContatoId));
+  }
+
+  const orfas = await db
+    .select({
+      id: asaasCobrancas.id,
+      contatoId: asaasCobrancas.contatoId,
+      externalReference: asaasCobrancas.externalReference,
+    })
+    .from(asaasCobrancas)
+    .where(and(...conds));
+
+  let atribuidas = 0;
+  for (const cob of orfas) {
+    const atendenteId = await inferirAtendentePorCobranca(
+      escritorioId,
+      cob.externalReference,
+      cob.contatoId,
+    );
+    if (atendenteId !== null) {
+      await db
+        .update(asaasCobrancas)
+        .set({ atendenteId })
+        .where(eq(asaasCobrancas.id, cob.id));
+      atribuidas++;
+    }
+  }
+
+  return { atribuidas };
+}
+
+/**
+ * Atribui em massa atendente / categoria / override a um conjunto de cobranças.
+ * Campos undefined preservam o valor atual; null limpa explicitamente.
+ */
+export async function atribuirCobrancasEmMassa(
+  escritorioId: number,
+  cobrancaIds: number[],
+  dados: {
+    atendenteId?: number | null;
+    categoriaId?: number | null;
+    comissionavelOverride?: boolean | null;
+  },
+): Promise<{ atualizadas: number }> {
+  const db = await getDb();
+  if (!db) return { atualizadas: 0 };
+  if (cobrancaIds.length === 0) return { atualizadas: 0 };
+
+  const set: Record<string, unknown> = {};
+  if (dados.atendenteId !== undefined) set.atendenteId = dados.atendenteId;
+  if (dados.categoriaId !== undefined) set.categoriaId = dados.categoriaId;
+  if (dados.comissionavelOverride !== undefined) {
+    set.comissionavelOverride = dados.comissionavelOverride;
+  }
+  if (Object.keys(set).length === 0) return { atualizadas: 0 };
+
+  await db
+    .update(asaasCobrancas)
+    .set(set)
+    .where(
+      and(
+        eq(asaasCobrancas.escritorioId, escritorioId),
+        inArray(asaasCobrancas.id, cobrancaIds),
+      ),
+    );
+
+  return { atualizadas: cobrancaIds.length };
 }
 
 // ─── Seed de categorias padrão ───────────────────────────────────────────────

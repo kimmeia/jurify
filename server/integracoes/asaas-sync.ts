@@ -17,6 +17,7 @@ import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient } from "./asaas-client";
 import { createLogger } from "../_core/logger";
+import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 const log = createLogger("integracoes-asaas-sync");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -133,6 +134,11 @@ export async function syncCobrancasDeCliente(
         // constraint UNIQUE(escritorioId, asaasPaymentId) impede duplicata).
         // Em caso de duplicata já escrita, atualizamos os campos para refletir
         // o snapshot atual do Asaas — é mais recente que o do webhook.
+        const atendenteInferido = await inferirAtendentePorCobranca(
+          escritorioId,
+          cob.externalReference || null,
+          contatoId,
+        );
         await db
           .insert(asaasCobrancas)
           .values({
@@ -149,6 +155,8 @@ export async function syncCobrancasDeCliente(
             invoiceUrl: cob.invoiceUrl,
             bankSlipUrl: cob.bankSlipUrl || null,
             dataPagamento: cob.paymentDate || null,
+            externalReference: cob.externalReference || null,
+            atendenteId: atendenteInferido,
           })
           .onDuplicateKeyUpdate({
             set: {

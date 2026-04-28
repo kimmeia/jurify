@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import {
+  asaasCobrancas,
+  categoriasCobranca,
+  contatos,
+} from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import {
+  atribuirCobrancasEmMassa,
   atualizarCategoriaCobranca,
   atualizarCategoriaDespesa,
   criarCategoriaCobranca,
@@ -11,6 +19,7 @@ import {
   listarCategoriasCobranca,
   listarCategoriasDespesa,
   obterRegraComissao,
+  reconciliarCobrancasOrfas,
   salvarRegraComissao,
 } from "./db-financeiro";
 
@@ -136,5 +145,101 @@ export const financeiroRouter = router({
         input.valorMinimoCobranca,
       );
       return { success: true };
+    }),
+
+  // ─── Cobranças sincronizadas: atribuição em massa + reconciliação ──────────
+
+  /**
+   * Lista cobranças do escritório para a tela de atribuição. Suporta filtro
+   * `apenasSemAtribuicao` que limita o resultado às cobranças sem atendente
+   * OU sem categoria — o caso típico após sync do Asaas.
+   */
+  listarCobrancasParaAtribuicao: protectedProcedure
+    .input(
+      z
+        .object({
+          apenasSemAtribuicao: z.boolean().default(false),
+          limit: z.number().min(1).max(500).default(200),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const db = await getDb();
+      if (!db) return [];
+
+      const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
+      if (input?.apenasSemAtribuicao) {
+        conds.push(
+          or(
+            isNull(asaasCobrancas.atendenteId),
+            isNull(asaasCobrancas.categoriaId),
+          )!,
+        );
+      }
+
+      return db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          contatoId: asaasCobrancas.contatoId,
+          contatoNome: contatos.nome,
+          valor: asaasCobrancas.valor,
+          status: asaasCobrancas.status,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          vencimento: asaasCobrancas.vencimento,
+          descricao: asaasCobrancas.descricao,
+          atendenteId: asaasCobrancas.atendenteId,
+          categoriaId: asaasCobrancas.categoriaId,
+          categoriaNome: categoriasCobranca.nome,
+          comissionavelOverride: asaasCobrancas.comissionavelOverride,
+        })
+        .from(asaasCobrancas)
+        .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
+        .leftJoin(
+          categoriasCobranca,
+          eq(categoriasCobranca.id, asaasCobrancas.categoriaId),
+        )
+        .where(and(...conds))
+        .orderBy(desc(asaasCobrancas.createdAt))
+        .limit(input?.limit ?? 200);
+    }),
+
+  atribuirCobrancasEmMassa: protectedProcedure
+    .input(
+      z.object({
+        cobrancaIds: z.array(z.number()).min(1).max(500),
+        atendenteId: z.number().nullable().optional(),
+        categoriaId: z.number().nullable().optional(),
+        comissionavelOverride: z.boolean().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const r = await atribuirCobrancasEmMassa(
+        esc.escritorio.id,
+        input.cobrancaIds,
+        {
+          atendenteId: input.atendenteId,
+          categoriaId: input.categoriaId,
+          comissionavelOverride: input.comissionavelOverride,
+        },
+      );
+      return r;
+    }),
+
+  /**
+   * Re-roda a cascata de inferência sobre cobranças órfãs (sem atendente).
+   * Atribuições manuais nunca são sobrescritas. Útil após preencher o
+   * `atendenteResponsavelId` de um cliente que tinha cobranças passadas.
+   */
+  reconciliarCobrancasOrfas: protectedProcedure
+    .input(z.object({ contatoId: z.number().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      return reconciliarCobrancasOrfas(esc.escritorio.id, input?.contatoId);
     }),
 });

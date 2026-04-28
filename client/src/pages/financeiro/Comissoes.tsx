@@ -42,14 +42,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Calculator,
   History,
   Loader2,
   Lock,
   Receipt,
-  TrendingUp,
+  Tags,
   Users,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBRL } from "./helpers";
@@ -88,6 +98,10 @@ export function ComissoesTab() {
           <Calculator className="h-3.5 w-3.5" />
           Calcular
         </TabsTrigger>
+        <TabsTrigger value="atribuir" className="gap-1.5">
+          <Tags className="h-3.5 w-3.5" />
+          Atribuir cobranças
+        </TabsTrigger>
         <TabsTrigger value="historico" className="gap-1.5">
           <History className="h-3.5 w-3.5" />
           Histórico de fechamentos
@@ -95,6 +109,9 @@ export function ComissoesTab() {
       </TabsList>
       <TabsContent value="calcular">
         <CalcularSection />
+      </TabsContent>
+      <TabsContent value="atribuir">
+        <AtribuirSection />
       </TabsContent>
       <TabsContent value="historico">
         <HistoricoSection />
@@ -493,6 +510,312 @@ function HistoricoSection() {
         />
       )}
     </div>
+  );
+}
+
+// ─── Sub-tab: Atribuir ───────────────────────────────────────────────────────
+
+function AtribuirSection() {
+  const utils = trpc.useUtils();
+  const [apenasSemAtribuicao, setApenasSemAtribuicao] = useState(true);
+  const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
+  const [dialogAberto, setDialogAberto] = useState(false);
+
+  const { data, isLoading } = trpc.financeiro.listarCobrancasParaAtribuicao.useQuery(
+    { apenasSemAtribuicao, limit: 200 },
+  );
+  const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
+  const atendentes = useMemo(
+    () =>
+      (equipeData && "colaboradores" in equipeData
+        ? equipeData.colaboradores
+        : []
+      ).filter((c) => c.cargo !== "estagiario"),
+    [equipeData],
+  );
+  const { data: categoriasList } = trpc.financeiro.listarCategoriasCobranca.useQuery();
+  const categoriasAtivas = (categoriasList ?? []).filter((c) => c.ativo);
+
+  const reconciliarMut = trpc.financeiro.reconciliarCobrancasOrfas.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.atribuidas} cobrança(s) atribuída(s)`, {
+        description: r.atribuidas > 0 ? "Atendentes inferidos via cliente." : "Nenhuma órfã atribuível.",
+      });
+      utils.financeiro.listarCobrancasParaAtribuicao.invalidate();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  const linhas = data ?? [];
+  const todasSelecionadas =
+    linhas.length > 0 && linhas.every((l) => selecionadas.has(l.id));
+
+  function toggleTodas() {
+    if (todasSelecionadas) {
+      setSelecionadas(new Set());
+    } else {
+      setSelecionadas(new Set(linhas.map((l) => l.id)));
+    }
+  }
+
+  function toggleLinha(id: number) {
+    const next = new Set(selecionadas);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelecionadas(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={apenasSemAtribuicao}
+                onCheckedChange={(v) => setApenasSemAtribuicao(Boolean(v))}
+              />
+              Mostrar apenas cobranças sem atribuição
+            </label>
+            <div className="flex-1" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => reconciliarMut.mutate({})}
+              disabled={reconciliarMut.isPending}
+              title="Re-aplica a cascata de inferência (externalReference + atendente do cliente) sobre cobranças órfãs"
+            >
+              {reconciliarMut.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              ) : (
+                <Wand2 className="h-3.5 w-3.5 mr-2" />
+              )}
+              Reconciliar órfãs
+            </Button>
+            <Button
+              size="sm"
+              disabled={selecionadas.size === 0}
+              onClick={() => setDialogAberto(true)}
+            >
+              Atribuir selecionadas ({selecionadas.size})
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : linhas.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {apenasSemAtribuicao
+              ? "Nenhuma cobrança sem atribuição. Tudo organizado!"
+              : "Nenhuma cobrança encontrada."}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={todasSelecionadas}
+                    onCheckedChange={toggleTodas}
+                  />
+                </TableHead>
+                <TableHead className="text-xs">Cliente</TableHead>
+                <TableHead className="text-xs">Descrição</TableHead>
+                <TableHead className="text-xs">Pago em</TableHead>
+                <TableHead className="text-xs">Atendente</TableHead>
+                <TableHead className="text-xs">Categoria</TableHead>
+                <TableHead className="text-xs text-right">Valor</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {linhas.map((l) => {
+                const atendNome = atendentes.find((a) => a.id === l.atendenteId)?.userName;
+                return (
+                  <TableRow key={l.id} data-state={selecionadas.has(l.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selecionadas.has(l.id)}
+                        onCheckedChange={() => toggleLinha(l.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-xs">{l.contatoNome ?? "—"}</TableCell>
+                    <TableCell className="text-xs max-w-[220px] truncate">
+                      {l.descricao ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-xs">{formatData(l.dataPagamento)}</TableCell>
+                    <TableCell className="text-xs">
+                      {l.atendenteId ? (
+                        atendNome ?? `#${l.atendenteId}`
+                      ) : (
+                        <Badge variant="outline" className="text-amber-600 border-amber-200">
+                          sem atendente
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {l.categoriaNome ?? (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          sem categoria
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {formatBRL(Number(l.valor))}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      <AtribuirEmMassaDialog
+        open={dialogAberto}
+        onClose={() => setDialogAberto(false)}
+        cobrancaIds={[...selecionadas]}
+        atendentes={atendentes}
+        categorias={categoriasAtivas}
+        onSuccess={() => {
+          setSelecionadas(new Set());
+          setDialogAberto(false);
+          utils.financeiro.listarCobrancasParaAtribuicao.invalidate();
+        }}
+      />
+    </div>
+  );
+}
+
+function AtribuirEmMassaDialog({
+  open,
+  onClose,
+  cobrancaIds,
+  atendentes,
+  categorias,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  cobrancaIds: number[];
+  atendentes: Array<{ id: number; userName: string | null; cargo: string }>;
+  categorias: Array<{ id: number; nome: string; comissionavel: boolean }>;
+  onSuccess: () => void;
+}) {
+  const [atendente, setAtendente] = useState<string>("manter"); // manter | none | <id>
+  const [categoria, setCategoria] = useState<string>("manter");
+  const [override, setOverride] = useState<string>("manter"); // manter | padrao | sim | nao
+
+  const aplicarMut = trpc.financeiro.atribuirCobrancasEmMassa.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.atualizadas} cobrança(s) atualizada(s)`);
+      onSuccess();
+      reset();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  function reset() {
+    setAtendente("manter");
+    setCategoria("manter");
+    setOverride("manter");
+  }
+
+  function aplicar() {
+    const dados: {
+      atendenteId?: number | null;
+      categoriaId?: number | null;
+      comissionavelOverride?: boolean | null;
+    } = {};
+    if (atendente !== "manter") {
+      dados.atendenteId = atendente === "none" ? null : parseInt(atendente);
+    }
+    if (categoria !== "manter") {
+      dados.categoriaId = categoria === "none" ? null : parseInt(categoria);
+    }
+    if (override !== "manter") {
+      dados.comissionavelOverride =
+        override === "padrao" ? null : override === "sim";
+    }
+    if (Object.keys(dados).length === 0) {
+      toast.warning("Nenhum campo para alterar.");
+      return;
+    }
+    aplicarMut.mutate({ cobrancaIds, ...dados });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Atribuir em massa</DialogTitle>
+          <DialogDescription>
+            {cobrancaIds.length} cobrança(s) selecionada(s). Campos definidos
+            como "Manter" não são alterados.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label className="text-xs">Atendente</Label>
+            <Select value={atendente} onValueChange={setAtendente}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manter">Manter</SelectItem>
+                <SelectItem value="none">Limpar (sem atendente)</SelectItem>
+                {atendentes.map((a) => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.userName ?? "—"} ({a.cargo})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Categoria</Label>
+            <Select value={categoria} onValueChange={setCategoria}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manter">Manter</SelectItem>
+                <SelectItem value="none">Limpar (sem categoria)</SelectItem>
+                {categorias.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.nome}
+                    {c.comissionavel ? "" : " (não comissionável)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Conta na comissão?</Label>
+            <Select value={override} onValueChange={setOverride}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manter">Manter</SelectItem>
+                <SelectItem value="padrao">Padrão da categoria</SelectItem>
+                <SelectItem value="sim">Sim (forçar)</SelectItem>
+                <SelectItem value="nao">Não (ignorar)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={aplicar} disabled={aplicarMut.isPending}>
+            {aplicarMut.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : null}
+            Aplicar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

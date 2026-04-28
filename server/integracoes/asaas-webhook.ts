@@ -26,6 +26,7 @@ import { asaasConfig, asaasCobrancas, asaasClientes, contatos } from "../../driz
 import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
+import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
@@ -107,6 +108,15 @@ export function registerAsaasWebhook(app: Express) {
             ))
             .limit(1);
 
+          // Inferência de atendente: só usada no INSERT inicial. Em UPDATE
+          // não tocamos no atendenteId — atribuição manual via bulk-edit
+          // sempre vence retries do Asaas.
+          const atendenteInferido = await inferirAtendentePorCobranca(
+            escritorioId,
+            payment.externalReference || null,
+            vinculo?.contatoId ?? null,
+          );
+
           await db
             .insert(asaasCobrancas)
             .values({
@@ -124,6 +134,7 @@ export function registerAsaasWebhook(app: Express) {
               bankSlipUrl: payment.bankSlipUrl || null,
               dataPagamento: payment.paymentDate || null,
               externalReference: payment.externalReference || null,
+              atendenteId: atendenteInferido,
             })
             .onDuplicateKeyUpdate({
               set: {
