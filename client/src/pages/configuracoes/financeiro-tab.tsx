@@ -15,6 +15,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   DollarSign,
@@ -39,16 +46,36 @@ export function FinanceiroTab({ canEdit }: { canEdit: boolean }) {
 
 // ─── Regra global de comissão ────────────────────────────────────────────────
 
+type Modo = "flat" | "faixas";
+type BaseFaixa = "bruto" | "comissionavel";
+
+interface FaixaUI {
+  /** Vazio = "sem teto" (NULL). */
+  limiteAteText: string;
+  aliquotaText: string;
+}
+
 function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
   const utils = trpc.useUtils();
   const { data: regra, isLoading } = trpc.financeiro.obterRegraComissao.useQuery();
+  const [modo, setModo] = useState<Modo>("flat");
   const [aliquota, setAliquota] = useState("");
   const [valorMinimo, setValorMinimo] = useState("");
+  const [baseFaixa, setBaseFaixa] = useState<BaseFaixa>("comissionavel");
+  const [faixas, setFaixas] = useState<FaixaUI[]>([]);
 
   useEffect(() => {
     if (regra) {
+      setModo((regra.modo ?? "flat") as Modo);
       setAliquota(String(regra.aliquotaPercent ?? "0"));
       setValorMinimo(String(regra.valorMinimoCobranca ?? "0"));
+      setBaseFaixa((regra.baseFaixa ?? "comissionavel") as BaseFaixa);
+      setFaixas(
+        (regra.faixas ?? []).map((f) => ({
+          limiteAteText: f.limiteAte === null ? "" : String(f.limiteAte),
+          aliquotaText: String(f.aliquotaPercent),
+        })),
+      );
     }
   }, [regra]);
 
@@ -57,10 +84,22 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
       toast.success("Regra de comissão salva");
       utils.financeiro.obterRegraComissao.invalidate();
     },
-    onError: (err) => toast.error("Erro", { description: err.message }),
+    onError: (err) => toast.error("Erro ao salvar", { description: err.message }),
   });
 
-  const salvar = () => {
+  function adicionarFaixa() {
+    setFaixas([...faixas, { limiteAteText: "", aliquotaText: "" }]);
+  }
+
+  function removerFaixa(idx: number) {
+    setFaixas(faixas.filter((_, i) => i !== idx));
+  }
+
+  function atualizarFaixa(idx: number, campo: keyof FaixaUI, valor: string) {
+    setFaixas(faixas.map((f, i) => (i === idx ? { ...f, [campo]: valor } : f)));
+  }
+
+  function salvar() {
     const aliq = parseFloat(aliquota.replace(",", "."));
     const min = parseFloat(valorMinimo.replace(",", "."));
     if (isNaN(aliq) || aliq < 0 || aliq > 100) {
@@ -71,8 +110,63 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
       toast.error("Valor mínimo inválido");
       return;
     }
-    salvarMut.mutate({ aliquotaPercent: aliq, valorMinimoCobranca: min });
-  };
+
+    let faixasParsed: Array<{ limiteAte: number | null; aliquotaPercent: number }> = [];
+    if (modo === "faixas") {
+      if (faixas.length === 0) {
+        toast.error("Adicione pelo menos uma faixa", {
+          description: "Modo 'faixas' exige cadastrar a tabela.",
+        });
+        return;
+      }
+      for (let i = 0; i < faixas.length; i++) {
+        const f = faixas[i];
+        const limTrim = f.limiteAteText.trim();
+        const aliqFaixa = parseFloat(f.aliquotaText.replace(",", "."));
+        if (isNaN(aliqFaixa) || aliqFaixa < 0 || aliqFaixa > 100) {
+          toast.error(`Faixa ${i + 1}: alíquota inválida`);
+          return;
+        }
+        let lim: number | null;
+        if (limTrim === "") {
+          lim = null;
+          if (i !== faixas.length - 1) {
+            toast.error(`Faixa ${i + 1}: só a última pode ser "sem teto"`);
+            return;
+          }
+        } else {
+          lim = parseFloat(limTrim.replace(",", "."));
+          if (isNaN(lim) || lim < 0) {
+            toast.error(`Faixa ${i + 1}: limite inválido`);
+            return;
+          }
+        }
+        faixasParsed.push({ limiteAte: lim, aliquotaPercent: aliqFaixa });
+      }
+      // Coerência crescente.
+      let anterior = -1;
+      for (let i = 0; i < faixasParsed.length; i++) {
+        const lim = faixasParsed[i].limiteAte;
+        if (lim !== null) {
+          if (lim <= anterior) {
+            toast.error("Limites devem ser crescentes", {
+              description: `Faixa ${i + 1} (R$ ${lim}) não é maior que a anterior.`,
+            });
+            return;
+          }
+          anterior = lim;
+        }
+      }
+    }
+
+    salvarMut.mutate({
+      modo,
+      aliquotaPercent: aliq,
+      valorMinimoCobranca: min,
+      baseFaixa,
+      faixas: faixasParsed,
+    });
+  }
 
   return (
     <Card>
@@ -81,8 +175,10 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
           <DollarSign className="h-4 w-4" /> Comissão dos atendentes
         </CardTitle>
         <CardDescription>
-          Alíquota única aplicada sobre cobranças pagas. O valor mínimo exclui
-          micro-cobranças (mensalidades, reembolsos pequenos) do cálculo.
+          Use <strong>faixa única</strong> para uma alíquota global; ou{" "}
+          <strong>faixas progressivas</strong> para incentivar quem fatura mais —
+          a faixa atingida pelo total recebido define a alíquota aplicada
+          sobre toda a base (modelo cumulativo).
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -91,42 +187,189 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Alíquota (%)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                disabled={!canEdit}
-                value={aliquota}
-                onChange={(e) => setAliquota(e.target.value)}
-              />
+          <div className="space-y-4">
+            {/* Linha 1: modo + valor mínimo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Modo</Label>
+                <Select
+                  value={modo}
+                  onValueChange={(v) => setModo(v as Modo)}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flat">Faixa única (alíquota fixa)</SelectItem>
+                    <SelectItem value="faixas">Faixas progressivas (cumulativo)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Valor mínimo da cobrança (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  disabled={!canEdit}
+                  value={valorMinimo}
+                  onChange={(e) => setValorMinimo(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Cobranças abaixo deste valor nunca contam, em qualquer modo.
+                </p>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Valor mínimo da cobrança (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                disabled={!canEdit}
-                value={valorMinimo}
-                onChange={(e) => setValorMinimo(e.target.value)}
-              />
+
+            {/* Modo flat: 1 alíquota */}
+            {modo === "flat" && (
+              <div className="space-y-1.5 max-w-xs">
+                <Label className="text-xs">Alíquota (%)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  disabled={!canEdit}
+                  value={aliquota}
+                  onChange={(e) => setAliquota(e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Modo faixas: tabela editável + base */}
+            {modo === "faixas" && (
+              <div className="space-y-3 border-t pt-3">
+                <div className="space-y-1.5 max-w-md">
+                  <Label className="text-xs">Base que define a faixa</Label>
+                  <Select
+                    value={baseFaixa}
+                    onValueChange={(v) => setBaseFaixa(v as BaseFaixa)}
+                    disabled={!canEdit}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="comissionavel">
+                        Recebido comissionável (após filtros)
+                      </SelectItem>
+                      <SelectItem value="bruto">
+                        Recebido bruto (tudo que entrou)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    A alíquota da faixa atingida sempre incide sobre o
+                    comissionável; o que muda é como a faixa é classificada.
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="text-xs mb-2 block">Faixas (cumulativo)</Label>
+                  <div className="space-y-2">
+                    {faixas.length === 0 && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Nenhuma faixa cadastrada. Clique em "Adicionar faixa" para
+                        começar.
+                      </p>
+                    )}
+                    {faixas.map((f, idx) => {
+                      const isUltima = idx === faixas.length - 1;
+                      const limAnterior =
+                        idx > 0
+                          ? faixas[idx - 1].limiteAteText.trim() === ""
+                            ? "—"
+                            : `R$ ${faixas[idx - 1].limiteAteText}`
+                          : "R$ 0";
+                      return (
+                        <div
+                          key={idx}
+                          className="grid grid-cols-12 gap-2 items-center"
+                        >
+                          <div className="col-span-1 text-xs text-muted-foreground text-center">
+                            {idx + 1}
+                          </div>
+                          <div className="col-span-4 text-xs text-muted-foreground">
+                            de {limAnterior} até
+                          </div>
+                          <div className="col-span-3">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder={isUltima ? "Vazio = sem teto" : "Ex: 20000"}
+                              disabled={!canEdit}
+                              value={f.limiteAteText}
+                              onChange={(e) =>
+                                atualizarFaixa(idx, "limiteAteText", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="col-span-3 flex items-center gap-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              placeholder="%"
+                              disabled={!canEdit}
+                              value={f.aliquotaText}
+                              onChange={(e) =>
+                                atualizarFaixa(idx, "aliquotaText", e.target.value)
+                              }
+                            />
+                            <span className="text-xs text-muted-foreground">%</span>
+                          </div>
+                          <div className="col-span-1">
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => removerFaixa(idx)}
+                                title="Remover faixa"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {canEdit && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={adicionarFaixa}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar faixa
+                    </Button>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-3">
+                    Exemplo: 4% até R$ 20.000, 5% até R$ 30.000, 6% sem teto.
+                    Quem fechou R$ 25.000 ganha 5% × R$ 25.000 = R$ 1.250.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={salvar}
+                disabled={!canEdit || salvarMut.isPending}
+              >
+                {salvarMut.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Salvar
+              </Button>
             </div>
-            <Button
-              onClick={salvar}
-              disabled={!canEdit || salvarMut.isPending}
-              className="sm:w-auto"
-            >
-              {salvarMut.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Salvar
-            </Button>
           </div>
         )}
       </CardContent>
