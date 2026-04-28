@@ -15,7 +15,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, colaboradores, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
@@ -70,6 +70,34 @@ async function requireEscritorio(userId: number) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Você precisa de um escritório para usar cobranças." });
   }
   return result;
+}
+
+/**
+ * Valida que o atendente pertence ao escritório, está ativo e retorna o nome
+ * (do `users.name`) — usado para preencher `groupName` no Asaas.
+ * Lança TRPCError se inválido.
+ */
+async function validarAtendente(escritorioId: number, atendenteId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  const [row] = await db
+    .select({ nome: users.name, ativo: colaboradores.ativo })
+    .from(colaboradores)
+    .innerJoin(users, eq(users.id, colaboradores.userId))
+    .where(
+      and(
+        eq(colaboradores.id, atendenteId),
+        eq(colaboradores.escritorioId, escritorioId),
+      ),
+    )
+    .limit(1);
+  if (!row || !row.ativo) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Atendente inválido ou inativo.",
+    });
+  }
+  return { nome: row.nome };
 }
 
 export async function getAsaasClient(escritorioId: number): Promise<AsaasClient | null> {
@@ -1024,6 +1052,12 @@ export const asaasRouter = router({
       vencimento: z.string().min(10),
       formaPagamento: z.enum(["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]),
       descricao: z.string().max(512).optional(),
+      /** Atendente que receberá comissão pela cobrança. Se omitido, herda do contato. */
+      atendenteId: z.number().optional(),
+      /** Categoria de cobrança (define elegibilidade padrão da comissão). */
+      categoriaId: z.number().optional(),
+      /** Override manual: TRUE/FALSE força; null/undefined = obedece a categoria. */
+      comissionavelOverride: z.boolean().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -1068,6 +1102,25 @@ export const asaasRouter = router({
         });
       }
 
+      // Resolve atendente: explícito > responsável padrão do contato > nenhum.
+      let atendenteId: number | null = input.atendenteId ?? null;
+      if (atendenteId === null) {
+        const [contatoRow] = await db
+          .select({ atendenteRespId: contatos.atendenteResponsavelId })
+          .from(contatos)
+          .where(eq(contatos.id, input.contatoId))
+          .limit(1);
+        atendenteId = contatoRow?.atendenteRespId ?? null;
+      }
+      if (atendenteId !== null) {
+        await validarAtendente(esc.escritorio.id, atendenteId);
+      }
+
+      // Carimba o atendente no Asaas para que cobranças importadas em outro
+      // canal (webhook, sync) consigam reidentificar a atribuição original.
+      const externalReference =
+        atendenteId !== null ? `atendente:${atendenteId}` : undefined;
+
       // Criar cobrança no Asaas
       const cobranca = await client.criarCobranca({
         customer: vinculo.asaasCustomerId,
@@ -1075,6 +1128,7 @@ export const asaasRouter = router({
         value: input.valor,
         dueDate: input.vencimento,
         description: input.descricao,
+        externalReference,
       });
 
       // Salvar localmente
@@ -1091,6 +1145,10 @@ export const asaasRouter = router({
         descricao: input.descricao || null,
         invoiceUrl: cobranca.invoiceUrl,
         bankSlipUrl: cobranca.bankSlipUrl || null,
+        externalReference: externalReference ?? null,
+        atendenteId,
+        categoriaId: input.categoriaId ?? null,
+        comissionavelOverride: input.comissionavelOverride ?? null,
       });
 
       // Se é Pix, buscar QR Code
@@ -1516,6 +1574,11 @@ export const asaasRouter = router({
       endereco: z.string().optional(),
       numero: z.string().optional(),
       bairro: z.string().optional(),
+      /**
+       * Atendente responsável pelo cliente. Usado como default na criação
+       * de novas cobranças e refletido como `groupName` no painel Asaas.
+       */
+      atendenteResponsavelId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -1531,6 +1594,13 @@ export const asaasRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
+
+      // Resolve atendente responsável (opcional) — define `groupName` no Asaas.
+      let atendenteNome: string | undefined;
+      if (input.atendenteResponsavelId !== undefined) {
+        const v = await validarAtendente(esc.escritorio.id, input.atendenteResponsavelId);
+        atendenteNome = v.nome ?? undefined;
+      }
 
       // 1. Verificar se já vinculado localmente por CPF
       const [localExistente] = await db.select().from(asaasClientes)
@@ -1564,7 +1634,16 @@ export const asaasRouter = router({
           address: input.endereco,
           addressNumber: input.numero,
           province: input.bairro,
+          groupName: atendenteNome,
         });
+      } else if (atendenteNome) {
+        // Cliente já existia no Asaas → atualiza só o agrupador. Falha silenciosa
+        // pra não quebrar o cadastro (groupName é metadado, não bloqueante).
+        try {
+          await client.atualizarCliente(asaasCli.id, { groupName: atendenteNome });
+        } catch (err: any) {
+          log.warn({ err: err.message, asaasId: asaasCli.id }, "Falha ao atualizar groupName no Asaas");
+        }
       }
 
       // Verificar/criar contato no CRM
@@ -1575,6 +1654,16 @@ export const asaasRouter = router({
 
       if (contatoExistente) {
         contatoId = contatoExistente.id;
+        // Atualiza atendente responsável se mudou (ou se preenchendo pela 1ª vez).
+        if (
+          input.atendenteResponsavelId !== undefined &&
+          contatoExistente.atendenteResponsavelId !== input.atendenteResponsavelId
+        ) {
+          await db
+            .update(contatos)
+            .set({ atendenteResponsavelId: input.atendenteResponsavelId })
+            .where(eq(contatos.id, contatoId));
+        }
       } else {
         const [novo] = await db.insert(contatos).values({
           escritorioId: esc.escritorio.id,
@@ -1583,6 +1672,7 @@ export const asaasRouter = router({
           email: input.email || null,
           telefone: input.telefone || null,
           origem: "manual",
+          atendenteResponsavelId: input.atendenteResponsavelId ?? null,
         }).$returningId();
         contatoId = novo.id;
       }

@@ -19,12 +19,40 @@ function formatBRL(value: number) { return new Intl.NumberFormat("pt-BR", { styl
 export function NovaCobrancaDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente">("avulsa");
   const [contatoId, setContatoId] = useState(""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
+  // Atribuição de comissão (modo "avulsa" apenas — parcelamento/assinatura herdam do cliente via webhook).
+  const [atendenteId, setAtendenteId] = useState<string>("auto"); // "auto" = herda do contato no backend
+  const [categoriaId, setCategoriaId] = useState<string>("none");
+  const [overrideComissao, setOverrideComissao] = useState<"padrao" | "sim" | "nao">("padrao");
+
+  const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
+  const { data: categoriasList = [] } = trpc.financeiro.listarCategoriasCobranca.useQuery();
+  const atendentes = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c) => c.cargo !== "estagiario");
+  const categoriasAtivas = categoriasList.filter((c) => c.ativo);
+
   const criarAvulsaMut = trpc.asaas.criarCobranca.useMutation({ onSuccess: (data) => { setResultado(data.cobranca); toast.success("Cobranca criada"); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const criarParcelaMut = trpc.asaas.criarParcelamento.useMutation({ onSuccess: () => { toast.success("Parcelamento criado"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const criarAssinaturaMut = trpc.asaas.criarAssinatura.useMutation({ onSuccess: () => { toast.success("Assinatura criada"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending;
-  const resetForm = () => { setContatoId(""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); };
-  const handleCriar = () => { if (modo === "avulsa") { criarAvulsaMut.mutate({ contatoId: parseInt(contatoId), valor: parseFloat(valor), vencimento, formaPagamento: forma as any, descricao: descricao || undefined }); } else if (modo === "parcelada") { criarParcelaMut.mutate({ contatoId: parseInt(contatoId), valorTotal: parseFloat(valor), parcelas: parseInt(parcelas), vencimento, formaPagamento: forma as any, descricao: descricao || undefined }); } else { criarAssinaturaMut.mutate({ contatoId: parseInt(contatoId), valor: parseFloat(valor), proximoVencimento: vencimento, ciclo: ciclo as any, formaPagamento: forma as any, descricao: descricao || undefined }); } };
+  const resetForm = () => { setContatoId(""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); };
+  const handleCriar = () => {
+    if (modo === "avulsa") {
+      const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
+      criarAvulsaMut.mutate({
+        contatoId: parseInt(contatoId),
+        valor: parseFloat(valor),
+        vencimento,
+        formaPagamento: forma as any,
+        descricao: descricao || undefined,
+        atendenteId: atendenteId === "auto" ? undefined : parseInt(atendenteId),
+        categoriaId: categoriaId === "none" ? undefined : parseInt(categoriaId),
+        comissionavelOverride: overrideMap[overrideComissao],
+      });
+    } else if (modo === "parcelada") {
+      criarParcelaMut.mutate({ contatoId: parseInt(contatoId), valorTotal: parseFloat(valor), parcelas: parseInt(parcelas), vencimento, formaPagamento: forma as any, descricao: descricao || undefined });
+    } else {
+      criarAssinaturaMut.mutate({ contatoId: parseInt(contatoId), valor: parseFloat(valor), proximoVencimento: vencimento, ciclo: ciclo as any, formaPagamento: forma as any, descricao: descricao || undefined });
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o); }}>
@@ -45,6 +73,52 @@ export function NovaCobrancaDialog({ open, onOpenChange, onSuccess }: { open: bo
             <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Forma</Label><Select value={forma} onValueChange={setForma}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PIX">Pix</SelectItem><SelectItem value="BOLETO">Boleto</SelectItem><SelectItem value="CREDIT_CARD">Cartao</SelectItem><SelectItem value="UNDEFINED">Cliente escolhe</SelectItem></SelectContent></Select></div>{modo === "parcelada" && (<div><Label className="text-xs">Parcelas</Label><Input type="number" min="2" max="24" value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="mt-1" /></div>)}{modo === "recorrente" && (<div><Label className="text-xs">Ciclo</Label><Select value={ciclo} onValueChange={setCiclo}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="WEEKLY">Semanal</SelectItem><SelectItem value="BIWEEKLY">Quinzenal</SelectItem><SelectItem value="MONTHLY">Mensal</SelectItem><SelectItem value="QUARTERLY">Trimestral</SelectItem><SelectItem value="SEMIANNUALLY">Semestral</SelectItem><SelectItem value="YEARLY">Anual</SelectItem></SelectContent></Select></div>)}</div>
             {modo === "parcelada" && valor && parcelas && <p className="text-xs text-muted-foreground">{parseInt(parcelas)}x de {formatBRL(parseFloat(valor) / parseInt(parcelas))}</p>}
             <div><Label className="text-xs">Descricao</Label><Input placeholder="Honorarios" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1" /></div>
+            {modo === "avulsa" ? (
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Comissão</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Atendente</Label>
+                    <Select value={atendenteId} onValueChange={setAtendenteId}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Padrão do cliente</SelectItem>
+                        {atendentes.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Categoria</Label>
+                    <Select value={categoriaId} onValueChange={setCategoriaId}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem categoria</SelectItem>
+                        {categoriasAtivas.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.nome}{c.comissionavel ? "" : " (não comissionável)"}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Conta na comissão?</Label>
+                  <Select value={overrideComissao} onValueChange={(v) => setOverrideComissao(v as any)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="padrao">Padrão da categoria</SelectItem>
+                      <SelectItem value="sim">Sim (forçar)</SelectItem>
+                      <SelectItem value="nao">Não (ignorar)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic pt-2 border-t">
+                A comissão será atribuída quando o pagamento for confirmado, usando o atendente responsável do cliente.
+              </p>
+            )}
           </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
         )}
       </DialogContent>
@@ -70,7 +144,11 @@ export function NovaAssinaturaDialog({ open, onOpenChange, onSuccess }: { open: 
 
 export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const [nome, setNome] = useState(""); const [cpf, setCpf] = useState(""); const [email, setEmail] = useState(""); const [tel, setTel] = useState(""); const [cep, setCep] = useState(""); const [endereco, setEndereco] = useState(""); const [numero, setNumero] = useState(""); const [bairro, setBairro] = useState("");
-  const criarMut = trpc.asaas.criarClienteAsaas.useMutation({ onSuccess: () => { toast.success("Cliente cadastrado"); setNome(""); setCpf(""); setEmail(""); setTel(""); setCep(""); setEndereco(""); setNumero(""); setBairro(""); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message }) });
+  const [atendenteId, setAtendenteId] = useState<string>("none");
+  const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
+  const atendentes = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c) => c.cargo !== "estagiario");
+  const reset = () => { setNome(""); setCpf(""); setEmail(""); setTel(""); setCep(""); setEndereco(""); setNumero(""); setBairro(""); setAtendenteId("none"); };
+  const criarMut = trpc.asaas.criarClienteAsaas.useMutation({ onSuccess: () => { toast.success("Cliente cadastrado"); reset(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message }) });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Novo cliente</DialogTitle><DialogDescription>Cadastra no Asaas e vincula ao CRM.</DialogDescription></DialogHeader>
       <div className="space-y-3 py-1">
@@ -78,8 +156,21 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">Telefone</Label><Input value={tel} onChange={(e) => setTel(e.target.value)} className="mt-1" /></div></div>
         <div className="grid grid-cols-3 gap-2"><div><Label className="text-xs">CEP</Label><Input value={cep} onChange={(e) => setCep(e.target.value)} className="mt-1" /></div><div className="col-span-2"><Label className="text-xs">Endereco</Label><Input value={endereco} onChange={(e) => setEndereco(e.target.value)} className="mt-1" /></div></div>
         <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Numero</Label><Input value={numero} onChange={(e) => setNumero(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">Bairro</Label><Input value={bairro} onChange={(e) => setBairro(e.target.value)} className="mt-1" /></div></div>
+        <div>
+          <Label className="text-xs">Atendente responsável</Label>
+          <Select value={atendenteId} onValueChange={setAtendenteId}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="Sem atendente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sem atendente</SelectItem>
+              {atendentes.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-1">Cobranças deste cliente são atribuídas a este atendente para fins de comissão. Visível como agrupamento no painel Asaas.</p>
+        </div>
       </div>
-      <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarMut.mutate({ nome, cpfCnpj: cpf, email: email || undefined, telefone: tel || undefined, cep: cep || undefined, endereco: endereco || undefined, numero: numero || undefined, bairro: bairro || undefined })} disabled={criarMut.isPending || !nome || cpf.replace(/\D/g, "").length < 11}>{criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}Cadastrar</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarMut.mutate({ nome, cpfCnpj: cpf, email: email || undefined, telefone: tel || undefined, cep: cep || undefined, endereco: endereco || undefined, numero: numero || undefined, bairro: bairro || undefined, atendenteResponsavelId: atendenteId === "none" ? undefined : parseInt(atendenteId) })} disabled={criarMut.isPending || !nome || cpf.replace(/\D/g, "").length < 11}>{criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}Cadastrar</Button></DialogFooter>
     </DialogContent></Dialog>
   );
 }
