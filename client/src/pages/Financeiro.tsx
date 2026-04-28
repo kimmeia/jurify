@@ -31,6 +31,7 @@ import {
 import {
   NovaCobrancaDialog, NovaAssinaturaDialog, NovoClienteDialog,
 } from "./financeiro/dialogs";
+import { ComissoesTab } from "./financeiro/Comissoes";
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
@@ -428,6 +429,10 @@ export default function Financeiro() {
             <Users className="h-3.5 w-3.5" />
             Clientes ({clientesVinculados?.length ?? 0})
           </TabsTrigger>
+          <TabsTrigger value="comissoes" className="gap-1.5">
+            <DollarSign className="h-3.5 w-3.5" />
+            Comissões
+          </TabsTrigger>
         </TabsList>
 
         {/* ─── Aba: Cobranças ─── */}
@@ -752,6 +757,10 @@ export default function Financeiro() {
               <p className="text-sm text-muted-foreground">Nenhum cliente vinculado.</p>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="comissoes" className="mt-4">
+          <ComissoesTab />
         </TabsContent>
       </Tabs>
 
