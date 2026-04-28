@@ -490,6 +490,12 @@ export const contatos = mysqlTable("contatos", {
   tags: text("tagsContato"),
   observacoes: text("observacoesContato"),
   responsavelId: int("responsavelIdContato"),
+  /**
+   * Atendente responsável padrão pelo cliente (FK → colaboradores.id).
+   * Usado como sugestão default ao criar cobrança e como `groupName` no Asaas.
+   * Cobranças sincronizadas que vêm sem `externalReference` herdam este atendente.
+   */
+  atendenteResponsavelId: int("atendenteRespIdContato"),
   createdAt: timestamp("createdAtContato").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtContato").defaultNow().onUpdateNow().notNull(),
 });
@@ -1160,6 +1166,15 @@ export const asaasCobrancas = mysqlTable(
     pixQrCodePayload: text("pixQrCodePayload"),
     dataPagamento: varchar("dataPagamentoAsaas", { length: 10 }),
     externalReference: varchar("externalRefAsaas", { length: 255 }),
+    /** Atendente que receberá comissão por esta cobrança (FK → colaboradores.id). */
+    atendenteId: int("atendenteIdAsaasCob"),
+    /** Categoria da cobrança (FK → categorias_cobranca.id). */
+    categoriaId: int("categoriaIdAsaasCob"),
+    /**
+     * Override manual de elegibilidade para comissão.
+     * NULL = obedece flag da categoria; TRUE/FALSE = força.
+     */
+    comissionavelOverride: boolean("comissionavelOverrideAsaasCob"),
     createdAt: timestamp("createdAtAsaasCob").defaultNow().notNull(),
     updatedAt: timestamp("updatedAtAsaasCob").defaultNow().onUpdateNow().notNull(),
   },
@@ -1170,6 +1185,12 @@ export const asaasCobrancas = mysqlTable(
     uqPayment: uniqueIndex("asaas_cob_escr_payment_uq").on(
       t.escritorioId,
       t.asaasPaymentId,
+    ),
+    // Acelera relatório de comissão (filtra por atendente + período).
+    idxAtendentePagamento: index("asaas_cob_atendente_pag_idx").on(
+      t.escritorioId,
+      t.atendenteId,
+      t.dataPagamento,
     ),
   }),
 );
@@ -1663,3 +1684,180 @@ export const tetosLegais = mysqlTable("tetos_legais", {
 });
 
 export type TetoLegal = typeof tetosLegais.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FINANCEIRO PLUS — CATEGORIAS, COMISSÕES E DESPESAS
+// Habilita: comissão flat para atendentes (com filtros multicamada), categorização
+// de cobranças/despesas, contas a pagar e snapshot imutável de fechamentos.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Categorias de cobrança do escritório (ex: "Honorário inicial", "Mensalidade").
+ * Cada categoria define se cobranças daquele tipo entram no cálculo de comissão
+ * por padrão. Pode ser sobrescrito por cobrança via `asaas_cobrancas.comissionavelOverride`.
+ */
+export const categoriasCobranca = mysqlTable(
+  "categorias_cobranca",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdCatCob").notNull(),
+    nome: varchar("nomeCatCob", { length: 80 }).notNull(),
+    comissionavel: boolean("comissionavelCatCob").default(true).notNull(),
+    ativo: boolean("ativoCatCob").default(true).notNull(),
+    createdAt: timestamp("createdAtCatCob").defaultNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioNome: uniqueIndex("cat_cob_escr_nome_uq").on(
+      t.escritorioId,
+      t.nome,
+    ),
+  }),
+);
+
+export type CategoriaCobranca = typeof categoriasCobranca.$inferSelect;
+export type InsertCategoriaCobranca = typeof categoriasCobranca.$inferInsert;
+
+/** Categorias de despesa do escritório (ex: "Aluguel", "Salários"). */
+export const categoriasDespesa = mysqlTable(
+  "categorias_despesa",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdCatDesp").notNull(),
+    nome: varchar("nomeCatDesp", { length: 80 }).notNull(),
+    ativo: boolean("ativoCatDesp").default(true).notNull(),
+    createdAt: timestamp("createdAtCatDesp").defaultNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioNome: uniqueIndex("cat_desp_escr_nome_uq").on(
+      t.escritorioId,
+      t.nome,
+    ),
+  }),
+);
+
+export type CategoriaDespesa = typeof categoriasDespesa.$inferSelect;
+export type InsertCategoriaDespesa = typeof categoriasDespesa.$inferInsert;
+
+/** Contas a pagar do escritório (despesas operacionais). */
+export const despesas = mysqlTable(
+  "despesas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdDesp").notNull(),
+    categoriaId: int("categoriaIdDesp"),
+    descricao: varchar("descricaoDesp", { length: 200 }).notNull(),
+    /** Valor em formato decimal "1234.56" para precisão monetária. */
+    valor: decimal("valorDesp", { precision: 12, scale: 2 }).notNull(),
+    /** Data de vencimento (YYYY-MM-DD). */
+    vencimento: varchar("vencimentoDesp", { length: 10 }).notNull(),
+    /** Data efetiva do pagamento (YYYY-MM-DD); NULL enquanto pendente. */
+    dataPagamento: varchar("dataPagamentoDesp", { length: 10 }),
+    status: mysqlEnum("statusDesp", ["pendente", "pago", "vencido"])
+      .default("pendente")
+      .notNull(),
+    recorrencia: mysqlEnum("recorrenciaDesp", ["nenhuma", "mensal", "anual"])
+      .default("nenhuma")
+      .notNull(),
+    observacoes: text("observacoesDesp"),
+    criadoPorUserId: int("criadoPorUserIdDesp").notNull(),
+    createdAt: timestamp("createdAtDesp").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtDesp").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    idxEscritorioVencimento: index("desp_escr_venc_idx").on(
+      t.escritorioId,
+      t.vencimento,
+    ),
+    idxEscritorioStatus: index("desp_escr_status_idx").on(
+      t.escritorioId,
+      t.status,
+    ),
+  }),
+);
+
+export type Despesa = typeof despesas.$inferSelect;
+export type InsertDespesa = typeof despesas.$inferInsert;
+
+/**
+ * Regra global de comissão por escritório (singleton).
+ * Modelo flat: uma única alíquota vale para todos os atendentes.
+ * Cobranças abaixo de `valorMinimoCobranca` ficam fora do cálculo.
+ */
+export const regraComissao = mysqlTable(
+  "regra_comissao",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdRegraCom").notNull(),
+    aliquotaPercent: decimal("aliquotaPercentRegraCom", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
+    valorMinimoCobranca: decimal("valorMinimoCobRegraCom", { precision: 12, scale: 2 })
+      .default("0")
+      .notNull(),
+    updatedAt: timestamp("updatedAtRegraCom").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorio: uniqueIndex("regra_com_escritorio_uq").on(t.escritorioId),
+  }),
+);
+
+export type RegraComissao = typeof regraComissao.$inferSelect;
+export type InsertRegraComissao = typeof regraComissao.$inferInsert;
+
+/**
+ * Snapshot imutável de fechamento de comissão.
+ * Após "fechar período", os valores ficam congelados aqui — mudanças posteriores
+ * em alíquota, categorias ou cobranças não afetam fechamentos passados.
+ */
+export const comissoesFechadas = mysqlTable(
+  "comissoes_fechadas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdComFech").notNull(),
+    atendenteId: int("atendenteIdComFech").notNull(),
+    /** Início do período (YYYY-MM-DD), inclusive. */
+    periodoInicio: varchar("periodoInicioComFech", { length: 10 }).notNull(),
+    /** Fim do período (YYYY-MM-DD), inclusive. */
+    periodoFim: varchar("periodoFimComFech", { length: 10 }).notNull(),
+    totalBrutoRecebido: decimal("totalBrutoRecebidoComFech", { precision: 14, scale: 2 })
+      .notNull(),
+    totalComissionavel: decimal("totalComissionavelComFech", { precision: 14, scale: 2 })
+      .notNull(),
+    totalNaoComissionavel: decimal("totalNaoComissionavelComFech", { precision: 14, scale: 2 })
+      .notNull(),
+    totalComissao: decimal("totalComissaoComFech", { precision: 14, scale: 2 }).notNull(),
+    aliquotaUsada: decimal("aliquotaUsadaComFech", { precision: 5, scale: 2 }).notNull(),
+    valorMinimoUsado: decimal("valorMinimoUsadoComFech", { precision: 12, scale: 2 })
+      .notNull(),
+    fechadoEm: timestamp("fechadoEmComFech").defaultNow().notNull(),
+    fechadoPorUserId: int("fechadoPorUserIdComFech").notNull(),
+    observacoes: text("observacoesComFech"),
+  },
+  (t) => ({
+    idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
+      t.escritorioId,
+      t.atendenteId,
+    ),
+  }),
+);
+
+export type ComissaoFechada = typeof comissoesFechadas.$inferSelect;
+export type InsertComissaoFechada = typeof comissoesFechadas.$inferInsert;
+
+/**
+ * Itens (cobranças) que entraram no snapshot de comissão fechada.
+ * `motivoExclusao` é NULL para itens comissionáveis e preenchido para os que
+ * apareceram no relatório como "não comissionáveis":
+ * 'categoria_nao_comissionavel' | 'abaixo_minimo' | 'override_manual'
+ */
+export const comissoesFechadasItens = mysqlTable("comissoes_fechadas_itens", {
+  id: int("id").autoincrement().primaryKey(),
+  comissaoFechadaId: int("comissaoFechadaIdItem").notNull(),
+  asaasCobrancaId: int("asaasCobrancaIdItem").notNull(),
+  valor: decimal("valorItem", { precision: 12, scale: 2 }).notNull(),
+  foiComissionavel: boolean("foiComissionavelItem").notNull(),
+  motivoExclusao: varchar("motivoExclusaoItem", { length: 32 }),
+});
+
+export type ComissaoFechadaItem = typeof comissoesFechadasItens.$inferSelect;
+export type InsertComissaoFechadaItem = typeof comissoesFechadasItens.$inferInsert;
