@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   calcularComissao,
   classificarCobranca,
+  selecionarFaixa,
   type CobrancaParaComissao,
+  type FaixaComissao,
   type RegraComissao,
 } from "../../shared/calculo-comissao";
 
@@ -140,5 +142,204 @@ describe("calcularComissao", () => {
     );
     expect(r.totais.comissionavel).toBe(300);
     expect(r.totais.valorComissao).toBe(22.5);
+  });
+});
+
+// ─── Modo faixas (cumulativo) ────────────────────────────────────────────────
+
+const FAIXAS_BASE: FaixaComissao[] = [
+  { limiteAte: 20000, aliquotaPercent: 4 },
+  { limiteAte: 30000, aliquotaPercent: 5 },
+  { limiteAte: null, aliquotaPercent: 6 },
+];
+
+describe("selecionarFaixa", () => {
+  it("retorna null quando tabela está vazia", () => {
+    expect(selecionarFaixa([], 10000)).toBeNull();
+  });
+
+  it("escolhe a primeira faixa quando o valor cai dentro", () => {
+    const r = selecionarFaixa(FAIXAS_BASE, 15000);
+    expect(r?.ordem).toBe(0);
+    expect(r?.faixa.aliquotaPercent).toBe(4);
+  });
+
+  it("escolhe a faixa intermediária para valor dentro dela", () => {
+    const r = selecionarFaixa(FAIXAS_BASE, 25000);
+    expect(r?.faixa.aliquotaPercent).toBe(5);
+  });
+
+  it("trata valor exatamente igual ao limite como pertencente à faixa", () => {
+    const r = selecionarFaixa(FAIXAS_BASE, 20000);
+    expect(r?.faixa.aliquotaPercent).toBe(4);
+  });
+
+  it("usa última faixa (sem teto) quando valor estoura todos os limites", () => {
+    const r = selecionarFaixa(FAIXAS_BASE, 50000);
+    expect(r?.faixa.aliquotaPercent).toBe(6);
+  });
+
+  it("usa a última faixa explícita quando todas têm teto e valor estoura", () => {
+    const finitas: FaixaComissao[] = [
+      { limiteAte: 1000, aliquotaPercent: 2 },
+      { limiteAte: 2000, aliquotaPercent: 3 },
+    ];
+    const r = selecionarFaixa(finitas, 9999);
+    expect(r?.faixa.aliquotaPercent).toBe(3);
+  });
+
+  it("ordena faixas internamente quando entrada está fora de ordem", () => {
+    const desordenadas: FaixaComissao[] = [
+      { limiteAte: 30000, aliquotaPercent: 5 },
+      { limiteAte: 20000, aliquotaPercent: 4 },
+    ];
+    const r = selecionarFaixa(desordenadas, 25000);
+    expect(r?.faixa.aliquotaPercent).toBe(5);
+  });
+});
+
+describe("calcularComissao — modo faixas (cumulativo)", () => {
+  function cobrPaga(id: number, valor: number): CobrancaParaComissao {
+    return {
+      id,
+      valor,
+      dataPagamento: new Date("2026-04-15"),
+      atendenteId: 7,
+      categoriaComissionavel: true,
+      comissionavelOverride: null,
+    };
+  }
+
+  it("exemplo do dono: recebeu R$ 20.000 → 4% sobre 20.000 = R$ 800", () => {
+    const r = calcularComissao([cobrPaga(1, 20000)], {
+      modo: "faixas",
+      aliquotaPercent: 0,
+      valorMinimo: 100,
+      faixas: FAIXAS_BASE,
+    });
+    expect(r.aliquotaAplicada).toBe(4);
+    expect(r.totais.valorComissao).toBe(800);
+    expect(r.faixaAplicada?.limiteAte).toBe(20000);
+  });
+
+  it("exemplo do dono: recebeu R$ 25.000 → 5% sobre 25.000 = R$ 1.250 (cumulativo)", () => {
+    const r = calcularComissao(
+      [cobrPaga(1, 15000), cobrPaga(2, 10000)],
+      {
+        modo: "faixas",
+        aliquotaPercent: 0,
+        valorMinimo: 100,
+        faixas: FAIXAS_BASE,
+      },
+    );
+    expect(r.totais.comissionavel).toBe(25000);
+    expect(r.aliquotaAplicada).toBe(5);
+    expect(r.totais.valorComissao).toBe(1250);
+    expect(r.faixaAplicada?.ordem).toBe(1);
+  });
+
+  it("estoura a maior faixa → usa última (sem teto) — R$ 100.000 × 6% = R$ 6.000", () => {
+    const r = calcularComissao([cobrPaga(1, 100000)], {
+      modo: "faixas",
+      aliquotaPercent: 0,
+      valorMinimo: 100,
+      faixas: FAIXAS_BASE,
+    });
+    expect(r.aliquotaAplicada).toBe(6);
+    expect(r.totais.valorComissao).toBe(6000);
+    expect(r.faixaAplicada?.limiteAte).toBeNull();
+  });
+
+  it("baseFaixa=bruto: mensalidade infla a faixa mas não a comissão", () => {
+    // 22k comissionável + 5k mensalidade não-comissionável = 27k bruto.
+    // Bruto 27k cai na faixa de 30k (5%). Comissão = 5% × 22k = 1.100.
+    const cobrancas: CobrancaParaComissao[] = [
+      cobrPaga(1, 22000),
+      {
+        id: 2,
+        valor: 5000,
+        dataPagamento: new Date("2026-04-15"),
+        atendenteId: 7,
+        categoriaComissionavel: false,
+        comissionavelOverride: null,
+      },
+    ];
+    const r = calcularComissao(cobrancas, {
+      modo: "faixas",
+      aliquotaPercent: 0,
+      valorMinimo: 100,
+      faixas: FAIXAS_BASE,
+      baseFaixa: "bruto",
+    });
+    expect(r.totais.bruto).toBe(27000);
+    expect(r.totais.comissionavel).toBe(22000);
+    expect(r.aliquotaAplicada).toBe(5);
+    expect(r.totais.valorComissao).toBe(1100);
+  });
+
+  it("baseFaixa=comissionavel (default): mensalidade não influencia faixa nem cálculo", () => {
+    const cobrancas: CobrancaParaComissao[] = [
+      cobrPaga(1, 18000),
+      {
+        id: 2,
+        valor: 5000,
+        dataPagamento: new Date("2026-04-15"),
+        atendenteId: 7,
+        categoriaComissionavel: false,
+        comissionavelOverride: null,
+      },
+    ];
+    const r = calcularComissao(cobrancas, {
+      modo: "faixas",
+      aliquotaPercent: 0,
+      valorMinimo: 100,
+      faixas: FAIXAS_BASE,
+      // baseFaixa omitido → "comissionavel"
+    });
+    expect(r.totais.bruto).toBe(23000);
+    expect(r.totais.comissionavel).toBe(18000);
+    // 18k cai na faixa de 20k (4%) — bruto não conta.
+    expect(r.aliquotaAplicada).toBe(4);
+    expect(r.totais.valorComissao).toBe(720);
+  });
+
+  it("filtro de valor mínimo continua excluindo cobranças pequenas no modo faixas", () => {
+    const r = calcularComissao(
+      [cobrPaga(1, 22000), cobrPaga(2, 80)],
+      {
+        modo: "faixas",
+        aliquotaPercent: 0,
+        valorMinimo: 100,
+        faixas: FAIXAS_BASE,
+      },
+    );
+    expect(r.totais.comissionavel).toBe(22000);
+    expect(r.naoComissionaveis).toHaveLength(1);
+    expect(r.naoComissionaveis[0].motivo).toBe("abaixo_minimo");
+    expect(r.aliquotaAplicada).toBe(5); // 22k cai na faixa de 30k
+  });
+
+  it("modo faixas com tabela vazia cai no flat (alíquota fallback)", () => {
+    const r = calcularComissao([cobrPaga(1, 5000)], {
+      modo: "faixas",
+      aliquotaPercent: 3,
+      valorMinimo: 0,
+      faixas: [],
+    });
+    expect(r.aliquotaAplicada).toBe(3);
+    expect(r.totais.valorComissao).toBe(150);
+    expect(r.faixaAplicada).toBeUndefined();
+  });
+
+  it("modo flat ignora faixas mesmo se passadas", () => {
+    const r = calcularComissao([cobrPaga(1, 25000)], {
+      modo: "flat",
+      aliquotaPercent: 4,
+      valorMinimo: 0,
+      faixas: FAIXAS_BASE,
+    });
+    expect(r.aliquotaAplicada).toBe(4);
+    expect(r.totais.valorComissao).toBe(1000);
+    expect(r.faixaAplicada).toBeUndefined();
   });
 });

@@ -12,6 +12,7 @@ import {
   colaboradores,
   contatos,
   regraComissao,
+  regraComissaoFaixas,
 } from "../../drizzle/schema";
 
 // ─── Categorias de cobrança ──────────────────────────────────────────────────
@@ -114,22 +115,69 @@ export async function obterRegraComissao(escritorioId: number) {
   return regra ?? null;
 }
 
+/** Lista as faixas de um escritório em ordem crescente (lê pela coluna `ordem`). */
+export async function listarFaixasComissao(escritorioId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(regraComissaoFaixas)
+    .where(eq(regraComissaoFaixas.escritorioId, escritorioId))
+    .orderBy(asc(regraComissaoFaixas.ordem));
+}
+
+export interface FaixaInput {
+  /** NULL = sem teto (só permitido na última faixa). */
+  limiteAte: number | null;
+  aliquotaPercent: number;
+}
+
+/**
+ * Salva regra completa: cabeçalho (modo, base, alíquota flat, mínimo) + faixas.
+ * Substitui completamente as faixas antigas (delete + insert) — operação simples
+ * dado que cada escritório tem ≤ ~10 faixas. Não usa transação porque o motor
+ * (`mysql2`) não expõe uma; pra workload tão pequeno o risco é aceitável.
+ */
 export async function salvarRegraComissao(
   escritorioId: number,
-  aliquotaPercent: number,
-  valorMinimoCobranca: number,
+  dados: {
+    modo: "flat" | "faixas";
+    aliquotaPercent: number;
+    valorMinimoCobranca: number;
+    baseFaixa: "bruto" | "comissionavel";
+    faixas: FaixaInput[];
+  },
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
-  // INSERT ... ON DUPLICATE KEY UPDATE: garante 1 linha por escritório.
+
   await db.execute(
     sql`INSERT INTO regra_comissao
-        (escritorioIdRegraCom, aliquotaPercentRegraCom, valorMinimoCobRegraCom)
-        VALUES (${escritorioId}, ${aliquotaPercent}, ${valorMinimoCobranca})
+        (escritorioIdRegraCom, aliquotaPercentRegraCom, modoRegraCom, baseFaixaRegraCom, valorMinimoCobRegraCom)
+        VALUES (${escritorioId}, ${dados.aliquotaPercent}, ${dados.modo}, ${dados.baseFaixa}, ${dados.valorMinimoCobranca})
         ON DUPLICATE KEY UPDATE
           aliquotaPercentRegraCom = VALUES(aliquotaPercentRegraCom),
+          modoRegraCom = VALUES(modoRegraCom),
+          baseFaixaRegraCom = VALUES(baseFaixaRegraCom),
           valorMinimoCobRegraCom = VALUES(valorMinimoCobRegraCom)`,
   );
+
+  // Substitui o conjunto de faixas. Se modo='flat', o usuário pode ainda enviar
+  // faixas (preserva-as caso volte a 'faixas' depois) — mas se vier vazio, limpa.
+  await db
+    .delete(regraComissaoFaixas)
+    .where(eq(regraComissaoFaixas.escritorioId, escritorioId));
+
+  if (dados.faixas.length > 0) {
+    await db.insert(regraComissaoFaixas).values(
+      dados.faixas.map((f, i) => ({
+        escritorioId,
+        ordem: i,
+        limiteAte: f.limiteAte === null ? null : f.limiteAte.toFixed(2),
+        aliquotaPercent: f.aliquotaPercent.toFixed(2),
+      })),
+    );
+  }
 }
 
 // ─── Cascata de atribuição de atendente em cobranças sincronizadas ───────────

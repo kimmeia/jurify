@@ -168,8 +168,11 @@ function CalcularSection() {
   });
 
   const totais = sim.data?.totais;
-  const aliquota = sim.data?.regra.aliquotaPercent ?? 0;
+  const aliquotaAplicada = Number(sim.data?.aliquotaAplicada ?? 0);
   const valorMinimo = sim.data?.regra.valorMinimo ?? 0;
+  const modo = sim.data?.regra.modo ?? "flat";
+  const baseFaixa = sim.data?.regra.baseFaixa ?? "comissionavel";
+  const faixaAplicada = sim.data?.faixaAplicada;
 
   return (
     <div className="space-y-4">
@@ -246,17 +249,41 @@ function CalcularSection() {
               accent="text-muted-foreground"
             />
             <KpiCard
-              label={`Comissão (${aliquota}%)`}
+              label={`Comissão (${aliquotaAplicada}%)`}
               valor={totais?.valorComissao ?? 0}
               accent="text-primary"
               destaque
             />
           </div>
 
+          {modo === "faixas" && faixaAplicada && (
+            <Card className="bg-muted/30">
+              <CardContent className="py-3 px-4 text-xs space-y-1">
+                <div className="font-medium text-foreground">
+                  Faixa atingida (cumulativo)
+                </div>
+                <div className="text-muted-foreground">
+                  Base usada: <strong>{formatBRL(faixaAplicada.valorBaseClassificacao)}</strong>{" "}
+                  ({baseFaixa === "bruto" ? "recebido bruto" : "recebido comissionável"})
+                  {" → "}faixa de{" "}
+                  <strong>
+                    {faixaAplicada.limiteAte === null
+                      ? "sem teto"
+                      : `até ${formatBRL(Number(faixaAplicada.limiteAte))}`}
+                  </strong>
+                  {" → "}alíquota <strong>{faixaAplicada.aliquotaPercent}%</strong>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>
-              Regra atual: alíquota {aliquota}% · valor mínimo{" "}
-              {formatBRL(valorMinimo)}
+              Regra atual:{" "}
+              {modo === "faixas"
+                ? `faixas progressivas (cumulativo)`
+                : `alíquota fixa ${aliquotaAplicada}%`}
+              {" · "}valor mínimo {formatBRL(valorMinimo)}
             </span>
             <Button
               size="sm"
@@ -854,9 +881,20 @@ function FechamentoDetalheDialog({
             {data && (
               <span>
                 {data.atendenteNome} · {formatData(data.periodoInicio)} –{" "}
-                {formatData(data.periodoFim)} · alíquota{" "}
-                {Number(data.aliquotaUsada)}% · mínimo{" "}
-                {formatBRL(Number(data.valorMinimoUsado))}
+                {formatData(data.periodoFim)} ·{" "}
+                {data.modoUsado === "faixas" ? (
+                  <>
+                    faixa atingida{" "}
+                    <strong>{Number(data.aliquotaUsada)}%</strong> (base:{" "}
+                    {data.baseFaixaUsada === "bruto"
+                      ? "recebido bruto"
+                      : "recebido comissionável"}
+                    )
+                  </>
+                ) : (
+                  <>alíquota fixa {Number(data.aliquotaUsada)}%</>
+                )}
+                {" · "}mínimo {formatBRL(Number(data.valorMinimoUsado))}
               </span>
             )}
           </AlertDialogDescription>

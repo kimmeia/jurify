@@ -1780,8 +1780,18 @@ export type InsertDespesa = typeof despesas.$inferInsert;
 
 /**
  * Regra global de comissão por escritório (singleton).
- * Modelo flat: uma única alíquota vale para todos os atendentes.
- * Cobranças abaixo de `valorMinimoCobranca` ficam fora do cálculo.
+ *
+ * Suporta dois modos:
+ * - "flat": usa `aliquotaPercent` como alíquota única (modelo original).
+ * - "faixas": usa as linhas em `regra_comissao_faixas` como tabela cumulativa —
+ *   a faixa cujo `limiteAte` cobre o total recebido define a alíquota aplicada
+ *   sobre toda a base.
+ *
+ * `baseFaixa` define o que classifica a faixa quando modo='faixas':
+ * - "bruto": tudo que o atendente recebeu no período.
+ * - "comissionavel": apenas o que sobra após filtros de categoria/mínimo/override.
+ *
+ * Cobranças abaixo de `valorMinimoCobranca` ficam fora do cálculo nos dois modos.
  */
 export const regraComissao = mysqlTable(
   "regra_comissao",
@@ -1790,6 +1800,10 @@ export const regraComissao = mysqlTable(
     escritorioId: int("escritorioIdRegraCom").notNull(),
     aliquotaPercent: decimal("aliquotaPercentRegraCom", { precision: 5, scale: 2 })
       .default("0")
+      .notNull(),
+    modo: mysqlEnum("modoRegraCom", ["flat", "faixas"]).default("flat").notNull(),
+    baseFaixa: mysqlEnum("baseFaixaRegraCom", ["bruto", "comissionavel"])
+      .default("comissionavel")
       .notNull(),
     valorMinimoCobranca: decimal("valorMinimoCobRegraCom", { precision: 12, scale: 2 })
       .default("0")
@@ -1803,6 +1817,33 @@ export const regraComissao = mysqlTable(
 
 export type RegraComissao = typeof regraComissao.$inferSelect;
 export type InsertRegraComissao = typeof regraComissao.$inferInsert;
+
+/**
+ * Faixas progressivas da regra de comissão (singleton por escritório → N faixas).
+ *
+ * Convenção: as faixas são lidas em ordem crescente de `ordem`. A faixa "encaixa"
+ * o total da base (recebido bruto ou comissionável) se este for ≤ `limiteAte`.
+ * A última faixa pode ter `limiteAte = NULL` para representar "sem teto".
+ */
+export const regraComissaoFaixas = mysqlTable(
+  "regra_comissao_faixas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdFaixa").notNull(),
+    ordem: int("ordemFaixa").notNull(),
+    /** Cota superior da faixa (inclusiva). NULL = sem teto (última faixa). */
+    limiteAte: decimal("limiteAteFaixa", { precision: 14, scale: 2 }),
+    aliquotaPercent: decimal("aliquotaPercentFaixa", { precision: 5, scale: 2 })
+      .notNull(),
+    createdAt: timestamp("createdAtFaixa").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxEscritorioOrdem: index("faixa_escr_ordem_idx").on(t.escritorioId, t.ordem),
+  }),
+);
+
+export type RegraComissaoFaixa = typeof regraComissaoFaixas.$inferSelect;
+export type InsertRegraComissaoFaixa = typeof regraComissaoFaixas.$inferInsert;
 
 /**
  * Snapshot imutável de fechamento de comissão.
@@ -1827,6 +1868,12 @@ export const comissoesFechadas = mysqlTable(
       .notNull(),
     totalComissao: decimal("totalComissaoComFech", { precision: 14, scale: 2 }).notNull(),
     aliquotaUsada: decimal("aliquotaUsadaComFech", { precision: 5, scale: 2 }).notNull(),
+    /** Modo da regra no momento do fechamento. Em "faixas", a `aliquotaUsada` reflete a faixa cumulativa atingida. */
+    modoUsado: mysqlEnum("modoUsadoComFech", ["flat", "faixas"]).default("flat").notNull(),
+    /** Base que classificou a faixa quando modoUsado='faixas'. NULL para "flat". */
+    baseFaixaUsada: mysqlEnum("baseFaixaUsadaComFech", ["bruto", "comissionavel"]),
+    /** JSON com a tabela de faixas vigente no momento do fechamento (apenas no modo "faixas"). */
+    faixasUsadas: text("faixasUsadasComFech"),
     valorMinimoUsado: decimal("valorMinimoUsadoComFech", { precision: 12, scale: 2 })
       .notNull(),
     fechadoEm: timestamp("fechadoEmComFech").defaultNow().notNull(),

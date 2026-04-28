@@ -12,10 +12,11 @@ import {
   users,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { obterRegraComissao } from "./db-financeiro";
+import { listarFaixasComissao, obterRegraComissao } from "./db-financeiro";
 import {
   calcularComissao,
   type CobrancaParaComissao,
+  type FaixaComissao,
   type MotivoExclusao,
 } from "../../shared/calculo-comissao";
 
@@ -58,6 +59,15 @@ async function simularComissao(
   const regraRow = await obterRegraComissao(escritorioId);
   const aliquotaPercent = regraRow ? Number(regraRow.aliquotaPercent) : 0;
   const valorMinimo = regraRow ? Number(regraRow.valorMinimoCobranca) : 0;
+  const modo = regraRow?.modo ?? "flat";
+  const baseFaixa = regraRow?.baseFaixa ?? "comissionavel";
+
+  // Carrega faixas só quando relevantes — quando modo='flat', evita um SELECT.
+  const faixasRows = modo === "faixas" ? await listarFaixasComissao(escritorioId) : [];
+  const faixas: FaixaComissao[] = faixasRows.map((f) => ({
+    limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
+    aliquotaPercent: Number(f.aliquotaPercent),
+  }));
 
   // LEFT JOIN com categorias para hidratar `comissionavel` (null quando sem categoria).
   const linhas = await db
@@ -100,8 +110,11 @@ async function simularComissao(
   }));
 
   const resultado = calcularComissao(cobrancasParaCalculo, {
+    modo,
     aliquotaPercent,
     valorMinimo,
+    faixas,
+    baseFaixa,
   });
 
   // Para o UI, devolvemos os mesmos itens enriquecidos (descrição, categoria, etc.).
@@ -122,7 +135,15 @@ async function simularComissao(
   };
 
   return {
-    regra: { aliquotaPercent, valorMinimo },
+    regra: {
+      aliquotaPercent,
+      valorMinimo,
+      modo,
+      baseFaixa,
+      faixas,
+    },
+    aliquotaAplicada: resultado.aliquotaAplicada,
+    faixaAplicada: resultado.faixaAplicada ?? null,
     comissionaveis: resultado.comissionaveis.map((c) => enriquecer(c.id)),
     naoComissionaveis: resultado.naoComissionaveis.map((n) =>
       enriquecer(n.cobranca.id, n.motivo),
@@ -193,7 +214,15 @@ export const comissoesRouter = router({
           totalComissionavel: sim.totais.comissionavel.toFixed(2),
           totalNaoComissionavel: sim.totais.naoComissionavel.toFixed(2),
           totalComissao: sim.totais.valorComissao.toFixed(2),
-          aliquotaUsada: sim.regra.aliquotaPercent.toFixed(2),
+          // No modo flat, a alíquota usada = regra.aliquotaPercent. No modo faixas,
+          // = a alíquota da faixa atingida (já calculada por `aliquotaAplicada`).
+          aliquotaUsada: sim.aliquotaAplicada.toFixed(2),
+          modoUsado: sim.regra.modo,
+          baseFaixaUsada: sim.regra.modo === "faixas" ? sim.regra.baseFaixa : null,
+          faixasUsadas:
+            sim.regra.modo === "faixas"
+              ? JSON.stringify(sim.regra.faixas)
+              : null,
           valorMinimoUsado: sim.regra.valorMinimo.toFixed(2),
           fechadoPorUserId: ctx.user.id,
           observacoes: input.observacoes ?? null,
@@ -286,6 +315,9 @@ export const comissoesRouter = router({
           totalNaoComissionavel: comissoesFechadas.totalNaoComissionavel,
           totalComissao: comissoesFechadas.totalComissao,
           aliquotaUsada: comissoesFechadas.aliquotaUsada,
+          modoUsado: comissoesFechadas.modoUsado,
+          baseFaixaUsada: comissoesFechadas.baseFaixaUsada,
+          faixasUsadas: comissoesFechadas.faixasUsadas,
           valorMinimoUsado: comissoesFechadas.valorMinimoUsado,
           fechadoEm: comissoesFechadas.fechadoEm,
           observacoes: comissoesFechadas.observacoes,

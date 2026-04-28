@@ -18,6 +18,7 @@ import {
   garantirCategoriasPadrao,
   listarCategoriasCobranca,
   listarCategoriasDespesa,
+  listarFaixasComissao,
   obterRegraComissao,
   reconciliarCobrancasOrfas,
   salvarRegraComissao,
@@ -122,28 +123,92 @@ export const financeiroRouter = router({
   obterRegraComissao: protectedProcedure.query(async ({ ctx }) => {
     const esc = await requireEscritorio(ctx.user.id);
     const regra = await obterRegraComissao(esc.escritorio.id);
-    // Quando o escritório nunca configurou, retorna defaults sem persistir nada.
-    return regra ?? {
-      aliquotaPercent: "0.00",
-      valorMinimoCobranca: "0.00",
+    const faixas = await listarFaixasComissao(esc.escritorio.id);
+    if (!regra) {
+      // Defaults sem persistir.
+      return {
+        aliquotaPercent: "0.00",
+        modo: "flat" as const,
+        baseFaixa: "comissionavel" as const,
+        valorMinimoCobranca: "0.00",
+        faixas: [] as Array<{ limiteAte: string | null; aliquotaPercent: string }>,
+      };
+    }
+    return {
+      aliquotaPercent: regra.aliquotaPercent,
+      modo: regra.modo,
+      baseFaixa: regra.baseFaixa,
+      valorMinimoCobranca: regra.valorMinimoCobranca,
+      faixas: faixas.map((f) => ({
+        limiteAte: f.limiteAte,
+        aliquotaPercent: f.aliquotaPercent,
+      })),
     };
   }),
 
   salvarRegraComissao: protectedProcedure
     .input(
       z.object({
+        modo: z.enum(["flat", "faixas"]).default("flat"),
         aliquotaPercent: z.number().min(0).max(100),
         valorMinimoCobranca: z.number().min(0),
+        baseFaixa: z.enum(["bruto", "comissionavel"]).default("comissionavel"),
+        /**
+         * Tabela de faixas. Última faixa pode ter `limiteAte: null` para
+         * representar "sem teto". Vazia quando modo='flat'.
+         */
+        faixas: z
+          .array(
+            z.object({
+              limiteAte: z.number().min(0).nullable(),
+              aliquotaPercent: z.number().min(0).max(100),
+            }),
+          )
+          .max(20)
+          .default([]),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
       requireGestao(esc.colaborador.cargo);
-      await salvarRegraComissao(
-        esc.escritorio.id,
-        input.aliquotaPercent,
-        input.valorMinimoCobranca,
-      );
+
+      // Validação extra de coerência das faixas:
+      if (input.modo === "faixas") {
+        if (input.faixas.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Modo 'faixas' exige pelo menos uma faixa configurada.",
+          });
+        }
+        // Limites finitos devem ser estritamente crescentes; só a última pode ser null.
+        let anterior = -1;
+        for (let i = 0; i < input.faixas.length; i++) {
+          const f = input.faixas[i];
+          if (f.limiteAte === null && i !== input.faixas.length - 1) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Apenas a última faixa pode ter limite 'sem teto'.",
+            });
+          }
+          if (f.limiteAte !== null) {
+            if (f.limiteAte <= anterior) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Os limites das faixas precisam ser crescentes.",
+              });
+            }
+            anterior = f.limiteAte;
+          }
+        }
+      }
+
+      await salvarRegraComissao(esc.escritorio.id, {
+        modo: input.modo,
+        aliquotaPercent: input.aliquotaPercent,
+        valorMinimoCobranca: input.valorMinimoCobranca,
+        baseFaixa: input.baseFaixa,
+        faixas: input.faixas,
+      });
       return { success: true };
     }),
 
