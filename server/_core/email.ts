@@ -192,3 +192,88 @@ export async function enviarEmailConvite(params: {
     text,
   });
 }
+
+/**
+ * Email de redefinição de senha. Link expira em 1h.
+ */
+export async function enviarEmailRedefinirSenha(params: {
+  email: string;
+  nome: string;
+  token: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const link = `${APP_URL}/redefinir-senha?token=${encodeURIComponent(params.token)}`;
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
+  <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">Jurify</h1>
+    </div>
+    <h2 style="font-size: 20px; color: #111827; margin-bottom: 8px;">Redefinir sua senha</h2>
+    <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Olá ${params.nome || "Usuário"},</p>
+    <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">
+      Recebemos uma solicitação para redefinir sua senha do Jurify. Clique no botão abaixo pra escolher uma nova senha:
+    </p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${link}" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+        Redefinir senha
+      </a>
+    </div>
+    <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">
+      Se o botão não funcionar, copie e cole no navegador:<br>
+      <a href="${link}" style="color: #7c3aed; word-break: break-all;">${link}</a>
+    </p>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 24px; text-align: center;">
+      Este link expira em <strong>1 hora</strong>.<br>
+      Se você não solicitou, ignore este email — sua senha continua a mesma.
+    </p>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+  </div>
+</body>
+</html>`;
+  const text = `Olá ${params.nome || "Usuário"},\n\nRecebemos uma solicitação para redefinir sua senha do Jurify.\n\nAcesse o link abaixo (expira em 1h):\n${link}\n\nSe você não solicitou, ignore este email.`;
+  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — Jurify", html, text });
+}
+
+/**
+ * Email de boas-vindas pós-signup com CTA pra dashboard.
+ */
+export async function enviarEmailBoasVindas(params: {
+  email: string;
+  nome: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
+  <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <h1 style="font-size: 28px; color: #7c3aed; margin: 0;">Bem-vindo ao Jurify!</h1>
+    </div>
+    <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">Olá <strong>${params.nome}</strong>,</p>
+    <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Sua conta foi criada com sucesso. Estamos felizes em ter você.</p>
+    <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Pra começar, você pode:</p>
+    <ul style="color: #4b5563; font-size: 15px; line-height: 1.8; padding-left: 20px;">
+      <li>Cadastrar seus primeiros <strong>clientes</strong></li>
+      <li>Organizar tarefas no <strong>Kanban</strong></li>
+      <li>Acompanhar receitas e despesas no <strong>Financeiro</strong></li>
+    </ul>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${APP_URL}/dashboard" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+        Acessar o Jurify
+      </a>
+    </div>
+    <p style="color: #9ca3af; font-size: 13px; text-align: center; margin-top: 24px;">
+      Estamos em <strong>versão Beta</strong> — sua opinião conta muito.<br>
+      Use o menu <strong>Roadmap</strong> dentro do app pra sugerir melhorias.
+    </p>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+  </div>
+</body>
+</html>`;
+  const text = `Olá ${params.nome},\n\nSua conta no Jurify foi criada com sucesso. Estamos felizes em ter você.\n\nAcesse: ${APP_URL}/dashboard\n\nEstamos em versão Beta — use o menu Roadmap dentro do app pra sugerir melhorias.`;
+  return enviarEmail({ to: params.email, subject: "Bem-vindo ao Jurify", html, text });
+}

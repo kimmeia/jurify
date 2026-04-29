@@ -1412,7 +1412,24 @@ export async function runMigrations(): Promise<void> {
 
       if (fileFailed) {
         comErro++;
-        log.warn({ file, warnings }, "Migration teve falhas — não marcando como aplicada");
+        // Erro fatal de schema — log alto E reporte ao Sentry, em vez
+        // de só log warn. Esses erros geralmente significam que o
+        // servidor vai começar a gerar 5xx por coluna inexistente
+        // (foi exatamente o que aconteceu com 0030_auth_extras v1).
+        log.error(
+          { file, warnings },
+          "Migration teve falhas FATAIS — não marcando como aplicada. Esquema do banco pode estar inconsistente com o código.",
+        );
+        try {
+          const { captureError } = await import("./sentry");
+          captureError(new Error(`Migration falhou: ${file}`), {
+            kind: "migration-failed",
+            file,
+            warnings,
+          });
+        } catch {
+          // Sentry pode não estar disponível em dev local — sem problema.
+        }
       } else {
         await connection.execute("INSERT INTO __migrations (filename) VALUES (?)", [file]);
         aplicadas++;

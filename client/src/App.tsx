@@ -8,6 +8,10 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Roadmap from "./pages/Roadmap";
+import Termos from "./pages/Termos";
+import Privacidade from "./pages/Privacidade";
+import EsqueciSenha from "./pages/EsqueciSenha";
+import RedefinirSenha from "./pages/RedefinirSenha";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminClients from "./pages/admin/AdminClients";
 import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
@@ -70,6 +74,10 @@ function Router() {
     <Switch>
       {/* Public routes */}
       <Route path="/" component={Home} />
+      <Route path="/termos" component={Termos} />
+      <Route path="/privacidade" component={Privacidade} />
+      <Route path="/esqueci-senha" component={EsqueciSenha} />
+      <Route path="/redefinir-senha" component={RedefinirSenha} />
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/assinar/:token">
         {(params: any) => <AssinarDocumento token={params.token} />}
