@@ -1,18 +1,22 @@
 /**
- * Router tRPC — Roadmap público.
+ * Router tRPC — Roadmap público com moderação.
  *
- * Visível pra qualquer usuário logado (multi-escritório). Admin (role=admin)
- * pode trocar status via `atualizarStatus`. Voto é "1 por user por item",
- * com toggle (segunda chamada cancela o voto).
+ * Fluxo de moderação:
+ *  - User comum cria sugestão → status `aguardando_aprovacao`
+ *    (visível só pro próprio criador + admins do sistema)
+ *  - Admin aprova movendo pra qualquer outro status (geralmente `novo`)
+ *    → fica visível pra todos os usuários e pode receber votos
+ *  - Admin pode `recusar` (status="recusado") — ainda invisível
+ *    pra outros users; só o criador continua vendo
  *
  * Notificações:
- *  - Quando um item é criado, todos os admins recebem `notificacoes` (sino).
- *  - Quando o status muda pra "lancado", o autor + todos que votaram são
- *    notificados.
+ *  - Item criado → admins recebem `notificacoes` (sino)
+ *  - Status sai de `aguardando_aprovacao` → criador é notificado
+ *  - Status muda pra "lancado" → autor + todos que votaram são notificados
  */
 
 import { z } from "zod";
-import { eq, and, desc, like, or, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, like, or, sql, inArray, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
@@ -27,6 +31,7 @@ import { createLogger } from "./_core/logger";
 const log = createLogger("router-roadmap");
 
 const STATUS_VALORES = [
+  "aguardando_aprovacao",
   "novo",
   "em_analise",
   "planejado",
@@ -79,6 +84,8 @@ export const roadmapRouter = router({
       const db = await getDb();
       if (!db) return { itens: [], total: 0, pagina: 1, limite: input.limite, totalPaginas: 0 };
 
+      const isAdmin = ctx.user.role === "admin";
+
       const conds: any[] = [];
       if (input.status !== "todos") conds.push(eq(roadmapItens.status, input.status));
       if (input.categoria !== "todos") conds.push(eq(roadmapItens.categoria, input.categoria));
@@ -86,6 +93,17 @@ export const roadmapRouter = router({
         const b = `%${input.busca}%`;
         conds.push(or(like(roadmapItens.titulo, b), like(roadmapItens.descricao, b)));
       }
+
+      // Moderação: usuário comum só vê itens públicos (status != aguardando_aprovacao)
+      // OU os que ele mesmo criou (pra acompanhar o que sugeriu).
+      // Admin vê tudo.
+      if (!isAdmin) {
+        conds.push(or(
+          ne(roadmapItens.status, "aguardando_aprovacao"),
+          eq(roadmapItens.criadoPor, ctx.user.id),
+        ));
+      }
+
       const where = conds.length > 0 ? and(...conds) : undefined;
 
       const orderBy = input.ordenacao === "votos"
@@ -174,12 +192,13 @@ export const roadmapRouter = router({
         descricao: input.descricao.trim(),
         categoria: input.categoria,
         criadoPor: ctx.user.id,
+        status: "aguardando_aprovacao", // explícito (também é o default do banco)
       });
       const id = (r as { insertId: number }).insertId;
 
       void notificarAdmins(
-        "Nova sugestão de roadmap",
-        `${ctx.user.name || "Um usuário"} sugeriu: ${input.titulo}`,
+        "Sugestão aguardando aprovação",
+        `${ctx.user.name || "Um usuário"} sugeriu: "${input.titulo}". Aprove em /roadmap.`,
       );
 
       return { id };
@@ -196,11 +215,17 @@ export const roadmapRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [item] = await db
-        .select({ id: roadmapItens.id })
+        .select({ id: roadmapItens.id, status: roadmapItens.status })
         .from(roadmapItens)
         .where(eq(roadmapItens.id, input.itemId))
         .limit(1);
       if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      if (item.status === "aguardando_aprovacao") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Esta sugestão ainda não foi aprovada e não pode receber votos.",
+        });
+      }
 
       const [voto] = await db
         .select({ id: roadmapVotos.id })
@@ -301,6 +326,25 @@ export const roadmapRouter = router({
         .set({ status: input.status })
         .where(eq(roadmapItens.id, input.id));
 
+      // Aprovação: status sai de "aguardando_aprovacao" → notifica criador.
+      // Item agora fica visível pra todos os usuários e pode receber votos.
+      if (antes.status === "aguardando_aprovacao" && input.status !== "aguardando_aprovacao") {
+        if (input.status === "recusado") {
+          void notificarUsers(
+            [antes.criadoPor],
+            "Sua sugestão foi avaliada",
+            `Após análise, "${antes.titulo}" não entrou no roadmap dessa vez.`,
+          );
+        } else {
+          void notificarUsers(
+            [antes.criadoPor],
+            "Sua sugestão foi aprovada!",
+            `"${antes.titulo}" agora está pública no roadmap. Outros usuários podem votar.`,
+          );
+        }
+      }
+
+      // Lançamento: notifica autor + votantes.
       if (input.status === "lancado" && antes.status !== "lancado") {
         const votantes = await db
           .select({ userId: roadmapVotos.userId })

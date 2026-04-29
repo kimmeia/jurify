@@ -26,10 +26,12 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lightbulb, ThumbsUp, Plus, Search, ChevronLeft, ChevronRight, Loader2,
+  List, LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { RoadmapKanban } from "./RoadmapKanban";
 
 const CATEGORIA_META: Record<string, { label: string; cor: string }> = {
   feature: { label: "Funcionalidade", cor: "bg-violet-500/10 text-violet-700 dark:text-violet-300" },
@@ -38,6 +40,7 @@ const CATEGORIA_META: Record<string, { label: string; cor: string }> = {
 };
 
 const STATUS_META: Record<string, { label: string; cor: string }> = {
+  aguardando_aprovacao: { label: "Aguardando aprovação", cor: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
   novo: { label: "Novo", cor: "bg-slate-500/10 text-slate-700 dark:text-slate-300" },
   em_analise: { label: "Em análise", cor: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
   planejado: { label: "Planejado", cor: "bg-blue-500/10 text-blue-700 dark:text-blue-300" },
@@ -46,11 +49,13 @@ const STATUS_META: Record<string, { label: string; cor: string }> = {
   recusado: { label: "Recusado", cor: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300" },
 };
 
-const STATUS_VALORES = ["novo", "em_analise", "planejado", "em_desenvolvimento", "lancado", "recusado"] as const;
+const STATUS_VALORES = ["aguardando_aprovacao", "novo", "em_analise", "planejado", "em_desenvolvimento", "lancado", "recusado"] as const;
 
 export default function Roadmap() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  // Default kanban — visualização que cliente pediu como ideal.
+  const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [status, setStatus] = useState<"todos" | typeof STATUS_VALORES[number]>("todos");
   const [categoria, setCategoria] = useState<"todos" | "feature" | "bug" | "melhoria">("todos");
   const [ordenacao, setOrdenacao] = useState<"votos" | "recente">("votos");
@@ -60,15 +65,21 @@ export default function Roadmap() {
   const [novoTitulo, setNovoTitulo] = useState("");
   const [novaDescricao, setNovaDescricao] = useState("");
   const [novaCategoria, setNovaCategoria] = useState<"feature" | "bug" | "melhoria">("melhoria");
+  const [votandoId, setVotandoId] = useState<number | null>(null);
+  const [atualizandoId, setAtualizandoId] = useState<number | null>(null);
 
-  const limite = 20;
-  const { data, isLoading, refetch } = (trpc as any).roadmap.listar.useQuery({
-    status, categoria, ordenacao, busca: busca || undefined, limite, pagina,
-  });
+  // Kanban precisa de mais itens em uma página (50 = max do backend) e
+  // status=todos pra agrupar nas colunas. Lista usa paginação normal.
+  const limite = view === "kanban" ? 50 : 20;
+  const queryParams = view === "kanban"
+    ? { status: "todos", categoria: "todos", ordenacao: "recente", limite: 50, pagina: 1 }
+    : { status, categoria, ordenacao, busca: busca || undefined, limite, pagina };
+
+  const { data, isLoading, refetch } = (trpc as any).roadmap.listar.useQuery(queryParams);
 
   const criarMut = (trpc as any).roadmap.criar.useMutation({
     onSuccess: () => {
-      toast.success("Sugestão enviada! Obrigado por contribuir.");
+      toast.success("Sugestão enviada! Aguarde aprovação do administrador.");
       setNovoOpen(false);
       setNovoTitulo("");
       setNovaDescricao("");
@@ -79,11 +90,15 @@ export default function Roadmap() {
   });
 
   const votarMut = (trpc as any).roadmap.votar.useMutation({
+    onMutate: ({ itemId }: { itemId: number }) => setVotandoId(itemId),
+    onSettled: () => setVotandoId(null),
     onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
   });
 
   const atualizarStatusMut = (trpc as any).roadmap.atualizarStatus.useMutation({
+    onMutate: ({ id }: { id: number }) => setAtualizandoId(id),
+    onSettled: () => setAtualizandoId(null),
     onSuccess: () => { toast.success("Status atualizado"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -104,13 +119,39 @@ export default function Roadmap() {
             votados sobem na fila.
           </p>
         </div>
-        <Button onClick={() => setNovoOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Sugerir melhoria
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Toggle Lista / Kanban */}
+          <div className="inline-flex rounded-lg border bg-background p-0.5">
+            <button
+              onClick={() => setView("kanban")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                view === "kanban" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Visualização Kanban"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Kanban
+            </button>
+            <button
+              onClick={() => setView("lista")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                view === "lista" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Visualização em Lista"
+            >
+              <List className="h-3.5 w-3.5" />
+              Lista
+            </button>
+          </div>
+          <Button onClick={() => setNovoOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Sugerir melhoria
+          </Button>
+        </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros — só na view de lista (kanban já agrupa por status) */}
+      {view === "lista" && (
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-3">
@@ -151,8 +192,30 @@ export default function Roadmap() {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {/* Lista */}
+      {/* Kanban view */}
+      {view === "kanban" && (
+        isLoading ? (
+          <div className="flex gap-3 overflow-x-auto">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="flex-shrink-0 w-72 h-96" />)}
+          </div>
+        ) : (
+          <RoadmapKanban
+            itens={itens as any}
+            isAdmin={isAdmin}
+            userId={user?.id ?? 0}
+            onAtualizarStatus={(id, novoStatus) => atualizarStatusMut.mutate({ id, status: novoStatus })}
+            onVotar={(id) => votarMut.mutate({ itemId: id })}
+            votandoId={votandoId}
+            atualizandoId={atualizandoId}
+          />
+        )
+      )}
+
+      {/* Lista view */}
+      {view === "lista" && (
+      <>
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
@@ -264,6 +327,8 @@ export default function Roadmap() {
             Próxima <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
+      )}
+      </>
       )}
 
       {/* Dialog nova sugestão */}
