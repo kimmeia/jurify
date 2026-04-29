@@ -263,7 +263,13 @@ export async function criarConvite(
   escritorioId: number,
   convidadoPorId: number,
   email: string,
-  cargo: "gestor" | "atendente" | "estagiario",
+  /**
+   * Cargo do convite. Pode ser um dos defaults ("gestor", "atendente",
+   * "estagiario") OU o nome de um cargo personalizado existente do
+   * escritório (ex: "advogados"). A validação é feita ANTES de chamar
+   * essa função (pelo router enviarConvite).
+   */
+  cargo: string,
   departamento?: string,
 ) {
   const db = await getDb();
@@ -383,29 +389,43 @@ export async function aceitarConvite(token: string, userId: number) {
   const existente = await getEscritorioPorUsuario(userId);
   if (existente) throw new Error("Você já pertence a um escritório. Saia do atual antes de aceitar outro convite.");
 
-  // Resolver cargoPersonalizadoId — sem isso o checkPermission cai no
-  // PERMISSOES_LEGADO (hardcoded) e ignora o que o admin configurou no
-  // painel de Permissões. O nome do cargo personalizado padrão segue o
-  // mapa: gestor→Gestor, atendente→Atendente, estagiario→Estagiário.
-  const NOMES_CARGO: Record<string, string> = {
+  // Resolver cargoPersonalizadoId.
+  //
+  // Dois caminhos:
+  //  1) convite.cargo é um dos defaults ("gestor"|"atendente"|"estagiario"):
+  //     resolve pelo NOME canonical (Gestor/Atendente/Estagiário) — assim
+  //     escritórios que customizaram permissões do "Gestor" no painel
+  //     passam a valer.
+  //  2) convite.cargo é o nome de um cargo personalizado (ex: "advogados"):
+  //     busca direto pelo nome. Nesse caso a coluna `colaboradores.cargo`
+  //     (enum) recebe "atendente" como fallback seguro — checkPermission
+  //     usa cargoPersonalizadoId como fonte da verdade, mas se algo der
+  //     errado, fica com permissões mínimas em vez de admin.
+  const NOMES_CARGO_DEFAULT: Record<string, string> = {
     gestor: "Gestor",
     atendente: "Atendente",
     estagiario: "Estagiário",
   };
-  let cargoPersonalizadoId: number | null = null;
-  const nomeCargo = NOMES_CARGO[convite.cargo];
-  if (nomeCargo) {
-    const { cargosPersonalizados } = await import("../../drizzle/schema");
-    const [cp] = await db
-      .select({ id: cargosPersonalizados.id })
-      .from(cargosPersonalizados)
-      .where(and(
-        eq(cargosPersonalizados.escritorioId, convite.escritorioId),
-        eq(cargosPersonalizados.nome, nomeCargo),
-      ))
-      .limit(1);
-    cargoPersonalizadoId = cp?.id ?? null;
-  }
+  const ehDefault = convite.cargo in NOMES_CARGO_DEFAULT;
+  const nomeBuscado = ehDefault ? NOMES_CARGO_DEFAULT[convite.cargo] : convite.cargo;
+
+  const { cargosPersonalizados } = await import("../../drizzle/schema");
+  const [cp] = await db
+    .select({ id: cargosPersonalizados.id })
+    .from(cargosPersonalizados)
+    .where(and(
+      eq(cargosPersonalizados.escritorioId, convite.escritorioId),
+      eq(cargosPersonalizados.nome, nomeBuscado),
+    ))
+    .limit(1);
+  const cargoPersonalizadoId: number | null = cp?.id ?? null;
+
+  // Cargo enum: se for default, mantém. Se for custom, fallback pra
+  // "atendente" (permissões mínimas em caso de cargoPersonalizadoId não
+  // resolver).
+  const cargoEnum: CargoColaborador = ehDefault
+    ? (convite.cargo as CargoColaborador)
+    : "atendente";
 
   // Criar colaborador (com cargo personalizado vinculado). Em caso de
   // race com outra aba, UNIQUE(escritorioId, userId) barra o INSERT
@@ -414,7 +434,7 @@ export async function aceitarConvite(token: string, userId: number) {
     await db.insert(colaboradores).values({
       escritorioId: convite.escritorioId,
       userId,
-      cargo: convite.cargo as CargoColaborador,
+      cargo: cargoEnum,
       cargoPersonalizadoId,
       departamento: convite.departamento,
       ativo: true,

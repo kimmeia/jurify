@@ -251,7 +251,12 @@ export const configuracoesRouter = router({
   enviarConvite: protectedProcedure
     .input(z.object({
       email: z.string().email(),
-      cargo: z.enum(["gestor", "atendente", "estagiario"]),
+      /**
+       * Cargo do convite. Aceita um dos defaults ou nome de um cargo
+       * personalizado do escritório. Validação em runtime — usa varchar
+       * no banco em vez de enum (migration 0033).
+       */
+      cargo: z.string().min(1).max(64),
       departamento: z.string().max(64).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -262,15 +267,42 @@ export const configuracoesRouter = router({
         "Sem permissão para convidar colaboradores.",
       );
 
+      // Validação do cargo: ou é default OU é cargo personalizado existente
+      // daquele escritório. Evita aceitar strings arbitrárias.
+      const CARGOS_DEFAULT = new Set(["gestor", "atendente", "estagiario"]);
+      let nomeCargoFinal = input.cargo;
+      if (!CARGOS_DEFAULT.has(input.cargo)) {
+        const { getDb } = await import("../db");
+        const { cargosPersonalizados } = await import("../../drizzle/schema");
+        const { and: drizzleAnd, eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new Error("Database indisponível");
+        const [cargoExistente] = await db
+          .select({ nome: cargosPersonalizados.nome })
+          .from(cargosPersonalizados)
+          .where(drizzleAnd(
+            eq(cargosPersonalizados.escritorioId, result.escritorio.id),
+            eq(cargosPersonalizados.nome, input.cargo),
+          ))
+          .limit(1);
+        if (!cargoExistente) {
+          throw new Error(
+            `Cargo "${input.cargo}" não existe. Crie em Permissões > Cargos antes de convidar.`,
+          );
+        }
+        nomeCargoFinal = cargoExistente.nome;
+      }
+
       const { token, expiresAt } = await criarConvite(
         result.escritorio.id,
         result.colaborador.id,
         input.email,
-        input.cargo,
+        nomeCargoFinal,
         input.departamento,
       );
 
-      // Enviar email de convite via Resend
+      // Enviar email de convite via Resend.
+      // Pra defaults usa label amigável; pra cargo custom usa o próprio nome.
       const CARGO_LABELS: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
       let emailEnviado = false;
       let emailErro: string | undefined;
@@ -279,7 +311,7 @@ export const configuracoesRouter = router({
         const resultado = await enviarEmailConvite({
           email: input.email,
           nomeEscritorio: result.escritorio.nome,
-          cargo: CARGO_LABELS[input.cargo] || input.cargo,
+          cargo: CARGO_LABELS[nomeCargoFinal] || nomeCargoFinal,
           token,
           convidadoPor: ctx.user.name || ctx.user.email || "Admin",
         });
