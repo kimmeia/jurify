@@ -61,6 +61,13 @@ export default function Dashboard() {
 
   const { data: subscription } = trpc.subscription.current.useQuery(undefined, { enabled: !!user, retry: false });
   const { data: credits } = trpc.dashboard.credits.useQuery(undefined, { enabled: !!user, retry: false });
+  // Contagem de clientes aguardando envio de documentação. Click no card
+  // navega pra `/clientes?aguardandoDocs=1` que abre a lista filtrada.
+  const { data: clientesStats } = (trpc as any).clientes?.estatisticas?.useQuery?.(
+    undefined,
+    { enabled: !!user, retry: false, refetchInterval: 60_000 },
+  ) || { data: null };
+  const aguardandoDocs: number = clientesStats?.aguardandoDocumentacao ?? 0;
   const { data: r } = trpc.dashboard.resumoEscritorio.useQuery(undefined, {
     enabled: !!user,
     retry: false,
@@ -276,7 +283,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-3">
+              <div className={`grid gap-3 ${aguardandoDocs > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                 <SubMetric
                   value={totalHoje}
                   label="Compromissos"
@@ -295,6 +302,14 @@ export default function Dashboard() {
                   color="text-indigo-600"
                   onClick={() => nav("/processos")}
                 />
+                {aguardandoDocs > 0 && (
+                  <SubMetric
+                    value={aguardandoDocs}
+                    label="Aguardando docs"
+                    color="text-orange-600"
+                    onClick={() => nav("/clientes?aguardandoDocs=1")}
+                  />
+                )}
               </div>
             </CardContent>
           </Card>

@@ -510,6 +510,19 @@ export const contatos = mysqlTable("contatos", {
    * Cobranças sincronizadas que vêm sem `externalReference` herdam este atendente.
    */
   atendenteResponsavelId: int("atendenteRespIdContato"),
+  /**
+   * Cliente está aguardando o envio de documentos (RG, procuração, comprovante,
+   * etc). Quando true, aparece no card "Aguardando documentação" do dashboard
+   * e em filtro próprio na lista de clientes. SmartFlow pode usar essa flag
+   * como condição em gatilhos (ex: WhatsApp automático cobrando docs).
+   */
+  documentacaoPendente: boolean("documentacaoPendente").default(false).notNull(),
+  /**
+   * Observações livres do que está pendente. Ex: "Falta RG e procuração
+   * assinada". O atendente preenche ao marcar a flag e atualiza conforme
+   * recebe os documentos.
+   */
+  documentacaoObservacoes: text("documentacaoObservacoes"),
   createdAt: timestamp("createdAtContato").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtContato").defaultNow().onUpdateNow().notNull(),
 });
