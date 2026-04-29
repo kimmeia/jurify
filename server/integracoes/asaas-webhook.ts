@@ -250,14 +250,15 @@ export function registerAsaasWebhook(app: Express) {
                 telefone: customer.mobilePhone || customer.phone || null,
               }).where(eq(contatos.id, contatoId));
             } else {
-              // Criar contato novo no CRM
+              // Criar contato novo no CRM. Origem "asaas" pra deixar
+              // claro que veio da sincronização (não foi cadastro manual).
               const [novo] = await db.insert(contatos).values({
                 escritorioId,
                 nome: customer.name,
                 cpfCnpj: cpfLimpo || null,
                 email: customer.email || null,
                 telefone: customer.mobilePhone || customer.phone || null,
-                origem: "manual",
+                origem: "asaas",
               }).$returningId();
               contatoId = novo.id;
             }

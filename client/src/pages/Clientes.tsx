@@ -21,6 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
@@ -244,6 +248,25 @@ export default function Clientes() {
     limite: 50,
   });
 
+  // Permissões pra mostrar/esconder ícone de excluir na row.
+  // Default: se não carregou ainda, esconde (defesa em profundidade).
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeExcluirCliente = !!(minhasPerms?.permissoes?.clientes?.excluir);
+
+  // Mutation de excluir + estado pra dialog de confirmação.
+  const [excluirAlvo, setExcluirAlvo] = useState<{ id: number; nome: string } | null>(null);
+  const excluirMut = (trpc as any).clientes.excluir.useMutation({
+    onSuccess: () => {
+      toast.success("Cliente excluído");
+      setExcluirAlvo(null);
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const clientesFiltrados = useMemo(() => {
     const base = data?.clientes || [];
     return aplicarSegmento(base, segmento);
@@ -314,8 +337,8 @@ export default function Clientes() {
         </Button>
       </div>
 
-      {/* Stats */}
-      {stats && (
+      {/* Stats — só na lista; no detalhe os 5 cards do cliente já bastam */}
+      {!selId && stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             { v: stats.total, l: "Total", c: "" },
@@ -440,17 +463,22 @@ export default function Clientes() {
                   {clientesFiltrados.map((c: any) => (
                     <div
                       key={c.id}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/40 transition-colors text-left group"
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/40 transition-colors text-left group cursor-pointer"
+                      onClick={(e) => {
+                        // Linha inteira clicável — abre detalhe. Cliques em
+                        // controles internos (checkbox, botões) chamam
+                        // stopPropagation pra não interferir.
+                        if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
+                        setSelId(c.id);
+                      }}
                     >
-                      <Checkbox
-                        checked={selecionados.has(c.id)}
-                        onCheckedChange={() => toggleSelecionado(c.id)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <button
-                        className="flex-1 flex items-center gap-3 min-w-0"
-                        onClick={() => setSelId(c.id)}
-                      >
+                      <div data-stop-row-click onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selecionados.has(c.id)}
+                          onCheckedChange={() => toggleSelecionado(c.id)}
+                        />
+                      </div>
+                      <div className="flex-1 flex items-center gap-3 min-w-0">
                         <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-200 to-purple-100 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0">
                           {initials(c.nome || "?")}
                         </div>
@@ -474,7 +502,7 @@ export default function Clientes() {
                             )}
                           </div>
                         </div>
-                      </button>
+                      </div>
                       <div className="w-32 text-right">
                         <FinanceiroBadge contatoId={c.id} />
                       </div>
@@ -484,6 +512,29 @@ export default function Clientes() {
                       <span className="text-[10px] text-muted-foreground shrink-0 w-12 text-right">
                         {timeAgo(c.createdAt)}
                       </span>
+                      {/* Ações que aparecem só no hover */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Ver/Editar cliente"
+                          onClick={(e) => { e.stopPropagation(); setSelId(c.id); }}
+                        >
+                          <PenLine className="h-3.5 w-3.5" />
+                        </Button>
+                        {podeExcluirCliente && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 hover:bg-red-500/10 hover:text-red-600"
+                            title="Excluir cliente"
+                            onClick={(e) => { e.stopPropagation(); setExcluirAlvo({ id: c.id, nome: c.nome }); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -521,6 +572,32 @@ export default function Clientes() {
       )}
 
       <NovoClienteDialog open={showNovo} onOpenChange={setShowNovo} onSuccess={() => refetch()} />
+
+      {/* Confirmação de exclusão de cliente.
+          Backend faz cascade: deleta conversas, leads, tarefas, anotações,
+          arquivos, assinaturas e cobranças Asaas vinculadas. */}
+      <AlertDialog open={!!excluirAlvo} onOpenChange={(o) => !o && setExcluirAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove <strong>{excluirAlvo?.nome}</strong> e todos os dados vinculados:
+              conversas, leads, tarefas, anotações, arquivos, assinaturas e cobranças.
+              Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => excluirAlvo && excluirMut.mutate({ id: excluirAlvo.id })}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
