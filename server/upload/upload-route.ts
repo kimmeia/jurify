@@ -1,38 +1,70 @@
 /**
  * Router tRPC — Upload de Arquivos
- * 
+ *
  * Frontend converte arquivo para base64, envia via tRPC mutation.
  * Backend decodifica e salva em ./uploads/{escritorioId}/
  * Arquivos servidos via Express static em /uploads/
- * 
+ *
  * Limite: 10MB por arquivo. Suporta PDF, imagens, docs.
+ *
+ * Validação de tipo: confiar no MIME enviado pelo cliente é inseguro
+ * (cliente pode enviar `.exe` declarando `application/pdf`). Por isso
+ * checamos a "magic number" do buffer com `file-type`. Para tipos de
+ * texto puro (txt/csv) que não têm magic number, validamos heurística:
+ * conteúdo precisa ser UTF-8 sem bytes nulos.
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
-import fs from "fs";
+import { fileTypeFromBuffer } from "file-type";
+import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
 const UPLOAD_DIR = path.resolve("./uploads");
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = [
+
+// MIME types aceitos. Mantemos lista explícita pra fechar a porta pra
+// formatos que nunca deveriam ser aceitos (ex: executáveis, scripts).
+const ALLOWED_TYPES = new Set([
   "application/pdf",
-  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/plain", "text/csv",
-];
+  "text/plain",
+  "text/csv",
+]);
 
-function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// Tipos sem magic number — só passam se input.tipo declarar e o conteúdo
+// parecer texto válido. Tudo mais precisa bater com fileTypeFromBuffer.
+const TIPOS_SEM_MAGIC = new Set(["text/plain", "text/csv"]);
+
+async function ensureDir(dir: string): Promise<void> {
+  await fs.mkdir(dir, { recursive: true });
 }
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+}
+
+/** Heurística simples pra "isso parece texto?" — sem bytes nulos e
+ *  decodificável como UTF-8. Não é blindagem perfeita, mas barra
+ *  binários disfarçados de .txt. */
+function pareceTextoPlano(buffer: Buffer): boolean {
+  if (buffer.includes(0)) return false;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const uploadRouter = router({
@@ -46,47 +78,81 @@ export const uploadRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
 
-      // Validar tipo
-      const mimeType = input.tipo.split(";")[0].trim();
-      if (!ALLOWED_TYPES.includes(mimeType)) {
-        throw new Error(`Tipo de arquivo não permitido: ${mimeType}. Tipos aceitos: PDF, imagens, documentos.`);
+      // 1) Allowlist no MIME declarado — barra cedo formatos óbvios.
+      const mimeDeclarado = input.tipo.split(";")[0].trim();
+      if (!ALLOWED_TYPES.has(mimeDeclarado)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Tipo de arquivo não permitido: ${mimeDeclarado}. Tipos aceitos: PDF, imagens, documentos.`,
+        });
       }
 
-      // Decodificar base64
+      // 2) Decodifica o base64.
       let base64Data = input.base64;
       if (base64Data.includes(",")) {
-        base64Data = base64Data.split(",")[1]; // Remove "data:mime;base64,"
+        base64Data = base64Data.split(",")[1];
       }
-
       const buffer = Buffer.from(base64Data, "base64");
 
-      // Validar tamanho
+      // 3) Limite de tamanho — checagem real depois de decodificar.
       if (buffer.length > MAX_SIZE_BYTES) {
-        throw new Error(`Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 10MB.`);
+        throw new TRPCError({
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 10MB.`,
+        });
+      }
+      if (buffer.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo vazio." });
       }
 
-      // Criar diretório do escritório
-      const escDir = path.join(UPLOAD_DIR, `escritorio_${esc.escritorio.id}`);
-      ensureDir(escDir);
+      // 4) Validação por magic number — não confia no MIME do cliente.
+      //    Pra binários, exige bater com a allowlist. Pra texto puro
+      //    (sem magic), heurística UTF-8.
+      const detectado = await fileTypeFromBuffer(buffer);
+      if (detectado) {
+        if (!ALLOWED_TYPES.has(detectado.mime)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Conteúdo do arquivo é "${detectado.mime}", que não é permitido.`,
+          });
+        }
+        // Cliente declarou um tipo, conteúdo é outro: pode ser ataque.
+        if (detectado.mime !== mimeDeclarado) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Tipo declarado (${mimeDeclarado}) não bate com o conteúdo (${detectado.mime}).`,
+          });
+        }
+      } else {
+        // Sem magic detectada — só aceita se for texto declarado E o
+        // conteúdo parecer texto válido.
+        if (!TIPOS_SEM_MAGIC.has(mimeDeclarado) || !pareceTextoPlano(buffer)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não foi possível identificar o tipo do arquivo. Use PDF, imagem ou documento conhecido.",
+          });
+        }
+      }
 
-      // Gerar nome único
+      // 5) Persistência. Diretório por escritório, nome único.
+      const escDir = path.join(UPLOAD_DIR, `escritorio_${esc.escritorio.id}`);
+      await ensureDir(escDir);
+
       const ext = path.extname(input.nome) || ".bin";
       const hash = crypto.randomBytes(8).toString("hex");
       const filename = `${Date.now()}_${hash}${ext}`;
       const filepath = path.join(escDir, filename);
 
-      // Salvar arquivo
-      fs.writeFileSync(filepath, buffer);
+      await fs.writeFile(filepath, buffer);
 
-      // URL relativa (servida via Express static)
       const url = `/uploads/escritorio_${esc.escritorio.id}/${filename}`;
 
       return {
         url,
         nome: sanitizeFilename(input.nome),
-        tipo: mimeType,
+        tipo: mimeDeclarado,
         tamanho: buffer.length,
       };
     }),
@@ -96,17 +162,21 @@ export const uploadRouter = router({
     .input(z.object({ url: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
 
-      // Segurança: garantir que o URL é do escritório do usuário
+      // Segurança: garantir que o URL é do escritório do usuário (path
+      // traversal: bloqueia ".." e qualquer coisa fora do prefixo esperado).
       const expected = `/uploads/escritorio_${esc.escritorio.id}/`;
-      if (!input.url.startsWith(expected)) {
-        throw new Error("Sem permissão para excluir este arquivo.");
+      if (!input.url.startsWith(expected) || input.url.includes("..")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir este arquivo." });
       }
 
       const filepath = path.join(UPLOAD_DIR, input.url.replace("/uploads/", ""));
-      if (fs.existsSync(filepath)) {
-        fs.unlinkSync(filepath);
+      try {
+        await fs.unlink(filepath);
+      } catch (err: any) {
+        // ENOENT (arquivo já excluído) é benigno — sucesso idempotente.
+        if (err.code !== "ENOENT") throw err;
       }
 
       return { success: true };
