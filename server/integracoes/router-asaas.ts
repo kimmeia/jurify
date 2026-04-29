@@ -554,14 +554,15 @@ export const asaasRouter = router({
           });
           vinculados++;
         } else {
-          // Criar contato novo no CRM
+          // Criar contato novo no CRM com origem "asaas" — script de
+          // sincronização importou esse cliente direto da conta Asaas.
           const [novoContato] = await db.insert(contatos).values({
             escritorioId: esc.escritorio.id,
             nome: asaasCli.name,
             cpfCnpj: cpfLimpo,
             email: asaasCli.email || null,
             telefone: asaasCli.mobilePhone || asaasCli.phone || null,
-            origem: "manual",
+            origem: "asaas",
           }).$returningId();
 
           await db.insert(asaasClientes).values({

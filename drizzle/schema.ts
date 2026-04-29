@@ -493,7 +493,7 @@ export const contatos = mysqlTable("contatos", {
   telefonesSecundarios: text("telefonesSecundarios"),
   email: varchar("emailContato", { length: 320 }),
   cpfCnpj: varchar("cpfCnpj", { length: 18 }),
-  origem: mysqlEnum("origemContato", ["whatsapp", "instagram", "facebook", "telefone", "manual", "site"]).default("manual").notNull(),
+  origem: mysqlEnum("origemContato", ["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"]).default("manual").notNull(),
   tags: text("tagsContato"),
   observacoes: text("observacoesContato"),
   responsavelId: int("responsavelIdContato"),
