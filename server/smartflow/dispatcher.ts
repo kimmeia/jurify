@@ -274,10 +274,34 @@ async function executarCenarioCarregado(
  *   2. `clienteAsaasId` informado → busca `asaasClientes` → `contatos`.
  * Retorna `{}` se nada encontrado (chamador continua sem telefone).
  */
+/** Lê os campos personalizados do contato (JSON serializado).
+ *  Retorna `{}` se não houver, JSON inválido ou erro. Nunca lança. */
+async function lerCamposPersonalizados(
+  escritorioId: number,
+  contatoId: number | undefined,
+): Promise<Record<string, unknown>> {
+  if (!contatoId) return {};
+  const db = await getDb();
+  if (!db) return {};
+  try {
+    const { contatos } = await import("../../drizzle/schema");
+    const [c] = await db
+      .select({ camposPersonalizados: contatos.camposPersonalizados })
+      .from(contatos)
+      .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
+      .limit(1);
+    if (!c?.camposPersonalizados) return {};
+    const parsed = JSON.parse(c.camposPersonalizados);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 async function resolverContatoAsaas(
   escritorioId: number,
   opts: { contatoId?: number; clienteAsaasId?: string },
-): Promise<{ contatoId?: number; nome?: string; telefone?: string; email?: string; atendenteResponsavelId?: number }> {
+): Promise<{ contatoId?: number; nome?: string; telefone?: string; email?: string; atendenteResponsavelId?: number; camposPersonalizados?: Record<string, unknown> }> {
   const db = await getDb();
   if (!db) return {};
   try {
@@ -307,11 +331,22 @@ async function resolverContatoAsaas(
         telefone: contatos.telefone,
         email: contatos.email,
         atendenteResponsavelId: contatos.atendenteResponsavelId,
+        camposPersonalizados: contatos.camposPersonalizados,
       })
       .from(contatos)
       .where(and(eq(contatos.id, contatoIdFinal), eq(contatos.escritorioId, escritorioId)))
       .limit(1);
     if (!c) return {};
+
+    let campos: Record<string, unknown> | undefined;
+    if (c.camposPersonalizados) {
+      try {
+        const parsed = JSON.parse(c.camposPersonalizados);
+        if (parsed && typeof parsed === "object") campos = parsed;
+      } catch {
+        /* JSON inválido — ignora */
+      }
+    }
 
     return {
       contatoId: c.id,
@@ -319,6 +354,7 @@ async function resolverContatoAsaas(
       telefone: c.telefone || undefined,
       email: c.email || undefined,
       atendenteResponsavelId: c.atendenteResponsavelId ?? undefined,
+      camposPersonalizados: campos,
     };
   } catch (err: any) {
     log.warn({ err: err.message }, "SmartFlow: falha ao resolver contato Asaas");
@@ -450,6 +486,7 @@ export async function dispararPagamentoRecebido(
       emailCliente: contato.email,
       contatoId: contato.contatoId,
       atendenteResponsavelId: contato.atendenteResponsavelId,
+      cliente: { campos: contato.camposPersonalizados || {} },
       valorTotalCliente: resumo.valorTotalCliente,
       percentualPago: resumo.percentualPago,
     };
@@ -623,6 +660,7 @@ export async function dispararPagamentoVencido(
         emailCliente: contato.email,
         contatoId: contato.contatoId ?? params.contatoId,
         atendenteResponsavelId: contato.atendenteResponsavelId,
+        cliente: { campos: contato.camposPersonalizados || {} },
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
@@ -703,6 +741,7 @@ export async function dispararProximoVencimento(
         emailCliente: contato.email,
         contatoId: contato.contatoId ?? params.contatoId,
         atendenteResponsavelId: contato.atendenteResponsavelId,
+        cliente: { campos: contato.camposPersonalizados || {} },
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
@@ -827,6 +866,10 @@ export async function dispararMensagemCanal(
       }
     }
 
+    // Lê campos personalizados do cliente (definidos em Configurações)
+    // pra disponibilizar como `cliente.campos.<chave>` no contexto.
+    const camposCliente = await lerCamposPersonalizados(escritorioId, params.contatoId);
+
     const contexto: SmartflowContexto = {
       mensagem: params.mensagem,
       nomeCliente: params.nomeCliente,
@@ -835,6 +878,7 @@ export async function dispararMensagemCanal(
       conversaId: params.conversaId,
       canalId: params.canalId,
       canalTipo: params.canalTipo,
+      cliente: { campos: camposCliente },
     };
 
     // 1. Tenta cenários `mensagem_canal` com filtro de canal

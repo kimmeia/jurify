@@ -523,6 +523,14 @@ export const contatos = mysqlTable("contatos", {
    * recebe os documentos.
    */
   documentacaoObservacoes: text("documentacaoObservacoes"),
+  /**
+   * Valores dos campos personalizados do escritório (definidos em
+   * `camposPersonalizadosCliente`). JSON serializado com formato:
+   * `{ "<chave>": "<valor>" }`. Nulo quando o cliente ainda não tem
+   * nenhum valor definido. Disponível no SmartFlow como
+   * `{{cliente.campos.<chave>}}`.
+   */
+  camposPersonalizados: text("camposPersonalizadosContato"),
   createdAt: timestamp("createdAtContato").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtContato").defaultNow().onUpdateNow().notNull(),
 });
@@ -1710,6 +1718,36 @@ export const kanbanTags = mysqlTable("kanban_tags", {
   cor: varchar("corKTag", { length: 16 }).notNull(),
   createdAt: timestamp("createdAtKTag").defaultNow().notNull(),
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAMPOS PERSONALIZADOS DE CLIENTE
+// Cada escritório define campos extras pra capturar no cadastro do cliente
+// (ex: "Número OAB", "Data audiência", "Tipo de processo"). Os valores ficam
+// em `contatos.camposPersonalizados` (JSON) e o catálogo de definições aqui.
+// Disponíveis no SmartFlow como `{{cliente.campos.<chave>}}`.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const camposPersonalizadosCliente = mysqlTable("campos_personalizados_cliente", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdCpc").notNull(),
+  /** Chave usada nas variáveis ({{cliente.campos.<chave>}}). camelCase,
+   *  sem espaços. Único por escritório. */
+  chave: varchar("chaveCpc", { length: 48 }).notNull(),
+  /** Label exibido no formulário do cliente. Ex: "Número OAB". */
+  label: varchar("labelCpc", { length: 64 }).notNull(),
+  /** Tipo do campo: texto / numero / data / textarea / select / boolean. */
+  tipo: mysqlEnum("tipoCpc", ["texto", "numero", "data", "textarea", "select", "boolean"]).default("texto").notNull(),
+  /** Pra tipo=select: opções como JSON array de strings. Nulo nos outros tipos. */
+  opcoes: text("opcoesCpc"),
+  /** Texto auxiliar exibido como hint abaixo do campo. */
+  ajuda: varchar("ajudaCpc", { length: 200 }),
+  obrigatorio: boolean("obrigatorioCpc").default(false).notNull(),
+  /** Ordem de exibição no formulário (ascendente). */
+  ordem: int("ordemCpc").default(0).notNull(),
+  createdAt: timestamp("createdAtCpc").defaultNow().notNull(),
+});
+
+export type CampoPersonalizadoCliente = typeof camposPersonalizadosCliente.$inferSelect;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TETOS LEGAIS COM TIMELINE

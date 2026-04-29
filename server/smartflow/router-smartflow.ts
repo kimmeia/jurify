@@ -93,9 +93,43 @@ export const smartflowRouter = router({
    * "pagamento_recebido" expõe variáveis de pagamento + cliente; gatilho
    * "mensagem_recebida" expõe variáveis de mensagem).
    */
-  catalogoVariaveis: protectedProcedure.query(async () => {
+  catalogoVariaveis: protectedProcedure.query(async ({ ctx }) => {
     const { CATALOGO_VARIAVEIS } = await import("./interpolar");
-    return CATALOGO_VARIAVEIS;
+    // Enriquece com os campos personalizados do escritório — ficam
+    // disponíveis pra todos os gatilhos que tenham `contatoId` no contexto.
+    let camposExtras: { path: string; label: string; exemplo: string }[] = [];
+    try {
+      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (esc) {
+        const { getDb } = await import("../db");
+        const db = await getDb();
+        if (db) {
+          const { camposPersonalizadosCliente } = await import("../../drizzle/schema");
+          const { eq, asc } = await import("drizzle-orm");
+          const rows = await db
+            .select()
+            .from(camposPersonalizadosCliente)
+            .where(eq(camposPersonalizadosCliente.escritorioId, esc.escritorio.id))
+            .orderBy(asc(camposPersonalizadosCliente.ordem));
+          camposExtras = rows.map((r) => ({
+            path: `cliente.campos.${r.chave}`,
+            label: r.label,
+            exemplo: r.tipo === "data" ? "2025-04-01" : r.tipo === "numero" ? "123" : r.label.toLowerCase(),
+          }));
+        }
+      }
+    } catch {
+      // Se falhar, devolve catálogo padrão sem extras — fluxo segue
+    }
+
+    if (camposExtras.length === 0) return CATALOGO_VARIAVEIS;
+
+    // Adiciona em todos os gatilhos que têm contatoId
+    return CATALOGO_VARIAVEIS.map((g) => {
+      const temContato = g.variaveis.some((v) => v.path === "contatoId" || v.path === "telefoneCliente");
+      return temContato ? { ...g, variaveis: [...g.variaveis, ...camposExtras] } : g;
+    });
   }),
 
   /** Lista cenários do escritório */
