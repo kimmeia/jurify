@@ -110,6 +110,14 @@ export default function Configuracoes() {
   const { data, isLoading, refetch } = trpc.configuracoes.meuEscritorio.useQuery();
   const { data: equipeData, refetch: refetchEquipe } = trpc.configuracoes.listarColaboradores.useQuery(undefined, { enabled: !!data });
   const { data: convites, refetch: refetchConvites } = trpc.configuracoes.listarConvites.useQuery(undefined, { enabled: !!data });
+  // Cargos personalizados criados pelo admin em /configuracoes (aba
+  // Permissões). O select de "Cargo" do convite mostra os 3 default +
+  // todos os custom (excluindo "Dono", "Gestor", "Atendente", "Estagiário"
+  // que são os defaults canônicos auto-criados pelo sistema).
+  const { data: cargosCustom } = (trpc as any).permissoes?.listarCargos?.useQuery?.(
+    undefined,
+    { enabled: !!data, retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
 
   // ─── Perfil form state ───
   const [editMode, setEditMode] = useState(false);
@@ -117,7 +125,9 @@ export default function Configuracoes() {
 
   // ─── Convite form state ───
   const [conviteEmail, setConviteEmail] = useState("");
-  const [conviteCargo, setConviteCargo] = useState<"gestor" | "atendente" | "estagiario">("atendente");
+  // Cargo do convite — pode ser default ("gestor"|"atendente"|"estagiario")
+  // ou nome de um cargo personalizado criado em Permissões (ex: "advogados").
+  const [conviteCargo, setConviteCargo] = useState<string>("atendente");
   const [conviteDepto, setConviteDepto] = useState("");
   const [lastToken, setLastToken] = useState("");
 
@@ -426,12 +436,21 @@ export default function Configuracoes() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Cargo *</Label>
-                    <Select value={conviteCargo} onValueChange={(v) => setConviteCargo(v as any)}>
+                    <Select value={conviteCargo} onValueChange={(v) => setConviteCargo(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
+                        {/* Defaults — nomes técnicos (gestor/atendente/estagiario)
+                            consumidos pelo backend. Labels amigáveis aqui no UI. */}
                         {CARGOS_CONVITE.map((c) => (
                           <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                         ))}
+                        {/* Cargos personalizados criados em Permissões.
+                            Filtra os defaults canônicos pra não duplicar. */}
+                        {(cargosCustom || [])
+                          .filter((c: any) => !["Dono", "Gestor", "Atendente", "Estagiário"].includes(c.nome))
+                          .map((c: any) => (
+                            <SelectItem key={c.id} value={c.nome}>{c.nome}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -440,7 +459,10 @@ export default function Configuracoes() {
                     <Input placeholder="Ex: Comercial" value={conviteDepto} onChange={(e) => setConviteDepto(e.target.value)} />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">{CARGO_DESCRICAO[conviteCargo]}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(CARGO_DESCRICAO as Record<string, string>)[conviteCargo]
+                    || "Cargo personalizado — permissões definidas em Permissões > Cargos."}
+                </p>
                 <Button onClick={() => enviarConviteMut.mutate({ email: conviteEmail, cargo: conviteCargo, departamento: conviteDepto || undefined })}
                   disabled={!conviteEmail || enviarConviteMut.isPending}>
                   {enviarConviteMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />} Enviar Convite

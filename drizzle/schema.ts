@@ -361,7 +361,14 @@ export const convitesColaborador = mysqlTable("convites_colaborador", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioId").notNull(), // FK → escritorios.id
   email: varchar("email", { length: 320 }).notNull(),
-  cargo: mysqlEnum("cargoConvite", ["gestor", "atendente", "estagiario"]).notNull(),
+  /**
+   * Cargo do convite. Pode ser um dos defaults ("gestor", "atendente",
+   * "estagiario") OU o nome de um cargo personalizado criado pelo
+   * escritório (ex: "advogados", "secretaria"). Validado em runtime
+   * pelo backend (`enviarConvite`). Quando o convite é aceito,
+   * `aceitarConvite` resolve `cargoPersonalizadoId` por nome.
+   */
+  cargo: varchar("cargoConvite", { length: 64 }).notNull(),
   departamento: varchar("departamentoConvite", { length: 64 }),
   token: varchar("token", { length: 128 }).notNull().unique(),
   status: mysqlEnum("statusConvite", ["pendente", "aceito", "expirado", "cancelado"]).default("pendente").notNull(),
