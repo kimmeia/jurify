@@ -581,6 +581,55 @@ function handleEsperar(
   };
 }
 
+/** Define uma variável no contexto pra usar em passos seguintes.
+ *  Suporta interpolação de outras variáveis no valor — ex: chave="dobro",
+ *  valor="{{pagamentoValor}}" guarda o valor do pagamento como string em
+ *  ctx.dobro. Permite escrever variáveis aninhadas via dot-notation
+ *  (chave="cliente.observado" cria/atualiza cliente.observado). */
+async function handleDefinirVariavel(
+  passo: Passo,
+  ctx: SmartflowContexto,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { chave?: string; valor?: string };
+  const chave = (cfg.chave || "").trim();
+  if (!chave) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Chave da variável vazia" };
+  }
+  if (!/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(chave)) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: `Chave inválida: "${chave}". Use letras, números, _ e . (pra aninhar).`,
+    };
+  }
+
+  const { interpolarVariaveis } = await import("./interpolar");
+  const valorInterpolado = interpolarVariaveis(String(cfg.valor ?? ""), ctx as any);
+
+  // Aplica suporte a dot-notation (chave="a.b.c" cria estrutura aninhada)
+  const novoCtx: SmartflowContexto = { ...ctx };
+  const partes = chave.split(".");
+  if (partes.length === 1) {
+    novoCtx[partes[0]] = valorInterpolado;
+  } else {
+    let alvo: Record<string, unknown> = novoCtx as any;
+    for (let i = 0; i < partes.length - 1; i++) {
+      const p = partes[i];
+      const atual = alvo[p];
+      if (!atual || typeof atual !== "object") {
+        alvo[p] = {};
+      } else {
+        // Clona pra não mutar referência compartilhada com ctx anterior
+        alvo[p] = { ...(atual as Record<string, unknown>) };
+      }
+      alvo = alvo[p] as Record<string, unknown>;
+    }
+    alvo[partes[partes.length - 1]] = valorInterpolado;
+  }
+
+  return { sucesso: true, contexto: novoCtx };
+}
+
 async function handleWebhook(
   passo: Passo,
   ctx: SmartflowContexto,
@@ -680,6 +729,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   esperar: handleEsperar,
   webhook: handleWebhook,
   kanban_criar_card: handleKanbanCriarCard,
+  definir_variavel: handleDefinirVariavel,
 };
 
 export interface ExecutarCenarioResultado {

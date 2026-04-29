@@ -71,7 +71,8 @@ export type TipoPasso =
   | "condicional"
   | "esperar"
   | "webhook"
-  | "kanban_criar_card";
+  | "kanban_criar_card"
+  | "definir_variavel";
 
 export type StatusExecucao = "rodando" | "concluido" | "erro" | "cancelado";
 
@@ -341,6 +342,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
   { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300", grupo: "fluxo" },
   { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "kanban" },
+  { id: "definir_variavel", label: "Definir variável", descricao: "Guarda um valor no contexto pra usar em passos seguintes.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "fluxo" },
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
