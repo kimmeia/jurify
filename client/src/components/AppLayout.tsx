@@ -65,6 +65,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { BetaBadge } from "./BetaBadge";
+import { moduloOcultoNoMenu } from "@/config/visibility";
 import { toast } from "sonner";
 
 const calculosSubItems = [
@@ -374,7 +375,6 @@ function AppSidebarContent({
                         className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
                       />
                       <span className="flex-1">Cálculos</span>
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-950/20">Em revisão</Badge>
                       {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                       <ChevronRight
                         className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ml-1 ${calculosOpen ? "rotate-90" : ""}`}
@@ -413,12 +413,12 @@ function AppSidebarContent({
                 >
                   <Users className={`h-4 w-4 ${location === "/clientes" ? "text-primary" : ""}`} />
                   <span className="flex-1">Clientes</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-950/20">Em revisão</Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
               {/* Agenda (unifica Tarefas + Agendamento) */}
-              {canSee("agenda") && <SidebarMenuItem>
+              {canSee("agenda") && !moduloOcultoNoMenu("agenda") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/agenda"}
                   onClick={() => navigateOrBlock("/agenda")}
@@ -431,7 +431,7 @@ function AppSidebarContent({
               </SidebarMenuItem>}
 
               {/* Processos */}
-              {canSee("processos") && <SidebarMenuItem>
+              {canSee("processos") && !moduloOcultoNoMenu("processos") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/processos"}
                   onClick={() => navigateOrBlock("/processos")}
@@ -447,7 +447,7 @@ function AppSidebarContent({
               </SidebarMenuItem>}
 
               {/* Atendimento */}
-              {canSee("atendimento") && <SidebarMenuItem>
+              {canSee("atendimento") && !moduloOcultoNoMenu("atendimento") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/atendimento"}
                   onClick={() => navigateOrBlock("/atendimento")}
@@ -461,7 +461,7 @@ function AppSidebarContent({
               </SidebarMenuItem>}
 
               {/* Agentes IA */}
-              {canSee("agentesIa") && <SidebarMenuItem>
+              {canSee("agentesIa") && !moduloOcultoNoMenu("agentesIa") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/agentes-ia"}
                   onClick={() => navigateOrBlock("/agentes-ia")}
@@ -483,12 +483,13 @@ function AppSidebarContent({
                   className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
                 >
                   <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
-                  <span>Kanban</span>
+                  <span className="flex-1">Kanban</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
               {/* SmartFlow */}
-              {canSee("smartflow") && <SidebarMenuItem>
+              {canSee("smartflow") && !moduloOcultoNoMenu("smartflow") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/smartflow"}
                   onClick={() => navigateOrBlock("/smartflow")}
@@ -523,7 +524,8 @@ function AppSidebarContent({
                   className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
                 >
                   <DollarSign className={`h-4 w-4 ${location === "/financeiro" ? "text-primary" : ""}`} />
-                  <span>Financeiro</span>
+                  <span className="flex-1">Financeiro</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
