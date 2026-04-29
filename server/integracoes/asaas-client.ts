@@ -91,6 +91,12 @@ export interface AsaasPayment {
   deleted: boolean;
   paymentDate?: string;
   clientPaymentDate?: string;
+  /** Data de confirmação no Asaas — preenchido quando status=CONFIRMED
+   *  (PIX confirmado, cartão autorizado, boleto registrado) antes do
+   *  crédito ser efetivado em conta. Pra status=RECEIVED, prefira
+   *  `paymentDate` (data do crédito). Usado como fallback de
+   *  "data do pagamento" quando `paymentDate` ainda não está disponível. */
+  confirmedDate?: string;
   originalValue?: number;
   interestValue?: number;
   fine?: {
