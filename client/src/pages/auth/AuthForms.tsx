@@ -161,7 +161,6 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
   const [signupEmail, setSignupEmail] = useState(initialEmail || "");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
-  const [aceitouTermos, setAceitouTermos] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,15 +177,10 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
       toast.error("A senha deve ter pelo menos 6 caracteres");
       return;
     }
-    if (!aceitouTermos) {
-      toast.error("Você precisa aceitar os Termos e a Política de Privacidade");
-      return;
-    }
     signupMut.mutate({
       name: signupName.trim(),
       email: signupEmail.trim().toLowerCase(),
       password: signupPassword,
-      aceitouTermos: true,
     });
   };
 
@@ -250,14 +244,9 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="login-password" className="text-xs">
-                  Senha
-                </Label>
-                <a href="/esqueci-senha" className="text-[11px] text-violet-600 hover:underline">
-                  Esqueci minha senha
-                </a>
-              </div>
+              <Label htmlFor="login-password" className="text-xs">
+                Senha
+              </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -404,37 +393,6 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
               )}
             </div>
 
-            <label className="flex items-start gap-2 text-[11px] text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={aceitouTermos}
-                onChange={(e) => setAceitouTermos(e.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5 accent-violet-600 cursor-pointer"
-                required
-              />
-              <span>
-                Li e aceito os{" "}
-                <a
-                  href="/termos"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-600 hover:underline"
-                >
-                  Termos de Uso
-                </a>{" "}
-                e a{" "}
-                <a
-                  href="/privacidade"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-600 hover:underline"
-                >
-                  Política de Privacidade
-                </a>
-                .
-              </span>
-            </label>
-
             <Button
               type="submit"
               className="w-full"
@@ -444,13 +402,16 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
                 !signupName ||
                 !signupEmail ||
                 !signupPassword ||
-                signupPassword !== signupPasswordConfirm ||
-                !aceitouTermos
+                signupPassword !== signupPasswordConfirm
               }
             >
               {signupMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar conta
             </Button>
+
+            <p className="text-[10px] text-muted-foreground text-center">
+              Ao se cadastrar, você concorda com os Termos de Uso e a Política de Privacidade.
+            </p>
           </form>
 
           {googleConfig?.enabled && (
