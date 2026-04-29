@@ -187,10 +187,11 @@ function exportClientesCSV(clientes: any[]) {
 
 // ─── Segmentação (chips) ─────────────────────────────────────────────────────
 
-type Segmento = "todos" | "vip" | "inativo" | "novos" | "com_email" | "com_telefone";
+type Segmento = "todos" | "vip" | "inativo" | "novos" | "com_email" | "com_telefone" | "aguardando_docs";
 
 const SEGMENTOS: { id: Segmento; label: string; icon: any; color: string }[] = [
   { id: "todos", label: "Todos", icon: Users, color: "text-muted-foreground" },
+  { id: "aguardando_docs", label: "Aguardando docs", icon: FileText, color: "text-orange-600" },
   { id: "vip", label: "VIP", icon: Star, color: "text-amber-600" },
   { id: "novos", label: "Novos (7d)", icon: Plus, color: "text-emerald-600" },
   { id: "inativo", label: "Inativos (30d+)", icon: Calendar, color: "text-gray-500" },
@@ -202,6 +203,7 @@ function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
   if (seg === "todos") return clientes;
   if (seg === "com_email") return clientes.filter((c) => !!c.email);
   if (seg === "com_telefone") return clientes.filter((c) => !!c.telefone);
+  if (seg === "aguardando_docs") return clientes.filter((c) => !!c.documentacaoPendente);
   if (seg === "novos") {
     const seteDias = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return clientes.filter((c) => new Date(c.createdAt).getTime() >= seteDias);
@@ -222,7 +224,13 @@ export default function Clientes() {
   const [, setLocation] = useLocation();
   const [busca, setBusca] = useState("");
   const [buscaDebounced, setBuscaDebounced] = useState("");
-  const [segmento, setSegmento] = useState<Segmento>("todos");
+  const [segmento, setSegmento] = useState<Segmento>(() => {
+    // Dashboard linka pra `/clientes?aguardandoDocs=1` quando clica
+    // no card "Aguardando documentação" — abre filtrado direto.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("aguardandoDocs") === "1") return "aguardando_docs";
+    return "todos";
+  });
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
     // Se veio com ?id=X na URL, abre direto no detalhe
@@ -246,6 +254,9 @@ export default function Clientes() {
     busca: buscaDebounced || undefined,
     pagina,
     limite: 50,
+    // Filtra no servidor pra não perder clientes além do limite 50.
+    // O aplicarSegmento no client roda em cima dessa lista (no-op aqui).
+    aguardandoDocumentacao: segmento === "aguardando_docs" ? true : undefined,
   });
 
   // Permissões pra mostrar/esconder ícone de excluir na row.
@@ -817,6 +828,28 @@ function ClienteDetalhe({
 
   return (
     <div className="space-y-4">
+      {/* Banner laranja quando documentação pendente — visível em todas
+          as abas pra atendente lembrar de cobrar. Some quando admin
+          marca como recebida (no form Editar). */}
+      {cliente.documentacaoPendente && (
+        <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-900 px-4 py-3 flex items-start gap-3">
+          <FileText className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-orange-900 dark:text-orange-100">
+              Documentação pendente
+            </p>
+            {cliente.documentacaoObservacoes && (
+              <p className="text-xs text-orange-800/80 dark:text-orange-200/80 mt-0.5 whitespace-pre-wrap">
+                {cliente.documentacaoObservacoes}
+              </p>
+            )}
+            <p className="text-[11px] text-orange-700/70 dark:text-orange-300/70 mt-1">
+              Após receber e arquivar, desmarque em &ldquo;Visão Geral &gt; Documentação pendente&rdquo;.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header do cliente */}
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="sm" onClick={onVoltar}>

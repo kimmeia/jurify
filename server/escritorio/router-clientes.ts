@@ -11,7 +11,7 @@ import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
 
 export const clientesRouter = router({
-  listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional() }).optional()).query(async ({ ctx, input }) => {
+  listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional(), aguardandoDocumentacao: z.boolean().optional() }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
     const db = await getDb(); if (!db) return { clientes: [], total: 0 };
@@ -20,6 +20,7 @@ export const clientesRouter = router({
     // Se só pode ver próprios, filtra por responsável
     if (!perm.verTodos && perm.verProprios) { where = and(where, eq(contatos.responsavelId, perm.colaboradorId)); }
     if (input?.busca) { const b = `%${input.busca}%`; where = and(where, or(like(contatos.nome, b), like(contatos.telefone, b), like(contatos.email, b), like(contatos.cpfCnpj, b))); }
+    if (input?.aguardandoDocumentacao) { where = and(where, eq(contatos.documentacaoPendente, true)); }
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
     return { clientes: rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" })), total: Number((cnt as { count: number } | undefined)?.count || 0), pagina: input?.pagina || 1, limite, totalPaginas: Math.ceil(Number((cnt as { count: number } | undefined)?.count || 0) / limite) };
@@ -43,7 +44,7 @@ export const clientesRouter = router({
     return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional() }))
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
       if (!perm.allowed) throw new Error("Sem permissão para cadastrar clientes.");
@@ -58,11 +59,11 @@ export const clientesRouter = router({
       const respId = perm.verTodos
         ? (input.responsavelId ?? perm.colaboradorId)
         : perm.colaboradorId;
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId });
+      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null });
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -107,6 +108,8 @@ export const clientesRouter = router({
       if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj;
       if (d.observacoes !== undefined) u.observacoes = d.observacoes;
       if (d.tags !== undefined) u.tags = d.tags;
+      if (d.documentacaoPendente !== undefined) u.documentacaoPendente = d.documentacaoPendente;
+      if (d.documentacaoObservacoes !== undefined) u.documentacaoObservacoes = d.documentacaoObservacoes;
       // Reatribuição de responsável: só permitida pra quem tem verTodos
       // (atendente/estagiário não pode "passar" cliente pra outro).
       // Esse colaborador é o "dono" do cliente — recebe a conversa quando o
@@ -459,13 +462,20 @@ export const clientesRouter = router({
   }),
 
   estatisticas: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0 };
-    const db = await getDb(); if (!db) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0 };
+    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
+    const db = await getDb(); if (!db) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
     const eid = esc.escritorio.id;
     const [t] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(eq(contatos.escritorioId, eid));
     const [ct] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`telefoneContato IS NOT NULL AND telefoneContato != ''`));
     const [ce] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`emailContato IS NOT NULL AND emailContato != ''`));
     const [nh] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`DATE(createdAtContato) = CURDATE()`));
-    return { total: Number((t as { count: number } | undefined)?.count || 0), novosHoje: Number((nh as { count: number } | undefined)?.count || 0), comTelefone: Number((ct as { count: number } | undefined)?.count || 0), comEmail: Number((ce as { count: number } | undefined)?.count || 0) };
+    const [docs] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), eq(contatos.documentacaoPendente, true)));
+    return {
+      total: Number((t as { count: number } | undefined)?.count || 0),
+      novosHoje: Number((nh as { count: number } | undefined)?.count || 0),
+      comTelefone: Number((ct as { count: number } | undefined)?.count || 0),
+      comEmail: Number((ce as { count: number } | undefined)?.count || 0),
+      aguardandoDocumentacao: Number((docs as { count: number } | undefined)?.count || 0),
+    };
   }),
 });

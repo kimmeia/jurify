@@ -31,6 +31,8 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   const [cpf, setCpf] = useState(cliente.cpfCnpj || "");
   const [obs, setObs] = useState(cliente.observacoes || "");
   const [tags, setTags] = useState(cliente.tags || "");
+  const [docPendente, setDocPendente] = useState(!!cliente.documentacaoPendente);
+  const [docObs, setDocObs] = useState(cliente.documentacaoObservacoes || "");
   // responsavelId pode ser null (sem responsável) ou number; UI usa string
   const [responsavelId, setResponsavelId] = useState<string>(
     cliente.responsavelId ? String(cliente.responsavelId) : "",
@@ -107,10 +109,42 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
 
         <div className="space-y-1.5"><Label className="text-xs">Tags</Label><Input value={tags} onChange={e => setTags(e.target.value)} placeholder="VIP, Trabalhista" /></div>
         <div className="space-y-1.5"><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} /></div>
+
+        {/* Documentação pendente — toggle + observações livres.
+            Quando marcado, cliente entra na contagem do dashboard e na
+            lista filtrada "Aguardando documentação". */}
+        <div className="space-y-2 pt-2 border-t">
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={docPendente}
+              onChange={(e) => setDocPendente(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-violet-600 cursor-pointer"
+            />
+            <div>
+              <span className="text-sm font-medium">Documentação pendente</span>
+              <p className="text-[10px] text-muted-foreground">
+                Cliente ainda precisa enviar documentos. Aparece em destaque no Dashboard.
+              </p>
+            </div>
+          </label>
+          {docPendente && (
+            <Textarea
+              placeholder="O que está pendente? Ex: RG, comprovante de residência, procuração assinada..."
+              value={docObs}
+              onChange={(e) => setDocObs(e.target.value)}
+              maxLength={1000}
+              rows={2}
+            />
+          )}
+        </div>
+
         <Button size="sm" onClick={() => mut.mutate({
           id: cliente.id,
           nome, telefone: tel, email, cpfCnpj: cpf,
           observacoes: obs, tags,
+          documentacaoPendente: docPendente,
+          documentacaoObservacoes: docPendente ? (docObs || null) : null,
           // Só envia responsavelId se podeReatribuir (UX de leitura
           // pra atendentes não tenta enviar campo). Empty string vira null
           // (sem responsável) — backend ignora se não tem verTodos.
@@ -474,6 +508,8 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
 export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
   const [nome, setNome] = useState(""); const [tel, setTel] = useState(""); const [email, setEmail] = useState(""); const [cpf, setCpf] = useState("");
   const [responsavelId, setResponsavelId] = useState<string>("");
+  const [docPendente, setDocPendente] = useState(false);
+  const [docObs, setDocObs] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
 
   // Lista de colaboradores ATIVOS — usado pra escolher responsável.
@@ -485,7 +521,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   ) || { data: null };
   const colaboradores: any[] = equipeData?.colaboradores || [];
 
-  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
+  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setDocPendente(false); setDocObs(""); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
 
   const validar = () => {
     const e: Record<string, string> = {};
@@ -530,7 +566,37 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         </p>
       </div>
     )}
-  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { if (validar()) criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined, responsavelId: responsavelId ? Number(responsavelId) : undefined }); }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
+    {/* Documentação pendente — flag pra rastrear cliente que assinou
+        contrato mas ainda não enviou todos os documentos. SmartFlow
+        pode disparar cobrança automática usando essa flag. */}
+    <div className="space-y-2 pt-2 border-t">
+      <label className="flex items-start gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={docPendente}
+          onChange={(e) => setDocPendente(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-violet-600 cursor-pointer"
+        />
+        <div>
+          <span className="text-sm font-medium">Documentação pendente</span>
+          <p className="text-[10px] text-muted-foreground">
+            Marque se o cliente ainda precisa enviar documentos (RG, CPF, procuração, etc).
+            Aparece em destaque no Dashboard.
+          </p>
+        </div>
+      </label>
+      {docPendente && (
+        <textarea
+          placeholder="O que está pendente? Ex: RG, comprovante de residência, procuração assinada..."
+          value={docObs}
+          onChange={(e) => setDocObs(e.target.value)}
+          maxLength={1000}
+          rows={2}
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+        />
+      )}
+    </div>
+  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { if (validar()) criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined, responsavelId: responsavelId ? Number(responsavelId) : undefined, documentacaoPendente: docPendente, documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined }); }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
