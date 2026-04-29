@@ -10,6 +10,28 @@ import { verificarLimite } from "../billing/plan-limits";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
 
+/** Remove entradas vazias/nulas e serializa pra TEXT.
+ *  - `null`, `""`, `undefined` → omitidos
+ *  - `false` é preservado (resposta válida pra checkbox)
+ *  - retorna `null` quando não sobrou nada (limpa coluna no banco) */
+function sanitizarCamposPersonalizados(
+  raw: Record<string, string | number | boolean | null> | undefined,
+): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string") {
+      const trimmed = v.trim();
+      if (trimmed === "") continue;
+      out[k] = trimmed;
+    } else {
+      out[k] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? JSON.stringify(out) : null;
+}
+
 export const clientesRouter = router({
   listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional(), aguardandoDocumentacao: z.boolean().optional() }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
@@ -44,7 +66,7 @@ export const clientesRouter = router({
     return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional() }))
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
       if (!perm.allowed) throw new Error("Sem permissão para cadastrar clientes.");
@@ -59,11 +81,14 @@ export const clientesRouter = router({
       const respId = perm.verTodos
         ? (input.responsavelId ?? perm.colaboradorId)
         : perm.colaboradorId;
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null });
+      // Campos personalizados — só persiste o que tiver chave válida (string)
+      // e pelo menos um valor não-vazio.
+      const camposJson = sanitizarCamposPersonalizados(input.camposPersonalizados);
+      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson });
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -110,6 +135,7 @@ export const clientesRouter = router({
       if (d.tags !== undefined) u.tags = d.tags;
       if (d.documentacaoPendente !== undefined) u.documentacaoPendente = d.documentacaoPendente;
       if (d.documentacaoObservacoes !== undefined) u.documentacaoObservacoes = d.documentacaoObservacoes;
+      if (d.camposPersonalizados !== undefined) u.camposPersonalizados = sanitizarCamposPersonalizados(d.camposPersonalizados);
       // Reatribuição de responsável: só permitida pra quem tem verTodos
       // (atendente/estagiário não pode "passar" cliente pra outro).
       // Esse colaborador é o "dono" do cliente — recebe a conversa quando o

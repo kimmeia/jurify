@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TagsChipPicker } from "@/components/TagsChipPicker";
+import { CamposPersonalizadosForm, validarCamposObrigatorios } from "@/components/CamposPersonalizadosForm";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
@@ -34,6 +35,17 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   const [tags, setTags] = useState(cliente.tags || "");
   const [docPendente, setDocPendente] = useState(!!cliente.documentacaoPendente);
   const [docObs, setDocObs] = useState(cliente.documentacaoObservacoes || "");
+  // Campos personalizados — valor inicial vem como string JSON do banco
+  const [camposExtras, setCamposExtras] = useState<Record<string, any>>(() => {
+    if (!cliente.camposPersonalizados) return {};
+    if (typeof cliente.camposPersonalizados === "object") return cliente.camposPersonalizados;
+    try {
+      return JSON.parse(cliente.camposPersonalizados);
+    } catch {
+      return {};
+    }
+  });
+  const { data: defsCampos } = (trpc as any).camposCliente.listar.useQuery(undefined, { retry: false });
   // responsavelId pode ser null (sem responsável) ou number; UI usa string
   const [responsavelId, setResponsavelId] = useState<string>(
     cliente.responsavelId ? String(cliente.responsavelId) : "",
@@ -143,19 +155,32 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
           )}
         </div>
 
-        <Button size="sm" onClick={() => mut.mutate({
-          id: cliente.id,
-          nome, telefone: tel, email, cpfCnpj: cpf,
-          observacoes: obs, tags,
-          documentacaoPendente: docPendente,
-          documentacaoObservacoes: docPendente ? (docObs || null) : null,
-          // Só envia responsavelId se podeReatribuir (UX de leitura
-          // pra atendentes não tenta enviar campo). Empty string vira null
-          // (sem responsável) — backend ignora se não tem verTodos.
-          ...(podeReatribuir
-            ? { responsavelId: responsavelId ? Number(responsavelId) : null }
-            : {}),
-        })} disabled={!nome || mut.isPending}>
+        <CamposPersonalizadosForm value={camposExtras} onChange={setCamposExtras} />
+
+        <Button size="sm" onClick={() => {
+          // Validação de campos obrigatórios personalizados
+          if (defsCampos && defsCampos.length > 0) {
+            const faltando = validarCamposObrigatorios(camposExtras, defsCampos);
+            if (faltando.length > 0) {
+              toast.error(`Preencha: ${faltando.join(", ")}`);
+              return;
+            }
+          }
+          mut.mutate({
+            id: cliente.id,
+            nome, telefone: tel, email, cpfCnpj: cpf,
+            observacoes: obs, tags,
+            documentacaoPendente: docPendente,
+            documentacaoObservacoes: docPendente ? (docObs || null) : null,
+            camposPersonalizados: camposExtras,
+            // Só envia responsavelId se podeReatribuir (UX de leitura
+            // pra atendentes não tenta enviar campo). Empty string vira null
+            // (sem responsável) — backend ignora se não tem verTodos.
+            ...(podeReatribuir
+              ? { responsavelId: responsavelId ? Number(responsavelId) : null }
+              : {}),
+          });
+        }} disabled={!nome || mut.isPending}>
           {mut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Salvar
         </Button>
       </CardContent>
@@ -515,6 +540,8 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   const [docPendente, setDocPendente] = useState(false);
   const [docObs, setDocObs] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [camposExtras, setCamposExtras] = useState<Record<string, any>>({});
+  const { data: defsCampos } = (trpc as any).camposCliente.listar.useQuery(undefined, { retry: false, enabled: open });
 
   // Lista de colaboradores ATIVOS — usado pra escolher responsável.
   // Só dono/gestor (verTodos) consegue atribuir a outro; pra atendentes
@@ -525,7 +552,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   ) || { data: null };
   const colaboradores: any[] = equipeData?.colaboradores || [];
 
-  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setDocPendente(false); setDocObs(""); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
+  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setDocPendente(false); setDocObs(""); setCamposExtras({}); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
 
   const validar = () => {
     const e: Record<string, string> = {};
@@ -600,7 +627,15 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         />
       )}
     </div>
-  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => { if (validar()) criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined, responsavelId: responsavelId ? Number(responsavelId) : undefined, documentacaoPendente: docPendente, documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined }); }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
+    <CamposPersonalizadosForm value={camposExtras} onChange={setCamposExtras} />
+  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => {
+    if (!validar()) return;
+    if (defsCampos && defsCampos.length > 0) {
+      const faltando = validarCamposObrigatorios(camposExtras, defsCampos);
+      if (faltando.length > 0) { toast.error(`Preencha: ${faltando.join(", ")}`); return; }
+    }
+    criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined, responsavelId: responsavelId ? Number(responsavelId) : undefined, documentacaoPendente: docPendente, documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined, camposPersonalizados: camposExtras });
+  }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

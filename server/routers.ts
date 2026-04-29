@@ -25,6 +25,7 @@ import { configuracoesRouter } from "./escritorio/router-configuracoes";
 import { agendamentoRouter } from "./escritorio/router-agendamento";
 import { crmRouter } from "./escritorio/router-crm";
 import { clientesRouter } from "./escritorio/router-clientes";
+import { camposClienteRouter } from "./escritorio/router-campos-cliente";
 import { clienteProcessosRouter } from "./escritorio/router-cliente-processos";
 import { relatoriosRouter } from "./escritorio/router-relatorios";
 import { permissoesRouter } from "./escritorio/router-permissoes";
@@ -97,6 +98,7 @@ export const appRouter = router({
   agentesIa: agentesIaRouter,
   agenteChat: agenteChatRouter,
   clientes: clientesRouter,
+  camposCliente: camposClienteRouter,
   clienteProcessos: clienteProcessosRouter,
   relatorios: relatoriosRouter,
   permissoes: permissoesRouter,
