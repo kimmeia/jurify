@@ -1908,3 +1908,54 @@ export const comissoesFechadasItens = mysqlTable("comissoes_fechadas_itens", {
 
 export type ComissaoFechadaItem = typeof comissoesFechadasItens.$inferSelect;
 export type InsertComissaoFechadaItem = typeof comissoesFechadasItens.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROADMAP — Sugestões de melhoria com votação dos clientes
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Item de roadmap — uma sugestão/ideia/bug reportado por um cliente.
+ * Visível pra todos os usuários logados (multi-escritório). Admin (role=admin)
+ * troca o status. `contagemVotos` é denormalizado pra ordenação rápida — é
+ * mantido pelo router de voto (não usa MySQL trigger).
+ */
+export const roadmapItens = mysqlTable("roadmap_itens", {
+  id: int("id").autoincrement().primaryKey(),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao").notNull(),
+  categoria: mysqlEnum("categoriaRoadmap", ["feature", "bug", "melhoria"]).default("melhoria").notNull(),
+  status: mysqlEnum("statusRoadmap", [
+    "novo",
+    "em_analise",
+    "planejado",
+    "em_desenvolvimento",
+    "lancado",
+    "recusado",
+  ]).default("novo").notNull(),
+  criadoPor: int("criadoPor").notNull(),
+  contagemVotos: int("contagemVotos").default(0).notNull(),
+  createdAt: timestamp("createdAtRoadmap").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtRoadmap").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  roadmapStatusIdx: index("roadmap_itens_status_idx").on(t.status),
+  roadmapVotosIdx: index("roadmap_itens_votos_idx").on(t.contagemVotos),
+}));
+
+export type RoadmapItem = typeof roadmapItens.$inferSelect;
+export type InsertRoadmapItem = typeof roadmapItens.$inferInsert;
+
+/**
+ * Voto de um usuário num item de roadmap.
+ * Constraint UNIQUE(itemId, userId) garante "1 voto por user por item".
+ */
+export const roadmapVotos = mysqlTable("roadmap_votos", {
+  id: int("id").autoincrement().primaryKey(),
+  itemId: int("itemId").notNull(),
+  userId: int("userId").notNull(),
+  createdAt: timestamp("createdAtVoto").defaultNow().notNull(),
+}, (t) => ({
+  roadmapVotosUnique: uniqueIndex("roadmap_votos_item_user_unique").on(t.itemId, t.userId),
+}));
+
+export type RoadmapVoto = typeof roadmapVotos.$inferSelect;
+export type InsertRoadmapVoto = typeof roadmapVotos.$inferInsert;

@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import Roadmap from "./pages/Roadmap";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminClients from "./pages/admin/AdminClients";
 import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
@@ -138,6 +139,11 @@ function Router() {
         <AdminArea>
           <AdminErros />
         </AdminArea>
+      </Route>
+      <Route path="/roadmap">
+        <ClientAreaNoGuard>
+          <Roadmap />
+        </ClientAreaNoGuard>
       </Route>
       <Route path="/admin/integrations">
         <AdminArea>

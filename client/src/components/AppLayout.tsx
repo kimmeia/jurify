@@ -58,6 +58,7 @@ import {
   BrainCircuit,
   Zap,
   LayoutGrid,
+  Lightbulb,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -538,6 +539,20 @@ function AppSidebarContent({
                   <span>Configurações</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
+
+              {/* Roadmap — todos os usuários logados podem ver e votar.
+                  Sem canSee() porque não está no sistema de permissões. */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/roadmap"}
+                  onClick={() => navigateOrBlock("/roadmap")}
+                  tooltip="Roadmap"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <Lightbulb className={`h-4 w-4 ${location === "/roadmap" ? "text-primary" : ""}`} />
+                  <span>Roadmap</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               {/* Meu Plano — visível apenas para Dono do escritório
                   (e admin do sistema via role). Informação financeira/

@@ -44,6 +44,7 @@ import { agentesIaRouter } from "./integracoes/router-agentes-ia";
 import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
+import { roadmapRouter } from "./router-roadmap";
 import { juditOperacoesRouter } from "./integracoes/router-judit-operacoes";
 import { juditUsuarioRouter } from "./integracoes/router-judit-usuario";
 import { juditCredenciaisRouter } from "./integracoes/router-judit-credenciais";
@@ -115,6 +116,7 @@ export const appRouter = router({
   juditProcessos: juditProcessosRouter,
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
+  roadmap: roadmapRouter,
   juditOperacoes: juditOperacoesRouter,
   juditUsuario: juditUsuarioRouter,
   juditCredenciais: juditCredenciaisRouter,
