@@ -2,9 +2,42 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { createLogger } from "./logger";
+
+const errLog = createLogger("trpc-error");
+
+// Códigos esperados — auth/permission/input. Não logam como erro do servidor;
+// são fluxos normais (ex: usuário sem permissão, body inválido).
+const EXPECTED_CODES = new Set([
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "NOT_FOUND",
+  "BAD_REQUEST",
+  "CONFLICT",
+  "PRECONDITION_FAILED",
+  "PAYLOAD_TOO_LARGE",
+  "TOO_MANY_REQUESTS",
+  "UNPROCESSABLE_CONTENT",
+]);
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter({ shape, error }) {
+    if (!EXPECTED_CODES.has(shape.data.code)) {
+      // Erro inesperado do servidor — log estruturado pra rastreio.
+      // Etapa 1 (Sentry) pluga `Sentry.captureException` aqui no mesmo ponto.
+      errLog.error(
+        {
+          code: shape.data.code,
+          path: shape.data.path,
+          httpStatus: shape.data.httpStatus,
+          err: error.cause instanceof Error ? error.cause.stack : error.stack,
+        },
+        `tRPC error: ${error.message}`,
+      );
+    }
+    return shape;
+  },
 });
 
 export const router = t.router;

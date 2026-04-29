@@ -95,42 +95,9 @@ async function startServer() {
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);
 
-  // Diagnostic endpoint (temporary)
-  app.get("/api/debug/templates", async (_req, res) => {
-    let conn: any = null;
-    try {
-      const mysql = await import("mysql2/promise");
-      conn = await mysql.createConnection(process.env.DATABASE_URL!);
-      const results: any = {};
-
-      try {
-        await conn.execute("CREATE TABLE IF NOT EXISTS mensagem_templates (id INT AUTO_INCREMENT PRIMARY KEY, escritorioIdTpl INT NOT NULL, tituloTpl VARCHAR(100) NOT NULL, conteudoTpl TEXT NOT NULL, categoriaTpl ENUM('saudacao','cobranca','agendamento','juridico','encerramento','outro') DEFAULT 'outro' NOT NULL, atalhoTpl VARCHAR(20), criadoPorTpl INT NOT NULL, createdAtTpl TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX tpl_escritorio (escritorioIdTpl))");
-        results.step1_createTable = "OK";
-      } catch (e: any) { results.step1_error = { msg: e.message, code: e.code, errno: e.errno }; }
-
-      try {
-        const [rows] = await conn.execute("DESCRIBE mensagem_templates");
-        results.step2_describe = rows;
-      } catch (e: any) { results.step2_error = { msg: e.message, code: e.code }; }
-
-      try {
-        const [ins] = await conn.execute("INSERT INTO mensagem_templates (escritorioIdTpl, tituloTpl, conteudoTpl, categoriaTpl, criadoPorTpl) VALUES (1, 'test_debug', 'teste ok', 'outro', 1)");
-        results.step3_insert = { ok: true, id: (ins as { insertId: number }).insertId };
-      } catch (e: any) { results.step3_error = { msg: e.message, code: e.code, errno: e.errno }; }
-
-      try {
-        const [rows] = await conn.execute("SELECT * FROM mensagem_templates LIMIT 5");
-        results.step4_rows = rows;
-      } catch (e: any) { results.step4_error = { msg: e.message, code: e.code }; }
-
-      try { await conn.execute("DELETE FROM mensagem_templates WHERE tituloTpl = 'test_debug'"); } catch {}
-
-      await conn.end();
-      res.json(results);
-    } catch (e: any) {
-      if (conn) try { await conn.end(); } catch {}
-      res.json({ fatal: e.message, code: e.code });
-    }
+  // Health check — usado pelo Railway/loadbalancer pra saber se o app respira.
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true, uptime: process.uptime(), now: new Date().toISOString() });
   });
 
   // SSE real-time notifications
@@ -162,6 +129,21 @@ async function startServer() {
     iniciarJobs();
   });
 }
+
+// Captura erros assíncronos que escapam de promises e exceções não tratadas.
+// Sem isso, qualquer rejection silenciosa vira processo morto sem rastro.
+// O Sentry (quando configurado) também capta — esses handlers só garantem o
+// log estruturado e que o processo não fique num estado inconsistente.
+process.on("unhandledRejection", (reason) => {
+  log.error({ reason: reason instanceof Error ? reason.stack : String(reason) }, "Unhandled promise rejection");
+});
+
+process.on("uncaughtException", (err) => {
+  log.fatal({ err: err.stack || err.message }, "Uncaught exception");
+  // Crash deliberado: estado do processo é desconhecido depois de uma uncaught.
+  // Railway/PM2 reinicia. Melhor reiniciar limpo do que servir requests com bug.
+  process.exit(1);
+});
 
 startServer().catch((err) => {
   log.fatal({ err: String(err) }, "Failed to start server");
