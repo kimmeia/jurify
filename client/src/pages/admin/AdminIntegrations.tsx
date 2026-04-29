@@ -86,8 +86,76 @@ function WhatsAppCloudForm({ onConnect, isConnecting }: { onConnect: (json: stri
   );
 }
 
+// ─── Sentry Form ──────────────────────────────────────────────────────────
+//
+// Sentry precisa de mais campos que uma API key simples: authToken (PAT
+// read-only do Sentry, usado só pelo módulo Erros do admin), org slug,
+// project slug, e os DSNs front/back. Empacotamos tudo num JSON pra
+// reusar o pipeline existente de "1 string criptografada por integração".
+
+function SentryForm({ onConnect, isConnecting }: { onConnect: (json: string) => void; isConnecting: boolean }) {
+  const [authToken, setAuthToken] = useState("");
+  const [org, setOrg] = useState("");
+  const [project, setProject] = useState("");
+  const [dsnFrontend, setDsnFrontend] = useState("");
+  const [dsnBackend, setDsnBackend] = useState("");
+
+  const handleSubmit = () => {
+    if (!authToken || !org || !project) {
+      toast.error("Preencha authToken, org e project");
+      return;
+    }
+    const json = JSON.stringify({ authToken, org, project, dsnFrontend, dsnBackend });
+    onConnect(json);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Auth Token *</Label>
+        <Input type="password" placeholder="sntrys_..." value={authToken} onChange={(e) => setAuthToken(e.target.value)} className="font-mono text-sm" />
+        <p className="text-[10px] text-muted-foreground">
+          Sentry → User Settings → Auth Tokens. Escopo mínimo: <code>project:read</code>, <code>event:read</code>, <code>issue:read</code>, <code>issue:write</code>.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Organization slug *</Label>
+          <Input placeholder="jurify" value={org} onChange={(e) => setOrg(e.target.value)} className="font-mono text-sm" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Project slug *</Label>
+          <Input placeholder="jurify-backend" value={project} onChange={(e) => setProject(e.target.value)} className="font-mono text-sm" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">DSN Frontend (opcional)</Label>
+        <Input placeholder="https://...@o.../..." value={dsnFrontend} onChange={(e) => setDsnFrontend(e.target.value)} className="font-mono text-[11px]" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">DSN Backend (opcional)</Label>
+        <Input placeholder="https://...@o.../..." value={dsnBackend} onChange={(e) => setDsnBackend(e.target.value)} className="font-mono text-[11px]" />
+        <p className="text-[10px] text-muted-foreground">
+          DSNs também podem ser definidos como env vars (<code>VITE_SENTRY_DSN</code>, <code>SENTRY_DSN_BACKEND</code>) — env tem precedência.
+        </p>
+      </div>
+      <Button onClick={handleSubmit} disabled={isConnecting} className="w-full h-9 text-sm">
+        {isConnecting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plug className="h-4 w-4 mr-2" />}
+        Conectar
+      </Button>
+    </div>
+  );
+}
+
 // Logo SVG inline para cada integração
 function IntegrationLogo({ id, className }: { id: string; className?: string }) {
+  if (id === "sentry") {
+    return (
+      <div className={`flex items-center justify-center rounded-lg bg-purple-500/10 ${className}`}>
+        <AlertCircle className="h-4 w-4 text-purple-600" />
+      </div>
+    );
+  }
   if (id === "whatsapp_cloud") {
     return (
       <div className={`flex items-center justify-center rounded-lg bg-emerald-600/10 ${className}`}>
@@ -449,6 +517,11 @@ function IntegracaoCard({
           <div className="space-y-2 pt-1 mt-auto">
             {integracao.id === "whatsapp_cloud" ? (
               <WhatsAppCloudForm
+                onConnect={(json) => handleConnect(json)}
+                isConnecting={isConnecting}
+              />
+            ) : integracao.id === "sentry" ? (
+              <SentryForm
                 onConnect={(json) => handleConnect(json)}
                 isConnecting={isConnecting}
               />

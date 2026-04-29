@@ -78,6 +78,14 @@ const PROVEDORES: ProvedorMeta[] = [
     docUrl: "https://resend.com/api-keys",
     services: ["Convites de equipe", "Notificações", "100/dia grátis"],
   },
+  {
+    id: "sentry",
+    nome: "Sentry (Monitoramento de Erros)",
+    descricao:
+      "Captura erros do frontend e backend em tempo real. O auth token é usado pelo módulo Erros do admin para listar issues sem sair do app.",
+    docUrl: "https://sentry.io/settings/account/api/auth-tokens/",
+    services: ["Issues", "Replay", "Performance"],
+  },
 ];
 
 function getProvedorMeta(provedor: string): ProvedorMeta | undefined {
@@ -244,6 +252,41 @@ async function testarConexaoProvedor(provedor: string, apiKey: string) {
           return { ok: false, mensagem: "Timeout — Resend não respondeu em 10s" };
         }
         return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
+      }
+    }
+    case "sentry": {
+      // apiKey é JSON: { authToken, org, project, dsnFrontend?, dsnBackend? }
+      try {
+        const cfg = JSON.parse(apiKey);
+        if (!cfg.authToken || !cfg.org || !cfg.project) {
+          return { ok: false, mensagem: "Preencha authToken, org e project." };
+        }
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        try {
+          const resp = await fetch(
+            `https://sentry.io/api/0/projects/${encodeURIComponent(cfg.org)}/${encodeURIComponent(cfg.project)}/`,
+            { headers: { Authorization: `Bearer ${cfg.authToken}` }, signal: ctrl.signal },
+          );
+          clearTimeout(t);
+          if (resp.status === 401 || resp.status === 403) {
+            return { ok: false, mensagem: "Auth token inválido ou sem permissão de leitura no projeto." };
+          }
+          if (resp.status === 404) {
+            return { ok: false, mensagem: `Projeto "${cfg.org}/${cfg.project}" não encontrado.` };
+          }
+          if (!resp.ok) {
+            return { ok: false, mensagem: `Sentry respondeu HTTP ${resp.status}.` };
+          }
+          const data = (await resp.json()) as { name?: string; slug?: string };
+          return { ok: true, mensagem: `Sentry conectado: ${data.name || data.slug || cfg.project}.` };
+        } catch (err: any) {
+          clearTimeout(t);
+          if (err.name === "AbortError") return { ok: false, mensagem: "Timeout — Sentry não respondeu em 8s" };
+          return { ok: false, mensagem: "Erro de conexão", detalhes: err.message };
+        }
+      } catch {
+        return { ok: false, mensagem: "Formato inválido. Esperado JSON com authToken, org, project." };
       }
     }
     default:

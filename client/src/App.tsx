@@ -13,6 +13,7 @@ import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import AdminAuditoria from "./pages/admin/AdminAuditoria";
+import AdminErros from "./pages/admin/AdminErros";
 import AdminInadimplentes from "./pages/admin/AdminInadimplentes";
 import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminCupons from "./pages/admin/AdminCupons";
@@ -131,6 +132,11 @@ function Router() {
       <Route path="/admin/auditoria">
         <AdminArea>
           <AdminAuditoria />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/erros">
+        <AdminArea>
+          <AdminErros />
         </AdminArea>
       </Route>
       <Route path="/admin/integrations">

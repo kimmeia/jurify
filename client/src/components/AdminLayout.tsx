@@ -39,6 +39,7 @@ import {
   DollarSign,
   BrainCircuit,
   Radar,
+  Bug,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -183,6 +184,7 @@ function AdminSidebarContent({
     { icon: Radar, label: "Judit Processos", path: "/admin/judit" },
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
+    { icon: Bug, label: "Erros", path: "/admin/erros" },
     { icon: Plug, label: "Integrações", path: "/admin/integrations" },
     { icon: Settings, label: "Configurações", path: "/admin/settings" },
   ];
