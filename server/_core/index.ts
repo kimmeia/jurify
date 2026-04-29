@@ -17,6 +17,11 @@ import { registrarSSE } from "./sse-notifications";
 import { rateLimit, globalApiRateLimit } from "./rate-limit";
 import { createLogger } from "./logger";
 import { runMigrations } from "./auto-migrate";
+import { initSentry, captureError } from "./sentry";
+
+// Sentry tem que inicializar ANTES de qualquer outro código rodar — caso
+// contrário erros lançados durante o boot (ex: migrations) escapam.
+initSentry();
 
 const log = createLogger("server");
 
@@ -136,10 +141,12 @@ async function startServer() {
 // log estruturado e que o processo não fique num estado inconsistente.
 process.on("unhandledRejection", (reason) => {
   log.error({ reason: reason instanceof Error ? reason.stack : String(reason) }, "Unhandled promise rejection");
+  captureError(reason, { kind: "unhandledRejection" });
 });
 
 process.on("uncaughtException", (err) => {
   log.fatal({ err: err.stack || err.message }, "Uncaught exception");
+  captureError(err, { kind: "uncaughtException" });
   // Crash deliberado: estado do processo é desconhecido depois de uma uncaught.
   // Railway/PM2 reinicia. Melhor reiniciar limpo do que servir requests com bug.
   process.exit(1);

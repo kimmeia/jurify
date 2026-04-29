@@ -43,6 +43,7 @@ import { twilioRouter } from "./integracoes/router-twilio";
 import { agentesIaRouter } from "./integracoes/router-agentes-ia";
 import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
+import { adminErrosRouter } from "./admin/router-admin-erros";
 import { juditOperacoesRouter } from "./integracoes/router-judit-operacoes";
 import { juditUsuarioRouter } from "./integracoes/router-judit-usuario";
 import { juditCredenciaisRouter } from "./integracoes/router-judit-credenciais";
@@ -113,6 +114,7 @@ export const appRouter = router({
   customer360: customer360Router, // perfil 360° do cliente para Atendimento
   juditProcessos: juditProcessosRouter,
   adminIntegracoes: adminIntegracoesRouter,
+  adminErros: adminErrosRouter,
   juditOperacoes: juditOperacoesRouter,
   juditUsuario: juditUsuarioRouter,
   juditCredenciais: juditCredenciaisRouter,

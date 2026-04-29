@@ -3,6 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { createLogger } from "./logger";
+import { captureError } from "./sentry";
 
 const errLog = createLogger("trpc-error");
 
@@ -25,7 +26,6 @@ const t = initTRPC.context<TrpcContext>().create({
   errorFormatter({ shape, error }) {
     if (!EXPECTED_CODES.has(shape.data.code)) {
       // Erro inesperado do servidor — log estruturado pra rastreio.
-      // Etapa 1 (Sentry) pluga `Sentry.captureException` aqui no mesmo ponto.
       errLog.error(
         {
           code: shape.data.code,
@@ -35,6 +35,12 @@ const t = initTRPC.context<TrpcContext>().create({
         },
         `tRPC error: ${error.message}`,
       );
+      captureError(error.cause ?? error, {
+        kind: "trpc",
+        code: shape.data.code,
+        path: shape.data.path,
+        httpStatus: shape.data.httpStatus,
+      });
     }
     return shape;
   },
