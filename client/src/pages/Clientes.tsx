@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -613,14 +614,309 @@ export default function Clientes() {
   );
 }
 
+// ─── Financeiro do Cliente — cobranças Asaas ────────────────────────────────
+
+const STATUS_COBRANCA_LABEL: Record<string, { label: string; cor: string }> = {
+  PENDING: { label: "Pendente", cor: "bg-amber-100 text-amber-700 border-amber-200" },
+  RECEIVED: { label: "Recebido", cor: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  CONFIRMED: { label: "Confirmado", cor: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  OVERDUE: { label: "Vencido", cor: "bg-red-100 text-red-700 border-red-200" },
+  REFUNDED: { label: "Estornado", cor: "bg-zinc-100 text-zinc-700 border-zinc-200" },
+  CANCELED: { label: "Cancelado", cor: "bg-zinc-100 text-zinc-700 border-zinc-200" },
+};
+
+function fmtMoeda(centavosOuDecimal: number | string | null | undefined): string {
+  if (centavosOuDecimal == null) return "—";
+  const n = typeof centavosOuDecimal === "string" ? parseFloat(centavosOuDecimal) : centavosOuDecimal;
+  if (!Number.isFinite(n)) return "—";
+  // Asaas armazena em decimal "1234.56" — assumimos reais já formatados.
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+}
+
+function fmtData(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("pt-BR");
+  } catch {
+    return iso;
+  }
+}
+
+function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
+  const { data, isLoading } = (trpc as any).asaas.listarCobrancas.useQuery({
+    contatoId,
+    limit: 100,
+  });
+  const items: any[] = data?.items || [];
+
+  // Agregados — calcula direto no client porque a lista cabe em memória.
+  const totais = useMemo(() => {
+    let pago = 0;
+    let pendente = 0;
+    let vencido = 0;
+    for (const c of items) {
+      const v = parseFloat(c.valor) || 0;
+      if (c.status === "RECEIVED" || c.status === "CONFIRMED") pago += v;
+      else if (c.status === "OVERDUE") vencido += v;
+      else if (c.status === "PENDING") pendente += v;
+    }
+    return { pago, pendente, vencido };
+  }, [items]);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center">
+          <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <DollarSign className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+          <p className="text-sm font-medium">Nenhuma cobrança vinculada</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Cobranças deste cliente no Asaas aparecerão aqui automaticamente.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Totais agregados */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg border bg-card px-3 py-2 text-center">
+          <p className="text-base font-bold leading-tight text-emerald-600">{fmtMoeda(totais.pago)}</p>
+          <p className="text-[10px] text-muted-foreground">Pago</p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2 text-center">
+          <p className="text-base font-bold leading-tight text-amber-600">{fmtMoeda(totais.pendente)}</p>
+          <p className="text-[10px] text-muted-foreground">Pendente</p>
+        </div>
+        <div className="rounded-lg border bg-card px-3 py-2 text-center">
+          <p className="text-base font-bold leading-tight text-red-600">{fmtMoeda(totais.vencido)}</p>
+          <p className="text-[10px] text-muted-foreground">Vencido</p>
+        </div>
+      </div>
+
+      {/* Lista de cobranças */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {items.map((c) => {
+              const meta = STATUS_COBRANCA_LABEL[c.status] || { label: c.status, cor: "bg-zinc-100 text-zinc-700 border-zinc-200" };
+              return (
+                <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/30">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{c.descricao || "Cobrança"}</p>
+                      <Badge variant="outline" className={`text-[9px] ${meta.cor}`}>{meta.label}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
+                      <span>Vence {fmtData(c.vencimento)}</span>
+                      {c.dataPagamento && <span>Pago {fmtData(c.dataPagamento)}</span>}
+                      {c.tipo && <span className="uppercase">{c.tipo}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold">{fmtMoeda(c.valor)}</p>
+                    {c.asaasPaymentId && (
+                      <a
+                        href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-violet-600 hover:underline"
+                      >
+                        Abrir no Asaas
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Processos do Cliente ────────────────────────────────────────────────────
+
+const TIPO_PROCESSO_META: Record<string, { label: string; cor: string }> = {
+  extrajudicial: { label: "Extrajudicial", cor: "bg-sky-100 text-sky-700 border-sky-200" },
+  litigioso: { label: "Litigioso", cor: "bg-violet-100 text-violet-700 border-violet-200" },
+};
+
+function ProcessoCard({
+  processo,
+  expandido,
+  onToggle,
+  onDesvincular,
+}: {
+  processo: any;
+  expandido: boolean;
+  onToggle: () => void;
+  onDesvincular: () => void;
+}) {
+  const p = processo;
+  const tipo = p.tipo || "litigioso";
+  const tipoMeta = TIPO_PROCESSO_META[tipo] || TIPO_PROCESSO_META.litigioso;
+
+  // Anotações são carregadas SOB DEMANDA quando o card é expandido —
+  // evita N queries ao listar todos os processos do cliente.
+  const { data: anotacoes, refetch: refetchAnotacoes } =
+    (trpc as any).clienteProcessos.listarAnotacoes.useQuery(
+      { processoId: p.id },
+      { enabled: expandido, retry: false },
+    );
+  const [novaAnot, setNovaAnot] = useState("");
+  const criarAnot = (trpc as any).clienteProcessos.criarAnotacao.useMutation({
+    onSuccess: () => {
+      setNovaAnot("");
+      refetchAnotacoes();
+      toast.success("Anotação adicionada");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const excluirAnot = (trpc as any).clienteProcessos.excluirAnotacao.useMutation({
+    onSuccess: () => refetchAnotacoes(),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Card className="hover:shadow-sm transition-all">
+      <CardContent className="pt-3 pb-3">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0 hover:bg-indigo-500/20 transition-colors"
+            title={expandido ? "Recolher" : "Expandir anotações"}
+          >
+            <Scale className="h-4 w-4 text-indigo-500" />
+          </button>
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-mono font-medium">{p.numeroCnj}</p>
+              <Badge variant="outline" className={`text-[9px] ${tipoMeta.cor}`}>
+                {tipoMeta.label}
+              </Badge>
+              {p.polo && (
+                <Badge variant="outline" className="text-[9px]">
+                  {p.polo === "ativo" ? "Polo Ativo" : p.polo === "passivo" ? "Polo Passivo" : "Interessado"}
+                </Badge>
+              )}
+              {p.monitoramentoId && (
+                <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">
+                  <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
+                </Badge>
+              )}
+            </div>
+            {p.apelido && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
+            {p.tribunal && <p className="text-[10px] text-muted-foreground">{p.tribunal}</p>}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-destructive"
+            title="Desvincular"
+            onClick={onDesvincular}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {/* Accordion de anotações — abre clicando no ícone ou no texto.
+            Só carrega anotações quando expandido (lazy). */}
+        {expandido && (
+          <div className="mt-3 pt-3 border-t space-y-2">
+            <div className="flex items-center gap-2">
+              <StickyNote className="h-3.5 w-3.5 text-amber-600" />
+              <p className="text-xs font-semibold">Anotações de andamento</p>
+            </div>
+
+            {/* Form pra nova anotação */}
+            <div className="flex gap-2">
+              <Textarea
+                value={novaAnot}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNovaAnot(e.target.value)}
+                placeholder="Ex: Audiência marcada pra 12/05; despacho recebido; parte contrária respondeu..."
+                rows={2}
+                maxLength={2000}
+                className="text-xs resize-none"
+              />
+              <Button
+                size="sm"
+                onClick={() => novaAnot.trim() && criarAnot.mutate({ processoId: p.id, conteudo: novaAnot.trim() })}
+                disabled={!novaAnot.trim() || criarAnot.isPending}
+                className="self-start"
+              >
+                {criarAnot.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+
+            {/* Lista de anotações */}
+            {anotacoes && anotacoes.length > 0 ? (
+              <div className="space-y-1.5">
+                {anotacoes.map((a: any) => (
+                  <div key={a.id} className="rounded-md bg-amber-50/40 dark:bg-amber-950/10 border border-amber-200/40 dark:border-amber-900/30 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs whitespace-pre-wrap flex-1">{a.conteudo}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm("Excluir esta anotação?")) excluirAnot.mutate({ id: a.id });
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {a.autorNome} · {new Date(a.createdAt).toLocaleString("pt-BR", {
+                        day: "2-digit", month: "2-digit", year: "2-digit",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground italic text-center py-2">
+                Nenhuma anotação ainda. Use o campo acima pra registrar andamentos.
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
   const [novoOpen, setNovoOpen] = useState(false);
   const [novoCnj, setNovoCnj] = useState("");
   const [novoApelido, setNovoApelido] = useState("");
   const [novoPolo, setNovoPolo] = useState<string>("");
+  const [novoTipo, setNovoTipo] = useState<"extrajudicial" | "litigioso">("litigioso");
   const [novoMonitorar, setNovoMonitorar] = useState(false);
+  const [expandidos, setExpandidos] = useState<Set<number>>(new Set());
+
+  function toggleExpandido(processoId: number) {
+    setExpandidos((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(processoId)) novo.delete(processoId);
+      else novo.add(processoId);
+      return novo;
+    });
+  }
 
   const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
   const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
@@ -630,6 +926,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       setNovoCnj("");
       setNovoApelido("");
       setNovoPolo("");
+      setNovoTipo("litigioso");
       setNovoMonitorar(false);
       refetch();
     },
@@ -670,43 +967,15 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       ) : (
         <div className="space-y-2">
           {lista.map((p: any) => (
-            <Card key={p.id} className="hover:shadow-sm transition-all">
-              <CardContent className="pt-3 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
-                    <Scale className="h-4 w-4 text-indigo-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-mono font-medium">{p.numeroCnj}</p>
-                      {p.polo && (
-                        <Badge variant="outline" className="text-[9px]">
-                          {p.polo === "ativo" ? "Polo Ativo" : p.polo === "passivo" ? "Polo Passivo" : "Interessado"}
-                        </Badge>
-                      )}
-                      {p.monitoramentoId && (
-                        <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">
-                          <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
-                        </Badge>
-                      )}
-                    </div>
-                    {p.apelido && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
-                    {p.tribunal && <p className="text-[10px] text-muted-foreground">{p.tribunal}</p>}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-destructive"
-                    title="Desvincular"
-                    onClick={() => {
-                      if (confirm("Desvincular este processo do cliente?")) desvincularMut.mutate({ id: p.id });
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <ProcessoCard
+              key={p.id}
+              processo={p}
+              expandido={expandidos.has(p.id)}
+              onToggle={() => toggleExpandido(p.id)}
+              onDesvincular={() => {
+                if (confirm("Desvincular este processo do cliente?")) desvincularMut.mutate({ id: p.id });
+              }}
+            />
           ))}
         </div>
       )}
@@ -738,16 +1007,28 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 onChange={(e) => setNovoApelido(e.target.value)}
               />
             </div>
-            <div>
-              <Label>Polo do cliente</Label>
-              <Select value={novoPolo} onValueChange={setNovoPolo}>
-                <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativo">Polo Ativo (autor)</SelectItem>
-                  <SelectItem value="passivo">Polo Passivo (réu)</SelectItem>
-                  <SelectItem value="interessado">Interessado</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Polo do cliente</Label>
+                <Select value={novoPolo} onValueChange={setNovoPolo}>
+                  <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Polo Ativo (autor)</SelectItem>
+                    <SelectItem value="passivo">Polo Passivo (réu)</SelectItem>
+                    <SelectItem value="interessado">Interessado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tipo</Label>
+                <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="litigioso">Litigioso</SelectItem>
+                    <SelectItem value="extrajudicial">Extrajudicial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <label className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50">
               <input
@@ -772,6 +1053,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 numeroCnj: novoCnj.trim(),
                 apelido: novoApelido || undefined,
                 polo: novoPolo || undefined,
+                tipo: novoTipo,
                 monitorar: novoMonitorar,
               })}
               disabled={!novoCnj.trim() || novoCnj.trim().length < 15 || vincularMut.isPending}
@@ -936,14 +1218,17 @@ function ClienteDetalhe({
         ))}
       </div>
 
-      {/* 3 abas consolidadas */}
+      {/* 5 abas consolidadas */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4 h-9">
+        <TabsList className="grid w-full grid-cols-5 h-9">
           <TabsTrigger value="visao-geral" className="text-xs gap-1">
             <User className="h-3 w-3" /> Visão Geral
           </TabsTrigger>
           <TabsTrigger value="processos" className="text-xs gap-1">
             <Scale className="h-3 w-3" /> Processos
+          </TabsTrigger>
+          <TabsTrigger value="financeiro" className="text-xs gap-1">
+            <DollarSign className="h-3 w-3" /> Financeiro
           </TabsTrigger>
           <TabsTrigger value="historico" className="text-xs gap-1">
             <MessageCircle className="h-3 w-3" /> Histórico
@@ -962,6 +1247,11 @@ function ClienteDetalhe({
         {/* Aba 2: Processos */}
         <TabsContent value="processos" className="mt-4 space-y-4">
           <ProcessosClienteTab contatoId={id} />
+        </TabsContent>
+
+        {/* Aba 3: Financeiro — cobranças do Asaas vinculadas */}
+        <TabsContent value="financeiro" className="mt-4 space-y-4">
+          <FinanceiroClienteTab contatoId={id} />
         </TabsContent>
 
         {/* Aba 3: Histórico (conversas + leads + notas + timeline) */}
