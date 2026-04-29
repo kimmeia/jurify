@@ -144,10 +144,10 @@ export function NovaAssinaturaDialog({ open, onOpenChange, onSuccess }: { open: 
 
 export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const [nome, setNome] = useState(""); const [cpf, setCpf] = useState(""); const [email, setEmail] = useState(""); const [tel, setTel] = useState(""); const [cep, setCep] = useState(""); const [endereco, setEndereco] = useState(""); const [numero, setNumero] = useState(""); const [bairro, setBairro] = useState("");
-  const [atendenteId, setAtendenteId] = useState<string>("none");
+  const [responsavelId, setResponsavelId] = useState<string>("none");
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
-  const atendentes = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c) => c.cargo !== "estagiario");
-  const reset = () => { setNome(""); setCpf(""); setEmail(""); setTel(""); setCep(""); setEndereco(""); setNumero(""); setBairro(""); setAtendenteId("none"); };
+  const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c) => c.ativo);
+  const reset = () => { setNome(""); setCpf(""); setEmail(""); setTel(""); setCep(""); setEndereco(""); setNumero(""); setBairro(""); setResponsavelId("none"); };
   const criarMut = trpc.asaas.criarClienteAsaas.useMutation({ onSuccess: () => { toast.success("Cliente cadastrado"); reset(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message }) });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Novo cliente</DialogTitle><DialogDescription>Cadastra no Asaas e vincula ao CRM.</DialogDescription></DialogHeader>
@@ -157,20 +157,20 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         <div className="grid grid-cols-3 gap-2"><div><Label className="text-xs">CEP</Label><Input value={cep} onChange={(e) => setCep(e.target.value)} className="mt-1" /></div><div className="col-span-2"><Label className="text-xs">Endereco</Label><Input value={endereco} onChange={(e) => setEndereco(e.target.value)} className="mt-1" /></div></div>
         <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Numero</Label><Input value={numero} onChange={(e) => setNumero(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">Bairro</Label><Input value={bairro} onChange={(e) => setBairro(e.target.value)} className="mt-1" /></div></div>
         <div>
-          <Label className="text-xs">Atendente responsável</Label>
-          <Select value={atendenteId} onValueChange={setAtendenteId}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="Sem atendente" /></SelectTrigger>
+          <Label className="text-xs">Responsável</Label>
+          <Select value={responsavelId} onValueChange={setResponsavelId}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="Sem responsável" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Sem atendente</SelectItem>
-              {atendentes.map((c) => (
+              <SelectItem value="none">Sem responsável</SelectItem>
+              {colaboradoresAtivos.map((c) => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground mt-1">Cobranças deste cliente são atribuídas a este atendente para fins de comissão. Visível como agrupamento no painel Asaas.</p>
+          <p className="text-[10px] text-muted-foreground mt-1">Quem cuida do cliente nas conversas e recebe comissão pelas cobranças. Visível como agrupamento no painel Asaas.</p>
         </div>
       </div>
-      <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarMut.mutate({ nome, cpfCnpj: cpf, email: email || undefined, telefone: tel || undefined, cep: cep || undefined, endereco: endereco || undefined, numero: numero || undefined, bairro: bairro || undefined, atendenteResponsavelId: atendenteId === "none" ? undefined : parseInt(atendenteId) })} disabled={criarMut.isPending || !nome || cpf.replace(/\D/g, "").length < 11}>{criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}Cadastrar</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarMut.mutate({ nome, cpfCnpj: cpf, email: email || undefined, telefone: tel || undefined, cep: cep || undefined, endereco: endereco || undefined, numero: numero || undefined, bairro: bairro || undefined, responsavelId: responsavelId === "none" ? undefined : parseInt(responsavelId) })} disabled={criarMut.isPending || !nome || cpf.replace(/\D/g, "").length < 11}>{criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}Cadastrar</Button></DialogFooter>
     </DialogContent></Dialog>
   );
 }

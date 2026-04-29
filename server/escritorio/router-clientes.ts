@@ -62,7 +62,7 @@ export const clientesRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), atendenteResponsavelId: z.number().nullable().optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -109,32 +109,29 @@ export const clientesRouter = router({
       if (d.tags !== undefined) u.tags = d.tags;
       // Reatribuição de responsável: só permitida pra quem tem verTodos
       // (atendente/estagiário não pode "passar" cliente pra outro).
+      // Esse colaborador é o "dono" do cliente — recebe a conversa quando o
+      // cliente entra em contato E recebe comissão pelas cobranças do cliente.
+      // Detecta mudança ANTES do update para disparar a reconciliação depois.
+      let responsavelMudou = false;
+      let responsavelAlvo: number | null | undefined;
       if (d.responsavelId !== undefined && perm.verTodos) {
-        u.responsavelId = d.responsavelId;
-      }
-      // Atendente responsável pela comissão: mesmo gating (gestão).
-      // Quando muda, dispara reconciliação das cobranças órfãs deste cliente
-      // para que recebam o atendente novo automaticamente.
-      let atendenteMudou = false;
-      let atendenteAlvo: number | null | undefined;
-      if (d.atendenteResponsavelId !== undefined && perm.verTodos) {
-        const [antes] = await db.select({ atual: contatos.atendenteResponsavelId })
+        const [antes] = await db.select({ atual: contatos.responsavelId })
           .from(contatos)
           .where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)))
           .limit(1);
         const valorAtual = antes?.atual ?? null;
-        atendenteMudou = valorAtual !== (d.atendenteResponsavelId ?? null);
-        atendenteAlvo = d.atendenteResponsavelId;
-        u.atendenteResponsavelId = d.atendenteResponsavelId;
+        responsavelMudou = valorAtual !== (d.responsavelId ?? null);
+        responsavelAlvo = d.responsavelId;
+        u.responsavelId = d.responsavelId;
       }
       await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)));
 
-      // Reconciliação automática: se o atendente responsável mudou, propaga
-      // pro histórico de cobranças deste cliente que ainda estão sem atendente.
+      // Reconciliação automática: se o responsável mudou para um colaborador
+      // não-nulo, propaga pro histórico de cobranças órfãs deste cliente.
       // Cobranças com atendente já atribuído (manual ou via cascata) são
       // preservadas — a função reconciliarCobrancasOrfas só toca em órfãs.
       let reconciliadas = 0;
-      if (atendenteMudou && atendenteAlvo !== null && atendenteAlvo !== undefined) {
+      if (responsavelMudou && responsavelAlvo !== null && responsavelAlvo !== undefined) {
         try {
           const r = await reconciliarCobrancasOrfas(perm.escritorioId, id);
           reconciliadas = r.atribuidas;
