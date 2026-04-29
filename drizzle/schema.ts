@@ -791,10 +791,37 @@ export const clienteProcessos = mysqlTable("cliente_processos", {
   valorCausa: int("valorCausaCliProc"),
   /** Polo do cliente (ativo/passivo) */
   polo: mysqlEnum("poloCliProc", ["ativo", "passivo", "interessado"]),
+  /**
+   * Tipo do processo: extrajudicial (negociação, mediação fora do
+   * tribunal) ou litigioso (ajuizado, em tramitação judicial).
+   * Default 'litigioso' por ser o mais comum no fluxo do escritório.
+   */
+  tipo: mysqlEnum("tipoCliProc", ["extrajudicial", "litigioso"]).default("litigioso").notNull(),
   criadoPor: int("criadoPorCliProc"),
   createdAt: timestamp("createdAtCliProc").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtCliProc").defaultNow().onUpdateNow().notNull(),
 });
+
+/**
+ * Anotações livres por processo do cliente. Cada atendente pode adicionar
+ * notas curtas de andamento (audiência marcada, despacho recebido, parte
+ * contrária respondeu, etc) sem precisar criar tarefa formal.
+ *
+ * Imutável após criação (não tem update). Pra corrigir, exclui e cria
+ * outra. Mantém auditoria limpa.
+ */
+export const clienteProcessoAnotacoes = mysqlTable("cliente_processo_anotacoes", {
+  id: int("id").autoincrement().primaryKey(),
+  processoId: int("processoIdAnot").notNull(),
+  autorUserId: int("autorUserIdAnot").notNull(),
+  conteudo: text("conteudoAnot").notNull(),
+  createdAt: timestamp("createdAtAnot").defaultNow().notNull(),
+}, (t) => ({
+  cpaProcessoIdx: index("cpa_processo_idx").on(t.processoId),
+}));
+
+export type ClienteProcessoAnotacao = typeof clienteProcessoAnotacoes.$inferSelect;
+export type InsertClienteProcessoAnotacao = typeof clienteProcessoAnotacoes.$inferInsert;
 
 export type ClienteProcesso = typeof clienteProcessos.$inferSelect;
 export type InsertClienteProcesso = typeof clienteProcessos.$inferInsert;

@@ -1676,6 +1676,50 @@ function ConfigCondicionalFields({
   );
 }
 
+/**
+ * Campos do nó "Enviar mensagem WhatsApp" — texto livre com autocomplete
+ * de variáveis. Compat com formato legado `{nome}` e `{intencao}` (engine
+ * resolve via aliases em interpolar.ts).
+ */
+function ConfigWhatsappEnviarFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.template || "");
+    onChange({ template: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <Label className="text-xs">Template da mensagem</Label>
+        <VariableTrigger
+          inputId="cfg-whatsapp-template"
+          variaveis={variaveis}
+          onInsert={insertNoCfg}
+        />
+      </div>
+      <VariableInput
+        id="cfg-whatsapp-template"
+        as="textarea"
+        rows={4}
+        value={String(cfg.template || "")}
+        onChange={(v) => onChange({ template: v })}
+        variaveis={variaveis}
+        placeholder="Olá {{nomeCliente}}, vi sua mensagem sobre {{intencao}}."
+      />
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Use <code>{"{{"}</code> pra inserir variável dinâmica. Aliases legado
+        (<code>{"{nome}"}</code>, <code>{"{intencao}"}</code>, <code>{"{horario}"}</code>) continuam funcionando.
+      </p>
+    </div>
+  );
+}
+
 function ConfigKanbanCriarCardFields({
   cfg,
   onChange,
@@ -2003,20 +2047,7 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
         </div>
       );
     case "whatsapp_enviar":
-      return (
-        <div>
-          <Label className="text-xs">Template da mensagem</Label>
-          <Textarea
-            value={String(cfg.template || "")}
-            onChange={(e) => onChange({ template: e.target.value })}
-            placeholder="Olá {nome}, vi sua mensagem sobre {intencao}."
-            rows={4}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Variáveis: <code>{"{nome}"}</code>, <code>{"{intencao}"}</code>, <code>{"{horario}"}</code>.
-          </p>
-        </div>
-      );
+      return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return (
         <p className="text-xs text-muted-foreground">
