@@ -1971,6 +1971,13 @@ export const comissoesFechadas = mysqlTable(
     fechadoEm: timestamp("fechadoEmComFech").defaultNow().notNull(),
     fechadoPorUserId: int("fechadoPorUserIdComFech").notNull(),
     observacoes: text("observacoesComFech"),
+    /** Origem do fechamento — 'manual' (botão "Fechar período") ou
+     *  'automatico' (cron por agenda configurada em
+     *  `comissoes_agenda`). Permite filtrar/auditar lançamentos
+     *  automáticos no histórico. */
+    origem: mysqlEnum("origemComFech", ["manual", "automatico"]).default("manual").notNull(),
+    /** FK opcional pra `comissoes_agenda` quando origem='automatico'. */
+    agendaId: int("agendaIdComFech"),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
@@ -2000,6 +2007,83 @@ export const comissoesFechadasItens = mysqlTable("comissoes_fechadas_itens", {
 
 export type ComissaoFechadaItem = typeof comissoesFechadasItens.$inferSelect;
 export type InsertComissaoFechadaItem = typeof comissoesFechadasItens.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AGENDA E LOG DE LANÇAMENTOS AUTOMÁTICOS DE COMISSÃO
+// Cada escritório configura quando o sistema deve fechar comissões
+// automaticamente (dia do mês + hora local). O cron worker varre a tabela
+// a cada 15 min e dispara fechamentos pendentes. O log abaixo serve pra
+// idempotência: chave única (escritorio, periodo, atendente) impede que
+// uma execução duplicada (deploy concorrente, restart) feche o mesmo
+// período 2x.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const comissoesAgenda = mysqlTable(
+  "comissoes_agenda",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdComAg").notNull(),
+    /** Liga/desliga o lançamento automático sem perder a config. */
+    ativo: boolean("ativoComAg").default(true).notNull(),
+    /** Dia do mês em que dispara (1-31). Se o mês não tem o dia
+     *  configurado (ex: 31 em fevereiro), roda no último dia do mês. */
+    diaDoMes: int("diaDoMesComAg").notNull(),
+    /** Hora local (no fuso do escritório) no formato "HH:MM". */
+    horaLocal: varchar("horaLocalComAg", { length: 5 }).notNull(),
+    /** Escopo do período fechado. MVP: 'mes_anterior' (fecha mês cheio
+     *  passado quando dispara). Futuro: 'mes_corrente_ate_ontem'. */
+    escopoPeriodo: mysqlEnum("escopoPeriodoComAg", ["mes_anterior"]).default("mes_anterior").notNull(),
+    criadoPorUserId: int("criadoPorUserIdComAg").notNull(),
+    criadoEm: timestamp("criadoEmComAg").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEmComAg").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    // Por enquanto 1 agenda por escritório — simplifica o caso comum.
+    // Se virar caso de uso, basta soltar a constraint.
+    uqEscritorio: uniqueIndex("comissoes_agenda_escritorio_uq").on(t.escritorioId),
+  }),
+);
+
+export type ComissaoAgenda = typeof comissoesAgenda.$inferSelect;
+
+export const comissoesLancamentosLog = mysqlTable(
+  "comissoes_lancamentos_log",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdComLog").notNull(),
+    agendaId: int("agendaIdComLog").notNull(),
+    atendenteId: int("atendenteIdComLog").notNull(),
+    periodoInicio: varchar("periodoInicioComLog", { length: 10 }).notNull(),
+    periodoFim: varchar("periodoFimComLog", { length: 10 }).notNull(),
+    /** 'em_andamento' protege contra deploy concorrente; 'concluido'
+     *  é o estado feliz; 'falhou' grava `mensagemErro` e permite retry
+     *  manual. */
+    status: mysqlEnum("statusComLog", ["em_andamento", "concluido", "falhou"]).notNull(),
+    /** ID do `comissoes_fechadas` quando concluiu com sucesso. */
+    comissaoFechadaId: int("comissaoFechadaIdComLog"),
+    mensagemErro: text("mensagemErroComLog"),
+    iniciadoEm: timestamp("iniciadoEmComLog").defaultNow().notNull(),
+    finalizadoEm: timestamp("finalizadoEmComLog"),
+  },
+  (t) => ({
+    // Idempotência: mesmo período + atendente + agenda só pode ter 1
+    // entrada. Race entre 2 workers ⇒ INSERT segundo falha
+    // (ER_DUP_ENTRY) e o segundo worker pula.
+    uqExecucao: uniqueIndex("comissoes_log_execucao_uq").on(
+      t.escritorioId,
+      t.agendaId,
+      t.atendenteId,
+      t.periodoInicio,
+      t.periodoFim,
+    ),
+    idxEscritorio: index("comissoes_log_escritorio_idx").on(
+      t.escritorioId,
+      t.iniciadoEm,
+    ),
+  }),
+);
+
+export type ComissaoLancamentoLog = typeof comissoesLancamentosLog.$inferSelect;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROADMAP — Sugestões de melhoria com votação dos clientes
