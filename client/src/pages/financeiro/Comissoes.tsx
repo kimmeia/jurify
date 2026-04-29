@@ -43,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -540,17 +541,154 @@ function HistoricoSection() {
   );
 }
 
+// ─── Célula "Comissão" da tabela Atribuir ───────────────────────────────────
+
+/**
+ * Chip clicável que mostra o estado de comissionável da cobrança e
+ * permite alterar via popover sem abrir o dialog "Atribuir em massa".
+ *
+ * Estados (resolvidos a partir de override + categoria):
+ *  - 🟢 Sim       → override=true OU (override=null E categoria.comissionavel=true)
+ *  - 🔴 Não       → override=false OU (override=null E categoria.comissionavel=false)
+ *  - ⚪ Indefinido → override=null E categoria=null (típico em PIX direto pro Asaas
+ *                    via webhook que cria cobrança sem categoria)
+ *
+ * Click abre popover com 3 opções:
+ *  - "Sim, comissionável" → override=true
+ *  - "Não comissionável"  → override=false
+ *  - "Herdar da categoria" → override=null (volta pro default)
+ */
+function CelulaComissao({
+  comissionavelOverride,
+  categoriaComissionavel,
+  onChange,
+  disabled,
+}: {
+  cobrancaId: number;
+  comissionavelOverride: boolean | null;
+  categoriaComissionavel: boolean | null;
+  onChange: (novo: boolean | null) => void;
+  disabled?: boolean;
+}) {
+  // Estado efetivo (o que o cálculo de comissão vai usar)
+  const efetivo: "sim" | "nao" | "indefinido" =
+    comissionavelOverride === true
+      ? "sim"
+      : comissionavelOverride === false
+        ? "nao"
+        : categoriaComissionavel === true
+          ? "sim"
+          : categoriaComissionavel === false
+            ? "nao"
+            : "indefinido";
+
+  const fonte: "override" | "categoria" | "indefinido" =
+    comissionavelOverride !== null
+      ? "override"
+      : categoriaComissionavel !== null
+        ? "categoria"
+        : "indefinido";
+
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <Popover open={aberto} onOpenChange={setAberto}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={[
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+            efetivo === "sim" && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
+            efetivo === "nao" && "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
+            efetivo === "indefinido" && "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+            disabled && "opacity-50 cursor-not-allowed",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          title={
+            fonte === "override"
+              ? "Definido manualmente. Click pra alterar."
+              : fonte === "categoria"
+                ? "Herdado da categoria. Click pra sobrescrever."
+                : "Sem decisão — defina ou atribua categoria."
+          }
+        >
+          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{
+            background: efetivo === "sim" ? "#10b981" : efetivo === "nao" ? "#ef4444" : "#f59e0b",
+          }} />
+          {efetivo === "sim" ? "Sim" : efetivo === "nao" ? "Não" : "Indefinido"}
+          {fonte === "categoria" && <span className="opacity-60 text-[9px] ml-0.5">(cat.)</span>}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-1" align="start">
+        <div className="text-[10px] text-muted-foreground px-2 pt-1.5 pb-1">
+          Esta cobrança é comissionável?
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(true);
+            setAberto(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center gap-2"
+        >
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          Sim, comissionável
+          {comissionavelOverride === true && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(false);
+            setAberto(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2"
+        >
+          <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+          Não comissionável
+          {comissionavelOverride === false && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(null);
+            setAberto(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent flex items-center gap-2"
+        >
+          <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/40" />
+          Herdar da categoria
+          {comissionavelOverride === null && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Sub-tab: Atribuir ───────────────────────────────────────────────────────
 
 function AtribuirSection() {
   const utils = trpc.useUtils();
   const [apenasSemAtribuicao, setApenasSemAtribuicao] = useState(true);
+  const [apenasSemDecisaoComissao, setApenasSemDecisaoComissao] = useState(false);
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const { data, isLoading } = trpc.financeiro.listarCobrancasParaAtribuicao.useQuery(
-    { apenasSemAtribuicao, limit: 200 },
+    { apenasSemAtribuicao, apenasSemDecisaoComissao, limit: 200 },
   );
+
+  // Mutation pra alterar override individual de uma cobrança — usa a
+  // mesma `atribuirCobrancasEmMassa` mandando 1 ID. Otimização possível
+  // futura: criar endpoint dedicado se virar gargalo, mas o existing
+  // já é eficiente (single UPDATE).
+  const overrideMut = trpc.financeiro.atribuirCobrancasEmMassa.useMutation({
+    onSuccess: () => {
+      utils.financeiro.listarCobrancasParaAtribuicao.invalidate();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const atendentes = useMemo(
     () =>
@@ -602,7 +740,14 @@ function AtribuirSection() {
                 checked={apenasSemAtribuicao}
                 onCheckedChange={(v) => setApenasSemAtribuicao(Boolean(v))}
               />
-              Mostrar apenas cobranças sem atribuição
+              Sem atendente/categoria
+            </label>
+            <label className="flex items-center gap-2 text-sm" title="Cobranças sem categoria E sem decisão manual de comissionável — típico em PIX direto pro Asaas">
+              <Checkbox
+                checked={apenasSemDecisaoComissao}
+                onCheckedChange={(v) => setApenasSemDecisaoComissao(Boolean(v))}
+              />
+              Sem decisão de comissão
             </label>
             <div className="flex-1" />
             <Button
@@ -658,6 +803,7 @@ function AtribuirSection() {
                 <TableHead className="text-xs">Pago em</TableHead>
                 <TableHead className="text-xs">Atendente</TableHead>
                 <TableHead className="text-xs">Categoria</TableHead>
+                <TableHead className="text-xs">Comissão</TableHead>
                 <TableHead className="text-xs text-right">Valor</TableHead>
               </TableRow>
             </TableHeader>
@@ -692,6 +838,20 @@ function AtribuirSection() {
                           sem categoria
                         </Badge>
                       )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <CelulaComissao
+                        cobrancaId={l.id}
+                        comissionavelOverride={l.comissionavelOverride}
+                        categoriaComissionavel={l.categoriaComissionavel}
+                        onChange={(novo) =>
+                          overrideMut.mutate({
+                            cobrancaIds: [l.id],
+                            comissionavelOverride: novo,
+                          })
+                        }
+                        disabled={overrideMut.isPending}
+                      />
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">
                       {formatBRL(Number(l.valor))}
