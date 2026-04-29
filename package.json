@@ -10,6 +10,7 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
