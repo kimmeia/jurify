@@ -152,13 +152,27 @@ async function startServer() {
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);
 
+  // Resolução de ambiente — `JURIFY_AMBIENTE` tem precedência (set
+  // explicitamente no Railway de staging). Fallback pra `NODE_ENV`.
+  // Frontend lê isso via /api/health/live pra mostrar banner amarelo
+  // em staging.
+  const ambiente = (process.env.JURIFY_AMBIENTE
+    || (process.env.NODE_ENV === "production" ? "production"
+        : process.env.NODE_ENV === "staging" ? "staging"
+        : "development")) as "production" | "staging" | "development";
+
   // Health check — usado pelo Railway/loadbalancer pra saber se o app respira.
   // Faz ping no MySQL com timeout curto pra detectar DB caído. Sem ele,
   // o LB acha que tá tudo bem mesmo se as queries tão estourando timeout.
   // /api/health/live (sempre 200, só prova que o processo Node respira) /
   // /api/health (200 só se DB responde — usado como readiness check).
   app.get("/api/health/live", (_req, res) => {
-    res.json({ ok: true, uptime: process.uptime(), now: new Date().toISOString() });
+    res.json({
+      ok: true,
+      ambiente,
+      uptime: process.uptime(),
+      now: new Date().toISOString(),
+    });
   });
 
   app.get("/api/health", async (_req, res) => {
@@ -169,6 +183,7 @@ async function startServer() {
       if (!db) {
         res.status(503).json({
           ok: false,
+          ambiente,
           db: "unavailable",
           reason: "getDb retornou null",
           uptime: process.uptime(),
@@ -188,6 +203,7 @@ async function startServer() {
       ]);
       res.json({
         ok: true,
+        ambiente,
         db: "ok",
         latencyMs: Date.now() - inicio,
         uptime: process.uptime(),
@@ -197,6 +213,7 @@ async function startServer() {
     } catch (err: any) {
       res.status(503).json({
         ok: false,
+        ambiente,
         db: "error",
         reason: err.message || String(err),
         latencyMs: Date.now() - inicio,
