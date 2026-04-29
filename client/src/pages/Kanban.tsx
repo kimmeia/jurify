@@ -41,9 +41,12 @@ export default function Kanban() {
   const [novoCardOpen, setNovoCardOpen] = useState<number | null>(null); // colunaId
   const [novaColunaOpen, setNovaColunaOpen] = useState(false);
   const [novaColunaNome, setNovaColunaNome] = useState("");
-  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false });
+  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "" });
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+
+  const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
+  const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c: any) => c.ativo);
 
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
@@ -87,7 +90,7 @@ export default function Kanban() {
     onSuccess: () => refetchFunil(),
   });
   const criarCardMut = (trpc as any).kanban.criarCard.useMutation({
-    onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
+    onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "" }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
   const deletarCardMut = (trpc as any).kanban.deletarCard.useMutation({
@@ -361,6 +364,24 @@ export default function Kanban() {
               )}
             </div>
 
+            {/* Responsável */}
+            <div>
+              <Label className="text-xs">Responsável</Label>
+              <Select
+                value={cardForm.responsavelId || "_criador"}
+                onValueChange={(v) => setCardForm({ ...cardForm, responsavelId: v === "_criador" ? "" : v })}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_criador">Eu mesmo (padrão)</SelectItem>
+                  {colaboradoresAtivos.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">Recebe notificação quando o card é criado.</p>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Prazo (opcional)</Label><Input type="date" value={cardForm.prazo} onChange={(e) => setCardForm({ ...cardForm, prazo: e.target.value })} /></div>
               <div>
@@ -411,6 +432,7 @@ export default function Kanban() {
               descricao: cardForm.descricao || undefined,
               cnj: cardForm.cnj || undefined,
               clienteId: clienteSelecionado?.id,
+              responsavelId: cardForm.responsavelId ? Number(cardForm.responsavelId) : undefined,
             })} disabled={!cardForm.titulo || criarCardMut.isPending}>
               {criarCardMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Criar
             </Button>

@@ -1674,6 +1674,170 @@ function ConfigCondicionalFields({
   );
 }
 
+function ConfigKanbanCriarCardFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const { data: funis } = (trpc as any).kanban.listarFunis.useQuery();
+  const funilId = cfg.funilId ? Number(cfg.funilId) : undefined;
+  const { data: funilData } = (trpc as any).kanban.obterFunil.useQuery(
+    { funilId: funilId! },
+    { enabled: !!funilId },
+  );
+  const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
+  const colaboradoresAtivos = (
+    equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []
+  ).filter((c: any) => c.ativo);
+  const colunas = funilData?.colunas || [];
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Quadro</Label>
+        <Select
+          value={cfg.funilId ? String(cfg.funilId) : "_padrao"}
+          onValueChange={(v) =>
+            onChange({
+              funilId: v === "_padrao" ? null : Number(v),
+              colunaId: null,
+            })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_padrao">Primeiro quadro disponível</SelectItem>
+            {(funis || []).map((f: any) => (
+              <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Coluna inicial</Label>
+        <Select
+          value={cfg.colunaId ? String(cfg.colunaId) : "_primeira"}
+          onValueChange={(v) =>
+            onChange({ colunaId: v === "_primeira" ? null : Number(v) })
+          }
+          disabled={!funilId}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_primeira">Primeira coluna do quadro</SelectItem>
+            {colunas.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!funilId && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Escolha um quadro pra liberar as colunas.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <Label className="text-xs">Título</Label>
+        <Input
+          value={String(cfg.titulo || "")}
+          onChange={(e) => onChange({ titulo: e.target.value })}
+          placeholder="Deixe vazio pra usar dados do contexto"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Descrição</Label>
+        <Textarea
+          value={String(cfg.descricao || "")}
+          onChange={(e) => onChange({ descricao: e.target.value })}
+          rows={2}
+          placeholder="Detalhes do card (opcional)"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Responsável</Label>
+        <Select
+          value={cfg.responsavelId ? String(cfg.responsavelId) : "_nenhum"}
+          onValueChange={(v) =>
+            onChange({ responsavelId: v === "_nenhum" ? null : Number(v) })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Sem responsável" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_nenhum">Sem responsável</SelectItem>
+            {colaboradoresAtivos.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.userName ?? "—"} ({c.cargo})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Recebe notificação quando o card é criado pela automação.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Número CNJ (opcional)</Label>
+        <Input
+          value={String(cfg.cnj || "")}
+          onChange={(e) => onChange({ cnj: e.target.value })}
+          placeholder="0000000-00.0000.0.00.0000"
+          className="font-mono"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Prazo em dias (opcional)</Label>
+        <Input
+          type="number"
+          min={1}
+          value={cfg.prazoDias != null ? String(cfg.prazoDias) : ""}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            onChange({ prazoDias: v ? Number(v) : null });
+          }}
+          placeholder="Vazio = usa o prazo padrão do quadro"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Tags</Label>
+        <Input
+          value={String(cfg.tags || "")}
+          onChange={(e) => onChange({ tags: e.target.value })}
+          placeholder="vip, trabalhista"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Prioridade</Label>
+        <Select value={String(cfg.prioridade || "media")} onValueChange={(v) => onChange({ prioridade: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alta">Alta</SelectItem>
+            <SelectItem value="media">Média</SelectItem>
+            <SelectItem value="baixa">Baixa</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
 function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: Record<string, unknown>) => void }) {
   const cfg = node.data.config;
 
@@ -1852,32 +2016,7 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
         </div>
       );
     case "kanban_criar_card":
-      return (
-        <div className="space-y-2">
-          <div>
-            <Label className="text-xs">Título (opcional)</Label>
-            <Input
-              value={String(cfg.titulo || "")}
-              onChange={(e) => onChange({ titulo: e.target.value })}
-              placeholder="Deixe vazio para usar dados do pagamento"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Prioridade</Label>
-            <Select value={String(cfg.prioridade || "media")} onValueChange={(v) => onChange({ prioridade: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="alta">Alta</SelectItem>
-                <SelectItem value="media">Média</SelectItem>
-                <SelectItem value="baixa">Baixa</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            Se <code>funilId/colunaId</code> não forem configurados, usa o primeiro funil+coluna do escritório.
-          </p>
-        </div>
-      );
+      return <ConfigKanbanCriarCardFields cfg={cfg} onChange={onChange} />;
     default:
       return (
         <p className="text-xs text-muted-foreground">

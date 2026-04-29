@@ -281,14 +281,13 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
     async criarCardKanban(params): Promise<number> {
       try {
         const { getDb } = await import("../db");
-        const { kanbanCards, kanbanColunas, kanbanFunis } = await import("../../drizzle/schema");
+        const { kanbanCards, kanbanColunas, kanbanFunis, colaboradores } = await import("../../drizzle/schema");
         const { eq, and, asc } = await import("drizzle-orm");
         const db = await getDb();
         if (!db) throw new Error("DB indisponível");
 
         let colunaId = params.colunaId;
 
-        // Se não tem colunaId mas tem funilId, pega a primeira coluna
         if (!colunaId && params.funilId) {
           const [col] = await db.select({ id: kanbanColunas.id }).from(kanbanColunas)
             .where(eq(kanbanColunas.funilId, params.funilId))
@@ -296,7 +295,6 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           colunaId = col?.id;
         }
 
-        // Se não tem funilId nem colunaId, pega o primeiro funil do escritório
         if (!colunaId) {
           const [funil] = await db.select({ id: kanbanFunis.id }).from(kanbanFunis)
             .where(eq(kanbanFunis.escritorioId, escritorioId)).limit(1);
@@ -310,11 +308,40 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
         if (!colunaId) throw new Error("Nenhum funil/coluna encontrado. Crie um funil no Kanban primeiro.");
 
-        // Verificar duplicata por asaasPaymentId
         if (params.asaasPaymentId) {
           const [existente] = await db.select({ id: kanbanCards.id }).from(kanbanCards)
             .where(eq(kanbanCards.asaasPaymentId, params.asaasPaymentId)).limit(1);
-          if (existente) return existente.id; // Já existe, retorna sem duplicar
+          if (existente) return existente.id;
+        }
+
+        // Defesa em profundidade: se a config aponta pra colaborador inválido
+        // (desativado ou de outro escritório), grava sem responsável em vez
+        // de abortar a automação inteira.
+        let responsavelIdValido: number | null = null;
+        if (params.responsavelId) {
+          const [colab] = await db.select({ id: colaboradores.id })
+            .from(colaboradores)
+            .where(and(
+              eq(colaboradores.id, params.responsavelId),
+              eq(colaboradores.escritorioId, escritorioId),
+              eq(colaboradores.ativo, true),
+            )).limit(1);
+          responsavelIdValido = colab?.id ?? null;
+        }
+
+        // Prazo: prazoDias do passo > prazoPadraoDias do funil > 15 dias.
+        let prazo: Date | null = null;
+        if (params.prazoDias && params.prazoDias > 0) {
+          prazo = new Date(Date.now() + params.prazoDias * 24 * 60 * 60 * 1000);
+        } else {
+          const [col] = await db.select({ funilId: kanbanColunas.funilId }).from(kanbanColunas)
+            .where(eq(kanbanColunas.id, colunaId)).limit(1);
+          if (col) {
+            const [funil] = await db.select({ prazoPadraoDias: kanbanFunis.prazoPadraoDias }).from(kanbanFunis)
+              .where(eq(kanbanFunis.id, col.funilId)).limit(1);
+            const dias = funil?.prazoPadraoDias || 15;
+            prazo = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+          }
         }
 
         const [r] = await db.insert(kanbanCards).values({
@@ -322,12 +349,29 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           colunaId,
           titulo: params.titulo,
           descricao: params.descricao || null,
+          cnj: params.cnj || null,
           clienteId: params.clienteId || null,
+          responsavelId: responsavelIdValido,
           prioridade: (params.prioridade as any) || "media",
+          prazo,
+          tags: params.tags || null,
           asaasPaymentId: params.asaasPaymentId || null,
           ordem: 0,
         });
-        return (r as { insertId: number }).insertId;
+        const cardId = (r as { insertId: number }).insertId;
+
+        if (responsavelIdValido !== null) {
+          const { notificarCardAtribuido } = await import("../escritorio/notificar-card-kanban");
+          await notificarCardAtribuido({
+            cardId,
+            responsavelColaboradorId: responsavelIdValido,
+            atribuidorUserId: null,
+            acao: "criado",
+            tituloCard: params.titulo,
+          });
+        }
+
+        return cardId;
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao criar card Kanban");
         throw err;

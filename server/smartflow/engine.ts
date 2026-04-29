@@ -152,7 +152,19 @@ export interface SmartflowExecutores {
   /** Chama webhook externo */
   chamarWebhook: (url: string, dados: any) => Promise<any>;
   /** Cria card no Kanban */
-  criarCardKanban: (params: { funilId?: number; colunaId?: number; titulo: string; descricao?: string; clienteId?: number; prioridade?: string; asaasPaymentId?: string }) => Promise<number>;
+  criarCardKanban: (params: {
+    funilId?: number;
+    colunaId?: number;
+    titulo: string;
+    descricao?: string;
+    clienteId?: number;
+    prioridade?: string;
+    asaasPaymentId?: string;
+    cnj?: string;
+    responsavelId?: number;
+    prazoDias?: number;
+    tags?: string;
+  }) => Promise<number>;
 }
 
 // ─── Handlers por tipo de passo ─────────────────────────────────────────────
@@ -583,19 +595,31 @@ async function handleKanbanCriarCard(
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
-  const titulo = (passo.config as any).titulo
+  const cfg = passo.config as any;
+  const titulo = cfg.titulo
     || ctx.pagamentoDescricao
     || `${(ctx.nomeCliente as string) || "Cliente"} — Pagamento recebido`;
 
+  // Descrição: a do editor sobrepõe o default baseado no pagamento.
+  const descricaoPadrao =
+    `Pagamento: R$ ${((ctx.pagamentoValor || 0) / 100).toFixed(2)}\n${ctx.pagamentoDescricao || ""}`.trim();
+  const descricao = cfg.descricao ? String(cfg.descricao) : descricaoPadrao;
+
+  const prazoDiasNum = Number(cfg.prazoDias);
+
   try {
     const cardId = await exec.criarCardKanban({
-      funilId: (passo.config as any).funilId,
-      colunaId: (passo.config as any).colunaId,
+      funilId: cfg.funilId,
+      colunaId: cfg.colunaId,
       titulo,
-      descricao: `Pagamento: R$ ${((ctx.pagamentoValor || 0) / 100).toFixed(2)}\n${ctx.pagamentoDescricao || ""}`.trim(),
+      descricao,
       clienteId: ctx.contatoId as number | undefined,
-      prioridade: (passo.config as any).prioridade || "media",
+      prioridade: cfg.prioridade || "media",
       asaasPaymentId: ctx.pagamentoId,
+      cnj: cfg.cnj || undefined,
+      responsavelId: cfg.responsavelId ? Number(cfg.responsavelId) : undefined,
+      prazoDias: Number.isFinite(prazoDiasNum) && prazoDiasNum > 0 ? prazoDiasNum : undefined,
+      tags: cfg.tags || undefined,
     });
     return {
       sucesso: true,
