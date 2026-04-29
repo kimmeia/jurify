@@ -1769,7 +1769,7 @@ export const despesas = mysqlTable(
     status: mysqlEnum("statusDesp", ["pendente", "pago", "vencido"])
       .default("pendente")
       .notNull(),
-    recorrencia: mysqlEnum("recorrenciaDesp", ["nenhuma", "mensal", "anual"])
+    recorrencia: mysqlEnum("recorrenciaDesp", ["nenhuma", "semanal", "mensal", "anual"])
       .default("nenhuma")
       .notNull(),
     observacoes: text("observacoesDesp"),

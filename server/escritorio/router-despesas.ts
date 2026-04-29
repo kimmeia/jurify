@@ -93,7 +93,7 @@ export const despesasRouter = router({
         valor: z.number().min(0.01),
         vencimento: dataInput,
         categoriaId: z.number().optional(),
-        recorrencia: z.enum(["nenhuma", "mensal", "anual"]).default("nenhuma"),
+        recorrencia: z.enum(["nenhuma", "semanal", "mensal", "anual"]).default("nenhuma"),
         observacoes: z.string().max(1000).optional(),
       }),
     )
@@ -128,7 +128,7 @@ export const despesasRouter = router({
         valor: z.number().min(0.01).optional(),
         vencimento: dataInput.optional(),
         categoriaId: z.number().nullable().optional(),
-        recorrencia: z.enum(["nenhuma", "mensal", "anual"]).optional(),
+        recorrencia: z.enum(["nenhuma", "semanal", "mensal", "anual"]).optional(),
         observacoes: z.string().max(1000).nullable().optional(),
       }),
     )

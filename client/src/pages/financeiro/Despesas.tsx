@@ -82,6 +82,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const RECORRENCIA_LABEL: Record<string, string> = {
   nenhuma: "—",
+  semanal: "Semanal",
   mensal: "Mensal",
   anual: "Anual",
 };
@@ -358,7 +359,7 @@ function NovaDespesaDialog({
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState(hojeIso());
   const [categoriaId, setCategoriaId] = useState<string>("none");
-  const [recorrencia, setRecorrencia] = useState<"nenhuma" | "mensal" | "anual">(
+  const [recorrencia, setRecorrencia] = useState<"nenhuma" | "semanal" | "mensal" | "anual">(
     "nenhuma",
   );
   const [observacoes, setObservacoes] = useState("");
@@ -465,6 +466,7 @@ function NovaDespesaDialog({
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="nenhuma">Única</SelectItem>
+                  <SelectItem value="semanal">Semanal</SelectItem>
                   <SelectItem value="mensal">Mensal</SelectItem>
                   <SelectItem value="anual">Anual</SelectItem>
                 </SelectContent>
