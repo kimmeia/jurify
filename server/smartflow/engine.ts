@@ -41,6 +41,10 @@ export interface SmartflowContexto {
   primeiraCobranca?: boolean;
   /** ID do card criado no Kanban */
   kanbanCardId?: number;
+  /** ID do atendente responsável pelo cliente (do cadastro CRM) — usado
+   *  como default em passos que precisam de responsável (ex: Kanban
+   *  "Criar card" sem responsavelId explícito herda esse valor). */
+  atendenteResponsavelId?: number;
   /** Dados livres por passo */
   [key: string]: unknown;
 }
@@ -621,6 +625,21 @@ async function handleKanbanCriarCard(
 
   const prazoDiasNum = Number(cfg.prazoDias);
 
+  // Resolução do responsável (em ordem de prioridade):
+  //  1. cfg.responsavelId — selecionado explicitamente no editor pra um
+  //     colaborador específico
+  //  2. cfg.responsavelAuto = true (default) → usa atendenteResponsavelId
+  //     do cliente vinculado (cadastro CRM)
+  //  3. fallback null (card sem responsável)
+  let responsavelIdResolvido: number | undefined;
+  if (cfg.responsavelId) {
+    responsavelIdResolvido = Number(cfg.responsavelId);
+  } else if (cfg.responsavelAuto !== false) {
+    // Default: auto — pega do cadastro do cliente
+    const auto = ctx.atendenteResponsavelId;
+    if (typeof auto === "number") responsavelIdResolvido = auto;
+  }
+
   try {
     const cardId = await exec.criarCardKanban({
       funilId: cfg.funilId,
@@ -631,7 +650,7 @@ async function handleKanbanCriarCard(
       prioridade: cfg.prioridade || "media",
       asaasPaymentId: ctx.pagamentoId,
       cnj: cfg.cnj || undefined,
-      responsavelId: cfg.responsavelId ? Number(cfg.responsavelId) : undefined,
+      responsavelId: responsavelIdResolvido,
       prazoDias: Number.isFinite(prazoDiasNum) && prazoDiasNum > 0 ? prazoDiasNum : undefined,
       tags: tagsInterpoladas || undefined,
     });

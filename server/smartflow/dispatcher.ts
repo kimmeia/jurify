@@ -277,7 +277,7 @@ async function executarCenarioCarregado(
 async function resolverContatoAsaas(
   escritorioId: number,
   opts: { contatoId?: number; clienteAsaasId?: string },
-): Promise<{ contatoId?: number; nome?: string; telefone?: string; email?: string }> {
+): Promise<{ contatoId?: number; nome?: string; telefone?: string; email?: string; atendenteResponsavelId?: number }> {
   const db = await getDb();
   if (!db) return {};
   try {
@@ -301,7 +301,13 @@ async function resolverContatoAsaas(
     if (!contatoIdFinal) return {};
 
     const [c] = await db
-      .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone, email: contatos.email })
+      .select({
+        id: contatos.id,
+        nome: contatos.nome,
+        telefone: contatos.telefone,
+        email: contatos.email,
+        atendenteResponsavelId: contatos.atendenteResponsavelId,
+      })
       .from(contatos)
       .where(and(eq(contatos.id, contatoIdFinal), eq(contatos.escritorioId, escritorioId)))
       .limit(1);
@@ -312,6 +318,7 @@ async function resolverContatoAsaas(
       nome: c.nome || undefined,
       telefone: c.telefone || undefined,
       email: c.email || undefined,
+      atendenteResponsavelId: c.atendenteResponsavelId ?? undefined,
     };
   } catch (err: any) {
     log.warn({ err: err.message }, "SmartFlow: falha ao resolver contato Asaas");
@@ -442,6 +449,7 @@ export async function dispararPagamentoRecebido(
       telefoneCliente: contato.telefone,
       emailCliente: contato.email,
       contatoId: contato.contatoId,
+      atendenteResponsavelId: contato.atendenteResponsavelId,
       valorTotalCliente: resumo.valorTotalCliente,
       percentualPago: resumo.percentualPago,
     };
@@ -614,6 +622,7 @@ export async function dispararPagamentoVencido(
         telefoneCliente: contato.telefone,
         emailCliente: contato.email,
         contatoId: contato.contatoId ?? params.contatoId,
+        atendenteResponsavelId: contato.atendenteResponsavelId,
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
         ...(slotChave ? { slotTimestamp: slotChave } : {}),
@@ -693,6 +702,7 @@ export async function dispararProximoVencimento(
         telefoneCliente: contato.telefone,
         emailCliente: contato.email,
         contatoId: contato.contatoId ?? params.contatoId,
+        atendenteResponsavelId: contato.atendenteResponsavelId,
         valorTotalCliente: resumo.valorTotalCliente,
         percentualPago: resumo.percentualPago,
         ...(slotChave ? { slotTimestamp: slotChave } : {}),

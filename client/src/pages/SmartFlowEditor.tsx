@@ -74,6 +74,7 @@ import {
 } from "@shared/smartflow-types";
 import { validarGrafo } from "@shared/smartflow-graph-validation";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
+import { TagsChipPicker } from "@/components/TagsChipPicker";
 import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
@@ -1839,15 +1840,24 @@ function ConfigKanbanCriarCardFields({
       <div>
         <Label className="text-xs">Responsável</Label>
         <Select
-          value={cfg.responsavelId ? String(cfg.responsavelId) : "_nenhum"}
-          onValueChange={(v) =>
-            onChange({ responsavelId: v === "_nenhum" ? null : Number(v) })
+          value={
+            cfg.responsavelId
+              ? String(cfg.responsavelId)
+              : cfg.responsavelAuto === false
+                ? "_nenhum"
+                : "_auto"
           }
+          onValueChange={(v) => {
+            if (v === "_auto") onChange({ responsavelId: null, responsavelAuto: true });
+            else if (v === "_nenhum") onChange({ responsavelId: null, responsavelAuto: false });
+            else onChange({ responsavelId: Number(v), responsavelAuto: false });
+          }}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Sem responsável" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="_auto">Atendente do cliente (auto)</SelectItem>
             <SelectItem value="_nenhum">Sem responsável</SelectItem>
             {colaboradoresAtivos.map((c: any) => (
               <SelectItem key={c.id} value={String(c.id)}>
@@ -1857,7 +1867,9 @@ function ConfigKanbanCriarCardFields({
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          Recebe notificação quando o card é criado pela automação.
+          <strong>Auto</strong> usa o atendente cadastrado no cliente. Se o cliente
+          não tem atendente, fica vazio. Recebe notificação quando o card é criado
+          pela automação.
         </p>
       </div>
 
@@ -1886,23 +1898,15 @@ function ConfigKanbanCriarCardFields({
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-1">
-          <Label className="text-xs">Tags</Label>
-          <VariableTrigger
-            inputId="cfg-tags"
-            variaveis={variaveis}
-            onInsert={insertNoCfg("tags")}
-          />
-        </div>
-        <VariableInput
-          id="cfg-tags"
+        <Label className="text-xs">Tags</Label>
+        <TagsChipPicker
           value={String(cfg.tags || "")}
           onChange={(v) => onChange({ tags: v })}
-          variaveis={variaveis}
-          placeholder="vip, trabalhista"
+          placeholder="Buscar ou criar tag..."
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          Tags são salvas no cliente vinculado (single-source). Editar aqui altera o cadastro do cliente.
+          Tags são salvas no cliente vinculado (single-source) — editar aqui altera o cadastro do cliente.
+          Crie tags novas que ficam disponíveis no Kanban e clientes.
         </p>
       </div>
 
