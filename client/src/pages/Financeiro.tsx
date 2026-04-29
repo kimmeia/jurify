@@ -278,146 +278,17 @@ export default function Financeiro() {
         </div>
       </div>
 
-      {/* ─── Hero: Fluxo de caixa (gráfico grande) ─── */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
-            <div>
-              <p className="text-sm text-muted-foreground font-medium">Fluxo de caixa</p>
-              <div className="flex items-baseline gap-3 mt-1">
-                <h2 className="text-3xl font-bold tracking-tight text-emerald-600">
-                  {formatBRL(cashFlow?.totalRecebido ?? kpis?.recebido ?? 0)}
-                </h2>
-                <span className="text-sm text-muted-foreground">recebido nos últimos {periodo} meses</span>
-              </div>
-            </div>
-            <Tabs value={String(periodo)} onValueChange={(v) => setPeriodo(Number(v) as 3 | 6 | 12)}>
-              <TabsList className="h-8">
-                <TabsTrigger value="3" className="text-xs px-3">3m</TabsTrigger>
-                <TabsTrigger value="6" className="text-xs px-3">6m</TabsTrigger>
-                <TabsTrigger value="12" className="text-xs px-3">12m</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="h-56">
-            {cashFlow && cashFlow.pontos.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="mes"
-                    tick={{ fontSize: 11, fill: "#9ca3af" }}
-                    tickFormatter={formatMes}
-                    stroke="#e5e7eb"
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#9ca3af" }}
-                    tickFormatter={formatBRLShort}
-                    stroke="#e5e7eb"
-                    width={60}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    labelFormatter={formatMes}
-                    formatter={(v: number) => formatBRL(v)}
-                  />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Bar dataKey="recebido" fill="#10b981" name="Recebido" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="pendente" fill="#f59e0b" name="Pendente" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="vencido" fill="#ef4444" name="Vencido" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                Sem dados no período selecionado.
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ─── KPIs + Forecast ─── */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          icon={TrendingUp}
-          label="Recebido"
-          value={formatBRL(kpis?.recebido ?? 0)}
-          color="emerald"
-        />
-        <KPICard
-          icon={Clock}
-          label="A receber"
-          value={formatBRL(kpis?.pendente ?? 0)}
-          color="amber"
-        />
-        <KPICard
-          icon={AlertTriangle}
-          label="Vencido"
-          value={formatBRL(kpis?.vencido ?? 0)}
-          color="red"
-        />
-        <KPICard
-          icon={Wallet}
-          label="Saldo Asaas"
-          value={saldo ? formatBRL(saldo.balance) : "—"}
-          color="blue"
-        />
-      </div>
-
-      {/* ─── Forecast — próximos 30 dias ─── */}
-      {forecast && forecast.semanas.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-500" />
-                Previsão de recebimentos — próximos 30 dias
-              </CardTitle>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-muted-foreground">
-                  Total previsto: <strong className="text-foreground">{formatBRL(forecast.total)}</strong>
-                </span>
-                {forecast.atrasado > 0 && (
-                  <span className="text-red-600">
-                    ⚠ {formatBRL(forecast.atrasado)} já vencido
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={forecast.semanas} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="#e5e7eb" />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={formatBRLShort} stroke="#e5e7eb" width={60} />
-                  <Tooltip
-                    contentStyle={{ fontSize: "11px", borderRadius: "8px" }}
-                    formatter={(v: number) => formatBRL(v)}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="valor"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: "#3b82f6" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─── Tabs com tabela + filtros ─── */}
+      {/* ─── Tabs principais ─── */}
+      {/*
+        TabsList é sticky pra continuar acessível ao rolar — antes ficava
+        no rodapé da página depois do hero+KPIs+forecast, exigindo scroll
+        pra qualquer navegação. Cada aba tem seus KPIs/gráficos
+        contextuais (cobranças vê fluxo de caixa; comissões vê os KPIs
+        próprios — total comissionável, sem decisão, próximo lançamento).
+      */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <div className="sticky top-0 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-2 border-b">
+          <TabsList>
           <TabsTrigger value="cobrancas" className="gap-1.5">
             <Receipt className="h-3.5 w-3.5" />
             Cobranças ({kpis?.totalCobrancas ?? 0})
@@ -438,10 +309,150 @@ export default function Financeiro() {
             <Wallet className="h-3.5 w-3.5" />
             Despesas
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
 
         {/* ─── Aba: Cobranças ─── */}
         <TabsContent value="cobrancas" className="mt-4 space-y-4">
+          {/* Hero: Fluxo de caixa (gráfico grande) — específico da
+              aba Cobranças, antes era no topo geral mas faz mais sentido
+              agrupado com a tabela de cobranças. */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+                <div>
+                  <p className="text-sm text-muted-foreground font-medium">Fluxo de caixa</p>
+                  <div className="flex items-baseline gap-3 mt-1">
+                    <h2 className="text-3xl font-bold tracking-tight text-emerald-600">
+                      {formatBRL(cashFlow?.totalRecebido ?? kpis?.recebido ?? 0)}
+                    </h2>
+                    <span className="text-sm text-muted-foreground">recebido nos últimos {periodo} meses</span>
+                  </div>
+                </div>
+                <Tabs value={String(periodo)} onValueChange={(v) => setPeriodo(Number(v) as 3 | 6 | 12)}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="3" className="text-xs px-3">3m</TabsTrigger>
+                    <TabsTrigger value="6" className="text-xs px-3">6m</TabsTrigger>
+                    <TabsTrigger value="12" className="text-xs px-3">12m</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              <div className="h-56">
+                {cashFlow && cashFlow.pontos.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="mes"
+                        tick={{ fontSize: 11, fill: "#9ca3af" }}
+                        tickFormatter={formatMes}
+                        stroke="#e5e7eb"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#9ca3af" }}
+                        tickFormatter={formatBRLShort}
+                        stroke="#e5e7eb"
+                        width={60}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "white",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                        labelFormatter={formatMes}
+                        formatter={(v: number) => formatBRL(v)}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      <Bar dataKey="recebido" fill="#10b981" name="Recebido" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="pendente" fill="#f59e0b" name="Pendente" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="vencido" fill="#ef4444" name="Vencido" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                    Sem dados no período selecionado.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* KPIs */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <KPICard
+              icon={TrendingUp}
+              label="Recebido"
+              value={formatBRL(kpis?.recebido ?? 0)}
+              color="emerald"
+            />
+            <KPICard
+              icon={Clock}
+              label="A receber"
+              value={formatBRL(kpis?.pendente ?? 0)}
+              color="amber"
+            />
+            <KPICard
+              icon={AlertTriangle}
+              label="Vencido"
+              value={formatBRL(kpis?.vencido ?? 0)}
+              color="red"
+            />
+            <KPICard
+              icon={Wallet}
+              label="Saldo Asaas"
+              value={saldo ? formatBRL(saldo.balance) : "—"}
+              color="blue"
+            />
+          </div>
+
+          {/* Forecast — próximos 30 dias */}
+          {forecast && forecast.semanas.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-blue-500" />
+                    Previsão de recebimentos — próximos 30 dias
+                  </CardTitle>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-muted-foreground">
+                      Total previsto: <strong className="text-foreground">{formatBRL(forecast.total)}</strong>
+                    </span>
+                    {forecast.atrasado > 0 && (
+                      <span className="text-red-600">
+                        ⚠ {formatBRL(forecast.atrasado)} já vencido
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-28">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={forecast.semanas} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="#e5e7eb" />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={formatBRLShort} stroke="#e5e7eb" width={60} />
+                      <Tooltip
+                        contentStyle={{ fontSize: "11px", borderRadius: "8px" }}
+                        formatter={(v: number) => formatBRL(v)}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="valor"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={{ r: 4, fill: "#3b82f6" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Barra de filtros */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
