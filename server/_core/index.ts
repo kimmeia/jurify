@@ -49,6 +49,29 @@ async function startServer() {
   // antes do servidor aceitar qualquer request.
   await runMigrations();
 
+  // Aviso quando o storage de uploads não está num volume persistente.
+  // Em produção (Railway), uploads em ./uploads vão pro disco da instância
+  // — que é efêmero a cada redeploy. Solução: anexar um volume Railway
+  // montado em /app/uploads. Esse warn ajuda a flagrar a configuração
+  // ausente nos logs do boot.
+  if (process.env.NODE_ENV === "production") {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const uploadsDir = path.resolve(process.cwd(), "uploads");
+    try {
+      const stat = fs.statSync(uploadsDir);
+      if (!stat.isDirectory()) {
+        log.error({ uploadsDir }, "uploads/ existe mas não é diretório");
+      } else if (!process.env.RAILWAY_VOLUME_MOUNT_PATH && !process.env.UPLOADS_PERSISTENT) {
+        log.warn({ uploadsDir }, "uploads/ presente mas sem volume persistente declarado. Defina UPLOADS_PERSISTENT=1 quando montar volume Railway.");
+      } else {
+        log.info({ uploadsDir }, "uploads/ ok");
+      }
+    } catch {
+      log.warn({ uploadsDir }, "uploads/ não existe ainda — será criado no primeiro upload, mas confirme que há volume persistente em produção");
+    }
+  }
+
   const app = express();
   const server = createServer(app);
 

@@ -1,0 +1,41 @@
+name: Backup MySQL diário
+
+on:
+  schedule:
+    # 05:00 UTC = 02:00 Brasília. Madrugada = baixa carga + janela curta.
+    - cron: "0 5 * * *"
+  workflow_dispatch: # permite disparar manualmente pra testar
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar mysql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Instalar deps (sem build)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rodar backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+          BACKUP_BUCKET_ENDPOINT: ${{ secrets.BACKUP_BUCKET_ENDPOINT }}
+          BACKUP_BUCKET_REGION: ${{ secrets.BACKUP_BUCKET_REGION }}
+          BACKUP_ACCESS_KEY: ${{ secrets.BACKUP_ACCESS_KEY }}
+          BACKUP_SECRET_KEY: ${{ secrets.BACKUP_SECRET_KEY }}
+        run: pnpm tsx scripts/backup-db.ts
