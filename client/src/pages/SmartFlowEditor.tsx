@@ -73,6 +73,8 @@ import {
   type TipoCanalMensagem,
 } from "@shared/smartflow-types";
 import { validarGrafo } from "@shared/smartflow-graph-validation";
+import { VariableInput, VariableTrigger } from "@/components/VariableInput";
+import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
 
@@ -1681,6 +1683,14 @@ function ConfigKanbanCriarCardFields({
   cfg: Record<string, unknown>;
   onChange: (patch: Record<string, unknown>) => void;
 }) {
+  // Variáveis disponíveis pro autocomplete `{{...}}`. Lista achatada
+  // (todos os gatilhos) — usuário escolhe a que faz sentido pro fluxo.
+  // Refinamento por gatilho do cenário fica como melhoria futura.
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (campo: string) => (path: string) => {
+    const atual = String(cfg[campo] || "");
+    onChange({ [campo]: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
   const { data: funis } = (trpc as any).kanban.listarFunis.useQuery();
   const funilId = cfg.funilId ? Number(cfg.funilId) : undefined;
   const { data: funilData } = (trpc as any).kanban.obterFunil.useQuery(
@@ -1745,21 +1755,40 @@ function ConfigKanbanCriarCardFields({
       </div>
 
       <div>
-        <Label className="text-xs">Título</Label>
-        <Input
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Título</Label>
+          <VariableTrigger
+            inputId="cfg-titulo"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("titulo")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-titulo"
           value={String(cfg.titulo || "")}
-          onChange={(e) => onChange({ titulo: e.target.value })}
-          placeholder="Deixe vazio pra usar dados do contexto"
+          onChange={(v) => onChange({ titulo: v })}
+          variaveis={variaveis}
+          placeholder="Deixe vazio pra usar dados do contexto. Use {{ pra inserir variável."
         />
       </div>
 
       <div>
-        <Label className="text-xs">Descrição</Label>
-        <Textarea
-          value={String(cfg.descricao || "")}
-          onChange={(e) => onChange({ descricao: e.target.value })}
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Descrição</Label>
+          <VariableTrigger
+            inputId="cfg-descricao"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("descricao")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-descricao"
+          as="textarea"
           rows={2}
-          placeholder="Detalhes do card (opcional)"
+          value={String(cfg.descricao || "")}
+          onChange={(v) => onChange({ descricao: v })}
+          variaveis={variaveis}
+          placeholder="Detalhes do card (opcional). Use {{ pra inserir variável."
         />
       </div>
 
@@ -1813,12 +1842,24 @@ function ConfigKanbanCriarCardFields({
       </div>
 
       <div>
-        <Label className="text-xs">Tags</Label>
-        <Input
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Tags</Label>
+          <VariableTrigger
+            inputId="cfg-tags"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("tags")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-tags"
           value={String(cfg.tags || "")}
-          onChange={(e) => onChange({ tags: e.target.value })}
+          onChange={(v) => onChange({ tags: v })}
+          variaveis={variaveis}
           placeholder="vip, trabalhista"
         />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Tags são salvas no cliente vinculado (single-source). Editar aqui altera o cadastro do cliente.
+        </p>
       </div>
 
       <div>

@@ -390,11 +390,14 @@ async function handleWhatsAppEnviar(
     }
   }
 
-  const mensagem = template
-    .replace(/\{nome\}/g, (ctx.nomeCliente as string) || "")
-    .replace(/\{intencao\}/g, ctx.intencao || "")
-    .replace(/\{horario\}/g, ctx.horarioEscolhido || "")
-    .replace(/\{cobrancasAbertas\}/g, blocoCobrancas);
+  // Bloco multi-linha {cobrancasAbertas} é tratado ANTES da interpolação
+  // genérica (não dá pra ter linha quebrada num placeholder simples).
+  const templateComCobrancas = template.replace(/\{cobrancasAbertas\}/g, blocoCobrancas);
+
+  // Interpolação genérica: aceita `{{cliente.nome}}` (novo) e mantém
+  // compat com `{nome}`, `{intencao}`, `{horario}` (legado via alias).
+  const { interpolarVariaveis } = await import("./interpolar");
+  const mensagem = interpolarVariaveis(templateComCobrancas, ctx as any);
 
   // Quando o gatilho veio via `dispararMensagemCanal` (ou legado
   // `tentarSmartFlow`), o contexto carrega `canalId` — o whatsapp-handler
@@ -596,14 +599,25 @@ async function handleKanbanCriarCard(
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
   const cfg = passo.config as any;
-  const titulo = cfg.titulo
+  const { interpolarVariaveis } = await import("./interpolar");
+
+  // Interpolar variáveis dos campos textuais. cfg.titulo/descricao/tags
+  // podem conter `{{cliente.nome}}`, `{{pagamento.valor}}`, etc — substitui
+  // pelos valores do contexto antes de criar o card.
+  const tituloRaw = cfg.titulo
     || ctx.pagamentoDescricao
     || `${(ctx.nomeCliente as string) || "Cliente"} — Pagamento recebido`;
+  const titulo = interpolarVariaveis(String(tituloRaw), ctx as any);
 
   // Descrição: a do editor sobrepõe o default baseado no pagamento.
   const descricaoPadrao =
     `Pagamento: R$ ${((ctx.pagamentoValor || 0) / 100).toFixed(2)}\n${ctx.pagamentoDescricao || ""}`.trim();
-  const descricao = cfg.descricao ? String(cfg.descricao) : descricaoPadrao;
+  const descricaoRaw = cfg.descricao ? String(cfg.descricao) : descricaoPadrao;
+  const descricao = interpolarVariaveis(descricaoRaw, ctx as any);
+
+  const tagsInterpoladas = cfg.tags
+    ? interpolarVariaveis(String(cfg.tags), ctx as any)
+    : undefined;
 
   const prazoDiasNum = Number(cfg.prazoDias);
 
@@ -619,7 +633,7 @@ async function handleKanbanCriarCard(
       cnj: cfg.cnj || undefined,
       responsavelId: cfg.responsavelId ? Number(cfg.responsavelId) : undefined,
       prazoDias: Number.isFinite(prazoDiasNum) && prazoDiasNum > 0 ? prazoDiasNum : undefined,
-      tags: cfg.tags || undefined,
+      tags: tagsInterpoladas || undefined,
     });
     return {
       sucesso: true,
