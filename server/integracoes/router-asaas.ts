@@ -1102,15 +1102,17 @@ export const asaasRouter = router({
         });
       }
 
-      // Resolve atendente: explícito > responsável padrão do contato > nenhum.
+      // Resolve atendente: explícito > responsável do contato > nenhum.
+      // O `responsavelId` do cliente é a única fonte: quem cuida do cliente
+      // é quem recebe comissão pelas cobranças.
       let atendenteId: number | null = input.atendenteId ?? null;
       if (atendenteId === null) {
         const [contatoRow] = await db
-          .select({ atendenteRespId: contatos.atendenteResponsavelId })
+          .select({ responsavelId: contatos.responsavelId })
           .from(contatos)
           .where(eq(contatos.id, input.contatoId))
           .limit(1);
-        atendenteId = contatoRow?.atendenteRespId ?? null;
+        atendenteId = contatoRow?.responsavelId ?? null;
       }
       if (atendenteId !== null) {
         await validarAtendente(esc.escritorio.id, atendenteId);
@@ -1575,10 +1577,11 @@ export const asaasRouter = router({
       numero: z.string().optional(),
       bairro: z.string().optional(),
       /**
-       * Atendente responsável pelo cliente. Usado como default na criação
-       * de novas cobranças e refletido como `groupName` no painel Asaas.
+       * Colaborador responsável pelo cliente — recebe a conversa quando o
+       * cliente entra em contato E recebe comissão pelas cobranças.
+       * Refletido como `groupName` no painel Asaas.
        */
-      atendenteResponsavelId: z.number().optional(),
+      responsavelId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -1595,10 +1598,11 @@ export const asaasRouter = router({
 
       const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
 
-      // Resolve atendente responsável (opcional) — define `groupName` no Asaas.
+      // Resolve responsável (opcional) — define `groupName` no Asaas e fica
+      // gravado em `contatos.responsavelId` para inferência de comissão.
       let atendenteNome: string | undefined;
-      if (input.atendenteResponsavelId !== undefined) {
-        const v = await validarAtendente(esc.escritorio.id, input.atendenteResponsavelId);
+      if (input.responsavelId !== undefined) {
+        const v = await validarAtendente(esc.escritorio.id, input.responsavelId);
         atendenteNome = v.nome ?? undefined;
       }
 
@@ -1654,14 +1658,14 @@ export const asaasRouter = router({
 
       if (contatoExistente) {
         contatoId = contatoExistente.id;
-        // Atualiza atendente responsável se mudou (ou se preenchendo pela 1ª vez).
+        // Atualiza responsável se mudou (ou se preenchendo pela 1ª vez).
         if (
-          input.atendenteResponsavelId !== undefined &&
-          contatoExistente.atendenteResponsavelId !== input.atendenteResponsavelId
+          input.responsavelId !== undefined &&
+          contatoExistente.responsavelId !== input.responsavelId
         ) {
           await db
             .update(contatos)
-            .set({ atendenteResponsavelId: input.atendenteResponsavelId })
+            .set({ responsavelId: input.responsavelId })
             .where(eq(contatos.id, contatoId));
         }
       } else {
@@ -1672,7 +1676,7 @@ export const asaasRouter = router({
           email: input.email || null,
           telefone: input.telefone || null,
           origem: "manual",
-          atendenteResponsavelId: input.atendenteResponsavelId ?? null,
+          responsavelId: input.responsavelId ?? null,
         }).$returningId();
         contatoId = novo.id;
       }

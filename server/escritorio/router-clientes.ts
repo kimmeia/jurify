@@ -8,6 +8,7 @@ import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
 import { excluirClienteEmCascata } from "./excluir-cliente";
+import { reconciliarCobrancasOrfas } from "./db-financeiro";
 
 export const clientesRouter = router({
   listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional() }).optional()).query(async ({ ctx, input }) => {
@@ -108,11 +109,38 @@ export const clientesRouter = router({
       if (d.tags !== undefined) u.tags = d.tags;
       // Reatribuição de responsável: só permitida pra quem tem verTodos
       // (atendente/estagiário não pode "passar" cliente pra outro).
+      // Esse colaborador é o "dono" do cliente — recebe a conversa quando o
+      // cliente entra em contato E recebe comissão pelas cobranças do cliente.
+      // Detecta mudança ANTES do update para disparar a reconciliação depois.
+      let responsavelMudou = false;
+      let responsavelAlvo: number | null | undefined;
       if (d.responsavelId !== undefined && perm.verTodos) {
+        const [antes] = await db.select({ atual: contatos.responsavelId })
+          .from(contatos)
+          .where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
+        const valorAtual = antes?.atual ?? null;
+        responsavelMudou = valorAtual !== (d.responsavelId ?? null);
+        responsavelAlvo = d.responsavelId;
         u.responsavelId = d.responsavelId;
       }
       await db.update(contatos).set(u).where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)));
-      return { success: true };
+
+      // Reconciliação automática: se o responsável mudou para um colaborador
+      // não-nulo, propaga pro histórico de cobranças órfãs deste cliente.
+      // Cobranças com atendente já atribuído (manual ou via cascata) são
+      // preservadas — a função reconciliarCobrancasOrfas só toca em órfãs.
+      let reconciliadas = 0;
+      if (responsavelMudou && responsavelAlvo !== null && responsavelAlvo !== undefined) {
+        try {
+          const r = await reconciliarCobrancasOrfas(perm.escritorioId, id);
+          reconciliadas = r.atribuidas;
+        } catch (err) {
+          // Não derruba o update do contato se a reconciliação falhar.
+          // O usuário ainda pode disparar manualmente em "Atribuir cobranças".
+        }
+      }
+      return { success: true, reconciliadas };
     }),
 
   excluir: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {

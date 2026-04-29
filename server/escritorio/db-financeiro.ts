@@ -190,7 +190,8 @@ const REGEX_ATENDENTE_REF = /^atendente:(\d+)$/;
  *
  *   1. externalReference no padrão "atendente:N" — confere que N é colaborador
  *      ativo do escritório e usa.
- *   2. Senão, busca atendenteResponsavelId no contato vinculado.
+ *   2. Senão, busca o `responsavelId` do contato vinculado (mesma pessoa que
+ *      atende o cliente é quem recebe a comissão).
  *   3. Senão, retorna null (cobrança fica em "sem atribuição" até bulk-edit).
  *
  * Idempotente. Não tenta inferir categoria — categorização sempre exige ação
@@ -227,11 +228,11 @@ export async function inferirAtendentePorCobranca(
 
   if (contatoId !== null) {
     const [c] = await db
-      .select({ atendenteResponsavelId: contatos.atendenteResponsavelId })
+      .select({ responsavelId: contatos.responsavelId })
       .from(contatos)
       .where(eq(contatos.id, contatoId))
       .limit(1);
-    if (c?.atendenteResponsavelId) return c.atendenteResponsavelId;
+    if (c?.responsavelId) return c.responsavelId;
   }
 
   return null;

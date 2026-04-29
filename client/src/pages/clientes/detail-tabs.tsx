@@ -55,7 +55,17 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   })();
 
   const mut = trpc.clientes.atualizar.useMutation({
-    onSuccess: () => { toast.success("Atualizado!"); onSuccess(); },
+    onSuccess: (data: any) => {
+      const reconc = data?.reconciliadas ?? 0;
+      if (reconc > 0) {
+        toast.success("Atualizado!", {
+          description: `${reconc} cobrança(s) deste cliente foram atribuídas ao atendente.`,
+        });
+      } else {
+        toast.success("Atualizado!");
+      }
+      onSuccess();
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -91,7 +101,7 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
             </div>
           )}
           <p className="text-[10px] text-muted-foreground">
-            Quando o cliente entrar em contato (WhatsApp etc.), a conversa cai no responsável definido aqui.
+            Quando o cliente entrar em contato (WhatsApp etc.), a conversa cai no responsável definido aqui. Esta também é a pessoa que recebe a comissão pelas cobranças deste cliente — ao alterar, cobranças órfãs são propagadas automaticamente.
           </p>
         </div>
 
