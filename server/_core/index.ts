@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -81,18 +82,46 @@ async function startServer() {
   // (sameSite=none exige secure=true).
   app.set("trust proxy", 1);
 
-  // Headers de segurança — Cross-Origin-Opener-Policy permite popups (Google
-  // Sign-In, Facebook Login) se comunicarem de volta via postMessage com a
-  // janela pai. Sem isso, o popup do Google Sign-In falha ao retornar o token.
+  // Headers de segurança via Helmet. Defaults cobrem X-Frame-Options,
+  // X-Content-Type-Options, Referrer-Policy, HSTS, X-DNS-Prefetch-Control,
+  // X-Download-Options, X-Permitted-Cross-Domain-Policies e remove o header
+  // X-Powered-By.
+  //
+  // Desabilitamos:
+  //   - contentSecurityPolicy: exige curadoria caso a caso (Sentry, Vite,
+  //     fontes externas). Habilitar sem testar quebra a app inteira. Fica
+  //     pra um PR dedicado pós-lançamento.
+  //   - crossOriginOpenerPolicy / crossOriginEmbedderPolicy: configuradas
+  //     manualmente abaixo pra permitir Google Sign-In via popup.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginOpenerPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      strictTransportSecurity: {
+        maxAge: 31536000, // 1 ano
+        includeSubDomains: true,
+        preload: false,
+      },
+    }),
+  );
+
+  // Cross-Origin-Opener-Policy permite popups (Google Sign-In, Facebook Login)
+  // se comunicarem de volta via postMessage com a janela pai. Sem isso, o
+  // popup do Google Sign-In falha ao retornar o token. Por isso desabilitamos
+  // o COOP/COEP no helmet acima e definimos manualmente aqui.
   app.use((_req, res, next) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
     next();
   });
 
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Body parser. Limite maior que o padrão (100KB) pra acomodar uploads em
+  // base64 — 10MB de arquivo binário viram ~13.5MB de string base64.
+  // 15MB cobre com folga; mais que isso é payload grande demais e pode ser
+  // tentativa de DoS por exaustão de memória.
+  app.use(express.json({ limit: "15mb" }));
+  app.use(express.urlencoded({ limit: "15mb", extended: true }));
   // Serve uploaded files statically
   app.use("/uploads", express.static("./uploads"));
   // Rate limiting — aplicar globalmente ao tRPC e limites específicos para públicas
