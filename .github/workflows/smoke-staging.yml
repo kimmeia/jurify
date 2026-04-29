@@ -1,0 +1,40 @@
+name: Smoke contra staging
+
+# Roda os 3 specs leves (health, headers, login) contra a URL pública
+# de staging. Se quebrar, dispara erro no Sentry de staging — aparece
+# em /admin/erros.
+on:
+  schedule:
+    - cron: "*/15 * * * *" # a cada 15 minutos
+  workflow_dispatch: # permite disparo manual
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Configurar em Repo Settings > Secrets > Actions:
+      #   STAGING_BASE_URL = https://staging.jurify.com.br (ou Railway URL)
+      PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install (sem build scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Smoke (health + headers + login)
+        run: pnpm exec playwright test tests/e2e/health.spec.ts tests/e2e/headers.spec.ts tests/e2e/login.spec.ts
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-staging-report
+          path: playwright-report/
+          retention-days: 7
