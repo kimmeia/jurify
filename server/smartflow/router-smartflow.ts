@@ -87,6 +87,17 @@ async function garantirOwnership(
 }
 
 export const smartflowRouter = router({
+  /**
+   * Catálogo de variáveis disponíveis pro autocomplete `{{...}}` do
+   * editor. Lista filtrada pelo tipo de gatilho do cenário (ex: gatilho
+   * "pagamento_recebido" expõe variáveis de pagamento + cliente; gatilho
+   * "mensagem_recebida" expõe variáveis de mensagem).
+   */
+  catalogoVariaveis: protectedProcedure.query(async () => {
+    const { CATALOGO_VARIAVEIS } = await import("./interpolar");
+    return CATALOGO_VARIAVEIS;
+  }),
+
   /** Lista cenários do escritório */
   listar: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "smartflow", "ver");
