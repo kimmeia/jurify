@@ -517,6 +517,86 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("definir_variavel", () => {
+    it("guarda valor literal no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_variavel", config: { chave: "etapa", valor: "confirmado" } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.etapa).toBe("confirmado");
+    });
+
+    it("interpola variáveis no valor", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_variavel", config: { chave: "saudacao", valor: "Olá {{nomeCliente}}" } },
+      ];
+
+      const resultado = await executarCenario(passos, { nomeCliente: "João" } as SmartflowContexto, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.saudacao).toBe("Olá João");
+    });
+
+    it("suporta dot-notation pra criar estrutura aninhada", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_variavel", config: { chave: "fluxo.estado", valor: "aprovado" } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect((resultado.contexto.fluxo as any)?.estado).toBe("aprovado");
+    });
+
+    it("variável definida fica disponível pros passos seguintes", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_variavel", config: { chave: "saudacao", valor: "Bem-vindo" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", config: { template: "{{saudacao}}!" } },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { telefoneCliente: "5585999990000" } as SmartflowContexto,
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledWith("5585999990000", "Bem-vindo!");
+    });
+
+    it("falha quando chave está vazia", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_variavel", config: { chave: "", valor: "x" } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toMatch(/chave.*vazia/i);
+    });
+
+    it("falha quando chave tem caracteres inválidos", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_variavel", config: { chave: "1invalida", valor: "x" } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toMatch(/inválida/i);
+    });
+  });
+
   describe("branching multi-saída (condicional com proximoSe)", () => {
     it("segue o ramo da primeira condição que bate", async () => {
       // intencao=agendar → ramo A (resposta1)

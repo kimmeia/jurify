@@ -45,6 +45,7 @@ import {
   AlertTriangle, ArrowLeft, Brain, Bot, Calendar, CheckCircle2, Clock, DollarSign,
   GitBranch, LayoutGrid, Loader2, MessageCircle, PhoneCall, Play,
   Plus, Save, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2,
+  Variable as VariableIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   esperar: Clock,
   webhook: Webhook,
   kanban_criar_card: LayoutGrid,
+  definir_variavel: VariableIcon,
 };
 
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
@@ -491,6 +493,12 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       return typeof config.url === "string" ? truncar(config.url, 40) : "";
     case "kanban_criar_card":
       return config.prioridade ? `Prioridade ${config.prioridade}` : "";
+    case "definir_variavel": {
+      const chave = String(config.chave || "").trim();
+      const valor = String(config.valor || "").trim();
+      if (!chave) return "(sem nome)";
+      return valor ? `${chave} = ${truncar(valor, 24)}` : chave;
+    }
     default:
       return "";
   }
@@ -1927,6 +1935,72 @@ function ConfigKanbanCriarCardFields({
   );
 }
 
+/**
+ * Config do passo "Definir variável" — guarda valor no contexto
+ * pra usar em passos seguintes via {{chave}}. O valor suporta
+ * interpolação de outras variáveis (ex: valor="{{pagamentoValor}}").
+ */
+function ConfigDefinirVariavelFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (campo: string) => (path: string) => {
+    const atual = String(cfg[campo] || "");
+    onChange({ [campo]: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  const chave = String(cfg.chave || "");
+  const chaveValida = chave === "" || /^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(chave);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">Nome da variável</Label>
+        <Input
+          value={chave}
+          onChange={(e) => onChange({ chave: e.target.value })}
+          placeholder="valorComJuros"
+          maxLength={64}
+          className={chaveValida ? "font-mono text-xs" : "border-destructive font-mono text-xs"}
+        />
+        <p className={`text-[10px] mt-1 ${chaveValida ? "text-muted-foreground" : "text-destructive"}`}>
+          {!chaveValida
+            ? "Use letras, números, _ e . (pra aninhar). Deve começar com letra ou _"
+            : chave
+              ? `Em passos seguintes, use {{${chave}}} pra ler o valor.`
+              : "Letras, números, _ e . (pra aninhar). Ex: valorComJuros, cliente.observado"}
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Valor</Label>
+          <VariableTrigger
+            inputId="cfg-defvar-valor"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("valor")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-defvar-valor"
+          value={String(cfg.valor || "")}
+          onChange={(v) => onChange({ valor: v })}
+          variaveis={variaveis}
+          placeholder="Ex: confirmado, ou {{pagamentoValor}}"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Pode ser texto fixo ou referenciar outras variáveis com{" "}
+          <code className="text-[10px]">{`{{...}}`}</code>. O valor é guardado como
+          texto.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: Record<string, unknown>) => void }) {
   const cfg = node.data.config;
 
@@ -2093,6 +2167,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       );
     case "kanban_criar_card":
       return <ConfigKanbanCriarCardFields cfg={cfg} onChange={onChange} />;
+    case "definir_variavel":
+      return <ConfigDefinirVariavelFields cfg={cfg} onChange={onChange} />;
     default:
       return (
         <p className="text-xs text-muted-foreground">
