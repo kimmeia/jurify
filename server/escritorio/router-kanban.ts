@@ -178,14 +178,18 @@ export const kanbanRouter = router({
           .where(and(...cardConditions))
           .orderBy(asc(kanbanCards.ordem));
 
-        // Enriquecer cards com nome do cliente
+        // Enriquecer cards com nome do cliente + tags resolvidas.
+        // Tags single-source: se card tem clienteId, mostra contatos.tags;
+        // senão usa kanbanCards.tags próprio (cards sem cliente vinculado).
         const cardsEnriquecidos = [];
         for (const card of cards) {
           let clienteNome: string | null = null;
+          let tagsResolvidas: string | null = card.tags;
           if (card.clienteId) {
-            const [c] = await db.select({ nome: contatos.nome }).from(contatos)
+            const [c] = await db.select({ nome: contatos.nome, tags: contatos.tags }).from(contatos)
               .where(eq(contatos.id, card.clienteId)).limit(1);
             clienteNome = c?.nome || null;
+            tagsResolvidas = c?.tags || null;
           }
           let responsavelNome: string | null = null;
           if (card.responsavelId) {
@@ -193,7 +197,7 @@ export const kanbanRouter = router({
               .where(eq(colaboradores.id, card.responsavelId)).limit(1);
             responsavelNome = r ? `Colab #${card.responsavelId}` : null;
           }
-          cardsEnriquecidos.push({ ...card, clienteNome, responsavelNome });
+          cardsEnriquecidos.push({ ...card, tags: tagsResolvidas, clienteNome, responsavelNome });
         }
 
         result.push({ ...col, cards: cardsEnriquecidos });
@@ -241,6 +245,18 @@ export const kanbanRouter = router({
       }
 
       const responsavelFinal = input.responsavelId || perm.colaboradorId;
+
+      // Tags single-source: se card tem cliente vinculado, persiste em
+      // contatos.tags (cliente é fonte da verdade — outros cards do mesmo
+      // cliente refletem). Sem cliente, mantém em kanbanCards.tags próprio.
+      let tagsCard: string | null = input.tags || null;
+      if (input.clienteId && input.tags !== undefined) {
+        await db.update(contatos)
+          .set({ tags: input.tags || null })
+          .where(and(eq(contatos.id, input.clienteId), eq(contatos.escritorioId, perm.escritorioId)));
+        tagsCard = null; // não armazena no card
+      }
+
       const [r] = await db.insert(kanbanCards).values({
         escritorioId: perm.escritorioId,
         colunaId: input.colunaId,
@@ -254,7 +270,7 @@ export const kanbanRouter = router({
         responsavelId: responsavelFinal,
         prioridade: (input.prioridade as any) || "media",
         prazo,
-        tags: input.tags || null,
+        tags: tagsCard,
         ordem,
       });
       const cardId = (r as { insertId: number }).insertId;
@@ -301,7 +317,29 @@ export const kanbanRouter = router({
       if (update.cnj !== undefined) setData.cnj = update.cnj;
       if (update.prioridade) setData.prioridade = update.prioridade;
       if (update.prazo !== undefined) setData.prazo = update.prazo ? new Date(update.prazo) : null;
-      if (update.tags !== undefined) setData.tags = update.tags;
+
+      // Tags single-source: descobre o clienteId atual do card (vindo do
+      // input ou já armazenado). Se tem cliente, escreve em contatos.tags
+      // (fonte da verdade). Se não tem, escreve no próprio card.
+      if (update.tags !== undefined) {
+        let clienteIdAlvo: number | null | undefined = update.clienteId;
+        if (clienteIdAlvo === undefined) {
+          const [atual] = await db
+            .select({ clienteId: kanbanCards.clienteId })
+            .from(kanbanCards)
+            .where(and(eq(kanbanCards.id, id), eq(kanbanCards.escritorioId, perm.escritorioId)))
+            .limit(1);
+          clienteIdAlvo = atual?.clienteId ?? null;
+        }
+        if (clienteIdAlvo) {
+          await db.update(contatos)
+            .set({ tags: update.tags || null })
+            .where(and(eq(contatos.id, clienteIdAlvo), eq(contatos.escritorioId, perm.escritorioId)));
+          setData.tags = null; // limpa cópia local pra evitar drift
+        } else {
+          setData.tags = update.tags;
+        }
+      }
       if (update.clienteId !== undefined) setData.clienteId = update.clienteId;
       if (update.responsavelId !== undefined) setData.responsavelId = update.responsavelId;
 
@@ -440,15 +478,19 @@ export const kanbanRouter = router({
         .limit(1);
       if (!card) return null;
 
-      // Enriquecer
+      // Enriquecer + resolver tags single-source (cliente é fonte da verdade)
       let clienteNome: string | null = null;
       let clienteCpfCnpj: string | null = null;
+      let tagsResolvidas: string | null = card.tags;
       if (card.clienteId) {
-        const [c] = await db.select({ nome: contatos.nome, cpfCnpj: contatos.cpfCnpj }).from(contatos)
+        const [c] = await db.select({ nome: contatos.nome, cpfCnpj: contatos.cpfCnpj, tags: contatos.tags }).from(contatos)
           .where(eq(contatos.id, card.clienteId)).limit(1);
         clienteNome = c?.nome || null;
         clienteCpfCnpj = c?.cpfCnpj || null;
+        tagsResolvidas = c?.tags || null;
       }
+      // Substitui tags do card original pelas resolvidas (fonte da verdade)
+      (card as any).tags = tagsResolvidas;
 
       // Histórico de movimentações
       const movs = await db.select().from(kanbanMovimentacoes)
