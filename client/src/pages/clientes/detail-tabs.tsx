@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TagsChipPicker } from "@/components/TagsChipPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
@@ -107,7 +108,10 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
           </p>
         </div>
 
-        <div className="space-y-1.5"><Label className="text-xs">Tags</Label><Input value={tags} onChange={e => setTags(e.target.value)} placeholder="VIP, Trabalhista" /></div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Tags</Label>
+          <TagsChipPicker value={tags} onChange={setTags} placeholder="Buscar ou criar tag..." />
+        </div>
         <div className="space-y-1.5"><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} /></div>
 
         {/* Documentação pendente — toggle + observações livres.

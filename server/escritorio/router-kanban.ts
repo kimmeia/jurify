@@ -7,7 +7,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanTags, contatos, colaboradores } from "../../drizzle/schema";
-import { eq, and, desc, asc, or } from "drizzle-orm";
+import { eq, and, desc, asc, or, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
 
@@ -433,14 +433,79 @@ export const kanbanRouter = router({
     }),
 
   // ─── TAGS ─────────────────────────────────────────────────────────────────
+  //
+  // Tags são single-source: a tabela `kanban_tags` é o catálogo do escritório
+  // (id + nome + cor). Os usos vivem como string vírgula-separada em
+  // `contatos.tags` (autoridade pro cliente) e `kanban_cards.tags` (apenas
+  // pra cards sem `clienteId`). Quando renomeamos ou excluímos uma tag aqui,
+  // varremos as duas tabelas e fazemos replace/remove em cada string —
+  // mantendo consistência entre o catálogo e os usos.
 
   listarTags: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(kanbanTags).where(eq(kanbanTags.escritorioId, esc.escritorio.id));
+    return db
+      .select()
+      .from(kanbanTags)
+      .where(eq(kanbanTags.escritorioId, esc.escritorio.id))
+      .orderBy(asc(kanbanTags.nome));
   }),
+
+  /** Conta em quantos contatos e cards a tag está em uso. Útil pro UI
+   *  exibir "X em uso" antes da exclusão. Comparação é case-insensitive
+   *  no nome (mas o uso preserva case do que estiver salvo). */
+  usoTag: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { contatos: 0, cards: 0, nome: "" };
+      const db = await getDb();
+      if (!db) return { contatos: 0, cards: 0, nome: "" };
+      const [tag] = await db
+        .select()
+        .from(kanbanTags)
+        .where(and(eq(kanbanTags.id, input.id), eq(kanbanTags.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!tag) return { contatos: 0, cards: 0, nome: "" };
+
+      const nomeAlvo = tag.nome.toLowerCase();
+      // Fetch só dos rows que têm a string — filter exato em JS pra evitar
+      // matches parciais (ex: "VIP" não casa com "VIPER")
+      const candidatosContatos = await db
+        .select({ tags: contatos.tags })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.escritorioId, esc.escritorio.id),
+            like(contatos.tags, `%${tag.nome}%`),
+          ),
+        );
+      const candidatosCards = await db
+        .select({ tags: kanbanCards.tags })
+        .from(kanbanCards)
+        .where(
+          and(
+            eq(kanbanCards.escritorioId, esc.escritorio.id),
+            like(kanbanCards.tags, `%${tag.nome}%`),
+          ),
+        );
+
+      const usaTag = (s: string | null | undefined): boolean => {
+        if (!s) return false;
+        return s
+          .split(",")
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean)
+          .includes(nomeAlvo);
+      };
+
+      const totalContatos = candidatosContatos.filter((r) => usaTag(r.tags)).length;
+      const totalCards = candidatosCards.filter((r) => usaTag(r.tags)).length;
+
+      return { contatos: totalContatos, cards: totalCards, nome: tag.nome };
+    }),
 
   criarTag: protectedProcedure
     .input(z.object({ nome: z.string().min(1).max(32), cor: z.string().min(4).max(16) }))
@@ -449,10 +514,136 @@ export const kanbanRouter = router({
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [r] = await db.insert(kanbanTags).values({ escritorioId: esc.escritorio.id, nome: input.nome, cor: input.cor });
+      // Evita duplicata por nome (case-insensitive) no mesmo escritório
+      const existentes = await db
+        .select({ id: kanbanTags.id, nome: kanbanTags.nome })
+        .from(kanbanTags)
+        .where(eq(kanbanTags.escritorioId, esc.escritorio.id));
+      const dup = existentes.find((t) => t.nome.toLowerCase() === input.nome.toLowerCase());
+      if (dup) {
+        throw new TRPCError({ code: "CONFLICT", message: `Já existe uma tag chamada "${input.nome}"` });
+      }
+      const [r] = await db
+        .insert(kanbanTags)
+        .values({ escritorioId: esc.escritorio.id, nome: input.nome, cor: input.cor });
       return { id: (r as { insertId: number }).insertId };
     }),
 
+  /** Edita uma tag (nome e/ou cor). Se o nome mudar, faz replace cascateado
+   *  em `contatos.tags` e `kanban_cards.tags` — preservando ordem e outras
+   *  tags. Match é case-insensitive (mas grava com o `nome` novo). */
+  editarTag: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        nome: z.string().min(1).max(32).optional(),
+        cor: z.string().min(4).max(16).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [tag] = await db
+        .select()
+        .from(kanbanTags)
+        .where(and(eq(kanbanTags.id, input.id), eq(kanbanTags.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!tag) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const nomeAntigo = tag.nome;
+      const nomeNovo = input.nome?.trim();
+      const corNova = input.cor?.trim();
+
+      // Conflito: nome novo já existe em outra tag
+      if (nomeNovo && nomeNovo.toLowerCase() !== nomeAntigo.toLowerCase()) {
+        const existentes = await db
+          .select({ id: kanbanTags.id, nome: kanbanTags.nome })
+          .from(kanbanTags)
+          .where(eq(kanbanTags.escritorioId, esc.escritorio.id));
+        const dup = existentes.find(
+          (t) => t.id !== tag.id && t.nome.toLowerCase() === nomeNovo.toLowerCase(),
+        );
+        if (dup) {
+          throw new TRPCError({ code: "CONFLICT", message: `Já existe uma tag chamada "${nomeNovo}"` });
+        }
+      }
+
+      // Atualiza catálogo
+      const upd: { nome?: string; cor?: string } = {};
+      if (nomeNovo) upd.nome = nomeNovo;
+      if (corNova) upd.cor = corNova;
+      if (Object.keys(upd).length > 0) {
+        await db.update(kanbanTags).set(upd).where(eq(kanbanTags.id, tag.id));
+      }
+
+      // Replace cascateado nas strings (só faz se nome mudou)
+      if (nomeNovo && nomeNovo.toLowerCase() !== nomeAntigo.toLowerCase()) {
+        const replaceNaString = (s: string | null | undefined): string | null => {
+          if (!s) return s ?? null;
+          const partes = s.split(",").map((t) => t.trim()).filter(Boolean);
+          let mudou = false;
+          const novas = partes.map((t) => {
+            if (t.toLowerCase() === nomeAntigo.toLowerCase()) {
+              mudou = true;
+              return nomeNovo;
+            }
+            return t;
+          });
+          // Dedup case-insensitive (caso já existisse a tag-destino)
+          const seen = new Set<string>();
+          const dedup = novas.filter((t) => {
+            const k = t.toLowerCase();
+            if (seen.has(k)) {
+              mudou = true;
+              return false;
+            }
+            seen.add(k);
+            return true;
+          });
+          return mudou ? dedup.join(", ") : s;
+        };
+
+        const candidatosContatos = await db
+          .select({ id: contatos.id, tags: contatos.tags })
+          .from(contatos)
+          .where(
+            and(
+              eq(contatos.escritorioId, esc.escritorio.id),
+              like(contatos.tags, `%${nomeAntigo}%`),
+            ),
+          );
+        for (const r of candidatosContatos) {
+          const novo = replaceNaString(r.tags);
+          if (novo !== r.tags) {
+            await db.update(contatos).set({ tags: novo }).where(eq(contatos.id, r.id));
+          }
+        }
+
+        const candidatosCards = await db
+          .select({ id: kanbanCards.id, tags: kanbanCards.tags })
+          .from(kanbanCards)
+          .where(
+            and(
+              eq(kanbanCards.escritorioId, esc.escritorio.id),
+              like(kanbanCards.tags, `%${nomeAntigo}%`),
+            ),
+          );
+        for (const r of candidatosCards) {
+          const novo = replaceNaString(r.tags);
+          if (novo !== r.tags) {
+            await db.update(kanbanCards).set({ tags: novo }).where(eq(kanbanCards.id, r.id));
+          }
+        }
+      }
+
+      return { success: true };
+    }),
+
+  /** Remove a tag do catálogo + de todos contatos/cards (cascade). UI
+   *  deve chamar `usoTag` antes pra confirmar com o usuário. */
   deletarTag: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -460,8 +651,64 @@ export const kanbanRouter = router({
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(kanbanTags).where(and(eq(kanbanTags.id, input.id), eq(kanbanTags.escritorioId, esc.escritorio.id)));
-      return { success: true };
+
+      const [tag] = await db
+        .select()
+        .from(kanbanTags)
+        .where(and(eq(kanbanTags.id, input.id), eq(kanbanTags.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!tag) return { success: true, removidos: { contatos: 0, cards: 0 } };
+
+      const nomeAlvo = tag.nome.toLowerCase();
+      const removerNaString = (s: string | null | undefined): { novo: string | null; mudou: boolean } => {
+        if (!s) return { novo: s ?? null, mudou: false };
+        const partes = s.split(",").map((t) => t.trim()).filter(Boolean);
+        const filtradas = partes.filter((t) => t.toLowerCase() !== nomeAlvo);
+        const mudou = filtradas.length !== partes.length;
+        return { novo: filtradas.length > 0 ? filtradas.join(", ") : null, mudou };
+      };
+
+      const candidatosContatos = await db
+        .select({ id: contatos.id, tags: contatos.tags })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.escritorioId, esc.escritorio.id),
+            like(contatos.tags, `%${tag.nome}%`),
+          ),
+        );
+      let contatosAfetados = 0;
+      for (const r of candidatosContatos) {
+        const { novo, mudou } = removerNaString(r.tags);
+        if (mudou) {
+          await db.update(contatos).set({ tags: novo }).where(eq(contatos.id, r.id));
+          contatosAfetados += 1;
+        }
+      }
+
+      const candidatosCards = await db
+        .select({ id: kanbanCards.id, tags: kanbanCards.tags })
+        .from(kanbanCards)
+        .where(
+          and(
+            eq(kanbanCards.escritorioId, esc.escritorio.id),
+            like(kanbanCards.tags, `%${tag.nome}%`),
+          ),
+        );
+      let cardsAfetados = 0;
+      for (const r of candidatosCards) {
+        const { novo, mudou } = removerNaString(r.tags);
+        if (mudou) {
+          await db.update(kanbanCards).set({ tags: novo }).where(eq(kanbanCards.id, r.id));
+          cardsAfetados += 1;
+        }
+      }
+
+      await db
+        .delete(kanbanTags)
+        .where(and(eq(kanbanTags.id, input.id), eq(kanbanTags.escritorioId, esc.escritorio.id)));
+
+      return { success: true, removidos: { contatos: contatosAfetados, cards: cardsAfetados } };
     }),
 
   /** Detalhe completo de um card */

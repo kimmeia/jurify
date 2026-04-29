@@ -15,7 +15,7 @@ import {
   Settings, Building2, Users, Loader2, Plus, Trash2, Mail,
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
-  ChevronDown, ChevronUp, Calendar, DollarSign, Plug,
+  ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
@@ -33,6 +33,7 @@ import {
   ClaudeDialog,
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
+import { TagsTab } from "./configuracoes/tags-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 import { FinanceiroTab } from "./configuracoes/financeiro-tab";
 
@@ -230,10 +231,11 @@ export default function Configuracoes() {
       </div>
 
       <Tabs defaultValue="perfil">
-        <TabsList className="grid w-full grid-cols-6 h-10">
+        <TabsList className="grid w-full grid-cols-7 h-10">
           <TabsTrigger value="perfil" className="gap-1.5 text-xs"><Building2 className="h-3.5 w-3.5" /> Escritório</TabsTrigger>
           <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
           <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
+          <TabsTrigger value="tags" className="gap-1.5 text-xs"><TagIcon className="h-3.5 w-3.5" /> Tags</TabsTrigger>
           <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
           <TabsTrigger value="financeiro" className="gap-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
           <TabsTrigger value="integracoes" className="gap-1.5 text-xs"><Link2 className="h-3.5 w-3.5" /> Integrações</TabsTrigger>
@@ -547,6 +549,10 @@ export default function Configuracoes() {
 
         <TabsContent value="financeiro" className="space-y-4">
           <FinanceiroTab canEdit={isDono || colaborador.cargo === "gestor"} />
+        </TabsContent>
+
+        <TabsContent value="tags" className="space-y-4">
+          <TagsTab canEdit={canEdit} />
         </TabsContent>
 
       </Tabs>
