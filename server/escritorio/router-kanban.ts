@@ -240,6 +240,7 @@ export const kanbanRouter = router({
         }
       }
 
+      const responsavelFinal = input.responsavelId || perm.colaboradorId;
       const [r] = await db.insert(kanbanCards).values({
         escritorioId: perm.escritorioId,
         colunaId: input.colunaId,
@@ -250,13 +251,24 @@ export const kanbanRouter = router({
         // Se não informado, atribui ao próprio criador (sobretudo importante
         // pra usuários com permissão verProprios — senão não enxergariam
         // o card que acabaram de criar).
-        responsavelId: input.responsavelId || perm.colaboradorId,
+        responsavelId: responsavelFinal,
         prioridade: (input.prioridade as any) || "media",
         prazo,
         tags: input.tags || null,
         ordem,
       });
-      return { id: (r as { insertId: number }).insertId };
+      const cardId = (r as { insertId: number }).insertId;
+
+      const { notificarCardAtribuido } = await import("./notificar-card-kanban");
+      await notificarCardAtribuido({
+        cardId,
+        responsavelColaboradorId: responsavelFinal,
+        atribuidorUserId: ctx.user.id,
+        acao: "criado",
+        tituloCard: input.titulo,
+      });
+
+      return { id: cardId };
     }),
 
   editarCard: protectedProcedure
@@ -292,9 +304,39 @@ export const kanbanRouter = router({
       if (update.tags !== undefined) setData.tags = update.tags;
       if (update.clienteId !== undefined) setData.clienteId = update.clienteId;
       if (update.responsavelId !== undefined) setData.responsavelId = update.responsavelId;
+
+      // Detecta mudança de responsável ANTES do update, para notificar o novo
+      // responsável depois. Só faz a query extra se a mutação está alterando
+      // esse campo.
+      let novoResponsavelParaNotificar: number | null = null;
+      let tituloAtual = update.titulo || "";
+      if (update.responsavelId !== undefined) {
+        const [antes] = await db
+          .select({ atual: kanbanCards.responsavelId, titulo: kanbanCards.titulo })
+          .from(kanbanCards)
+          .where(and(eq(kanbanCards.id, id), eq(kanbanCards.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (antes && antes.atual !== update.responsavelId) {
+          novoResponsavelParaNotificar = update.responsavelId;
+          tituloAtual = update.titulo || antes.titulo;
+        }
+      }
+
       // Garantir o filtro escritorioId no UPDATE — antes só filtrava por id (vazamento entre escritórios)
       await db.update(kanbanCards).set(setData)
         .where(and(eq(kanbanCards.id, id), eq(kanbanCards.escritorioId, perm.escritorioId)));
+
+      if (novoResponsavelParaNotificar !== null) {
+        const { notificarCardAtribuido } = await import("./notificar-card-kanban");
+        await notificarCardAtribuido({
+          cardId: id,
+          responsavelColaboradorId: novoResponsavelParaNotificar,
+          atribuidorUserId: ctx.user.id,
+          acao: "atribuido",
+          tituloCard: tituloAtual,
+        });
+      }
+
       return { success: true };
     }),
 
