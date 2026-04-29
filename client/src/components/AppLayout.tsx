@@ -426,7 +426,8 @@ function AppSidebarContent({
                   className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
                 >
                   <CalendarDays className={`h-4 w-4 ${location === "/agenda" ? "text-primary" : ""}`} />
-                  <span>Agenda</span>
+                  <span className="flex-1">Agenda</span>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -456,7 +457,7 @@ function AppSidebarContent({
                 >
                   <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
                   <span className="flex-1">Atendimento</span>
-                  <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-600 bg-blue-50 dark:bg-blue-950/20">Em revisão</Badge>
+                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
