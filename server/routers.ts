@@ -35,6 +35,7 @@ import { agendaRouter } from "./escritorio/router-agenda";
 import { templatesRouter } from "./escritorio/router-templates";
 import { financeiroRouter } from "./escritorio/router-financeiro";
 import { comissoesRouter } from "./escritorio/router-comissoes";
+import { comissoesAgendaRouter } from "./escritorio/router-comissoes-agenda";
 import { despesasRouter } from "./escritorio/router-despesas";
 
 // Integrações
@@ -109,6 +110,7 @@ export const appRouter = router({
   templates: templatesRouter,
   financeiro: financeiroRouter,
   comissoes: comissoesRouter,
+  comissoesAgenda: comissoesAgendaRouter,
   despesas: despesasRouter,
 
   // Integrações específicas
