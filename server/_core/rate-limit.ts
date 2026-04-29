@@ -85,3 +85,42 @@ export const writeRateLimit = rateLimit({
   name: "write",
   max: 60, // 60 mutations/min por IP
 });
+
+/**
+ * Rate limit programático — pra uso DENTRO de procedures tRPC, onde a
+ * gente quer chavear por algo além do IP (ex: IP+email pra brute force
+ * de login). Retorna `{ allowed, retryAfter }`. Se `allowed=false`, o
+ * caller deve lançar TRPCError com TOO_MANY_REQUESTS.
+ *
+ * Compartilha o mesmo `stores` do middleware Express.
+ */
+export function consume(opts: {
+  name: string;
+  key: string;
+  max: number;
+  windowMs: number;
+}): { allowed: boolean; retryAfter: number } {
+  const store = getStore(opts.name);
+  const now = Date.now();
+  const entry = store.get(opts.key);
+
+  if (!entry || now > entry.resetAt) {
+    store.set(opts.key, { count: 1, resetAt: now + opts.windowMs });
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  entry.count++;
+  if (entry.count > opts.max) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { allowed: true, retryAfter: 0 };
+}
+
+/**
+ * Reseta o contador pra uma chave — útil em login bem-sucedido pra
+ * não penalizar usuário legítimo que errou senha algumas vezes.
+ */
+export function reset(name: string, key: string): void {
+  const store = stores.get(name);
+  store?.delete(key);
+}

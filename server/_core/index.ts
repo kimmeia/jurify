@@ -124,8 +124,56 @@ async function startServer() {
   registerWhatsAppCloudWebhook(app);
 
   // Health check — usado pelo Railway/loadbalancer pra saber se o app respira.
-  app.get("/api/health", (_req, res) => {
+  // Faz ping no MySQL com timeout curto pra detectar DB caído. Sem ele,
+  // o LB acha que tá tudo bem mesmo se as queries tão estourando timeout.
+  // /api/health/live (sempre 200, só prova que o processo Node respira) /
+  // /api/health (200 só se DB responde — usado como readiness check).
+  app.get("/api/health/live", (_req, res) => {
     res.json({ ok: true, uptime: process.uptime(), now: new Date().toISOString() });
+  });
+
+  app.get("/api/health", async (_req, res) => {
+    const inicio = Date.now();
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        res.status(503).json({
+          ok: false,
+          db: "unavailable",
+          reason: "getDb retornou null",
+          uptime: process.uptime(),
+        });
+        return;
+      }
+      // Ping com timeout 2s — DB lento conta como falha pro health.
+      const ping = await Promise.race([
+        (async () => {
+          const { sql } = await import("drizzle-orm");
+          const result = await db.execute(sql`SELECT 1 AS ok`);
+          return result;
+        })(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DB ping timeout 2s")), 2000),
+        ),
+      ]);
+      res.json({
+        ok: true,
+        db: "ok",
+        latencyMs: Date.now() - inicio,
+        uptime: process.uptime(),
+        now: new Date().toISOString(),
+        ping: !!ping,
+      });
+    } catch (err: any) {
+      res.status(503).json({
+        ok: false,
+        db: "error",
+        reason: err.message || String(err),
+        latencyMs: Date.now() - inicio,
+        uptime: process.uptime(),
+      });
+    }
   });
 
   // SSE real-time notifications

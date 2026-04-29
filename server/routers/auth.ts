@@ -13,9 +13,11 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME, SESSION_DURATION_MS } from "@shared/const";
 import { publicProcedure, router } from "../_core/trpc";
 import { getSessionCookieOptions } from "../_core/cookies";
+import { consume as rateLimitConsume, reset as rateLimitReset } from "../_core/rate-limit";
 import { sdk } from "../_core/sdk";
 import {
   upsertUser,
@@ -161,6 +163,16 @@ export const authRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Anti-spam: máximo 3 cadastros / IP / hora.
+      const ip = ctx.req.ip || "unknown";
+      const rl = rateLimitConsume({ name: "auth-signup", key: ip, max: 3, windowMs: 60 * 60_000 });
+      if (!rl.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Muitos cadastros do seu IP. Tente novamente em ${Math.ceil(rl.retryAfter / 60)} minutos.`,
+        });
+      }
+
       const email = input.email.trim().toLowerCase();
 
       // Verifica se já existe
@@ -232,6 +244,28 @@ export const authRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const email = input.email.trim().toLowerCase();
+      const ip = ctx.req.ip || "unknown";
+
+      // Rate limit anti-bruteforce: dois eixos, cada um cobre um cenário.
+      // (1) IP: 10 tentativas / 15min — proteje contra password spraying
+      //     (mesmo IP testando vários emails).
+      // (2) email: 5 tentativas / 1h — proteje contra brute force focado
+      //     numa conta específica vindo de IPs diferentes.
+      const rlIp = rateLimitConsume({ name: "login-ip", key: ip, max: 10, windowMs: 15 * 60_000 });
+      if (!rlIp.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Muitas tentativas. Tente novamente em ${Math.ceil(rlIp.retryAfter / 60)} minutos.`,
+        });
+      }
+      const rlEmail = rateLimitConsume({ name: "login-email", key: email, max: 5, windowMs: 60 * 60_000 });
+      if (!rlEmail.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Muitas tentativas para esse e-mail. Tente novamente em ${Math.ceil(rlEmail.retryAfter / 60)} minutos.`,
+        });
+      }
+
       const user = await getUserByEmail(email);
 
       if (!user || !user.passwordHash) {
@@ -246,6 +280,11 @@ export const authRouter = router({
 
       // Bloqueia login se o usuário foi removido de todos os escritórios
       await bloquearSeRemovido(user.id);
+
+      // Sucesso: limpa contadores pra não penalizar usuário legítimo que
+      // errou senha algumas vezes antes de acertar.
+      rateLimitReset("login-ip", ip);
+      rateLimitReset("login-email", email);
 
       // Atualiza lastSignedIn
       await upsertUser({
@@ -267,6 +306,17 @@ export const authRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Anti-flood: 20 tentativas / IP / 15min. Google já valida o token,
+      // então o limite é mais frouxo do que email/senha.
+      const ip = ctx.req.ip || "unknown";
+      const rl = rateLimitConsume({ name: "login-google", key: ip, max: 20, windowMs: 15 * 60_000 });
+      if (!rl.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Muitas tentativas. Tente novamente em ${Math.ceil(rl.retryAfter / 60)} minutos.`,
+        });
+      }
+
       const profile = await verifyGoogleIdToken(input.idToken);
       if (!profile) {
         throw new Error("Token do Google inválido.");
