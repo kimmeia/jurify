@@ -27,6 +27,7 @@ import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
+import { extrairDataPagamento } from "./asaas-sync";
 const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
@@ -40,6 +41,12 @@ interface AsaasWebhookPayload {
     status: string;
     dueDate: string;
     paymentDate?: string;
+    /** Data informada pelo cliente como "quando pagou" — usado no
+     *  RECEIVED_IN_CASH e como fallback informativo. */
+    clientPaymentDate?: string;
+    /** Data de confirmação (CONFIRMED) — preenchido antes do crédito
+     *  cair em conta. Usado como fallback de "data do pagamento". */
+    confirmedDate?: string;
     description?: string;
     invoiceUrl?: string;
     bankSlipUrl?: string;
@@ -132,7 +139,7 @@ export function registerAsaasWebhook(app: Express) {
               descricao: payment.description || null,
               invoiceUrl: payment.invoiceUrl || null,
               bankSlipUrl: payment.bankSlipUrl || null,
-              dataPagamento: payment.paymentDate || null,
+              dataPagamento: extrairDataPagamento(payment),
               externalReference: payment.externalReference || null,
               atendenteId: atendenteInferido,
             })
@@ -142,7 +149,7 @@ export function registerAsaasWebhook(app: Express) {
                 valor: payment.value.toString(),
                 valorLiquido: payment.netValue?.toString() || null,
                 vencimento: payment.dueDate,
-                dataPagamento: payment.paymentDate || null,
+                dataPagamento: extrairDataPagamento(payment),
                 descricao: payment.description || null,
                 invoiceUrl: payment.invoiceUrl || null,
                 bankSlipUrl: payment.bankSlipUrl || null,

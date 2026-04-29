@@ -15,9 +15,32 @@ import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, contatos } from "../../drizzle/schema";
 import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
-import { AsaasClient } from "./asaas-client";
+import { AsaasClient, type AsaasPayment } from "./asaas-client";
 import { createLogger } from "../_core/logger";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
+
+/** Extrai a "data de pagamento" mais confiável da cobrança Asaas.
+ *
+ *  O Asaas usa 3 campos com semânticas distintas:
+ *   - `paymentDate`: data em que o dinheiro caiu na conta (status RECEIVED)
+ *   - `confirmedDate`: data de confirmação (CONFIRMED — PIX confirmado,
+ *      cartão autorizado, boleto registrado) — antes do crédito ser
+ *      efetivado em conta
+ *   - `clientPaymentDate`: data informada pelo cliente como "quando pagou"
+ *      (RECEIVED_IN_CASH = pagamento manual em dinheiro/transferência
+ *      registrado fora do Asaas, ou fallback informativo)
+ *
+ *  Pra exibir "Pago em" no app e calcular comissões, queremos a primeira
+ *  data disponível nessa ordem: paymentDate > clientPaymentDate >
+ *  confirmedDate. Sem fallback, cobranças CONFIRMED ou RECEIVED_IN_CASH
+ *  apareciam com "—" (data nula) e o cálculo de comissão não pegava
+ *  esses pagamentos no período.
+ */
+export function extrairDataPagamento(
+  cob: Pick<AsaasPayment, "paymentDate" | "clientPaymentDate" | "confirmedDate">,
+): string | null {
+  return cob.paymentDate || cob.clientPaymentDate || cob.confirmedDate || null;
+}
 const log = createLogger("integracoes-asaas-sync");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -106,7 +129,7 @@ export async function syncCobrancasDeCliente(
       if (local) {
         // Normaliza datas de pagamento (API pode retornar "" / undefined; DB guarda null)
         const localDataPag = local.dataPagamento || null;
-        const remotaDataPag = cob.paymentDate || null;
+        const remotaDataPag = extrairDataPagamento(cob);
         const remotaNetValue = cob.netValue?.toString() || null;
         const mudouStatus = local.status !== cob.status;
         const mudouDataPag = localDataPag !== remotaDataPag;
@@ -154,7 +177,7 @@ export async function syncCobrancasDeCliente(
             descricao: cob.description || null,
             invoiceUrl: cob.invoiceUrl,
             bankSlipUrl: cob.bankSlipUrl || null,
-            dataPagamento: cob.paymentDate || null,
+            dataPagamento: extrairDataPagamento(cob),
             externalReference: cob.externalReference || null,
             atendenteId: atendenteInferido,
           })
@@ -170,7 +193,7 @@ export async function syncCobrancasDeCliente(
               descricao: cob.description || null,
               invoiceUrl: cob.invoiceUrl,
               bankSlipUrl: cob.bankSlipUrl || null,
-              dataPagamento: cob.paymentDate || null,
+              dataPagamento: extrairDataPagamento(cob),
             },
           });
         stats.novas++;
