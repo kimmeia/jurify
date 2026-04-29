@@ -26,8 +26,10 @@ import {
   getUserByOpenId,
   getDb,
 } from "../db";
-import { colaboradores, users } from "../../drizzle/schema";
-import { and, eq } from "drizzle-orm";
+import { colaboradores, users, passwordResetTokens } from "../../drizzle/schema";
+import { and, eq, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { enviarEmailRedefinirSenha, enviarEmailBoasVindas } from "../_core/email";
 
 /** Bloqueia login de usuário que foi removido de TODOS os escritórios
  *  em que tinha vínculo. Mantém o flag de remoção visível pra ele entender
@@ -160,6 +162,12 @@ export const authRouter = router({
         name: z.string().min(2).max(255),
         email: z.string().email().max(320),
         password: z.string().min(6).max(128),
+        // LGPD: aceite explícito dos Termos + Política. O frontend só
+        // habilita o botão de signup com isso true. Aqui validamos de
+        // novo (defesa em profundidade).
+        aceitouTermos: z.literal(true, {
+          errorMap: () => ({ message: "Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar a conta." }),
+        }),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -226,11 +234,19 @@ export const authRouter = router({
         loginMethod: "email",
         passwordHash,
         lastSignedIn: new Date(),
+        aceitouTermosEm: new Date(),
       });
 
       await setSessionCookie(ctx, openId, input.name);
 
       log.info({ email }, "Novo cadastro via email/senha");
+
+      // Email de boas-vindas — não bloqueia o signup se falhar (Resend
+      // pode estar fora ou config faltando). Só loga.
+      void enviarEmailBoasVindas({ email, nome: input.name }).then((r) => {
+        if (!r.success) log.warn({ email, error: r.error }, "Falha ao enviar email de boas-vindas");
+      });
+
       return { success: true, email, name: input.name } as const;
     }),
 
@@ -354,5 +370,128 @@ export const authRouter = router({
         name: profile.name,
         picture: profile.picture,
       } as const;
+    }),
+
+  /**
+   * "Esqueci minha senha" — gera token de reset e envia email.
+   *
+   * Sempre retorna sucesso (mesmo se email não existe) pra não vazar
+   * existência de conta. Logamos internamente o caso pra suporte.
+   */
+  esqueciSenha: publicProcedure
+    .input(z.object({ email: z.string().email().max(320) }))
+    .mutation(async ({ ctx, input }) => {
+      const ip = ctx.req.ip || "unknown";
+
+      // Rate limit: 3 solicitações / IP / hora + 3 / email / hora.
+      // Evita spam de "esqueci senha" pra email aleatório (gera carga
+      // de email + spam pro user real).
+      const rlIp = rateLimitConsume({ name: "reset-ip", key: ip, max: 3, windowMs: 60 * 60_000 });
+      if (!rlIp.allowed) {
+        // Mensagem genérica idêntica ao caminho de sucesso pra não vazar
+        return { success: true } as const;
+      }
+      const rlEmail = rateLimitConsume({ name: "reset-email", key: input.email.toLowerCase(), max: 3, windowMs: 60 * 60_000 });
+      if (!rlEmail.allowed) {
+        return { success: true } as const;
+      }
+
+      const email = input.email.trim().toLowerCase();
+      const user = await getUserByEmail(email);
+
+      if (!user || !user.passwordHash) {
+        // User não existe OU é só Google (não tem senha pra resetar).
+        // Log silencioso, retorna sucesso genérico.
+        log.info({ email }, "Solicitação de reset pra user inexistente ou Google-only");
+        return { success: true } as const;
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Invalida tokens anteriores ainda não usados desse user. Best
+      // practice: só 1 token ativo por user.
+      await db
+        .update(passwordResetTokens)
+        .set({ usadoEm: new Date() })
+        .where(and(
+          eq(passwordResetTokens.userId, user.id),
+          isNull(passwordResetTokens.usadoEm),
+        ));
+
+      // Gera novo token (UUID v4 — 36 chars, suficiente).
+      const token = randomUUID();
+      const expiraEm = new Date(Date.now() + 60 * 60_000); // 1h
+
+      await db.insert(passwordResetTokens).values({
+        userId: user.id,
+        token,
+        expiraEm,
+      });
+
+      // Envia email — falha não bloqueia (mas loga).
+      const result = await enviarEmailRedefinirSenha({
+        email,
+        nome: user.name || "",
+        token,
+      });
+      if (!result.success) {
+        log.error({ email, error: result.error }, "Falha ao enviar email de reset");
+      }
+
+      return { success: true } as const;
+    }),
+
+  /**
+   * Redefinir senha usando token. Valida que existe, não foi usado e não
+   * expirou. Marca como usado, troca a senha do user.
+   */
+  redefinirSenha: publicProcedure
+    .input(z.object({
+      token: z.string().min(20).max(64),
+      novaSenha: z.string().min(6).max(128),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [reg] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(eq(passwordResetTokens.token, input.token))
+        .limit(1);
+
+      if (!reg) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Link inválido. Solicite uma nova redefinição." });
+      }
+      if (reg.usadoEm) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este link já foi usado. Solicite uma nova redefinição." });
+      }
+      if (reg.expiraEm.getTime() < Date.now()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este link expirou. Solicite uma nova redefinição." });
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, reg.userId)).limit(1);
+      if (!user) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Usuário não encontrado." });
+      }
+
+      const passwordHash = await hashPassword(input.novaSenha);
+
+      await upsertUser({
+        openId: user.openId,
+        passwordHash,
+      });
+
+      await db
+        .update(passwordResetTokens)
+        .set({ usadoEm: new Date() })
+        .where(eq(passwordResetTokens.id, reg.id));
+
+      // Limpa eventuais rate limits do user — ele provou identidade.
+      rateLimitReset("login-email", user.email || "");
+
+      log.info({ userId: user.id }, "Senha redefinida via token");
+      return { success: true } as const;
     }),
 });

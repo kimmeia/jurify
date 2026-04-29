@@ -43,6 +43,13 @@ export const users = mysqlTable("users", {
   motivoBloqueio: varchar("motivoBloqueio", { length: 500 }),
   /** Timestamp do bloqueio. */
   bloqueadoEm: timestamp("bloqueadoEm"),
+  /**
+   * Quando o usuário aceitou os Termos de Uso + Política de Privacidade.
+   * Required pra signup novo (LGPD: precisa de aceite explícito e auditável).
+   * Pode ser null em contas antigas — se for, exibimos modal pedindo aceite
+   * no próximo login (TODO frontend).
+   */
+  aceitouTermosEm: timestamp("aceitouTermosEm"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -1959,3 +1966,31 @@ export const roadmapVotos = mysqlTable("roadmap_votos", {
 
 export type RoadmapVoto = typeof roadmapVotos.$inferSelect;
 export type InsertRoadmapVoto = typeof roadmapVotos.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PASSWORD RESET — Tokens pra "Esqueci minha senha"
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tokens de reset de senha. Cada solicitação de "esqueci senha" cria
+ * um registro com UUID + expiração de 1h. Quando o user clica no link
+ * e troca a senha, marcamos `usadoEm` — o mesmo token não pode rodar
+ * de novo.
+ *
+ * Solicitações novas pro mesmo user invalidam tokens anteriores
+ * (best practice: só 1 token ativo por user).
+ */
+export const passwordResetTokens = mysqlTable("password_reset_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiraEm: timestamp("expiraEm").notNull(),
+  usadoEm: timestamp("usadoEm"),
+  createdAt: timestamp("createdAtTok").defaultNow().notNull(),
+}, (t) => ({
+  prtUserIdx: index("prt_user_idx").on(t.userId),
+  prtExpiraIdx: index("prt_expira_idx").on(t.expiraEm),
+}));
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
