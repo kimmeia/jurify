@@ -29,6 +29,7 @@ const inputCriar = z.object({
   opcoes: z.array(z.string().min(1).max(64)).max(50).optional(),
   ajuda: z.string().max(200).optional(),
   obrigatorio: z.boolean().default(false),
+  mostrarCadastro: z.boolean().default(true),
   ordem: z.number().int().min(0).default(0),
 });
 
@@ -45,6 +46,7 @@ const inputEditar = z.object({
   opcoes: z.array(z.string().min(1).max(64)).max(50).nullable().optional(),
   ajuda: z.string().max(200).nullable().optional(),
   obrigatorio: z.boolean().optional(),
+  mostrarCadastro: z.boolean().optional(),
   ordem: z.number().int().min(0).optional(),
 });
 
@@ -92,7 +94,11 @@ export const camposClienteRouter = router({
       tipo: input.tipo,
       opcoes: input.opcoes ? JSON.stringify(input.opcoes) : null,
       ajuda: input.ajuda || null,
-      obrigatorio: input.obrigatorio,
+      // Campo invisível no cadastro não pode ser obrigatório (operadora não
+      // teria como preencher). Trava defensiva — front também desabilita o
+      // switch quando mostrarCadastro=false.
+      obrigatorio: input.mostrarCadastro === false ? false : input.obrigatorio,
+      mostrarCadastro: input.mostrarCadastro,
       ordem: input.ordem,
     });
     return { id: (r as { insertId: number }).insertId };
@@ -150,7 +156,15 @@ export const camposClienteRouter = router({
     }
     if (input.ajuda !== undefined) upd.ajuda = input.ajuda;
     if (input.obrigatorio !== undefined) upd.obrigatorio = input.obrigatorio;
+    if (input.mostrarCadastro !== undefined) upd.mostrarCadastro = input.mostrarCadastro;
     if (input.ordem !== undefined) upd.ordem = input.ordem;
+
+    // Trava defensiva: campo invisível no cadastro não pode ser
+    // obrigatório. Considera o estado final pós-update.
+    const mostrarFinal = input.mostrarCadastro ?? campo.mostrarCadastro;
+    if (mostrarFinal === false) {
+      upd.obrigatorio = false;
+    }
 
     if (Object.keys(upd).length > 0) {
       await db

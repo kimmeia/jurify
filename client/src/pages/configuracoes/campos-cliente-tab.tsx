@@ -31,7 +31,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Plus, Pencil, Trash2, Loader2, AlertTriangle, X, GripVertical } from "lucide-react";
+import { Sparkles, Plus, Pencil, Trash2, Loader2, AlertTriangle, X, GripVertical, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 type TipoCampo = "texto" | "numero" | "data" | "textarea" | "select" | "boolean";
@@ -44,6 +44,7 @@ interface Campo {
   opcoes: string[] | null;
   ajuda: string | null;
   obrigatorio: boolean;
+  mostrarCadastro: boolean;
   ordem: number;
 }
 
@@ -163,6 +164,16 @@ export function CamposClienteTab({ canEdit }: { canEdit: boolean }) {
                         obrigatório
                       </Badge>
                     )}
+                    {c.mostrarCadastro === false && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-4 px-1.5 gap-1 border-accent-purple text-accent-purple-fg"
+                        title="Campo oculto do cadastro — usado só por automações (SmartFlow, API)"
+                      >
+                        <EyeOff className="h-2.5 w-2.5" />
+                        só automação
+                      </Badge>
+                    )}
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-normal">
                       {TIPOS_LABEL[c.tipo]}
                     </Badge>
@@ -271,6 +282,7 @@ interface FormData {
   opcoes?: string[];
   ajuda?: string;
   obrigatorio: boolean;
+  mostrarCadastro: boolean;
 }
 
 function CampoFormDialog({
@@ -294,6 +306,10 @@ function CampoFormDialog({
   const [tipo, setTipo] = useState<TipoCampo>(inicial?.tipo || "texto");
   const [ajuda, setAjuda] = useState(inicial?.ajuda || "");
   const [obrigatorio, setObrigatorio] = useState(inicial?.obrigatorio || false);
+  // Default true: comportamento histórico era sempre mostrar. Edição de
+  // campo existente que ainda não tem o flag (rows pré-migração) também
+  // assume true via `?? true`.
+  const [mostrarCadastro, setMostrarCadastro] = useState(inicial?.mostrarCadastro ?? true);
   const [opcoes, setOpcoes] = useState<string[]>(inicial?.opcoes || []);
   const [novaOpcao, setNovaOpcao] = useState("");
 
@@ -352,7 +368,10 @@ function CampoFormDialog({
       tipo,
       opcoes: tipo === "select" ? opcoes : undefined,
       ajuda: ajuda || undefined,
-      obrigatorio,
+      // Quando oculto do cadastro, força obrigatorio=false (operadora
+      // não teria como preencher). Backend tem a mesma trava defensiva.
+      obrigatorio: mostrarCadastro ? obrigatorio : false,
+      mostrarCadastro,
     });
   }
 
@@ -465,17 +484,40 @@ function CampoFormDialog({
           </div>
           <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
             <div>
+              <Label className="text-xs cursor-pointer" htmlFor="mostrar-cadastro-switch">
+                Mostrar no cadastro do cliente
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Quando desligado, o campo só fica disponível para automações
+                (SmartFlow, API) — não aparece no formulário de cadastro.
+              </p>
+            </div>
+            <Switch
+              id="mostrar-cadastro-switch"
+              checked={mostrarCadastro}
+              onCheckedChange={setMostrarCadastro}
+            />
+          </div>
+          <div
+            className={`flex items-center justify-between p-3 rounded-md border bg-muted/30 transition-opacity ${
+              mostrarCadastro ? "" : "opacity-50"
+            }`}
+          >
+            <div>
               <Label className="text-xs cursor-pointer" htmlFor="obrigatorio-switch">
                 Campo obrigatório
               </Label>
               <p className="text-[10px] text-muted-foreground">
-                Bloqueia salvar cliente sem este preenchido
+                {mostrarCadastro
+                  ? "Bloqueia salvar cliente sem este preenchido"
+                  : "Indisponível: campo oculto do cadastro"}
               </p>
             </div>
             <Switch
               id="obrigatorio-switch"
-              checked={obrigatorio}
+              checked={obrigatorio && mostrarCadastro}
               onCheckedChange={setObrigatorio}
+              disabled={!mostrarCadastro}
             />
           </div>
         </div>
