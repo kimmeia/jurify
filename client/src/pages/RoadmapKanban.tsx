@@ -11,7 +11,7 @@
  *  - planejado: vai entrar no roadmap
  *  - em_desenvolvimento: sendo construído
  *  - lancado: pronto, em produção
- *  - recusado: não vai ser feito
+ *  - recusado: não vai ser feito (collapsed por default — não polui o board)
  */
 
 import { useState } from "react";
@@ -27,7 +27,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ThumbsUp, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  ThumbsUp,
+  AlertCircle,
+  Loader2,
+  Inbox,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -42,49 +49,42 @@ const STATUS_KANBAN = [
 ] as const;
 
 type StatusKanban = typeof STATUS_KANBAN[number];
+type Tone = "info" | "warning" | "success" | "neutral" | "accent" | "danger";
 
-const STATUS_META: Record<StatusKanban, { label: string; cor: string; corColuna: string }> = {
-  aguardando_aprovacao: {
-    label: "Sugestão",
-    cor: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    corColuna: "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900",
-  },
-  novo: {
-    label: "Novo",
-    cor: "bg-slate-500/10 text-slate-700 dark:text-slate-300",
-    corColuna: "bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800",
-  },
-  em_analise: {
-    label: "Em análise",
-    cor: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    corColuna: "bg-amber-50/30 dark:bg-amber-950/10 border-amber-200 dark:border-amber-900",
-  },
-  planejado: {
-    label: "Planejado",
-    cor: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
-    corColuna: "bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900",
-  },
-  em_desenvolvimento: {
-    label: "Em desenvolvimento",
-    cor: "bg-orange-500/10 text-orange-700 dark:text-orange-300",
-    corColuna: "bg-orange-50/50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900",
-  },
-  lancado: {
-    label: "Lançado",
-    cor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    corColuna: "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900",
-  },
-  recusado: {
-    label: "Recusado",
-    cor: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300",
-    corColuna: "bg-zinc-50/50 dark:bg-zinc-950/20 border-zinc-200 dark:border-zinc-800",
-  },
+const STATUS_META: Record<StatusKanban, { label: string; tone: Tone }> = {
+  aguardando_aprovacao: { label: "Sugestão", tone: "warning" },
+  novo: { label: "Novo", tone: "neutral" },
+  em_analise: { label: "Em análise", tone: "warning" },
+  planejado: { label: "Planejado", tone: "info" },
+  em_desenvolvimento: { label: "Em desenvolvimento", tone: "accent" },
+  lancado: { label: "Lançado", tone: "success" },
+  recusado: { label: "Recusado", tone: "neutral" },
 };
 
-const CATEGORIA_META: Record<string, { label: string; cor: string }> = {
-  feature: { label: "Funcionalidade", cor: "bg-violet-500/10 text-violet-700" },
-  bug: { label: "Bug", cor: "bg-red-500/10 text-red-700" },
-  melhoria: { label: "Melhoria", cor: "bg-sky-500/10 text-sky-700" },
+const CATEGORIA_META: Record<string, { label: string; tone: Tone }> = {
+  feature: { label: "Funcionalidade", tone: "accent" },
+  bug: { label: "Bug", tone: "danger" },
+  melhoria: { label: "Melhoria", tone: "info" },
+};
+
+/** Classes Tailwind por tone — usa tokens semânticos do `index.css`,
+ *  então respeita light/dark automaticamente. */
+const TONE_BADGE: Record<Tone, string> = {
+  info: "bg-info-bg text-info-fg",
+  warning: "bg-warning-bg text-warning-fg",
+  success: "bg-success-bg text-success-fg",
+  neutral: "bg-neutral-bg text-neutral-fg",
+  accent: "bg-accent-purple-bg text-accent-purple-fg",
+  danger: "bg-danger-bg text-danger-fg",
+};
+
+const TONE_BORDER: Record<Tone, string> = {
+  info: "border-l-info",
+  warning: "border-l-warning",
+  success: "border-l-success",
+  neutral: "border-l-neutral",
+  accent: "border-l-accent-purple",
+  danger: "border-l-danger",
 };
 
 interface RoadmapItem {
@@ -110,11 +110,22 @@ interface Props {
   atualizandoId: number | null;
 }
 
-export function RoadmapKanban({ itens, isAdmin, userId, onAtualizarStatus, onVotar, votandoId, atualizandoId }: Props) {
+export function RoadmapKanban({
+  itens,
+  isAdmin,
+  userId,
+  onAtualizarStatus,
+  onVotar,
+  votandoId,
+  atualizandoId,
+}: Props) {
   const sensors = useSensors(
     // 5px de tolerância pra clique não virar drag por engano (botão votar etc.)
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+
+  // "Recusado" começa collapsed — não polui o board com ideias mortas.
+  const [recusadoAberto, setRecusadoAberto] = useState(false);
 
   // Decide quais colunas mostrar:
   // - Admin: TODAS (ele precisa ver e moderar "Sugestão")
@@ -142,16 +153,20 @@ export function RoadmapKanban({ itens, isAdmin, userId, onAtualizarStatus, onVot
         {colunas.map((status) => {
           const meta = STATUS_META[status];
           const itensColuna = itens.filter((i) => i.status === status);
+          const isRecusado = status === "recusado";
+          const colapsada = isRecusado && !recusadoAberto;
           return (
             <Coluna
               key={status}
               status={status}
               label={meta.label}
-              cor={meta.corColuna}
+              tone={meta.tone}
               count={itensColuna.length}
               isAdmin={isAdmin}
+              colapsada={colapsada}
+              onToggle={isRecusado ? () => setRecusadoAberto((v) => !v) : undefined}
             >
-              {itensColuna.map((item) => (
+              {!colapsada && itensColuna.map((item) => (
                 <ItemCard
                   key={item.id}
                   item={item}
@@ -162,12 +177,15 @@ export function RoadmapKanban({ itens, isAdmin, userId, onAtualizarStatus, onVot
                   atualizandoId={atualizandoId}
                 />
               ))}
-              {itensColuna.length === 0 && (
-                <p className="text-[11px] text-muted-foreground text-center py-6">
-                  {status === "aguardando_aprovacao" && isAdmin
-                    ? "Sem sugestões pendentes."
-                    : "Vazio."}
-                </p>
+              {!colapsada && itensColuna.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground/70">
+                  <Inbox className="h-5 w-5" />
+                  <p className="text-[11px]">
+                    {status === "aguardando_aprovacao" && isAdmin
+                      ? "Sem sugestões pendentes"
+                      : "Vazio"}
+                  </p>
+                </div>
               )}
             </Coluna>
           );
@@ -182,38 +200,64 @@ export function RoadmapKanban({ itens, isAdmin, userId, onAtualizarStatus, onVot
 function Coluna({
   status,
   label,
-  cor,
+  tone,
   count,
   isAdmin,
+  colapsada,
+  onToggle,
   children,
 }: {
   status: StatusKanban;
   label: string;
-  cor: string;
+  tone: Tone;
   count: number;
   isAdmin: boolean;
+  colapsada: boolean;
+  onToggle?: () => void;
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
+  const colapsavel = !!onToggle;
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-72 rounded-lg border ${cor} ${isOver && isAdmin ? "ring-2 ring-violet-400" : ""}`}
+      className={`
+        flex-shrink-0 ${colapsada ? "w-44" : "w-72"} rounded-lg border bg-card
+        border-l-4 ${TONE_BORDER[tone]}
+        transition-all
+        ${isOver && isAdmin ? "ring-2 ring-ring/50" : ""}
+      `}
     >
-      <div className="px-3 py-2 border-b bg-background/50 rounded-t-lg flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{label}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!colapsavel}
+        className={`
+          w-full px-3 py-2 border-b flex items-center justify-between gap-2
+          ${colapsavel ? "hover:bg-muted/50 cursor-pointer" : "cursor-default"}
+          rounded-t-lg
+        `}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {colapsavel && (colapsada ? (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          ))}
+          <span className="text-sm font-semibold truncate">{label}</span>
           <Badge variant="secondary" className="text-[10px] h-5">{count}</Badge>
         </div>
-        {status === "aguardando_aprovacao" && isAdmin && (
-          <Badge variant="outline" className="text-[9px] h-5 border-amber-400 text-amber-700">
+        {status === "aguardando_aprovacao" && isAdmin && !colapsada && (
+          <Badge className="text-[9px] h-5 bg-warning-bg text-warning-fg border-0">
             Modere
           </Badge>
         )}
-      </div>
-      <div className="p-2 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
-        {children}
-      </div>
+      </button>
+      {!colapsada && (
+        <div className="p-2 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -242,6 +286,7 @@ function ItemCard({
 
   const ehProprio = item.criadoPor === userId;
   const aguardando = item.status === "aguardando_aprovacao";
+  const catMeta = CATEGORIA_META[item.categoria];
 
   return (
     <Card
@@ -252,17 +297,19 @@ function ItemCard({
         ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}
         ${isDragging ? "opacity-30" : ""}
         ${aguardando ? "border-dashed" : ""}
-        hover:shadow-sm transition-shadow
+        hover:shadow-md hover:border-foreground/20 transition-all
       `}
     >
       <CardContent className="p-3 space-y-2">
-        <div className="flex items-start gap-1.5 flex-wrap">
-          <Badge variant="secondary" className={`text-[9px] h-5 ${CATEGORIA_META[item.categoria]?.cor}`}>
-            {CATEGORIA_META[item.categoria]?.label}
-          </Badge>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {catMeta && (
+            <Badge className={`text-[9px] h-5 border-0 ${TONE_BADGE[catMeta.tone]}`}>
+              {catMeta.label}
+            </Badge>
+          )}
           {aguardando && ehProprio && !isAdmin && (
-            <Badge variant="outline" className="text-[9px] h-5 border-amber-400 text-amber-700">
-              <AlertCircle className="h-2.5 w-2.5 mr-1" /> Aguardando aprovação
+            <Badge variant="outline" className="text-[9px] h-5 border-warning text-warning-fg">
+              <AlertCircle className="h-2.5 w-2.5 mr-1" /> Aguardando
             </Badge>
           )}
           {atualizandoId === item.id && (
@@ -270,21 +317,23 @@ function ItemCard({
           )}
         </div>
 
-        <p className="text-sm font-medium leading-tight">{item.titulo}</p>
-        <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-wrap">
+        <p className="text-sm font-semibold leading-tight">{item.titulo}</p>
+        <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-wrap leading-snug">
           {item.descricao}
         </p>
 
-        <div className="flex items-center justify-between pt-1 border-t mt-2">
-          <div className="text-[10px] text-muted-foreground">
-            <div className="font-medium truncate max-w-[120px]">{item.autorNome}</div>
-            <div>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: ptBR })}</div>
+        <div className="flex items-center justify-between pt-2 border-t border-border/60">
+          <div className="text-[10px] text-muted-foreground min-w-0 flex-1">
+            <div className="font-medium truncate">{item.autorNome}</div>
+            <div className="truncate">
+              {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: ptBR })}
+            </div>
           </div>
           {!aguardando && (
             <Button
               variant={item.jaVotou ? "default" : "outline"}
               size="sm"
-              className="h-7 text-xs gap-1.5"
+              className="h-6 px-2 text-[11px] gap-1"
               onPointerDown={(e) => e.stopPropagation()} // não inicia drag ao clicar votar
               onClick={(e) => {
                 e.stopPropagation();

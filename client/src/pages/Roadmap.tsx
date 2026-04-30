@@ -5,11 +5,11 @@
  * Admin (role=admin) ganha um Select pra trocar status do item.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Card, CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -26,35 +27,57 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lightbulb, ThumbsUp, Plus, Search, ChevronLeft, ChevronRight, Loader2,
-  List, LayoutGrid,
+  List, LayoutGrid, X, Hammer, CalendarClock, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { RoadmapKanban } from "./RoadmapKanban";
 
-const CATEGORIA_META: Record<string, { label: string; cor: string }> = {
-  feature: { label: "Funcionalidade", cor: "bg-violet-500/10 text-violet-700 dark:text-violet-300" },
-  bug: { label: "Bug", cor: "bg-red-500/10 text-red-700 dark:text-red-300" },
-  melhoria: { label: "Melhoria", cor: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
+type Tone = "info" | "warning" | "success" | "neutral" | "accent" | "danger";
+
+const CATEGORIA_META: Record<string, { label: string; tone: Tone }> = {
+  feature: { label: "Funcionalidade", tone: "accent" },
+  bug: { label: "Bug", tone: "danger" },
+  melhoria: { label: "Melhoria", tone: "info" },
 };
 
-const STATUS_META: Record<string, { label: string; cor: string }> = {
-  aguardando_aprovacao: { label: "Aguardando aprovação", cor: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
-  novo: { label: "Novo", cor: "bg-slate-500/10 text-slate-700 dark:text-slate-300" },
-  em_analise: { label: "Em análise", cor: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
-  planejado: { label: "Planejado", cor: "bg-blue-500/10 text-blue-700 dark:text-blue-300" },
-  em_desenvolvimento: { label: "Em desenvolvimento", cor: "bg-orange-500/10 text-orange-700 dark:text-orange-300" },
-  lancado: { label: "Lançado", cor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  recusado: { label: "Recusado", cor: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300" },
+const STATUS_META: Record<string, { label: string; tone: Tone }> = {
+  aguardando_aprovacao: { label: "Aguardando aprovação", tone: "warning" },
+  novo: { label: "Novo", tone: "neutral" },
+  em_analise: { label: "Em análise", tone: "warning" },
+  planejado: { label: "Planejado", tone: "info" },
+  em_desenvolvimento: { label: "Em desenvolvimento", tone: "accent" },
+  lancado: { label: "Lançado", tone: "success" },
+  recusado: { label: "Recusado", tone: "neutral" },
 };
 
-const STATUS_VALORES = ["aguardando_aprovacao", "novo", "em_analise", "planejado", "em_desenvolvimento", "lancado", "recusado"] as const;
+const TONE_BADGE: Record<Tone, string> = {
+  info: "bg-info-bg text-info-fg",
+  warning: "bg-warning-bg text-warning-fg",
+  success: "bg-success-bg text-success-fg",
+  neutral: "bg-neutral-bg text-neutral-fg",
+  accent: "bg-accent-purple-bg text-accent-purple-fg",
+  danger: "bg-danger-bg text-danger-fg",
+};
+
+const STATUS_VALORES = [
+  "aguardando_aprovacao",
+  "novo",
+  "em_analise",
+  "planejado",
+  "em_desenvolvimento",
+  "lancado",
+  "recusado",
+] as const;
+
+const DESCRICAO_MAX = 2000;
+const DESCRICAO_MIN = 10;
+const PAGINA_SIZE = 20;
 
 export default function Roadmap() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  // Default kanban — visualização que cliente pediu como ideal.
   const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [status, setStatus] = useState<"todos" | typeof STATUS_VALORES[number]>("todos");
   const [categoria, setCategoria] = useState<"todos" | "feature" | "bug" | "melhoria">("todos");
@@ -70,10 +93,9 @@ export default function Roadmap() {
 
   // Kanban precisa de mais itens em uma página (50 = max do backend) e
   // status=todos pra agrupar nas colunas. Lista usa paginação normal.
-  const limite = view === "kanban" ? 50 : 20;
   const queryParams = view === "kanban"
     ? { status: "todos", categoria: "todos", ordenacao: "recente", limite: 50, pagina: 1 }
-    : { status, categoria, ordenacao, busca: busca || undefined, limite, pagina };
+    : { status, categoria, ordenacao, busca: busca || undefined, limite: PAGINA_SIZE, pagina };
 
   const { data, isLoading, refetch } = (trpc as any).roadmap.listar.useQuery(queryParams);
 
@@ -105,13 +127,55 @@ export default function Roadmap() {
 
   const itens = data?.itens ?? [];
   const totalPaginas = data?.totalPaginas ?? 1;
+  const totalItens = data?.totalItens ?? itens.length;
+
+  // KPIs do header — calculados no kanban (que tem 50 itens) ou na lista.
+  // Pode ficar levemente subestimado se houver >50 ideias no kanban, mas
+  // pra escritórios reais isso não é problema antes de muitos meses.
+  const kpis = useMemo(() => {
+    const trintaDiasAtras = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return {
+      emDev: itens.filter((i: any) => i.status === "em_desenvolvimento").length,
+      planejados: itens.filter((i: any) => i.status === "planejado").length,
+      lancados30d: itens.filter(
+        (i: any) =>
+          i.status === "lancado" && new Date(i.createdAt).getTime() >= trintaDiasAtras,
+      ).length,
+    };
+  }, [itens]);
+
+  const filtrosAtivos: Array<{ label: string; clear: () => void }> = [];
+  if (view === "lista") {
+    if (status !== "todos") {
+      filtrosAtivos.push({
+        label: STATUS_META[status]?.label ?? status,
+        clear: () => { setStatus("todos"); setPagina(1); },
+      });
+    }
+    if (categoria !== "todos") {
+      filtrosAtivos.push({
+        label: CATEGORIA_META[categoria]?.label ?? categoria,
+        clear: () => { setCategoria("todos"); setPagina(1); },
+      });
+    }
+    if (busca) {
+      filtrosAtivos.push({
+        label: `"${busca}"`,
+        clear: () => { setBusca(""); setPagina(1); },
+      });
+    }
+  }
+
+  const inicioRange = totalItens === 0 ? 0 : (pagina - 1) * PAGINA_SIZE + 1;
+  const fimRange = Math.min(pagina * PAGINA_SIZE, totalItens);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Lightbulb className="h-6 w-6 text-amber-500" />
+            <Lightbulb className="h-6 w-6 text-warning" />
             Roadmap
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-xl">
@@ -150,13 +214,34 @@ export default function Roadmap() {
         </div>
       </div>
 
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard
+          icon={<Hammer className="h-4 w-4" />}
+          label="Em desenvolvimento"
+          value={kpis.emDev}
+          tone="accent"
+        />
+        <KpiCard
+          icon={<CalendarClock className="h-4 w-4" />}
+          label="Planejados"
+          value={kpis.planejados}
+          tone="info"
+        />
+        <KpiCard
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label="Lançados (30 dias)"
+          value={kpis.lancados30d}
+          tone="success"
+        />
+      </div>
+
       {/* Filtros — só na view de lista (kanban já agrupa por status) */}
       {view === "lista" && (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-3">
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <Select value={status} onValueChange={(v) => { setStatus(v as any); setPagina(1); }}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os status</SelectItem>
                 {STATUS_VALORES.map((s) => (
@@ -165,7 +250,7 @@ export default function Roadmap() {
               </SelectContent>
             </Select>
             <Select value={categoria} onValueChange={(v) => { setCategoria(v as any); setPagina(1); }}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+              <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todas as categorias</SelectItem>
                 <SelectItem value="feature">Funcionalidade</SelectItem>
@@ -174,7 +259,7 @@ export default function Roadmap() {
               </SelectContent>
             </Select>
             <Select value={ordenacao} onValueChange={(v) => { setOrdenacao(v as any); setPagina(1); }}>
-              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="votos">Mais votados</SelectItem>
                 <SelectItem value="recente">Mais recentes</SelectItem>
@@ -186,12 +271,40 @@ export default function Roadmap() {
                 placeholder="Buscar..."
                 value={busca}
                 onChange={(e) => { setBusca(e.target.value); setPagina(1); }}
-                className="pl-9"
+                className="pl-9 h-9"
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Chips de filtros ativos */}
+          {filtrosAtivos.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-[11px] text-muted-foreground">Filtros:</span>
+              {filtrosAtivos.map((f, idx) => (
+                <button
+                  key={idx}
+                  onClick={f.clear}
+                  className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-muted hover:bg-muted/70 text-[11px] transition-colors"
+                  title="Remover filtro"
+                >
+                  {f.label}
+                  <X className="h-3 w-3" />
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  setStatus("todos");
+                  setCategoria("todos");
+                  setBusca("");
+                  setPagina(1);
+                }}
+                className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline ml-1"
+              >
+                limpar todos
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Kanban view */}
@@ -217,8 +330,8 @@ export default function Roadmap() {
       {view === "lista" && (
       <>
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
         </div>
       ) : itens.length === 0 ? (
         <Card>
@@ -237,95 +350,108 @@ export default function Roadmap() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {itens.map((item: any) => (
-            <Card key={item.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-4 pb-3">
-                <div className="flex gap-4">
-                  {/* Botão votar */}
-                  <button
-                    onClick={() => votarMut.mutate({ itemId: item.id })}
-                    disabled={votarMut.isPending}
-                    className={`flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg border transition-all min-w-[60px] ${
-                      item.jaVotou
-                        ? "bg-amber-500/10 border-amber-400 text-amber-700 dark:text-amber-300"
-                        : "hover:bg-muted/50 border-border text-muted-foreground"
-                    }`}
-                    title={item.jaVotou ? "Cancelar voto" : "Votar"}
-                  >
-                    <ThumbsUp className="h-4 w-4" />
-                    <span className="text-sm font-bold">{item.contagemVotos}</span>
-                  </button>
-
-                  {/* Conteúdo */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 flex-wrap">
-                      <Badge variant="secondary" className={`text-[10px] ${CATEGORIA_META[item.categoria]?.cor}`}>
-                        {CATEGORIA_META[item.categoria]?.label || item.categoria}
-                      </Badge>
-                      <Badge variant="secondary" className={`text-[10px] ${STATUS_META[item.status]?.cor}`}>
-                        {STATUS_META[item.status]?.label || item.status}
-                      </Badge>
-                    </div>
-                    <p className="font-medium text-sm mt-2">{item.titulo}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 whitespace-pre-wrap">
-                      {item.descricao}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
-                      <span>por <b>{item.autorNome}</b></span>
-                      <span>•</span>
-                      <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: ptBR })}</span>
-                    </div>
-
-                    {/* Admin: trocar status */}
-                    {isAdmin && (
-                      <div className="mt-3">
-                        <Select
-                          value={item.status}
-                          onValueChange={(v) => atualizarStatusMut.mutate({ id: item.id, status: v })}
-                        >
-                          <SelectTrigger className="h-7 w-[200px] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STATUS_VALORES.map((s) => (
-                              <SelectItem key={s} value={s} className="text-xs">
-                                {STATUS_META[s].label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+          {itens.map((item: any) => {
+            const catMeta = CATEGORIA_META[item.categoria];
+            const stMeta = STATUS_META[item.status];
+            return (
+              <Card key={item.id} className="hover:shadow-sm hover:border-foreground/20 transition-all">
+                <CardContent className="py-3">
+                  <div className="flex gap-3">
+                    {/* Conteúdo */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {catMeta && (
+                          <Badge className={`text-[10px] h-5 border-0 ${TONE_BADGE[catMeta.tone]}`}>
+                            {catMeta.label}
+                          </Badge>
+                        )}
+                        {stMeta && (
+                          <Badge className={`text-[10px] h-5 border-0 ${TONE_BADGE[stMeta.tone]}`}>
+                            {stMeta.label}
+                          </Badge>
+                        )}
                       </div>
-                    )}
+                      <p className="font-semibold text-sm mt-1.5 leading-tight">{item.titulo}</p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 whitespace-pre-wrap leading-snug">
+                        {item.descricao}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2 text-[11px] text-muted-foreground">
+                        <span>por <b className="font-medium text-foreground">{item.autorNome}</b></span>
+                        <span>•</span>
+                        <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: ptBR })}</span>
+                      </div>
+
+                      {/* Admin: trocar status */}
+                      {isAdmin && (
+                        <div className="mt-2">
+                          <Select
+                            value={item.status}
+                            onValueChange={(v) => atualizarStatusMut.mutate({ id: item.id, status: v })}
+                          >
+                            <SelectTrigger className="h-7 w-[200px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_VALORES.map((s) => (
+                                <SelectItem key={s} value={s} className="text-xs">
+                                  {STATUS_META[s].label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Botão votar (vertical) */}
+                    <button
+                      onClick={() => votarMut.mutate({ itemId: item.id })}
+                      disabled={votarMut.isPending}
+                      className={`flex flex-col items-center justify-center gap-0.5 px-3 rounded-lg border self-start transition-all min-w-[52px] h-14 ${
+                        item.jaVotou
+                          ? "bg-warning-bg border-warning text-warning-fg"
+                          : "hover:bg-muted/50 border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                      title={item.jaVotou ? "Cancelar voto" : "Votar"}
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5" />
+                      <span className="text-sm font-bold leading-none">{item.contagemVotos}</span>
+                    </button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
       {/* Paginação */}
       {totalPaginas > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPagina((p) => Math.max(1, p - 1))}
-            disabled={pagina === 1}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Página {pagina} de {totalPaginas}
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <span className="text-[11px] text-muted-foreground">
+            {inicioRange}–{fimRange} de {totalItens}
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPagina((p) => p + 1)}
-            disabled={pagina >= totalPaginas}
-          >
-            Próxima <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              disabled={pagina === 1}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Página {pagina} de {totalPaginas}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPagina((p) => p + 1)}
+              disabled={pagina >= totalPaginas}
+            >
+              Próxima <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       )}
       </>
@@ -370,11 +496,22 @@ export default function Roadmap() {
                 onChange={(e) => setNovaDescricao(e.target.value)}
                 placeholder="O quê? Por quê? Cenário concreto?"
                 rows={4}
-                maxLength={2000}
+                maxLength={DESCRICAO_MAX}
                 className="mt-1"
               />
+              <div className="mt-1.5 flex items-center gap-2">
+                <Progress
+                  value={Math.min(100, (novaDescricao.length / DESCRICAO_MAX) * 100)}
+                  className="flex-1 h-1"
+                />
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  {novaDescricao.length}/{DESCRICAO_MAX}
+                </span>
+              </div>
               <p className="text-[10px] text-muted-foreground mt-1">
-                {novaDescricao.length}/2000 caracteres (mínimo 10)
+                Mínimo {DESCRICAO_MIN} caracteres. Markdown básico funciona:
+                <code className="mx-1 px-1 rounded bg-muted">**negrito**</code>
+                <code className="mx-1 px-1 rounded bg-muted">*itálico*</code>
               </p>
             </div>
           </div>
@@ -382,7 +519,11 @@ export default function Roadmap() {
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
               onClick={() => criarMut.mutate({ titulo: novoTitulo, descricao: novaDescricao, categoria: novaCategoria })}
-              disabled={criarMut.isPending || novoTitulo.trim().length < 3 || novaDescricao.trim().length < 10}
+              disabled={
+                criarMut.isPending ||
+                novoTitulo.trim().length < 3 ||
+                novaDescricao.trim().length < DESCRICAO_MIN
+              }
             >
               {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Enviar
@@ -391,5 +532,39 @@ export default function Roadmap() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── KPI Card ──────────────────────────────────────────────────────────────
+
+const KPI_TONE: Record<Tone, string> = {
+  info: "bg-info-bg text-info-fg",
+  warning: "bg-warning-bg text-warning-fg",
+  success: "bg-success-bg text-success-fg",
+  neutral: "bg-neutral-bg text-neutral-fg",
+  accent: "bg-accent-purple-bg text-accent-purple-fg",
+  danger: "bg-danger-bg text-danger-fg",
+};
+
+function KpiCard({
+  icon, label, value, tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone: Tone;
+}) {
+  return (
+    <Card>
+      <CardContent className="py-3 flex items-center gap-3">
+        <div className={`flex items-center justify-center h-9 w-9 rounded-lg ${KPI_TONE[tone]}`}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] text-muted-foreground leading-none">{label}</p>
+          <p className="text-2xl font-bold leading-tight tabular-nums mt-0.5">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

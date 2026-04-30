@@ -41,6 +41,28 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Tokens semânticos — base pro refresh visual (piloto: Roadmap).
+   * Usar `bg-info-bg text-info-fg` em vez de `bg-blue-500/10 text-blue-700`
+   * pra que cores respeitem o tema light/dark e fiquem trocáveis em
+   * um único lugar. */
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-fg: var(--info-fg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-fg: var(--success-fg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-neutral: var(--neutral);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-fg: var(--neutral-fg);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-purple-bg: var(--accent-purple-bg);
+  --color-accent-purple-fg: var(--accent-purple-fg);
 }
 
 :root {
@@ -77,13 +99,36 @@
   --sidebar-accent-foreground: oklch(0.18 0.02 260);
   --sidebar-border: oklch(0.91 0.005 260);
   --sidebar-ring: oklch(0.45 0.18 260);
+  /* Paleta semântica — light. OKLCH consistente com o restante do tema. */
+  --info: oklch(0.55 0.18 250);
+  --info-bg: oklch(0.96 0.04 250);
+  --info-fg: oklch(0.40 0.15 250);
+  --warning: oklch(0.70 0.16 75);
+  --warning-bg: oklch(0.96 0.06 80);
+  --warning-fg: oklch(0.45 0.13 65);
+  --success: oklch(0.65 0.15 155);
+  --success-bg: oklch(0.96 0.05 155);
+  --success-fg: oklch(0.40 0.13 155);
+  --danger: oklch(0.62 0.22 25);
+  --danger-bg: oklch(0.96 0.05 25);
+  --danger-fg: oklch(0.45 0.18 25);
+  --neutral: oklch(0.60 0.01 260);
+  --neutral-bg: oklch(0.95 0.005 260);
+  --neutral-fg: oklch(0.35 0.02 260);
+  --accent-purple: oklch(0.55 0.20 295);
+  --accent-purple-bg: oklch(0.96 0.04 295);
+  --accent-purple-fg: oklch(0.40 0.18 295);
 }
 
 .dark {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-500);
-  --sidebar-primary-foreground: var(--color-blue-50);
+  /* Primary/ring/sidebar agora em OKLCH alinhado ao roxo-azulado do
+   * light (hue ~260). Antes a dark misturava `var(--color-blue-700)`
+   * (azul puro Tailwind) com ring `oklch(... 264)` (roxo) — mismatch
+   * visual. */
+  --primary: oklch(0.55 0.18 260);
+  --primary-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.55 0.18 260);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.85 0.005 65);
   --card: oklch(0.21 0.006 285.885);
@@ -100,18 +145,37 @@
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
+  --ring: oklch(0.55 0.18 260);
+  --chart-1: oklch(0.70 0.15 260);
+  --chart-2: oklch(0.60 0.18 260);
+  --chart-3: oklch(0.50 0.18 260);
+  --chart-4: oklch(0.40 0.15 260);
+  --chart-5: oklch(0.30 0.10 260);
   --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.85 0.005 65);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
+  --sidebar-ring: oklch(0.55 0.18 260);
+  /* Paleta semântica — dark. Mesmo hue do light, lightness ajustada. */
+  --info: oklch(0.65 0.16 250);
+  --info-bg: oklch(0.28 0.05 250);
+  --info-fg: oklch(0.80 0.10 250);
+  --warning: oklch(0.75 0.15 75);
+  --warning-bg: oklch(0.30 0.06 75);
+  --warning-fg: oklch(0.85 0.10 75);
+  --success: oklch(0.70 0.14 155);
+  --success-bg: oklch(0.28 0.05 155);
+  --success-fg: oklch(0.82 0.10 155);
+  --danger: oklch(0.68 0.20 25);
+  --danger-bg: oklch(0.30 0.07 25);
+  --danger-fg: oklch(0.82 0.13 25);
+  --neutral: oklch(0.65 0.01 260);
+  --neutral-bg: oklch(0.28 0.005 260);
+  --neutral-fg: oklch(0.82 0.005 260);
+  --accent-purple: oklch(0.65 0.18 295);
+  --accent-purple-bg: oklch(0.30 0.06 295);
+  --accent-purple-fg: oklch(0.82 0.12 295);
 }
 
 @layer base {
