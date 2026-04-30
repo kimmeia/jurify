@@ -16,20 +16,18 @@ import {
 import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
-  UserPlus, Repeat, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
-  Calendar,
+  UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  LineChart, Line, Legend,
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import {
   formatBRL, formatBRLShort, formatMes, StatusBadge, FormaBadge, CICLO_LABELS,
   exportCobrancasCSV,
 } from "./financeiro/helpers";
 import {
-  NovaCobrancaDialog, NovaAssinaturaDialog, NovoClienteDialog,
+  NovaCobrancaDialog, NovoClienteDialog,
 } from "./financeiro/dialogs";
 import { ComissoesTab } from "./financeiro/Comissoes";
 import { DespesasTab } from "./financeiro/Despesas";
@@ -39,7 +37,6 @@ import { DespesasTab } from "./financeiro/Despesas";
 export default function Financeiro() {
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
-  const [novaAssinaturaOpen, setNovaAssinaturaOpen] = useState(false);
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroForma, setFiltroForma] = useState("todos");
@@ -72,14 +69,6 @@ export default function Financeiro() {
       refetchInterval: REFRESH_MS * 2, // 2 min (menos sensível a mudanças)
     },
   );
-  const { data: forecast } = trpc.asaas.forecast.useQuery(
-    { dias: 30 },
-    {
-      retry: false,
-      enabled: statusAsaas?.conectado,
-      refetchInterval: REFRESH_MS * 2,
-    },
-  );
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
     trpc.asaas.listarCobrancas.useQuery(
       { status: filtroStatus !== "todos" ? filtroStatus : undefined, limit: 100 },
@@ -90,12 +79,6 @@ export default function Financeiro() {
         refetchOnWindowFocus: true,
       },
     );
-  const { data: assinaturas, refetch: refetchSubs } =
-    trpc.asaas.listarAssinaturas.useQuery(undefined, {
-      retry: false,
-      enabled: statusAsaas?.conectado,
-      refetchInterval: REFRESH_MS,
-    });
   const { data: clientesVinculados, refetch: refetchClientes } =
     trpc.asaas.listarClientesVinculados.useQuery(
       { busca: busca || undefined },
@@ -134,7 +117,6 @@ export default function Financeiro() {
   const cancelarSubMut = trpc.asaas.cancelarAssinatura.useMutation({
     onSuccess: () => {
       toast.success("Assinatura cancelada");
-      refetchSubs();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
@@ -143,7 +125,6 @@ export default function Financeiro() {
     refetchStatus();
     refetchKpis();
     refetchCob();
-    refetchSubs();
     refetchClientes();
   };
 
@@ -294,10 +275,6 @@ export default function Financeiro() {
             <Receipt className="h-3.5 w-3.5" />
             Cobranças ({kpis?.totalCobrancas ?? 0})
           </TabsTrigger>
-          <TabsTrigger value="assinaturas" className="gap-1.5">
-            <Repeat className="h-3.5 w-3.5" />
-            Assinaturas ({assinaturas?.length ?? 0})
-          </TabsTrigger>
           <TabsTrigger value="clientes" className="gap-1.5">
             <Users className="h-3.5 w-3.5" />
             Clientes ({clientesVinculados?.length ?? 0})
@@ -343,14 +320,29 @@ export default function Financeiro() {
                 </Tabs>
               </div>
 
-              <div className="h-56">
+              {/* AreaChart com gradient — mesmo estilo do Dashboard. Em
+                  vez de barras justapostas (Recebido/Pendente/Vencido) que
+                  ocupavam muito espaço vertical, mostra Recebido + Pendente
+                  como áreas sobrepostas com fade vertical. Vencido vai pra
+                  KPI separado abaixo. */}
+              <div className="h-56 -mx-2">
                 {cashFlow && cashFlow.pontos.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                    <AreaChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="financeiroColorRecebido" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="financeiroColorPendente" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <XAxis
                         dataKey="mes"
-                        tick={{ fontSize: 11, fill: "#9ca3af" }}
+                        tick={{ fontSize: 10, fill: "#9ca3af" }}
                         tickFormatter={formatMes}
                         stroke="#e5e7eb"
                       />
@@ -370,11 +362,23 @@ export default function Financeiro() {
                         labelFormatter={formatMes}
                         formatter={(v: number) => formatBRL(v)}
                       />
-                      <Legend wrapperStyle={{ fontSize: "11px" }} />
-                      <Bar dataKey="recebido" fill="#10b981" name="Recebido" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="pendente" fill="#f59e0b" name="Pendente" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="vencido" fill="#ef4444" name="Vencido" radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                      <Area
+                        type="monotone"
+                        dataKey="recebido"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#financeiroColorRecebido)"
+                        name="Recebido"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="pendente"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        fill="url(#financeiroColorPendente)"
+                        name="Pendente"
+                      />
+                    </AreaChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -418,50 +422,6 @@ export default function Financeiro() {
             />
           </div>
 
-          {/* Forecast — próximos 30 dias */}
-          {forecast && forecast.semanas.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-blue-500" />
-                    Previsão de recebimentos — próximos 30 dias
-                  </CardTitle>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="text-muted-foreground">
-                      Total previsto: <strong className="text-foreground">{formatBRL(forecast.total)}</strong>
-                    </span>
-                    {forecast.atrasado > 0 && (
-                      <span className="text-red-600">
-                        ⚠ {formatBRL(forecast.atrasado)} já vencido
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-28">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={forecast.semanas} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="#e5e7eb" />
-                      <YAxis tick={{ fontSize: 10 }} tickFormatter={formatBRLShort} stroke="#e5e7eb" width={60} />
-                      <Tooltip
-                        contentStyle={{ fontSize: "11px", borderRadius: "8px" }}
-                        formatter={(v: number) => formatBRL(v)}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="valor"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        dot={{ r: 4, fill: "#3b82f6" }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Barra de filtros */}
           <div className="flex items-center gap-3 flex-wrap">
@@ -653,82 +613,6 @@ export default function Financeiro() {
           )}
         </TabsContent>
 
-        {/* ─── Aba: Assinaturas ─── */}
-        <TabsContent value="assinaturas" className="mt-4 space-y-4">
-          {!conectado ? (
-            <AsaasDisconnectedCta titulo="Assinaturas recorrentes" descricao="Mensalidades, planos e cobrança recorrente via Asaas." />
-          ) : (
-            <div className="space-y-4">
-          <div className="flex items-center justify-end">
-            <Button size="sm" variant="outline" onClick={() => setNovaAssinaturaOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Nova assinatura
-            </Button>
-          </div>
-          {assinaturas && assinaturas.length > 0 ? (
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Ciclo</TableHead>
-                    <TableHead>Próx. venc.</TableHead>
-                    <TableHead>Forma</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {assinaturas.map((s: any) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium text-sm">{s.contatoNome}</TableCell>
-                      <TableCell className="font-mono text-sm">{formatBRL(s.value)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {CICLO_LABELS[s.cycle] || s.cycle}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {s.nextDueDate
-                          ? new Date(s.nextDueDate + "T12:00:00").toLocaleDateString("pt-BR")
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <FormaBadge forma={s.billingType} />
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={s.status} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {s.status === "ACTIVE" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-destructive"
-                            onClick={() => {
-                              if (confirm("Cancelar assinatura?"))
-                                cancelarSubMut.mutate({ assinaturaId: s.id });
-                            }}
-                          >
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Cancelar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 gap-2">
-              <Repeat className="h-8 w-8 text-muted-foreground opacity-30" />
-              <p className="text-sm text-muted-foreground">Nenhuma assinatura.</p>
-            </div>
-          )}
-            </div>
-          )}
-        </TabsContent>
-
         {/* ─── Aba: Clientes ─── */}
         <TabsContent value="clientes" className="mt-4 space-y-4">
           {!conectado ? (
@@ -815,13 +699,7 @@ export default function Financeiro() {
         onSuccess={() => {
           refetchCob();
           refetchKpis();
-          refetchSubs();
         }}
-      />
-      <NovaAssinaturaDialog
-        open={novaAssinaturaOpen}
-        onOpenChange={setNovaAssinaturaOpen}
-        onSuccess={refetchSubs}
       />
       <NovoClienteDialog
         open={novoClienteOpen}
