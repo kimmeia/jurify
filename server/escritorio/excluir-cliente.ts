@@ -102,11 +102,14 @@ export async function excluirClienteEmCascata(
 
     // Só cancelamos cobranças que ainda não foram recebidas.
     // Cobranças já pagas/recebidas ficam no Asaas (histórico fiscal).
+    // Cobranças manuais não passam pelo Asaas — ignora aqui (são
+    // deletadas do banco quando o contato é excluído via cascata).
     const cancelaveis = cobrancasDoContato.filter(
-      (c) =>
-        c.status === "PENDING" ||
-        c.status === "OVERDUE" ||
-        c.status === "AWAITING_RISK_ANALYSIS",
+      (c): c is typeof c & { asaasPaymentId: string } =>
+        c.asaasPaymentId !== null &&
+        (c.status === "PENDING" ||
+          c.status === "OVERDUE" ||
+          c.status === "AWAITING_RISK_ANALYSIS"),
     );
 
     if (cancelaveis.length > 0) {

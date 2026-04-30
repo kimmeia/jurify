@@ -1226,6 +1226,164 @@ export const asaasRouter = router({
       return { success: true, valor: input.valor };
     }),
 
+  /**
+   * Cria cobrança "manual" — sem passar pela API Asaas. Usada quando
+   * o cliente paga em dinheiro/cartão presencial, ou quando o
+   * escritório está sem Asaas conectado e quer registrar a entrada
+   * no contas-a-receber.
+   *
+   * Diferenças vs `criarCobranca`:
+   *  - Não chama Asaas (não tem invoiceUrl, pixQrCode, etc)
+   *  - `asaasPaymentId` e `asaasCustomerId` ficam NULL
+   *  - `origem='manual'`
+   *  - Aceita formas extras: DINHEIRO, TRANSFERENCIA, OUTRO
+   *  - Pode nascer já paga (`jaPaga:true` → status=RECEIVED + dataPagamento)
+   */
+  criarCobrancaManual: protectedProcedure
+    .input(
+      z.object({
+        contatoId: z.number(),
+        valor: z.number().min(0.01),
+        descricao: z.string().max(512).optional(),
+        vencimento: z.string(),
+        formaPagamento: z.enum([
+          "PIX",
+          "BOLETO",
+          "CREDIT_CARD",
+          "DINHEIRO",
+          "TRANSFERENCIA",
+          "OUTRO",
+        ]),
+        /** Se true, registra como já recebida (status=RECEIVED + dataPagamento). */
+        jaPaga: z.boolean().default(false),
+        dataPagamento: z.string().optional(),
+        atendenteId: z.number().optional(),
+        categoriaId: z.number().optional(),
+        comissionavelOverride: z.boolean().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
+      if (!perm.criar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para criar cobranças no módulo Financeiro.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Valida que o contato existe no escritório.
+      const [cont] = await db
+        .select({ id: contatos.id })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.id, input.contatoId),
+            eq(contatos.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!cont) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Contato não encontrado." });
+      }
+
+      // Inferência de atendente — mesma lógica do path Asaas.
+      let atendenteId: number | null = input.atendenteId ?? null;
+      if (atendenteId === null) {
+        const [contatoRow] = await db
+          .select({ responsavelId: contatos.responsavelId })
+          .from(contatos)
+          .where(eq(contatos.id, input.contatoId))
+          .limit(1);
+        atendenteId = contatoRow?.responsavelId ?? null;
+      }
+      if (atendenteId !== null) {
+        await validarAtendente(esc.escritorio.id, atendenteId);
+      }
+
+      const dataPag = input.jaPaga
+        ? input.dataPagamento ?? new Date().toISOString().slice(0, 10)
+        : null;
+      const status = input.jaPaga ? "RECEIVED" : "PENDING";
+
+      const [r] = await db
+        .insert(asaasCobrancas)
+        .values({
+          escritorioId: esc.escritorio.id,
+          contatoId: input.contatoId,
+          asaasPaymentId: null,
+          asaasCustomerId: null,
+          origem: "manual",
+          valor: input.valor.toFixed(2),
+          // Manual: bruto = líquido (sem taxa Asaas).
+          valorLiquido: input.valor.toFixed(2),
+          vencimento: input.vencimento,
+          formaPagamento: input.formaPagamento as any,
+          status,
+          descricao: input.descricao || null,
+          dataPagamento: dataPag,
+          atendenteId,
+          categoriaId: input.categoriaId ?? null,
+          comissionavelOverride: input.comissionavelOverride ?? null,
+        })
+        .$returningId();
+
+      return {
+        success: true,
+        cobrancaId: (r as { id: number }).id,
+        status,
+      };
+    }),
+
+  /**
+   * Marca cobrança manual como recebida. Equivalente ao "Marcar paga"
+   * do contas-a-pagar, mas pra entrada. Não funciona em cobrança Asaas
+   * (status sincroniza via webhook automaticamente).
+   */
+  marcarCobrancaPaga: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        dataPagamento: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cob] = await db
+        .select({ origem: asaasCobrancas.origem })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.id),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
+      if (cob.origem !== "manual") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cobranças Asaas são marcadas como pagas via webhook automaticamente.",
+        });
+      }
+
+      const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+      await db
+        .update(asaasCobrancas)
+        .set({ status: "RECEIVED", dataPagamento: dataPag })
+        .where(eq(asaasCobrancas.id, input.id));
+      return { success: true, dataPagamento: dataPag };
+    }),
+
   /** Lista cobranças do escritório com filtros */
   listarCobrancas: protectedProcedure
     .input(z.object({
@@ -1826,11 +1984,16 @@ export const asaasRouter = router({
           nome: v.nome,
           primario: (v as { primario?: boolean | null }).primario ?? null,
         }));
-        const cobrancas: CobrancaAgg[] = cobrancasRaw.map((c) => ({
-          asaasCustomerId: c.asaasCustomerId,
-          valor: c.valor,
-          status: c.status,
-        }));
+        // Filtra cobranças com asaasCustomerId não-null — cobranças
+        // manuais (sem vínculo Asaas) não entram nessa agregação que
+        // depende do customerId.
+        const cobrancas: CobrancaAgg[] = cobrancasRaw
+          .filter((c): c is typeof c & { asaasCustomerId: string } => c.asaasCustomerId !== null)
+          .map((c) => ({
+            asaasCustomerId: c.asaasCustomerId,
+            valor: c.valor,
+            status: c.status,
+          }));
 
         return agregarVinculosPorContato(vinculos, cobrancas, contatosMeta);
       } catch {
@@ -1862,8 +2025,14 @@ export const asaasRouter = router({
 
       if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
 
-      await client.excluirCobranca(cob.asaasPaymentId);
-      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, input.id));
+      // Cobrança manual: deleta direto, sem chamar Asaas (não passou
+      // pela API). Cobrança Asaas: chama API e depois remove local.
+      if (cob.origem === "manual" || !cob.asaasPaymentId) {
+        await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, input.id));
+      } else {
+        await client.excluirCobranca(cob.asaasPaymentId);
+        await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, input.id));
+      }
 
       return { success: true };
     }),
@@ -1899,6 +2068,14 @@ export const asaasRouter = router({
         return { payload: cob.pixQrCodePayload, image: null, fromCache: true };
       }
 
+      // Cobrança manual não tem QR Asaas — devolve null pra UI tratar.
+      if (!cob.asaasPaymentId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cobrança manual não tem QR Code Pix do Asaas.",
+        });
+      }
+
       const client = await requireAsaasClient(esc.escritorio.id);
       try {
         const qr = await client.obterPixQrCode(cob.asaasPaymentId);
@@ -1931,6 +2108,12 @@ export const asaasRouter = router({
         .limit(1);
 
       if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!cob.asaasPaymentId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cobrança manual não tem boleto.",
+        });
+      }
 
       try {
         return await client.obterLinhaDigitavel(cob.asaasPaymentId);

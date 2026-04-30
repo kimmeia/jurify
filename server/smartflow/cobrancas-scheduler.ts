@@ -163,6 +163,10 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
         // Pagou entre um lembrete e outro? skip qualquer disparo.
         if (STATUS_PAGO.has(cb.status)) continue;
 
+        // Cobranças manuais não passam pelo scheduler de SmartFlow
+        // (não tem pagamentoId Asaas pra correlacionar com webhooks).
+        if (!cb.asaasPaymentId || !cb.asaasCustomerId) continue;
+
         const vinc = await resolverVinculo(escritorioId, cb.asaasCustomerId);
         const comuns = {
           pagamentoId: cb.asaasPaymentId,
