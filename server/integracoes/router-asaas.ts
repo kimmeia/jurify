@@ -1811,26 +1811,52 @@ export const asaasRouter = router({
       return { success: true };
     }),
 
-  /** Obtém QR Code Pix de uma cobrança */
+  /**
+   * Obtém QR Code Pix de uma cobrança. Mutation (não query) porque
+   * tem efeito colateral: cacheia o payload em `pixQrCodePayload` na
+   * primeira chamada — assim cobranças PIX antigas (criadas antes do
+   * cacheamento) param de bater no Asaas a cada copy.
+   */
   obterPixQrCode: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const [cob] = await db.select().from(asaasCobrancas)
-        .where(and(eq(asaasCobrancas.id, input.id), eq(asaasCobrancas.escritorioId, esc.escritorio.id)))
+      const [cob] = await db
+        .select()
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.id),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
         .limit(1);
 
       if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
 
+      // Cache hit — pula chamada externa.
+      if (cob.pixQrCodePayload) {
+        return { payload: cob.pixQrCodePayload, image: null, fromCache: true };
+      }
+
+      const client = await requireAsaasClient(esc.escritorio.id);
       try {
         const qr = await client.obterPixQrCode(cob.asaasPaymentId);
-        return { payload: qr.payload, image: qr.encodedImage, expirationDate: qr.expirationDate };
-      } catch {
-        return null;
+        if (qr?.payload) {
+          await db
+            .update(asaasCobrancas)
+            .set({ pixQrCodePayload: qr.payload })
+            .where(eq(asaasCobrancas.id, cob.id));
+        }
+        return { payload: qr.payload, image: qr.encodedImage, fromCache: false };
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err?.message || "Falha ao buscar QR Code Pix",
+        });
       }
     }),
 

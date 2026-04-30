@@ -16,9 +16,24 @@ import { ClienteCombobox } from "./ClienteCombobox";
 
 function formatBRL(value: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value); }
 
-export function NovaCobrancaDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
+export function NovaCobrancaDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  contatoIdInicial,
+  esconderCliente,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSuccess: () => void;
+  /** Se preenchido, o dialog abre já com este cliente selecionado.
+   *  Útil pra invocar a partir do popover/ficha do cliente. */
+  contatoIdInicial?: number | string;
+  /** Quando true, esconde o seletor de cliente (cliente fixo). */
+  esconderCliente?: boolean;
+}) {
   const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente">("avulsa");
-  const [contatoId, setContatoId] = useState(""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
+  const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : ""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
   // Atribuição de comissão (modo "avulsa" apenas — parcelamento/assinatura herdam do cliente via webhook).
   const [atendenteId, setAtendenteId] = useState<string>("auto"); // "auto" = herda do contato no backend
   const [categoriaId, setCategoriaId] = useState<string>("none");
@@ -33,7 +48,7 @@ export function NovaCobrancaDialog({ open, onOpenChange, onSuccess }: { open: bo
   const criarParcelaMut = trpc.asaas.criarParcelamento.useMutation({ onSuccess: () => { toast.success("Parcelamento criado"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const criarAssinaturaMut = trpc.asaas.criarAssinatura.useMutation({ onSuccess: () => { toast.success("Assinatura criada"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending;
-  const resetForm = () => { setContatoId(""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); };
+  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); };
   const handleCriar = () => {
     if (modo === "avulsa") {
       const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
@@ -68,7 +83,9 @@ export function NovaCobrancaDialog({ open, onOpenChange, onSuccess }: { open: bo
         ) : (
           <><div className="space-y-3 py-1">
             <div className="flex gap-2"><Button variant={modo === "avulsa" ? "default" : "outline"} size="sm" className="flex-1 text-xs" onClick={() => setModo("avulsa")}>Avulsa</Button><Button variant={modo === "parcelada" ? "default" : "outline"} size="sm" className="flex-1 text-xs" onClick={() => setModo("parcelada")}>Parcelada</Button><Button variant={modo === "recorrente" ? "default" : "outline"} size="sm" className="flex-1 text-xs" onClick={() => setModo("recorrente")}><Repeat className="h-3 w-3 mr-1" />Recorrente</Button></div>
-            <div><Label className="text-xs">Cliente</Label><ClienteCombobox value={contatoId} onChange={(id) => setContatoId(id)} /></div>
+            {!esconderCliente && (
+              <div><Label className="text-xs">Cliente</Label><ClienteCombobox value={contatoId} onChange={(id) => setContatoId(id)} /></div>
+            )}
             <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">{modo === "parcelada" ? "Valor total (R$)" : "Valor (R$)"}</Label><Input type="number" step="0.01" min="0.01" placeholder="150.00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">{modo === "recorrente" ? "Primeiro vencimento" : "Vencimento"}</Label><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className="mt-1" /></div></div>
             <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Forma</Label><Select value={forma} onValueChange={setForma}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PIX">Pix</SelectItem><SelectItem value="BOLETO">Boleto</SelectItem><SelectItem value="CREDIT_CARD">Cartao</SelectItem><SelectItem value="UNDEFINED">Cliente escolhe</SelectItem></SelectContent></Select></div>{modo === "parcelada" && (<div><Label className="text-xs">Parcelas</Label><Input type="number" min="2" max="24" value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="mt-1" /></div>)}{modo === "recorrente" && (<div><Label className="text-xs">Ciclo</Label><Select value={ciclo} onValueChange={setCiclo}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="WEEKLY">Semanal</SelectItem><SelectItem value="BIWEEKLY">Quinzenal</SelectItem><SelectItem value="MONTHLY">Mensal</SelectItem><SelectItem value="QUARTERLY">Trimestral</SelectItem><SelectItem value="SEMIANNUALLY">Semestral</SelectItem><SelectItem value="YEARLY">Anual</SelectItem></SelectContent></Select></div>)}</div>
             {modo === "parcelada" && valor && parcelas && <p className="text-xs text-muted-foreground">{parseInt(parcelas)}x de {formatBRL(parseFloat(valor) / parseInt(parcelas))}</p>}
