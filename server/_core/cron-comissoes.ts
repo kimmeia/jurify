@@ -20,6 +20,7 @@
 import { getDb } from "../db";
 import {
   comissoesAgenda,
+  comissoesFechadas,
   comissoesLancamentosLog,
   escritorios,
   asaasCobrancas,
@@ -230,6 +231,7 @@ export async function processarAgendasComissao(): Promise<void> {
 
       let fechadosOk = 0;
       let fechadosFalha = 0;
+      let puladosManual = 0;
 
       // Pega o dono do escritório como "fechadoPorUserId" (auditoria)
       const [donoRow] = await db
@@ -260,6 +262,38 @@ export async function processarAgendasComissao(): Promise<void> {
           periodoFim: fim,
         });
         if (!logId) continue; // já rodou (concluído ou em andamento)
+
+        // Dedup cross-origem: se já existe fechamento pro mesmo
+        // (escritorio, atendente, período) — manual ou automático —
+        // marca a execução como concluída apontando pro existente
+        // e pula. Evita duplicar fechamento manual feito antes da
+        // agenda ser criada.
+        const existente = await db
+          .select({ id: comissoesFechadas.id })
+          .from(comissoesFechadas)
+          .where(
+            and(
+              eq(comissoesFechadas.escritorioId, agenda.escritorioId),
+              eq(comissoesFechadas.atendenteId, at.id),
+              eq(comissoesFechadas.periodoInicio, inicio),
+              eq(comissoesFechadas.periodoFim, fim),
+            ),
+          )
+          .limit(1);
+        if (existente.length > 0) {
+          await marcarExecucaoConcluida(logId, existente[0].id);
+          puladosManual += 1;
+          log.info(
+            {
+              escritorioId: agenda.escritorioId,
+              atendenteId: at.id,
+              periodo: `${inicio}..${fim}`,
+              comissaoFechadaId: existente[0].id,
+            },
+            "Já existe fechamento pro período, skip",
+          );
+          continue;
+        }
 
         try {
           const r = await fecharComissao({
@@ -296,7 +330,7 @@ export async function processarAgendasComissao(): Promise<void> {
       // Notifica só se houve algo (sucesso, falha, ou rodou e não tinha
       // ninguém pra fechar). Quando atendentes=[] ainda assim notifica
       // pra dar feedback de que o cron rodou.
-      if (atendentes.length === 0 && fechadosOk + fechadosFalha === 0) {
+      if (atendentes.length === 0 && fechadosOk + fechadosFalha + puladosManual === 0) {
         // Mesmo assim, marca como "rodou" via log fictício? Não — sem
         // atendente o período fica intocado. Próxima passada vai
         // re-checar (atendente pode ser cadastrado depois).
@@ -310,6 +344,8 @@ export async function processarAgendasComissao(): Promise<void> {
       const partes: string[] = [];
       if (fechadosOk > 0)
         partes.push(`${fechadosOk} atendente(s) com comissão fechada`);
+      if (puladosManual > 0)
+        partes.push(`${puladosManual} já tinha(m) fechamento`);
       if (fechadosFalha > 0) partes.push(`${fechadosFalha} falha(s)`);
       const mensagem = `Período ${inicio} a ${fim}: ${partes.join(", ")}.`;
       await notificar(agenda.escritorioId, titulo, mensagem);
