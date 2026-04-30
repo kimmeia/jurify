@@ -1742,6 +1742,10 @@ export const camposPersonalizadosCliente = mysqlTable("campos_personalizados_cli
   /** Texto auxiliar exibido como hint abaixo do campo. */
   ajuda: varchar("ajudaCpc", { length: 200 }),
   obrigatorio: boolean("obrigatorioCpc").default(false).notNull(),
+  /** Quando true (default), aparece no formulário de cadastro do cliente.
+   *  Quando false, o campo existe só pra automações (SmartFlow lê via
+   *  `{{cliente.campos.<chave>}}` mas operadora não o vê no cadastro). */
+  mostrarCadastro: boolean("mostrarCadastroCpc").default(true).notNull(),
   /** Ordem de exibição no formulário (ascendente). */
   ordem: int("ordemCpc").default(0).notNull(),
   createdAt: timestamp("createdAtCpc").defaultNow().notNull(),

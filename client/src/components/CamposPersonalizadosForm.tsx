@@ -37,7 +37,14 @@ export function CamposPersonalizadosForm({ value, onChange, destacarObrigatorios
   const { data: campos, isLoading } = (trpc as any).camposCliente.listar.useQuery();
 
   if (isLoading) return null;
-  if (!campos || campos.length === 0) return null;
+  // Só campos visíveis no cadastro. Os de "só automação"
+  // (mostrarCadastro=false) ficam invisíveis aqui mas continuam
+  // disponíveis no SmartFlow como `{{cliente.campos.<chave>}}`.
+  // Default true mantém retrocompatibilidade com rows pré-migração.
+  const visiveis = (campos || []).filter(
+    (c: any) => c.mostrarCadastro !== false,
+  );
+  if (visiveis.length === 0) return null;
 
   function setValor(chave: string, val: ValorCampo) {
     onChange({ ...value, [chave]: val });
@@ -50,7 +57,7 @@ export function CamposPersonalizadosForm({ value, onChange, destacarObrigatorios
         Campos personalizados
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        {campos.map((c: any) => {
+        {visiveis.map((c: any) => {
           const v = value?.[c.chave];
           return (
             <div
@@ -146,14 +153,18 @@ export function CamposPersonalizadosForm({ value, onChange, destacarObrigatorios
 }
 
 /** Valida se todos campos obrigatórios estão preenchidos.
- *  Retorna lista de labels faltando (vazia se OK). */
+ *  Retorna lista de labels faltando (vazia se OK).
+ *  Ignora campos com `mostrarCadastro=false` (não tem como operadora
+ *  preencher um campo invisível). Backend também tem trava defensiva
+ *  forçando obrigatorio=false nesses casos. */
 export function validarCamposObrigatorios(
   valores: Record<string, ValorCampo>,
-  campos: { chave: string; label: string; obrigatorio: boolean }[],
+  campos: { chave: string; label: string; obrigatorio: boolean; mostrarCadastro?: boolean }[],
 ): string[] {
   const faltando: string[] = [];
   for (const c of campos) {
     if (!c.obrigatorio) continue;
+    if (c.mostrarCadastro === false) continue;
     const v = valores?.[c.chave];
     if (v === null || v === undefined || v === "") {
       faltando.push(c.label);
