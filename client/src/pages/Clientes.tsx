@@ -681,6 +681,15 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
     onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
+  // Marcar cobrança manual como recebida.
+  const marcarPagaMut = (trpc as any).asaas.marcarCobrancaPaga.useMutation({
+    onSuccess: () => {
+      toast.success("Cobrança marcada como recebida");
+      refetch();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
   function copiarLink(url: string) {
     navigator.clipboard.writeText(url);
     toast.success("Link copiado");
@@ -764,11 +773,19 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{c.descricao || "Cobrança"}</p>
                       <Badge variant="outline" className={`text-[9px] ${meta.cor}`}>{meta.label}</Badge>
+                      {c.origem === "manual" && (
+                        <Badge className="text-[9px] h-4 px-1 border-0 bg-warning-bg text-warning-fg">
+                          manual
+                        </Badge>
+                      )}
                       {c.formaPagamento && (
                         <Badge variant="secondary" className="text-[9px] font-normal">
                           {c.formaPagamento === "PIX" ? "Pix"
                             : c.formaPagamento === "BOLETO" ? "Boleto"
                             : c.formaPagamento === "CREDIT_CARD" ? "Cartão"
+                            : c.formaPagamento === "DINHEIRO" ? "Dinheiro"
+                            : c.formaPagamento === "TRANSFERENCIA" ? "Transferência"
+                            : c.formaPagamento === "OUTRO" ? "Outro"
                             : c.formaPagamento}
                         </Badge>
                       )}
@@ -778,10 +795,24 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                       {c.dataPagamento && <span>Pago {fmtData(c.dataPagamento)}</span>}
                       {c.tipo && <span className="uppercase">{c.tipo}</span>}
                     </div>
-                    {/* Ações: copiar link + copiar pix. Apenas pra cobranças
-                        em aberto (não faz sentido pra já recebida). */}
+                    {/* Ações: copiar link + copiar pix + marcar paga (manual).
+                        Apenas pra cobranças em aberto (não faz sentido pra já
+                        recebida). */}
                     {c.status !== "RECEIVED" && c.status !== "CONFIRMED" && (
                       <div className="flex items-center gap-1.5 mt-2">
+                        {c.origem === "manual" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-2 text-emerald-600 hover:text-emerald-700"
+                            onClick={() => marcarPagaMut.mutate({ id: c.id })}
+                            disabled={marcarPagaMut.isPending}
+                            title="Marcar como recebida (cobrança manual)"
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Marcar paga
+                          </Button>
+                        )}
                         {c.invoiceUrl && (
                           <Button
                             size="sm"
@@ -793,7 +824,7 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                             <Link2 className="h-3 w-3 mr-1" /> Link
                           </Button>
                         )}
-                        {(c.formaPagamento === "PIX" || c.formaPagamento === "UNDEFINED") && (
+                        {c.origem !== "manual" && (c.formaPagamento === "PIX" || c.formaPagamento === "UNDEFINED") && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -829,7 +860,7 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">
-                      {c.asaasPaymentId && (
+                      {c.asaasPaymentId && c.origem !== "manual" && (
                         <a
                           href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
                           target="_blank"

@@ -1238,12 +1238,32 @@ export const asaasCobrancas = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     escritorioId: int("escritorioIdAsaasCob").notNull(),
     contatoId: int("contatoIdAsaasCob"),
-    asaasPaymentId: varchar("asaasPaymentId", { length: 64 }).notNull(),
-    asaasCustomerId: varchar("asaasCustomerIdCob", { length: 64 }).notNull(),
+    /** ID do pagamento no Asaas. NULL pra cobrança manual (sem
+     *  integração — cliente pagou em dinheiro/cartão presencial). */
+    asaasPaymentId: varchar("asaasPaymentId", { length: 64 }),
+    /** ID do customer no Asaas. NULL pra cobrança manual quando o
+     *  contato não está vinculado ao Asaas. */
+    asaasCustomerId: varchar("asaasCustomerIdCob", { length: 64 }),
+    /**
+     * Origem da cobrança:
+     *  - 'asaas': criada via API Asaas, status sincronizado por webhook
+     *  - 'manual': lançada na UI sem passar por Asaas (ex: cliente
+     *     pagou presencialmente em dinheiro). Operador marca paga
+     *     manualmente.
+     */
+    origem: mysqlEnum("origemAsaasCob", ["asaas", "manual"]).default("asaas").notNull(),
     valor: varchar("valorAsaas", { length: 20 }).notNull(),
     valorLiquido: varchar("valorLiquidoAsaas", { length: 20 }),
     vencimento: varchar("vencimentoAsaas", { length: 10 }).notNull(),
-    formaPagamento: mysqlEnum("formaPagAsaas", ["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]).notNull(),
+    formaPagamento: mysqlEnum("formaPagAsaas", [
+      "BOLETO",
+      "CREDIT_CARD",
+      "PIX",
+      "UNDEFINED",
+      "DINHEIRO",
+      "TRANSFERENCIA",
+      "OUTRO",
+    ]).notNull(),
     status: varchar("statusAsaasCob", { length: 64 }).notNull(),
     descricao: varchar("descricaoAsaas", { length: 512 }),
     invoiceUrl: text("invoiceUrlAsaas"),

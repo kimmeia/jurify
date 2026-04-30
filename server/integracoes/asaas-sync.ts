@@ -204,14 +204,19 @@ export async function syncCobrancasDeCliente(
     offset += res.limit;
   }
 
-  // Remover cobranças locais que não existem mais no Asaas (orfãs)
-  // SEMPRE executar, mesmo se idsAsaas estiver vazio (caso todas as cobranças foram deletadas)
+  // Remover cobranças locais que não existem mais no Asaas (orfãs).
+  // Filtra origem='asaas' — cobranças manuais não devem ser tocadas
+  // pelo sync (não passam pela API Asaas).
   const locais = await db.select({ id: asaasCobrancas.id, asaasPaymentId: asaasCobrancas.asaasPaymentId })
     .from(asaasCobrancas)
-    .where(and(eq(asaasCobrancas.escritorioId, escritorioId), eq(asaasCobrancas.asaasCustomerId, asaasCustomerId)));
+    .where(and(
+      eq(asaasCobrancas.escritorioId, escritorioId),
+      eq(asaasCobrancas.asaasCustomerId, asaasCustomerId),
+      eq(asaasCobrancas.origem, "asaas"),
+    ));
 
   for (const local of locais) {
-    if (!idsAsaas.has(local.asaasPaymentId)) {
+    if (local.asaasPaymentId && !idsAsaas.has(local.asaasPaymentId)) {
       await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
       stats.removidas++;
       log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);

@@ -32,8 +32,11 @@ export function NovaCobrancaDialog({
   /** Quando true, esconde o seletor de cliente (cliente fixo). */
   esconderCliente?: boolean;
 }) {
-  const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente">("avulsa");
+  const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente" | "manual">("avulsa");
   const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : ""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
+  // Modo manual: campos extras
+  const [jaPaga, setJaPaga] = useState(false);
+  const [dataPagamento, setDataPagamento] = useState("");
   // Atribuição de comissão — válida pros 3 modos. Em parcelamento/
   // assinatura, a config é persistida e aplicada nas cobranças filhas
   // pelo webhook handler.
@@ -49,8 +52,17 @@ export function NovaCobrancaDialog({
   const criarAvulsaMut = trpc.asaas.criarCobranca.useMutation({ onSuccess: (data) => { setResultado(data.cobranca); toast.success("Cobranca criada"); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const criarParcelaMut = trpc.asaas.criarParcelamento.useMutation({ onSuccess: () => { toast.success("Parcelamento criado"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const criarAssinaturaMut = trpc.asaas.criarAssinatura.useMutation({ onSuccess: () => { toast.success("Assinatura criada"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
-  const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending;
-  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); };
+  const criarManualMut = (trpc as any).asaas.criarCobrancaManual.useMutation({
+    onSuccess: () => {
+      toast.success("Cobrança manual registrada");
+      resetForm();
+      onOpenChange(false);
+      onSuccess();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message, duration: 8000 }),
+  });
+  const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending || criarManualMut.isPending;
+  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); };
   const handleCriar = () => {
     const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
     const comissaoFields = {
@@ -77,7 +89,7 @@ export function NovaCobrancaDialog({
         descricao: descricao || undefined,
         ...comissaoFields,
       });
-    } else {
+    } else if (modo === "recorrente") {
       criarAssinaturaMut.mutate({
         contatoId: parseInt(contatoId),
         valor: parseFloat(valor),
@@ -85,6 +97,18 @@ export function NovaCobrancaDialog({
         ciclo: ciclo as any,
         formaPagamento: forma as any,
         descricao: descricao || undefined,
+        ...comissaoFields,
+      });
+    } else {
+      // Manual: não chama Asaas. Pode nascer já paga.
+      criarManualMut.mutate({
+        contatoId: parseInt(contatoId),
+        valor: parseFloat(valor),
+        vencimento,
+        formaPagamento: forma as any,
+        descricao: descricao || undefined,
+        jaPaga,
+        dataPagamento: jaPaga ? (dataPagamento || undefined) : undefined,
         ...comissaoFields,
       });
     }
@@ -103,12 +127,90 @@ export function NovaCobrancaDialog({
           </div>
         ) : (
           <><div className="space-y-3 py-1">
-            <div className="flex gap-2"><Button variant={modo === "avulsa" ? "default" : "outline"} size="sm" className="flex-1 text-xs" onClick={() => setModo("avulsa")}>Avulsa</Button><Button variant={modo === "parcelada" ? "default" : "outline"} size="sm" className="flex-1 text-xs" onClick={() => setModo("parcelada")}>Parcelada</Button><Button variant={modo === "recorrente" ? "default" : "outline"} size="sm" className="flex-1 text-xs" onClick={() => setModo("recorrente")}><Repeat className="h-3 w-3 mr-1" />Recorrente</Button></div>
+            <div className="grid grid-cols-4 gap-2">
+              <Button variant={modo === "avulsa" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("avulsa")}>Avulsa</Button>
+              <Button variant={modo === "parcelada" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("parcelada")}>Parcelada</Button>
+              <Button variant={modo === "recorrente" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("recorrente")}><Repeat className="h-3 w-3 mr-1" />Recorrente</Button>
+              <Button variant={modo === "manual" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("manual")} title="Cobrança lançada à mão (sem Asaas) — cliente pagou em dinheiro/cartão presencial">Manual</Button>
+            </div>
+            {modo === "manual" && (
+              <div className="rounded-md border bg-muted/30 p-2 text-[11px] text-muted-foreground">
+                <b>Cobrança manual</b>: lançada sem passar pelo Asaas. Use quando o cliente
+                paga presencialmente (dinheiro, cartão na maquininha, transferência) ou
+                quando o Asaas estiver desconectado.
+              </div>
+            )}
             {!esconderCliente && (
               <div><Label className="text-xs">Cliente</Label><ClienteCombobox value={contatoId} onChange={(id) => setContatoId(id)} /></div>
             )}
             <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">{modo === "parcelada" ? "Valor total (R$)" : "Valor (R$)"}</Label><Input type="number" step="0.01" min="0.01" placeholder="150.00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">{modo === "recorrente" ? "Primeiro vencimento" : "Vencimento"}</Label><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className="mt-1" /></div></div>
-            <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Forma</Label><Select value={forma} onValueChange={setForma}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PIX">Pix</SelectItem><SelectItem value="BOLETO">Boleto</SelectItem><SelectItem value="CREDIT_CARD">Cartao</SelectItem><SelectItem value="UNDEFINED">Cliente escolhe</SelectItem></SelectContent></Select></div>{modo === "parcelada" && (<div><Label className="text-xs">Parcelas</Label><Input type="number" min="2" max="24" value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="mt-1" /></div>)}{modo === "recorrente" && (<div><Label className="text-xs">Ciclo</Label><Select value={ciclo} onValueChange={setCiclo}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="WEEKLY">Semanal</SelectItem><SelectItem value="BIWEEKLY">Quinzenal</SelectItem><SelectItem value="MONTHLY">Mensal</SelectItem><SelectItem value="QUARTERLY">Trimestral</SelectItem><SelectItem value="SEMIANNUALLY">Semestral</SelectItem><SelectItem value="YEARLY">Anual</SelectItem></SelectContent></Select></div>)}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Forma</Label>
+                <Select value={forma} onValueChange={setForma}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PIX">Pix</SelectItem>
+                    <SelectItem value="BOLETO">Boleto</SelectItem>
+                    <SelectItem value="CREDIT_CARD">Cartão</SelectItem>
+                    {modo !== "manual" && <SelectItem value="UNDEFINED">Cliente escolhe</SelectItem>}
+                    {modo === "manual" && <SelectItem value="DINHEIRO">Dinheiro</SelectItem>}
+                    {modo === "manual" && <SelectItem value="TRANSFERENCIA">Transferência</SelectItem>}
+                    {modo === "manual" && <SelectItem value="OUTRO">Outro</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+              {modo === "parcelada" && (
+                <div>
+                  <Label className="text-xs">Parcelas</Label>
+                  <Input type="number" min="2" max="24" value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="mt-1" />
+                </div>
+              )}
+              {modo === "recorrente" && (
+                <div>
+                  <Label className="text-xs">Ciclo</Label>
+                  <Select value={ciclo} onValueChange={setCiclo}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WEEKLY">Semanal</SelectItem>
+                      <SelectItem value="BIWEEKLY">Quinzenal</SelectItem>
+                      <SelectItem value="MONTHLY">Mensal</SelectItem>
+                      <SelectItem value="QUARTERLY">Trimestral</SelectItem>
+                      <SelectItem value="SEMIANNUALLY">Semestral</SelectItem>
+                      <SelectItem value="YEARLY">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            {modo === "manual" && (
+              <div className="space-y-2 pt-2 border-t">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={jaPaga}
+                    onChange={(e) => setJaPaga(e.target.checked)}
+                    className="h-4 w-4 accent-primary cursor-pointer"
+                  />
+                  <span className="text-xs">Já recebida</span>
+                </label>
+                {jaPaga && (
+                  <div>
+                    <Label className="text-xs">Data do pagamento</Label>
+                    <Input
+                      type="date"
+                      value={dataPagamento}
+                      onChange={(e) => setDataPagamento(e.target.value)}
+                      placeholder="Hoje"
+                      className="mt-1"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Vazio = hoje. Cobrança nasce com status "Recebido".
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {modo === "parcelada" && valor && parcelas && <p className="text-xs text-muted-foreground">{parseInt(parcelas)}x de {formatBRL(parseFloat(valor) / parseInt(parcelas))}</p>}
             <div><Label className="text-xs">Descricao</Label><Input placeholder="Honorarios" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1" /></div>
             <div className="space-y-2 pt-2 border-t">
