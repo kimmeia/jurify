@@ -29,8 +29,16 @@ import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
-  Scale, Radar, Copy, Link2,
+  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { GerarContratoDialog } from "@/components/GerarContratoDialog";
@@ -661,6 +669,18 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
     onError: (err: any) => toast.error("Erro ao buscar Pix", { description: err.message }),
   });
 
+  // Toggle do flag comissionável (override por cobrança).
+  const atualizarComissionavelMut = (trpc as any).asaas.atualizarComissionavel.useMutation({
+    onSuccess: (r: { valor: boolean | null }) => {
+      const txt = r.valor === true ? "comissionável"
+        : r.valor === false ? "não comissionável"
+        : "padrão da categoria";
+      toast.success(`Cobrança marcada como ${txt}`);
+      refetch();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
   function copiarLink(url: string) {
     navigator.clipboard.writeText(url);
     toast.success("Link copiado");
@@ -773,14 +793,16 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                             <Link2 className="h-3 w-3 mr-1" /> Link
                           </Button>
                         )}
-                        {c.formaPagamento === "PIX" && (
+                        {(c.formaPagamento === "PIX" || c.formaPagamento === "UNDEFINED") && (
                           <Button
                             size="sm"
                             variant="outline"
                             className="h-6 text-[10px] px-2"
                             onClick={() => copiarPix(c)}
                             disabled={obterPixMut.isPending}
-                            title="Copiar código Pix"
+                            title={c.formaPagamento === "UNDEFINED"
+                              ? "Cliente escolhe — copiar código Pix do checkout"
+                              : "Copiar código Pix"}
                           >
                             {obterPixMut.isPending ? (
                               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -793,18 +815,86 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                       </div>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
                     <p className="text-sm font-semibold">{fmtMoeda(c.valor)}</p>
-                    {c.asaasPaymentId && (
-                      <a
-                        href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-violet-600 hover:underline"
-                      >
-                        Abrir no Asaas
-                      </a>
+                    {/* Indicador do override de comissão (quando setado) */}
+                    {c.comissionavelOverride === true && (
+                      <Badge className="text-[9px] h-4 px-1 border-0 bg-success-bg text-success-fg">
+                        comissionável
+                      </Badge>
                     )}
+                    {c.comissionavelOverride === false && (
+                      <Badge className="text-[9px] h-4 px-1 border-0 bg-neutral-bg text-neutral-fg">
+                        não comissionável
+                      </Badge>
+                    )}
+                    <div className="flex items-center gap-2">
+                      {c.asaasPaymentId && (
+                        <a
+                          href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-violet-600 hover:underline"
+                        >
+                          Abrir no Asaas
+                        </a>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground"
+                            title="Mais ações"
+                            disabled={atualizarComissionavelMut.isPending}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="text-xs">
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                            Comissão
+                          </DropdownMenuLabel>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              atualizarComissionavelMut.mutate({ id: c.id, valor: true })
+                            }
+                            className="gap-2"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                            Marcar comissionável
+                            {c.comissionavelOverride === true && (
+                              <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              atualizarComissionavelMut.mutate({ id: c.id, valor: false })
+                            }
+                            className="gap-2"
+                          >
+                            <X className="h-3.5 w-3.5 text-neutral-fg" />
+                            Marcar NÃO comissionável
+                            {c.comissionavelOverride === false && (
+                              <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() =>
+                              atualizarComissionavelMut.mutate({ id: c.id, valor: null })
+                            }
+                            className="gap-2"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Voltar pro padrão
+                            {c.comissionavelOverride === null && (
+                              <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
               );
