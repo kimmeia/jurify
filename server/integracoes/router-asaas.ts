@@ -16,7 +16,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, colaboradores, contatos, users } from "../../drizzle/schema";
-import { eq, and, desc, like, or, inArray } from "drizzle-orm";
+import { eq, and, desc, like, or, inArray, between, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -1390,6 +1390,10 @@ export const asaasRouter = router({
       status: z.string().optional(),
       contatoId: z.number().optional(),
       busca: z.string().optional(),
+      /** Filtra cobranças por vencimento ≥ data (YYYY-MM-DD). */
+      vencimentoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      /** Filtra cobranças por vencimento ≤ data (YYYY-MM-DD). */
+      vencimentoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       limit: z.number().min(1).max(100).default(50),
       offset: z.number().min(0).default(0),
     }).optional())
@@ -1405,6 +1409,13 @@ export const asaasRouter = router({
 
         if (input?.status) conditions.push(eq(asaasCobrancas.status, input.status));
         if (input?.contatoId) conditions.push(eq(asaasCobrancas.contatoId, input.contatoId));
+        if (input?.vencimentoInicio && input?.vencimentoFim) {
+          conditions.push(between(asaasCobrancas.vencimento, input.vencimentoInicio, input.vencimentoFim));
+        } else if (input?.vencimentoInicio) {
+          conditions.push(gte(asaasCobrancas.vencimento, input.vencimentoInicio));
+        } else if (input?.vencimentoFim) {
+          conditions.push(lte(asaasCobrancas.vencimento, input.vencimentoFim));
+        }
 
         // Filtro por permissão: se verProprios only, só mostra cobranças
         // de contatos cujo responsável é o próprio colaborador.
@@ -1655,62 +1666,80 @@ export const asaasRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
-      const db = await getDb();
-      if (!db) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+      type Bucket = { recebido: number; pendente: number; vencido: number };
+      const ZERO = { granularidade: "mes" as "mes" | "dia", pontos: [] as Array<{ chave: string } & Bucket>, totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
 
-      // Decide o range de meses: se vier `dataInicio` + `dataFim`, gera
-      // os meses entre eles (inclusivo). Senão, conta `meses` pra trás
-      // a partir do mês atual.
-      const mesesKeys: string[] = [];
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return ZERO;
+      const db = await getDb();
+      if (!db) return ZERO;
+
+      // Decide range + granularidade.
+      // - Sem custom: presets contam meses pra trás (granularidade=mes)
+      // - Com custom: granularidade=dia se range ≤ 62 dias; senão mes
       const usandoRange = !!(input?.dataInicio && input?.dataFim);
+      let granularidade: "dia" | "mes" = "mes";
+      let chaves: string[] = [];
+
       if (usandoRange) {
         const ini = new Date(`${input!.dataInicio}T00:00:00`);
         const fim = new Date(`${input!.dataFim}T00:00:00`);
-        if (ini > fim) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
-        const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
-        const fimChave = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}`;
-        // Hard cap de 36 meses pra evitar query monstro acidental.
-        let i = 0;
-        while (i < 36) {
-          const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
-          mesesKeys.push(k);
-          if (k === fimChave) break;
-          cursor.setMonth(cursor.getMonth() + 1);
-          i++;
+        if (ini > fim) return ZERO;
+        const diffDias = Math.round((fim.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        granularidade = diffDias <= 62 ? "dia" : "mes";
+
+        if (granularidade === "dia") {
+          // Hard cap de 366 dias pra range diário (caso o threshold mude).
+          const cursor = new Date(ini);
+          let i = 0;
+          while (i < 366) {
+            chaves.push(cursor.toISOString().slice(0, 10));
+            if (cursor.getTime() >= fim.getTime()) break;
+            cursor.setDate(cursor.getDate() + 1);
+            i++;
+          }
+        } else {
+          const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
+          const fimChave = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}`;
+          let i = 0;
+          while (i < 36) {
+            const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+            chaves.push(k);
+            if (k === fimChave) break;
+            cursor.setMonth(cursor.getMonth() + 1);
+            i++;
+          }
         }
       } else {
         const meses = input?.meses ?? 6;
         const hoje = new Date();
         for (let i = meses - 1; i >= 0; i--) {
           const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-          mesesKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+          chaves.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
         }
       }
 
       try {
         const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
-        if (visiveis !== null && visiveis.length === 0) {
-          return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
-        }
+        if (visiveis !== null && visiveis.length === 0) return ZERO;
         const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
         if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
         const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
-        const porMes = new Map<string, { recebido: number; pendente: number; vencido: number }>();
-        for (const k of mesesKeys) porMes.set(k, { recebido: 0, pendente: 0, vencido: 0 });
+        const buckets = new Map<string, Bucket>();
+        for (const k of chaves) buckets.set(k, { recebido: 0, pendente: 0, vencido: 0 });
 
         let totalRecebido = 0, totalPendente = 0, totalVencido = 0;
         const hojeStr = new Date().toISOString().slice(0, 10);
+        const sliceLen = granularidade === "dia" ? 10 : 7;
 
         for (const c of todas) {
           const valor = parseFloat(c.valor) || 0;
           const pago = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status);
           const refDate = pago ? (c.dataPagamento || c.vencimento) : c.vencimento;
           if (!refDate) continue;
-          const mes = refDate.slice(0, 7);
-          const bucket = porMes.get(mes);
+          const chave = refDate.slice(0, sliceLen);
+          const bucket = buckets.get(chave);
 
           if (pago) {
             totalRecebido += valor;
@@ -1729,16 +1758,16 @@ export const asaasRouter = router({
           }
         }
 
-        const pontos = Array.from(porMes.entries()).map(([mes, v]) => ({
-          mes,
+        const pontos = Array.from(buckets.entries()).map(([chave, v]) => ({
+          chave,
           recebido: Math.round(v.recebido * 100) / 100,
           pendente: Math.round(v.pendente * 100) / 100,
           vencido: Math.round(v.vencido * 100) / 100,
         }));
 
-        return { pontos, totalRecebido, totalPendente, totalVencido };
+        return { granularidade, pontos, totalRecebido, totalPendente, totalVencido };
       } catch {
-        return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+        return ZERO;
       }
     }),
 

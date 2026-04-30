@@ -19,6 +19,20 @@ export function formatMes(mes: string): string {
   return `${names[m - 1]}/${String(y).slice(2)}`;
 }
 
+/** Formata "YYYY-MM-DD" → "DD/MM" pra ticks curtos de eixo. */
+export function formatDiaCurto(iso: string): string {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}`;
+}
+
+/** Formata "YYYY-MM-DD" → "DD/MM/YYYY" pra tooltip/labels. */
+export function formatDiaCompleto(iso: string): string {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     PENDING: { label: "Pendente", cls: "bg-amber-500/15 text-amber-700 border-amber-500/25" },
