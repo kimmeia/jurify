@@ -25,7 +25,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import {
-  formatBRL, formatBRLShort, formatMes, StatusBadge, FormaBadge, CICLO_LABELS,
+  formatBRL, formatBRLShort, formatMes, formatDiaCurto, formatDiaCompleto, StatusBadge, FormaBadge, CICLO_LABELS,
   exportCobrancasCSV,
 } from "./financeiro/helpers";
 import {
@@ -81,9 +81,25 @@ export default function Financeiro() {
       refetchInterval: REFRESH_MS * 2, // 2 min (menos sensível a mudanças)
     },
   );
+  // Range efetivo (dataInicio/dataFim concretos) derivado do estado atual.
+  // Usado tanto pelo gráfico quanto pelo filtro de cobranças (vencimento).
+  const rangeEfetivo = useMemo<{ inicio: string; fim: string }>(() => {
+    if (rangeCustom) return rangeCustom;
+    const meses = periodo ?? 6;
+    const hoje = new Date();
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - (meses - 1), 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); // último dia do mês atual
+    return { inicio: inicio.toISOString().slice(0, 10), fim: fim.toISOString().slice(0, 10) };
+  }, [rangeCustom, periodo]);
+
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
     trpc.asaas.listarCobrancas.useQuery(
-      { status: filtroStatus !== "todos" ? filtroStatus : undefined, limit: 100 },
+      {
+        status: filtroStatus !== "todos" ? filtroStatus : undefined,
+        vencimentoInicio: rangeEfetivo.inicio,
+        vencimentoFim: rangeEfetivo.fim,
+        limit: 100,
+      },
       {
         retry: false,
         enabled: statusAsaas?.conectado,
@@ -453,9 +469,9 @@ export default function Financeiro() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <XAxis
-                        dataKey="mes"
+                        dataKey="chave"
                         tick={{ fontSize: 10, fill: "#9ca3af" }}
-                        tickFormatter={formatMes}
+                        tickFormatter={cashFlow.granularidade === "dia" ? formatDiaCurto : formatMes}
                         stroke="#e5e7eb"
                       />
                       <YAxis
@@ -471,7 +487,7 @@ export default function Financeiro() {
                           borderRadius: "8px",
                           fontSize: "12px",
                         }}
-                        labelFormatter={formatMes}
+                        labelFormatter={cashFlow.granularidade === "dia" ? formatDiaCompleto : formatMes}
                         formatter={(v: number) => formatBRL(v)}
                       />
                       <Area
