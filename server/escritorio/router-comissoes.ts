@@ -12,7 +12,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { fecharComissao, simularComissao } from "./db-comissoes";
+import { fecharComissao, FechamentoJaExisteError, simularComissao } from "./db-comissoes";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -73,24 +73,42 @@ export const comissoesRouter = router({
         periodoInicio: dataInput,
         periodoFim: dataInput,
         observacoes: z.string().max(500).optional(),
+        /**
+         * Por default rejeita duplicar fechamento existente. UI deve
+         * mostrar dialog "já existe — quer mesmo criar outro?" e re-
+         * tentar com `forcarDuplicado:true` se o operador confirmar
+         * (caso documentado de re-fechamento após correção).
+         */
+        forcarDuplicado: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
       requireGestao(esc.colaborador.cargo);
-      // Fechamento manual pode coexistir com outros do mesmo período
-      // (re-fechamento após correção). Histórico cumulativo. A
-      // proteção de duplicação só vale pra automáticos (via
-      // `comissoes_lancamentos_log`).
-      return fecharComissao({
-        escritorioId: esc.escritorio.id,
-        atendenteId: input.atendenteId,
-        periodoInicio: input.periodoInicio,
-        periodoFim: input.periodoFim,
-        fechadoPorUserId: ctx.user.id,
-        origem: "manual",
-        observacoes: input.observacoes ?? null,
-      }).then((r) => ({ id: r.id }));
+      try {
+        const r = await fecharComissao({
+          escritorioId: esc.escritorio.id,
+          atendenteId: input.atendenteId,
+          periodoInicio: input.periodoInicio,
+          periodoFim: input.periodoFim,
+          fechadoPorUserId: ctx.user.id,
+          origem: "manual",
+          observacoes: input.observacoes ?? null,
+          forcarDuplicado: input.forcarDuplicado ?? false,
+        });
+        return { status: "criado" as const, id: r.id };
+      } catch (err) {
+        if (err instanceof FechamentoJaExisteError) {
+          // Resposta estruturada (não exception) — UI decide se mostra
+          // dialog "Ver existente" / "Criar mesmo assim".
+          return {
+            status: "duplicado" as const,
+            existenteId: err.comissaoFechadaId,
+            origem: err.origem,
+          };
+        }
+        throw err;
+      }
     }),
 
   listarFechamentos: protectedProcedure

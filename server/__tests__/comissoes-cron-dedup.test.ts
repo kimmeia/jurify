@@ -16,8 +16,20 @@ const marcarExecucaoConcluida = vi.fn();
 const marcarExecucaoFalhou = vi.fn();
 const reservarExecucao = vi.fn();
 
+// Stub da exceção — precisa ser uma classe pra `instanceof` funcionar.
+class FechamentoJaExisteError extends Error {
+  constructor(
+    public readonly comissaoFechadaId: number,
+    public readonly origem: "manual" | "automatico",
+  ) {
+    super(`Fechamento já existe (id=${comissaoFechadaId})`);
+    this.name = "FechamentoJaExisteError";
+  }
+}
+
 vi.mock("../escritorio/db-comissoes", () => ({
   fecharComissao,
+  FechamentoJaExisteError,
   marcarExecucaoConcluida,
   marcarExecucaoFalhou,
   reservarExecucao,
@@ -97,7 +109,7 @@ afterEach(() => {
 });
 
 describe("processarAgendasComissao — dedup cross-origem", () => {
-  it("pula atendente quando já existe fechamento pro mesmo período", async () => {
+  it("pula atendente quando fecharComissao lança FechamentoJaExisteError", async () => {
     // 1) Agendas ativas
     selectQueue.push([
       {
@@ -114,18 +126,18 @@ describe("processarAgendasComissao — dedup cross-origem", () => {
     selectQueue.push([{ id: 10, userId: 50, userName: "Atendente A" }]);
     // 4) Dono do escritório
     selectQueue.push([{ userId: 1 }]);
-    // 5) Existente em comissoes_fechadas (KEY) — fechamento manual prévio
-    selectQueue.push([{ id: 999 }]);
-    // 6) Destinatários da notificação
+    // 5) Destinatários da notificação
     selectQueue.push([{ userId: 1 }]);
 
     reservarExecucao.mockResolvedValue(42);
+    // Simula que fecharComissao detectou duplicata (manual prévio)
+    fecharComissao.mockRejectedValue(new FechamentoJaExisteError(999, "manual"));
 
     await processarAgendasComissao();
 
     expect(reservarExecucao).toHaveBeenCalledOnce();
+    expect(fecharComissao).toHaveBeenCalledOnce();
     expect(marcarExecucaoConcluida).toHaveBeenCalledWith(42, 999);
-    expect(fecharComissao).not.toHaveBeenCalled();
     expect(marcarExecucaoFalhou).not.toHaveBeenCalled();
 
     // Notificação inclui contador de "já tinha fechamento".
@@ -150,8 +162,6 @@ describe("processarAgendasComissao — dedup cross-origem", () => {
     selectQueue.push([{ atendenteId: 10 }]);
     selectQueue.push([{ id: 10, userId: 50, userName: "Atendente A" }]);
     selectQueue.push([{ userId: 1 }]);
-    // Existente vazio → não é dedup, segue pra fecharComissao
-    selectQueue.push([]);
     selectQueue.push([{ userId: 1 }]);
 
     reservarExecucao.mockResolvedValue(42);
