@@ -35,6 +35,7 @@ import Previdenciario from "./pages/calculos/Previdenciario";
 import CalculosDiversos from "./pages/calculos/CalculosDiversos";
 import Processos from "./pages/Processos";
 import Configuracoes from "./pages/Configuracoes";
+import ModelosContrato from "./pages/ModelosContrato";
 import Agendamento from "./pages/Agendamento";
 import Atendimento from "./pages/Atendimento";
 import AgentesIA from "./pages/AgentesIA";
@@ -214,6 +215,11 @@ function Router() {
       <Route path="/configuracoes">
         <ClientArea>
           <Configuracoes />
+        </ClientArea>
+      </Route>
+      <Route path="/modelos-contrato">
+        <ClientArea>
+          <ModelosContrato />
         </ClientArea>
       </Route>
       <Route path="/agenda">

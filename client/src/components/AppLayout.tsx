@@ -47,6 +47,7 @@ import {
   CreditCard,
   Lock,
   FileSearch,
+  FileText,
   Headphones,
   CalendarDays,
   Settings,
@@ -414,6 +415,20 @@ function AppSidebarContent({
                   <Users className={`h-4 w-4 ${location === "/clientes" ? "text-primary" : ""}`} />
                   <span className="flex-1">Clientes</span>
                   <BetaBadge className="ml-auto" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>}
+
+              {/* Modelos de contrato — depende de "clientes" pra fazer sentido (gera
+                  contrato pra um cliente específico). */}
+              {canSee("clientes") && <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location === "/modelos-contrato"}
+                  onClick={() => navigateOrBlock("/modelos-contrato")}
+                  tooltip="Modelos de contrato"
+                  className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                >
+                  <FileText className={`h-4 w-4 ${location === "/modelos-contrato" ? "text-primary" : ""}`} />
+                  <span className="flex-1">Modelos</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 

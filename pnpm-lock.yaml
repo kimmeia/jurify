@@ -163,6 +163,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      docxtemplater:
+        specifier: ^3.68.6
+        version: 3.68.6
       dotenv:
         specifier: ^17.2.2
         version: 17.2.3
@@ -214,6 +217,9 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+      pizzip:
+        specifier: ^3.2.0
+        version: 3.2.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -3154,6 +3160,10 @@ packages:
     resolution: {tarball: https://codeload.github.com/whiskeysockets/libsignal-node/tar.gz/1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67}
     version: 2.0.1
 
+  '@xmldom/xmldom@0.9.10':
+    resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
+    engines: {node: '>=14.6'}
+
   '@xyflow/react@12.10.2':
     resolution: {integrity: sha512-CgIi6HwlcHXwlkTpr0fxLv/0sRVNZ8IdwKLzzeCscaYBwpvfcH1QFOCeaTCuEn1FQEs/B8CjnTSjhs8udgmBgQ==}
     peerDependencies:
@@ -3665,6 +3675,10 @@ packages:
 
   dijkstrajs@1.0.3:
     resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
+
+  docxtemplater@3.68.6:
+    resolution: {integrity: sha512-gpctSJS9680VYzYvc8g9ClqcvQl6P6EOeK3u32CsdZGy3mSqOgjLZm4D94ufIR0yN+yGp3EwTTnhV8GUJZ5pOw==}
+    engines: {node: '>=0.10'}
 
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
@@ -4719,6 +4733,9 @@ packages:
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
 
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
   parse-entities@4.0.2:
     resolution: {integrity: sha512-GG2AQYWoLgL877gQIKeRPGO1xF9+eG1ujIb5soS5gPvLQ1y2o8FL90w2QWNdf9I361Mpp7726c+lj3U0qK1uGw==}
 
@@ -4790,6 +4807,9 @@ packages:
   pino@9.14.0:
     resolution: {integrity: sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==}
     hasBin: true
+
+  pizzip@3.2.0:
+    resolution: {integrity: sha512-X4NPNICxCfIK8VYhF6wbksn81vTiziyLbvKuORVAmolvnUzl1A1xmz9DAWKxPRq9lZg84pJOOAMq3OE61bD8IQ==}
 
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
@@ -8943,6 +8963,8 @@ snapshots:
       curve25519-js: 0.0.4
       protobufjs: 6.8.8
 
+  '@xmldom/xmldom@0.9.10': {}
+
   '@xyflow/react@12.10.2(@types/react@19.2.1)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
     dependencies:
       '@xyflow/system': 0.0.76
@@ -9458,6 +9480,10 @@ snapshots:
   dfa@1.2.0: {}
 
   dijkstrajs@1.0.3: {}
+
+  docxtemplater@3.68.6:
+    dependencies:
+      '@xmldom/xmldom': 0.9.10
 
   dom-helpers@5.2.1:
     dependencies:
@@ -10762,6 +10788,8 @@ snapshots:
 
   pako@1.0.11: {}
 
+  pako@2.1.0: {}
+
   parse-entities@4.0.2:
     dependencies:
       '@types/unist': 2.0.11
@@ -10856,6 +10884,10 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 3.1.0
+
+  pizzip@3.2.0:
+    dependencies:
+      pako: 2.1.0
 
   pkg-types@1.3.1:
     dependencies:
