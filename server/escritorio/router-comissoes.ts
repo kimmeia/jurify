@@ -8,6 +8,7 @@ import {
   colaboradores,
   comissoesFechadas,
   comissoesFechadasItens,
+  despesas,
   users,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
@@ -202,12 +203,26 @@ export const comissoesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [existente] = await db
-        .select({ escritorioId: comissoesFechadas.escritorioId })
+        .select({
+          escritorioId: comissoesFechadas.escritorioId,
+          despesaId: comissoesFechadas.despesaId,
+        })
         .from(comissoesFechadas)
         .where(eq(comissoesFechadas.id, input.id))
         .limit(1);
       if (!existente || existente.escritorioId !== esc.escritorio.id) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // Cascata da despesa automática vinculada — só se ainda pendente.
+      // Despesa já paga fica preservada (não rebobinar histórico
+      // financeiro com efeito real).
+      if (existente.despesaId) {
+        await db
+          .delete(despesas)
+          .where(
+            and(eq(despesas.id, existente.despesaId), eq(despesas.status, "pendente")),
+          );
       }
 
       await db
