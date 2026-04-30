@@ -34,7 +34,9 @@ export function NovaCobrancaDialog({
 }) {
   const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente">("avulsa");
   const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : ""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
-  // Atribuição de comissão (modo "avulsa" apenas — parcelamento/assinatura herdam do cliente via webhook).
+  // Atribuição de comissão — válida pros 3 modos. Em parcelamento/
+  // assinatura, a config é persistida e aplicada nas cobranças filhas
+  // pelo webhook handler.
   const [atendenteId, setAtendenteId] = useState<string>("auto"); // "auto" = herda do contato no backend
   const [categoriaId, setCategoriaId] = useState<string>("none");
   const [overrideComissao, setOverrideComissao] = useState<"padrao" | "sim" | "nao">("padrao");
@@ -50,22 +52,41 @@ export function NovaCobrancaDialog({
   const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending;
   const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); };
   const handleCriar = () => {
+    const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
+    const comissaoFields = {
+      atendenteId: atendenteId === "auto" ? undefined : parseInt(atendenteId),
+      categoriaId: categoriaId === "none" ? undefined : parseInt(categoriaId),
+      comissionavelOverride: overrideMap[overrideComissao],
+    };
     if (modo === "avulsa") {
-      const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
       criarAvulsaMut.mutate({
         contatoId: parseInt(contatoId),
         valor: parseFloat(valor),
         vencimento,
         formaPagamento: forma as any,
         descricao: descricao || undefined,
-        atendenteId: atendenteId === "auto" ? undefined : parseInt(atendenteId),
-        categoriaId: categoriaId === "none" ? undefined : parseInt(categoriaId),
-        comissionavelOverride: overrideMap[overrideComissao],
+        ...comissaoFields,
       });
     } else if (modo === "parcelada") {
-      criarParcelaMut.mutate({ contatoId: parseInt(contatoId), valorTotal: parseFloat(valor), parcelas: parseInt(parcelas), vencimento, formaPagamento: forma as any, descricao: descricao || undefined });
+      criarParcelaMut.mutate({
+        contatoId: parseInt(contatoId),
+        valorTotal: parseFloat(valor),
+        parcelas: parseInt(parcelas),
+        vencimento,
+        formaPagamento: forma as any,
+        descricao: descricao || undefined,
+        ...comissaoFields,
+      });
     } else {
-      criarAssinaturaMut.mutate({ contatoId: parseInt(contatoId), valor: parseFloat(valor), proximoVencimento: vencimento, ciclo: ciclo as any, formaPagamento: forma as any, descricao: descricao || undefined });
+      criarAssinaturaMut.mutate({
+        contatoId: parseInt(contatoId),
+        valor: parseFloat(valor),
+        proximoVencimento: vencimento,
+        ciclo: ciclo as any,
+        formaPagamento: forma as any,
+        descricao: descricao || undefined,
+        ...comissaoFields,
+      });
     }
   };
 
@@ -90,52 +111,51 @@ export function NovaCobrancaDialog({
             <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Forma</Label><Select value={forma} onValueChange={setForma}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PIX">Pix</SelectItem><SelectItem value="BOLETO">Boleto</SelectItem><SelectItem value="CREDIT_CARD">Cartao</SelectItem><SelectItem value="UNDEFINED">Cliente escolhe</SelectItem></SelectContent></Select></div>{modo === "parcelada" && (<div><Label className="text-xs">Parcelas</Label><Input type="number" min="2" max="24" value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="mt-1" /></div>)}{modo === "recorrente" && (<div><Label className="text-xs">Ciclo</Label><Select value={ciclo} onValueChange={setCiclo}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="WEEKLY">Semanal</SelectItem><SelectItem value="BIWEEKLY">Quinzenal</SelectItem><SelectItem value="MONTHLY">Mensal</SelectItem><SelectItem value="QUARTERLY">Trimestral</SelectItem><SelectItem value="SEMIANNUALLY">Semestral</SelectItem><SelectItem value="YEARLY">Anual</SelectItem></SelectContent></Select></div>)}</div>
             {modo === "parcelada" && valor && parcelas && <p className="text-xs text-muted-foreground">{parseInt(parcelas)}x de {formatBRL(parseFloat(valor) / parseInt(parcelas))}</p>}
             <div><Label className="text-xs">Descricao</Label><Input placeholder="Honorarios" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1" /></div>
-            {modo === "avulsa" ? (
-              <div className="space-y-2 pt-2 border-t">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Comissão</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Atendente</Label>
-                    <Select value={atendenteId} onValueChange={setAtendenteId}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">Padrão do cliente</SelectItem>
-                        {atendentes.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Categoria</Label>
-                    <Select value={categoriaId} onValueChange={setCategoriaId}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sem categoria</SelectItem>
-                        {categoriasAtivas.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>{c.nome}{c.comissionavel ? "" : " (não comissionável)"}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+            <div className="space-y-2 pt-2 border-t">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Comissão</p>
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">Conta na comissão?</Label>
-                  <Select value={overrideComissao} onValueChange={(v) => setOverrideComissao(v as any)}>
+                  <Label className="text-xs">Atendente</Label>
+                  <Select value={atendenteId} onValueChange={setAtendenteId}>
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="padrao">Padrão da categoria</SelectItem>
-                      <SelectItem value="sim">Sim (forçar)</SelectItem>
-                      <SelectItem value="nao">Não (ignorar)</SelectItem>
+                      <SelectItem value="auto">Padrão do cliente</SelectItem>
+                      {atendentes.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Categoria</Label>
+                  <Select value={categoriaId} onValueChange={setCategoriaId}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem categoria</SelectItem>
+                      {categoriasAtivas.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.nome}{c.comissionavel ? "" : " (não comissionável)"}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-            ) : (
-              <p className="text-[11px] text-muted-foreground italic pt-2 border-t">
-                A comissão será atribuída quando o pagamento for confirmado, usando o atendente responsável do cliente.
-              </p>
-            )}
+              <div>
+                <Label className="text-xs">Conta na comissão?</Label>
+                <Select value={overrideComissao} onValueChange={(v) => setOverrideComissao(v as any)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="padrao">Padrão da categoria</SelectItem>
+                    <SelectItem value="sim">Sim (forçar)</SelectItem>
+                    <SelectItem value="nao">Não (ignorar)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {modo !== "avulsa" && (
+                <p className="text-[10px] text-muted-foreground italic">
+                  Aplicado automaticamente em todas as {modo === "parcelada" ? "parcelas" : "cobranças recorrentes"} geradas.
+                </p>
+              )}
+            </div>
           </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
         )}
       </DialogContent>

@@ -15,7 +15,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, colaboradores, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, colaboradores, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
@@ -1942,6 +1942,11 @@ export const asaasRouter = router({
       ciclo: z.enum(["WEEKLY", "BIWEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "SEMIANNUALLY", "YEARLY"]),
       formaPagamento: z.enum(["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]),
       descricao: z.string().max(512).optional(),
+      // Config de comissão — aplicada nas cobranças geradas pela
+      // assinatura via webhook.
+      atendenteId: z.number().optional(),
+      categoriaId: z.number().optional(),
+      comissionavelOverride: z.boolean().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -1970,6 +1975,24 @@ export const asaasRouter = router({
         cycle: input.ciclo,
         description: input.descricao,
       });
+
+      // Persiste config se algum flag foi informado. Sem flags, mantém
+      // path legado (webhook usa responsavelId do contato).
+      if (input.atendenteId || input.categoriaId || input.comissionavelOverride !== undefined) {
+        try {
+          await db.insert(asaasConfigCobrancaPai).values({
+            escritorioId: esc.escritorio.id,
+            tipo: "assinatura",
+            asaasParentId: assinatura.id,
+            atendenteId: input.atendenteId ?? null,
+            categoriaId: input.categoriaId ?? null,
+            comissionavelOverride: input.comissionavelOverride ?? null,
+          });
+        } catch (err: any) {
+          // Não-fatal: assinatura já criada. Loga e segue.
+          console.warn("[criarAssinatura] falha ao salvar config de comissão", err?.message);
+        }
+      }
 
       return { success: true, assinaturaId: assinatura.id, status: assinatura.status };
     }),
@@ -2041,6 +2064,10 @@ export const asaasRouter = router({
       vencimento: z.string(),
       formaPagamento: z.enum(["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]),
       descricao: z.string().max(512).optional(),
+      // Config de comissão — aplicada nas parcelas geradas via webhook.
+      atendenteId: z.number().optional(),
+      categoriaId: z.number().optional(),
+      comissionavelOverride: z.boolean().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -2069,6 +2096,22 @@ export const asaasRouter = router({
         dueDate: input.vencimento,
         description: input.descricao,
       });
+
+      // Persiste config se algum flag de comissão foi informado.
+      if (input.atendenteId || input.categoriaId || input.comissionavelOverride !== undefined) {
+        try {
+          await db.insert(asaasConfigCobrancaPai).values({
+            escritorioId: esc.escritorio.id,
+            tipo: "parcelamento",
+            asaasParentId: parcela.id,
+            atendenteId: input.atendenteId ?? null,
+            categoriaId: input.categoriaId ?? null,
+            comissionavelOverride: input.comissionavelOverride ?? null,
+          });
+        } catch (err: any) {
+          console.warn("[criarParcelamento] falha ao salvar config de comissão", err?.message);
+        }
+      }
 
       return { success: true, parcelamentoId: parcela.id };
     }),
