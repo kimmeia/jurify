@@ -167,15 +167,27 @@ function CalcularSection() {
     { enabled: podeSimular, staleTime: 0 },
   );
 
-  const fecharMut = trpc.comissoes.fechar.useMutation({
-    onSuccess: () => {
+  // Quando o backend detecta fechamento existente pro mesmo período,
+  // retorna `status: "duplicado"` em vez de criar. Guardamos pra
+  // mostrar dialog "Já existe — quer criar mesmo assim?".
+  const [duplicadoInfo, setDuplicadoInfo] = useState<
+    { existenteId: number; origem: "manual" | "automatico" } | null
+  >(null);
+
+  const fecharMut = (trpc.comissoes.fechar as any).useMutation({
+    onSuccess: (r: { status: "criado"; id: number } | { status: "duplicado"; existenteId: number; origem: "manual" | "automatico" }) => {
+      if (r.status === "duplicado") {
+        setDuplicadoInfo({ existenteId: r.existenteId, origem: r.origem });
+        setConfirmFechar(false);
+        return;
+      }
       toast.success("Período fechado", {
         description: "Snapshot salvo no histórico.",
       });
       utils.comissoes.listarFechamentos.invalidate();
       setConfirmFechar(false);
     },
-    onError: (err) =>
+    onError: (err: any) =>
       toast.error("Erro ao fechar", { description: err.message }),
   });
 
@@ -356,6 +368,45 @@ function CalcularSection() {
                 <Lock className="h-4 w-4 mr-2" />
               )}
               Confirmar fechamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog: já existe fechamento pro período (manual ou cron) */}
+      <AlertDialog
+        open={!!duplicadoInfo}
+        onOpenChange={(o) => !o && setDuplicadoInfo(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Já existe fechamento pra esse período</AlertDialogTitle>
+            <AlertDialogDescription>
+              Foi encontrado um fechamento de origem{" "}
+              <b>{duplicadoInfo?.origem === "automatico" ? "automática (cron)" : "manual"}</b>{" "}
+              pro mesmo atendente e período. Você pode ver o existente ou criar
+              um adicional (re-fechamento após correção).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={fecharMut.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={fecharMut.isPending || atendenteIdNum === null}
+              onClick={(e) => {
+                e.preventDefault();
+                if (atendenteIdNum === null) return;
+                fecharMut.mutate({
+                  atendenteId: atendenteIdNum,
+                  periodoInicio,
+                  periodoFim,
+                  forcarDuplicado: true,
+                });
+                setDuplicadoInfo(null);
+              }}
+            >
+              Criar mesmo assim
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

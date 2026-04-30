@@ -145,14 +145,70 @@ export interface FecharComissaoParams {
   origem?: "manual" | "automatico";
   agendaId?: number | null;
   observacoes?: string | null;
+  /**
+   * Quando `false` (default), bloqueia criação se já existe fechamento pro
+   * mesmo `(escritorioId, atendenteId, periodoInicio, periodoFim)` —
+   * independente de origem. Lança `FechamentoJaExisteError` com o id
+   * existente pra caller decidir o que fazer.
+   *
+   * Quando `true`, permite criar duplicado (caso documentado de
+   * "re-fechamento após correção"). UI manual deve confirmar com o
+   * operador antes de passar `true`.
+   *
+   * O cron sempre usa `false` (dedup silencioso — pula no caller).
+   */
+  forcarDuplicado?: boolean;
 }
 
-/** Persiste cabeçalho + itens. Função pura: NÃO valida permissões. */
+/** Lançado por `fecharComissao` quando já existe fechamento pro período
+ *  e `forcarDuplicado` não foi usado. Caller decide se pula (cron) ou
+ *  pergunta ao operador (UI manual). */
+export class FechamentoJaExisteError extends Error {
+  constructor(
+    public readonly comissaoFechadaId: number,
+    public readonly origem: "manual" | "automatico",
+  ) {
+    super(`Fechamento já existe (id=${comissaoFechadaId}, origem=${origem})`);
+    this.name = "FechamentoJaExisteError";
+  }
+}
+
+/** Persiste cabeçalho + itens. Função pura: NÃO valida permissões.
+ *  Por default rejeita duplicatas — passe `forcarDuplicado:true` pra
+ *  permitir re-fechamento após correção (UI deve confirmar antes). */
 export async function fecharComissao(
   params: FecharComissaoParams,
 ): Promise<{ id: number; totais: { bruto: number; comissionavel: number; naoComissionavel: number; valorComissao: number } }> {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+
+  // Dedup cross-origem: protege tanto cron quanto manual de criar
+  // fechamento duplicado pro mesmo período. Cron pula silencioso; UI
+  // manual deve mostrar dialog "já existe" antes de re-tentar com
+  // `forcarDuplicado:true`.
+  if (!params.forcarDuplicado) {
+    const [existente] = await db
+      .select({
+        id: comissoesFechadas.id,
+        origem: comissoesFechadas.origem,
+      })
+      .from(comissoesFechadas)
+      .where(
+        and(
+          eq(comissoesFechadas.escritorioId, params.escritorioId),
+          eq(comissoesFechadas.atendenteId, params.atendenteId),
+          eq(comissoesFechadas.periodoInicio, params.periodoInicio),
+          eq(comissoesFechadas.periodoFim, params.periodoFim),
+        ),
+      )
+      .limit(1);
+    if (existente) {
+      throw new FechamentoJaExisteError(
+        existente.id,
+        existente.origem as "manual" | "automatico",
+      );
+    }
+  }
 
   const sim = await simularComissao(
     params.escritorioId,

@@ -20,7 +20,6 @@
 import { getDb } from "../db";
 import {
   comissoesAgenda,
-  comissoesFechadas,
   comissoesLancamentosLog,
   escritorios,
   asaasCobrancas,
@@ -31,6 +30,7 @@ import {
 import { and, eq, inArray, between, isNotNull } from "drizzle-orm";
 import {
   fecharComissao,
+  FechamentoJaExisteError,
   marcarExecucaoConcluida,
   marcarExecucaoFalhou,
   periodoMesAnterior,
@@ -263,38 +263,10 @@ export async function processarAgendasComissao(): Promise<void> {
         });
         if (!logId) continue; // já rodou (concluído ou em andamento)
 
-        // Dedup cross-origem: se já existe fechamento pro mesmo
-        // (escritorio, atendente, período) — manual ou automático —
-        // marca a execução como concluída apontando pro existente
-        // e pula. Evita duplicar fechamento manual feito antes da
-        // agenda ser criada.
-        const existente = await db
-          .select({ id: comissoesFechadas.id })
-          .from(comissoesFechadas)
-          .where(
-            and(
-              eq(comissoesFechadas.escritorioId, agenda.escritorioId),
-              eq(comissoesFechadas.atendenteId, at.id),
-              eq(comissoesFechadas.periodoInicio, inicio),
-              eq(comissoesFechadas.periodoFim, fim),
-            ),
-          )
-          .limit(1);
-        if (existente.length > 0) {
-          await marcarExecucaoConcluida(logId, existente[0].id);
-          puladosManual += 1;
-          log.info(
-            {
-              escritorioId: agenda.escritorioId,
-              atendenteId: at.id,
-              periodo: `${inicio}..${fim}`,
-              comissaoFechadaId: existente[0].id,
-            },
-            "Já existe fechamento pro período, skip",
-          );
-          continue;
-        }
-
+        // Dedup cross-origem é responsabilidade de `fecharComissao`
+        // (lança `FechamentoJaExisteError` quando já existe). Aqui
+        // captamos pra apontar o log pro existente e contar como
+        // pulado (não é falha).
         try {
           const r = await fecharComissao({
             escritorioId: agenda.escritorioId,
@@ -318,6 +290,21 @@ export async function processarAgendasComissao(): Promise<void> {
             "Comissão fechada automaticamente",
           );
         } catch (err: any) {
+          if (err instanceof FechamentoJaExisteError) {
+            await marcarExecucaoConcluida(logId, err.comissaoFechadaId);
+            puladosManual += 1;
+            log.info(
+              {
+                escritorioId: agenda.escritorioId,
+                atendenteId: at.id,
+                periodo: `${inicio}..${fim}`,
+                comissaoFechadaId: err.comissaoFechadaId,
+                origemExistente: err.origem,
+              },
+              "Já existe fechamento pro período, skip",
+            );
+            continue;
+          }
           await marcarExecucaoFalhou(logId, err.message || "Erro desconhecido");
           fechadosFalha += 1;
           log.error(
