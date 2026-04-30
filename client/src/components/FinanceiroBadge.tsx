@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { NovaCobrancaDialog } from "@/pages/financeiro/dialogs";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -306,8 +307,9 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
       </Popover>
 
       {cobrancaOpen && (
-        <CobrancaRapidaDialog
-          contatoId={contatoId}
+        <NovaCobrancaDialog
+          contatoIdInicial={contatoId}
+          esconderCliente
           open={cobrancaOpen}
           onOpenChange={setCobrancaOpen}
           onSuccess={() => refetch()}
@@ -374,111 +376,6 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DIALOG: COBRANÇA RÁPIDA (usado no popover e no atendimento)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export function CobrancaRapidaDialog({
-  contatoId, open, onOpenChange, onSuccess,
-}: {
-  contatoId: number; open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void;
-}) {
-  const [valor, setValor] = useState("");
-  const [vencimento, setVencimento] = useState("");
-  const [forma, setForma] = useState("PIX");
-  const [descricao, setDescricao] = useState("");
-  const [resultado, setResultado] = useState<any>(null);
-
-  const criarMut = trpc.asaas.criarCobranca.useMutation({
-    onSuccess: (data) => {
-      setResultado(data.cobranca);
-      toast.success("Cobrança criada");
-      onSuccess();
-    },
-    onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }),
-  });
-
-  const reset = () => { setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setResultado(null); };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Cobrar</DialogTitle>
-          <DialogDescription>Criar cobrança rápida para este contato.</DialogDescription>
-        </DialogHeader>
-
-        {resultado ? (
-          <div className="space-y-3 py-2">
-            <div className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="font-medium text-sm">Cobrança criada</span>
-            </div>
-            {resultado.invoiceUrl && (
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Link de pagamento:</p>
-                <div className="flex items-center gap-1">
-                  <Input value={resultado.invoiceUrl} readOnly className="text-[10px] font-mono h-8" />
-                  <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => { navigator.clipboard.writeText(resultado.invoiceUrl); toast.success("Copiado"); }}>
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
-            {resultado.pixQrCode && (
-              <div className="text-center">
-                <img src={`data:image/png;base64,${resultado.pixQrCode.image}`} alt="Pix" className="mx-auto w-32 h-32 rounded-lg border" />
-                <Button size="sm" variant="ghost" className="text-xs mt-1" onClick={() => { navigator.clipboard.writeText(resultado.pixQrCode.payload); toast.success("Código Pix copiado"); }}>
-                  <Copy className="h-3 w-3 mr-1" /> Copiar código Pix
-                </Button>
-              </div>
-            )}
-            <Button className="w-full" onClick={() => { reset(); onOpenChange(false); }}>Fechar</Button>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3 py-1">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-medium">Valor (R$)</label>
-                  <Input type="number" step="0.01" min="0.01" placeholder="150.00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1 h-8 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Vencimento</label>
-                  <Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className="mt-1 h-8 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium">Forma</label>
-                <Select value={forma} onValueChange={setForma}>
-                  <SelectTrigger className="mt-1 h-8 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PIX">Pix</SelectItem>
-                    <SelectItem value="BOLETO">Boleto</SelectItem>
-                    <SelectItem value="CREDIT_CARD">Cartão</SelectItem>
-                    <SelectItem value="UNDEFINED">Cliente escolhe</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium">Descrição</label>
-                <Input placeholder="Honorários..." value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1 h-8 text-sm" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button size="sm" onClick={() => criarMut.mutate({ contatoId, valor: parseFloat(valor), vencimento, formaPagamento: forma as any, descricao: descricao || undefined })} disabled={criarMut.isPending || !valor || !vencimento}>
-                {criarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1" />}
-                Cobrar
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 

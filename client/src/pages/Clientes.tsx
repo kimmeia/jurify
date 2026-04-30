@@ -29,7 +29,7 @@ import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
-  Scale, Radar,
+  Scale, Radar, Copy, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
@@ -644,11 +644,37 @@ function fmtData(iso: string | null | undefined): string {
 }
 
 function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
-  const { data, isLoading } = (trpc as any).asaas.listarCobrancas.useQuery({
+  const { data, isLoading, refetch } = (trpc as any).asaas.listarCobrancas.useQuery({
     contatoId,
     limit: 100,
   });
   const items: any[] = data?.items || [];
+
+  // Cobranças PIX antigas podem não ter pixQrCodePayload no banco
+  // (criadas antes do fix). Endpoint busca on-demand e cacheia.
+  const obterPixMut = (trpc as any).asaas.obterPixQrCode.useMutation({
+    onSuccess: (r: { payload: string }) => {
+      navigator.clipboard.writeText(r.payload);
+      toast.success("Código Pix copiado");
+      refetch();
+    },
+    onError: (err: any) => toast.error("Erro ao buscar Pix", { description: err.message }),
+  });
+
+  function copiarLink(url: string) {
+    navigator.clipboard.writeText(url);
+    toast.success("Link copiado");
+  }
+
+  function copiarPix(c: any) {
+    if (c.pixQrCodePayload) {
+      navigator.clipboard.writeText(c.pixQrCodePayload);
+      toast.success("Código Pix copiado");
+      return;
+    }
+    // Fallback: fetch on-demand do Asaas (e cacheia no banco).
+    obterPixMut.mutate({ id: c.id });
+  }
 
   // Agregados — calcula direto no client porque a lista cabe em memória.
   const totais = useMemo(() => {
@@ -715,15 +741,57 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
               return (
                 <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/30">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{c.descricao || "Cobrança"}</p>
                       <Badge variant="outline" className={`text-[9px] ${meta.cor}`}>{meta.label}</Badge>
+                      {c.formaPagamento && (
+                        <Badge variant="secondary" className="text-[9px] font-normal">
+                          {c.formaPagamento === "PIX" ? "Pix"
+                            : c.formaPagamento === "BOLETO" ? "Boleto"
+                            : c.formaPagamento === "CREDIT_CARD" ? "Cartão"
+                            : c.formaPagamento}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
                       <span>Vence {fmtData(c.vencimento)}</span>
                       {c.dataPagamento && <span>Pago {fmtData(c.dataPagamento)}</span>}
                       {c.tipo && <span className="uppercase">{c.tipo}</span>}
                     </div>
+                    {/* Ações: copiar link + copiar pix. Apenas pra cobranças
+                        em aberto (não faz sentido pra já recebida). */}
+                    {c.status !== "RECEIVED" && c.status !== "CONFIRMED" && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {c.invoiceUrl && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => copiarLink(c.invoiceUrl)}
+                            title="Copiar link de pagamento"
+                          >
+                            <Link2 className="h-3 w-3 mr-1" /> Link
+                          </Button>
+                        )}
+                        {c.formaPagamento === "PIX" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => copiarPix(c)}
+                            disabled={obterPixMut.isPending}
+                            title="Copiar código Pix"
+                          >
+                            {obterPixMut.isPending ? (
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            ) : (
+                              <Copy className="h-3 w-3 mr-1" />
+                            )}
+                            Pix
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-semibold">{fmtMoeda(c.valor)}</p>
