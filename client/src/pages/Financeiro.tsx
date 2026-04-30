@@ -389,11 +389,11 @@ export default function Financeiro() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KPICard
               icon={TrendingUp}
-              label="Recebido"
-              value={formatBRL(kpis?.recebido ?? 0)}
+              label="Recebido (líquido)"
+              value={formatBRL(kpis?.recebidoLiquido ?? 0)}
               subValue={
                 kpis && kpis.recebidoLiquido !== kpis.recebido
-                  ? `${formatBRL(kpis.recebidoLiquido)} líquido (após taxas)`
+                  ? `${formatBRL(kpis.recebido)} bruto`
                   : undefined
               }
               color="emerald"
