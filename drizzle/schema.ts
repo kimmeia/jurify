@@ -1865,13 +1865,24 @@ export const despesas = mysqlTable(
     escritorioId: int("escritorioIdDesp").notNull(),
     categoriaId: int("categoriaIdDesp"),
     descricao: varchar("descricaoDesp", { length: 200 }).notNull(),
-    /** Valor em formato decimal "1234.56" para precisão monetária. */
+    /** Valor total da despesa em formato decimal "1234.56". */
     valor: decimal("valorDesp", { precision: 12, scale: 2 }).notNull(),
+    /** Soma de pagamentos parciais já registrados. Quando bate ou supera
+     *  `valor`, status vai pra "pago". Default 0. */
+    valorPago: decimal("valorPagoDesp", { precision: 12, scale: 2 })
+      .default("0.00")
+      .notNull(),
     /** Data de vencimento (YYYY-MM-DD). */
     vencimento: varchar("vencimentoDesp", { length: 10 }).notNull(),
-    /** Data efetiva do pagamento (YYYY-MM-DD); NULL enquanto pendente. */
+    /** Data do último pagamento que quitou totalmente (YYYY-MM-DD); NULL
+     *  enquanto não totalmente pago. Pagamentos parciais não preenchem. */
     dataPagamento: varchar("dataPagamentoDesp", { length: 10 }),
-    status: mysqlEnum("statusDesp", ["pendente", "pago", "vencido"])
+    status: mysqlEnum("statusDesp", [
+      "pendente",
+      "parcial",
+      "pago",
+      "vencido",
+    ])
       .default("pendente")
       .notNull(),
     recorrencia: mysqlEnum("recorrenciaDesp", ["nenhuma", "semanal", "mensal", "anual"])

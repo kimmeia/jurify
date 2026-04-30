@@ -43,7 +43,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  DollarSign,
   Loader2,
+  Pencil,
   Plus,
   RotateCcw,
   Trash2,
@@ -76,6 +78,7 @@ function formatData(iso: string | null | undefined) {
 
 const STATUS_LABEL: Record<string, string> = {
   pendente: "Pendente",
+  parcial: "Parcial",
   pago: "Pago",
   vencido: "Vencido",
 };
@@ -87,12 +90,29 @@ const RECORRENCIA_LABEL: Record<string, string> = {
   anual: "Anual",
 };
 
+interface DespesaListItem {
+  id: number;
+  descricao: string;
+  valor: string;
+  valorPago: string;
+  vencimento: string;
+  dataPagamento: string | null;
+  status: "pendente" | "parcial" | "pago" | "vencido";
+  recorrencia: "nenhuma" | "semanal" | "mensal" | "anual";
+  observacoes: string | null;
+  categoriaId: number | null;
+  categoriaNome: string | null;
+  createdAt: Date | string;
+}
+
 export function DespesasTab() {
   const utils = trpc.useUtils();
   const [periodoInicio, setPeriodoInicio] = useState(inicioDoMesIso());
   const [periodoFim, setPeriodoFim] = useState(fimDoMesIso());
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [novaAberta, setNovaAberta] = useState(false);
+  const [editando, setEditando] = useState<DespesaListItem | null>(null);
+  const [pagando, setPagando] = useState<DespesaListItem | null>(null);
 
   const status = filtroStatus === "todos" ? undefined : (filtroStatus as any);
   const lista = trpc.despesas.listar.useQuery({
@@ -103,14 +123,6 @@ export function DespesasTab() {
   });
   const kpis = trpc.despesas.kpis.useQuery({ periodoInicio, periodoFim });
 
-  const marcarPagaMut = trpc.despesas.marcarPaga.useMutation({
-    onSuccess: () => {
-      toast.success("Despesa marcada como paga");
-      utils.despesas.listar.invalidate();
-      utils.despesas.kpis.invalidate();
-    },
-    onError: (err) => toast.error("Erro", { description: err.message }),
-  });
   const reabrirMut = trpc.despesas.reabrir.useMutation({
     onSuccess: () => {
       utils.despesas.listar.invalidate();
@@ -156,6 +168,7 @@ export function DespesasTab() {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="parcial">Parcial</SelectItem>
                   <SelectItem value="pago">Pago</SelectItem>
                   <SelectItem value="vencido">Vencido</SelectItem>
                 </SelectContent>
@@ -230,77 +243,122 @@ export function DespesasTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(lista.data ?? []).map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell className="text-xs">{formatData(d.vencimento)}</TableCell>
-                    <TableCell className="text-xs max-w-[260px] truncate">
-                      {d.descricao}
-                    </TableCell>
-                    <TableCell className="text-xs">{d.categoriaNome ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{RECORRENCIA_LABEL[d.recorrencia]}</TableCell>
-                    <TableCell className="text-xs">
-                      <StatusBadge status={d.status} />
-                      {d.dataPagamento && d.status === "pago" && (
-                        <span className="text-[10px] text-muted-foreground ml-1">
-                          em {formatData(d.dataPagamento)}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">
-                      {formatBRL(Number(d.valor))}
-                    </TableCell>
-                    <TableCell className="text-xs flex gap-1">
-                      {d.status !== "pago" ? (
+                {(lista.data ?? []).map((d) => {
+                  const valorTotal = Number(d.valor);
+                  const valorPago = Number(d.valorPago ?? 0);
+                  const restante = Math.max(0, valorTotal - valorPago);
+                  return (
+                    <TableRow key={d.id}>
+                      <TableCell className="text-xs">{formatData(d.vencimento)}</TableCell>
+                      <TableCell className="text-xs max-w-[260px] truncate">
+                        {d.descricao}
+                      </TableCell>
+                      <TableCell className="text-xs">{d.categoriaNome ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{RECORRENCIA_LABEL[d.recorrencia]}</TableCell>
+                      <TableCell className="text-xs">
+                        <StatusBadge status={d.status} />
+                        {d.dataPagamento && d.status === "pago" && (
+                          <span className="text-[10px] text-muted-foreground ml-1">
+                            em {formatData(d.dataPagamento)}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">
+                        {formatBRL(valorTotal)}
+                        {d.status === "parcial" && (
+                          <div className="text-[10px] text-muted-foreground">
+                            pago {formatBRL(valorPago)} · falta {formatBRL(restante)}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs flex gap-1">
+                        {d.status !== "pago" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-emerald-600 hover:text-emerald-700"
+                            onClick={() => setPagando(d)}
+                          >
+                            <DollarSign className="h-3.5 w-3.5 mr-1" />
+                            {d.status === "parcial" ? "Pagar resto" : "Pagar"}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-muted-foreground"
+                            onClick={() => reabrirMut.mutate({ id: d.id })}
+                            disabled={reabrirMut.isPending}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-emerald-600 hover:text-emerald-700"
-                          onClick={() => marcarPagaMut.mutate({ id: d.id })}
-                          disabled={marcarPagaMut.isPending}
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => setEditando(d)}
+                          title="Editar"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Marcar paga
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                      ) : (
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-muted-foreground"
-                          onClick={() => reabrirMut.mutate({ id: d.id })}
-                          disabled={reabrirMut.isPending}
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            if (confirm("Excluir esta despesa?")) {
+                              excluirMut.mutate({ id: d.id });
+                            }
+                          }}
+                          disabled={excluirMut.isPending}
+                          title="Excluir"
                         >
-                          <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => {
-                          if (confirm("Excluir esta despesa?")) {
-                            excluirMut.mutate({ id: d.id });
-                          }
-                        }}
-                        disabled={excluirMut.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      <NovaDespesaDialog
+      <DespesaFormDialog
         open={novaAberta}
+        modo="criar"
         onClose={() => setNovaAberta(false)}
         onSuccess={() => {
           utils.despesas.listar.invalidate();
           utils.despesas.kpis.invalidate();
         }}
       />
+
+      {editando && (
+        <DespesaFormDialog
+          open
+          modo="editar"
+          despesa={editando}
+          onClose={() => setEditando(null)}
+          onSuccess={() => {
+            utils.despesas.listar.invalidate();
+            utils.despesas.kpis.invalidate();
+          }}
+        />
+      )}
+
+      {pagando && (
+        <RegistrarPagamentoDialog
+          despesa={pagando}
+          onClose={() => setPagando(null)}
+          onSuccess={() => {
+            utils.despesas.listar.invalidate();
+            utils.despesas.kpis.invalidate();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -336,6 +394,7 @@ function KpiCard({
 function StatusBadge({ status }: { status: string }) {
   const cores: Record<string, string> = {
     pendente: "text-amber-600 border-amber-200",
+    parcial: "text-info-fg border-info/40 bg-info-bg/50",
     pago: "text-emerald-600 border-emerald-200",
     vencido: "text-destructive border-destructive/30",
   };
@@ -346,23 +405,31 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function NovaDespesaDialog({
+/** Dialog compartilhado entre criar e editar — props decidem o modo. */
+function DespesaFormDialog({
   open,
+  modo,
+  despesa,
   onClose,
   onSuccess,
 }: {
   open: boolean;
+  modo: "criar" | "editar";
+  despesa?: DespesaListItem;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [descricao, setDescricao] = useState("");
-  const [valor, setValor] = useState("");
-  const [vencimento, setVencimento] = useState(hojeIso());
-  const [categoriaId, setCategoriaId] = useState<string>("none");
-  const [recorrencia, setRecorrencia] = useState<"nenhuma" | "semanal" | "mensal" | "anual">(
-    "nenhuma",
+  const isEdit = modo === "editar" && despesa;
+  const [descricao, setDescricao] = useState(isEdit ? despesa.descricao : "");
+  const [valor, setValor] = useState(isEdit ? String(despesa.valor) : "");
+  const [vencimento, setVencimento] = useState(isEdit ? despesa.vencimento : hojeIso());
+  const [categoriaId, setCategoriaId] = useState<string>(
+    isEdit && despesa.categoriaId ? String(despesa.categoriaId) : "none",
   );
-  const [observacoes, setObservacoes] = useState("");
+  const [recorrencia, setRecorrencia] = useState<"nenhuma" | "semanal" | "mensal" | "anual">(
+    isEdit ? despesa.recorrencia : "nenhuma",
+  );
+  const [observacoes, setObservacoes] = useState(isEdit ? despesa.observacoes ?? "" : "");
 
   const { data: categoriasList } = trpc.financeiro.listarCategoriasDespesa.useQuery();
   const ativas = useMemo(
@@ -380,6 +447,17 @@ function NovaDespesaDialog({
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  const atualizarMut = trpc.despesas.atualizar.useMutation({
+    onSuccess: () => {
+      toast.success("Despesa atualizada");
+      onSuccess();
+      onClose();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  const isPending = criarMut.isPending || atualizarMut.isPending;
+
   function reset() {
     setDescricao("");
     setValor("");
@@ -395,23 +473,36 @@ function NovaDespesaDialog({
       toast.error("Preencha descrição, valor e vencimento.");
       return;
     }
-    criarMut.mutate({
+    const payload = {
       descricao: descricao.trim(),
       valor: v,
       vencimento,
       categoriaId: categoriaId === "none" ? undefined : parseInt(categoriaId),
       recorrencia,
       observacoes: observacoes.trim() || undefined,
-    });
+    };
+    if (isEdit) {
+      atualizarMut.mutate({
+        id: despesa.id,
+        ...payload,
+        // Permite limpar categoria/observações quando voltam ao default
+        categoriaId: categoriaId === "none" ? null : parseInt(categoriaId),
+        observacoes: observacoes.trim() || null,
+      });
+    } else {
+      criarMut.mutate(payload);
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Nova despesa</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar despesa" : "Nova despesa"}</DialogTitle>
           <DialogDescription>
-            Conta a pagar do escritório (aluguel, salários, tributos, etc.).
+            {isEdit
+              ? "Atualize os dados desta conta a pagar."
+              : "Conta a pagar do escritório (aluguel, salários, tributos, etc.)."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -485,13 +576,132 @@ function NovaDespesaDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={salvar} disabled={criarMut.isPending}>
-            {criarMut.isPending ? (
+          <Button onClick={salvar} disabled={isPending}>
+            {isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : isEdit ? (
+              <CheckCircle2 className="h-4 w-4 mr-2" />
             ) : (
               <Plus className="h-4 w-4 mr-2" />
             )}
-            Criar
+            {isEdit ? "Salvar" : "Criar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Dialog "Registrar pagamento": aceita parcial ou total. Default é
+ *  o valor restante (atalho pra "marcar paga totalmente"). */
+function RegistrarPagamentoDialog({
+  despesa,
+  onClose,
+  onSuccess,
+}: {
+  despesa: DespesaListItem;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const valorTotal = Number(despesa.valor);
+  const valorPago = Number(despesa.valorPago ?? 0);
+  const restante = Math.max(0, valorTotal - valorPago);
+
+  const [valor, setValor] = useState(restante.toFixed(2));
+  const [data, setData] = useState(hojeIso());
+
+  const registrarMut = (trpc as any).despesas.registrarPagamento.useMutation({
+    onSuccess: (r: { quitou: boolean; valorPago: string; restante: string }) => {
+      toast.success(
+        r.quitou
+          ? "Despesa quitada"
+          : `Pagamento parcial registrado · falta R$ ${r.restante}`,
+      );
+      onSuccess();
+      onClose();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
+  function salvar() {
+    const v = parseFloat(valor.replace(",", "."));
+    if (isNaN(v) || v <= 0) {
+      toast.error("Informe um valor maior que zero");
+      return;
+    }
+    if (v > restante + 0.01) {
+      toast.error(`Valor excede o restante (R$ ${restante.toFixed(2)})`);
+      return;
+    }
+    registrarMut.mutate({
+      id: despesa.id,
+      valor: v,
+      dataPagamento: data,
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Registrar pagamento</DialogTitle>
+          <DialogDescription>
+            {despesa.descricao}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="rounded-md border bg-muted/30 p-3 text-xs grid grid-cols-3 gap-2">
+            <div>
+              <div className="text-muted-foreground">Total</div>
+              <div className="font-medium tabular-nums">{formatBRL(valorTotal)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Já pago</div>
+              <div className="font-medium tabular-nums">{formatBRL(valorPago)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Restante</div>
+              <div className="font-medium tabular-nums text-amber-600">
+                {formatBRL(restante)}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Valor a pagar agora *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                className="mt-1"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Default: restante (R$ {restante.toFixed(2)}).
+                Informe menos pra registrar pagamento parcial.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs">Data do pagamento</Label>
+              <Input
+                type="date"
+                value={data}
+                onChange={(e) => setData(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={salvar} disabled={registrarMut.isPending}>
+            {registrarMut.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <DollarSign className="h-4 w-4 mr-2" />
+            )}
+            Registrar
           </Button>
         </DialogFooter>
       </DialogContent>
