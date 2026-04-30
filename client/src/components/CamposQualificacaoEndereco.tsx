@@ -82,9 +82,54 @@ function formatarCep(v: string): string {
 interface Props {
   value: QualificacaoEndereco;
   onChange: (patch: Partial<QualificacaoEndereco>) => void;
+  /** Quando true, marca os campos como obrigatórios (asterisco `*`).
+   *  A validação real fica no caller — esse flag é apenas dica visual. */
+  obrigatorios?: boolean;
 }
 
-export function CamposQualificacaoEndereco({ value, onChange }: Props) {
+/**
+ * Lista de campos da qualificação/endereço considerados obrigatórios pra
+ * gerar contrato. `Complemento` fica de fora — nem todo endereço tem.
+ */
+export const CAMPOS_OBRIGATORIOS_QUALIFICACAO: Array<{
+  chave: keyof QualificacaoEndereco;
+  label: string;
+}> = [
+  { chave: "profissao", label: "Profissão" },
+  { chave: "estadoCivil", label: "Estado civil" },
+  { chave: "nacionalidade", label: "Nacionalidade" },
+  { chave: "cep", label: "CEP" },
+  { chave: "uf", label: "UF" },
+  { chave: "logradouro", label: "Logradouro" },
+  { chave: "numeroEndereco", label: "Número" },
+  { chave: "bairro", label: "Bairro" },
+  { chave: "cidade", label: "Cidade" },
+];
+
+/** Retorna labels dos campos obrigatórios que estão vazios. */
+export function validarQualificacaoCompleta(
+  v: QualificacaoEndereco,
+): string[] {
+  const faltando: string[] = [];
+  for (const campo of CAMPOS_OBRIGATORIOS_QUALIFICACAO) {
+    const valor = v[campo.chave];
+    if (!valor || String(valor).trim() === "") {
+      faltando.push(campo.label);
+    }
+  }
+  return faltando;
+}
+
+const REQ = (label: string, on: boolean) =>
+  on ? (
+    <>
+      {label} <span className="text-destructive">*</span>
+    </>
+  ) : (
+    label
+  );
+
+export function CamposQualificacaoEndereco({ value, onChange, obrigatorios }: Props) {
   const [buscandoCep, setBuscandoCep] = useState(false);
 
   /** Consulta ViaCEP (API pública gratuita) e preenche os campos.
@@ -124,7 +169,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
       {/* Qualificação civil */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">Profissão</Label>
+          <Label className="text-xs">{REQ("Profissão", !!obrigatorios)}</Label>
           <Input
             value={value.profissao}
             onChange={(e) => onChange({ profissao: e.target.value })}
@@ -133,7 +178,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Estado civil</Label>
+          <Label className="text-xs">{REQ("Estado civil", !!obrigatorios)}</Label>
           <Select
             value={value.estadoCivil || "_none"}
             onValueChange={(v) =>
@@ -155,7 +200,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Nacionalidade</Label>
+        <Label className="text-xs">{REQ("Nacionalidade", !!obrigatorios)}</Label>
         <Input
           value={value.nacionalidade}
           onChange={(e) => onChange({ nacionalidade: e.target.value })}
@@ -172,7 +217,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">CEP</Label>
+            <Label className="text-xs">{REQ("CEP", !!obrigatorios)}</Label>
             <div className="flex gap-1.5">
               <Input
                 value={value.cep}
@@ -201,7 +246,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">UF</Label>
+            <Label className="text-xs">{REQ("UF", !!obrigatorios)}</Label>
             <Select
               value={value.uf || "_none"}
               onValueChange={(v) => onChange({ uf: v === "_none" ? "" : v })}
@@ -222,7 +267,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
         </div>
         <div className="grid grid-cols-[1fr_120px] gap-3 mt-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Logradouro</Label>
+            <Label className="text-xs">{REQ("Logradouro", !!obrigatorios)}</Label>
             <Input
               value={value.logradouro}
               onChange={(e) => onChange({ logradouro: e.target.value })}
@@ -231,7 +276,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Número</Label>
+            <Label className="text-xs">{REQ("Número", !!obrigatorios)}</Label>
             <Input
               value={value.numeroEndereco}
               onChange={(e) => onChange({ numeroEndereco: e.target.value })}
@@ -251,7 +296,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Bairro</Label>
+            <Label className="text-xs">{REQ("Bairro", !!obrigatorios)}</Label>
             <Input
               value={value.bairro}
               onChange={(e) => onChange({ bairro: e.target.value })}
@@ -260,7 +305,7 @@ export function CamposQualificacaoEndereco({ value, onChange }: Props) {
           </div>
         </div>
         <div className="space-y-1.5 mt-3">
-          <Label className="text-xs">Cidade</Label>
+          <Label className="text-xs">{REQ("Cidade", !!obrigatorios)}</Label>
           <Input
             value={value.cidade}
             onChange={(e) => onChange({ cidade: e.target.value })}
