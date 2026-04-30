@@ -1177,6 +1177,55 @@ export const asaasRouter = router({
       };
     }),
 
+  /**
+   * Sobrescreve flag `comissionavelOverride` numa cobrança existente.
+   *  - `true`  → força entrar na comissão (ignora padrão da categoria)
+   *  - `false` → força ficar de fora
+   *  - `null`  → volta pro padrão (categoria.comissionavel)
+   *
+   * Útil pra ajustar cobranças que vieram via webhook (parcelamento,
+   * assinatura) e estavam com o flag herdado errado, ou pra excepcionar
+   * casos pontuais sem mudar a categoria.
+   */
+  atualizarComissionavel: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        valor: z.boolean().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão pra editar cobranças.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cob] = await db
+        .select({ id: asaasCobrancas.id })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.id),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await db
+        .update(asaasCobrancas)
+        .set({ comissionavelOverride: input.valor })
+        .where(eq(asaasCobrancas.id, cob.id));
+
+      return { success: true, valor: input.valor };
+    }),
+
   /** Lista cobranças do escritório com filtros */
   listarCobrancas: protectedProcedure
     .input(z.object({
