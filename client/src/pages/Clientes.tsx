@@ -1175,7 +1175,6 @@ function ClienteDetalhe({
     );
   }
 
-  const totalAssinaturas = (assinaturas || []).length;
   const isVip = (cliente.tags || "").toLowerCase().includes("vip");
 
   return (
@@ -1275,25 +1274,6 @@ function ClienteDetalhe({
         >
           <Trash2 className="h-4 w-4" />
         </Button>
-      </div>
-
-      {/* Stats resumo */}
-      <div className="grid grid-cols-5 gap-2">
-        {[
-          { v: cliente.totalConversas, l: "Conversas", c: "text-blue-600" },
-          { v: cliente.totalLeads, l: "Leads", c: "text-violet-600" },
-          { v: cliente.totalArquivos, l: "Arquivos", c: "text-amber-600" },
-          { v: cliente.totalAnotacoes, l: "Anotações", c: "text-emerald-600" },
-          { v: totalAssinaturas, l: "Assinaturas", c: "text-rose-600" },
-        ].map((k, i) => (
-          <div
-            key={i}
-            className="rounded-lg border bg-card px-3 py-2 text-center"
-          >
-            <p className={`text-lg font-bold ${k.c}`}>{k.v}</p>
-            <p className="text-[10px] text-muted-foreground">{k.l}</p>
-          </div>
-        ))}
       </div>
 
       {/* 5 abas consolidadas */}
