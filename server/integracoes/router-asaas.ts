@@ -1444,32 +1444,40 @@ export const asaasRouter = router({
 
   /** KPIs financeiros do escritório */
   kpis: protectedProcedure.query(async ({ ctx }) => {
+    const ZERO = { recebido: 0, recebidoLiquido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
     const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return { recebido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
+    if (!esc) return ZERO;
 
     const db = await getDb();
-    if (!db) return { recebido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
+    if (!db) return ZERO;
 
     try {
       const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
-      if (visiveis !== null && visiveis.length === 0) {
-        return { recebido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
-      }
+      if (visiveis !== null && visiveis.length === 0) return ZERO;
       const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
       if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
       const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
-      let recebido = 0, pendente = 0, vencido = 0;
+      let recebido = 0;
+      let recebidoLiquido = 0;
+      let pendente = 0;
+      let vencido = 0;
       for (const c of todas) {
         const val = parseFloat(c.valor) || 0;
-        if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) recebido += val;
-        else if (c.status === "PENDING") pendente += val;
+        // valorLiquido vem do Asaas (`netValue`) com taxa já abatida.
+        // Pra cobranças sem este campo (manuais ou antigas), usamos o
+        // bruto como aproximação — sem taxa, líquido = bruto.
+        const liq = c.valorLiquido != null ? parseFloat(c.valorLiquido) : val;
+        if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) {
+          recebido += val;
+          recebidoLiquido += liq;
+        } else if (c.status === "PENDING") pendente += val;
         else if (c.status === "OVERDUE") vencido += val;
       }
 
-      return { recebido, pendente, vencido, totalCobrancas: todas.length };
+      return { recebido, recebidoLiquido, pendente, vencido, totalCobrancas: todas.length };
     } catch {
-      return { recebido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
+      return ZERO;
     }
   }),
 

@@ -210,34 +210,13 @@ export default function Financeiro() {
   }
 
   // Estado desconectado — card grande convidando a conectar
-  if (!statusAsaas?.conectado) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
-          <p className="text-muted-foreground mt-1">Gerencie cobranças via Asaas.</p>
-        </div>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg">
-              <DollarSign className="h-8 w-8 text-white" />
-            </div>
-            <div className="text-center">
-              <p className="font-semibold text-lg">Conecte sua conta Asaas</p>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                Crie cobranças (Pix, boleto, cartão), acompanhe recebimentos e
-                integre com o CRM em segundos.
-              </p>
-            </div>
-            <Button size="lg" onClick={() => (window.location.href = "/configuracoes")}>
-              <Settings className="h-4 w-4 mr-2" />
-              Configurar agora
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Antes havia early return aqui que escondia o módulo inteiro quando
+  // Asaas não estava conectado. Mas Despesas e Comissões são dados
+  // locais (não dependem do Asaas), então passaram a ficar inacessíveis
+  // sem motivo. Agora destravamos: as abas funcionam sempre, e cada aba
+  // que precisa de Asaas (Cobranças/Assinaturas/Clientes/Saldo) mostra
+  // CTA inline. Banner global avisa se está desconectado.
+  const conectado = !!statusAsaas?.conectado;
 
   return (
     <div className="space-y-6">
@@ -246,11 +225,17 @@ export default function Financeiro() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
           <div className="flex items-center gap-2 mt-1">
-            <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px] font-normal">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Asaas {statusAsaas.modo === "sandbox" ? "Sandbox" : "Produção"}
-            </Badge>
-            {saldo && (
+            {conectado ? (
+              <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px] font-normal">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Asaas {statusAsaas.modo === "sandbox" ? "Sandbox" : "Produção"}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                Asaas desconectado
+              </Badge>
+            )}
+            {conectado && saldo && (
               <span className="text-xs text-muted-foreground">
                 Saldo: <strong className="text-foreground">{formatBRL(saldo.balance)}</strong>
               </span>
@@ -258,20 +243,36 @@ export default function Financeiro() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {conectado ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => syncMut.mutate()}
+              disabled={syncMut.isPending}
+            >
+              {syncMut.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Sincronizar
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (window.location.href = "/configuracoes")}
+            >
+              <Settings className="h-3.5 w-3.5 mr-1.5" />
+              Conectar Asaas
+            </Button>
+          )}
           <Button
-            variant="outline"
             size="sm"
-            onClick={() => syncMut.mutate()}
-            disabled={syncMut.isPending}
+            onClick={() => setNovaCobrancaOpen(true)}
+            disabled={!conectado}
+            title={!conectado ? "Conecte o Asaas pra criar cobranças online (cobrança manual chega na PR seguinte)" : undefined}
           >
-            {syncMut.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Sincronizar
-          </Button>
-          <Button size="sm" onClick={() => setNovaCobrancaOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
             Nova cobrança
           </Button>
@@ -314,6 +315,10 @@ export default function Financeiro() {
 
         {/* ─── Aba: Cobranças ─── */}
         <TabsContent value="cobrancas" className="mt-4 space-y-4">
+          {!conectado ? (
+            <AsaasDisconnectedCta titulo="Cobranças online" descricao="Pix, boleto e cartão via Asaas." />
+          ) : (
+            <div className="space-y-4">
           {/* Hero: Fluxo de caixa (gráfico grande) — específico da
               aba Cobranças, antes era no topo geral mas faz mais sentido
               agrupado com a tabela de cobranças. */}
@@ -386,6 +391,11 @@ export default function Financeiro() {
               icon={TrendingUp}
               label="Recebido"
               value={formatBRL(kpis?.recebido ?? 0)}
+              subValue={
+                kpis && kpis.recebidoLiquido !== kpis.recebido
+                  ? `${formatBRL(kpis.recebidoLiquido)} líquido (após taxas)`
+                  : undefined
+              }
               color="emerald"
             />
             <KPICard
@@ -639,10 +649,16 @@ export default function Financeiro() {
               </p>
             </div>
           )}
+            </div>
+          )}
         </TabsContent>
 
         {/* ─── Aba: Assinaturas ─── */}
         <TabsContent value="assinaturas" className="mt-4 space-y-4">
+          {!conectado ? (
+            <AsaasDisconnectedCta titulo="Assinaturas recorrentes" descricao="Mensalidades, planos e cobrança recorrente via Asaas." />
+          ) : (
+            <div className="space-y-4">
           <div className="flex items-center justify-end">
             <Button size="sm" variant="outline" onClick={() => setNovaAssinaturaOpen(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" />
@@ -709,10 +725,16 @@ export default function Financeiro() {
               <p className="text-sm text-muted-foreground">Nenhuma assinatura.</p>
             </div>
           )}
+            </div>
+          )}
         </TabsContent>
 
         {/* ─── Aba: Clientes ─── */}
         <TabsContent value="clientes" className="mt-4 space-y-4">
+          {!conectado ? (
+            <AsaasDisconnectedCta titulo="Clientes vinculados" descricao="Sincronização com clientes do Asaas." />
+          ) : (
+            <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -773,6 +795,8 @@ export default function Financeiro() {
               <p className="text-sm text-muted-foreground">Nenhum cliente vinculado.</p>
             </div>
           )}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="comissoes" className="mt-4">
@@ -814,11 +838,15 @@ function KPICard({
   icon: Icon,
   label,
   value,
+  subValue,
   color,
 }: {
   icon: any;
   label: string;
   value: string;
+  /** Linha pequena abaixo do valor principal — útil pra mostrar
+   *  recorte secundário tipo "líquido" sob o bruto. */
+  subValue?: string;
   color: "emerald" | "amber" | "red" | "blue";
 }) {
   const colors = {
@@ -838,8 +866,36 @@ function KPICard({
           <div>
             <p className="text-xs text-muted-foreground font-medium">{label}</p>
             <p className={`text-xl font-bold ${c.valueText}`}>{value}</p>
+            {subValue && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">{subValue}</p>
+            )}
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** CTA mostrado dentro de cada aba que depende do Asaas estar conectado.
+ *  Mantém o módulo Financeiro acessível pra Despesas/Comissões mesmo
+ *  sem Asaas — só as abas Asaas-específicas é que pedem conexão. */
+function AsaasDisconnectedCta({ titulo, descricao }: { titulo: string; descricao: string }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+        <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg">
+          <DollarSign className="h-8 w-8 text-white" />
+        </div>
+        <div className="text-center">
+          <p className="font-semibold text-lg">{titulo}</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">
+            {descricao} Conecte sua conta Asaas pra ativar.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => (window.location.href = "/configuracoes")}>
+          <Settings className="h-4 w-4 mr-2" />
+          Conectar Asaas
+        </Button>
       </CardContent>
     </Card>
   );
