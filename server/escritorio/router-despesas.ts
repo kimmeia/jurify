@@ -37,7 +37,7 @@ export const despesasRouter = router({
     .input(
       z
         .object({
-          status: z.enum(["pendente", "pago", "vencido"]).optional(),
+          status: z.enum(["pendente", "parcial", "pago", "vencido"]).optional(),
           categoriaId: z.number().optional(),
           periodoInicio: dataInput.optional(),
           periodoFim: dataInput.optional(),
@@ -67,6 +67,7 @@ export const despesasRouter = router({
           id: despesas.id,
           descricao: despesas.descricao,
           valor: despesas.valor,
+          valorPago: despesas.valorPago,
           vencimento: despesas.vencimento,
           dataPagamento: despesas.dataPagamento,
           status: despesas.status,
@@ -160,6 +161,85 @@ export const despesasRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Registra um pagamento (parcial ou total). Soma ao acumulador
+   * `valorPago`. Quando atingir/superar o `valor` da despesa, status
+   * vai pra "pago" e `dataPagamento` é gravada. Antes disso, status
+   * fica "parcial".
+   *
+   * Para "marcar paga totalmente" sem detalhar valor, o front pode
+   * mandar `valor` igual ao restante (utilitário inferido na UI).
+   */
+  registrarPagamento: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        valor: z.number().min(0.01),
+        dataPagamento: dataInput.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Lê valor + valorPago atuais pra calcular novo estado.
+      const [d] = await db
+        .select({
+          valor: despesas.valor,
+          valorPago: despesas.valorPago,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!d) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const valorTotal = Number(d.valor);
+      const acumuladoAntes = Number(d.valorPago);
+      const novoAcumulado = acumuladoAntes + input.valor;
+
+      // Trava: não permite pagar mais que o devido (resto exato).
+      // Pequena folga de 1 centavo pra absorver arredondamento.
+      if (novoAcumulado > valorTotal + 0.01) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Valor excede o restante (R$ ${(valorTotal - acumuladoAntes).toFixed(2)}).`,
+        });
+      }
+
+      const quitou = novoAcumulado >= valorTotal - 0.01;
+      const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+
+      await db
+        .update(despesas)
+        .set({
+          valorPago: novoAcumulado.toFixed(2),
+          status: quitou ? "pago" : "parcial",
+          // Só preenche dataPagamento quando totalmente quitada.
+          dataPagamento: quitou ? dataPag : null,
+        })
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return {
+        success: true,
+        quitou,
+        valorPago: novoAcumulado.toFixed(2),
+        restante: Math.max(0, valorTotal - novoAcumulado).toFixed(2),
+      };
+    }),
+
+  /** Atalho legado: marca total como pago (equivale a registrar
+   *  pagamento do restante). Mantido pra compat com chamadores antigos. */
   marcarPaga: protectedProcedure
     .input(
       z.object({
@@ -174,9 +254,26 @@ export const despesasRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+      // Pega o valor pra setar valorPago = valor (quitado total).
+      const [d] = await db
+        .select({ valor: despesas.valor })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!d) throw new TRPCError({ code: "NOT_FOUND" });
+
       await db
         .update(despesas)
-        .set({ status: "pago", dataPagamento: dataPag })
+        .set({
+          status: "pago",
+          dataPagamento: dataPag,
+          valorPago: d.valor,
+        })
         .where(
           and(
             eq(despesas.id, input.id),
@@ -186,6 +283,7 @@ export const despesasRouter = router({
       return { success: true, dataPagamento: dataPag };
     }),
 
+  /** Reabre despesa: zera acumulador e volta pra "pendente". */
   reabrir: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -195,7 +293,11 @@ export const despesasRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db
         .update(despesas)
-        .set({ status: "pendente", dataPagamento: null })
+        .set({
+          status: "pendente",
+          dataPagamento: null,
+          valorPago: "0.00",
+        })
         .where(
           and(
             eq(despesas.id, input.id),
@@ -239,10 +341,16 @@ export const despesasRouter = router({
         return { pendente: 0, pago: 0, vencido: 0, total: 0 };
       }
 
+      // Com pagamento parcial, agregamos por linha:
+      //  - pago = SUM(valorPago) — quanto efetivamente saiu do caixa
+      //  - pendente = SUM(valor - valorPago) das não vencidas
+      //  - vencido = SUM(valor - valorPago) das vencidas
+      //  - total = SUM(valor) — valor nominal das despesas no período
       const rows = await db
         .select({
           status: despesas.status,
-          total: sql<string>`SUM(${despesas.valor})`,
+          valor: sql<string>`SUM(${despesas.valor})`,
+          valorPago: sql<string>`SUM(${despesas.valorPago})`,
         })
         .from(despesas)
         .where(
@@ -255,11 +363,15 @@ export const despesasRouter = router({
 
       const acc = { pendente: 0, pago: 0, vencido: 0, total: 0 };
       for (const r of rows) {
-        const v = Number(r.total ?? "0");
+        const v = Number(r.valor ?? "0");
+        const p = Number(r.valorPago ?? "0");
+        const restante = Math.max(0, v - p);
         acc.total += v;
-        if (r.status === "pendente") acc.pendente = v;
-        else if (r.status === "pago") acc.pago = v;
-        else if (r.status === "vencido") acc.vencido = v;
+        acc.pago += p;
+        if (r.status === "vencido") acc.vencido += restante;
+        else if (r.status === "pendente" || r.status === "parcial")
+          acc.pendente += restante;
+        // status='pago' não acumula em pendente/vencido (totalmente quitada).
       }
       return acc;
     }),

@@ -13,10 +13,12 @@ import {
   asaasCobrancas,
   categoriasCobranca,
   categoriasDespesa,
+  colaboradores,
   comissoesFechadas,
   comissoesFechadasItens,
   comissoesLancamentosLog,
   despesas,
+  users,
 } from "../../drizzle/schema";
 import { and, asc, between, eq, inArray, isNotNull } from "drizzle-orm";
 import {
@@ -268,12 +270,27 @@ export async function fecharComissao(
     try {
       const categoriaId = await garantirCategoriaComissoes(params.escritorioId);
       const vencimento = calcularVencimentoComissao(params.periodoFim);
+      // Nome do atendente pra descrição amigável da despesa.
+      // Tolerante a falha: se não achar, usa fallback "atendente #id".
+      let nomeAtendente = `Atendente #${params.atendenteId}`;
+      try {
+        const [linha] = await db
+          .select({ nome: users.name })
+          .from(colaboradores)
+          .leftJoin(users, eq(users.id, colaboradores.userId))
+          .where(eq(colaboradores.id, params.atendenteId))
+          .limit(1);
+        if (linha?.nome) nomeAtendente = linha.nome;
+      } catch {
+        /* fallback acima */
+      }
+      const descricao = `Comissão ${nomeAtendente} — ${formatarDataBR(params.periodoInicio)} a ${formatarDataBR(params.periodoFim)}`;
       const [despNova] = await db
         .insert(despesas)
         .values({
           escritorioId: params.escritorioId,
           categoriaId,
-          descricao: `Comissão ${params.periodoInicio} a ${params.periodoFim}`,
+          descricao,
           valor: sim.totais.valorComissao.toFixed(2),
           vencimento,
           status: "pendente",
@@ -315,6 +332,14 @@ export async function garantirCategoriaComissoes(
     .limit(1);
   if (existente) return existente.id;
   return criarCategoriaDespesa(escritorioId, NOME_CATEGORIA_COMISSAO);
+}
+
+/** Converte ISO "YYYY-MM-DD" → "DD/MM/YYYY". Usado pra montar descrição
+ *  amigável da despesa de comissão. Idempotente em strings já BR. */
+export function formatarDataBR(iso: string): string {
+  const [ano, mes, dia] = iso.split("-");
+  if (!ano || !mes || !dia) return iso;
+  return `${dia}/${mes}/${ano}`;
 }
 
 /** Calcula data de vencimento da despesa de comissão a partir do
