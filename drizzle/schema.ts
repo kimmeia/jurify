@@ -2237,3 +2237,33 @@ export const modelosContrato = mysqlTable("modelos_contrato", {
 
 export type ModeloContrato = typeof modelosContrato.$inferSelect;
 export type InsertModeloContrato = typeof modelosContrato.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONFIGURAÇÃO DE COMISSÃO POR PARCELAMENTO/ASSINATURA
+// Quando criamos parcelamento ou assinatura no Asaas, persistimos a config
+// de comissão (atendente, categoria, override) keyed pelo ID retornado.
+// O webhook handler lê na criação de cada cobrança filha e aplica.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const asaasConfigCobrancaPai = mysqlTable(
+  "asaas_config_cobranca_pai",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAcCp").notNull(),
+    tipo: mysqlEnum("tipoAcCp", ["parcelamento", "assinatura"]).notNull(),
+    /** ID retornado pelo Asaas — `installment.id` ou `subscription.id`. */
+    asaasParentId: varchar("asaasParentIdAcCp", { length: 64 }).notNull(),
+    atendenteId: int("atendenteIdAcCp"),
+    categoriaId: int("categoriaIdAcCp"),
+    comissionavelOverride: boolean("comissionavelOverrideAcCp"),
+    createdAt: timestamp("createdAtAcCp").defaultNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioParent: uniqueIndex("ac_cp_esc_parent_uq").on(
+      t.escritorioId,
+      t.asaasParentId,
+    ),
+  }),
+);
+
+export type AsaasConfigCobrancaPai = typeof asaasConfigCobrancaPai.$inferSelect;

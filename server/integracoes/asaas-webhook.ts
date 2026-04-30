@@ -22,7 +22,7 @@
 
 import type { Express, Request, Response } from "express";
 import { getDb } from "../db";
-import { asaasConfig, asaasCobrancas, asaasClientes, contatos } from "../../drizzle/schema";
+import { asaasConfig, asaasCobrancas, asaasClientes, asaasConfigCobrancaPai, contatos } from "../../drizzle/schema";
 import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
@@ -124,6 +124,45 @@ export function registerAsaasWebhook(app: Express) {
             vinculo?.contatoId ?? null,
           );
 
+          // Config-pai (parcelamento/assinatura): se a cobrança veio de
+          // um pai com config persistida no `criarParcelamento`/
+          // `criarAssinatura`, sobrescreve atendente/categoria/override.
+          // Não-fatal: se a tabela não existe ou query falha, segue
+          // pelo path padrão.
+          const parentId =
+            (payment as any).installment ||
+            (payment as any).subscription ||
+            null;
+          let configPai: {
+            atendenteId: number | null;
+            categoriaId: number | null;
+            comissionavelOverride: boolean | null;
+          } | null = null;
+          if (parentId) {
+            try {
+              const [linha] = await db
+                .select({
+                  atendenteId: asaasConfigCobrancaPai.atendenteId,
+                  categoriaId: asaasConfigCobrancaPai.categoriaId,
+                  comissionavelOverride: asaasConfigCobrancaPai.comissionavelOverride,
+                })
+                .from(asaasConfigCobrancaPai)
+                .where(
+                  and(
+                    eq(asaasConfigCobrancaPai.escritorioId, escritorioId),
+                    eq(asaasConfigCobrancaPai.asaasParentId, parentId),
+                  ),
+                )
+                .limit(1);
+              if (linha) configPai = linha;
+            } catch (err: any) {
+              log.warn(
+                { err: err.message, parentId },
+                "[Asaas Webhook] falha ao ler config-pai, seguindo com path padrão",
+              );
+            }
+          }
+
           await db
             .insert(asaasCobrancas)
             .values({
@@ -141,7 +180,11 @@ export function registerAsaasWebhook(app: Express) {
               bankSlipUrl: payment.bankSlipUrl || null,
               dataPagamento: extrairDataPagamento(payment),
               externalReference: payment.externalReference || null,
-              atendenteId: atendenteInferido,
+              // Config-pai vence inferência (operador escolheu explicitamente
+              // no momento de criar parcelamento/assinatura).
+              atendenteId: configPai?.atendenteId ?? atendenteInferido,
+              categoriaId: configPai?.categoriaId ?? null,
+              comissionavelOverride: configPai?.comissionavelOverride ?? null,
             })
             .onDuplicateKeyUpdate({
               set: {
