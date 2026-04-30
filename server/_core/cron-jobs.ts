@@ -366,6 +366,26 @@ export function iniciarJobs() {
   // A cada 6 horas: cobrar monitoramentos mensais da Judit
   setInterval(() => cobrarMonitoramentosMensais(), 6 * 60 * 60 * 1000);
 
+  // A cada 15 minutos: processar agendas de lançamento automático de
+  // comissões. Worker decide internamente se cada agenda deve disparar
+  // (compara dia+hora local com agora) e usa log com chave única pra
+  // garantir idempotência.
+  import("./cron-comissoes")
+    .then(({ processarAgendasComissao }) => {
+      setInterval(() => {
+        processarAgendasComissao().catch((err) =>
+          log.error({ err: String(err) }, "[Cron] Erro no worker de comissões"),
+        );
+      }, 15 * 60 * 1000);
+      // Roda 1x na partida (com pequeno delay pra DB estar pronto)
+      setTimeout(() => {
+        processarAgendasComissao().catch((err) =>
+          log.error({ err: String(err) }, "[Cron] Erro inicial no worker de comissões"),
+        );
+      }, 30_000);
+    })
+    .catch((err) => log.warn({ err: String(err) }, "[Cron] Falha ao iniciar worker de comissões"));
+
   // SmartFlow scheduler — retoma execuções pausadas no passo "esperar"
   import("../smartflow/scheduler")
     .then(({ iniciarSchedulerSmartFlow }) => iniciarSchedulerSmartFlow())

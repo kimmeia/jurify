@@ -224,6 +224,11 @@ export const financeiroRouter = router({
       z
         .object({
           apenasSemAtribuicao: z.boolean().default(false),
+          /** Mostra apenas cobranças cujo estado de comissão está
+           *  indefinido — sem categoria E sem `comissionavelOverride`.
+           *  Cenário típico: PIX direto pro Asaas que cria cobrança
+           *  via webhook sem categoria atribuída. */
+          apenasSemDecisaoComissao: z.boolean().default(false),
           limit: z.number().min(1).max(500).default(200),
         })
         .optional(),
@@ -243,6 +248,12 @@ export const financeiroRouter = router({
           )!,
         );
       }
+      if (input?.apenasSemDecisaoComissao) {
+        // "Sem decisão" = sem override AND sem categoria. Se tem
+        // categoria (mesmo não-comissionável), foi uma decisão tomada.
+        conds.push(isNull(asaasCobrancas.comissionavelOverride));
+        conds.push(isNull(asaasCobrancas.categoriaId));
+      }
 
       return db
         .select({
@@ -258,6 +269,11 @@ export const financeiroRouter = router({
           atendenteId: asaasCobrancas.atendenteId,
           categoriaId: asaasCobrancas.categoriaId,
           categoriaNome: categoriasCobranca.nome,
+          // Flag herdada da categoria — usada pelo UI pra resolver o
+          // estado "Sim/Não/Indefinido" da coluna Comissão na tabela
+          // Atribuir. Quando comissionavelOverride é null, usamos esta;
+          // se ambas null → "Indefinido" (precisa decisão).
+          categoriaComissionavel: categoriasCobranca.comissionavel,
           comissionavelOverride: asaasCobrancas.comissionavelOverride,
         })
         .from(asaasCobrancas)

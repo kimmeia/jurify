@@ -1,27 +1,18 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, between, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   asaasCobrancas,
-  categoriasCobranca,
   colaboradores,
   comissoesFechadas,
   comissoesFechadasItens,
+  despesas,
   users,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { listarFaixasComissao, obterRegraComissao } from "./db-financeiro";
-import {
-  calcularComissao,
-  type CobrancaParaComissao,
-  type FaixaComissao,
-  type MotivoExclusao,
-} from "../../shared/calculo-comissao";
-
-/** Status Asaas que contam como pagamento confirmado pra fins de comissão. */
-const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+import { fecharComissao, simularComissao } from "./db-comissoes";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -46,111 +37,8 @@ function requireGestao(cargo: string) {
   }
 }
 
-/** Simulação detalhada: cobranças de um atendente no período + cálculo. */
-async function simularComissao(
-  escritorioId: number,
-  atendenteId: number,
-  periodoInicio: string,
-  periodoFim: string,
-) {
-  const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-  const regraRow = await obterRegraComissao(escritorioId);
-  const aliquotaPercent = regraRow ? Number(regraRow.aliquotaPercent) : 0;
-  const valorMinimo = regraRow ? Number(regraRow.valorMinimoCobranca) : 0;
-  const modo = regraRow?.modo ?? "flat";
-  const baseFaixa = regraRow?.baseFaixa ?? "comissionavel";
-
-  // Carrega faixas só quando relevantes — quando modo='flat', evita um SELECT.
-  const faixasRows = modo === "faixas" ? await listarFaixasComissao(escritorioId) : [];
-  const faixas: FaixaComissao[] = faixasRows.map((f) => ({
-    limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
-    aliquotaPercent: Number(f.aliquotaPercent),
-  }));
-
-  // LEFT JOIN com categorias para hidratar `comissionavel` (null quando sem categoria).
-  const linhas = await db
-    .select({
-      id: asaasCobrancas.id,
-      valor: asaasCobrancas.valor,
-      dataPagamento: asaasCobrancas.dataPagamento,
-      status: asaasCobrancas.status,
-      atendenteId: asaasCobrancas.atendenteId,
-      categoriaId: asaasCobrancas.categoriaId,
-      comissionavelOverride: asaasCobrancas.comissionavelOverride,
-      categoriaNome: categoriasCobranca.nome,
-      categoriaComissionavel: categoriasCobranca.comissionavel,
-      descricao: asaasCobrancas.descricao,
-      asaasPaymentId: asaasCobrancas.asaasPaymentId,
-    })
-    .from(asaasCobrancas)
-    .leftJoin(
-      categoriasCobranca,
-      eq(categoriasCobranca.id, asaasCobrancas.categoriaId),
-    )
-    .where(
-      and(
-        eq(asaasCobrancas.escritorioId, escritorioId),
-        eq(asaasCobrancas.atendenteId, atendenteId),
-        isNotNull(asaasCobrancas.dataPagamento),
-        between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
-        inArray(asaasCobrancas.status, STATUS_PAGOS),
-      ),
-    )
-    .orderBy(asc(asaasCobrancas.dataPagamento));
-
-  const cobrancasParaCalculo: CobrancaParaComissao[] = linhas.map((l) => ({
-    id: l.id,
-    valor: Number(l.valor),
-    dataPagamento: new Date(l.dataPagamento + "T00:00:00"),
-    atendenteId: l.atendenteId,
-    categoriaComissionavel: l.categoriaComissionavel ?? null,
-    comissionavelOverride: l.comissionavelOverride ?? null,
-  }));
-
-  const resultado = calcularComissao(cobrancasParaCalculo, {
-    modo,
-    aliquotaPercent,
-    valorMinimo,
-    faixas,
-    baseFaixa,
-  });
-
-  // Para o UI, devolvemos os mesmos itens enriquecidos (descrição, categoria, etc.).
-  const linhasMap = new Map(linhas.map((l) => [l.id, l]));
-  const enriquecer = (id: number, motivo?: MotivoExclusao) => {
-    const l = linhasMap.get(id)!;
-    return {
-      id: l.id,
-      asaasPaymentId: l.asaasPaymentId,
-      valor: Number(l.valor),
-      dataPagamento: l.dataPagamento,
-      descricao: l.descricao,
-      categoriaNome: l.categoriaNome,
-      categoriaComissionavel: l.categoriaComissionavel,
-      comissionavelOverride: l.comissionavelOverride,
-      motivoExclusao: motivo ?? null,
-    };
-  };
-
-  return {
-    regra: {
-      aliquotaPercent,
-      valorMinimo,
-      modo,
-      baseFaixa,
-      faixas,
-    },
-    aliquotaAplicada: resultado.aliquotaAplicada,
-    faixaAplicada: resultado.faixaAplicada ?? null,
-    comissionaveis: resultado.comissionaveis.map((c) => enriquecer(c.id)),
-    naoComissionaveis: resultado.naoComissionaveis.map((n) =>
-      enriquecer(n.cobranca.id, n.motivo),
-    ),
-    totais: resultado.totais,
-  };
-}
+// Função `simularComissao` foi extraída pra `db-comissoes.ts` —
+// reutilizada pelo cron worker de fechamento automático.
 
 export const comissoesRouter = router({
   simular: protectedProcedure
@@ -190,67 +78,19 @@ export const comissoesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
       requireGestao(esc.colaborador.cargo);
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-      const sim = await simularComissao(
-        esc.escritorio.id,
-        input.atendenteId,
-        input.periodoInicio,
-        input.periodoFim,
-      );
-
-      // Persiste cabeçalho + itens. Ambos são INSERTs novos: um fechamento
-      // pode coexistir com outros do mesmo atendente, mesmo período (re-fechamento
-      // após correção). Histórico é cumulativo, não sobrescrito.
-      const [novo] = await db
-        .insert(comissoesFechadas)
-        .values({
-          escritorioId: esc.escritorio.id,
-          atendenteId: input.atendenteId,
-          periodoInicio: input.periodoInicio,
-          periodoFim: input.periodoFim,
-          totalBrutoRecebido: sim.totais.bruto.toFixed(2),
-          totalComissionavel: sim.totais.comissionavel.toFixed(2),
-          totalNaoComissionavel: sim.totais.naoComissionavel.toFixed(2),
-          totalComissao: sim.totais.valorComissao.toFixed(2),
-          // No modo flat, a alíquota usada = regra.aliquotaPercent. No modo faixas,
-          // = a alíquota da faixa atingida (já calculada por `aliquotaAplicada`).
-          aliquotaUsada: sim.aliquotaAplicada.toFixed(2),
-          modoUsado: sim.regra.modo,
-          baseFaixaUsada: sim.regra.modo === "faixas" ? sim.regra.baseFaixa : null,
-          faixasUsadas:
-            sim.regra.modo === "faixas"
-              ? JSON.stringify(sim.regra.faixas)
-              : null,
-          valorMinimoUsado: sim.regra.valorMinimo.toFixed(2),
-          fechadoPorUserId: ctx.user.id,
-          observacoes: input.observacoes ?? null,
-        })
-        .$returningId();
-
-      const itens = [
-        ...sim.comissionaveis.map((c) => ({
-          comissaoFechadaId: novo.id,
-          asaasCobrancaId: c.id,
-          valor: c.valor.toFixed(2),
-          foiComissionavel: true,
-          motivoExclusao: null,
-        })),
-        ...sim.naoComissionaveis.map((c) => ({
-          comissaoFechadaId: novo.id,
-          asaasCobrancaId: c.id,
-          valor: c.valor.toFixed(2),
-          foiComissionavel: false,
-          motivoExclusao: c.motivoExclusao,
-        })),
-      ];
-
-      if (itens.length > 0) {
-        await db.insert(comissoesFechadasItens).values(itens);
-      }
-
-      return { id: novo.id };
+      // Fechamento manual pode coexistir com outros do mesmo período
+      // (re-fechamento após correção). Histórico cumulativo. A
+      // proteção de duplicação só vale pra automáticos (via
+      // `comissoes_lancamentos_log`).
+      return fecharComissao({
+        escritorioId: esc.escritorio.id,
+        atendenteId: input.atendenteId,
+        periodoInicio: input.periodoInicio,
+        periodoFim: input.periodoFim,
+        fechadoPorUserId: ctx.user.id,
+        origem: "manual",
+        observacoes: input.observacoes ?? null,
+      }).then((r) => ({ id: r.id }));
     }),
 
   listarFechamentos: protectedProcedure
@@ -363,12 +203,26 @@ export const comissoesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [existente] = await db
-        .select({ escritorioId: comissoesFechadas.escritorioId })
+        .select({
+          escritorioId: comissoesFechadas.escritorioId,
+          despesaId: comissoesFechadas.despesaId,
+        })
         .from(comissoesFechadas)
         .where(eq(comissoesFechadas.id, input.id))
         .limit(1);
       if (!existente || existente.escritorioId !== esc.escritorio.id) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // Cascata da despesa automática vinculada — só se ainda pendente.
+      // Despesa já paga fica preservada (não rebobinar histórico
+      // financeiro com efeito real).
+      if (existente.despesaId) {
+        await db
+          .delete(despesas)
+          .where(
+            and(eq(despesas.id, existente.despesaId), eq(despesas.status, "pendente")),
+          );
       }
 
       await db

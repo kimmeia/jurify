@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -43,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +55,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   Calculator,
+  CalendarClock,
+  CheckCircle2,
   History,
   Loader2,
   Lock,
@@ -60,6 +64,7 @@ import {
   Tags,
   Users,
   Wand2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBRL } from "./helpers";
@@ -106,6 +111,10 @@ export function ComissoesTab() {
           <History className="h-3.5 w-3.5" />
           Histórico de fechamentos
         </TabsTrigger>
+        <TabsTrigger value="agendamento" className="gap-1.5">
+          <CalendarClock className="h-3.5 w-3.5" />
+          Agendamento
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="calcular">
         <CalcularSection />
@@ -115,6 +124,9 @@ export function ComissoesTab() {
       </TabsContent>
       <TabsContent value="historico">
         <HistoricoSection />
+      </TabsContent>
+      <TabsContent value="agendamento">
+        <AgendamentoSection />
       </TabsContent>
     </Tabs>
   );
@@ -540,17 +552,154 @@ function HistoricoSection() {
   );
 }
 
+// ─── Célula "Comissão" da tabela Atribuir ───────────────────────────────────
+
+/**
+ * Chip clicável que mostra o estado de comissionável da cobrança e
+ * permite alterar via popover sem abrir o dialog "Atribuir em massa".
+ *
+ * Estados (resolvidos a partir de override + categoria):
+ *  - 🟢 Sim       → override=true OU (override=null E categoria.comissionavel=true)
+ *  - 🔴 Não       → override=false OU (override=null E categoria.comissionavel=false)
+ *  - ⚪ Indefinido → override=null E categoria=null (típico em PIX direto pro Asaas
+ *                    via webhook que cria cobrança sem categoria)
+ *
+ * Click abre popover com 3 opções:
+ *  - "Sim, comissionável" → override=true
+ *  - "Não comissionável"  → override=false
+ *  - "Herdar da categoria" → override=null (volta pro default)
+ */
+function CelulaComissao({
+  comissionavelOverride,
+  categoriaComissionavel,
+  onChange,
+  disabled,
+}: {
+  cobrancaId: number;
+  comissionavelOverride: boolean | null;
+  categoriaComissionavel: boolean | null;
+  onChange: (novo: boolean | null) => void;
+  disabled?: boolean;
+}) {
+  // Estado efetivo (o que o cálculo de comissão vai usar)
+  const efetivo: "sim" | "nao" | "indefinido" =
+    comissionavelOverride === true
+      ? "sim"
+      : comissionavelOverride === false
+        ? "nao"
+        : categoriaComissionavel === true
+          ? "sim"
+          : categoriaComissionavel === false
+            ? "nao"
+            : "indefinido";
+
+  const fonte: "override" | "categoria" | "indefinido" =
+    comissionavelOverride !== null
+      ? "override"
+      : categoriaComissionavel !== null
+        ? "categoria"
+        : "indefinido";
+
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <Popover open={aberto} onOpenChange={setAberto}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={[
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+            efetivo === "sim" && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900",
+            efetivo === "nao" && "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
+            efetivo === "indefinido" && "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+            disabled && "opacity-50 cursor-not-allowed",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          title={
+            fonte === "override"
+              ? "Definido manualmente. Click pra alterar."
+              : fonte === "categoria"
+                ? "Herdado da categoria. Click pra sobrescrever."
+                : "Sem decisão — defina ou atribua categoria."
+          }
+        >
+          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{
+            background: efetivo === "sim" ? "#10b981" : efetivo === "nao" ? "#ef4444" : "#f59e0b",
+          }} />
+          {efetivo === "sim" ? "Sim" : efetivo === "nao" ? "Não" : "Indefinido"}
+          {fonte === "categoria" && <span className="opacity-60 text-[9px] ml-0.5">(cat.)</span>}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-1" align="start">
+        <div className="text-[10px] text-muted-foreground px-2 pt-1.5 pb-1">
+          Esta cobrança é comissionável?
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(true);
+            setAberto(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center gap-2"
+        >
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          Sim, comissionável
+          {comissionavelOverride === true && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(false);
+            setAberto(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2"
+        >
+          <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+          Não comissionável
+          {comissionavelOverride === false && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onChange(null);
+            setAberto(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent flex items-center gap-2"
+        >
+          <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/40" />
+          Herdar da categoria
+          {comissionavelOverride === null && <span className="ml-auto text-[9px] text-muted-foreground">atual</span>}
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Sub-tab: Atribuir ───────────────────────────────────────────────────────
 
 function AtribuirSection() {
   const utils = trpc.useUtils();
   const [apenasSemAtribuicao, setApenasSemAtribuicao] = useState(true);
+  const [apenasSemDecisaoComissao, setApenasSemDecisaoComissao] = useState(false);
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const { data, isLoading } = trpc.financeiro.listarCobrancasParaAtribuicao.useQuery(
-    { apenasSemAtribuicao, limit: 200 },
+    { apenasSemAtribuicao, apenasSemDecisaoComissao, limit: 200 },
   );
+
+  // Mutation pra alterar override individual de uma cobrança — usa a
+  // mesma `atribuirCobrancasEmMassa` mandando 1 ID. Otimização possível
+  // futura: criar endpoint dedicado se virar gargalo, mas o existing
+  // já é eficiente (single UPDATE).
+  const overrideMut = trpc.financeiro.atribuirCobrancasEmMassa.useMutation({
+    onSuccess: () => {
+      utils.financeiro.listarCobrancasParaAtribuicao.invalidate();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const atendentes = useMemo(
     () =>
@@ -602,7 +751,14 @@ function AtribuirSection() {
                 checked={apenasSemAtribuicao}
                 onCheckedChange={(v) => setApenasSemAtribuicao(Boolean(v))}
               />
-              Mostrar apenas cobranças sem atribuição
+              Sem atendente/categoria
+            </label>
+            <label className="flex items-center gap-2 text-sm" title="Cobranças sem categoria E sem decisão manual de comissionável — típico em PIX direto pro Asaas">
+              <Checkbox
+                checked={apenasSemDecisaoComissao}
+                onCheckedChange={(v) => setApenasSemDecisaoComissao(Boolean(v))}
+              />
+              Sem decisão de comissão
             </label>
             <div className="flex-1" />
             <Button
@@ -658,6 +814,7 @@ function AtribuirSection() {
                 <TableHead className="text-xs">Pago em</TableHead>
                 <TableHead className="text-xs">Atendente</TableHead>
                 <TableHead className="text-xs">Categoria</TableHead>
+                <TableHead className="text-xs">Comissão</TableHead>
                 <TableHead className="text-xs text-right">Valor</TableHead>
               </TableRow>
             </TableHeader>
@@ -692,6 +849,20 @@ function AtribuirSection() {
                           sem categoria
                         </Badge>
                       )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <CelulaComissao
+                        cobrancaId={l.id}
+                        comissionavelOverride={l.comissionavelOverride}
+                        categoriaComissionavel={l.categoriaComissionavel}
+                        onChange={(novo) =>
+                          overrideMut.mutate({
+                            cobrancaIds: [l.id],
+                            comissionavelOverride: novo,
+                          })
+                        }
+                        disabled={overrideMut.isPending}
+                      />
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">
                       {formatBRL(Number(l.valor))}
@@ -993,5 +1164,233 @@ function FechamentoDetalheDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+// ─── Sub-tab: Agendamento (lançamento automático de comissões) ──────────────
+
+/**
+ * Configuração e histórico do lançamento automático de comissões.
+ * O escritório define dia + hora local em que o cron deve fechar o
+ * mês anterior calendário. Worker roda a cada 15 min e processa
+ * todas as agendas ativas.
+ */
+function AgendamentoSection() {
+  const utils = trpc.useUtils();
+  const { data: config } = (trpc as any).comissoesAgenda.obter.useQuery(undefined, {
+    retry: false,
+  });
+  const { data: log } = (trpc as any).comissoesAgenda.listarLog.useQuery(
+    { limit: 20 },
+    { retry: false },
+  );
+
+  const [ativo, setAtivo] = useState(true);
+  const [diaDoMes, setDiaDoMes] = useState(1);
+  const [horaLocal, setHoraLocal] = useState("18:00");
+  const [carregouConfig, setCarregouConfig] = useState(false);
+
+  // Hidrata estado a partir da config carregada (apenas 1x)
+  if (config && !carregouConfig) {
+    setAtivo(config.ativo);
+    setDiaDoMes(config.diaDoMes);
+    setHoraLocal(config.horaLocal);
+    setCarregouConfig(true);
+  }
+
+  const salvar = (trpc as any).comissoesAgenda.salvar.useMutation({
+    onSuccess: () => {
+      toast.success("Agendamento salvo");
+      utils.comissoesAgenda.obter.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
+  function handleSalvar() {
+    if (diaDoMes < 1 || diaDoMes > 31) {
+      toast.error("Dia do mês deve ser entre 1 e 31");
+      return;
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(horaLocal)) {
+      toast.error("Hora deve estar no formato HH:MM (24h)");
+      return;
+    }
+    salvar.mutate({ ativo, diaDoMes, horaLocal });
+  }
+
+  // Calcula próxima execução (UI puramente informativa)
+  const proximaExecucao = (() => {
+    if (!ativo) return null;
+    const agora = new Date();
+    const ano = agora.getFullYear();
+    const mes = agora.getMonth();
+    const [hh, mm] = horaLocal.split(":").map(Number);
+    const tentativaEsteMes = new Date(ano, mes, diaDoMes, hh, mm);
+    if (tentativaEsteMes > agora) return tentativaEsteMes;
+    // Já passou — próxima é mês que vem
+    return new Date(ano, mes + 1, diaDoMes, hh, mm);
+  })();
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarClock className="h-4 w-4" />
+            Lançamento automático
+          </CardTitle>
+          <CardDescription>
+            O sistema fecha as comissões do <strong>mês anterior completo</strong> automaticamente
+            no dia e hora configurados. Cobranças são identificadas pela data de pagamento (Asaas)
+            — não há risco de duplicação.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+            <div>
+              <Label className="text-sm font-medium cursor-pointer" htmlFor="ag-ativo">
+                Ativar lançamento automático
+              </Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Quando desligado, comissões só são fechadas manualmente.
+              </p>
+            </div>
+            <input
+              id="ag-ativo"
+              type="checkbox"
+              checked={ativo}
+              onChange={(e) => setAtivo(e.target.checked)}
+              className="h-5 w-9 accent-violet-600 cursor-pointer"
+            />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Dia do mês</Label>
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={diaDoMes}
+                onChange={(e) => setDiaDoMes(parseInt(e.target.value) || 1)}
+                disabled={!ativo}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Se o mês não tem o dia (ex: 31 em fevereiro), roda no último dia.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs">Hora local</Label>
+              <Input
+                type="time"
+                value={horaLocal}
+                onChange={(e) => setHoraLocal(e.target.value)}
+                disabled={!ativo}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                No fuso horário do escritório (configurável em Configurações).
+              </p>
+            </div>
+          </div>
+
+          {proximaExecucao && (
+            <div className="rounded-md border border-violet-200 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-900 p-3">
+              <p className="text-xs text-violet-900 dark:text-violet-200">
+                <strong>Próximo lançamento:</strong>{" "}
+                {proximaExecucao.toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}{" "}
+                às {horaLocal}
+              </p>
+              <p className="text-[10px] text-violet-700 dark:text-violet-400 mt-1">
+                Vai fechar o mês anterior completo (1 ao último dia).
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button onClick={handleSalvar} disabled={salvar.isPending}>
+              {salvar.isPending && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Histórico das execuções */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Últimas execuções
+          </CardTitle>
+          <CardDescription>
+            Histórico das 20 execuções mais recentes do cron — sucesso, falhas e quando rodou.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!log || log.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              Nenhuma execução ainda. O cron começa quando você ativar e a hora configurada chegar.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Período</TableHead>
+                  <TableHead className="text-xs">Atendente</TableHead>
+                  <TableHead className="text-xs">Iniciado</TableHead>
+                  <TableHead className="text-xs">Erro</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {log.map((row: any) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-xs">
+                      {row.status === "concluido" && (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
+                        </span>
+                      )}
+                      {row.status === "falhou" && (
+                        <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
+                          <XCircle className="h-3.5 w-3.5" /> Falhou
+                        </span>
+                      )}
+                      {row.status === "em_andamento" && (
+                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Em andamento
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      {row.periodoInicio} a {row.periodoFim}
+                    </TableCell>
+                    <TableCell className="text-xs">#{row.atendenteId}</TableCell>
+                    <TableCell className="text-xs">
+                      {row.iniciadoEm
+                        ? new Date(row.iniciadoEm).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-red-600 max-w-[300px] truncate">
+                      {row.mensagemErro || "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
