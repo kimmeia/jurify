@@ -1641,14 +1641,54 @@ export const asaasRouter = router({
 
   /** Fluxo de caixa mensal — últimos N meses, agrupado por mês de vencimento/pagamento */
   cashFlowMensal: protectedProcedure
-    .input(z.object({ meses: z.number().int().min(3).max(24).default(6) }).optional())
+    .input(
+      z
+        .object({
+          /** Quantidade de meses contando do mês corrente pra trás. Ignorado se
+           *  `dataInicio` e `dataFim` forem informados. Default: 6. */
+          meses: z.number().int().min(1).max(24).optional(),
+          /** Range customizado — primeiro dia do mês inicial (YYYY-MM-DD). */
+          dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          /** Range customizado — último dia do mês final (YYYY-MM-DD). */
+          dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
       const db = await getDb();
       if (!db) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
 
-      const meses = input?.meses ?? 6;
+      // Decide o range de meses: se vier `dataInicio` + `dataFim`, gera
+      // os meses entre eles (inclusivo). Senão, conta `meses` pra trás
+      // a partir do mês atual.
+      const mesesKeys: string[] = [];
+      const usandoRange = !!(input?.dataInicio && input?.dataFim);
+      if (usandoRange) {
+        const ini = new Date(`${input!.dataInicio}T00:00:00`);
+        const fim = new Date(`${input!.dataFim}T00:00:00`);
+        if (ini > fim) return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+        const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
+        const fimChave = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}`;
+        // Hard cap de 36 meses pra evitar query monstro acidental.
+        let i = 0;
+        while (i < 36) {
+          const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+          mesesKeys.push(k);
+          if (k === fimChave) break;
+          cursor.setMonth(cursor.getMonth() + 1);
+          i++;
+        }
+      } else {
+        const meses = input?.meses ?? 6;
+        const hoje = new Date();
+        for (let i = meses - 1; i >= 0; i--) {
+          const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+          mesesKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        }
+      }
+
       try {
         const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
         if (visiveis !== null && visiveis.length === 0) {
@@ -1659,15 +1699,10 @@ export const asaasRouter = router({
         const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
         const porMes = new Map<string, { recebido: number; pendente: number; vencido: number }>();
-        const hoje = new Date();
-        for (let i = meses - 1; i >= 0; i--) {
-          const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-          porMes.set(key, { recebido: 0, pendente: 0, vencido: 0 });
-        }
+        for (const k of mesesKeys) porMes.set(k, { recebido: 0, pendente: 0, vencido: 0 });
 
         let totalRecebido = 0, totalPendente = 0, totalVencido = 0;
-        const hojeStr = hoje.toISOString().slice(0, 10);
+        const hojeStr = new Date().toISOString().slice(0, 10);
 
         for (const c of todas) {
           const valor = parseFloat(c.valor) || 0;

@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -41,7 +43,15 @@ export default function Financeiro() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroForma, setFiltroForma] = useState("todos");
   const [busca, setBusca] = useState("");
-  const [periodo, setPeriodo] = useState<3 | 6 | 12>(6);
+  // Período do gráfico de fluxo de caixa. Pode ser preset (3/6/12 meses)
+  // ou range customizado (dataInicio/dataFim). Quando custom, `periodo`
+  // fica como null e a query usa as datas; caso contrário usa `meses`.
+  const [periodo, setPeriodo] = useState<3 | 6 | 12 | null>(6);
+  const [rangeCustom, setRangeCustom] = useState<{ inicio: string; fim: string } | null>(null);
+  const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
+  // Inputs locais do popover (só commitam ao clicar Aplicar).
+  const [rangeInicioInput, setRangeInicioInput] = useState("");
+  const [rangeFimInput, setRangeFimInput] = useState("");
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
 
   // Auto-refresh: cron sincroniza a cada 10min; webhook pode atualizar a qualquer
@@ -62,7 +72,9 @@ export default function Financeiro() {
     refetchInterval: REFRESH_MS,
   });
   const { data: cashFlow } = trpc.asaas.cashFlowMensal.useQuery(
-    { meses: periodo },
+    rangeCustom
+      ? { dataInicio: rangeCustom.inicio, dataFim: rangeCustom.fim }
+      : { meses: periodo ?? 6 },
     {
       retry: false,
       enabled: statusAsaas?.conectado,
@@ -308,16 +320,116 @@ export default function Financeiro() {
                     <h2 className="text-3xl font-bold tracking-tight text-emerald-600">
                       {formatBRL(cashFlow?.totalRecebido ?? kpis?.recebido ?? 0)}
                     </h2>
-                    <span className="text-sm text-muted-foreground">recebido nos últimos {periodo} meses</span>
+                    <span className="text-sm text-muted-foreground">
+                      {rangeCustom
+                        ? `entre ${rangeCustom.inicio.split("-").reverse().join("/")} e ${rangeCustom.fim.split("-").reverse().join("/")}`
+                        : `recebido nos últimos ${periodo ?? 6} meses`}
+                    </span>
                   </div>
                 </div>
-                <Tabs value={String(periodo)} onValueChange={(v) => setPeriodo(Number(v) as 3 | 6 | 12)}>
-                  <TabsList className="h-8">
-                    <TabsTrigger value="3" className="text-xs px-3">3m</TabsTrigger>
-                    <TabsTrigger value="6" className="text-xs px-3">6m</TabsTrigger>
-                    <TabsTrigger value="12" className="text-xs px-3">12m</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <div className="flex items-center gap-1">
+                  <Tabs
+                    value={rangeCustom ? "custom" : String(periodo ?? 6)}
+                    onValueChange={(v) => {
+                      if (v === "custom") return; // tratado pelo Popover abaixo
+                      setRangeCustom(null);
+                      setPeriodo(Number(v) as 3 | 6 | 12);
+                    }}
+                  >
+                    <TabsList className="h-8">
+                      <TabsTrigger value="3" className="text-xs px-3">3m</TabsTrigger>
+                      <TabsTrigger value="6" className="text-xs px-3">6m</TabsTrigger>
+                      <TabsTrigger value="12" className="text-xs px-3">12m</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <Popover
+                    open={rangePopoverOpen}
+                    onOpenChange={(o) => {
+                      setRangePopoverOpen(o);
+                      if (o) {
+                        // Pre-popula inputs com o range atual ou um default
+                        // (últimos 6 meses).
+                        if (rangeCustom) {
+                          setRangeInicioInput(rangeCustom.inicio);
+                          setRangeFimInput(rangeCustom.fim);
+                        } else {
+                          const hoje = new Date();
+                          const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 5, 1);
+                          const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+                          setRangeInicioInput(inicio.toISOString().slice(0, 10));
+                          setRangeFimInput(fim.toISOString().slice(0, 10));
+                        }
+                      }
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={rangeCustom ? "default" : "outline"}
+                        size="sm"
+                        className="h-8 text-xs"
+                      >
+                        Personalizar
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-72 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">De</Label>
+                        <Input
+                          type="date"
+                          value={rangeInicioInput}
+                          onChange={(e) => setRangeInicioInput(e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Até</Label>
+                        <Input
+                          type="date"
+                          value={rangeFimInput}
+                          onChange={(e) => setRangeFimInput(e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Agrupamento mensal. Máx 36 meses.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        {rangeCustom && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => {
+                              setRangeCustom(null);
+                              setPeriodo(6);
+                              setRangePopoverOpen(false);
+                            }}
+                          >
+                            Limpar
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          className="flex-1 h-8 text-xs"
+                          disabled={
+                            !rangeInicioInput ||
+                            !rangeFimInput ||
+                            rangeInicioInput > rangeFimInput
+                          }
+                          onClick={() => {
+                            setRangeCustom({
+                              inicio: rangeInicioInput,
+                              fim: rangeFimInput,
+                            });
+                            setRangePopoverOpen(false);
+                          }}
+                        >
+                          Aplicar
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
 
               {/* AreaChart com gradient — mesmo estilo do Dashboard. Em
