@@ -1978,6 +1978,10 @@ export const comissoesFechadas = mysqlTable(
     origem: mysqlEnum("origemComFech", ["manual", "automatico"]).default("manual").notNull(),
     /** FK opcional pra `comissoes_agenda` quando origem='automatico'. */
     agendaId: int("agendaIdComFech"),
+    /** FK opcional pra `despesas` — preenchida quando `fecharComissao`
+     *  cria despesa pendente automática. Permite cascata na exclusão
+     *  do fechamento. */
+    despesaId: int("despesaIdComFech"),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(

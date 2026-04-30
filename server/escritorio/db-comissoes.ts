@@ -12,18 +12,29 @@ import { getDb } from "../db";
 import {
   asaasCobrancas,
   categoriasCobranca,
+  categoriasDespesa,
   comissoesFechadas,
   comissoesFechadasItens,
   comissoesLancamentosLog,
+  despesas,
 } from "../../drizzle/schema";
 import { and, asc, between, eq, inArray, isNotNull } from "drizzle-orm";
-import { listarFaixasComissao, obterRegraComissao } from "./db-financeiro";
+import {
+  criarCategoriaDespesa,
+  listarFaixasComissao,
+  obterRegraComissao,
+} from "./db-financeiro";
 import {
   calcularComissao,
   type CobrancaParaComissao,
   type FaixaComissao,
   type MotivoExclusao,
 } from "../../shared/calculo-comissao";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("db-comissoes");
+
+const NOME_CATEGORIA_COMISSAO = "Comissões";
 
 const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
 
@@ -194,7 +205,73 @@ export async function fecharComissao(
     await db.insert(comissoesFechadasItens).values(itens);
   }
 
+  // Cria despesa pendente automática vinculada ao fechamento. Não-fatal:
+  // se algo falhar (categoria deletada, DB transitoriamente fora, etc.)
+  // o fechamento sobrevive — usuário pode lançar manualmente depois.
+  if (sim.totais.valorComissao > 0) {
+    try {
+      const categoriaId = await garantirCategoriaComissoes(params.escritorioId);
+      const vencimento = calcularVencimentoComissao(params.periodoFim);
+      const [despNova] = await db
+        .insert(despesas)
+        .values({
+          escritorioId: params.escritorioId,
+          categoriaId,
+          descricao: `Comissão ${params.periodoInicio} a ${params.periodoFim}`,
+          valor: sim.totais.valorComissao.toFixed(2),
+          vencimento,
+          status: "pendente",
+          criadoPorUserId: params.fechadoPorUserId,
+        })
+        .$returningId();
+      await db
+        .update(comissoesFechadas)
+        .set({ despesaId: despNova.id })
+        .where(eq(comissoesFechadas.id, novo.id));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err: msg, escritorioId: params.escritorioId, comissaoFechadaId: novo.id },
+        "Falha ao criar despesa automática — fechamento mantido sem despesa",
+      );
+    }
+  }
+
   return { id: novo.id, totais: sim.totais };
+}
+
+/** Retorna ID da categoria "Comissões" do escritório, criando se não existir.
+ *  Idempotente. Reusa `criarCategoriaDespesa` (db-financeiro.ts). */
+export async function garantirCategoriaComissoes(
+  escritorioId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+  const [existente] = await db
+    .select({ id: categoriasDespesa.id })
+    .from(categoriasDespesa)
+    .where(
+      and(
+        eq(categoriasDespesa.escritorioId, escritorioId),
+        eq(categoriasDespesa.nome, NOME_CATEGORIA_COMISSAO),
+      ),
+    )
+    .limit(1);
+  if (existente) return existente.id;
+  return criarCategoriaDespesa(escritorioId, NOME_CATEGORIA_COMISSAO);
+}
+
+/** Calcula data de vencimento da despesa de comissão a partir do
+ *  fim do período fechado: dia 5 do mês seguinte. Exemplos:
+ *  "2026-03-31" → "2026-04-05"; "2026-12-31" → "2027-01-05". */
+export function calcularVencimentoComissao(periodoFim: string): string {
+  const [ano, mes] = periodoFim.split("-").map(Number);
+  if (!ano || !mes || Number.isNaN(ano) || Number.isNaN(mes)) {
+    throw new Error(`periodoFim inválido: ${periodoFim}`);
+  }
+  const proxAno = mes === 12 ? ano + 1 : ano;
+  const proxMes = mes === 12 ? 1 : mes + 1;
+  return `${proxAno}-${String(proxMes).padStart(2, "0")}-05`;
 }
 
 // ─── Helpers de período ─────────────────────────────────────────────────────
