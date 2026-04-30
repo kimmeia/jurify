@@ -2192,3 +2192,37 @@ export const passwordResetTokens = mysqlTable("password_reset_tokens", {
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODELOS DE CONTRATO — Templates DOCX com placeholders numerados ({{1}}, {{2}})
+// que podem mapear pra variáveis (cliente.*, escritorio.*, data.*) ou pra
+// preenchimento manual na hora de gerar. Inspirado nos templates do WhatsApp.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const modelosContrato = mysqlTable("modelos_contrato", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdModCt").notNull(),
+  nome: varchar("nomeModCt", { length: 150 }).notNull(),
+  descricao: varchar("descricaoModCt", { length: 500 }),
+  /** Path interno do DOCX (`/uploads/modelos-contrato/escritorio_<id>/<file>`). */
+  arquivoUrl: varchar("arquivoUrlModCt", { length: 512 }).notNull(),
+  /** Nome original do arquivo (preservado pra exibir + download). */
+  arquivoNome: varchar("arquivoNomeModCt", { length: 255 }).notNull(),
+  tamanho: int("tamanhoModCt"),
+  /**
+   * JSON com array de placeholders configurados:
+   *  - `{numero, tipo:"variavel", variavel:"cliente.nome"}` — resolve
+   *    automático no contexto do contato/escritório/data
+   *  - `{numero, tipo:"manual", label:"Valor da causa", dica?:string}` —
+   *    operador preenche no modal "Gerar contrato"
+   */
+  placeholders: text("placeholdersModCt").notNull(),
+  criadoPorUserId: int("criadoPorUserIdModCt").notNull(),
+  createdAt: timestamp("createdAtModCt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtModCt").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  modCtEscIdx: index("modct_esc_idx").on(t.escritorioId),
+}));
+
+export type ModeloContrato = typeof modelosContrato.$inferSelect;
+export type InsertModeloContrato = typeof modelosContrato.$inferInsert;

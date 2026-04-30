@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
+import { GerarContratoDialog } from "@/components/GerarContratoDialog";
 import {
   EditarForm, AnotacoesTab, ArquivosTab, AssinaturasTab, TarefasClienteTab,
   NovoClienteDialog,
@@ -1081,6 +1082,7 @@ function ClienteDetalhe({
 }) {
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState("visao-geral");
+  const [gerarContratoOpen, setGerarContratoOpen] = useState(false);
   const { data: cliente, refetch } = trpc.clientes.detalhe.useQuery({ id });
   const { data: anotacoes, refetch: rN } = trpc.clientes.listarAnotacoes.useQuery({ contatoId: id });
   const { data: arquivos, refetch: rA } = trpc.clientes.listarArquivos.useQuery({ contatoId: id });
@@ -1179,6 +1181,14 @@ function ClienteDetalhe({
             Inbox
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setGerarContratoOpen(true)}
+        >
+          <FileText className="h-4 w-4 mr-1 text-info" />
+          Gerar contrato
+        </Button>
         {cliente.cpfCnpj && (
           <MonitorarJuditButton
             cpfCnpj={cliente.cpfCnpj}
@@ -1343,6 +1353,13 @@ function ClienteDetalhe({
           />
         </TabsContent>
       </Tabs>
+
+      <GerarContratoDialog
+        contatoId={id}
+        contatoNome={cliente.nome}
+        open={gerarContratoOpen}
+        onOpenChange={setGerarContratoOpen}
+      />
     </div>
   );
 }
