@@ -531,6 +531,29 @@ export const contatos = mysqlTable("contatos", {
    * `{{cliente.campos.<chave>}}`.
    */
   camposPersonalizados: text("camposPersonalizadosContato"),
+  /**
+   * Qualificação civil — usadas em contratos. Todos opcionais (cliente
+   * vem do WhatsApp/lead com pouca info; o operador completa quando
+   * faz o contrato). Disponíveis no SmartFlow como `{{cliente.profissao}}`,
+   * `{{cliente.estadoCivil}}`, etc.
+   */
+  profissao: varchar("profissaoContato", { length: 100 }),
+  estadoCivil: mysqlEnum("estadoCivilContato", [
+    "solteiro",
+    "casado",
+    "divorciado",
+    "viuvo",
+    "uniao_estavel",
+  ]),
+  nacionalidade: varchar("nacionalidadeContato", { length: 50 }),
+  /** Endereço estruturado. CEP no formato "12345-678" (com hífen). */
+  cep: varchar("cepContato", { length: 9 }),
+  logradouro: varchar("logradouroContato", { length: 200 }),
+  numeroEndereco: varchar("numeroEnderecoContato", { length: 20 }),
+  complemento: varchar("complementoContato", { length: 100 }),
+  bairro: varchar("bairroContato", { length: 100 }),
+  cidade: varchar("cidadeContato", { length: 100 }),
+  uf: varchar("ufContato", { length: 2 }),
   createdAt: timestamp("createdAtContato").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtContato").defaultNow().onUpdateNow().notNull(),
 });

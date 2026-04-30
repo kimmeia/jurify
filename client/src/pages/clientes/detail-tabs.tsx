@@ -14,6 +14,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TagsChipPicker } from "@/components/TagsChipPicker";
 import { CamposPersonalizadosForm, validarCamposObrigatorios } from "@/components/CamposPersonalizadosForm";
+import {
+  CamposQualificacaoEndereco,
+  extrairQualificacaoEndereco,
+  QUALIFICACAO_ENDERECO_VAZIO,
+  type QualificacaoEndereco,
+} from "@/components/CamposQualificacaoEndereco";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
@@ -35,6 +41,9 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
   const [tags, setTags] = useState(cliente.tags || "");
   const [docPendente, setDocPendente] = useState(!!cliente.documentacaoPendente);
   const [docObs, setDocObs] = useState(cliente.documentacaoObservacoes || "");
+  const [qualif, setQualif] = useState<QualificacaoEndereco>(() =>
+    extrairQualificacaoEndereco(cliente),
+  );
   // Campos personalizados — valor inicial vem como string JSON do banco
   const [camposExtras, setCamposExtras] = useState<Record<string, any>>(() => {
     if (!cliente.camposPersonalizados) return {};
@@ -95,6 +104,11 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
           <div className="space-y-1.5"><Label className="text-xs">Telefone</Label><Input value={tel} onChange={e => setTel(e.target.value)} /></div>
           <div className="space-y-1.5"><Label className="text-xs">Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
         </div>
+
+        <CamposQualificacaoEndereco
+          value={qualif}
+          onChange={(patch) => setQualif((q) => ({ ...q, ...patch }))}
+        />
 
         {/* Responsável pelo atendimento */}
         <div className="space-y-1.5">
@@ -173,6 +187,17 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
             documentacaoPendente: docPendente,
             documentacaoObservacoes: docPendente ? (docObs || null) : null,
             camposPersonalizados: camposExtras,
+            // Qualificação civil + endereço (campos nativos)
+            profissao: qualif.profissao || null,
+            estadoCivil: qualif.estadoCivil || null,
+            nacionalidade: qualif.nacionalidade || null,
+            cep: qualif.cep || null,
+            logradouro: qualif.logradouro || null,
+            numeroEndereco: qualif.numeroEndereco || null,
+            complemento: qualif.complemento || null,
+            bairro: qualif.bairro || null,
+            cidade: qualif.cidade || null,
+            uf: qualif.uf || null,
             // Só envia responsavelId se podeReatribuir (UX de leitura
             // pra atendentes não tenta enviar campo). Empty string vira null
             // (sem responsável) — backend ignora se não tem verTodos.
@@ -541,6 +566,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   const [docObs, setDocObs] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
   const [camposExtras, setCamposExtras] = useState<Record<string, any>>({});
+  const [qualif, setQualif] = useState<QualificacaoEndereco>({ ...QUALIFICACAO_ENDERECO_VAZIO });
   const { data: defsCampos } = (trpc as any).camposCliente.listar.useQuery(undefined, { retry: false, enabled: open });
 
   // Lista de colaboradores ATIVOS — usado pra escolher responsável.
@@ -552,7 +578,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   ) || { data: null };
   const colaboradores: any[] = equipeData?.colaboradores || [];
 
-  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setDocPendente(false); setDocObs(""); setCamposExtras({}); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
+  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setDocPendente(false); setDocObs(""); setCamposExtras({}); setQualif({ ...QUALIFICACAO_ENDERECO_VAZIO }); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
 
   const validar = () => {
     const e: Record<string, string> = {};
@@ -575,10 +601,14 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     if (d.length <= 2) return d; if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
   };
 
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
     <div className="space-y-1.5"><Label>Nome *</Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-red-400" : ""} />{erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}</div>
     <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone</Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="email@exemplo.com" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
     <div className="space-y-1.5"><Label>CPF/CNPJ</Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-red-400" : ""} />{erros.cpf && <p className="text-[10px] text-red-500">{erros.cpf}</p>}</div>
+    <CamposQualificacaoEndereco
+      value={qualif}
+      onChange={(patch) => setQualif((q) => ({ ...q, ...patch }))}
+    />
     {colaboradores.length > 1 && (
       <div className="space-y-1.5">
         <Label>Responsável pelo atendimento</Label>
@@ -634,7 +664,26 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       const faltando = validarCamposObrigatorios(camposExtras, defsCampos);
       if (faltando.length > 0) { toast.error(`Preencha: ${faltando.join(", ")}`); return; }
     }
-    criar.mutate({ nome, telefone: tel || undefined, email: email || undefined, cpfCnpj: cpf || undefined, responsavelId: responsavelId ? Number(responsavelId) : undefined, documentacaoPendente: docPendente, documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined, camposPersonalizados: camposExtras });
+    criar.mutate({
+      nome,
+      telefone: tel || undefined,
+      email: email || undefined,
+      cpfCnpj: cpf || undefined,
+      responsavelId: responsavelId ? Number(responsavelId) : undefined,
+      documentacaoPendente: docPendente,
+      documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined,
+      camposPersonalizados: camposExtras,
+      profissao: qualif.profissao || null,
+      estadoCivil: qualif.estadoCivil || null,
+      nacionalidade: qualif.nacionalidade || null,
+      cep: qualif.cep || null,
+      logradouro: qualif.logradouro || null,
+      numeroEndereco: qualif.numeroEndereco || null,
+      complemento: qualif.complemento || null,
+      bairro: qualif.bairro || null,
+      cidade: qualif.cidade || null,
+      uf: qualif.uf || null,
+    });
   }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
 }
 

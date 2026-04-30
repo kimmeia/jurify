@@ -66,7 +66,7 @@ export const clientesRouter = router({
     return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() }))
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
       if (!perm.allowed) throw new Error("Sem permissão para cadastrar clientes.");
@@ -84,11 +84,11 @@ export const clientesRouter = router({
       // Campos personalizados — só persiste o que tiver chave válida (string)
       // e pelo menos um valor não-vazio.
       const camposJson = sanitizarCamposPersonalizados(input.camposPersonalizados);
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson });
+      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -136,6 +136,18 @@ export const clientesRouter = router({
       if (d.documentacaoPendente !== undefined) u.documentacaoPendente = d.documentacaoPendente;
       if (d.documentacaoObservacoes !== undefined) u.documentacaoObservacoes = d.documentacaoObservacoes;
       if (d.camposPersonalizados !== undefined) u.camposPersonalizados = sanitizarCamposPersonalizados(d.camposPersonalizados);
+      // Qualificação civil + endereço — campos opcionais. `null`/string vazia
+      // limpa o campo no banco.
+      if (d.profissao !== undefined) u.profissao = d.profissao || null;
+      if (d.estadoCivil !== undefined) u.estadoCivil = d.estadoCivil || null;
+      if (d.nacionalidade !== undefined) u.nacionalidade = d.nacionalidade || null;
+      if (d.cep !== undefined) u.cep = d.cep || null;
+      if (d.logradouro !== undefined) u.logradouro = d.logradouro || null;
+      if (d.numeroEndereco !== undefined) u.numeroEndereco = d.numeroEndereco || null;
+      if (d.complemento !== undefined) u.complemento = d.complemento || null;
+      if (d.bairro !== undefined) u.bairro = d.bairro || null;
+      if (d.cidade !== undefined) u.cidade = d.cidade || null;
+      if (d.uf !== undefined) u.uf = d.uf ? d.uf.toUpperCase() : null;
       // Reatribuição de responsável: só permitida pra quem tem verTodos
       // (atendente/estagiário não pode "passar" cliente pra outro).
       // Esse colaborador é o "dono" do cliente — recebe a conversa quando o
