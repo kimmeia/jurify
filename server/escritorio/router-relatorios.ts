@@ -19,10 +19,22 @@ import {
   conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, or } from "drizzle-orm";
+import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 
 const PeriodoInput = z
   .object({ dias: z.number().min(1).max(365).optional() })
+  .optional();
+
+/** Input do relatório Comercial — aceita preset de dias OU range
+ *  customizado (dataInicio/dataFim) + filtro opcional por atendente.
+ *  Quando dataInicio+dataFim vêm preenchidos, sobrepõem `dias`. */
+const ComercialInput = z
+  .object({
+    dias: z.number().min(1).max(365).optional(),
+    dataInicio: z.string().optional(), // YYYY-MM-DD
+    dataFim: z.string().optional(),    // YYYY-MM-DD
+    responsavelId: z.number().int().positive().optional(),
+  })
   .optional();
 
 const ProducaoInput = z
@@ -37,6 +49,11 @@ const ProducaoInput = z
 function desdeDias(dias: number): Date {
   return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 }
+
+/** Origens "ativas" — só os canais por onde leads de fato CHEGAM ao
+ *  escritório. Asaas é cobrança (cliente já existente) e telefone/site
+ *  não fazem parte do funil de captação direto. */
+const ORIGENS_LEAD = ["whatsapp", "instagram", "facebook", "manual"] as const;
 
 export const relatoriosRouter = router({
   /** Atendimento — conversas e mensagens.
@@ -101,25 +118,66 @@ export const relatoriosRouter = router({
     };
   }),
 
-  /** Comercial — leads, funil, origem e taxa de conversão (consolidado) */
-  comercial: protectedProcedure.input(PeriodoInput).query(async ({ ctx, input }) => {
+  /**
+   * Comercial — leads, funil, origem e taxa de conversão.
+   *
+   * Filtros aceitos:
+   *  - `dias` (preset 7/15/30/90/365) OU `dataInicio`+`dataFim` (range custom)
+   *  - `responsavelId` (atendente específico) — só aplicado se o usuário tem
+   *    permissão `verTodos`; quem tem só `verProprios` continua filtrado pelo
+   *    próprio colaboradorId.
+   *
+   * Definições:
+   *  - Contratos fechados = leads com `etapaFunil = 'fechado_ganho'` no
+   *    período. É o que o atendente "moveu para Ganho" no pipeline.
+   *  - Conversão = contratos fechados / total de leads do período.
+   *  - Origem dos contatos = whitelist `ORIGENS_LEAD` (whatsapp, instagram,
+   *    facebook, manual). Asaas é cobrança (cliente existente, não lead).
+   */
+  comercial: protectedProcedure.input(ComercialInput).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
     const db = await getDb();
     if (!db) return null;
     const eid = esc.escritorio.id;
-    const dias = input?.dias || 30;
-    const desde = desdeDias(dias);
 
-    // Permissão: verProprios filtra leads e contatos por responsável
+    // ── Período: range custom sobrepõe preset de dias ──────────────────────
+    const dias = input?.dias || 30;
+    let dataInicio: Date;
+    let dataFim: Date;
+    if (input?.dataInicio && input?.dataFim) {
+      dataInicio = new Date(`${input.dataInicio}T00:00:00`);
+      dataFim = new Date(`${input.dataFim}T23:59:59`);
+    } else {
+      dataInicio = desdeDias(dias);
+      dataFim = new Date();
+    }
+
+    // ── Permissão + filtro por atendente ───────────────────────────────────
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
-    const filtroLeadResp = soProprios ? [eq(leads.responsavelId, colabId)] : [];
-    const filtroContResp = soProprios ? [eq(contatos.responsavelId, colabId)] : [];
-    const filtroConvResp = soProprios ? [eq(conversas.atendenteId, colabId)] : [];
 
-    // Etapas do funil (com valor estimado)
+    // verProprios trava no próprio colaborador. verTodos pode escolher um.
+    const filtroAtendente = soProprios
+      ? colabId
+      : (input?.responsavelId ?? null);
+
+    const filtroLeadResp = filtroAtendente
+      ? [eq(leads.responsavelId, filtroAtendente)]
+      : [];
+    const filtroContResp = filtroAtendente
+      ? [eq(contatos.responsavelId, filtroAtendente)]
+      : [];
+    const filtroConvResp = filtroAtendente
+      ? [eq(conversas.atendenteId, filtroAtendente)]
+      : [];
+
+    const rangeLead = [gte(leads.createdAt, dataInicio), lte(leads.createdAt, dataFim)];
+    const rangeContato = [gte(contatos.createdAt, dataInicio), lte(contatos.createdAt, dataFim)];
+    const rangeConv = [gte(conversas.createdAt, dataInicio), lte(conversas.createdAt, dataFim)];
+
+    // ── Etapas do funil (com valor estimado) ───────────────────────────────
     const etapaRows = await db
       .select({
         etapa: leads.etapaFunil,
@@ -127,10 +185,10 @@ export const relatoriosRouter = router({
         valor: sql<number>`COALESCE(SUM(CAST(valorEstimado AS DECIMAL(14,2))), 0)`,
       })
       .from(leads)
-      .where(and(eq(leads.escritorioId, eid), gte(leads.createdAt, desde), ...filtroLeadResp))
+      .where(and(eq(leads.escritorioId, eid), ...rangeLead, ...filtroLeadResp))
       .groupBy(leads.etapaFunil);
 
-    // Leads por mês (6m — histórico sempre útil independente do filtro de curto prazo)
+    // ── Leads por mês (sempre 6m, gráfico de tendência longa) ──────────────
     const leadsPorMes = await db
       .select({
         mes: sql<string>`DATE_FORMAT(createdAtLead,'%Y-%m')`,
@@ -147,19 +205,29 @@ export const relatoriosRouter = router({
       .groupBy(sql`DATE_FORMAT(createdAtLead,'%Y-%m')`)
       .orderBy(sql`DATE_FORMAT(createdAtLead,'%Y-%m')`);
 
-    // Contatos por origem (histórico completo)
+    // ── Contatos por origem (whitelist + range do período) ─────────────────
+    // Excluímos asaas/site/telefone: o relatório foca em CAPTAÇÃO ativa de
+    // leads (canais por onde o cliente novo chega).
     const origemRows = await db
       .select({ origem: contatos.origem, total: sql<number>`COUNT(*)` })
       .from(contatos)
-      .where(and(eq(contatos.escritorioId, eid), ...filtroContResp))
+      .where(
+        and(
+          eq(contatos.escritorioId, eid),
+          inArray(contatos.origem, [...ORIGENS_LEAD]),
+          ...rangeContato,
+          ...filtroContResp,
+        ),
+      )
       .groupBy(contatos.origem);
 
-    // Conversas atendidas no período
+    // ── Conversas atendidas no período ─────────────────────────────────────
     const [conversasTotal] = await db
       .select({ total: sql<number>`COUNT(*)` })
       .from(conversas)
-      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde), ...filtroConvResp));
+      .where(and(eq(conversas.escritorioId, eid), ...rangeConv, ...filtroConvResp));
 
+    // ── Agregações finais ──────────────────────────────────────────────────
     const etapas: Record<string, { total: number; valor: number }> = {};
     for (const r of etapaRows) {
       etapas[r.etapa as string] = { total: Number(r.total), valor: Number(r.valor) };
@@ -169,13 +237,16 @@ export const relatoriosRouter = router({
     const leadsPerdidos = etapas["fechado_perdido"]?.total || 0;
     const taxaConversao =
       totalLeads > 0 ? parseFloat(((leadsGanhos / totalLeads) * 100).toFixed(1)) : 0;
+    const valorGanho = etapas["fechado_ganho"]?.valor || 0;
+    const valorPerdido = etapas["fechado_perdido"]?.valor || 0;
     const valorPipeline = Object.entries(etapas)
       .filter(([k]) => !["fechado_ganho", "fechado_perdido"].includes(k))
       .reduce((a, [, v]) => a + v.valor, 0);
-    const valorGanho = etapas["fechado_ganho"]?.valor || 0;
 
     return {
       periodo: dias,
+      dataInicio: dataInicio.toISOString(),
+      dataFim: dataFim.toISOString(),
       // KPIs
       conversasAtendidas: Number(conversasTotal?.total || 0),
       totalLeads,
@@ -184,6 +255,7 @@ export const relatoriosRouter = router({
       taxaConversao,
       valorGanho,
       valorPipeline,
+      valorPerdido,
       // Detalhes
       etapas,
       leadsPorMes: leadsPorMes.map((r) => ({ mes: String(r.mes), total: Number(r.total) })),

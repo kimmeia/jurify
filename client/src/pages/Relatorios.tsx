@@ -17,10 +17,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   BarChart3, MessageCircle, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
   Activity, Loader2, Users, CheckCircle2, Target, AlertTriangle, Percent,
-  LayoutGrid, Calculator,
+  LayoutGrid, Calculator, CalendarRange, TrendingDown,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -31,6 +35,18 @@ import {
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
+
+/** Ordem fixa do funil — primeiro estágio (novo) ao último (ganho/perdido).
+ *  Usada pra renderizar o funil visual sempre na mesma sequência, mesmo
+ *  quando alguma etapa está zerada. */
+const ETAPAS_FUNIL = [
+  "novo",
+  "qualificado",
+  "proposta",
+  "negociacao",
+  "fechado_ganho",
+  "fechado_perdido",
+] as const;
 
 const ETAPA_LABELS: Record<string, string> = {
   novo: "Novo",
@@ -278,14 +294,176 @@ function AbaAtendimento({ dias }: { dias: number }) {
 
 // ───────────────────── aba: Comercial ─────────────────────
 
+/**
+ * Aba Comercial.
+ *
+ * Filtros locais (somam ao filtro `dias` global do topo):
+ *  - **Atendente**: select com colaboradores ativos do escritório.
+ *    Default "todos".
+ *  - **Período custom**: popover com inputs de data inicial/final que
+ *    sobrepõem o `dias` global quando aplicado.
+ *
+ * Definições importantes da aba:
+ *  - "Contratos fechados" = leads movidos pra etapa **Ganho** no pipeline
+ *    (`etapaFunil = 'fechado_ganho'`) dentro do período.
+ *  - "Taxa de conversão" = contratos fechados ÷ total de leads.
+ *  - "Contatos por origem" só conta canais de captação ativa
+ *    (whatsapp, instagram, facebook, manual). Asaas é cobrança de
+ *    cliente já existente — não é lead novo.
+ */
 function AbaComercial({ dias }: { dias: number }) {
+  // Atendente (string p/ Select shadcn — "todos" = sem filtro)
+  const [responsavelSel, setResponsavelSel] = useState<string>("todos");
+
+  // Range customizado (sobrepõe o `dias` global quando preenchido)
+  const [rangeCustom, setRangeCustom] = useState<{ inicio: string; fim: string } | null>(null);
+  const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
+  const [rangeInicioInput, setRangeInicioInput] = useState("");
+  const [rangeFimInput, setRangeFimInput] = useState("");
+
+  // Atendentes do escritório pra alimentar o select
+  const { data: colaboradoresData } = trpc.configuracoes.listarColaboradores.useQuery(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  );
+  const atendentes = colaboradoresData?.colaboradores ?? [];
+
+  const responsavelId =
+    responsavelSel === "todos" ? undefined : Number(responsavelSel);
+
   const { data, isLoading } = trpc.relatorios.comercial.useQuery(
-    { dias },
+    {
+      dias: rangeCustom ? undefined : dias,
+      dataInicio: rangeCustom?.inicio,
+      dataFim: rangeCustom?.fim,
+      responsavelId,
+    },
     { refetchInterval: 60_000 },
   );
-  if (isLoading) return <LoadingBlock />;
-  if (!data) return <Empty />;
 
+  const labelRange = rangeCustom
+    ? `${rangeCustom.inicio.split("-").reverse().join("/")} → ${rangeCustom.fim
+        .split("-")
+        .reverse()
+        .join("/")}`
+    : "Personalizar";
+
+  return (
+    <div className="space-y-4">
+      {/* ── Faixa de filtros locais ──────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">Atendente:</span>
+        <Select value={responsavelSel} onValueChange={setResponsavelSel}>
+          <SelectTrigger className="w-52 h-9 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os atendentes</SelectItem>
+            {atendentes.map((a: any) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {a.userName || a.userEmail}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <span className="text-xs text-muted-foreground ml-2">Período:</span>
+        <Popover
+          open={rangePopoverOpen}
+          onOpenChange={(o) => {
+            setRangePopoverOpen(o);
+            if (o) {
+              if (rangeCustom) {
+                setRangeInicioInput(rangeCustom.inicio);
+                setRangeFimInput(rangeCustom.fim);
+              } else {
+                const hoje = new Date();
+                const inicio = new Date(hoje);
+                inicio.setDate(hoje.getDate() - dias);
+                setRangeInicioInput(inicio.toISOString().slice(0, 10));
+                setRangeFimInput(hoje.toISOString().slice(0, 10));
+              }
+            }
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button
+              variant={rangeCustom ? "default" : "outline"}
+              size="sm"
+              className="h-9 text-xs gap-1.5"
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              {labelRange}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">De</Label>
+              <Input
+                type="date"
+                value={rangeInicioInput}
+                onChange={(e) => setRangeInicioInput(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Até</Label>
+              <Input
+                type="date"
+                value={rangeFimInput}
+                onChange={(e) => setRangeFimInput(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Sobrepõe o filtro global de dias.
+            </p>
+            <div className="flex gap-2 pt-1">
+              {rangeCustom && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1 h-8 text-xs"
+                  onClick={() => {
+                    setRangeCustom(null);
+                    setRangePopoverOpen(false);
+                  }}
+                >
+                  Limpar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="flex-1 h-8 text-xs"
+                disabled={
+                  !rangeInicioInput ||
+                  !rangeFimInput ||
+                  rangeInicioInput > rangeFimInput
+                }
+                onClick={() => {
+                  setRangeCustom({ inicio: rangeInicioInput, fim: rangeFimInput });
+                  setRangePopoverOpen(false);
+                }}
+              >
+                Aplicar
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {isLoading ? (
+        <LoadingBlock />
+      ) : !data ? (
+        <Empty />
+      ) : (
+        <ComercialConteudo data={data} />
+      )}
+    </div>
+  );
+}
+
+function ComercialConteudo({ data }: { data: any }) {
   return (
     <div className="space-y-4">
       {/* KPIs principais */}
@@ -306,7 +484,8 @@ function AbaComercial({ dias }: { dias: number }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Linha de valores: receita / pipeline em aberto / pipeline perdido / leads perdidos */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi
           icon={<DollarSign className="h-5 w-5 text-emerald-500" />}
           label="Receita (ganhos)"
@@ -321,6 +500,13 @@ function AbaComercial({ dias }: { dias: number }) {
           small
         />
         <Kpi
+          icon={<TrendingDown className="h-5 w-5 text-red-500" />}
+          label="Pipeline perdido"
+          value={formatBRL(data.valorPerdido ?? 0)}
+          small
+          highlight="text-red-600"
+        />
+        <Kpi
           icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
           label="Leads perdidos"
           value={data.leadsPerdidos}
@@ -328,29 +514,31 @@ function AbaComercial({ dias }: { dias: number }) {
         />
       </div>
 
-      {/* Funil */}
+      {/* Funil — sempre todas as etapas em ordem (primeiro → último) */}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Funil de Vendas</CardTitle></CardHeader>
         <CardContent>
-          {Object.keys(data.etapas).length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sem leads no período.</p>
-          ) : (
-            <div className="space-y-2">
-              {Object.entries(data.etapas).map(([e, info]: [string, any]) => {
-                const max = Math.max(
-                  ...Object.values(data.etapas).map((x: any) => x.total),
-                  1,
-                );
+          <div className="space-y-2">
+            {(() => {
+              const max = Math.max(
+                ...ETAPAS_FUNIL.map((e) => data.etapas?.[e]?.total ?? 0),
+                1,
+              );
+              return ETAPAS_FUNIL.map((e) => {
+                const info = data.etapas?.[e] ?? { total: 0, valor: 0 };
+                const pct = max > 0 ? (info.total / max) * 100 : 0;
                 return (
                   <div key={e} className="flex items-center gap-3">
                     <div className="w-24 text-xs font-medium truncate">
                       {ETAPA_LABELS[e] || e}
                     </div>
                     <div className="flex-1 h-7 bg-muted/40 rounded-full overflow-hidden relative">
-                      <div
-                        className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-gray-400"}`}
-                        style={{ width: `${Math.max((info.total / max) * 100, 3)}%` }}
-                      />
+                      {info.total > 0 && (
+                        <div
+                          className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-gray-400"}`}
+                          style={{ width: `${Math.max(pct, 3)}%` }}
+                        />
+                      )}
                       <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium">
                         {info.total}
                       </span>
@@ -360,20 +548,27 @@ function AbaComercial({ dias }: { dias: number }) {
                     </span>
                   </div>
                 );
-              })}
-            </div>
-          )}
+              });
+            })()}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Origem dos contatos */}
+      {/* Origem dos contatos — whitelist de canais de captação */}
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Contatos por Origem</CardTitle></CardHeader>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Contatos por Origem</CardTitle>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Apenas canais de captação (WhatsApp, Instagram, Facebook, manual).
+          </p>
+        </CardHeader>
         <CardContent>
           {data.contatosPorOrigem.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Sem contatos cadastrados.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Sem contatos no período.
+            </p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {data.contatosPorOrigem.map((o: any) => (
                 <div key={o.origem} className="rounded-lg border p-3 text-center">
                   <p className="text-xl font-bold">{o.total}</p>
