@@ -71,9 +71,12 @@ jobs:
           done
       - name: Run migrations + seed
         run: |
-          # Auto-migrate roda quando o app sobe — pra garantir que as tabelas
-          # existem ANTES do smoke, sobe o app rapidamente em background pra
-          # ele rodar as migrations, depois mata.
+          # 1) Cria tabelas base do schema (drizzle-kit push é a fonte da
+          #    verdade — auto-migrate só patcha colunas em tabelas que já
+          #    existem, não cria users/escritorios/etc do zero).
+          pnpm drizzle-kit push --force
+          # 2) Sobe o app em background pra rodar o auto-migrate (que aplica
+          #    patches/índices/enums em cima do schema base), depois mata.
           pnpm dev &
           APP_PID=$!
           for i in {1..60}; do
@@ -134,6 +137,8 @@ jobs:
           done
       - name: Migrations + seed
         run: |
+          # drizzle-kit push cria tabelas base (auto-migrate só patcha).
+          pnpm drizzle-kit push --force
           pnpm dev &
           APP_PID=$!
           for i in {1..60}; do
