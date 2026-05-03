@@ -33,6 +33,9 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     enviarWhatsApp: vi.fn().mockResolvedValue(true),
     chamarWebhook: vi.fn().mockResolvedValue({ ok: true }),
     criarCardKanban: vi.fn().mockResolvedValue(42),
+    moverCardKanban: vi.fn().mockResolvedValue(true),
+    atribuirResponsavelKanban: vi.fn().mockResolvedValue(true),
+    atualizarTagsCardKanban: vi.fn().mockResolvedValue(true),
     buscarCobrancasAbertas: vi.fn().mockResolvedValue(""),
     ...overrides,
   };
@@ -832,6 +835,226 @@ describe("SmartFlow Engine", () => {
       expect(resultado.sucesso).toBe(true);
       expect(resultado.contexto.kanbanCardId).toBe(42);
       expect(exec.criarCardKanban).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("kanban_mover_card", () => {
+    it("move card pra coluna destino usando ctx.kanbanCardId quando cardId vazio", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_mover_card", config: { colunaDestinoId: 7 } },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.moverCardKanban).toHaveBeenCalledWith({ cardId: 42, colunaDestinoId: 7 });
+    });
+
+    it("interpola cardId via {{...}}", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_mover_card", config: { cardId: "{{kanbanCardId}}", colunaDestinoId: 9 } },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 88 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.moverCardKanban).toHaveBeenCalledWith({ cardId: 88, colunaDestinoId: 9 });
+    });
+
+    it("falha quando cardId não pode ser resolvido", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_mover_card", config: { colunaDestinoId: 7 } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(exec.moverCardKanban).not.toHaveBeenCalled();
+    });
+
+    it("falha quando colunaDestinoId está ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_mover_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+    });
+  });
+
+  describe("kanban_atribuir_responsavel", () => {
+    it("usa responsavelId explícito quando configurado", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_atribuir_responsavel", config: { responsavelId: 12 } },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.atribuirResponsavelKanban).toHaveBeenCalledWith({ cardId: 5, responsavelId: 12 });
+    });
+
+    it("usa atendenteResponsavelId quando responsavelAuto não é falso", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_atribuir_responsavel", config: {} },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { kanbanCardId: 5, atendenteResponsavelId: 99 },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.atribuirResponsavelKanban).toHaveBeenCalledWith({ cardId: 5, responsavelId: 99 });
+    });
+
+    it("falha quando nenhum responsável pode ser resolvido", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_atribuir_responsavel", config: { responsavelAuto: false } },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(exec.atribuirResponsavelKanban).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("kanban_tags", () => {
+    it("adiciona tags com modo default", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_tags", config: { tags: "VIP, urgente" } },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.atualizarTagsCardKanban).toHaveBeenCalledWith({
+        cardId: 5,
+        tags: ["VIP", "urgente"],
+        modo: "adicionar",
+      });
+    });
+
+    it("interpola variáveis nas tags", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_tags", config: { tags: "{{intencao}}, novo", modo: "definir" } },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { kanbanCardId: 5, intencao: "agendar" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.atualizarTagsCardKanban).toHaveBeenCalledWith({
+        cardId: 5,
+        tags: ["agendar", "novo"],
+        modo: "definir",
+      });
+    });
+
+    it("modo definir aceita lista vazia (limpa tags)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "kanban_tags", config: { tags: "", modo: "definir" } },
+      ];
+
+      const resultado = await executarCenario(passos, { kanbanCardId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.atualizarTagsCardKanban).toHaveBeenCalledWith({
+        cardId: 5,
+        tags: [],
+        modo: "definir",
+      });
+    });
+  });
+
+  describe("condicional com dot-notation", () => {
+    it("resolve campo aninhado via cliente.nome", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional",
+          config: { campo: "cliente.nome", operador: "igual", valor: "Maria" },
+        },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { cliente: { nome: "Maria" } } as any,
+        exec,
+      );
+
+      expect(resultado.passosExecutados).toBe(2);
+      expect(exec.criarCardKanban).toHaveBeenCalled();
+    });
+
+    it("resolve campo personalizado via cliente.campos.oab", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional",
+          config: { campo: "cliente.campos.oab", operador: "existe" },
+        },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { cliente: { campos: { oab: "12345" } } } as any,
+        exec,
+      );
+
+      expect(resultado.passosExecutados).toBe(2);
+    });
+
+    it("path inexistente não quebra (nao_existe passa)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional",
+          config: { campo: "cliente.campos.inexistente", operador: "nao_existe" },
+        },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.passosExecutados).toBe(2);
+    });
+
+    it("operador maior funciona com path aninhado", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional",
+          config: { campo: "pagamento.valor", operador: "maior", valor: "1000" },
+        },
+        { id: 2, ordem: 2, tipo: "kanban_criar_card", config: {} },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { pagamento: { valor: 5000 } } as any,
+        exec,
+      );
+
+      expect(resultado.passosExecutados).toBe(2);
     });
   });
 

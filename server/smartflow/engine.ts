@@ -169,6 +169,27 @@ export interface SmartflowExecutores {
     prazoDias?: number;
     tags?: string;
   }) => Promise<number>;
+  /** Move um card existente pra outra coluna. Loga em kanban_movimentacoes. */
+  moverCardKanban: (params: {
+    cardId: number;
+    colunaDestinoId: number;
+  }) => Promise<boolean>;
+  /** Define o responsável de um card. Dispara notificação ao colaborador. */
+  atribuirResponsavelKanban: (params: {
+    cardId: number;
+    responsavelId: number | null;
+  }) => Promise<boolean>;
+  /**
+   * Atualiza tags de um card. Tags são CSV em `kanbanCards.tags`.
+   *  - "adicionar": união (sem duplicar).
+   *  - "remover": remove as tags listadas das atuais.
+   *  - "definir": substitui completamente.
+   */
+  atualizarTagsCardKanban: (params: {
+    cardId: number;
+    tags: string[];
+    modo: "adicionar" | "remover" | "definir";
+  }) => Promise<boolean>;
 }
 
 // ─── Handlers por tipo de passo ─────────────────────────────────────────────
@@ -458,6 +479,11 @@ function handleTransferir(
  * Avalia uma única condição sobre um contexto. Retorna `true` se bate.
  * Operadores `maior`, `menor`, `entre` são numéricos; `contem` é string-case
  * insensitive; os demais preservam semântica legada.
+ *
+ * `campo` aceita dot-notation (ex: `cliente.nome`, `cliente.campos.oab`),
+ * resolvido pelo mesmo helper que o autocomplete `{{...}}` usa. Paths
+ * legados top-level (`intencao`, `pagamentoValor`, …) seguem funcionando
+ * porque `resolverCaminho` lida com chaves simples sem ponto.
  */
 function avaliarCondicao(
   campo: string,
@@ -466,7 +492,20 @@ function avaliarCondicao(
   valor2: string | undefined,
   ctx: SmartflowContexto,
 ): boolean {
-  const valorAtual = ctx[campo];
+  // Mantém comportamento original pra `existe`, `nao_existe` e `verdadeiro`,
+  // que precisam diferenciar undefined/null/0/false do resto. Pra esses
+  // três operadores resolvemos manualmente o path no contexto sem
+  // forçar string vazia (que `resolverCaminho` faz).
+  const partes = campo.split(".");
+  let valorAtualRaw: any = ctx;
+  for (const p of partes) {
+    if (valorAtualRaw == null || typeof valorAtualRaw !== "object") {
+      valorAtualRaw = undefined;
+      break;
+    }
+    valorAtualRaw = valorAtualRaw[p];
+  }
+  const valorAtual: unknown = valorAtualRaw;
 
   switch (operador) {
     case "igual":
@@ -713,6 +752,119 @@ async function handleKanbanCriarCard(
   }
 }
 
+/**
+ * Resolve o ID de card alvo dos passos `kanban_mover_card`,
+ * `kanban_atribuir_responsavel` e `kanban_tags`.
+ * Ordem de prioridade:
+ *   1. `cfg.cardId` interpolado (ex: `{{kanbanCardId}}` → ctx.kanbanCardId).
+ *   2. `ctx.kanbanCardId` direto (preenchido por `kanban_criar_card`).
+ * Retorna null quando o resultado não é um número válido.
+ */
+async function resolverCardIdKanban(
+  cfgCardId: unknown,
+  ctx: SmartflowContexto,
+): Promise<number | null> {
+  const { interpolarVariaveis } = await import("./interpolar");
+  const raw = String(cfgCardId ?? "").trim();
+  if (raw) {
+    const interpolado = interpolarVariaveis(raw, ctx as any).trim();
+    const n = Number(interpolado);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const fromCtx = ctx.kanbanCardId;
+  if (typeof fromCtx === "number" && fromCtx > 0) return fromCtx;
+  return null;
+}
+
+async function handleKanbanMoverCard(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { cardId?: string; colunaDestinoId?: number };
+  const cardId = await resolverCardIdKanban(cfg.cardId, ctx);
+  if (!cardId) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Card alvo não identificado (cardId vazio e ctx.kanbanCardId ausente)" };
+  }
+  const colunaDestinoId = Number(cfg.colunaDestinoId);
+  if (!Number.isFinite(colunaDestinoId) || colunaDestinoId <= 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Coluna destino não configurada" };
+  }
+  try {
+    await exec.moverCardKanban({ cardId, colunaDestinoId });
+    return { sucesso: true, contexto: { ...ctx, kanbanCardId: cardId } };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Kanban mover: ${err.message}` };
+  }
+}
+
+async function handleKanbanAtribuirResponsavel(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    cardId?: string;
+    responsavelId?: number;
+    responsavelAuto?: boolean;
+  };
+  const cardId = await resolverCardIdKanban(cfg.cardId, ctx);
+  if (!cardId) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Card alvo não identificado" };
+  }
+
+  // Mesma lógica de resolução do `handleKanbanCriarCard`.
+  let responsavelIdResolvido: number | null = null;
+  if (cfg.responsavelId) {
+    responsavelIdResolvido = Number(cfg.responsavelId);
+  } else if (cfg.responsavelAuto !== false) {
+    const auto = ctx.atendenteResponsavelId;
+    if (typeof auto === "number") responsavelIdResolvido = auto;
+  }
+  if (!responsavelIdResolvido) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Nenhum responsável resolvido (configure responsavelId ou marque responsavelAuto)" };
+  }
+
+  try {
+    await exec.atribuirResponsavelKanban({ cardId, responsavelId: responsavelIdResolvido });
+    return { sucesso: true, contexto: { ...ctx, kanbanCardId: cardId } };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Kanban responsável: ${err.message}` };
+  }
+}
+
+async function handleKanbanTags(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    cardId?: string;
+    tags?: string;
+    modo?: "adicionar" | "remover" | "definir";
+  };
+  const cardId = await resolverCardIdKanban(cfg.cardId, ctx);
+  if (!cardId) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Card alvo não identificado" };
+  }
+  const { interpolarVariaveis } = await import("./interpolar");
+  const tagsInterpoladas = interpolarVariaveis(String(cfg.tags ?? ""), ctx as any);
+  const tags = tagsInterpoladas
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  const modo = cfg.modo ?? "adicionar";
+  if (modo !== "definir" && tags.length === 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Lista de tags vazia" };
+  }
+  try {
+    await exec.atualizarTagsCardKanban({ cardId, tags, modo });
+    return { sucesso: true, contexto: { ...ctx, kanbanCardId: cardId } };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Kanban tags: ${err.message}` };
+  }
+}
+
 // ─── Engine principal ───────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
@@ -729,6 +881,9 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   esperar: handleEsperar,
   webhook: handleWebhook,
   kanban_criar_card: handleKanbanCriarCard,
+  kanban_mover_card: handleKanbanMoverCard,
+  kanban_atribuir_responsavel: handleKanbanAtribuirResponsavel,
+  kanban_tags: handleKanbanTags,
   definir_variavel: handleDefinirVariavel,
 };
 
