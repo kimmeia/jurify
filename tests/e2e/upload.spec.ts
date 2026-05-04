@@ -6,7 +6,7 @@ test.describe("Upload de arquivos", () => {
     await loginAs(page, "dono");
   });
 
-  test("rejeita .exe disfarçado de .pdf via API tRPC", async ({ request }) => {
+  test("rejeita .exe disfarçado de .pdf via API tRPC", async ({ page }) => {
     // Buffer de PE/EXE inicia com "MZ" (0x4D 0x5A). Mandamos esse
     // conteúdo declarando MIME application/pdf — magic-number deve detectar.
     const exeMagic = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
@@ -14,7 +14,10 @@ test.describe("Upload de arquivos", () => {
     const buf = Buffer.concat([exeMagic, padding]);
     const base64 = buf.toString("base64");
 
-    const resp = await request.post("/api/trpc/upload.enviar?batch=1", {
+    // page.request compartilha cookies com page.context() — sem isso,
+    // a request bate sem auth e o backend rejeita por UNAUTHORIZED
+    // antes de chegar na validação de magic number, mascarando o teste.
+    const resp = await page.request.post("/api/trpc/upload.enviar?batch=1", {
       data: {
         "0": {
           json: {
@@ -35,8 +38,8 @@ test.describe("Upload de arquivos", () => {
     expect(text).toMatch(/tipo|conte[uú]do|n[aã]o bate|n[aã]o permit/i);
   });
 
-  test("rejeita arquivo vazio", async ({ request }) => {
-    const resp = await request.post("/api/trpc/upload.enviar?batch=1", {
+  test("rejeita arquivo vazio", async ({ page }) => {
+    const resp = await page.request.post("/api/trpc/upload.enviar?batch=1", {
       data: {
         "0": {
           json: {

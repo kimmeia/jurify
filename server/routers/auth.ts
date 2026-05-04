@@ -285,13 +285,15 @@ export const authRouter = router({
       const user = await getUserByEmail(email);
 
       if (!user || !user.passwordHash) {
-        // Mensagem genérica pra não vazar se o email existe
-        throw new Error("E-mail ou senha incorretos.");
+        // Mensagem genérica pra não vazar se o email existe.
+        // TRPCError UNAUTHORIZED vira HTTP 401 — `throw new Error()`
+        // mapeava pra 500 e disparava alarmes de schema corrompido.
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail ou senha incorretos." });
       }
 
       const valid = await verifyPassword(input.password, user.passwordHash);
       if (!valid) {
-        throw new Error("E-mail ou senha incorretos.");
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail ou senha incorretos." });
       }
 
       // Bloqueia login se o usuário foi removido de todos os escritórios
