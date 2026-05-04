@@ -212,6 +212,19 @@ export function NovaCobrancaDialog({
               </div>
             )}
             {modo === "parcelada" && valor && parcelas && <p className="text-xs text-muted-foreground">{parseInt(parcelas)}x de {formatBRL(parseFloat(valor) / parseInt(parcelas))}</p>}
+            {modo === "parcelada" && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+                <b>Como funciona</b>: serão criadas {parcelas || "N"} cobranças avulsas com vencimentos
+                mensais sequenciais. <b>Cada parcela é independente</b> — o cliente pode pagar
+                cada uma com método diferente (PIX, boleto, cartão).
+              </div>
+            )}
+            {/* Validação preventiva: vencimento não pode ser data passada */}
+            {vencimento && vencimento < new Date().toISOString().slice(0, 10) && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+                ⚠️ Vencimento não pode ser uma data passada. Escolha uma data futura.
+              </div>
+            )}
             <div><Label className="text-xs">Descricao</Label><Input placeholder="Honorarios" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1" /></div>
             <div className="space-y-2 pt-2 border-t">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Comissão</p>
@@ -258,7 +271,7 @@ export function NovaCobrancaDialog({
                 </p>
               )}
             </div>
-          </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
+          </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
         )}
       </DialogContent>
     </Dialog>

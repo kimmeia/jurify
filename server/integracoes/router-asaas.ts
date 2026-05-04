@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, colaboradores, contatos, users } from "../../drizzle/schema";
@@ -21,6 +22,7 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
+import { calcularParcelas } from "./parcelamento-local";
 import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
@@ -1124,15 +1126,23 @@ export const asaasRouter = router({
       const externalReference =
         atendenteId !== null ? `atendente:${atendenteId}` : undefined;
 
-      // Criar cobrança no Asaas
-      const cobranca = await client.criarCobranca({
-        customer: vinculo.asaasCustomerId,
-        billingType: input.formaPagamento,
-        value: input.valor,
-        dueDate: input.vencimento,
-        description: input.descricao,
-        externalReference,
-      });
+      // Criar cobrança no Asaas. O `client.criarCobranca` já formata erros
+      // do Asaas com a descrição original ("Vencimento não pode ser data
+      // passada", etc); convertemos pra TRPCError BAD_REQUEST pra o
+      // frontend exibir mensagem útil em vez de "status code 500".
+      let cobranca;
+      try {
+        cobranca = await client.criarCobranca({
+          customer: vinculo.asaasCustomerId,
+          billingType: input.formaPagamento,
+          value: input.valor,
+          dueDate: input.vencimento,
+          description: input.descricao,
+          externalReference,
+        });
+      } catch (err: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Erro ao criar cobrança no Asaas" });
+      }
 
       // Salvar localmente
       await db.insert(asaasCobrancas).values({
@@ -2222,14 +2232,19 @@ export const asaasRouter = router({
 
       if (!vinculo) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Contato não vinculado ao Asaas." });
 
-      const assinatura = await client.criarAssinatura({
-        customer: vinculo.asaasCustomerId,
-        billingType: input.formaPagamento,
-        value: input.valor,
-        nextDueDate: input.proximoVencimento,
-        cycle: input.ciclo,
-        description: input.descricao,
-      });
+      let assinatura;
+      try {
+        assinatura = await client.criarAssinatura({
+          customer: vinculo.asaasCustomerId,
+          billingType: input.formaPagamento,
+          value: input.valor,
+          nextDueDate: input.proximoVencimento,
+          cycle: input.ciclo,
+          description: input.descricao,
+        });
+      } catch (err: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Erro ao criar assinatura no Asaas" });
+      }
 
       // Persiste config se algum flag foi informado. Sem flags, mantém
       // path legado (webhook usa responsavelId do contato).
@@ -2310,7 +2325,21 @@ export const asaasRouter = router({
 
   // ─── PARCELAMENTOS ─────────────────────────────────────────────────────
 
-  /** Criar cobrança parcelada */
+  /**
+   * Criar cobrança parcelada — modo LOCAL.
+   *
+   * Em vez de usar o /installments do Asaas (que junta tudo no cartão de
+   * crédito como 1 transação parcelada na fatura), criamos N cobranças
+   * avulsas independentes com vencimentos mensais sequenciais. Cada
+   * parcela é amarrada pelo `parcelamentoLocalId` pra agrupar visualmente
+   * no CRM. Resultado: cliente paga cada parcela com o método que quiser
+   * (cartão na 1, PIX na 2, boleto na 3 — totalmente independente).
+   *
+   * Se uma parcela falhar ao criar no Asaas, as anteriores **não são
+   * revertidas** — o usuário vê o erro e pode tentar criar as restantes
+   * manualmente. Não fazemos rollback porque cobranças no Asaas têm
+   * cancelamento próprio e rollback em massa é arriscado.
+   */
   criarParcelamento: protectedProcedure
     .input(z.object({
       contatoId: z.number(),
@@ -2319,7 +2348,6 @@ export const asaasRouter = router({
       vencimento: z.string(),
       formaPagamento: z.enum(["BOLETO", "CREDIT_CARD", "PIX", "UNDEFINED"]),
       descricao: z.string().max(512).optional(),
-      // Config de comissão — aplicada nas parcelas geradas via webhook.
       atendenteId: z.number().optional(),
       categoriaId: z.number().optional(),
       comissionavelOverride: z.boolean().nullable().optional(),
@@ -2343,32 +2371,76 @@ export const asaasRouter = router({
 
       if (!vinculo) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Contato não vinculado ao Asaas." });
 
-      const parcela = await client.criarParcelamento({
-        customer: vinculo.asaasCustomerId,
-        billingType: input.formaPagamento,
-        totalValue: input.valorTotal,
-        installmentCount: input.parcelas,
-        dueDate: input.vencimento,
-        description: input.descricao,
-      });
+      const parcelamentoLocalId = nanoid(16);
+      const descBase = input.descricao || "Parcelamento";
+      const plano = calcularParcelas(input.valorTotal, input.parcelas, input.vencimento);
 
-      // Persiste config se algum flag de comissão foi informado.
-      if (input.atendenteId || input.categoriaId || input.comissionavelOverride !== undefined) {
+      const parcelasCriadas: Array<{ asaasPaymentId: string; parcelaAtual: number; valor: number }> = [];
+      let erroParcela: { numero: number; mensagem: string } | null = null;
+
+      for (const p of plano) {
         try {
-          await db.insert(asaasConfigCobrancaPai).values({
+          const cobranca = await client.criarCobranca({
+            customer: vinculo.asaasCustomerId,
+            billingType: input.formaPagamento,
+            value: p.valor,
+            dueDate: p.vencimento,
+            description: `${descBase} — parcela ${p.parcelaAtual}/${p.parcelaTotal}`,
+          });
+
+          await db.insert(asaasCobrancas).values({
             escritorioId: esc.escritorio.id,
-            tipo: "parcelamento",
-            asaasParentId: parcela.id,
+            contatoId: input.contatoId,
+            asaasPaymentId: cobranca.id,
+            asaasCustomerId: vinculo.asaasCustomerId,
+            origem: "asaas",
+            valor: p.valor.toFixed(2),
+            vencimento: p.vencimento,
+            formaPagamento: input.formaPagamento,
+            status: cobranca.status,
+            descricao: `${descBase} — parcela ${p.parcelaAtual}/${p.parcelaTotal}`,
+            invoiceUrl: cobranca.invoiceUrl || null,
+            bankSlipUrl: cobranca.bankSlipUrl || null,
             atendenteId: input.atendenteId ?? null,
             categoriaId: input.categoriaId ?? null,
             comissionavelOverride: input.comissionavelOverride ?? null,
+            parcelamentoLocalId,
+            parcelaAtual: p.parcelaAtual,
+            parcelaTotal: p.parcelaTotal,
+          }).onDuplicateKeyUpdate({
+            // Caso o webhook PAYMENT_CREATED do Asaas tenha chegado antes
+            // do nosso INSERT (corrida rara), preserva os campos do
+            // parcelamento que o webhook desconhece.
+            set: {
+              parcelamentoLocalId,
+              parcelaAtual: p.parcelaAtual,
+              parcelaTotal: p.parcelaTotal,
+              atendenteId: input.atendenteId ?? null,
+              categoriaId: input.categoriaId ?? null,
+              comissionavelOverride: input.comissionavelOverride ?? null,
+            },
           });
+
+          parcelasCriadas.push({ asaasPaymentId: cobranca.id, parcelaAtual: p.parcelaAtual, valor: p.valor });
         } catch (err: any) {
-          console.warn("[criarParcelamento] falha ao salvar config de comissão", err?.message);
+          erroParcela = { numero: p.parcelaAtual, mensagem: err?.message || String(err) };
+          break;
         }
       }
 
-      return { success: true, parcelamentoId: parcela.id };
+      if (erroParcela) {
+        const detalhe = parcelasCriadas.length === 0
+          ? `Falha ao criar a 1ª parcela: ${erroParcela.mensagem}`
+          : `${parcelasCriadas.length} parcela(s) criadas. Falhou na ${erroParcela.numero}ª: ${erroParcela.mensagem}. ` +
+            `Você pode tentar criar as parcelas restantes manualmente.`;
+        throw new TRPCError({ code: "BAD_REQUEST", message: detalhe });
+      }
+
+      return {
+        success: true,
+        parcelamentoLocalId,
+        parcelas: parcelasCriadas,
+      };
     }),
 
   /** Obter saldo da conta Asaas — só visível pra quem tem verTodos
