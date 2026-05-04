@@ -1,0 +1,90 @@
+name: Deploy Railway
+
+# Deploy automático no Railway só depois que toda a CI passa na main.
+#
+# Pra mexer/debugar:
+#   • Ver últimos deploys: aba "Deployments" do serviço no Railway
+#   • Disparar manual sem push: botão "Run workflow" na aba Actions do GitHub
+#   • Logs de build: clica no run específico → "Deploy" → expande os steps
+#
+# Secrets necessárias (configuradas em Settings > Secrets > Actions):
+#   RAILWAY_TOKEN          → Project Token criado no Railway
+#   RAILWAY_PROJECT_ID     → UUID do projeto
+#   RAILWAY_SERVICE_ID     → UUID do serviço (jurify)
+#   RAILWAY_ENVIRONMENT_ID → UUID do ambiente (production)
+#   RAILWAY_SERVICE_NAME   → Nome do serviço (jurify) — fallback caso o ID falhe
+on:
+  # Dispara DEPOIS que o "Tests CI" terminar com sucesso na main.
+  # Se a CI quebrar, o deploy NÃO roda — produção fica protegida.
+  workflow_run:
+    workflows: ["Tests CI"]
+    types: [completed]
+    branches: [main]
+
+  # Permite disparar manualmente via UI do GitHub (Actions > Deploy Railway > Run workflow).
+  # Útil pra re-deploy quando precisa, sem precisar fazer commit.
+  workflow_dispatch:
+
+# Cancela deploys antigos se um novo for disparado — evita duas builds
+# concorrentes no mesmo serviço (Railway aceitaria, mas vira corrida).
+concurrency:
+  group: deploy-railway-production
+  cancel-in-progress: false # NÃO cancela em curso — deixa terminar pra não corromper
+
+jobs:
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Bloqueia deploy se a CI falhou. workflow_dispatch (run manual) não
+    # tem `event.workflow_run`, então passa direto — isso é proposital pra
+    # permitir re-deploy de emergência.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # workflow_run roda no contexto do commit que disparou a CI;
+          # garante que pegamos o SHA certo da main.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar Railway CLI
+        run: npm install -g @railway/cli@latest
+
+      - name: Confirma autenticação
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway whoami || {
+            echo "::error::Falha ao autenticar com RAILWAY_TOKEN. Confirma o secret no GitHub."
+            exit 1
+          }
+
+      - name: Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          # `--detach` retorna assim que o deploy é DISPARADO (não espera
+          # o build terminar). Build do Jurify leva ~5min — esperar tudo
+          # estoura o timeout do GitHub Actions sem necessidade. Status
+          # final fica visível no dashboard do Railway.
+          railway up \
+            --service "${{ secrets.RAILWAY_SERVICE_ID }}" \
+            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID }}" \
+            --detach
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "## Deploy disparado :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.event.workflow_run.head_sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Serviço: ${{ secrets.RAILWAY_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Acompanhe o build em [Railway → Deployments](https://railway.com/project/${{ secrets.RAILWAY_PROJECT_ID }}/service/${{ secrets.RAILWAY_SERVICE_ID }}?environmentId=${{ secrets.RAILWAY_ENVIRONMENT_ID }})" >> $GITHUB_STEP_SUMMARY
