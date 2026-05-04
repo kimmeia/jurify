@@ -147,7 +147,11 @@ jobs:
             fi
             sleep 1
           done
+          # `pnpm dev` faz fork do tsx, então matar só o $APP_PID deixa o
+          # filho segurando a porta 3000 — o Playwright depois bate em
+          # "port already in use". `fuser -k` libera a porta de quem segurar.
           kill $APP_PID 2>/dev/null || true
+          sudo fuser -k 3000/tcp 2>/dev/null || true
           sleep 2
           pnpm tsx scripts/seed-staging.ts
       - name: Run E2E (Playwright sobe pnpm dev sozinho)
