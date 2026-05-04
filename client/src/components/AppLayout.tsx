@@ -572,27 +572,22 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Meu Plano — visível apenas para Dono do escritório
-                  (e admin do sistema via role). Informação financeira/
-                  contratual não deve estar disponível para gestor,
-                  atendente ou estagiário. */}
-              {(user?.role === "admin" || minhasPerms?.cargo === "Dono") && (
+              {/* Meu Plano migrou pra aba dentro de /configuracoes
+                  (visível apenas pro Dono do escritório / admin). Aqui
+                  fica só o atalho "Assinar plano" quando a conta está
+                  sem assinatura ativa — guia o usuário pra ação. */}
+              {(user?.role === "admin" || minhasPerms?.cargo === "Dono") && itemsLocked && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    isActive={location === "/plans"}
-                    onClick={() => setLocation("/plans")}
-                    tooltip="Meu Plano"
+                    onClick={() => setLocation("/configuracoes?tab=meu-plano")}
+                    tooltip="Assinar plano"
                     className="h-10 transition-all font-normal"
                   >
-                    <CreditCard
-                      className={`h-4 w-4 ${location === "/plans" ? "text-primary" : ""}`}
-                    />
-                    <span>Meu Plano</span>
-                    {itemsLocked && (
-                      <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
-                        Assinar
-                      </Badge>
-                    )}
+                    <CreditCard className="h-4 w-4" />
+                    <span>Assinar plano</span>
+                    <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
+                      !
+                    </Badge>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}

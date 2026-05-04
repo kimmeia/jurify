@@ -26,7 +26,6 @@ import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminCupons from "./pages/admin/AdminCupons";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
-import Plans from "./pages/Plans";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
 import Imobiliario from "./pages/calculos/Imobiliario";
@@ -54,6 +53,17 @@ import AceitarConvite from "./pages/AceitarConvite";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import SubscriptionGuard from "./components/SubscriptionGuard";
+
+/**
+ * Redireciona /plans (rota antiga) pra /configuracoes?tab=meu-plano,
+ * preservando query string (Plans.tsx renderizado dentro da aba lê
+ * `window.location.search` no mount pra detectar checkout success).
+ */
+function RedirectPlansParaConfiguracoes() {
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const extra = search.startsWith("?") ? `&${search.slice(1)}` : search ? `&${search}` : "";
+  return <Redirect to={`/configuracoes?tab=meu-plano${extra}`} />;
+}
 
 function ClientArea({ children }: { children: React.ReactNode }) {
   return (
@@ -88,11 +98,13 @@ function Router() {
         {(params: any) => <AceitarConvite token={params.token} />}
       </Route>
 
-      {/* Plans - accessible inside layout but without subscription guard */}
+      {/* Plans foi unificado como aba "Meu Plano" em Configurações.
+          Mantemos /plans funcional via redirect — preserva deep links
+          em e-mails de billing, /termos, e qualquer flow que aponte aqui.
+          Query string original (ex: ?success=true&plano=...) é repassada
+          pra Plans renderizado dentro da aba ler do window.location. */}
       <Route path="/plans">
-        <ClientAreaNoGuard>
-          <Plans />
-        </ClientAreaNoGuard>
+        <RedirectPlansParaConfiguracoes />
       </Route>
 
       {/* Admin routes - separate layout, no Cálculos menu */}
