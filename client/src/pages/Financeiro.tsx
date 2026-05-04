@@ -678,8 +678,18 @@ export default function Financeiro() {
                       <TableCell>
                         <StatusBadge status={c.status} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground truncate max-w-[120px]">
-                        {c.descricao || "—"}
+                      <TableCell className="text-xs text-muted-foreground truncate max-w-[180px]">
+                        <div className="flex items-center gap-1.5">
+                          {c.parcelaAtual && c.parcelaTotal && (
+                            <span
+                              className="shrink-0 rounded border border-violet-300 bg-violet-50 px-1 py-0 text-[9px] font-medium text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300"
+                              title={`Parcela ${c.parcelaAtual} de ${c.parcelaTotal}`}
+                            >
+                              {c.parcelaAtual}/{c.parcelaTotal}
+                            </span>
+                          )}
+                          <span className="truncate">{c.descricao || "—"}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">

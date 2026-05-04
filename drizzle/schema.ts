@@ -1176,6 +1176,23 @@ export const asaasCobrancas = mysqlTable(
      * NULL = obedece flag da categoria; TRUE/FALSE = força.
      */
     comissionavelOverride: boolean("comissionavelOverrideAsaasCob"),
+    /**
+     * Identificador local de parcelamento (nanoid).
+     *
+     * Em vez de usar o /installments do Asaas (que junta tudo no cartão de
+     * crédito), o sistema cria N cobranças avulsas com vencimentos mensais
+     * sequenciais e amarra elas pelo mesmo `parcelamentoLocalId`. Resultado:
+     * cliente paga cada parcela com o método que quiser (cartão/PIX/boleto
+     * por parcela) e o CRM agrupa visualmente como "Parcelamento Nx".
+     *
+     * NULL pra cobranças avulsas (não-parcelado) e pras parceladas legadas
+     * criadas via /installments (que mantêm o asaasParentId no Asaas).
+     */
+    parcelamentoLocalId: varchar("parcelamentoLocalId", { length: 64 }),
+    /** Número da parcela atual (1, 2, 3...). NULL pra avulsas. */
+    parcelaAtual: int("parcelaAtual"),
+    /** Total de parcelas do parcelamento. NULL pra avulsas. */
+    parcelaTotal: int("parcelaTotal"),
     createdAt: timestamp("createdAtAsaasCob").defaultNow().notNull(),
     updatedAt: timestamp("updatedAtAsaasCob").defaultNow().onUpdateNow().notNull(),
   },
@@ -1192,6 +1209,10 @@ export const asaasCobrancas = mysqlTable(
       t.escritorioId,
       t.atendenteId,
       t.dataPagamento,
+    ),
+    // Acelera lookup de parcelamento (agrupar parcelas no CRM).
+    idxParcelamentoLocal: index("asaas_cob_parcel_local_idx").on(
+      t.parcelamentoLocalId,
     ),
   }),
 );
