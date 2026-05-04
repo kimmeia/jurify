@@ -212,6 +212,15 @@ export default function Configuracoes() {
   const isGestor = colaborador.cargo === "gestor";
   const canEdit = isDono || isGestor;
   const podeVerMeuPlano = isDono || user?.role === "admin";
+  // Espelha `exigirDonoOuAdmin` do servidor (router-backup.ts). Frontend
+  // gating tem que aceitar os mesmos 4 caminhos pra não esconder o botão
+  // de quem o backend deixaria passar — admin Jurify, admin impersonando,
+  // dono via FK ownerId (mesmo com cargo customizado) ou cargo canônico.
+  const podeFazerBackup =
+    user?.role === "admin" ||
+    !!(user as any)?.impersonatedBy ||
+    (escritorio as any).ownerId === user?.id ||
+    colaborador.cargo === "dono";
 
   const initPerfilForm = () => {
     setFormPerfil({
@@ -380,7 +389,7 @@ export default function Configuracoes() {
                     <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Fuso</p><p>{escritorio.fusoHorario}</p></div>
                   </div>
 
-                  {isDono && (
+                  {podeFazerBackup && (
                     <>
                       <Separator />
                       <div className="flex items-center justify-between gap-4">

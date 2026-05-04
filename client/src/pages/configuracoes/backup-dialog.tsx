@@ -97,14 +97,22 @@ function BackupConteudo() {
 
   if (preview.isLoading) return <Skeleton className="h-64 w-full" />;
   if (preview.error) {
+    // Mostrar a mensagem REAL do servidor — antes era hardcoded "Acesso
+    // negado" pra qualquer erro, o que mascarava 500/timeout/etc. e
+    // confundia diagnóstico (admin impersonando achava que era permissão
+    // mas podia ser outro erro).
+    const code = (preview.error as any).data?.code;
+    const ehForbidden = code === "FORBIDDEN";
     return (
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
-            <ShieldAlert className="h-5 w-5" /> Acesso negado
+            <ShieldAlert className="h-5 w-5" />
+            {ehForbidden ? "Acesso negado" : "Não foi possível carregar"}
           </CardTitle>
           <CardDescription>
-            Apenas o dono do escritório pode gerar backup. Peça ao dono pra rodar.
+            {preview.error.message ||
+              "Erro inesperado ao consultar o backup do escritório."}
           </CardDescription>
         </CardHeader>
       </Card>
