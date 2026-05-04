@@ -75,7 +75,81 @@ export type TipoPasso =
   | "kanban_mover_card"
   | "kanban_atribuir_responsavel"
   | "kanban_tags"
-  | "definir_variavel";
+  | "asaas_gerar_cobranca"
+  | "asaas_cancelar_cobranca"
+  | "asaas_consultar_valor_aberto"
+  | "asaas_marcar_recebida"
+  | "definir_variavel"
+  | "definir_campo_personalizado";
+
+/**
+ * Categorias de passos com popover na paleta. Cada categoria agrupa
+ * subtipos relacionados (ex: "Kanban" → criar/mover/atribuir/tags).
+ * Renderização: 1 botão da categoria; clique abre popover com
+ * `tipos[]`. Tipos sem categoria são listados direto na paleta.
+ */
+export type CategoriaPasso = "kanban" | "agendamento" | "asaas" | "geral";
+
+export interface CategoriaPassoMeta {
+  id: CategoriaPasso;
+  label: string;
+  /** Grupo da paleta onde a categoria aparece. Hoje todas em "acoes". */
+  grupo: GrupoSmartflow;
+  /** Subtipos cobertos. Ordem aqui = ordem no popover. */
+  tipos: TipoPasso[];
+}
+
+export const CATEGORIAS_PASSO: ReadonlyArray<CategoriaPassoMeta> = [
+  {
+    id: "kanban",
+    label: "Kanban",
+    grupo: "acoes",
+    tipos: [
+      "kanban_criar_card",
+      "kanban_mover_card",
+      "kanban_atribuir_responsavel",
+      "kanban_tags",
+    ],
+  },
+  {
+    id: "agendamento",
+    label: "Agendamento (Cal.com)",
+    grupo: "acoes",
+    tipos: [
+      "calcom_horarios",
+      "calcom_agendar",
+      "calcom_listar",
+      "calcom_cancelar",
+      "calcom_remarcar",
+    ],
+  },
+  {
+    id: "asaas",
+    label: "Financeiro (Asaas)",
+    grupo: "acoes",
+    tipos: [
+      "asaas_gerar_cobranca",
+      "asaas_cancelar_cobranca",
+      "asaas_consultar_valor_aberto",
+      "asaas_marcar_recebida",
+    ],
+  },
+  {
+    id: "geral",
+    label: "Geral",
+    grupo: "acoes",
+    tipos: ["definir_variavel", "definir_campo_personalizado"],
+  },
+];
+
+export function getCategoriaMeta(id: string): CategoriaPassoMeta | null {
+  return CATEGORIAS_PASSO.find((c) => c.id === id) ?? null;
+}
+
+export function getCategoriaDoTipo(tipo: TipoPasso): CategoriaPasso | null {
+  const cat = CATEGORIAS_PASSO.find((c) => c.tipos.includes(tipo));
+  return cat?.id ?? null;
+}
 
 export type StatusExecucao = "rodando" | "concluido" | "erro" | "cancelado";
 
@@ -233,6 +307,51 @@ export interface ConfigKanbanTags {
   modo?: ModoTagsKanban;
 }
 
+export type TipoCobrancaAsaas = "BOLETO" | "PIX" | "CREDIT_CARD";
+
+/**
+ * Gera uma cobrança avulsa no Asaas pro cliente vinculado ao contexto
+ * (`ctx.contatoId`). Resolve o `customerId` Asaas via `asaasClientes`
+ * (vínculo primário). Valor/descrição interpoláveis.
+ */
+export interface ConfigAsaasGerarCobranca {
+  /** Em reais (string pra permitir interpolação `{{pagamentoValor}}`). */
+  valor?: string;
+  descricao?: string;
+  /** Default 7. Vencimento = hoje + N dias. */
+  vencimentoDias?: number;
+  /** Default BOLETO. */
+  tipoCobranca?: TipoCobrancaAsaas;
+}
+
+export interface ConfigAsaasCancelarCobranca {
+  /** Default `{{pagamentoId}}` do contexto. */
+  pagamentoId?: string;
+}
+
+/** Sem config; usa `ctx.contatoId`. Escreve resumo no contexto. */
+export interface ConfigAsaasConsultarValorAberto {}
+
+export interface ConfigAsaasMarcarRecebida {
+  pagamentoId?: string;
+  /** Opcional: se vazio usa o valor da cobrança original. */
+  valorRecebido?: string;
+  /** ISO `YYYY-MM-DD`; default: hoje. */
+  dataRecebimento?: string;
+}
+
+/**
+ * Persiste um valor em `contatos.camposPersonalizados[chave]` do
+ * cliente vinculado ao contexto. Diferente de `definir_variavel`, que
+ * só vive na execução. A `chave` deve existir no catálogo do escritório
+ * (`camposPersonalizadosCliente`) — caso contrário o passo falha com
+ * mensagem clara.
+ */
+export interface ConfigDefinirCampoPersonalizado {
+  chave?: string;
+  valor?: string;
+}
+
 /**
  * Union discriminada por `tipo`. Usada no editor pra garantir type-safety
  * do painel de configuração. O backend aceita `config` como objeto livre
@@ -254,7 +373,12 @@ export type PassoConfigByTipo =
   | { tipo: "kanban_criar_card"; config: ConfigKanbanCriarCard }
   | { tipo: "kanban_mover_card"; config: ConfigKanbanMoverCard }
   | { tipo: "kanban_atribuir_responsavel"; config: ConfigKanbanAtribuirResponsavel }
-  | { tipo: "kanban_tags"; config: ConfigKanbanTags };
+  | { tipo: "kanban_tags"; config: ConfigKanbanTags }
+  | { tipo: "asaas_gerar_cobranca"; config: ConfigAsaasGerarCobranca }
+  | { tipo: "asaas_cancelar_cobranca"; config: ConfigAsaasCancelarCobranca }
+  | { tipo: "asaas_consultar_valor_aberto"; config: ConfigAsaasConsultarValorAberto }
+  | { tipo: "asaas_marcar_recebida"; config: ConfigAsaasMarcarRecebida }
+  | { tipo: "definir_campo_personalizado"; config: ConfigDefinirCampoPersonalizado };
 
 export interface PassoSmartflow {
   id?: number;
@@ -374,11 +498,11 @@ export type ConfigGatilhoByTipo =
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
-  { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "calcom" },
-  { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "calcom" },
-  { id: "calcom_listar", label: "Listar agendamentos", descricao: "Busca bookings no Cal.com e grava no contexto.", cor: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300", grupo: "calcom" },
-  { id: "calcom_cancelar", label: "Cancelar agendamento", descricao: "Cancela um booking pelo ID.", cor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300", grupo: "calcom" },
-  { id: "calcom_remarcar", label: "Remarcar agendamento", descricao: "Reagenda um booking para novo horário.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "calcom" },
+  { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "acoes" },
+  { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "acoes" },
+  { id: "calcom_listar", label: "Listar agendamentos", descricao: "Busca bookings no Cal.com e grava no contexto.", cor: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300", grupo: "acoes" },
+  { id: "calcom_cancelar", label: "Cancelar agendamento", descricao: "Cancela um booking pelo ID.", cor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300", grupo: "acoes" },
+  { id: "calcom_remarcar", label: "Remarcar agendamento", descricao: "Reagenda um booking para novo horário.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
@@ -388,7 +512,12 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "kanban_mover_card", label: "Mover card Kanban", descricao: "Move um card existente para outra coluna.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
   { id: "kanban_atribuir_responsavel", label: "Atribuir responsável (Kanban)", descricao: "Define o colaborador responsável pelo card.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
   { id: "kanban_tags", label: "Tags do card (Kanban)", descricao: "Adiciona, remove ou substitui tags de um card.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
+  { id: "asaas_gerar_cobranca", label: "Gerar cobrança (Asaas)", descricao: "Cria cobrança avulsa pro cliente vinculado.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "acoes" },
+  { id: "asaas_cancelar_cobranca", label: "Cancelar cobrança (Asaas)", descricao: "Cancela uma cobrança Asaas pelo ID.", cor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300", grupo: "acoes" },
+  { id: "asaas_consultar_valor_aberto", label: "Consultar valor em aberto (Asaas)", descricao: "Lê resumo financeiro do cliente e grava no contexto.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "acoes" },
+  { id: "asaas_marcar_recebida", label: "Marcar como recebida (Asaas)", descricao: "Confirma recebimento manual de uma cobrança.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "acoes" },
   { id: "definir_variavel", label: "Definir variável", descricao: "Guarda um valor no contexto pra usar em passos seguintes.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "acoes" },
+  { id: "definir_campo_personalizado", label: "Definir campo personalizado", descricao: "Persiste um valor em campos personalizados do cliente.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "acoes" },
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [

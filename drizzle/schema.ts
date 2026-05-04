@@ -1645,7 +1645,12 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "kanban_mover_card",             // move card pra outra coluna
     "kanban_atribuir_responsavel",   // define responsável de um card
     "kanban_tags",                   // adiciona/remove/define tags do card
+    "asaas_gerar_cobranca",          // cria cobrança avulsa no Asaas
+    "asaas_cancelar_cobranca",       // cancela cobrança Asaas pelo ID
+    "asaas_consultar_valor_aberto",  // grava resumo financeiro no contexto
+    "asaas_marcar_recebida",         // confirma recebimento manual
     "definir_variavel",              // grava variável no contexto da execução
+    "definir_campo_personalizado",   // persiste em contatos.camposPersonalizados
   ]).notNull(),
   /** Configuração do passo (JSON — prompt, template, condição, etc) */
   config: text("configPasso"),

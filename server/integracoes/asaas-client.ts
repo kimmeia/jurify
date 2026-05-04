@@ -432,6 +432,26 @@ export class AsaasClient {
     await this.api.delete(`/payments/${id}`);
   }
 
+  /**
+   * Confirma recebimento manual (em dinheiro/PIX manual/transferência).
+   * `value` defaults ao valor da cobrança quando ausente; `paymentDate`
+   * default hoje. POST `/payments/:id/receiveInCash` — endpoint Asaas
+   * estável e documentado, usado quando o pagamento veio por fora do
+   * Asaas mas precisa ser refletido no painel/relatórios.
+   */
+  async confirmarRecebimentoEmDinheiro(
+    id: string,
+    params?: { value?: number; paymentDate?: string; notifyCustomer?: boolean },
+  ): Promise<AsaasPayment> {
+    const body: Record<string, unknown> = {
+      paymentDate: params?.paymentDate ?? new Date().toISOString().slice(0, 10),
+      notifyCustomer: params?.notifyCustomer ?? false,
+    };
+    if (typeof params?.value === "number") body.value = params.value;
+    const res = await this.api.post(`/payments/${id}/receiveInCash`, body);
+    return res.data;
+  }
+
   async obterPixQrCode(paymentId: string): Promise<AsaasPixQrCode> {
     const res = await this.api.get(`/payments/${paymentId}/pixQrCode`);
     return res.data;

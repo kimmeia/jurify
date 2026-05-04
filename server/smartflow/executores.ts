@@ -607,5 +607,158 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         return "";
       }
     },
+
+    async gerarCobrancaAsaas(params): Promise<{ pagamentoId: string; link?: string }> {
+      const { getAsaasClient } = await import("../integracoes/router-asaas");
+      const client = await getAsaasClient(escritorioId);
+      if (!client) throw new Error("Asaas não configurado neste escritório");
+
+      const { getDb } = await import("../db");
+      const { asaasClientes } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      // Resolve customerId: vínculo primário > primeiro encontrado.
+      const vinculos = await db
+        .select({
+          asaasCustomerId: asaasClientes.asaasCustomerId,
+          primario: asaasClientes.primario,
+        })
+        .from(asaasClientes)
+        .where(and(
+          eq(asaasClientes.escritorioId, escritorioId),
+          eq(asaasClientes.contatoId, params.contatoId),
+        ));
+      const principal = vinculos.find((v) => v.primario) ?? vinculos[0];
+      if (!principal) throw new Error("Contato não tem cliente Asaas vinculado");
+
+      const dias = params.vencimentoDias ?? 7;
+      const dueDate = new Date(Date.now() + dias * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+
+      const cobranca = await client.criarCobranca({
+        customer: principal.asaasCustomerId,
+        billingType: (params.tipoCobranca ?? "BOLETO") as any,
+        value: params.valor,
+        dueDate,
+        description: params.descricao,
+      });
+
+      return {
+        pagamentoId: cobranca.id,
+        link: cobranca.invoiceUrl || cobranca.bankSlipUrl || undefined,
+      };
+    },
+
+    async cancelarCobrancaAsaas(params): Promise<boolean> {
+      const { getAsaasClient } = await import("../integracoes/router-asaas");
+      const client = await getAsaasClient(escritorioId);
+      if (!client) throw new Error("Asaas não configurado neste escritório");
+      await client.excluirCobranca(params.pagamentoId);
+      return true;
+    },
+
+    async consultarValorAbertoAsaas(params): Promise<{ total: number; pendente: number; vencido: number; qtdAberto: number }> {
+      const { getAsaasClient } = await import("../integracoes/router-asaas");
+      const client = await getAsaasClient(escritorioId);
+      if (!client) throw new Error("Asaas não configurado neste escritório");
+
+      const { getDb } = await import("../db");
+      const { asaasClientes } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const vinculos = await db
+        .select({
+          asaasCustomerId: asaasClientes.asaasCustomerId,
+          primario: asaasClientes.primario,
+        })
+        .from(asaasClientes)
+        .where(and(
+          eq(asaasClientes.escritorioId, escritorioId),
+          eq(asaasClientes.contatoId, params.contatoId),
+        ));
+      const principal = vinculos.find((v) => v.primario) ?? vinculos[0];
+      if (!principal) throw new Error("Contato não tem cliente Asaas vinculado");
+
+      const r = await client.resumoFinanceiroCliente(principal.asaasCustomerId);
+      const qtdAberto = r.cobrancas.filter(
+        (c) => c.status === "PENDING" || c.status === "OVERDUE",
+      ).length;
+      return {
+        total: r.total,
+        pendente: r.pendente,
+        vencido: r.vencido,
+        qtdAberto,
+      };
+    },
+
+    async marcarCobrancaRecebidaAsaas(params): Promise<boolean> {
+      const { getAsaasClient } = await import("../integracoes/router-asaas");
+      const client = await getAsaasClient(escritorioId);
+      if (!client) throw new Error("Asaas não configurado neste escritório");
+      await client.confirmarRecebimentoEmDinheiro(params.pagamentoId, {
+        value: params.valorRecebido,
+        paymentDate: params.dataRecebimento,
+      });
+      return true;
+    },
+
+    async definirCampoPersonalizadoCliente(params): Promise<boolean> {
+      const { getDb } = await import("../db");
+      const { contatos, camposPersonalizadosCliente } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      // Valida que a chave existe no catálogo do escritório.
+      const [campo] = await db
+        .select({ chave: camposPersonalizadosCliente.chave })
+        .from(camposPersonalizadosCliente)
+        .where(and(
+          eq(camposPersonalizadosCliente.escritorioId, escritorioId),
+          eq(camposPersonalizadosCliente.chave, params.chave),
+        ))
+        .limit(1);
+      if (!campo) {
+        throw new Error(`Campo personalizado "${params.chave}" não existe no catálogo do escritório`);
+      }
+
+      // Busca contato + JSON atual.
+      const [contato] = await db
+        .select({
+          id: contatos.id,
+          camposPersonalizados: contatos.camposPersonalizados,
+        })
+        .from(contatos)
+        .where(and(
+          eq(contatos.id, params.contatoId),
+          eq(contatos.escritorioId, escritorioId),
+        ))
+        .limit(1);
+      if (!contato) throw new Error(`Contato ${params.contatoId} não encontrado`);
+
+      // Merge na chave alvo (preserva outras chaves).
+      let camposAtuais: Record<string, unknown> = {};
+      if (contato.camposPersonalizados) {
+        try {
+          const parsed = JSON.parse(contato.camposPersonalizados);
+          if (parsed && typeof parsed === "object") camposAtuais = parsed;
+        } catch {
+          // JSON corrompido — começamos do zero, evita escalar erro.
+        }
+      }
+      camposAtuais[params.chave] = params.valor;
+
+      await db
+        .update(contatos)
+        .set({ camposPersonalizados: JSON.stringify(camposAtuais) })
+        .where(eq(contatos.id, params.contatoId));
+
+      return true;
+    },
   };
 }

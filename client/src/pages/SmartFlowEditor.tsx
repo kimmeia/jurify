@@ -42,9 +42,10 @@ import {
 import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
 import {
-  AlertTriangle, ArrowLeft, Brain, Bot, Calendar, CheckCircle2, Clock, DollarSign,
-  GitBranch, LayoutGrid, Loader2, MessageCircle, Move, PhoneCall, Play,
-  Plus, Save, Tags as TagsIcon, UserPlus, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2,
+  AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
+  CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle,
+  Move, PhoneCall, Play, Plus, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
+  CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -63,9 +64,12 @@ import {
   GATILHO_META,
   TIPO_CANAL_META,
   GRUPO_META,
+  CATEGORIAS_PASSO,
   getTipoPassoMeta,
   getGatilhoMeta,
+  getCategoriaDoTipo,
   CAMPOS_CONDICIONAL,
+  type CategoriaPassoMeta,
   type GatilhoMeta,
   type GatilhoSmartflow,
   type GrupoSmartflow,
@@ -73,6 +77,19 @@ import {
   type TipoPasso,
   type TipoCanalMensagem,
 } from "@shared/smartflow-types";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { validarGrafo } from "@shared/smartflow-graph-validation";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
 import { TagsChipPicker } from "@/components/TagsChipPicker";
@@ -97,7 +114,20 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   kanban_mover_card: Move,
   kanban_atribuir_responsavel: UserPlus,
   kanban_tags: TagsIcon,
+  asaas_gerar_cobranca: Banknote,
+  asaas_cancelar_cobranca: XCircle,
+  asaas_consultar_valor_aberto: CircleDollarSign,
+  asaas_marcar_recebida: CheckCircle2,
   definir_variavel: VariableIcon,
+  definir_campo_personalizado: FileText,
+};
+
+/** Ícone representativo de cada categoria popover. */
+const CATEGORIA_ICON: Record<string, LucideIcon> = {
+  kanban: LayoutGrid,
+  agendamento: Calendar,
+  asaas: DollarSign,
+  geral: Sparkles,
 };
 
 const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
@@ -263,6 +293,69 @@ function HandleRow({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Botão da paleta que abre Popover com os subtipos de uma categoria.
+ * Usado pra agrupar Kanban/Agendamento/Asaas/Geral em 1 linha cada.
+ */
+function CategoriaPopoverButton({
+  categoria,
+  onPick,
+}: {
+  categoria: CategoriaPassoMeta;
+  onPick: (tipo: TipoPasso) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const Icon = CATEGORIA_ICON[categoria.id] ?? Sparkles;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left bg-card"
+          title={`${categoria.tipos.length} ações disponíveis`}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0" />
+          <span className="text-xs font-medium leading-tight">{categoria.label}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 ml-auto opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="w-64 p-1.5 space-y-1"
+      >
+        <p className="text-[9px] uppercase tracking-wider text-muted-foreground px-1.5 pt-1 pb-0.5 font-semibold">
+          {categoria.label}
+        </p>
+        {categoria.tipos.map((tipo) => {
+          const meta = TIPO_PASSO_META.find((m) => m.id === tipo);
+          if (!meta) return null;
+          const ItemIcon = TIPO_ICON[tipo];
+          return (
+            <button
+              key={tipo}
+              onClick={() => {
+                onPick(tipo);
+                setOpen(false);
+              }}
+              className={`w-full flex items-start gap-2 px-2 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left ${meta.cor}`}
+              title={meta.descricao}
+            >
+              <ItemIcon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium leading-tight">{meta.label}</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">
+                  {meta.descricao}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -515,6 +608,27 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       const valor = String(config.valor || "").trim();
       if (!chave) return "(sem nome)";
       return valor ? `${chave} = ${truncar(valor, 24)}` : chave;
+    }
+    case "definir_campo_personalizado": {
+      const chave = String(config.chave || "").trim();
+      const valor = String(config.valor || "").trim();
+      if (!chave) return "(sem campo)";
+      return valor ? `${chave} = ${truncar(valor, 24)}` : chave;
+    }
+    case "asaas_gerar_cobranca": {
+      const valor = String(config.valor || "").trim();
+      const tipo = String(config.tipoCobranca || "BOLETO");
+      return valor ? `${tipo}: R$ ${truncar(valor, 12)}` : tipo;
+    }
+    case "asaas_cancelar_cobranca": {
+      const id = String(config.pagamentoId || "").trim() || "{{pagamentoId}}";
+      return truncar(id, 18);
+    }
+    case "asaas_consultar_valor_aberto":
+      return "lê resumo financeiro";
+    case "asaas_marcar_recebida": {
+      const id = String(config.pagamentoId || "").trim() || "{{pagamentoId}}";
+      return truncar(id, 18);
     }
     default:
       return "";
@@ -1084,30 +1198,43 @@ export default function SmartFlowEditor() {
 
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Adicionar passo</p>
           <div className="space-y-3">
-            {agrupar<TipoPassoMeta>(TIPO_PASSO_META).map((g) => (
-              <div key={g.id}>
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1 font-semibold px-0.5">
-                  {g.label}
-                </p>
-                <div className="space-y-1.5">
-                  {g.itens.map((t) => {
-                    const Icon = TIPO_ICON[t.id];
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => adicionarPasso(t.id)}
-                        className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left ${t.cor}`}
-                        title={t.descricao}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        <span className="text-xs font-medium leading-tight">{t.label}</span>
-                        <Plus className="h-3 w-3 shrink-0 ml-auto mt-0.5 opacity-60" />
-                      </button>
-                    );
-                  })}
+            {agrupar<TipoPassoMeta>(TIPO_PASSO_META).map((g) => {
+              // Itens diretos (sem categoria popover) e categorias do grupo.
+              const diretos = g.itens.filter((t) => !getCategoriaDoTipo(t.id));
+              const categorias = CATEGORIAS_PASSO.filter((c) => c.grupo === g.id);
+              if (diretos.length === 0 && categorias.length === 0) return null;
+              return (
+                <div key={g.id}>
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1 font-semibold px-0.5">
+                    {g.label}
+                  </p>
+                  <div className="space-y-1.5">
+                    {diretos.map((t) => {
+                      const Icon = TIPO_ICON[t.id];
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => adicionarPasso(t.id)}
+                          className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left ${t.cor}`}
+                          title={t.descricao}
+                        >
+                          <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <span className="text-xs font-medium leading-tight">{t.label}</span>
+                          <Plus className="h-3 w-3 shrink-0 ml-auto mt-0.5 opacity-60" />
+                        </button>
+                      );
+                    })}
+                    {categorias.map((cat) => (
+                      <CategoriaPopoverButton
+                        key={cat.id}
+                        categoria={cat}
+                        onPick={(tipo) => adicionarPasso(tipo)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -1582,6 +1709,20 @@ interface CondicaoItem {
   valor2?: string;
 }
 
+/**
+ * Categoriza um path de variável pra agrupamento no combobox do If/Else.
+ * Heurística por prefixo. Sempre retorna uma categoria; default = "Outros".
+ */
+function categorizarVariavelCondicao(path: string): string {
+  if (path.startsWith("cliente.campos.")) return "Personalizados";
+  if (path.startsWith("cliente.")) return "Cliente";
+  if (path.startsWith("pagamento") || path.startsWith("cobrancas") || path === "valorTotalAberto" || path === "valorTotalVencido" || path === "cobrancasAbertasQtd") return "Pagamento (Asaas)";
+  if (path.startsWith("kanban") || path === "kanbanCardId") return "Kanban";
+  if (path.startsWith("calcom") || path === "horarioEscolhido" || path === "agendamentoId" || path === "bookingsQuantidade") return "Agendamento (Cal.com)";
+  if (["mensagem", "intencao", "respostaIA", "transferir"].includes(path)) return "Mensagem/IA";
+  return "Outros";
+}
+
 function ConfigCondicionalFields({
   cfg,
   onChange,
@@ -1590,23 +1731,37 @@ function ConfigCondicionalFields({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   // Catálogo dinâmico — mesmo do autocomplete `{{...}}`. Inclui campos
-  // personalizados do escritório (`cliente.campos.<chave>`). O usuário
-  // pode digitar livre também (datalist é só sugestão).
+  // personalizados do escritório (`cliente.campos.<chave>`).
   const variaveis = useSmartFlowVariaveis();
   // Mantém os 11 paths legados pra cenários antigos que salvaram
   // exatamente esses valores (a maioria já vem no catálogo, mas
   // `transferir`, `bookingsQuantidade` e similares não estão lá).
-  const sugestoes = useMemo(() => {
-    const set = new Map<string, string>();
+  const sugestoesAgrupadas = useMemo(() => {
+    const map = new Map<string, { path: string; label: string }>();
     for (const v of variaveis) {
-      if (!set.has(v.path)) set.set(v.path, v.label || v.path);
+      if (!map.has(v.path)) map.set(v.path, { path: v.path, label: v.label || v.path });
     }
     for (const k of CAMPOS_CONDICIONAL) {
-      if (!set.has(k)) set.set(k, k);
+      if (!map.has(k)) map.set(k, { path: k, label: k });
     }
-    return Array.from(set, ([path, label]) => ({ path, label }));
+    // Agrupa por categoria, preserva ordem alfabética dentro do grupo.
+    const grupos = new Map<string, { path: string; label: string }[]>();
+    for (const item of map.values()) {
+      const cat = categorizarVariavelCondicao(item.path);
+      if (!grupos.has(cat)) grupos.set(cat, []);
+      grupos.get(cat)!.push(item);
+    }
+    const ORDEM_GRUPOS = [
+      "Cliente", "Personalizados", "Pagamento (Asaas)",
+      "Agendamento (Cal.com)", "Kanban", "Mensagem/IA", "Outros",
+    ];
+    return ORDEM_GRUPOS
+      .filter((g) => grupos.has(g))
+      .map((g) => ({
+        nome: g,
+        itens: grupos.get(g)!.sort((a, b) => a.path.localeCompare(b.path)),
+      }));
   }, [variaveis]);
-  const datalistId = "smartflow-condicional-campos";
 
   const condicoes: CondicaoItem[] = Array.isArray(cfg.condicoes)
     ? (cfg.condicoes as CondicaoItem[])
@@ -1670,12 +1825,10 @@ function ConfigCondicionalFields({
                 placeholder={`Nome (ex: "Condição ${idx + 1}", "Cliente VIP"…)`}
                 className="h-7 text-xs"
               />
-              <Input
+              <CampoCondicaoCombobox
                 value={String(c.campo || "")}
-                onChange={(e) => atualizar(idx, { campo: e.target.value })}
-                placeholder="Campo (ex: intencao, cliente.nome, cliente.campos.oab)"
-                list={datalistId}
-                className="h-7 text-xs font-mono"
+                onChange={(v) => atualizar(idx, { campo: v })}
+                grupos={sugestoesAgrupadas}
               />
               <Select value={c.operador || "igual"} onValueChange={(v) => atualizar(idx, { operador: v })}>
                 <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
@@ -1712,14 +1865,6 @@ function ConfigCondicionalFields({
         </div>
       )}
 
-      <datalist id={datalistId}>
-        {sugestoes.map((s) => (
-          <option key={s.path} value={s.path}>
-            {s.label}
-          </option>
-        ))}
-      </datalist>
-
       <p className="text-[10px] text-muted-foreground">
         As condições são avaliadas em ordem. Conecte cada saída do nó ao próximo passo
         (ramo verde = condição X; ramo amarelo = fallback). Sem conexão = fim do fluxo.
@@ -1727,6 +1872,95 @@ function ConfigCondicionalFields({
         <code>cliente.campos.oab</code>) — mesmas variáveis do autocomplete <code>{"{{...}}"}</code>.
       </p>
     </div>
+  );
+}
+
+/**
+ * Combobox shadcn/cmdk pra escolher campo no If/Else. Sugestões agrupadas
+ * por categoria (Cliente / Personalizados / Pagamento / Kanban / etc) com
+ * busca fuzzy. Aceita digitação livre via Enter — escape hatch pra paths
+ * que não estão no catálogo.
+ */
+function CampoCondicaoCombobox({
+  value,
+  onChange,
+  grupos,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  grupos: Array<{ nome: string; itens: Array<{ path: string; label: string }> }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full h-7 flex items-center justify-between px-2 text-xs font-mono rounded border bg-card hover:bg-accent text-left"
+          title={value || "Escolha um campo"}
+        >
+          <span className={value ? "truncate" : "text-muted-foreground truncate"}>
+            {value || "Campo (ex: intencao, cliente.nome…)"}
+          </span>
+          <ChevronDown className="h-3 w-3 ml-1 opacity-60 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Buscar ou digitar caminho..."
+            value={busca}
+            onValueChange={setBusca}
+          />
+          <CommandList className="max-h-72">
+            <CommandEmpty>
+              <div className="text-xs px-2 py-1.5">
+                Sem sugestões. Pressione Enter pra usar{" "}
+                <code className="text-[10px]">{busca}</code>.
+              </div>
+              {busca.trim() && (
+                <button
+                  type="button"
+                  className="w-full text-left text-xs px-2 py-1.5 hover:bg-accent border-t"
+                  onClick={() => {
+                    onChange(busca.trim());
+                    setBusca("");
+                    setOpen(false);
+                  }}
+                >
+                  Usar <code className="text-[10px]">{busca.trim()}</code>
+                </button>
+              )}
+            </CommandEmpty>
+            {grupos.map((g) => (
+              <CommandGroup key={g.nome} heading={g.nome}>
+                {g.itens.map((item) => (
+                  <CommandItem
+                    key={item.path}
+                    value={`${item.path} ${item.label}`}
+                    onSelect={() => {
+                      onChange(item.path);
+                      setBusca("");
+                      setOpen(false);
+                    }}
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-mono text-[11px] truncate">{item.path}</span>
+                      {item.label !== item.path && (
+                        <span className="text-[10px] text-muted-foreground truncate">
+                          {item.label}
+                        </span>
+                      )}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -2265,6 +2499,300 @@ function ConfigDefinirVariavelFields({
   );
 }
 
+/**
+ * Definir campo personalizado — persiste no `contatos.camposPersonalizados`
+ * do cliente vinculado à execução. Lista de chaves vem do catálogo do
+ * escritório (`configuracoes.listarCamposPersonalizadosCliente`); se a
+ * lista estiver vazia, oferece input livre.
+ */
+function ConfigDefinirCampoPersonalizadoFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.valor || "");
+    onChange({ valor: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  // Catálogo de campos personalizados do escritório.
+  const { data: camposCatalogo } = (trpc as any).camposCliente.listar.useQuery(
+    undefined,
+    {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+  const opcoes: Array<{ chave: string; label: string }> = Array.isArray(camposCatalogo)
+    ? camposCatalogo.map((c: any) => ({ chave: c.chave, label: c.label || c.chave }))
+    : [];
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Campo personalizado</Label>
+        {opcoes.length > 0 ? (
+          <Select
+            value={String(cfg.chave || "")}
+            onValueChange={(v) => onChange({ chave: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Escolha o campo..." />
+            </SelectTrigger>
+            <SelectContent>
+              {opcoes.map((o) => (
+                <SelectItem key={o.chave} value={o.chave}>
+                  {o.label} <span className="text-muted-foreground ml-1 text-[10px]">({o.chave})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            value={String(cfg.chave || "")}
+            onChange={(e) => onChange({ chave: e.target.value })}
+            placeholder="oab"
+            className="font-mono text-xs"
+          />
+        )}
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {opcoes.length > 0
+            ? "Cadastre novos campos em Configurações → Campos personalizados de cliente."
+            : "Nenhum campo cadastrado ainda — digite a chave aqui ou crie em Configurações."}
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Valor</Label>
+          <VariableTrigger
+            inputId="cfg-defcampo-valor"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-defcampo-valor"
+          value={String(cfg.valor || "")}
+          onChange={(v) => onChange({ valor: v })}
+          variaveis={variaveis}
+          placeholder="Ex: ativo, ou {{intencao}}"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Persiste no cadastro do cliente vinculado à execução.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ConfigAsaasGerarCobrancaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (campo: string) => (path: string) => {
+    const atual = String(cfg[campo] || "");
+    onChange({ [campo]: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Valor (R$)</Label>
+          <VariableTrigger
+            inputId="cfg-asaas-valor"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("valor")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-asaas-valor"
+          value={String(cfg.valor || "")}
+          onChange={(v) => onChange({ valor: v })}
+          variaveis={variaveis}
+          placeholder="1500.00 ou {{pagamentoValor}}"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Tipo de cobrança</Label>
+        <Select
+          value={String(cfg.tipoCobranca || "BOLETO")}
+          onValueChange={(v) => onChange({ tipoCobranca: v })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="BOLETO">Boleto</SelectItem>
+            <SelectItem value="PIX">PIX</SelectItem>
+            <SelectItem value="CREDIT_CARD">Cartão de crédito</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Vencimento (dias)</Label>
+        <Input
+          type="number"
+          min={1}
+          value={cfg.vencimentoDias != null ? String(cfg.vencimentoDias) : ""}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            onChange({ vencimentoDias: v ? Number(v) : null });
+          }}
+          placeholder="7"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Descrição</Label>
+          <VariableTrigger
+            inputId="cfg-asaas-descricao"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("descricao")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-asaas-descricao"
+          value={String(cfg.descricao || "")}
+          onChange={(v) => onChange({ descricao: v })}
+          variaveis={variaveis}
+          placeholder="Honorários — {{nomeCliente}}"
+        />
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        O ID e o link da cobrança ficam em <code>{"{{pagamentoId}}"}</code> e
+        <code> {"{{pagamentoLink}}"}</code> pra usar nos próximos passos.
+      </p>
+    </div>
+  );
+}
+
+function ConfigAsaasCancelarCobrancaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.pagamentoId || "");
+    onChange({ pagamentoId: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">ID da cobrança</Label>
+          <VariableTrigger
+            inputId="cfg-asaas-cancelar-id"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-asaas-cancelar-id"
+          value={String(cfg.pagamentoId || "")}
+          onChange={(v) => onChange({ pagamentoId: v })}
+          variaveis={variaveis}
+          placeholder="{{pagamentoId}} (default — gerado num passo anterior)"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Vazio = usa <code>{"{{pagamentoId}}"}</code> do contexto.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ConfigAsaasConsultarValorAbertoFields() {
+  return (
+    <p className="text-xs text-muted-foreground">
+      Lê o resumo financeiro do cliente vinculado e grava no contexto:{" "}
+      <code>{"{{valorTotalAberto}}"}</code>, <code>{"{{valorTotalVencido}}"}</code>,
+      <code> {"{{cobrancasAbertasQtd}}"}</code>. Útil pra ramificar (If/Else) ou
+      compor mensagens.
+    </p>
+  );
+}
+
+function ConfigAsaasMarcarRecebidaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (campo: string) => (path: string) => {
+    const atual = String(cfg[campo] || "");
+    onChange({ [campo]: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">ID da cobrança</Label>
+          <VariableTrigger
+            inputId="cfg-asaas-receber-id"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("pagamentoId")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-asaas-receber-id"
+          value={String(cfg.pagamentoId || "")}
+          onChange={(v) => onChange({ pagamentoId: v })}
+          variaveis={variaveis}
+          placeholder="{{pagamentoId}}"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Valor recebido (R$, opcional)</Label>
+          <VariableTrigger
+            inputId="cfg-asaas-receber-valor"
+            variaveis={variaveis}
+            onInsert={insertNoCfg("valorRecebido")}
+          />
+        </div>
+        <VariableInput
+          id="cfg-asaas-receber-valor"
+          value={String(cfg.valorRecebido || "")}
+          onChange={(v) => onChange({ valorRecebido: v })}
+          variaveis={variaveis}
+          placeholder="Vazio = valor da cobrança"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs">Data do recebimento (opcional)</Label>
+        <Input
+          type="date"
+          value={String(cfg.dataRecebimento || "")}
+          onChange={(e) => onChange({ dataRecebimento: e.target.value })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Vazio = hoje. Útil quando o pagamento entrou por fora (PIX manual, transferência).
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: Record<string, unknown>) => void }) {
   const cfg = node.data.config;
 
@@ -2439,6 +2967,16 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigKanbanTagsFields cfg={cfg} onChange={onChange} />;
     case "definir_variavel":
       return <ConfigDefinirVariavelFields cfg={cfg} onChange={onChange} />;
+    case "definir_campo_personalizado":
+      return <ConfigDefinirCampoPersonalizadoFields cfg={cfg} onChange={onChange} />;
+    case "asaas_gerar_cobranca":
+      return <ConfigAsaasGerarCobrancaFields cfg={cfg} onChange={onChange} />;
+    case "asaas_cancelar_cobranca":
+      return <ConfigAsaasCancelarCobrancaFields cfg={cfg} onChange={onChange} />;
+    case "asaas_consultar_valor_aberto":
+      return <ConfigAsaasConsultarValorAbertoFields />;
+    case "asaas_marcar_recebida":
+      return <ConfigAsaasMarcarRecebidaFields cfg={cfg} onChange={onChange} />;
     default:
       return (
         <p className="text-xs text-muted-foreground">
