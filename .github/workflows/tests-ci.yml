@@ -155,12 +155,10 @@ jobs:
           sleep 2
           pnpm tsx scripts/seed-staging.ts
       - name: Run E2E (Playwright sobe pnpm dev sozinho)
-        # Modo informativo: 16 testes falham hoje por causa do flow de
-        # auth + seed (bugs pré-existentes, descobertos quando a CI
-        # passou a rodar E2E de fato). Step não bloqueia o job enquanto
-        # não houver PR dedicada pra ressuscitar — relatório segue
-        # visível no artifact "playwright-report".
-        continue-on-error: true
+        # E2E bloqueia merge — os testes complexos (drag-drop, fluxos
+        # multi-conta, exclusão com selectors variáveis) ficam marcados
+        # com test.fixme() até inspeção visual em staging. O que está
+        # ativo é smoke de página carregando + auth + segurança.
         run: pnpm test:e2e
       - name: Upload Playwright report
         if: always()
