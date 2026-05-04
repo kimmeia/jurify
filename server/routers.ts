@@ -38,6 +38,7 @@ import { financeiroRouter } from "./escritorio/router-financeiro";
 import { comissoesRouter } from "./escritorio/router-comissoes";
 import { comissoesAgendaRouter } from "./escritorio/router-comissoes-agenda";
 import { despesasRouter } from "./escritorio/router-despesas";
+import { backupRouter } from "./escritorio/router-backup";
 
 // Integrações
 import { calcomRouter } from "./integracoes/router-calcom";
@@ -47,6 +48,7 @@ import { agentesIaRouter } from "./integracoes/router-agentes-ia";
 import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
+import { adminBackupRouter } from "./admin/router-admin-backup";
 import { roadmapRouter } from "./router-roadmap";
 import { juditOperacoesRouter } from "./integracoes/router-judit-operacoes";
 import { juditUsuarioRouter } from "./integracoes/router-judit-usuario";
@@ -114,6 +116,7 @@ export const appRouter = router({
   comissoes: comissoesRouter,
   comissoesAgenda: comissoesAgendaRouter,
   despesas: despesasRouter,
+  backup: backupRouter,
 
   // Integrações específicas
   whatsappCoex: whatsappCoexRouter, // legado — mantido para retrocompatibilidade
@@ -122,6 +125,7 @@ export const appRouter = router({
   juditProcessos: juditProcessosRouter,
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
+  adminBackup: adminBackupRouter,
   roadmap: roadmapRouter,
   juditOperacoes: juditOperacoesRouter,
   juditUsuario: juditUsuarioRouter,

@@ -16,7 +16,9 @@ import {
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
+  Database,
 } from "lucide-react";
+import { BackupTab } from "./configuracoes/backup-tab";
 import { toast } from "sonner";
 import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import type { CargoColaborador } from "@shared/escritorio-types";
@@ -232,7 +234,7 @@ export default function Configuracoes() {
       </div>
 
       <Tabs defaultValue="perfil">
-        <TabsList className="grid w-full grid-cols-8 h-10">
+        <TabsList className={`grid w-full ${isDono ? "grid-cols-9" : "grid-cols-8"} h-10`}>
           <TabsTrigger value="perfil" className="gap-1.5 text-xs"><Building2 className="h-3.5 w-3.5" /> Escritório</TabsTrigger>
           <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
           <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
@@ -241,6 +243,9 @@ export default function Configuracoes() {
           <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
           <TabsTrigger value="financeiro" className="gap-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
           <TabsTrigger value="integracoes" className="gap-1.5 text-xs"><Link2 className="h-3.5 w-3.5" /> Integrações</TabsTrigger>
+          {isDono && (
+            <TabsTrigger value="backup" className="gap-1.5 text-xs"><Database className="h-3.5 w-3.5" /> Backup</TabsTrigger>
+          )}
         </TabsList>
 
         {/* ─── Perfil ────────────────────────────────────────────────── */}
@@ -560,6 +565,12 @@ export default function Configuracoes() {
         <TabsContent value="campos" className="space-y-4">
           <CamposClienteTab canEdit={canEdit} />
         </TabsContent>
+
+        {isDono && (
+          <TabsContent value="backup" className="space-y-4">
+            <BackupTab />
+          </TabsContent>
+        )}
 
       </Tabs>
     </div>

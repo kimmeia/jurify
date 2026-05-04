@@ -1,0 +1,117 @@
+/**
+ * Allowlist explícita das tabelas que entram no backup do escritório.
+ *
+ * Toda tabela com `escritorioId` precisa estar EM UMA das três listas:
+ *   - INCLUIR: faz parte do backup (dados ou configs sem segredo).
+ *   - EXCLUIR_SEGREDO: contém chaves criptografadas, tokens, senhas
+ *     compartilhadas. Restore manual via reconfiguração das integrações.
+ *   - EXCLUIR_NAO_RELEVANTE: auditoria, métricas internas Jurify, ou
+ *     dados que não fazem sentido no backup do escritório.
+ *
+ * O teste em `__tests__/backup-allowlist.test.ts` falha se aparecer
+ * qualquer tabela nova com `escritorioId` que não esteja classificada.
+ * Isso força decisão consciente quando uma feature nova adiciona tabela
+ * — evita lacuna silenciosa no backup.
+ *
+ * Pra colunas sensíveis dentro de tabelas que devem ser incluídas (ex:
+ * `agentesIa.openaiApiKey`), declare em `colunasOmitir`. O exporter
+ * remove a coluna do JSON e adiciona um placeholder no SQL.
+ */
+export interface TabelaBackup {
+  /** Nome da tabela no MySQL (snake_case). */
+  nomeBanco: string;
+  /** Coluna escritórioId real (alguns nomes variam: escritorioIdContato etc). */
+  colunaEscritorio: string;
+  /** Colunas com segredos criptografados — omitidas do export. */
+  colunasOmitir?: string[];
+  /**
+   * Categoria pra UX: "dados" aparece como "Dados operacionais" no
+   * preview do backup; "configs" como "Configurações do escritório".
+   */
+  categoria: "dados" | "configs";
+}
+
+export const TABELAS_INCLUIR: TabelaBackup[] = [
+  // ─── DADOS OPERACIONAIS ──────────────────────────────────────────────
+  { nomeBanco: "colaboradores", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "convites_colaborador", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "contatos", colunaEscritorio: "escritorioIdContato", categoria: "dados" },
+  { nomeBanco: "cliente_anotacoes", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "cliente_arquivos", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "cliente_pastas", colunaEscritorio: "escritorioIdPasta", categoria: "dados" },
+  { nomeBanco: "cliente_processos", colunaEscritorio: "escritorioIdCliProc", categoria: "dados" },
+  { nomeBanco: "conversas", colunaEscritorio: "escritorioIdConv", categoria: "dados" },
+  { nomeBanco: "leads", colunaEscritorio: "escritorioIdLead", categoria: "dados" },
+  { nomeBanco: "agendamentos", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "tarefas", colunaEscritorio: "escritorioIdTarefa", categoria: "dados" },
+  { nomeBanco: "kanban_funis", colunaEscritorio: "escritorioIdKF", categoria: "dados" },
+  { nomeBanco: "kanban_cards", colunaEscritorio: "escritorioIdKCard", categoria: "dados" },
+  { nomeBanco: "kanban_tags", colunaEscritorio: "escritorioIdKTag", categoria: "dados" },
+  { nomeBanco: "assinaturas_digitais", colunaEscritorio: "escritorioId", categoria: "dados" },
+  // Financeiro:
+  { nomeBanco: "asaas_clientes", colunaEscritorio: "escritorioIdAsaasCli", categoria: "dados" },
+  { nomeBanco: "asaas_cobrancas", colunaEscritorio: "escritorioIdAsaasCob", categoria: "dados" },
+  { nomeBanco: "asaas_config_cobranca_pai", colunaEscritorio: "escritorioIdAcCp", categoria: "dados" },
+  { nomeBanco: "despesas", colunaEscritorio: "escritorioIdDesp", categoria: "dados" },
+  { nomeBanco: "comissoes_fechadas", colunaEscritorio: "escritorioIdComFech", categoria: "dados" },
+  { nomeBanco: "comissoes_agenda", colunaEscritorio: "escritorioIdComAg", categoria: "dados" },
+  { nomeBanco: "comissoes_lancamentos_log", colunaEscritorio: "escritorioIdComLog", categoria: "dados" },
+  // Métricas de atendimento:
+  { nomeBanco: "atendimento_metricas_diarias", colunaEscritorio: "escritorioIdMetrica", categoria: "dados" },
+  // Judit (monitoramento de processos — não inclui chaves):
+  { nomeBanco: "judit_monitoramentos", colunaEscritorio: "escritorioIdJuditMon", categoria: "dados" },
+
+  // ─── CONFIGS DO ESCRITÓRIO ────────────────────────────────────────────
+  { nomeBanco: "campos_personalizados_cliente", colunaEscritorio: "escritorioIdCpc", categoria: "configs" },
+  { nomeBanco: "cargos_personalizados", colunaEscritorio: "escritorioId", categoria: "configs" },
+  { nomeBanco: "categorias_cobranca", colunaEscritorio: "escritorioIdCatCob", categoria: "configs" },
+  { nomeBanco: "categorias_despesa", colunaEscritorio: "escritorioIdCatDesp", categoria: "configs" },
+  { nomeBanco: "regra_comissao", colunaEscritorio: "escritorioIdRegraCom", categoria: "configs" },
+  { nomeBanco: "regra_comissao_faixas", colunaEscritorio: "escritorioIdFaixa", categoria: "configs" },
+  { nomeBanco: "mensagem_templates", colunaEscritorio: "escritorioIdTpl", categoria: "configs" },
+  { nomeBanco: "modelos_contrato", colunaEscritorio: "escritorioIdModCt", categoria: "configs" },
+  { nomeBanco: "smartflow_cenarios", colunaEscritorio: "escritorioIdSF", categoria: "configs" },
+  { nomeBanco: "smartflow_execucoes", colunaEscritorio: "escritorioIdExec", categoria: "configs" },
+  // Agentes IA — chaves API criptografadas são omitidas do export:
+  {
+    nomeBanco: "agentes_ia",
+    colunaEscritorio: "escritorioId",
+    categoria: "configs",
+    colunasOmitir: ["openaiApiKey", "apiKeyIv", "apiKeyTag"],
+  },
+  { nomeBanco: "agente_ia_documentos", colunaEscritorio: "escritorioIdIaDoc", categoria: "configs" },
+  { nomeBanco: "agente_chat_threads", colunaEscritorio: "escritorioIdThread", categoria: "configs" },
+];
+
+/**
+ * Tabelas com `escritorioId` que NÃO entram no backup porque guardam
+ * segredos (chaves API, webhook tokens, OAuth tokens). Restore =
+ * reconfigurar as integrações manualmente (~2 min cada).
+ */
+export const EXCLUIR_SEGREDO: ReadonlyArray<{ nomeBanco: string; motivo: string }> = [
+  { nomeBanco: "asaas_config", motivo: "API key criptografada + webhook token" },
+  { nomeBanco: "judit_credenciais", motivo: "API keys do Judit" },
+  { nomeBanco: "canais_integrados", motivo: "Tokens WhatsApp/Meta/IA, webhook secrets" },
+];
+
+/**
+ * Tabelas com `escritorioId` que não entram no backup por não fazerem
+ * sentido pro dono (auditoria de webhook, financeiro interno Jurify).
+ */
+export const EXCLUIR_NAO_RELEVANTE: ReadonlyArray<{ nomeBanco: string; motivo: string }> = [
+  { nomeBanco: "integracao_audit_log", motivo: "Auditoria de integrações — log interno" },
+  { nomeBanco: "asaas_webhook_eventos", motivo: "Idempotency log de webhooks — não tem valor pro dono" },
+  { nomeBanco: "judit_creditos", motivo: "Créditos do escritório no Judit — financeiro Jurify" },
+  { nomeBanco: "judit_transacoes", motivo: "Histórico de uso Judit — financeiro Jurify" },
+];
+
+/**
+ * Lista plana de TODAS as tabelas com `escritorioId` (de qualquer
+ * grupo). Usada pelo teste de enforcement. Atualizar quando schema
+ * adicionar tabela nova.
+ */
+export const TODAS_TABELAS_COM_ESCRITORIO_ID: ReadonlyArray<string> = [
+  ...TABELAS_INCLUIR.map((t) => t.nomeBanco),
+  ...EXCLUIR_SEGREDO.map((t) => t.nomeBanco),
+  ...EXCLUIR_NAO_RELEVANTE.map((t) => t.nomeBanco),
+];
