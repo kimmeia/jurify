@@ -16,9 +16,11 @@ import {
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
-  Database,
+  Database, CreditCard as CreditCardIcon,
 } from "lucide-react";
-import { BackupTab } from "./configuracoes/backup-tab";
+import { BackupDialog } from "./configuracoes/backup-dialog";
+import Plans from "./Plans";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import type { CargoColaborador } from "@shared/escritorio-types";
@@ -108,8 +110,23 @@ function SetupEscritorio({ onCreated }: { onCreated: () => void }) {
 
 // ─── Componente Principal ────────────────────────────────────────────────────
 
+/**
+ * Lê `?tab=` da URL pra abrir uma aba específica via deep-link. Usado
+ * no redirect de /plans → /configuracoes?tab=meu-plano (preserva o
+ * link antigo que aparece em Termos.tsx, e-mails de billing, etc).
+ */
+function getTabFromQueryString(): string {
+  if (typeof window === "undefined") return "perfil";
+  const params = new URLSearchParams(window.location.search);
+  const t = params.get("tab");
+  return t || "perfil";
+}
+
 export default function Configuracoes() {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const [tabAtiva, setTabAtiva] = useState(getTabFromQueryString());
+  const [backupDialogOpen, setBackupDialogOpen] = useState(false);
 
   const { data, isLoading, refetch } = trpc.configuracoes.meuEscritorio.useQuery();
   const { data: equipeData, refetch: refetchEquipe } = trpc.configuracoes.listarColaboradores.useQuery(undefined, { enabled: !!data });
@@ -194,6 +211,7 @@ export default function Configuracoes() {
   const isDono = colaborador.cargo === "dono";
   const isGestor = colaborador.cargo === "gestor";
   const canEdit = isDono || isGestor;
+  const podeVerMeuPlano = isDono || user?.role === "admin";
 
   const initPerfilForm = () => {
     setFormPerfil({
@@ -233,8 +251,8 @@ export default function Configuracoes() {
         <CargoBadge cargo={colaborador.cargo as CargoColaborador} />
       </div>
 
-      <Tabs defaultValue="perfil">
-        <TabsList className={`grid w-full ${isDono ? "grid-cols-9" : "grid-cols-8"} h-10`}>
+      <Tabs value={tabAtiva} onValueChange={setTabAtiva}>
+        <TabsList className={`grid w-full ${podeVerMeuPlano ? "grid-cols-9" : "grid-cols-8"} h-10`}>
           <TabsTrigger value="perfil" className="gap-1.5 text-xs"><Building2 className="h-3.5 w-3.5" /> Escritório</TabsTrigger>
           <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
           <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
@@ -243,8 +261,8 @@ export default function Configuracoes() {
           <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
           <TabsTrigger value="financeiro" className="gap-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
           <TabsTrigger value="integracoes" className="gap-1.5 text-xs"><Link2 className="h-3.5 w-3.5" /> Integrações</TabsTrigger>
-          {isDono && (
-            <TabsTrigger value="backup" className="gap-1.5 text-xs"><Database className="h-3.5 w-3.5" /> Backup</TabsTrigger>
+          {podeVerMeuPlano && (
+            <TabsTrigger value="meu-plano" className="gap-1.5 text-xs"><CreditCardIcon className="h-3.5 w-3.5" /> Meu Plano</TabsTrigger>
           )}
         </TabsList>
 
@@ -361,6 +379,29 @@ export default function Configuracoes() {
                     <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dias</p><p>{(escritorio.diasFuncionamento || []).join(", ")}</p></div>
                     <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Fuso</p><p>{escritorio.fusoHorario}</p></div>
                   </div>
+
+                  {isDono && (
+                    <>
+                      <Separator />
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium flex items-center gap-1.5">
+                            <Database className="h-4 w-4" /> Backup e import
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Exporta ou restaura todos os dados do escritório.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBackupDialogOpen(true)}
+                        >
+                          Abrir
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -566,13 +607,17 @@ export default function Configuracoes() {
           <CamposClienteTab canEdit={canEdit} />
         </TabsContent>
 
-        {isDono && (
-          <TabsContent value="backup" className="space-y-4">
-            <BackupTab />
+        {podeVerMeuPlano && (
+          <TabsContent value="meu-plano" className="space-y-4">
+            {/* `Plans` é a página antiga `/plans` reaproveitada como aba.
+                Tem layout próprio (max-w + padding) — fica OK aqui. */}
+            <Plans />
           </TabsContent>
         )}
 
       </Tabs>
+
+      <BackupDialog open={backupDialogOpen} onOpenChange={setBackupDialogOpen} />
     </div>
   );
 }

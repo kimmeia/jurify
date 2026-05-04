@@ -1,7 +1,9 @@
 /**
- * Aba "Backup" das Configurações do escritório. Visível apenas pra
- * cargo "dono". Gera ZIP/SQL filtrado por escritorioId, sem armazenamento
- * server-side: o servidor monta, retorna em base64, navegador baixa.
+ * Dialog "Backup do escritório" — abre a partir do botão na aba
+ * Escritório das Configurações. Visível apenas pra cargo "dono".
+ * Gera ZIP/SQL filtrado por escritorioId, sem armazenamento server-side:
+ * o servidor monta, retorna em base64, navegador baixa. Também cobre
+ * o fluxo de Importar (sobe ZIP, preview, executa).
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -15,6 +17,9 @@ import {
   RadioGroup, RadioGroupItem,
 } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertTriangle, CheckCircle2, Database, Download, FileJson,
   FileText, Loader2, ShieldAlert, Upload, Trash2,
@@ -47,7 +52,37 @@ function baixarBase64(base64: string, nome: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-export function BackupTab() {
+/**
+ * Wrapper Dialog. Conteúdo interno (BackupConteudo) só renderiza quando
+ * `open` é true — query habilitada condicionalmente pra evitar 1 request
+ * por render do componente pai.
+ */
+export function BackupDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" /> Backup e import do escritório
+          </DialogTitle>
+          <DialogDescription>
+            Gere um backup completo dos dados do escritório ou restaure a
+            partir de um ZIP gerado anteriormente.
+          </DialogDescription>
+        </DialogHeader>
+        {open && <BackupConteudo />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BackupConteudo() {
   const [formato, setFormato] = useState<Formato>("ambos");
   const preview = (trpc as any).backup.previewEscopo.useQuery(undefined, {
     retry: false,
@@ -82,14 +117,12 @@ export function BackupTab() {
   const configs = data.incluidas.filter((t: any) => t.categoria === "configs");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-2">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" /> Backup do escritório
-          </CardTitle>
+          <CardTitle className="text-base">Exportar backup</CardTitle>
           <CardDescription>
-            Exporta todos os dados do <strong>{data.escritorioNome}</strong>{" "}
+            Todos os dados do <strong>{data.escritorioNome}</strong>{" "}
             ({data.totalLinhas.toLocaleString("pt-BR")} registros). O backup é
             gerado e baixado direto pelo navegador — não fica armazenado nos
             nossos servidores.
