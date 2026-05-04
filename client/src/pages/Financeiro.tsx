@@ -33,6 +33,20 @@ import {
 } from "./financeiro/dialogs";
 import { ComissoesTab } from "./financeiro/Comissoes";
 import { DespesasTab } from "./financeiro/Despesas";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+
+/** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
+function rangeMesCorrente(): { inicio: string; fim: string } {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = hoje.getMonth();
+  const inicio = new Date(ano, mes, 1);
+  const fim = new Date(ano, mes + 1, 0);
+  return {
+    inicio: inicio.toISOString().slice(0, 10),
+    fim: fim.toISOString().slice(0, 10),
+  };
+}
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
@@ -40,14 +54,19 @@ export default function Financeiro() {
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
-  const [filtroStatus, setFiltroStatus] = useState("todos");
-  const [filtroForma, setFiltroForma] = useState("todos");
+  // Filtros multi-select. Vazio = "todos" (sem filtro).
+  const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
+  const [filtroForma, setFiltroForma] = useState<string[]>([]);
   const [busca, setBusca] = useState("");
   // Período do gráfico de fluxo de caixa. Pode ser preset (3/6/12 meses)
   // ou range customizado (dataInicio/dataFim). Quando custom, `periodo`
   // fica como null e a query usa as datas; caso contrário usa `meses`.
-  const [periodo, setPeriodo] = useState<3 | 6 | 12 | null>(6);
-  const [rangeCustom, setRangeCustom] = useState<{ inicio: string; fim: string } | null>(null);
+  // Default: range custom = mês corrente (1º a último dia). Pra ver mais
+  // meses pra trás, user troca pra preset.
+  const [periodo, setPeriodo] = useState<3 | 6 | 12 | null>(null);
+  const [rangeCustom, setRangeCustom] = useState<{ inicio: string; fim: string } | null>(
+    rangeMesCorrente(),
+  );
   const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
   // Inputs locais do popover (só commitam ao clicar Aplicar).
   const [rangeInicioInput, setRangeInicioInput] = useState("");
@@ -60,12 +79,35 @@ export default function Financeiro() {
 
   const { data: statusAsaas, isLoading: loadStatus, refetch: refetchStatus } =
     trpc.asaas.status.useQuery(undefined, { retry: false });
-  const { data: kpis, refetch: refetchKpis } = trpc.asaas.kpis.useQuery(undefined, {
-    retry: false,
-    enabled: statusAsaas?.conectado,
-    refetchInterval: REFRESH_MS,
-    refetchOnWindowFocus: true,
-  });
+
+  // Range efetivo (dataInicio/dataFim concretos) derivado do estado atual.
+  // Usado tanto pelo gráfico quanto pelos KPIs e filtro de cobranças.
+  const rangeEfetivo = useMemo<{ inicio: string; fim: string }>(() => {
+    if (rangeCustom) return rangeCustom;
+    const meses = periodo ?? 6;
+    const hoje = new Date();
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - (meses - 1), 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); // último dia do mês atual
+    return { inicio: inicio.toISOString().slice(0, 10), fim: fim.toISOString().slice(0, 10) };
+  }, [rangeCustom, periodo]);
+
+  // KPIs respeitam o range escolhido: cobranças PAGAS filtram por
+  // dataPagamento dentro do range (bate com Comissões); pendentes/
+  // vencidas filtram por vencimento (faz sentido por vencimento).
+  const { data: kpis, refetch: refetchKpis } = trpc.asaas.kpis.useQuery(
+    {
+      pagamentoInicio: rangeEfetivo.inicio,
+      pagamentoFim: rangeEfetivo.fim,
+      vencimentoInicio: rangeEfetivo.inicio,
+      vencimentoFim: rangeEfetivo.fim,
+    },
+    {
+      retry: false,
+      enabled: statusAsaas?.conectado,
+      refetchInterval: REFRESH_MS,
+      refetchOnWindowFocus: true,
+    },
+  );
   const { data: saldo } = trpc.asaas.obterSaldo.useQuery(undefined, {
     retry: false,
     enabled: statusAsaas?.conectado,
@@ -81,23 +123,22 @@ export default function Financeiro() {
       refetchInterval: REFRESH_MS * 2, // 2 min (menos sensível a mudanças)
     },
   );
-  // Range efetivo (dataInicio/dataFim concretos) derivado do estado atual.
-  // Usado tanto pelo gráfico quanto pelo filtro de cobranças (vencimento).
-  const rangeEfetivo = useMemo<{ inicio: string; fim: string }>(() => {
-    if (rangeCustom) return rangeCustom;
-    const meses = periodo ?? 6;
-    const hoje = new Date();
-    const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - (meses - 1), 1);
-    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); // último dia do mês atual
-    return { inicio: inicio.toISOString().slice(0, 10), fim: fim.toISOString().slice(0, 10) };
-  }, [rangeCustom, periodo]);
 
+  // Filtro da aba Cobranças: agora por DATA DE PAGAMENTO (bate com a
+  // aba Comissões). PENDING/OVERDUE não têm dataPagamento — são
+  // incluídas separadamente quando o user marca esses status no
+  // multi-select (filtramos por vencimento como fallback nesse caso).
+  const filtraPorVencimento = filtroStatus.length > 0 && filtroStatus.every(
+    (s) => s === "PENDING" || s === "OVERDUE",
+  );
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
     trpc.asaas.listarCobrancas.useQuery(
       {
-        status: filtroStatus !== "todos" ? filtroStatus : undefined,
-        vencimentoInicio: rangeEfetivo.inicio,
-        vencimentoFim: rangeEfetivo.fim,
+        status: filtroStatus.length > 0 ? filtroStatus : undefined,
+        formaPagamento: filtroForma.length > 0 ? filtroForma : undefined,
+        ...(filtraPorVencimento
+          ? { vencimentoInicio: rangeEfetivo.inicio, vencimentoFim: rangeEfetivo.fim }
+          : { pagamentoInicio: rangeEfetivo.inicio, pagamentoFim: rangeEfetivo.fim }),
         limit: 100,
       },
       {
@@ -156,15 +197,15 @@ export default function Financeiro() {
     refetchClientes();
   };
 
-  // Filtra cobranças visíveis (filtros client-side adicionais)
+  // Filtra cobranças visíveis (filtros client-side adicionais).
+  // Forma já vai pro backend, mas mantemos o filtro de busca livre.
   const cobrancasFiltradas = useMemo(() => {
     if (!cobrancas?.items) return [];
     return cobrancas.items.filter((c: any) => {
-      if (filtroForma !== "todos" && c.formaPagamento !== filtroForma) return false;
       if (busca && !`${c.nomeContato} ${c.descricao || ""}`.toLowerCase().includes(busca.toLowerCase())) return false;
       return true;
     });
-  }, [cobrancas, filtroForma, busca]);
+  }, [cobrancas, busca]);
 
   const toggleSelecionada = (id: string) => {
     setSelecionadas((prev) => {
@@ -562,31 +603,35 @@ export default function Financeiro() {
                 className="pl-9 h-9 text-sm"
               />
             </div>
-            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-              <SelectTrigger className="w-36 h-9 text-xs">
-                <Filter className="h-3 w-3 mr-1" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos status</SelectItem>
-                <SelectItem value="PENDING">Pendente</SelectItem>
-                <SelectItem value="RECEIVED">Recebido</SelectItem>
-                <SelectItem value="CONFIRMED">Confirmado</SelectItem>
-                <SelectItem value="OVERDUE">Vencido</SelectItem>
-                <SelectItem value="REFUNDED">Estornado</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroForma} onValueChange={setFiltroForma}>
-              <SelectTrigger className="w-32 h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todas formas</SelectItem>
-                <SelectItem value="PIX">Pix</SelectItem>
-                <SelectItem value="BOLETO">Boleto</SelectItem>
-                <SelectItem value="CREDIT_CARD">Cartão</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelectFilter
+              placeholder="Todos status"
+              value={filtroStatus}
+              onChange={setFiltroStatus}
+              showFilterIcon
+              className="w-40"
+              options={[
+                { value: "PENDING", label: "Pendente" },
+                { value: "RECEIVED", label: "Recebido" },
+                { value: "CONFIRMED", label: "Confirmado" },
+                { value: "OVERDUE", label: "Vencido" },
+                { value: "REFUNDED", label: "Estornado" },
+              ]}
+            />
+            <MultiSelectFilter
+              placeholder="Todas formas"
+              value={filtroForma}
+              onChange={setFiltroForma}
+              className="w-36"
+              options={[
+                { value: "PIX", label: "Pix" },
+                { value: "BOLETO", label: "Boleto" },
+                { value: "CREDIT_CARD", label: "Cartão" },
+                { value: "DINHEIRO", label: "Dinheiro" },
+                { value: "TRANSFERENCIA", label: "Transferência" },
+                { value: "OUTRO", label: "Outro" },
+                { value: "UNDEFINED", label: "Cliente escolhe" },
+              ]}
+            />
             <div className="flex-1" />
             <Button size="sm" variant="outline" onClick={handleBulkExport}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
@@ -741,7 +786,7 @@ export default function Financeiro() {
             <div className="flex flex-col items-center justify-center py-12 gap-2">
               <Receipt className="h-8 w-8 text-muted-foreground opacity-30" />
               <p className="text-sm text-muted-foreground">
-                {busca || filtroStatus !== "todos" || filtroForma !== "todos"
+                {busca || filtroStatus.length > 0 || filtroForma.length > 0
                   ? "Nenhuma cobrança corresponde aos filtros."
                   : "Nenhuma cobrança ainda."}
               </p>

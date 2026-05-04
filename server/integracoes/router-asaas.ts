@@ -1397,13 +1397,26 @@ export const asaasRouter = router({
   /** Lista cobranças do escritório com filtros */
   listarCobrancas: protectedProcedure
     .input(z.object({
-      status: z.string().optional(),
+      /** Aceita string única (legado) OU array (multi-select novo). */
+      status: z.union([z.string(), z.array(z.string())]).optional(),
+      /** Aceita string única (legado) OU array (multi-select novo). */
+      formaPagamento: z.union([z.string(), z.array(z.string())]).optional(),
       contatoId: z.number().optional(),
       busca: z.string().optional(),
       /** Filtra cobranças por vencimento ≥ data (YYYY-MM-DD). */
       vencimentoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       /** Filtra cobranças por vencimento ≤ data (YYYY-MM-DD). */
       vencimentoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      /**
+       * Filtra cobranças por DATA DE PAGAMENTO (≥). Útil pra "ver o que
+       * recebi em maio" — bate com o critério da aba Comissões.
+       * Cobranças não pagas (PENDING/OVERDUE) são excluídas implicitamente
+       * porque não têm dataPagamento.
+       */
+      pagamentoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      pagamentoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      /** Filtro por atendente (responsável pela comissão). */
+      atendenteId: z.number().optional(),
       limit: z.number().min(1).max(100).default(50),
       offset: z.number().min(0).default(0),
     }).optional())
@@ -1417,14 +1430,41 @@ export const asaasRouter = router({
       try {
         const conditions: any[] = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
 
-        if (input?.status) conditions.push(eq(asaasCobrancas.status, input.status));
+        // Status: aceita string ou array (multi-select)
+        if (input?.status) {
+          const statusList = Array.isArray(input.status) ? input.status : [input.status];
+          if (statusList.length === 1) {
+            conditions.push(eq(asaasCobrancas.status, statusList[0]));
+          } else if (statusList.length > 1) {
+            conditions.push(inArray(asaasCobrancas.status, statusList));
+          }
+        }
+        // Forma de pagamento: aceita string ou array (multi-select)
+        if (input?.formaPagamento) {
+          const formaList = Array.isArray(input.formaPagamento)
+            ? input.formaPagamento
+            : [input.formaPagamento];
+          if (formaList.length === 1) {
+            conditions.push(eq(asaasCobrancas.formaPagamento, formaList[0] as any));
+          } else if (formaList.length > 1) {
+            conditions.push(inArray(asaasCobrancas.formaPagamento, formaList as any));
+          }
+        }
         if (input?.contatoId) conditions.push(eq(asaasCobrancas.contatoId, input.contatoId));
+        if (input?.atendenteId) conditions.push(eq(asaasCobrancas.atendenteId, input.atendenteId));
         if (input?.vencimentoInicio && input?.vencimentoFim) {
           conditions.push(between(asaasCobrancas.vencimento, input.vencimentoInicio, input.vencimentoFim));
         } else if (input?.vencimentoInicio) {
           conditions.push(gte(asaasCobrancas.vencimento, input.vencimentoInicio));
         } else if (input?.vencimentoFim) {
           conditions.push(lte(asaasCobrancas.vencimento, input.vencimentoFim));
+        }
+        if (input?.pagamentoInicio && input?.pagamentoFim) {
+          conditions.push(between(asaasCobrancas.dataPagamento, input.pagamentoInicio, input.pagamentoFim));
+        } else if (input?.pagamentoInicio) {
+          conditions.push(gte(asaasCobrancas.dataPagamento, input.pagamentoInicio));
+        } else if (input?.pagamentoFim) {
+          conditions.push(lte(asaasCobrancas.dataPagamento, input.pagamentoFim));
         }
 
         // Filtro por permissão: se verProprios only, só mostra cobranças
@@ -1622,7 +1662,30 @@ export const asaasRouter = router({
   // ─── KPIs ────────────────────────────────────────────────────────────────
 
   /** KPIs financeiros do escritório */
-  kpis: protectedProcedure.query(async ({ ctx }) => {
+  /**
+   * KPIs do Financeiro: total recebido (pago), pendente, vencido.
+   *
+   * Filtros opcionais por período:
+   *   - `pagamentoInicio` / `pagamentoFim`: aplica em cobranças PAGAS
+   *     (RECEIVED/CONFIRMED/RECEIVED_IN_CASH) — bate com a aba Cobranças
+   *     filtrando por data de pagamento.
+   *   - `vencimentoInicio` / `vencimentoFim`: aplica em PENDING/OVERDUE
+   *     — pra "ver o que vence em maio".
+   *
+   * Sem filtros, retorna o total histórico (comportamento legado).
+   */
+  kpis: protectedProcedure
+    .input(
+      z
+        .object({
+          pagamentoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          pagamentoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          vencimentoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          vencimentoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
     const ZERO = { recebido: 0, recebidoLiquido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return ZERO;
@@ -1637,10 +1700,25 @@ export const asaasRouter = router({
       if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
       const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
+      const noRangePag = (data: string | null): boolean => {
+        if (!input?.pagamentoInicio && !input?.pagamentoFim) return true;
+        if (!data) return false;
+        if (input.pagamentoInicio && data < input.pagamentoInicio) return false;
+        if (input.pagamentoFim && data > input.pagamentoFim) return false;
+        return true;
+      };
+      const noRangeVenc = (venc: string): boolean => {
+        if (!input?.vencimentoInicio && !input?.vencimentoFim) return true;
+        if (input.vencimentoInicio && venc < input.vencimentoInicio) return false;
+        if (input.vencimentoFim && venc > input.vencimentoFim) return false;
+        return true;
+      };
+
       let recebido = 0;
       let recebidoLiquido = 0;
       let pendente = 0;
       let vencido = 0;
+      let totalCobrancas = 0;
       for (const c of todas) {
         const val = parseFloat(c.valor) || 0;
         // valorLiquido vem do Asaas (`netValue`) com taxa já abatida.
@@ -1648,13 +1726,25 @@ export const asaasRouter = router({
         // bruto como aproximação — sem taxa, líquido = bruto.
         const liq = c.valorLiquido != null ? parseFloat(c.valorLiquido) : val;
         if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) {
-          recebido += val;
-          recebidoLiquido += liq;
-        } else if (c.status === "PENDING") pendente += val;
-        else if (c.status === "OVERDUE") vencido += val;
+          if (noRangePag(c.dataPagamento)) {
+            recebido += val;
+            recebidoLiquido += liq;
+            totalCobrancas++;
+          }
+        } else if (c.status === "PENDING") {
+          if (noRangeVenc(c.vencimento)) {
+            pendente += val;
+            totalCobrancas++;
+          }
+        } else if (c.status === "OVERDUE") {
+          if (noRangeVenc(c.vencimento)) {
+            vencido += val;
+            totalCobrancas++;
+          }
+        }
       }
 
-      return { recebido, recebidoLiquido, pendente, vencido, totalCobrancas: todas.length };
+      return { recebido, recebidoLiquido, pendente, vencido, totalCobrancas };
     } catch {
       return ZERO;
     }

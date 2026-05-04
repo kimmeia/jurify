@@ -198,6 +198,20 @@ function CalcularSection() {
   const baseFaixa = sim.data?.regra.baseFaixa ?? "comissionavel";
   const faixaAplicada = sim.data?.faixaAplicada;
 
+  // Diagnóstico: compara cobranças pagas no período (de TODOS atendentes
+  // do escritório) com o que entra na comissão do atendente filtrado.
+  // Resposta detalhada pra "por que minha comissão tá menor que o
+  // recebido".
+  const [diagOpen, setDiagOpen] = useState(false);
+  const diag = trpc.comissoes.diagnosticar.useQuery(
+    {
+      atendenteId: atendenteIdNum ?? 0,
+      periodoInicio,
+      periodoFim,
+    },
+    { enabled: podeSimular && diagOpen, staleTime: 0 },
+  );
+
   return (
     <div className="space-y-4">
       {/* Controles */}
@@ -321,6 +335,14 @@ function CalcularSection() {
               <Lock className="h-3.5 w-3.5 mr-2" />
               Fechar período
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDiagOpen(true)}
+              title="Compara cobranças pagas no período com o que entra na comissão"
+            >
+              🔍 Diagnosticar diferença
+            </Button>
           </div>
 
           <ListaCobrancas
@@ -369,6 +391,112 @@ function CalcularSection() {
               )}
               Confirmar fechamento
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog: diagnóstico — explica diferença entre cobranças pagas
+          e o que entra na comissão. Lista cada cobrança com motivo. */}
+      <AlertDialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <AlertDialogContent className="max-w-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>🔍 Diagnóstico — diferença entre cobranças pagas e comissão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Lista TODAS as cobranças pagas no período (de qualquer atendente) e
+              mostra o motivo de cada uma entrar ou não na comissão do atendente
+              filtrado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {diag.isLoading && (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {diag.data && (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-3 gap-3">
+                <KpiCard label="Total pago no período" valor={diag.data.totalPago} />
+                <KpiCard
+                  label="Entra na comissão"
+                  valor={diag.data.totalComissionavel}
+                  accent="text-emerald-600"
+                />
+                <KpiCard
+                  label="Diferença (não entra)"
+                  valor={diag.data.diferenca}
+                  accent={diag.data.diferenca > 0 ? "text-amber-600" : "text-muted-foreground"}
+                  destaque
+                />
+              </div>
+
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium">Cobrança</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Valor</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Pago em</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diag.data.linhas.map((l) => {
+                      const cor =
+                        l.motivo === "comissionavel"
+                          ? "text-emerald-700 bg-emerald-50/50 dark:text-emerald-300 dark:bg-emerald-950/20"
+                          : l.motivo === "atendente_diferente"
+                          ? "text-blue-700 bg-blue-50/50 dark:text-blue-300 dark:bg-blue-950/20"
+                          : "text-amber-700 bg-amber-50/50 dark:text-amber-300 dark:bg-amber-950/20";
+                      const labelMotivo = {
+                        comissionavel: "✓ Entra",
+                        atendente_diferente: "Outro atendente",
+                        override_manual: "Override manual",
+                        categoria_nao_comissionavel: "Categoria não comiss.",
+                        abaixo_minimo: "Abaixo do mínimo",
+                      }[l.motivo];
+                      return (
+                        <tr key={l.id} className={`border-t ${cor}`}>
+                          <td className="px-2 py-1.5">
+                            {l.descricao || "—"}
+                            {l.categoriaNome && (
+                              <span className="ml-1 text-[10px] text-muted-foreground">
+                                ({l.categoriaNome})
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono">
+                            {formatBRL(l.valor)}
+                          </td>
+                          <td className="px-2 py-1.5 text-muted-foreground">
+                            {l.dataPagamento}
+                          </td>
+                          <td className="px-2 py-1.5 font-medium" title={l.detalhe}>
+                            {labelMotivo}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {diag.data.linhas.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">
+                          Nenhuma cobrança paga no período.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground italic">
+                Passe o mouse sobre cada motivo pra ver o detalhe completo.
+              </p>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Fechar</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
