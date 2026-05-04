@@ -190,6 +190,41 @@ export interface SmartflowExecutores {
     tags: string[];
     modo: "adicionar" | "remover" | "definir";
   }) => Promise<boolean>;
+  /**
+   * Cria cobrança avulsa no Asaas pra um contato. Resolve customerId
+   * via vínculo asaasClientes. Retorna payment id + link.
+   */
+  gerarCobrancaAsaas: (params: {
+    contatoId: number;
+    valor: number;
+    descricao?: string;
+    vencimentoDias?: number;
+    tipoCobranca?: "BOLETO" | "PIX" | "CREDIT_CARD";
+  }) => Promise<{ pagamentoId: string; link?: string }>;
+  /** Cancela cobrança Asaas pelo ID. */
+  cancelarCobrancaAsaas: (params: { pagamentoId: string }) => Promise<boolean>;
+  /** Resumo financeiro do contato (valores já em reais, não centavos). */
+  consultarValorAbertoAsaas: (params: { contatoId: number }) => Promise<{
+    total: number;
+    pendente: number;
+    vencido: number;
+    qtdAberto: number;
+  }>;
+  /** Confirma recebimento manual de uma cobrança (em dinheiro/PIX manual). */
+  marcarCobrancaRecebidaAsaas: (params: {
+    pagamentoId: string;
+    valorRecebido?: number;
+    dataRecebimento?: string;
+  }) => Promise<boolean>;
+  /**
+   * Persiste valor em `contatos.camposPersonalizados[chave]`. Valida que
+   * `chave` existe no catálogo do escritório (`camposPersonalizadosCliente`).
+   */
+  definirCampoPersonalizadoCliente: (params: {
+    contatoId: number;
+    chave: string;
+    valor: string;
+  }) => Promise<boolean>;
 }
 
 // ─── Handlers por tipo de passo ─────────────────────────────────────────────
@@ -865,6 +900,168 @@ async function handleKanbanTags(
   }
 }
 
+// ─── Asaas + campo personalizado ────────────────────────────────────────────
+
+async function handleAsaasGerarCobranca(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    valor?: string;
+    descricao?: string;
+    vencimentoDias?: number;
+    tipoCobranca?: "BOLETO" | "PIX" | "CREDIT_CARD";
+  };
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem contatoId no contexto — não dá pra emitir cobrança" };
+  }
+  const { interpolarVariaveis } = await import("./interpolar");
+  const valorRaw = interpolarVariaveis(String(cfg.valor ?? ""), ctx as any).trim();
+  const valorNum = Number(valorRaw.replace(",", "."));
+  if (!Number.isFinite(valorNum) || valorNum <= 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Valor inválido: "${valorRaw}"` };
+  }
+  const descricao = cfg.descricao
+    ? interpolarVariaveis(String(cfg.descricao), ctx as any)
+    : undefined;
+  try {
+    const r = await exec.gerarCobrancaAsaas({
+      contatoId,
+      valor: valorNum,
+      descricao,
+      vencimentoDias: cfg.vencimentoDias,
+      tipoCobranca: cfg.tipoCobranca,
+    });
+    return {
+      sucesso: true,
+      contexto: { ...ctx, pagamentoId: r.pagamentoId, pagamentoLink: r.link ?? "" },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Asaas gerar: ${err.message}` };
+  }
+}
+
+async function handleAsaasCancelarCobranca(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { pagamentoId?: string };
+  const { interpolarVariaveis } = await import("./interpolar");
+  const raw = String(cfg.pagamentoId ?? "").trim();
+  const interpolado = raw
+    ? interpolarVariaveis(raw, ctx as any).trim()
+    : String(ctx.pagamentoId ?? "");
+  if (!interpolado) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "pagamentoId vazio (config + ctx.pagamentoId ausente)" };
+  }
+  try {
+    await exec.cancelarCobrancaAsaas({ pagamentoId: interpolado });
+    return { sucesso: true, contexto: ctx };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Asaas cancelar: ${err.message}` };
+  }
+}
+
+async function handleAsaasConsultarValorAberto(
+  _passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem contatoId no contexto" };
+  }
+  try {
+    const r = await exec.consultarValorAbertoAsaas({ contatoId });
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        valorTotalAberto: r.pendente + r.vencido,
+        valorTotalVencido: r.vencido,
+        valorTotalPendente: r.pendente,
+        cobrancasAbertasQtd: r.qtdAberto,
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Asaas consultar: ${err.message}` };
+  }
+}
+
+async function handleAsaasMarcarRecebida(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    pagamentoId?: string;
+    valorRecebido?: string;
+    dataRecebimento?: string;
+  };
+  const { interpolarVariaveis } = await import("./interpolar");
+  const raw = String(cfg.pagamentoId ?? "").trim();
+  const pagamentoId = raw
+    ? interpolarVariaveis(raw, ctx as any).trim()
+    : String(ctx.pagamentoId ?? "");
+  if (!pagamentoId) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "pagamentoId vazio" };
+  }
+  let valorRecebido: number | undefined;
+  if (cfg.valorRecebido) {
+    const v = Number(interpolarVariaveis(String(cfg.valorRecebido), ctx as any).replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) {
+      return { sucesso: false, contexto: ctx, mensagemErro: `Valor recebido inválido: "${cfg.valorRecebido}"` };
+    }
+    valorRecebido = v;
+  }
+  try {
+    await exec.marcarCobrancaRecebidaAsaas({
+      pagamentoId,
+      valorRecebido,
+      dataRecebimento: cfg.dataRecebimento,
+    });
+    return { sucesso: true, contexto: ctx };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Asaas marcar recebida: ${err.message}` };
+  }
+}
+
+async function handleDefinirCampoPersonalizado(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { chave?: string; valor?: string };
+  const chave = String(cfg.chave ?? "").trim();
+  if (!chave) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Chave do campo personalizado vazia" };
+  }
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Sem contatoId no contexto" };
+  }
+  const { interpolarVariaveis } = await import("./interpolar");
+  const valor = interpolarVariaveis(String(cfg.valor ?? ""), ctx as any);
+  try {
+    await exec.definirCampoPersonalizadoCliente({ contatoId, chave, valor });
+    // Espelha no ctx.cliente.campos pra próximos passos lerem sem refetch.
+    const clienteAtual = (ctx.cliente as Record<string, any>) || {};
+    const camposAtuais = (clienteAtual.campos as Record<string, any>) || {};
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        cliente: { ...clienteAtual, campos: { ...camposAtuais, [chave]: valor } },
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Campo personalizado: ${err.message}` };
+  }
+}
+
 // ─── Engine principal ───────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
@@ -884,7 +1081,12 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   kanban_mover_card: handleKanbanMoverCard,
   kanban_atribuir_responsavel: handleKanbanAtribuirResponsavel,
   kanban_tags: handleKanbanTags,
+  asaas_gerar_cobranca: handleAsaasGerarCobranca,
+  asaas_cancelar_cobranca: handleAsaasCancelarCobranca,
+  asaas_consultar_valor_aberto: handleAsaasConsultarValorAberto,
+  asaas_marcar_recebida: handleAsaasMarcarRecebida,
   definir_variavel: handleDefinirVariavel,
+  definir_campo_personalizado: handleDefinirCampoPersonalizado,
 };
 
 export interface ExecutarCenarioResultado {

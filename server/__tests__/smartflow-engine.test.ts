@@ -36,6 +36,19 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     moverCardKanban: vi.fn().mockResolvedValue(true),
     atribuirResponsavelKanban: vi.fn().mockResolvedValue(true),
     atualizarTagsCardKanban: vi.fn().mockResolvedValue(true),
+    gerarCobrancaAsaas: vi.fn().mockResolvedValue({
+      pagamentoId: "pay_abc123",
+      link: "https://asaas.com/i/pay_abc123",
+    }),
+    cancelarCobrancaAsaas: vi.fn().mockResolvedValue(true),
+    consultarValorAbertoAsaas: vi.fn().mockResolvedValue({
+      total: 5000,
+      pendente: 1500,
+      vencido: 500,
+      qtdAberto: 2,
+    }),
+    marcarCobrancaRecebidaAsaas: vi.fn().mockResolvedValue(true),
+    definirCampoPersonalizadoCliente: vi.fn().mockResolvedValue(true),
     buscarCobrancasAbertas: vi.fn().mockResolvedValue(""),
     ...overrides,
   };
@@ -1258,6 +1271,204 @@ describe("SmartFlow Engine", () => {
       const resultado = await executarCenario(passos, {}, exec);
       expect(resultado.contexto.delayMinutos).toBe(5);
       expect(resultado.contexto.esperando).toBe(true);
+    });
+  });
+
+  describe("asaas_gerar_cobranca", () => {
+    it("gera cobrança e grava pagamentoId no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "asaas_gerar_cobranca",
+          config: { valor: "1500.00", descricao: "Honorários", tipoCobranca: "PIX" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { contatoId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.pagamentoId).toBe("pay_abc123");
+      expect(resultado.contexto.pagamentoLink).toBe("https://asaas.com/i/pay_abc123");
+      expect(exec.gerarCobrancaAsaas).toHaveBeenCalledWith({
+        contatoId: 42,
+        valor: 1500,
+        descricao: "Honorários",
+        vencimentoDias: undefined,
+        tipoCobranca: "PIX",
+      });
+    });
+
+    it("interpola valor a partir do contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "asaas_gerar_cobranca",
+          config: { valor: "{{pagamentoValor}}" },
+        },
+      ];
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, pagamentoValor: 250 },
+        exec,
+      );
+      expect(resultado.sucesso).toBe(true);
+      expect((exec.gerarCobrancaAsaas as any).mock.calls[0][0].valor).toBe(250);
+    });
+
+    it("falha quando valor inválido", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_gerar_cobranca", config: { valor: "abc" } },
+      ];
+      const resultado = await executarCenario(passos, { contatoId: 42 }, exec);
+      expect(resultado.sucesso).toBe(false);
+      expect(exec.gerarCobrancaAsaas).not.toHaveBeenCalled();
+    });
+
+    it("falha quando contatoId ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_gerar_cobranca", config: { valor: "100" } },
+      ];
+      const resultado = await executarCenario(passos, {}, exec);
+      expect(resultado.sucesso).toBe(false);
+    });
+  });
+
+  describe("asaas_cancelar_cobranca", () => {
+    it("cancela usando ctx.pagamentoId quando config vazia", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_cancelar_cobranca", config: {} },
+      ];
+      const resultado = await executarCenario(passos, { pagamentoId: "pay_xyz" }, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.cancelarCobrancaAsaas).toHaveBeenCalledWith({ pagamentoId: "pay_xyz" });
+    });
+
+    it("interpola pagamentoId via {{...}}", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_cancelar_cobranca",
+          config: { pagamentoId: "{{pagamentoId}}" } },
+      ];
+      const resultado = await executarCenario(passos, { pagamentoId: "pay_999" }, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.cancelarCobrancaAsaas).toHaveBeenCalledWith({ pagamentoId: "pay_999" });
+    });
+  });
+
+  describe("asaas_consultar_valor_aberto", () => {
+    it("escreve resumo financeiro no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_consultar_valor_aberto", config: {} },
+      ];
+      const resultado = await executarCenario(passos, { contatoId: 42 }, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.valorTotalAberto).toBe(2000); // pendente 1500 + vencido 500
+      expect(resultado.contexto.valorTotalVencido).toBe(500);
+      expect(resultado.contexto.cobrancasAbertasQtd).toBe(2);
+    });
+
+    it("falha quando contatoId ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_consultar_valor_aberto", config: {} },
+      ];
+      const resultado = await executarCenario(passos, {}, exec);
+      expect(resultado.sucesso).toBe(false);
+    });
+  });
+
+  describe("asaas_marcar_recebida", () => {
+    it("marca recebida usando valor opcional", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_marcar_recebida",
+          config: { pagamentoId: "pay_1", valorRecebido: "1500.00" } },
+      ];
+      const resultado = await executarCenario(passos, {}, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.marcarCobrancaRecebidaAsaas).toHaveBeenCalledWith({
+        pagamentoId: "pay_1",
+        valorRecebido: 1500,
+        dataRecebimento: undefined,
+      });
+    });
+
+    it("aceita pagamentoId via interpolação", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_marcar_recebida",
+          config: { pagamentoId: "{{pagamentoId}}" } },
+      ];
+      const resultado = await executarCenario(passos, { pagamentoId: "pay_X" }, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect((exec.marcarCobrancaRecebidaAsaas as any).mock.calls[0][0].pagamentoId).toBe("pay_X");
+    });
+
+    it("falha quando pagamentoId ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "asaas_marcar_recebida", config: {} },
+      ];
+      const resultado = await executarCenario(passos, {}, exec);
+      expect(resultado.sucesso).toBe(false);
+    });
+  });
+
+  describe("definir_campo_personalizado", () => {
+    it("persiste o campo + espelha em ctx.cliente.campos", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_campo_personalizado",
+          config: { chave: "oab", valor: "12345" } },
+      ];
+      const resultado = await executarCenario(passos, { contatoId: 7 }, exec);
+      expect(resultado.sucesso).toBe(true);
+      expect(exec.definirCampoPersonalizadoCliente).toHaveBeenCalledWith({
+        contatoId: 7,
+        chave: "oab",
+        valor: "12345",
+      });
+      const cliente = resultado.contexto.cliente as any;
+      expect(cliente?.campos?.oab).toBe("12345");
+    });
+
+    it("interpola valor via {{...}}", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_campo_personalizado",
+          config: { chave: "ultimaIntencao", valor: "{{intencao}}" } },
+      ];
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 7, intencao: "agendar" },
+        exec,
+      );
+      expect(resultado.sucesso).toBe(true);
+      expect((exec.definirCampoPersonalizadoCliente as any).mock.calls[0][0].valor).toBe("agendar");
+    });
+
+    it("falha quando chave vazia", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_campo_personalizado", config: { valor: "x" } },
+      ];
+      const resultado = await executarCenario(passos, { contatoId: 7 }, exec);
+      expect(resultado.sucesso).toBe(false);
+      expect(exec.definirCampoPersonalizadoCliente).not.toHaveBeenCalled();
+    });
+
+    it("falha quando contatoId ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "definir_campo_personalizado",
+          config: { chave: "oab", valor: "x" } },
+      ];
+      const resultado = await executarCenario(passos, {}, exec);
+      expect(resultado.sucesso).toBe(false);
     });
   });
 });
