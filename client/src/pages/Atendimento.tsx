@@ -27,6 +27,25 @@ function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
 function initials(n: string) { return n.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase(); }
 
+// Paleta determinística pra avatar. Mesmo nome → mesma cor sempre, em
+// qualquer device. Inspirado em Slack/Linear: ajuda atendente reconhecer
+// cliente recorrente sem ler o nome.
+const AVATAR_PALETTE = [
+  "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+  "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
+  "bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
+  "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
+];
+function colorFromName(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
+  return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
 const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string }> = {
   novo: { bg: "bg-slate-50/80", border: "border-slate-200", header: "bg-slate-100", dot: "bg-slate-400" },
   qualificado: { bg: "bg-blue-50/80", border: "border-blue-200", header: "bg-blue-100", dot: "bg-blue-500" },
@@ -269,6 +288,7 @@ export default function Atendimento() {
   const [tab, setTab] = useState("inbox"); const [selId, setSelId] = useState<number | null>(null);
   const [showNovo, setShowNovo] = useState(false); const [showIniciar, setShowIniciar] = useState(false); const [showNovoLead, setShowNovoLead] = useState(false);
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
+  const [inboxBusca, setInboxBusca] = useState("");
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
 
   // Deep link vindo do CRM (ex.: botão "Inbox" na ficha do cliente):
@@ -287,7 +307,29 @@ export default function Atendimento() {
   );
 
   const { data: metricas } = trpc.crm.metricas.useQuery(undefined, { refetchInterval: 10000 });
-  const { data: convs, refetch: rC } = trpc.crm.listarConversas.useQuery(filtro !== "todos" ? { status: filtro as StatusConversa } : undefined, { refetchInterval: 5000 });
+  // Sempre buscamos todas as conversas e filtramos no client. Permite
+  // contadores corretos nas pills sem quintuplicar o request, e a busca
+  // local fica instantânea (sem ida ao servidor).
+  const { data: convsAll, refetch: rC } = trpc.crm.listarConversas.useQuery(undefined, { refetchInterval: 5000 });
+  const convs = (() => {
+    const todas = convsAll || [];
+    const porStatus = filtro === "todos" ? todas : todas.filter((c: any) => c.status === filtro);
+    const q = inboxBusca.trim().toLowerCase();
+    if (!q) return porStatus;
+    const qDigits = q.replace(/\D/g, "");
+    return porStatus.filter((c: any) => {
+      if (c.contatoNome?.toLowerCase().includes(q)) return true;
+      // Telefone: compara só dígitos (cliente pode digitar com ou sem máscara).
+      if (qDigits && (c.contatoTelefone || "").replace(/\D/g, "").includes(qDigits)) return true;
+      return false;
+    });
+  })();
+  const counts = {
+    todos: (convsAll || []).length,
+    aguardando: (convsAll || []).filter((c: any) => c.status === "aguardando").length,
+    em_atendimento: (convsAll || []).filter((c: any) => c.status === "em_atendimento").length,
+    resolvido: (convsAll || []).filter((c: any) => c.status === "resolvido").length,
+  };
   const { data: contatos, refetch: rCt } = trpc.crm.listarContatos.useQuery(busca ? { busca } : undefined);
   const { data: leads, refetch: rL } = trpc.crm.listarLeads.useQuery(undefined, { refetchInterval: 8000 });
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
@@ -341,75 +383,157 @@ export default function Atendimento() {
           <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_320px] gap-4" style={{ minHeight: 600 }}>
             {/* Coluna 1: Lista de conversas */}
             <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
-              <div className="p-3 border-b flex items-center gap-2">
-                <p className="text-sm font-semibold flex-1">Conversas</p>
-                <Select value={filtro} onValueChange={setFiltro}>
-                  <SelectTrigger className="h-7 w-[110px] text-[11px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todas</SelectItem>
-                    <SelectItem value="aguardando">Aguardando</SelectItem>
-                    <SelectItem value="em_atendimento">Em atend.</SelectItem>
-                    <SelectItem value="resolvido">Resolvido</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Header: busca + pills de filtro com contador */}
+              <div className="p-3 border-b space-y-2.5">
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Input
+                    value={inboxBusca}
+                    onChange={(e) => setInboxBusca(e.target.value)}
+                    placeholder="Buscar por nome ou telefone…"
+                    className="h-8 pl-8 pr-8 text-xs"
+                  />
+                  {inboxBusca && (
+                    <button
+                      onClick={() => setInboxBusca("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="Limpar busca"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {/* Pills com contador. Scroll horizontal em mobile/colunas estreitas. */}
+                <div className="flex gap-1 overflow-x-auto -mx-1 px-1 pb-0.5 scrollbar-thin">
+                  {([
+                    { v: "todos", l: "Todas", n: counts.todos },
+                    { v: "aguardando", l: "Aguardando", n: counts.aguardando },
+                    { v: "em_atendimento", l: "Em atend.", n: counts.em_atendimento },
+                    { v: "resolvido", l: "Resolvido", n: counts.resolvido },
+                  ] as const).map((p) => {
+                    const ativo = filtro === p.v;
+                    return (
+                      <button
+                        key={p.v}
+                        onClick={() => setFiltro(p.v)}
+                        className={
+                          "shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors " +
+                          (ativo
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/60 text-muted-foreground hover:bg-muted")
+                        }
+                      >
+                        <span>{p.l}</span>
+                        <span className={"tabular-nums " + (ativo ? "opacity-90" : "opacity-70")}>
+                          {p.n}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <ScrollArea className="flex-1">
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-                    <p className="text-sm text-muted-foreground">Nenhuma conversa</p>
+                    <p className="text-sm text-muted-foreground">
+                      {inboxBusca
+                        ? "Nada encontrado"
+                        : filtro === "todos"
+                          ? "Nenhuma conversa"
+                          : "Nenhuma neste filtro"}
+                    </p>
+                    {(inboxBusca || filtro !== "todos") && (
+                      <button
+                        onClick={() => { setInboxBusca(""); setFiltro("todos"); }}
+                        className="text-xs text-primary hover:underline mt-2"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  convs.map((c: any) => (
-                    <button
-                      key={c.id}
-                      className={
-                        "w-full text-left px-3 py-3 border-b transition-all hover:bg-muted/40 " +
-                        (selId === c.id
-                          ? "bg-primary/5 border-l-[3px] border-l-primary"
-                          : "border-l-[3px] border-l-transparent")
-                      }
-                      onClick={() => setSelId(c.id)}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                          {initials(c.contatoNome || "?")}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium truncate">{c.contatoNome}</p>
-                            <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
-                              {timeAgo(c.ultimaMensagemAt)}
-                            </span>
+                  convs.map((c: any) => {
+                    const naoLidas = Number(c.naoLidas || 0);
+                    const selecionada = selId === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        className={
+                          "w-full text-left px-3 py-3 border-b transition-colors " +
+                          (selecionada
+                            ? "bg-primary/8 hover:bg-primary/10"
+                            : "hover:bg-muted/40")
+                        }
+                        onClick={() => setSelId(c.id)}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={
+                              "h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 " +
+                              colorFromName(c.contatoNome || "?")
+                            }
+                          >
+                            {initials(c.contatoNome || "?")}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {c.ultimaMensagemPreview || "Sem mensagens"}
-                          </p>
-                          <div className="flex items-center gap-1 mt-1">
-                            <Badge
-                              variant="outline"
-                              className={
-                                "text-[9px] px-1.5 py-0 " +
-                                (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
-                              }
-                            >
-                              {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
-                            </Badge>
-                            {(c as any).temAtraso && (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p
+                                className={
+                                  "text-sm truncate " +
+                                  (naoLidas > 0 ? "font-semibold text-foreground" : "font-medium")
+                                }
+                              >
+                                {c.contatoNome}
+                              </p>
+                              <span
+                                className={
+                                  "text-[10px] shrink-0 tabular-nums " +
+                                  (naoLidas > 0 ? "text-primary font-semibold" : "text-muted-foreground")
+                                }
+                              >
+                                {timeAgo(c.ultimaMensagemAt)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <p
+                                className={
+                                  "text-xs truncate " +
+                                  (naoLidas > 0 ? "text-foreground/80" : "text-muted-foreground")
+                                }
+                              >
+                                {c.ultimaMensagemPreview || "Sem mensagens"}
+                              </p>
+                              {naoLidas > 0 && (
+                                <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
+                                  {naoLidas > 99 ? "99+" : naoLidas}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1">
                               <Badge
                                 variant="outline"
-                                className="text-[9px] px-1.5 py-0 bg-red-50 text-red-700 border-red-300 font-semibold"
+                                className={
+                                  "text-[9px] px-1.5 py-0 " +
+                                  (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
+                                }
                               >
-                                ⚠ Atraso
+                                {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
                               </Badge>
-                            )}
+                              {(c as any).temAtraso && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] px-1.5 py-0 bg-red-50 text-red-700 border-red-300 font-semibold gap-0.5"
+                                >
+                                  <AlertTriangle className="h-2.5 w-2.5" /> Atraso
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    );
+                  })
                 )}
               </ScrollArea>
             </div>
