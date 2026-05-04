@@ -286,14 +286,16 @@ export const authRouter = router({
 
       if (!user || !user.passwordHash) {
         // Mensagem genérica pra não vazar se o email existe.
-        // TRPCError UNAUTHORIZED vira HTTP 401 — `throw new Error()`
-        // mapeava pra 500 e disparava alarmes de schema corrompido.
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail ou senha incorretos." });
+        // BAD_REQUEST (HTTP 400), não UNAUTHORIZED — o handler global
+        // do frontend (main.tsx) trata UNAUTHORIZED como sessão expirada
+        // e força logout+redirect, o que mata o toast antes de aparecer
+        // num login com senha errada (user não estava logado mesmo).
+        throw new TRPCError({ code: "BAD_REQUEST", message: "E-mail ou senha incorretos." });
       }
 
       const valid = await verifyPassword(input.password, user.passwordHash);
       if (!valid) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "E-mail ou senha incorretos." });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "E-mail ou senha incorretos." });
       }
 
       // Bloqueia login se o usuário foi removido de todos os escritórios
