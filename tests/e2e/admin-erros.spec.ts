@@ -21,14 +21,24 @@ test.describe("Admin > Erros", () => {
 
   test("não-admin tem 403 ou redirect ao tentar /admin/erros", async ({ page }) => {
     await loginAs(page, "dono"); // dono não é admin do sistema
-    const resp = await page.goto("/admin/erros");
-    // Espera ou redirect (não fica em /admin/erros) ou aviso visível
+    await page.goto("/admin/erros");
+
+    // AdminLayout faz <Redirect to="/dashboard" /> via React, que é
+    // client-side e leva uns ms — espera o redirect resolver antes de
+    // assertir. Em vez de aguardar URL específica (pode ser /dashboard,
+    // /plans, /configuracoes...), espera só sair de /admin/erros OU
+    // aparecer mensagem de bloqueio.
+    await page.waitForFunction(
+      () => !window.location.pathname.startsWith("/admin/erros") ||
+        /sem permiss|acesso negado|forbidden/i.test(document.body.innerText),
+      undefined,
+      { timeout: 10_000 },
+    );
+
     const url = page.url();
     if (url.includes("/admin/erros")) {
-      // Se renderizou a página, deve mostrar mensagem de permissão
       await expect(page.locator("body")).toContainText(/sem permiss|acesso negado|forbidden/i);
     } else {
-      // Redirecionou — qualquer destino que não seja /admin/erros é OK
       expect(url).not.toMatch(/\/admin\/erros$/);
     }
   });

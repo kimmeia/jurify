@@ -21,6 +21,7 @@ import {
   escritorios,
   colaboradores,
   contatos,
+  subscriptions,
 } from "../drizzle/schema";
 
 const SENHA_PADRAO = "Smoke123!";
@@ -125,6 +126,39 @@ async function seed() {
       ativo: true,
     });
     console.log(`[seed] colaborador criado: ${s.email} (cargo=${s.cargo})`);
+  }
+
+  // 3.5. Subscription ativa pro dono — sem isso o SubscriptionGuard
+  //      redireciona pra /plans e os testes E2E que dependem de
+  //      /dashboard, /clientes, /financeiro, etc. dão timeout.
+  const [subExistente] = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, ownerId))
+    .limit(1);
+
+  if (!subExistente) {
+    await db.insert(subscriptions).values({
+      userId: ownerId,
+      planId: "smoke-test-plan",
+      status: "active",
+      currentPeriodEnd: Date.now() + 365 * 24 * 60 * 60 * 1000,
+      creditsLimit: 999999,
+      creditsUsed: 0,
+    });
+    console.log(`[seed] subscription ativa criada pro dono (userId=${ownerId})`);
+  } else {
+    // Idempotente — força status active mesmo se já existia (caso o
+    // estado tenha sido alterado por algum teste anterior).
+    if (subExistente.status !== "active") {
+      await db
+        .update(subscriptions)
+        .set({ status: "active" })
+        .where(eq(subscriptions.id, subExistente.id));
+      console.log(`[seed] subscription do dono reativada`);
+    } else {
+      console.log(`[seed] subscription ativa do dono já existia`);
+    }
   }
 
   // 4. Contatos — clientes seed pra testes não começarem do zero.

@@ -4,18 +4,37 @@ import { E2E_PREFIX } from "./fixtures/users";
 test("cadastro de nova conta cria user e leva pro onboarding", async ({ page }) => {
   // Email único por run — evita colisão.
   const email = `${E2E_PREFIX.replace(/[\[\]]/g, "")}-${Date.now()}@jurify.com.br`.toLowerCase();
+  const senha = "Smoke123!";
 
   await page.goto("/");
-  // Vai pra tab "Criar conta"
-  await page.getByRole("tab", { name: /criar conta/i }).click();
+  // CTA "Começar grátis" abre o dialog já na tab Cadastro.
+  await page.getByRole("button", { name: /come[cç]ar gr[aá]tis|criar conta|cadastrar/i }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible({ timeout: 5000 });
 
-  await page.getByLabel(/nome/i).fill(`${E2E_PREFIX} User`);
-  await page.getByLabel(/^e-?mail$/i).fill(email);
-  await page.getByLabel(/^senha$/i).fill("Smoke123!");
+  // Garante tab "Criar conta" ativa (caso o CTA tenha aberto em login).
+  const tabSignup = dialog.getByRole("tab", { name: /criar conta/i });
+  if (await tabSignup.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await tabSignup.click();
+  }
 
-  await page.getByRole("button", { name: /criar conta|cadastrar/i }).click();
+  // Form completo — botão fica disabled enquanto faltar campo, senhas
+  // não conferem ou checkbox de termos não está marcado.
+  await dialog.getByLabel(/nome completo|^nome$/i).fill(`${E2E_PREFIX} User`);
+  await dialog.getByLabel(/^e-?mail$/i).fill(email);
+  await dialog.getByLabel(/^senha \(/i).fill(senha);
+  await dialog.getByLabel(/confirmar senha/i).fill(senha);
+  // Checkbox de termos
+  await dialog.getByRole("checkbox").check();
 
-  // Após signup, app vai pro dashboard ou pro onboarding (depende do
-  // estado do escritório). Espera URL contendo dashboard|onboarding|plans.
-  await expect(page).toHaveURL(/dashboard|onboarding|plans/, { timeout: 15_000 });
+  await dialog.getByRole("button", { name: /^criar conta$/i }).click();
+
+  // Após signup, app vai pro dashboard ou pro fluxo de assinatura. A
+  // rota /plans foi unificada em /configuracoes?tab=meu-plano (#167),
+  // mas o destino exato depende do estado do user (sem subscription
+  // → meu-plano). Aceita qualquer área autenticada.
+  await expect(page).toHaveURL(
+    /dashboard|onboarding|plans|configuracoes/,
+    { timeout: 15_000 },
+  );
 });

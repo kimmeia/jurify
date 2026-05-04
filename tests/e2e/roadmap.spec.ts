@@ -9,12 +9,17 @@ test.describe("Roadmap público", () => {
     await expect(page).toHaveURL(/\/roadmap/);
 
     const titulo = `${E2E_PREFIX} Sugestão ${Date.now()}`;
-    await page.getByRole("button", { name: /sugerir melhoria/i }).click();
-    await page.getByLabel(/t[ií]tulo/i).fill(titulo);
-    await page.getByLabel(/descri[cç][aã]o/i).fill(
-      "Descrição válida da sugestão automática gerada pelo robô E2E.",
+    await page.getByRole("button", { name: /sugerir melhoria/i }).first().click();
+
+    // O Dialog de Roadmap usa <Label> sem htmlFor — getByLabel não
+    // associa Label↔Input. Usa placeholder pra achar os campos.
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByPlaceholder(/permitir importar|funcionalidade|ex:/i).first().fill(titulo);
+    await dialog.getByPlaceholder(/o qu[eê]\?|cen[aá]rio|por qu[eê]/i).first().fill(
+      "Descrição válida da sugestão automática gerada pelo robô E2E para validar o fluxo.",
     );
-    await page.getByRole("button", { name: /enviar/i }).click();
+    await dialog.getByRole("button", { name: /enviar|publicar|criar/i }).click();
 
     await expect(page.getByText(titulo).first()).toBeVisible({ timeout: 10_000 });
   });
