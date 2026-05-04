@@ -29,10 +29,16 @@ test.describe("Login com email e senha", () => {
     await dialog.getByLabel(/^senha$/i).fill("senha-errada-xpto");
     await dialog.getByRole("button", { name: /^entrar$/i }).click();
 
-    // Mensagem (toast/inline) deve ser genérica e NÃO vazar a existência do email.
-    const body = page.locator("body");
-    await expect(body).toContainText(/incorretos|inv[aá]lid/i, { timeout: 5000 });
-    await expect(body).not.toContainText(/n[aã]o encontrado|usu[aá]rio inexistente/i);
+    // Mensagem (toast do sonner ou inline) deve ser genérica. O sonner
+    // renderiza via portal — usa getByText().waitFor() pra esperar
+    // explicitamente o toast aparecer (5s pode ser curto pra body.toContainText
+    // que retesta sem aguardar mutation acabar).
+    await expect(page.getByText(/incorretos|inv[aá]lid/i).first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator("body")).not.toContainText(
+      /n[aã]o encontrado|usu[aá]rio inexistente/i,
+    );
   });
 
   test("11 logins errados ativam rate limit", async ({ page, request }) => {

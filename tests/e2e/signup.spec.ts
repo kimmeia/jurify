@@ -29,7 +29,12 @@ test("cadastro de nova conta cria user e leva pro onboarding", async ({ page }) 
 
   await dialog.getByRole("button", { name: /^criar conta$/i }).click();
 
-  // Após signup, app vai pro dashboard ou pro onboarding (depende do
-  // estado do escritório). Espera URL contendo dashboard|onboarding|plans.
-  await expect(page).toHaveURL(/dashboard|onboarding|plans/, { timeout: 15_000 });
+  // Após signup, app vai pro dashboard ou pro fluxo de assinatura. A
+  // rota /plans foi unificada em /configuracoes?tab=meu-plano (#167),
+  // mas o destino exato depende do estado do user (sem subscription
+  // → meu-plano). Aceita qualquer área autenticada.
+  await expect(page).toHaveURL(
+    /dashboard|onboarding|plans|configuracoes/,
+    { timeout: 15_000 },
+  );
 });
