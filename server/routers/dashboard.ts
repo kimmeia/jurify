@@ -22,8 +22,7 @@ import {
   leads,
   mensagens,
   asaasCobrancas,
-  processosMonitorados,
-  movimentacoesProcesso,
+  juditMonitoramentos,
   notificacoes,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -219,64 +218,55 @@ export const dashboardRouter = router({
         }
       }
 
-      // ─── Processos ──────────────────────────────────────────
+      // ─── Processos (via Judit) ──────────────────────────────
+      // Conta monitoramentos ativos do escritório (statusJudit ∈ created/updating/updated)
+      // e pega as 5 últimas movimentações conhecidas. Movimentações não lidas
+      // vêm da tabela `notificacoes` (tipo=movimentacao).
       const processosAtivos = await db
-        .select({ id: processosMonitorados.id })
-        .from(processosMonitorados)
+        .select({
+          id: juditMonitoramentos.id,
+          searchKey: juditMonitoramentos.searchKey,
+          searchType: juditMonitoramentos.searchType,
+          ultimaMov: juditMonitoramentos.ultimaMovimentacao,
+          ultimaMovData: juditMonitoramentos.ultimaMovimentacaoData,
+        })
+        .from(juditMonitoramentos)
         .where(
-          and(eq(processosMonitorados.userId, ctx.user.id), eq(processosMonitorados.status, "ativo")),
+          and(
+            eq(juditMonitoramentos.escritorioId, escritorioId),
+            or(
+              eq(juditMonitoramentos.statusJudit, "created"),
+              eq(juditMonitoramentos.statusJudit, "updating"),
+              eq(juditMonitoramentos.statusJudit, "updated"),
+            ),
+          ),
         );
 
       const totalProcessos = processosAtivos.length;
-      const processosIds = processosAtivos.map((p) => p.id);
 
-      // Movimentações não lidas
-      let movimentacoesNaoLidas = 0;
-      const movimentacoesRecentes: Array<{
-        id: number;
-        nome: string;
-        numeroCnj: string;
-        dataHora: string;
-      }> = [];
+      const movimentacoesRecentes = processosAtivos
+        .filter((p) => p.ultimaMov && p.ultimaMovData)
+        .sort((a, b) => (b.ultimaMovData || "").localeCompare(a.ultimaMovData || ""))
+        .slice(0, 5)
+        .map((p) => ({
+          id: p.id,
+          nome: (p.ultimaMov || "").slice(0, 200),
+          numeroCnj: p.searchType === "lawsuit_cnj" ? p.searchKey : "",
+          dataHora: p.ultimaMovData || "",
+        }));
 
-      if (processosIds.length > 0) {
-        for (const pid of processosIds.slice(0, 50)) {
-          const naoLidas = await db
-            .select({ id: movimentacoesProcesso.id })
-            .from(movimentacoesProcesso)
-            .where(and(eq(movimentacoesProcesso.processoId, pid), eq(movimentacoesProcesso.lida, false)));
-          movimentacoesNaoLidas += naoLidas.length;
-        }
-
-        // Últimas 5 movimentações
-        for (const pid of processosIds.slice(0, 20)) {
-          const movs = await db
-            .select({
-              id: movimentacoesProcesso.id,
-              nome: movimentacoesProcesso.nome,
-              dataHora: movimentacoesProcesso.dataHora,
-              processoId: movimentacoesProcesso.processoId,
-            })
-            .from(movimentacoesProcesso)
-            .where(eq(movimentacoesProcesso.processoId, pid))
-            .orderBy(desc(movimentacoesProcesso.dataHora))
-            .limit(2);
-          for (const m of movs) {
-            const [proc] = await db
-              .select({ numeroCnj: processosMonitorados.numeroCnj })
-              .from(processosMonitorados)
-              .where(eq(processosMonitorados.id, m.processoId))
-              .limit(1);
-            movimentacoesRecentes.push({
-              id: m.id,
-              nome: m.nome,
-              numeroCnj: proc?.numeroCnj || "",
-              dataHora: m.dataHora,
-            });
-          }
-        }
-        movimentacoesRecentes.sort((a, b) => (b.dataHora || "").localeCompare(a.dataHora || ""));
-      }
+      // Não lidas = notificações de tipo "movimentacao" ainda não lidas
+      const movsNaoLidasRows = await db
+        .select({ id: notificacoes.id })
+        .from(notificacoes)
+        .where(
+          and(
+            eq(notificacoes.userId, ctx.user.id),
+            eq(notificacoes.tipo, "movimentacao"),
+            eq(notificacoes.lida, false),
+          ),
+        );
+      const movimentacoesNaoLidas = movsNaoLidasRows.length;
 
       // Notificações não lidas
       const notifsNaoLidas = await db
@@ -527,46 +517,39 @@ export const dashboardRouter = router({
           });
         }
 
-        // 3. Movimentações processuais
-        const processosDoUser = await db
-          .select({ id: processosMonitorados.id, numeroCnj: processosMonitorados.numeroCnj })
-          .from(processosMonitorados)
-          .where(eq(processosMonitorados.userId, ctx.user.id));
+        // 3. Movimentações processuais (via Judit)
+        // Pega monitoramentos do escritório atualizados nos últimos 7 dias.
+        // Cada monitoramento pode ter recebido várias atualizações via webhook;
+        // como não temos histórico granular aqui, registramos a última.
+        const monsRecentes = await db
+          .select({
+            id: juditMonitoramentos.id,
+            searchKey: juditMonitoramentos.searchKey,
+            searchType: juditMonitoramentos.searchType,
+            ultimaMov: juditMonitoramentos.ultimaMovimentacao,
+            updatedAt: juditMonitoramentos.updatedAt,
+          })
+          .from(juditMonitoramentos)
+          .where(
+            and(
+              eq(juditMonitoramentos.escritorioId, esc.escritorio.id),
+              gte(juditMonitoramentos.updatedAt, desde),
+            ),
+          )
+          .orderBy(desc(juditMonitoramentos.updatedAt))
+          .limit(limit);
 
-        if (processosDoUser.length > 0) {
-          const procIds = processosDoUser.slice(0, 30).map((p) => p.id);
-          const procMap = new Map(processosDoUser.map((p) => [p.id, p.numeroCnj]));
-
-          for (const pid of procIds) {
-            const movs = await db
-              .select({
-                id: movimentacoesProcesso.id,
-                nome: movimentacoesProcesso.nome,
-                dataHora: movimentacoesProcesso.dataHora,
-                createdAt: movimentacoesProcesso.createdAt,
-                processoId: movimentacoesProcesso.processoId,
-              })
-              .from(movimentacoesProcesso)
-              .where(
-                and(
-                  eq(movimentacoesProcesso.processoId, pid),
-                  gte(movimentacoesProcesso.createdAt, desde),
-                ),
-              )
-              .orderBy(desc(movimentacoesProcesso.createdAt))
-              .limit(3);
-
-            for (const m of movs) {
-              items.push({
-                id: `mov-${m.id}`,
-                tipo: "movimentacao",
-                titulo: `Movimentação processual`,
-                descricao: `${procMap.get(m.processoId) || ""} — ${m.nome.slice(0, 60)}`,
-                timestamp: (m.createdAt as Date).toISOString(),
-                link: "/processos",
-              });
-            }
-          }
+        for (const m of monsRecentes) {
+          if (!m.ultimaMov) continue;
+          const ref = m.searchType === "lawsuit_cnj" ? m.searchKey : (m.searchKey || "");
+          items.push({
+            id: `mov-${m.id}`,
+            tipo: "movimentacao",
+            titulo: `Movimentação processual`,
+            descricao: `${ref} — ${m.ultimaMov.slice(0, 60)}`,
+            timestamp: (m.updatedAt as Date).toISOString(),
+            link: "/processos",
+          });
         }
 
         // 4. Tarefas concluídas recentemente

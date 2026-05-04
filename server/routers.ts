@@ -15,9 +15,7 @@ import { imobiliarioRouter } from "./calculos/router-imobiliario";
 import { previdenciarioRouter } from "./calculos/router-previdenciario";
 import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 
-// Processos e OAB
-import { processosRouter } from "./processos/router-processos";
-import { oabRouter } from "./processos/router-oab";
+// Notificações in-app
 import { notificacoesRouter } from "./processos/router-notificacoes";
 
 // Escritório
@@ -87,9 +85,7 @@ export const appRouter = router({
   previdenciario: previdenciarioRouter,
   calculosDiversos: calculosDiversosRouter,
 
-  // Processos e OAB
-  processos: processosRouter,
-  oab: oabRouter,
+  // Notificações in-app
   notificacoes: notificacoesRouter,
 
   // Escritório e Configurações

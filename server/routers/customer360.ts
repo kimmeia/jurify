@@ -31,7 +31,6 @@ import {
   assinaturasDigitais,
   asaasClientes,
   asaasCobrancas,
-  processosMonitorados,
   juditMonitoramentos,
   clienteProcessos,
 } from "../../drizzle/schema";
@@ -287,13 +286,10 @@ export const customer360Router = router({
           .orderBy(desc(conversas.ultimaMensagemAt))
           .limit(5);
 
-        // ─── Processos VINCULADOS AO CLIENTE ─────────────────────────
-        // IMPORTANTE: antes a query buscava processos do usuário logado
-        // (processosMonitorados.userId = ctx.user.id) sem filtrar pelo
-        // contatoId — resultado: quando dono abria conversa, painel
-        // mostrava TODOS os processos dele (não só do cliente em questão).
-        // Agora usamos clienteProcessos que é a tabela de vínculo
-        // cliente↔processo criada especificamente pra isso.
+        // ─── Processos VINCULADOS AO CLIENTE (via Judit) ─────────────
+        // Usa clienteProcessos (tabela de vínculo cliente↔processo) e
+        // enriquece com dados frescos de juditMonitoramentos quando o
+        // vínculo aponta pra um monitoramento ativo.
         const vinculados = await db
           .select({
             id: clienteProcessos.id,
@@ -320,15 +316,19 @@ export const customer360Router = router({
           ultimaMovimentacao: string | null;
           ultimaMovimentacaoData: string | null;
           status: string;
-          fonte: "datajud" | "judit";
+          fonte: "judit";
         };
 
         const processosNormalizados: ProcessoNoCard[] = [];
 
-        // Enriquece cada vinculo com dados do monitoramento Judit (se tiver).
-        // Também cruza com processosMonitorados (DataJud) se o CNJ bater.
         for (const v of vinculados) {
-          // 1) Se tem monitoramentoId (Judit) — dados mais atualizados
+          let mon: {
+            tribunal: string | null;
+            ultimaMov: string | null;
+            ultimaMovData: string | null;
+            statusJudit: string;
+          } | null = null;
+
           if (v.monitoramentoId) {
             try {
               const [m] = await db
@@ -341,53 +341,21 @@ export const customer360Router = router({
                 .from(juditMonitoramentos)
                 .where(eq(juditMonitoramentos.id, v.monitoramentoId))
                 .limit(1);
-              processosNormalizados.push({
-                id: v.id,
-                numeroCnj: v.numeroCnj,
-                classe: v.classeV,
-                tribunal: m?.tribunal || v.tribunalV,
-                ultimaMovimentacao: m?.ultimaMov || null,
-                ultimaMovimentacaoData: m?.ultimaMovData || null,
-                status: m?.statusJudit === "paused" ? "pausado" : "ativo",
-                fonte: "judit",
-              });
-              continue;
+              if (m) mon = m;
             } catch {
-              /* Judit indisponível — cai no fallback abaixo */
+              /* Judit indisponível — segue só com dados do vínculo */
             }
           }
-
-          // 2) Fallback: tenta achar processoMonitorado com mesmo CNJ (DataJud)
-          const cnjLimpo = v.numeroCnj.replace(/\D/g, "");
-          const [p] = await db
-            .select({
-              classe: processosMonitorados.classe,
-              tribunal: processosMonitorados.tribunal,
-              ultimaMovimentacao: processosMonitorados.ultimaMovimentacao,
-              ultimaMovimentacaoData: processosMonitorados.ultimaMovimentacaoData,
-              status: processosMonitorados.status,
-            })
-            .from(processosMonitorados)
-            .where(
-              and(
-                or(
-                  eq(processosMonitorados.numeroCnj, v.numeroCnj),
-                  eq(processosMonitorados.numeroCnjLimpo, cnjLimpo),
-                ),
-                eq(processosMonitorados.userId, ctx.user.id),
-              ),
-            )
-            .limit(1);
 
           processosNormalizados.push({
             id: v.id,
             numeroCnj: v.numeroCnj,
-            classe: p?.classe || v.classeV,
-            tribunal: p?.tribunal || v.tribunalV,
-            ultimaMovimentacao: p?.ultimaMovimentacao || null,
-            ultimaMovimentacaoData: p?.ultimaMovimentacaoData || null,
-            status: p?.status || "ativo",
-            fonte: "datajud",
+            classe: v.classeV,
+            tribunal: mon?.tribunal || v.tribunalV,
+            ultimaMovimentacao: mon?.ultimaMov || null,
+            ultimaMovimentacaoData: mon?.ultimaMovData || null,
+            status: mon?.statusJudit === "paused" ? "pausado" : "ativo",
+            fonte: "judit",
           });
         }
 
