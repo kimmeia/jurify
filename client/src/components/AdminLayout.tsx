@@ -40,6 +40,7 @@ import {
   BrainCircuit,
   Radar,
   Bug,
+  Database,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -185,6 +186,7 @@ function AdminSidebarContent({
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
     { icon: Bug, label: "Erros", path: "/admin/erros" },
+    { icon: Database, label: "Backups", path: "/admin/backups" },
     { icon: Plug, label: "Integrações", path: "/admin/integrations" },
     { icon: Settings, label: "Configurações", path: "/admin/settings" },
   ];
