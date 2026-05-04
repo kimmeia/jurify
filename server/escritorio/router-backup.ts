@@ -37,13 +37,32 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 
-function exigirDono(cargo: string) {
-  if (cargo !== "dono") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Apenas o dono do escritório pode gerar backup. Peça ao dono pra rodar.",
-    });
-  }
+type CtxUser = { id: number; role?: string | null; impersonatedBy?: string };
+
+/**
+ * Backup do escritório exige privilégio de Dono. Aceita também:
+ * - admin Jurify (`role === "admin"`) — debug/suporte direto;
+ * - admin impersonando (`impersonatedBy` presente) — propaga privilégio
+ *   do admin original (já passou pelo gate em `/admin`); ações ficam
+ *   logadas em nome do admin original conforme banner de impersonação;
+ * - dono canônico via `escritorios.ownerId` — imune a alterações em
+ *   cargos personalizados (cliente pode ter cargo "Dono" capitalizado
+ *   ou "Sócio Fundador" e ainda assim ser o dono real do escritório).
+ */
+export function exigirDonoOuAdmin(
+  user: CtxUser,
+  esc: { escritorio: { ownerId: number }; colaborador: { cargo: string } },
+) {
+  if (user.role === "admin") return;
+  if (user.impersonatedBy) return;
+  if (esc.escritorio.ownerId === user.id) return;
+  if (esc.colaborador.cargo === "dono") return;
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message:
+      "Apenas o dono do escritório pode gerar/importar backup. " +
+      "Peça ao dono pra rodar, ou peça ao admin Jurify pra ajudar.",
+  });
 }
 
 export const backupRouter = router({
@@ -55,7 +74,7 @@ export const backupRouter = router({
   previewEscopo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório vinculado" });
-    exigirDono(esc.colaborador.cargo);
+    exigirDonoOuAdmin(ctx.user as CtxUser, esc);
 
     const { getDb } = await import("../db");
     const db = await getDb();
@@ -120,7 +139,7 @@ export const backupRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório vinculado" });
-      exigirDono(esc.colaborador.cargo);
+      exigirDonoOuAdmin(ctx.user as CtxUser, esc);
 
       const escritorioId = esc.escritorio.id;
       const escritorioNome = esc.escritorio.nome;
@@ -179,7 +198,7 @@ export const backupRouter = router({
   solicitarUploadImport: protectedProcedure.mutation(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório vinculado" });
-    exigirDono(esc.colaborador.cargo);
+    exigirDonoOuAdmin(ctx.user as CtxUser, esc);
     const cfg = obterConfigBackupDoEnv();
     if (!cfg) {
       throw new TRPCError({
@@ -210,7 +229,7 @@ export const backupRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório vinculado" });
-      exigirDono(esc.colaborador.cargo);
+      exigirDonoOuAdmin(ctx.user as CtxUser, esc);
       garantirKeyDoEscritorio(input.key, esc.escritorio.id);
       const cfg = obterConfigBackupDoEnv();
       if (!cfg) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Bucket S3 não configurado" });
@@ -232,7 +251,7 @@ export const backupRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório vinculado" });
-      exigirDono(esc.colaborador.cargo);
+      exigirDonoOuAdmin(ctx.user as CtxUser, esc);
       garantirKeyDoEscritorio(input.key, esc.escritorio.id);
       const cfg = obterConfigBackupDoEnv();
       if (!cfg) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Bucket S3 não configurado" });
