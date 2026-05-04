@@ -4,33 +4,35 @@ import { SEED_USERS, SEED_PASSWORD } from "./fixtures/users";
 test.describe("Login com email e senha", () => {
   test("dono consegue entrar e cair no dashboard", async ({ page }) => {
     await page.goto("/");
-    // A landing tem tabs "Entrar"/"Criar conta" — clica "Entrar" se não vier
-    // já com login. Usa getByLabel pra ser resistente a refactor visual.
-    const tabEntrar = page.getByRole("tab", { name: /^entrar$/i });
-    if (await tabEntrar.isVisible({ timeout: 1500 }).catch(() => false)) {
-      await tabEntrar.click();
-    }
-    await page.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
-    await page.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
-    await page.getByRole("button", { name: /^entrar$/i }).click();
+    // Abre o dialog de auth via CTA "Entrar" da navbar.
+    await page.getByRole("button", { name: /^entrar$/i }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+
+    // Tab "Entrar" já é default; clicar é idempotente.
+    await dialog.getByRole("tab", { name: /^entrar$/i }).click();
+    await dialog.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
+    await dialog.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
+    await dialog.getByRole("button", { name: /^entrar$/i }).click();
 
     await expect(page).toHaveURL(/\/dashboard\b/, { timeout: 15_000 });
   });
 
   test("senha errada mostra mensagem genérica (não vaza email)", async ({ page }) => {
     await page.goto("/");
-    const tabEntrar = page.getByRole("tab", { name: /^entrar$/i });
-    if (await tabEntrar.isVisible({ timeout: 1500 }).catch(() => false)) {
-      await tabEntrar.click();
-    }
-    await page.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
-    await page.getByLabel(/^senha$/i).fill("senha-errada-xpto");
-    await page.getByRole("button", { name: /^entrar$/i }).click();
+    await page.getByRole("button", { name: /^entrar$/i }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    // Mensagem deve ser genérica e NÃO conter "email não encontrado" ou similar
+    await dialog.getByRole("tab", { name: /^entrar$/i }).click();
+    await dialog.getByLabel(/^e-?mail$/i).fill(SEED_USERS.dono.email);
+    await dialog.getByLabel(/^senha$/i).fill("senha-errada-xpto");
+    await dialog.getByRole("button", { name: /^entrar$/i }).click();
+
+    // Mensagem (toast/inline) deve ser genérica e NÃO vazar a existência do email.
     const body = page.locator("body");
-    await expect(body).toContainText(/incorretos|inválido/i, { timeout: 5000 });
-    await expect(body).not.toContainText(/não encontrado|usuário inexistente/i);
+    await expect(body).toContainText(/incorretos|inv[aá]lid/i, { timeout: 5000 });
+    await expect(body).not.toContainText(/n[aã]o encontrado|usu[aá]rio inexistente/i);
   });
 
   test("11 logins errados ativam rate limit", async ({ page, request }) => {

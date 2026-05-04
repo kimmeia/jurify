@@ -13,21 +13,34 @@ import { SEED_USERS, SEED_PASSWORD, type SeedRole } from "./users";
 /**
  * Login completo pela UI. Usa quando você QUER validar a página de
  * login no caminho do teste. Caso contrário, prefira `loginViaTrpc`.
+ *
+ * Fluxo: home tem Navbar com CTA "Entrar" que abre um Dialog com
+ * tabs Entrar/Criar conta + form de email/senha. O fixture clica no
+ * CTA, garante que a tab Entrar está ativa, preenche e submete
+ * **dentro do dialog** pra evitar strict-mode violation com o CTA da
+ * navbar (mesmo nome "Entrar").
  */
 export async function loginAs(page: Page, role: SeedRole): Promise<void> {
   const user = SEED_USERS[role];
   await page.goto("/");
 
-  // A home tem um modal/CTA "Entrar" — clica nele se aparecer.
-  // Se já cair na tela de login, segue.
-  const entrarBtn = page.getByRole("button", { name: /entrar|fazer login/i });
-  if (await entrarBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await entrarBtn.click();
+  // CTA da navbar abre o dialog. Se já estiver aberto (ex: rota direta
+  // futura /auth), pula.
+  const dialog = page.getByRole("dialog");
+  if (!(await dialog.isVisible({ timeout: 800 }).catch(() => false))) {
+    await page.getByRole("button", { name: /^entrar$/i }).first().click();
+    await expect(dialog).toBeVisible({ timeout: 5000 });
   }
 
-  await page.getByLabel(/e-?mail/i).fill(user.email);
-  await page.getByLabel(/senha/i).fill(SEED_PASSWORD);
-  await page.getByRole("button", { name: /entrar|login/i }).click();
+  // Garante a tab "Entrar" ativa (default já é login, mas robustez)
+  const tabEntrar = dialog.getByRole("tab", { name: /^entrar$/i });
+  if (await tabEntrar.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await tabEntrar.click();
+  }
+
+  await dialog.getByLabel(/^e-?mail$/i).fill(user.email);
+  await dialog.getByLabel(/^senha$/i).fill(SEED_PASSWORD);
+  await dialog.getByRole("button", { name: /^entrar$/i }).click();
 
   // Espera a navegação pra dashboard (ou /admin pro role admin).
   await expect(page).toHaveURL(
