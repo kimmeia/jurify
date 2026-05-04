@@ -12,7 +12,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { fecharComissao, FechamentoJaExisteError, simularComissao } from "./db-comissoes";
+import { diagnosticarComissao, fecharComissao, FechamentoJaExisteError, simularComissao } from "./db-comissoes";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -59,6 +59,37 @@ export const comissoesRouter = router({
         });
       }
       return simularComissao(
+        esc.escritorio.id,
+        input.atendenteId,
+        input.periodoInicio,
+        input.periodoFim,
+      );
+    }),
+
+  /**
+   * Diagnóstico — compara cobranças pagas no período (TODAS do escritório)
+   * com o que entra na comissão do atendente filtrado. Retorna lista de
+   * cobranças com motivo claro pra cada exclusão. Útil pra responder
+   * "por que minha comissão tá menor que o total recebido".
+   */
+  diagnosticar: protectedProcedure
+    .input(
+      z.object({
+        atendenteId: z.number(),
+        periodoInicio: dataInput,
+        periodoFim: dataInput,
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      if (input.periodoInicio > input.periodoFim) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Período inválido: início depois do fim.",
+        });
+      }
+      return diagnosticarComissao(
         esc.escritorio.id,
         input.atendenteId,
         input.periodoInicio,

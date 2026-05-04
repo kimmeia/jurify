@@ -136,6 +136,129 @@ export async function simularComissao(
   };
 }
 
+/**
+ * Diagnóstico: compara o que aparece na aba Cobranças (cobranças pagas
+ * no período) com o que entra na comissão (subset, após cascata de
+ * elegibilidade) e devolve a diferença explicada cobrança por cobrança.
+ *
+ * Útil quando o operador questiona "por que minha comissão é menor
+ * que o total recebido no período" — a resposta vem com motivo claro
+ * pra cada cobrança excluída (override, categoria não-comissionável,
+ * abaixo do mínimo, ou atendente da cobrança difere do filtrado).
+ */
+export async function diagnosticarComissao(
+  escritorioId: number,
+  atendenteId: number,
+  periodoInicio: string,
+  periodoFim: string,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  // 1. TODAS as cobranças pagas no período do escritório (sem filtrar
+  //    atendente). Isso é "o que aparece na aba Cobranças quando o user
+  //    filtra por dataPagamento + status pago".
+  const todasPagas = await db
+    .select({
+      id: asaasCobrancas.id,
+      asaasPaymentId: asaasCobrancas.asaasPaymentId,
+      valor: asaasCobrancas.valor,
+      dataPagamento: asaasCobrancas.dataPagamento,
+      status: asaasCobrancas.status,
+      atendenteId: asaasCobrancas.atendenteId,
+      categoriaId: asaasCobrancas.categoriaId,
+      comissionavelOverride: asaasCobrancas.comissionavelOverride,
+      categoriaNome: categoriasCobranca.nome,
+      categoriaComissionavel: categoriasCobranca.comissionavel,
+      descricao: asaasCobrancas.descricao,
+    })
+    .from(asaasCobrancas)
+    .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
+    .where(
+      and(
+        eq(asaasCobrancas.escritorioId, escritorioId),
+        isNotNull(asaasCobrancas.dataPagamento),
+        between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
+        inArray(asaasCobrancas.status, STATUS_PAGOS),
+      ),
+    )
+    .orderBy(asc(asaasCobrancas.dataPagamento));
+
+  // 2. Simulação da comissão pro atendente (mesma lógica de fechamento).
+  const sim = await simularComissao(escritorioId, atendenteId, periodoInicio, periodoFim);
+  const idsComissionaveis = new Set(sim.comissionaveis.map((c) => c.id));
+  const naoComissionaveisMap = new Map(
+    sim.naoComissionaveis.map((n) => [n.id, n.motivoExclusao]),
+  );
+
+  // 3. Pra cada cobrança paga, decide categoria:
+  //    - "comissionavel": entra na comissão
+  //    - "excluida_motivo": pertence ao atendente, mas excluída (override/categoria/min)
+  //    - "atendente_diferente": pertence a outro atendente
+  type LinhaDiag = {
+    id: number;
+    asaasPaymentId: string | null;
+    valor: number;
+    dataPagamento: string;
+    descricao: string | null;
+    categoriaNome: string | null;
+    atendenteIdCobranca: number | null;
+    motivo: "comissionavel" | "atendente_diferente" | "override_manual" |
+            "categoria_nao_comissionavel" | "abaixo_minimo";
+    detalhe: string;
+  };
+
+  const linhas: LinhaDiag[] = todasPagas.map((c) => {
+    const valorNum = Number(c.valor);
+    const base = {
+      id: c.id,
+      asaasPaymentId: c.asaasPaymentId,
+      valor: valorNum,
+      dataPagamento: c.dataPagamento ?? "",
+      descricao: c.descricao,
+      categoriaNome: c.categoriaNome,
+      atendenteIdCobranca: c.atendenteId,
+    };
+
+    if (idsComissionaveis.has(c.id)) {
+      return { ...base, motivo: "comissionavel" as const, detalhe: "Entra na comissão." };
+    }
+
+    const motivoExclusao = naoComissionaveisMap.get(c.id);
+    if (motivoExclusao) {
+      const detalhes: Record<MotivoExclusao, string> = {
+        override_manual: "Marcada como NÃO comissionável manualmente (comissionavelOverride=false).",
+        categoria_nao_comissionavel: `Categoria "${c.categoriaNome ?? "—"}" não é comissionável.`,
+        abaixo_minimo: "Valor abaixo do mínimo configurado na regra de comissão.",
+      };
+      return { ...base, motivo: motivoExclusao, detalhe: detalhes[motivoExclusao] };
+    }
+
+    // Não está em nenhum dos dois → atendente da cobrança != atendente filtrado
+    return {
+      ...base,
+      motivo: "atendente_diferente" as const,
+      detalhe: c.atendenteId === null
+        ? "Cobrança sem atendente atribuído (não conta na comissão de ninguém)."
+        : `Cobrança pertence ao atendente #${c.atendenteId}, não ao filtrado (#${atendenteId}).`,
+    };
+  });
+
+  const totalPago = linhas.reduce((s, l) => s + l.valor, 0);
+  const totalComissionavel = linhas
+    .filter((l) => l.motivo === "comissionavel")
+    .reduce((s, l) => s + l.valor, 0);
+
+  return {
+    totalPago,
+    totalComissionavel,
+    diferenca: totalPago - totalComissionavel,
+    quantidadeTotal: linhas.length,
+    quantidadeComissionavel: linhas.filter((l) => l.motivo === "comissionavel").length,
+    linhas,
+  };
+}
+
 export interface FecharComissaoParams {
   escritorioId: number;
   atendenteId: number;
