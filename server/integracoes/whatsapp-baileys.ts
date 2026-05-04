@@ -18,7 +18,7 @@ import type {
   WhatsappMensagemRecebida,
   WhatsappMensagemEnviar,
 } from "../../shared/whatsapp-types";
-import { jidToPhone, isLidJid } from "../../shared/whatsapp-types";
+import { jidToPhone, isLidJid, resolverJidValido } from "../../shared/whatsapp-types";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-whatsapp-baileys");
 
@@ -195,10 +195,26 @@ class WhatsappSessionManager extends EventEmitter {
     return !!state.socket?.user;
   }
 
+  /**
+   * Resolve o JID válido pra um número de telefone consultando o socket Baileys.
+   * Trata a quirk dos números BR sem "9" antecipado. Retorna `null` se o
+   * número não está registrado no WhatsApp.
+   *
+   * Útil pra quando o caller precisa SABER o JID antes de criar uma conversa
+   * (pra salvar `chatIdExterno` correto). Pra envio direto, prefira
+   * `enviarMensagem` / `enviarMensagemJid` que já resolvem internamente.
+   */
+  async resolverJid(canalId: number, telefone: string): Promise<string | null> {
+    const state = this.sessions.get(canalId);
+    if (!state || state.status !== "conectado" || !state.socket) {
+      throw new Error("Sessão WhatsApp não conectada.");
+    }
+    return resolverJidValido(state.socket, telefone);
+  }
+
   /** Envia mensagem de texto via Baileys */
   async enviarMensagem(canalId: number, msg: WhatsappMensagemEnviar): Promise<{ messageId: string } | null> {
-    const jid = `${msg.telefone.replace(/\D/g, "")}@s.whatsapp.net`;
-    return this.enviarMensagemJid(canalId, jid, msg.conteudo, msg.tipo, msg.mediaUrl, msg.mediaCaption);
+    return this.enviarMensagemJid(canalId, msg.telefone, msg.conteudo, msg.tipo, msg.mediaUrl, msg.mediaCaption);
   }
 
   /** Envia mensagem usando JID direto (chatIdExterno) ou número de telefone */
@@ -215,13 +231,26 @@ class WhatsappSessionManager extends EventEmitter {
       throw new Error("Sessão WhatsApp não conectada.");
     }
 
-    // Se o destinatário já contém @, usar como JID direto
-    // Senão, converter para JID padrão
+    // Resolução do JID:
+    //   1. Se já vier com "@", usa direto (chatIdExterno de conversa existente,
+    //      LID, grupo, etc — confiamos que o caller sabe o que tá fazendo).
+    //   2. Senão é número de telefone — consulta o servidor do WhatsApp via
+    //      onWhatsApp() pra descobrir o JID correto. Resolve a quirk dos
+    //      números BR sem "9" antecipado: se o número salvo é
+    //      `5585999999999` mas no WhatsApp está como `558599999999`, pega o
+    //      JID válido. Sem essa resolução, sendMessage falha silenciosamente
+    //      ou retorna pra um JID inexistente.
     let jid: string;
     if (destinatario.includes("@")) {
       jid = destinatario;
     } else {
-      jid = `${destinatario.replace(/\D/g, "")}@s.whatsapp.net`;
+      const resolvido = await resolverJidValido(state.socket, destinatario);
+      if (!resolvido) {
+        throw new Error(
+          `Número ${destinatario} não está registrado no WhatsApp (testadas variantes BR com/sem 9).`,
+        );
+      }
+      jid = resolvido;
     }
 
     log.info(`[WhatsApp] Enviando para JID: ${jid}`);

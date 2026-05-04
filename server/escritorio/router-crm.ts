@@ -220,6 +220,9 @@ export const crmRouter = router({
             const manager = getWhatsappManager();
 
             if (manager.isConectado(convData.canalId)) {
+              // Preferência por chatIdExterno (já é JID de conversa existente).
+              // Fallback pro telefone — enviarMensagemJid resolve a quirk BR
+              // com/sem "9" via onWhatsApp() automaticamente.
               const destinatario = convData.chatIdExterno || convData.telefone;
               if (destinatario) {
                 await manager.enviarMensagemJid(convData.canalId, destinatario, input.conteudo);
@@ -324,8 +327,22 @@ export const crmRouter = router({
         origem: "whatsapp",
       });
 
-      // 2. Verificar se já existe conversa aberta com este contato+canal
-      const jid = `${cleanPhone}@s.whatsapp.net`;
+      // 2. Resolver JID via Baileys (resolve a quirk BR com/sem "9").
+      //    Se o canal não estiver conectado, cai no JID literal — a mensagem
+      //    falhará depois mas a conversa fica criada pra atendimento manual.
+      const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
+      const manager = getWhatsappManager();
+      let jid = `${cleanPhone}@s.whatsapp.net`;
+      if (manager.isConectado(input.canalId)) {
+        try {
+          const resolvido = await manager.resolverJid(input.canalId, cleanPhone);
+          if (resolvido) jid = resolvido;
+        } catch (e: any) {
+          log.warn({ err: e.message, telefone: cleanPhone }, "[CRM] Falha resolver JID, usando literal");
+        }
+      }
+
+      // 3. Verificar se já existe conversa aberta com este contato+canal
       const existingConvs = await listarConversas(esc.escritorio.id, {});
       let conversaId: number | null = null;
       for (const c of existingConvs) {
@@ -359,7 +376,7 @@ export const crmRouter = router({
         await atualizarConversa(conversaId, esc.escritorio.id, { status: "em_atendimento" });
       }
 
-      // 3. Salvar mensagem no banco
+      // 4. Salvar mensagem no banco
       const msgId = await enviarMensagem({
         conversaId,
         remetenteId: esc.colaborador.id,
@@ -367,13 +384,11 @@ export const crmRouter = router({
         conteudo: input.mensagem,
       });
 
-      // 4. Enviar via WhatsApp
+      // 5. Enviar via WhatsApp (jid já resolvido acima)
       try {
-        const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
-        const manager = getWhatsappManager();
         if (manager.isConectado(input.canalId)) {
           await manager.enviarMensagemJid(input.canalId, jid, input.mensagem);
-          log.info(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp`);
+          log.info(`[CRM] Nova conversa iniciada com ${cleanPhone} via WhatsApp (jid=${jid})`);
         }
       } catch (err: any) {
         log.error(`[CRM] Erro ao enviar 1ª mensagem:`, err.message);

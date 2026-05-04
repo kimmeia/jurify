@@ -23,19 +23,23 @@ export async function buscarContatoPorTelefone(
   const db = await getDb();
   if (!db || !telefoneNormalizado) return null;
 
+  // Considera todas as variantes BR (com/sem "9" antecipado) pra evitar
+  // duplicação: se o cliente foi salvo como `5585999999999` e agora chega
+  // via WhatsApp como `558599999999` (ou vice-versa), bate o mesmo registro.
+  const { phoneVariantsBR } = await import("../../shared/whatsapp-types");
+  const variantes = phoneVariantsBR(telefoneNormalizado);
+  const candidatos = variantes.length > 0 ? variantes : [telefoneNormalizado];
+
+  const conditions = candidatos.flatMap((v) => [
+    eq(contatos.telefone, v),
+    like(contatos.telefonesAnteriores, `%${v}%`),
+    like(contatos.telefonesSecundarios, `%${v}%`),
+  ]);
+
   const rows = await db
     .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
     .from(contatos)
-    .where(
-      and(
-        eq(contatos.escritorioId, escritorioId),
-        or(
-          eq(contatos.telefone, telefoneNormalizado),
-          like(contatos.telefonesAnteriores, `%${telefoneNormalizado}%`),
-          like(contatos.telefonesSecundarios, `%${telefoneNormalizado}%`),
-        ),
-      ),
-    )
+    .where(and(eq(contatos.escritorioId, escritorioId), or(...conditions)))
     .orderBy(desc(contatos.createdAt))
     .limit(1);
 
