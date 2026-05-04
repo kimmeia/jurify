@@ -15,7 +15,9 @@ import { describe, expect, it } from "vitest";
 import {
   EXCLUIR_NAO_RELEVANTE,
   EXCLUIR_SEGREDO,
+  ORDEM_TOPOLOGICA,
   TABELAS_INCLUIR,
+  TABELAS_SATELITE,
 } from "../backup/escritorio-tabelas";
 
 function lerSchema(): string {
@@ -126,6 +128,42 @@ describe("backup escritório — allowlist", () => {
   it("EXCLUIR_SEGREDO sempre tem motivo preenchido", () => {
     for (const t of EXCLUIR_SEGREDO) {
       expect(t.motivo.length, `${t.nomeBanco} sem motivo`).toBeGreaterThan(0);
+    }
+  });
+
+  it("ORDEM_TOPOLOGICA cobre todas as tabelas (incluir + satélite) sem duplicatas", () => {
+    const esperado = new Set([
+      ...TABELAS_INCLUIR.map((t) => t.nomeBanco),
+      ...TABELAS_SATELITE.map((t) => t.nomeBanco),
+    ]);
+    const presente = new Set(ORDEM_TOPOLOGICA);
+
+    // Sem duplicatas
+    expect(
+      ORDEM_TOPOLOGICA.length,
+      `ORDEM_TOPOLOGICA tem duplicatas: ${ORDEM_TOPOLOGICA.length} itens vs ${presente.size} únicos`,
+    ).toBe(presente.size);
+
+    // Cobre tudo
+    const faltando = [...esperado].filter((n) => !presente.has(n));
+    expect(faltando, `Faltando em ORDEM_TOPOLOGICA: ${faltando.join(", ")}`).toEqual([]);
+
+    // Sem extras
+    const extras = [...presente].filter((n) => !esperado.has(n));
+    expect(extras, `Sobrando em ORDEM_TOPOLOGICA: ${extras.join(", ")}`).toEqual([]);
+  });
+
+  it("TABELAS_SATELITE filtroSql sempre referencia uma tabela INCLUIR", () => {
+    const incluir = new Set(TABELAS_INCLUIR.map((t) => t.nomeBanco));
+    for (const sat of TABELAS_SATELITE) {
+      // filtroSql tem padrão "FK IN (SELECT id FROM <tabela_pai> WHERE...)"
+      const m = sat.filtroSql.match(/FROM\s+(\w+)/i);
+      expect(m, `${sat.nomeBanco} filtroSql sem FROM detectável`).toBeTruthy();
+      const pai = m![1];
+      expect(
+        incluir.has(pai),
+        `${sat.nomeBanco} aponta pra ${pai} que não está em TABELAS_INCLUIR — backup ficaria órfão`,
+      ).toBe(true);
     }
   });
 });

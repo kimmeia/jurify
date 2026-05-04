@@ -115,3 +115,133 @@ export const TODAS_TABELAS_COM_ESCRITORIO_ID: ReadonlyArray<string> = [
   ...EXCLUIR_SEGREDO.map((t) => t.nomeBanco),
   ...EXCLUIR_NAO_RELEVANTE.map((t) => t.nomeBanco),
 ];
+
+/**
+ * Tabelas-satélite: NÃO têm `escritorioId` próprio mas pertencem ao
+ * escopo do escritório via FK indireta. Sem elas o backup é incompleto
+ * (cards sem coluna, conversas sem mensagens, etc).
+ *
+ * O exporter executa o `filtroSql` (que é o WHERE depois do `WHERE`)
+ * via subquery pra pegar só as linhas desse escritório.
+ */
+export interface TabelaBackupSatelite {
+  nomeBanco: string;
+  /** Cláusula WHERE (sem o `WHERE`). Usa `?` pra escritorioId. */
+  filtroSql: string;
+  categoria: "dados" | "configs";
+  colunasOmitir?: string[];
+}
+
+export const TABELAS_SATELITE: TabelaBackupSatelite[] = [
+  {
+    nomeBanco: "agendamento_lembretes",
+    filtroSql: "agendamentoId IN (SELECT id FROM agendamentos WHERE escritorioId = ?)",
+    categoria: "dados",
+  },
+  {
+    nomeBanco: "mensagens",
+    filtroSql: "conversaIdMsg IN (SELECT id FROM conversas WHERE escritorioIdConv = ?)",
+    categoria: "dados",
+  },
+  {
+    nomeBanco: "agente_chat_mensagens",
+    filtroSql: "threadIdMsg IN (SELECT id FROM agente_chat_threads WHERE escritorioIdThread = ?)",
+    categoria: "configs",
+  },
+  {
+    nomeBanco: "cliente_processo_anotacoes",
+    filtroSql: "processoIdAnot IN (SELECT id FROM cliente_processos WHERE escritorioIdCliProc = ?)",
+    categoria: "dados",
+  },
+  {
+    nomeBanco: "permissoes_cargo",
+    filtroSql: "cargoId IN (SELECT id FROM cargos_personalizados WHERE escritorioId = ?)",
+    categoria: "configs",
+  },
+  {
+    nomeBanco: "smartflow_passos",
+    filtroSql: "cenarioIdPasso IN (SELECT id FROM smartflow_cenarios WHERE escritorioIdSF = ?)",
+    categoria: "configs",
+  },
+  {
+    nomeBanco: "kanban_colunas",
+    filtroSql: "funilIdKC IN (SELECT id FROM kanban_funis WHERE escritorioIdKF = ?)",
+    categoria: "dados",
+  },
+  {
+    nomeBanco: "kanban_movimentacoes",
+    filtroSql: "cardIdKMov IN (SELECT id FROM kanban_cards WHERE escritorioIdKCard = ?)",
+    categoria: "dados",
+  },
+  {
+    nomeBanco: "comissoes_fechadas_itens",
+    filtroSql: "comissaoFechadaIdItem IN (SELECT id FROM comissoes_fechadas WHERE escritorioIdComFech = ?)",
+    categoria: "dados",
+  },
+];
+
+/**
+ * Ordem topológica de INSERT pro import: pais antes de filhos.
+ * DELETE roda em ordem REVERSA. Inclui tabelas com escritorioId +
+ * tabelas-satélite. Self-ref de cliente_pastas é resolvida com
+ * SET FOREIGN_KEY_CHECKS=0 durante o import.
+ *
+ * Ordem derivada das FKs entre tabelas do escopo (FKs pra users,
+ * escritorios, judit_credenciais ficam fora). Ver
+ * docs/backup-fk-graph.md ou a investigação da PR.
+ */
+export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
+  // RAÍZES — sem FK pra dentro do escopo:
+  "contatos",
+  "cargos_personalizados",
+  "kanban_funis",
+  "kanban_tags",
+  "categorias_cobranca",
+  "categorias_despesa",
+  "regra_comissao",
+  "regra_comissao_faixas",
+  "mensagem_templates",
+  "modelos_contrato",
+  "campos_personalizados_cliente",
+  "smartflow_cenarios",
+  "agentes_ia",
+  "comissoes_agenda",
+  "judit_monitoramentos",
+  "atendimento_metricas_diarias",
+
+  // NÍVEL 1 — depende só de raízes:
+  "cliente_pastas", // self-ref OK com FK_CHECKS=0
+  "cliente_anotacoes",
+  "cliente_arquivos",
+  "conversas",
+  "leads",
+  "agendamentos",
+  "asaas_clientes",
+  "asaas_cobrancas",
+  "asaas_config_cobranca_pai",
+  "despesas",
+  "comissoes_fechadas",
+  "smartflow_passos",
+  "kanban_colunas",
+  "agente_ia_documentos",
+  "agente_chat_threads",
+  "permissoes_cargo",
+  "colaboradores",
+  "assinaturas_digitais",
+  "convites_colaborador",
+
+  // NÍVEL 2:
+  "cliente_processos",
+  "agendamento_lembretes",
+  "mensagens",
+  "kanban_cards",
+  "comissoes_fechadas_itens",
+  "comissoes_lancamentos_log",
+  "agente_chat_mensagens",
+  "smartflow_execucoes",
+  "tarefas",
+
+  // NÍVEL 3:
+  "cliente_processo_anotacoes",
+  "kanban_movimentacoes",
+];
