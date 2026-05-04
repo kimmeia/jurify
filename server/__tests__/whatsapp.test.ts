@@ -3,11 +3,14 @@
  * Etapa 3: Validação de tipos, formatação e processamento de mensagens
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   jidToPhone,
   phoneToJid,
   formatPhoneBR,
+  phoneVariantsBR,
+  resolverJidValido,
+  limparCacheJid,
   WHATSAPP_STATUS_LABELS,
   WHATSAPP_STATUS_CORES,
 } from "../../shared/whatsapp-types";
@@ -63,6 +66,144 @@ describe("formatPhoneBR", () => {
 
   it("lida com string com caracteres extras", () => {
     expect(formatPhoneBR("+55 11 99999-9999")).toBe("+55 (11) 99999-9999");
+  });
+});
+
+// ─── Testes: phoneVariantsBR (quirk do "9" antecipado) ─────────────────────
+
+describe("phoneVariantsBR", () => {
+  it("BR celular 13 dígitos → variante sem o 9", () => {
+    expect(phoneVariantsBR("5585999999999")).toEqual([
+      "5585999999999",
+      "558599999999",
+    ]);
+  });
+
+  it("BR celular 12 dígitos → variante com o 9", () => {
+    expect(phoneVariantsBR("558599999999")).toEqual([
+      "558599999999",
+      "5585999999999",
+    ]);
+  });
+
+  it("BR DDD 11 (São Paulo) — 13 dígitos", () => {
+    expect(phoneVariantsBR("5511987654321")).toEqual([
+      "5511987654321",
+      "551187654321",
+    ]);
+  });
+
+  it("BR sem DDI prepende 55 e gera variantes", () => {
+    expect(phoneVariantsBR("85999999999")).toEqual([
+      "5585999999999",
+      "558599999999",
+    ]);
+  });
+
+  it("BR fixo 12 dígitos (3xxx) → variante com 9 (servidor pode aceitar)", () => {
+    // Fixo BR começa com 2/3/4/5 — função gera variante mas Baileys vai rejeitar
+    // a variante com 9 via onWhatsApp(). Comportamento aceitável: gera ambas e
+    // deixa o servidor decidir.
+    expect(phoneVariantsBR("551133334444")).toEqual([
+      "551133334444",
+      "5511933334444",
+    ]);
+  });
+
+  it("Internacional não-BR → retorna só o original sem variante", () => {
+    expect(phoneVariantsBR("12025551234")).toEqual(["12025551234"]);
+    expect(phoneVariantsBR("442071234567")).toEqual(["442071234567"]);
+  });
+
+  it("string vazia → array vazio", () => {
+    expect(phoneVariantsBR("")).toEqual([]);
+    expect(phoneVariantsBR("abc")).toEqual([]);
+  });
+
+  it("formato com máscara é normalizado", () => {
+    expect(phoneVariantsBR("(85) 99999-9999")).toEqual([
+      "5585999999999",
+      "558599999999",
+    ]);
+  });
+
+  it("BR muito curto/longo (não-padrão) → não gera variante extra", () => {
+    expect(phoneVariantsBR("123456")).toEqual(["123456"]);
+    expect(phoneVariantsBR("5512345")).toEqual(["5512345"]);
+  });
+});
+
+// ─── Testes: resolverJidValido (consulta ao Baileys) ────────────────────────
+
+describe("resolverJidValido", () => {
+  beforeEach(() => {
+    limparCacheJid();
+  });
+
+  it("retorna JID com 9 quando servidor confirma esse formato", async () => {
+    const socket = {
+      onWhatsApp: vi.fn(async (numbers: string[]) => [
+        { exists: true, jid: `${numbers[0]}@s.whatsapp.net` },
+        { exists: false, jid: `${numbers[1]}@s.whatsapp.net` },
+      ]),
+    };
+    const jid = await resolverJidValido(socket, "5585999999999");
+    expect(jid).toBe("5585999999999@s.whatsapp.net");
+    expect(socket.onWhatsApp).toHaveBeenCalledWith([
+      "5585999999999",
+      "558599999999",
+    ]);
+  });
+
+  it("retorna JID sem 9 quando só essa variante existe (caso real do bug)", async () => {
+    const socket = {
+      onWhatsApp: vi.fn(async (numbers: string[]) => [
+        { exists: false, jid: `${numbers[0]}@s.whatsapp.net` },
+        { exists: true, jid: `${numbers[1]}@s.whatsapp.net` },
+      ]),
+    };
+    const jid = await resolverJidValido(socket, "5585999999999");
+    expect(jid).toBe("558599999999@s.whatsapp.net");
+  });
+
+  it("retorna null quando nenhuma variante existe (cliente sem WhatsApp)", async () => {
+    const socket = {
+      onWhatsApp: vi.fn(async (numbers: string[]) =>
+        numbers.map((n) => ({ exists: false, jid: `${n}@s.whatsapp.net` })),
+      ),
+    };
+    const jid = await resolverJidValido(socket, "5585999999999");
+    expect(jid).toBeNull();
+  });
+
+  it("cacheia resultado pra evitar nova chamada com mesmo número", async () => {
+    const socket = {
+      onWhatsApp: vi.fn(async (numbers: string[]) => [
+        { exists: true, jid: `${numbers[0]}@s.whatsapp.net` },
+      ]),
+    };
+    await resolverJidValido(socket, "5585999999999");
+    await resolverJidValido(socket, "5585999999999");
+    await resolverJidValido(socket, "5585999999999");
+    expect(socket.onWhatsApp).toHaveBeenCalledTimes(1);
+  });
+
+  it("fallback pro JID literal quando socket.onWhatsApp lança erro", async () => {
+    const socket = {
+      onWhatsApp: vi.fn(async () => {
+        throw new Error("Network down");
+      }),
+    };
+    const jid = await resolverJidValido(socket, "5585999999999");
+    // Sem cache — fallback usa primeira variante (preferida)
+    expect(jid).toBe("5585999999999@s.whatsapp.net");
+  });
+
+  it("retorna null pra string vazia (sem variantes)", async () => {
+    const socket = { onWhatsApp: vi.fn() };
+    const jid = await resolverJidValido(socket, "");
+    expect(jid).toBeNull();
+    expect(socket.onWhatsApp).not.toHaveBeenCalled();
   });
 });
 
