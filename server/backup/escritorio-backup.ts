@@ -17,17 +17,26 @@ import {
   EXCLUIR_NAO_RELEVANTE,
   EXCLUIR_SEGREDO,
   TABELAS_INCLUIR,
+  TABELAS_SATELITE,
   type TabelaBackup,
+  type TabelaBackupSatelite,
 } from "./escritorio-tabelas";
 
 export interface ManifestoBackup {
-  versao: 1;
+  /**
+   * v1 = só TABELAS_INCLUIR (PR1).
+   * v2 = adiciona TABELAS_SATELITE (PR2). Import só aceita v2 — round-trip
+   * em backup v1 não é confiável (faltam tabelas-satélite).
+   */
+  versao: 1 | 2;
   geradoEm: string; // ISO
   escritorioId: number;
   escritorioNome: string;
   tabelas: Array<{
     nome: string;
     categoria: "dados" | "configs";
+    /** "principal" = tem escritorioId; "satelite" = via FK indireta. */
+    tipo: "principal" | "satelite";
     linhas: number;
     colunasOmitidas?: string[];
   }>;
@@ -40,22 +49,28 @@ const AVISO_LGPD =
   "ATENÇÃO: este arquivo contém dados pessoais dos contatos do escritório (nomes, CPF/CNPJ, telefones, e-mails, conversas). " +
   "Armazene em local seguro. Sob a LGPD, o escritório é responsável pelo tratamento desses dados.";
 
+type TabelaQualquer =
+  | { kind: "principal"; tab: TabelaBackup }
+  | { kind: "satelite"; tab: TabelaBackupSatelite };
+
 /**
- * Faz SELECT * (com colunas omitidas) na tabela filtrando por
- * escritorioId. Retorna array de linhas como objetos JS.
+ * Faz SELECT * (com colunas omitidas) na tabela. Pra tabela principal
+ * filtra `escritorioId = ?`; pra satélite usa o `filtroSql` declarado
+ * (subquery via FK indireta).
  */
 async function lerLinhasTabela(
-  tab: TabelaBackup,
+  alvo: TabelaQualquer,
   escritorioId: number,
 ): Promise<Record<string, unknown>[]> {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
 
-  const colunasOmitir = new Set(tab.colunasOmitir ?? []);
-
-  // Drizzle não tem helper p/ "select all but exclude X" sem importar a
-  // tabela. Usamos query bruta — mais leve e funciona pra qualquer schema.
-  const sql = `SELECT * FROM \`${tab.nomeBanco}\` WHERE \`${tab.colunaEscritorio}\` = ?`;
+  const colunasOmitir = new Set(alvo.tab.colunasOmitir ?? []);
+  const where =
+    alvo.kind === "principal"
+      ? `\`${alvo.tab.colunaEscritorio}\` = ?`
+      : alvo.tab.filtroSql;
+  const sql = `SELECT * FROM \`${alvo.tab.nomeBanco}\` WHERE ${where}`;
   const conn: any = (db as any).$client ?? db;
   const [rows] = (await conn.execute(sql, [escritorioId])) as [any[], unknown];
 
@@ -82,18 +97,31 @@ export async function gerarBackupEscritorioJson(
   const tabelasManifesto: ManifestoBackup["tabelas"] = [];
 
   for (const tab of TABELAS_INCLUIR) {
-    const linhas = await lerLinhasTabela(tab, escritorioId);
+    const linhas = await lerLinhasTabela({ kind: "principal", tab }, escritorioId);
     zip.file(`tabelas/${tab.nomeBanco}.json`, JSON.stringify(linhas, null, 2));
     tabelasManifesto.push({
       nome: tab.nomeBanco,
       categoria: tab.categoria,
+      tipo: "principal",
+      linhas: linhas.length,
+      colunasOmitidas: tab.colunasOmitir,
+    });
+  }
+
+  for (const tab of TABELAS_SATELITE) {
+    const linhas = await lerLinhasTabela({ kind: "satelite", tab }, escritorioId);
+    zip.file(`tabelas/${tab.nomeBanco}.json`, JSON.stringify(linhas, null, 2));
+    tabelasManifesto.push({
+      nome: tab.nomeBanco,
+      categoria: tab.categoria,
+      tipo: "satelite",
       linhas: linhas.length,
       colunasOmitidas: tab.colunasOmitir,
     });
   }
 
   const manifesto: ManifestoBackup = {
-    versao: 1,
+    versao: 2,
     geradoEm: new Date().toISOString(),
     escritorioId,
     escritorioNome,
@@ -165,7 +193,24 @@ export async function gerarBackupEscritorioSql(
       );
       continue;
     }
-    const dump = await executarMysqldumpFiltrado(conn, tab, escritorioId);
+    const where = `${tab.colunaEscritorio}=${escritorioId}`;
+    const dump = await executarMysqldumpFiltrado(conn, tab.nomeBanco, where);
+    partes.push(dump);
+  }
+
+  for (const tab of TABELAS_SATELITE) {
+    if (tab.colunasOmitir && tab.colunasOmitir.length > 0) {
+      partes.push(
+        Buffer.from(
+          `-- (tabela \`${tab.nomeBanco}\` exportada apenas no JSON do ZIP — contém colunas sensíveis omitidas)\n\n`,
+        ),
+      );
+      continue;
+    }
+    // Substitui o `?` do filtroSql pelo escritorioId. Seguro porque
+    // escritorioId é number validado pela camada tRPC.
+    const where = tab.filtroSql.replace("?", String(escritorioId));
+    const dump = await executarMysqldumpFiltrado(conn, tab.nomeBanco, where);
     partes.push(dump);
   }
 
@@ -183,11 +228,10 @@ export async function gerarBackupEscritorioSql(
 
 function executarMysqldumpFiltrado(
   conn: ConexaoMysql,
-  tab: TabelaBackup,
-  escritorioId: number,
+  nomeTabela: string,
+  whereClausula: string,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const where = `${tab.colunaEscritorio}=${escritorioId}`;
     const dump = spawn(
       "mysqldump",
       [
@@ -202,9 +246,9 @@ function executarMysqldumpFiltrado(
         "--skip-add-locks",
         "--set-gtid-purged=OFF",
         "--column-statistics=0",
-        `--where=${where}`,
+        `--where=${whereClausula}`,
         conn.database,
-        tab.nomeBanco,
+        nomeTabela,
       ],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
@@ -220,7 +264,7 @@ function executarMysqldumpFiltrado(
       if (code !== 0) {
         reject(
           new Error(
-            `mysqldump falhou em ${tab.nomeBanco} (exit=${code}): ${stderr.slice(0, 300)}`,
+            `mysqldump falhou em ${nomeTabela} (exit=${code}): ${stderr.slice(0, 300)}`,
           ),
         );
         return;
