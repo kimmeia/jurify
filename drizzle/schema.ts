@@ -1629,19 +1629,23 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
   ordem: int("ordemPasso").default(0).notNull(),
   /** Tipo do passo */
   tipo: mysqlEnum("tipoPasso", [
-    "ia_classificar",       // IA classifica intenção da mensagem
-    "ia_responder",         // IA gera resposta contextual
-    "calcom_horarios",      // busca horários disponíveis no Cal.com
-    "calcom_agendar",       // cria agendamento no Cal.com
-    "calcom_listar",        // lista bookings do Cal.com (contexto)
-    "calcom_cancelar",      // cancela booking no Cal.com
-    "calcom_remarcar",      // reagenda booking no Cal.com
-    "whatsapp_enviar",      // envia mensagem no WhatsApp
-    "transferir",           // transfere pra humano
-    "condicional",          // if/else baseado em condição
-    "esperar",              // delay (follow-up)
+    "ia_classificar",                // IA classifica intenção da mensagem
+    "ia_responder",                  // IA gera resposta contextual
+    "calcom_horarios",               // busca horários disponíveis no Cal.com
+    "calcom_agendar",                // cria agendamento no Cal.com
+    "calcom_listar",                 // lista bookings do Cal.com (contexto)
+    "calcom_cancelar",               // cancela booking no Cal.com
+    "calcom_remarcar",               // reagenda booking no Cal.com
+    "whatsapp_enviar",               // envia mensagem no WhatsApp
+    "transferir",                    // transfere pra humano
+    "condicional",                   // if/else baseado em condição
+    "esperar",                       // delay (follow-up)
     "webhook",
-    "kanban_criar_card",    // cria card no Kanban
+    "kanban_criar_card",             // cria card no Kanban
+    "kanban_mover_card",             // move card pra outra coluna
+    "kanban_atribuir_responsavel",   // define responsável de um card
+    "kanban_tags",                   // adiciona/remove/define tags do card
+    "definir_variavel",              // grava variável no contexto da execução
   ]).notNull(),
   /** Configuração do passo (JSON — prompt, template, condição, etc) */
   config: text("configPasso"),

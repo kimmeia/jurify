@@ -43,8 +43,8 @@ import "@xyflow/react/dist/style.css";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Brain, Bot, Calendar, CheckCircle2, Clock, DollarSign,
-  GitBranch, LayoutGrid, Loader2, MessageCircle, PhoneCall, Play,
-  Plus, Save, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2,
+  GitBranch, LayoutGrid, Loader2, MessageCircle, Move, PhoneCall, Play,
+  Plus, Save, Tags as TagsIcon, UserPlus, Users, Webhook, Zap, CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2,
   Variable as VariableIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -94,6 +94,9 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   esperar: Clock,
   webhook: Webhook,
   kanban_criar_card: LayoutGrid,
+  kanban_mover_card: Move,
+  kanban_atribuir_responsavel: UserPlus,
+  kanban_tags: TagsIcon,
   definir_variavel: VariableIcon,
 };
 
@@ -121,7 +124,7 @@ const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
   calcom: Calendar,
   crm: Users,
   ia: Bot,
-  kanban: LayoutGrid,
+  acoes: Zap,
   fluxo: Play,
 };
 
@@ -493,6 +496,20 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       return typeof config.url === "string" ? truncar(config.url, 40) : "";
     case "kanban_criar_card":
       return config.prioridade ? `Prioridade ${config.prioridade}` : "";
+    case "kanban_mover_card": {
+      const card = String(config.cardId || "").trim() || "{{kanbanCardId}}";
+      const col = config.colunaDestinoId ? `→ #${config.colunaDestinoId}` : "→ ?";
+      return `${truncar(card, 18)} ${col}`;
+    }
+    case "kanban_atribuir_responsavel": {
+      if (config.responsavelId) return `colaborador #${config.responsavelId}`;
+      return config.responsavelAuto === false ? "(sem auto)" : "auto (atendente)";
+    }
+    case "kanban_tags": {
+      const modo = String(config.modo || "adicionar");
+      const tags = String(config.tags || "").trim();
+      return tags ? `${modo}: ${truncar(tags, 24)}` : modo;
+    }
     case "definir_variavel": {
       const chave = String(config.chave || "").trim();
       const valor = String(config.valor || "").trim();
@@ -1572,6 +1589,25 @@ function ConfigCondicionalFields({
   cfg: Record<string, unknown>;
   onChange: (patch: Record<string, unknown>) => void;
 }) {
+  // Catálogo dinâmico — mesmo do autocomplete `{{...}}`. Inclui campos
+  // personalizados do escritório (`cliente.campos.<chave>`). O usuário
+  // pode digitar livre também (datalist é só sugestão).
+  const variaveis = useSmartFlowVariaveis();
+  // Mantém os 11 paths legados pra cenários antigos que salvaram
+  // exatamente esses valores (a maioria já vem no catálogo, mas
+  // `transferir`, `bookingsQuantidade` e similares não estão lá).
+  const sugestoes = useMemo(() => {
+    const set = new Map<string, string>();
+    for (const v of variaveis) {
+      if (!set.has(v.path)) set.set(v.path, v.label || v.path);
+    }
+    for (const k of CAMPOS_CONDICIONAL) {
+      if (!set.has(k)) set.set(k, k);
+    }
+    return Array.from(set, ([path, label]) => ({ path, label }));
+  }, [variaveis]);
+  const datalistId = "smartflow-condicional-campos";
+
   const condicoes: CondicaoItem[] = Array.isArray(cfg.condicoes)
     ? (cfg.condicoes as CondicaoItem[])
     : [];
@@ -1634,14 +1670,13 @@ function ConfigCondicionalFields({
                 placeholder={`Nome (ex: "Condição ${idx + 1}", "Cliente VIP"…)`}
                 className="h-7 text-xs"
               />
-              <Select value={c.campo || "intencao"} onValueChange={(v) => atualizar(idx, { campo: v })}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CAMPOS_CONDICIONAL.map((k) => (
-                    <SelectItem key={k} value={k}>{k}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={String(c.campo || "")}
+                onChange={(e) => atualizar(idx, { campo: e.target.value })}
+                placeholder="Campo (ex: intencao, cliente.nome, cliente.campos.oab)"
+                list={datalistId}
+                className="h-7 text-xs font-mono"
+              />
               <Select value={c.operador || "igual"} onValueChange={(v) => atualizar(idx, { operador: v })}>
                 <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -1677,9 +1712,19 @@ function ConfigCondicionalFields({
         </div>
       )}
 
+      <datalist id={datalistId}>
+        {sugestoes.map((s) => (
+          <option key={s.path} value={s.path}>
+            {s.label}
+          </option>
+        ))}
+      </datalist>
+
       <p className="text-[10px] text-muted-foreground">
         As condições são avaliadas em ordem. Conecte cada saída do nó ao próximo passo
         (ramo verde = condição X; ramo amarelo = fallback). Sem conexão = fim do fluxo.
+        O campo aceita caminhos com ponto (ex: <code>cliente.nome</code>,{" "}
+        <code>cliente.campos.oab</code>) — mesmas variáveis do autocomplete <code>{"{{...}}"}</code>.
       </p>
     </div>
   );
@@ -1936,6 +1981,225 @@ function ConfigKanbanCriarCardFields({
 }
 
 /**
+ * Input padronizado pra `cardId` dos passos de manipulação de card.
+ * Default visual: `{{kanbanCardId}}` (preenchido por um passo `kanban_criar_card`
+ * anterior). Usuário pode sobrescrever com outra variável ou ID literal.
+ */
+function CardIdField({
+  cfg,
+  onChange,
+  inputId,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+  inputId: string;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.cardId || "");
+    onChange({ cardId: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <Label className="text-xs">ID do card</Label>
+        <VariableTrigger inputId={inputId} variaveis={variaveis} onInsert={insertNoCfg} />
+      </div>
+      <VariableInput
+        id={inputId}
+        value={String(cfg.cardId || "")}
+        onChange={(v) => onChange({ cardId: v })}
+        variaveis={variaveis}
+        placeholder="{{kanbanCardId}} (default — card criado num passo anterior)"
+      />
+      <p className="text-[10px] text-muted-foreground mt-1">
+        Vazio = usa <code>{"{{kanbanCardId}}"}</code> do contexto, preenchido por
+        "Criar card Kanban" anterior.
+      </p>
+    </div>
+  );
+}
+
+function ConfigKanbanMoverCardFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const { data: funis } = (trpc as any).kanban.listarFunis.useQuery();
+  const [funilSelecionado, setFunilSelecionado] = useState<number | undefined>(undefined);
+  const { data: funilData } = (trpc as any).kanban.obterFunil.useQuery(
+    { funilId: funilSelecionado! },
+    { enabled: !!funilSelecionado },
+  );
+  const colunas = funilData?.colunas || [];
+
+  return (
+    <div className="space-y-2">
+      <CardIdField cfg={cfg} onChange={onChange} inputId="cfg-kmover-cardid" />
+
+      <div>
+        <Label className="text-xs">Quadro</Label>
+        <Select
+          value={funilSelecionado ? String(funilSelecionado) : ""}
+          onValueChange={(v) => {
+            setFunilSelecionado(Number(v));
+            onChange({ colunaDestinoId: null });
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Escolha o quadro..." />
+          </SelectTrigger>
+          <SelectContent>
+            {(funis || []).map((f: any) => (
+              <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Coluna destino</Label>
+        <Select
+          value={cfg.colunaDestinoId ? String(cfg.colunaDestinoId) : ""}
+          onValueChange={(v) => onChange({ colunaDestinoId: Number(v) })}
+          disabled={!funilSelecionado}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Escolha a coluna..." />
+          </SelectTrigger>
+          <SelectContent>
+            {colunas.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!funilSelecionado && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Escolha um quadro pra liberar as colunas.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConfigKanbanAtribuirResponsavelFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
+  const colaboradoresAtivos = (
+    equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []
+  ).filter((c: any) => c.ativo);
+
+  return (
+    <div className="space-y-2">
+      <CardIdField cfg={cfg} onChange={onChange} inputId="cfg-katribuir-cardid" />
+
+      <div>
+        <Label className="text-xs">Responsável</Label>
+        <Select
+          value={
+            cfg.responsavelId
+              ? String(cfg.responsavelId)
+              : cfg.responsavelAuto === false
+                ? "_nenhum"
+                : "_auto"
+          }
+          onValueChange={(v) => {
+            if (v === "_auto") onChange({ responsavelId: null, responsavelAuto: true });
+            else if (v === "_nenhum") onChange({ responsavelId: null, responsavelAuto: false });
+            else onChange({ responsavelId: Number(v), responsavelAuto: false });
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_auto">Atendente do cliente (auto)</SelectItem>
+            <SelectItem value="_nenhum">Não alterar</SelectItem>
+            {colaboradoresAtivos.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.userName ?? "—"} ({c.cargo})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          <strong>Auto</strong> usa o atendente cadastrado no cliente vinculado ao card.
+          Recebe notificação de "atribuído".
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ConfigKanbanTagsFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.tags || "");
+    onChange({ tags: atual + (atual ? ", " : "") + `{{${path}}}` });
+  };
+  const modo = (cfg.modo as string) || "adicionar";
+
+  return (
+    <div className="space-y-2">
+      <CardIdField cfg={cfg} onChange={onChange} inputId="cfg-ktags-cardid" />
+
+      <div>
+        <Label className="text-xs">Modo</Label>
+        <Select value={modo} onValueChange={(v) => onChange({ modo: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="adicionar">Adicionar (mantém as existentes)</SelectItem>
+            <SelectItem value="remover">Remover</SelectItem>
+            <SelectItem value="definir">Definir (substitui todas)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Tags (separe por vírgula)</Label>
+          <VariableTrigger
+            inputId="cfg-ktags-tags"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-ktags-tags"
+          value={String(cfg.tags || "")}
+          onChange={(v) => onChange({ tags: v })}
+          variaveis={variaveis}
+          placeholder="VIP, urgente, {{intencao}}"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {modo === "definir"
+            ? "Substitui todas as tags. Vazio remove todas."
+            : modo === "remover"
+              ? "Remove as tags listadas (case-insensitive)."
+              : "Adiciona à lista atual sem duplicar."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Config do passo "Definir variável" — guarda valor no contexto
  * pra usar em passos seguintes via {{chave}}. O valor suporta
  * interpolação de outras variáveis (ex: valor="{{pagamentoValor}}").
@@ -2167,6 +2431,12 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       );
     case "kanban_criar_card":
       return <ConfigKanbanCriarCardFields cfg={cfg} onChange={onChange} />;
+    case "kanban_mover_card":
+      return <ConfigKanbanMoverCardFields cfg={cfg} onChange={onChange} />;
+    case "kanban_atribuir_responsavel":
+      return <ConfigKanbanAtribuirResponsavelFields cfg={cfg} onChange={onChange} />;
+    case "kanban_tags":
+      return <ConfigKanbanTagsFields cfg={cfg} onChange={onChange} />;
     case "definir_variavel":
       return <ConfigDefinirVariavelFields cfg={cfg} onChange={onChange} />;
     default:

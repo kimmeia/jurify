@@ -378,6 +378,160 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async moverCardKanban(params): Promise<boolean> {
+      try {
+        const { getDb } = await import("../db");
+        const { kanbanCards, kanbanColunas, kanbanMovimentacoes } = await import("../../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new Error("DB indisponível");
+
+        const [card] = await db.select({ id: kanbanCards.id, colunaId: kanbanCards.colunaId })
+          .from(kanbanCards)
+          .where(and(
+            eq(kanbanCards.id, params.cardId),
+            eq(kanbanCards.escritorioId, escritorioId),
+          )).limit(1);
+        if (!card) throw new Error(`Card ${params.cardId} não encontrado`);
+
+        // Valida que a coluna destino pertence ao mesmo escritório (via funil).
+        const { kanbanFunis } = await import("../../drizzle/schema");
+        const [colDest] = await db.select({ id: kanbanColunas.id, funilEscritorio: kanbanFunis.escritorioId })
+          .from(kanbanColunas)
+          .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+          .where(eq(kanbanColunas.id, params.colunaDestinoId))
+          .limit(1);
+        if (!colDest || colDest.funilEscritorio !== escritorioId) {
+          throw new Error(`Coluna ${params.colunaDestinoId} inválida`);
+        }
+
+        if (card.colunaId === params.colunaDestinoId) return true;
+
+        await db.update(kanbanCards)
+          .set({ colunaId: params.colunaDestinoId, atrasado: false })
+          .where(eq(kanbanCards.id, params.cardId));
+
+        await db.insert(kanbanMovimentacoes).values({
+          cardId: params.cardId,
+          colunaOrigemId: card.colunaId,
+          colunaDestinoId: params.colunaDestinoId,
+          movidoPorId: null,
+        });
+
+        return true;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao mover card Kanban");
+        throw err;
+      }
+    },
+
+    async atribuirResponsavelKanban(params): Promise<boolean> {
+      try {
+        const { getDb } = await import("../db");
+        const { kanbanCards, colaboradores } = await import("../../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new Error("DB indisponível");
+
+        const [card] = await db.select({ id: kanbanCards.id, titulo: kanbanCards.titulo })
+          .from(kanbanCards)
+          .where(and(
+            eq(kanbanCards.id, params.cardId),
+            eq(kanbanCards.escritorioId, escritorioId),
+          )).limit(1);
+        if (!card) throw new Error(`Card ${params.cardId} não encontrado`);
+
+        // Valida colaborador (mesmo escritório, ativo). null = remover responsável.
+        let responsavelIdValido: number | null = null;
+        if (params.responsavelId !== null && params.responsavelId !== undefined) {
+          const [colab] = await db.select({ id: colaboradores.id })
+            .from(colaboradores)
+            .where(and(
+              eq(colaboradores.id, params.responsavelId),
+              eq(colaboradores.escritorioId, escritorioId),
+              eq(colaboradores.ativo, true),
+            )).limit(1);
+          if (!colab) throw new Error(`Colaborador ${params.responsavelId} inválido`);
+          responsavelIdValido = colab.id;
+        }
+
+        await db.update(kanbanCards)
+          .set({ responsavelId: responsavelIdValido })
+          .where(eq(kanbanCards.id, params.cardId));
+
+        if (responsavelIdValido !== null) {
+          const { notificarCardAtribuido } = await import("../escritorio/notificar-card-kanban");
+          await notificarCardAtribuido({
+            cardId: params.cardId,
+            responsavelColaboradorId: responsavelIdValido,
+            atribuidorUserId: null,
+            acao: "atribuido",
+            tituloCard: card.titulo,
+          });
+        }
+
+        return true;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao atribuir responsável do card Kanban");
+        throw err;
+      }
+    },
+
+    async atualizarTagsCardKanban(params): Promise<boolean> {
+      try {
+        const { getDb } = await import("../db");
+        const { kanbanCards } = await import("../../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new Error("DB indisponível");
+
+        const [card] = await db.select({ id: kanbanCards.id, tags: kanbanCards.tags })
+          .from(kanbanCards)
+          .where(and(
+            eq(kanbanCards.id, params.cardId),
+            eq(kanbanCards.escritorioId, escritorioId),
+          )).limit(1);
+        if (!card) throw new Error(`Card ${params.cardId} não encontrado`);
+
+        const atuais = (card.tags || "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0);
+        const novasNorm = params.tags.map((t) => t.trim()).filter((t) => t.length > 0);
+
+        let resultado: string[];
+        if (params.modo === "definir") {
+          resultado = Array.from(new Set(novasNorm));
+        } else if (params.modo === "remover") {
+          const remover = new Set(novasNorm.map((t) => t.toLowerCase()));
+          resultado = atuais.filter((t) => !remover.has(t.toLowerCase()));
+        } else {
+          // adicionar (default): união, sem duplicar (case-insensitive).
+          const lower = new Set(atuais.map((t) => t.toLowerCase()));
+          resultado = [...atuais];
+          for (const t of novasNorm) {
+            if (!lower.has(t.toLowerCase())) {
+              resultado.push(t);
+              lower.add(t.toLowerCase());
+            }
+          }
+        }
+
+        // Coluna `tags` é varchar(255) — trunca silenciosamente se passar.
+        const csv = resultado.join(", ");
+        const csvFinal = csv.length > 255 ? csv.slice(0, 255) : csv;
+
+        await db.update(kanbanCards)
+          .set({ tags: csvFinal || null })
+          .where(eq(kanbanCards.id, params.cardId));
+
+        return true;
+      } catch (err: any) {
+        log.error({ err: err.message }, "SmartFlow: erro ao atualizar tags do card Kanban");
+        throw err;
+      }
+    },
+
     async chamarWebhook(url: string, dados: any): Promise<any> {
       const res = await fetch(url, {
         method: "POST",

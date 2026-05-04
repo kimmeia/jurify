@@ -35,7 +35,7 @@ export type TipoCanalMensagem =
  * da paleta do editor usa isso pra renderizar seções. O modelo de dados
  * permanece flat.
  */
-export type GrupoSmartflow = "mensagem" | "asaas" | "calcom" | "crm" | "ia" | "kanban" | "fluxo";
+export type GrupoSmartflow = "mensagem" | "asaas" | "calcom" | "crm" | "ia" | "acoes" | "fluxo";
 
 export interface GrupoMeta {
   id: GrupoSmartflow;
@@ -50,7 +50,7 @@ export const GRUPO_META: ReadonlyArray<GrupoMeta> = [
   { id: "calcom", label: "Cal.com (agenda)", ordem: 3 },
   { id: "crm", label: "CRM", ordem: 4 },
   { id: "ia", label: "Inteligência artificial", ordem: 5 },
-  { id: "kanban", label: "Kanban", ordem: 6 },
+  { id: "acoes", label: "Ações", ordem: 6 },
   { id: "fluxo", label: "Controle de fluxo", ordem: 7 },
 ];
 
@@ -72,6 +72,9 @@ export type TipoPasso =
   | "esperar"
   | "webhook"
   | "kanban_criar_card"
+  | "kanban_mover_card"
+  | "kanban_atribuir_responsavel"
+  | "kanban_tags"
   | "definir_variavel";
 
 export type StatusExecucao = "rodando" | "concluido" | "erro" | "cancelado";
@@ -194,6 +197,43 @@ export interface ConfigKanbanCriarCard {
 }
 
 /**
+ * Move um card existente para outra coluna. `cardId` aceita interpolação
+ * de variáveis (ex: `{{kanbanCardId}}` — preenchido por um passo
+ * `kanban_criar_card` anterior). Quando vazio, usa `ctx.kanbanCardId`.
+ */
+export interface ConfigKanbanMoverCard {
+  cardId?: string;
+  colunaDestinoId?: number;
+}
+
+/**
+ * Atribui um responsável (colaborador) a um card. Resolução do
+ * `responsavelId` em ordem: explícito > auto (atendenteResponsavelId do
+ * cliente, se `responsavelAuto` ≠ false) > fallback nulo (sem mudança).
+ */
+export interface ConfigKanbanAtribuirResponsavel {
+  cardId?: string;
+  responsavelId?: number;
+  /** Default true — usa atendenteResponsavelId do cliente vinculado. */
+  responsavelAuto?: boolean;
+}
+
+export type ModoTagsKanban = "adicionar" | "remover" | "definir";
+
+/**
+ * Manipula as tags de um card (CSV em `kanbanCards.tags`). `tags` aceita
+ * interpolação (`{{...}}`); separador é vírgula. `modo`:
+ *   - `adicionar` (default): união com tags atuais.
+ *   - `remover`: remove as tags listadas das atuais.
+ *   - `definir`: substitui completamente.
+ */
+export interface ConfigKanbanTags {
+  cardId?: string;
+  tags?: string;
+  modo?: ModoTagsKanban;
+}
+
+/**
  * Union discriminada por `tipo`. Usada no editor pra garantir type-safety
  * do painel de configuração. O backend aceita `config` como objeto livre
  * (por compatibilidade) mas esses tipos documentam o shape esperado.
@@ -211,7 +251,10 @@ export type PassoConfigByTipo =
   | { tipo: "condicional"; config: ConfigCondicional }
   | { tipo: "esperar"; config: ConfigEsperar }
   | { tipo: "webhook"; config: ConfigWebhook }
-  | { tipo: "kanban_criar_card"; config: ConfigKanbanCriarCard };
+  | { tipo: "kanban_criar_card"; config: ConfigKanbanCriarCard }
+  | { tipo: "kanban_mover_card"; config: ConfigKanbanMoverCard }
+  | { tipo: "kanban_atribuir_responsavel"; config: ConfigKanbanAtribuirResponsavel }
+  | { tipo: "kanban_tags"; config: ConfigKanbanTags };
 
 export interface PassoSmartflow {
   id?: number;
@@ -341,8 +384,11 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
   { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300", grupo: "fluxo" },
-  { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "kanban" },
-  { id: "definir_variavel", label: "Definir variável", descricao: "Guarda um valor no contexto pra usar em passos seguintes.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "fluxo" },
+  { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
+  { id: "kanban_mover_card", label: "Mover card Kanban", descricao: "Move um card existente para outra coluna.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
+  { id: "kanban_atribuir_responsavel", label: "Atribuir responsável (Kanban)", descricao: "Define o colaborador responsável pelo card.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
+  { id: "kanban_tags", label: "Tags do card (Kanban)", descricao: "Adiciona, remove ou substitui tags de um card.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
+  { id: "definir_variavel", label: "Definir variável", descricao: "Guarda um valor no contexto pra usar em passos seguintes.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "acoes" },
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
@@ -397,7 +443,16 @@ export const VARIAVEIS_TEMPLATE = [
   "{cobrancasAbertas}",
 ] as const;
 
-/** Campos sugeridos no painel de condicional. */
+/**
+ * Campos sugeridos no painel de condicional.
+ *
+ * @deprecated O editor agora usa `useSmartFlowVariaveis` (mesmo catálogo
+ * do autocomplete `{{...}}`) pra listar campos disponíveis por gatilho,
+ * incluindo paths com ponto (`cliente.nome`, `cliente.campos.<chave>`).
+ * Esta lista permanece exportada porque cenários antigos podem ter
+ * salvo esses paths em `ConfigCondicionalItem.campo`; todos continuam
+ * resolvíveis pelo engine via `resolverCaminho` (`server/smartflow/interpolar.ts`).
+ */
 export const CAMPOS_CONDICIONAL = [
   "intencao",
   "assinaturaId",
