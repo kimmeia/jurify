@@ -1712,12 +1712,30 @@ export const kanbanCards = mysqlTable("kanban_cards", {
   tags: varchar("tagsKCard", { length: 255 }),
   /** ID do pagamento Asaas que originou o card (evita duplicata) */
   asaasPaymentId: varchar("asaasPaymentIdKCard", { length: 64 }),
+  /**
+   * ID da ação (cliente_processos.id) que esse card representa.
+   *
+   * Quando o SmartFlow cria card com `processoId` no contexto (multi-ação),
+   * o passo `kanban_criar_card` busca card existente por
+   * `(escritorioId, processoId, clienteId)` em vez de `asaasPaymentId`.
+   * Resultado: 1 card por (cliente, ação) — não duplica em parcelamento
+   * nem em pacote de ações compartilhando paymentId.
+   *
+   * NULL = card legado (criado por SmartFlow antigo ou via UI direto).
+   */
+  processoId: int("processoIdKCard"),
   /** Se o card está atrasado (prazo vencido sem mover) */
   atrasado: boolean("atrasadoKCard").default(false).notNull(),
   ordem: int("ordemKCard").default(0).notNull(),
   createdAt: timestamp("createdAtKCard").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtKCard").defaultNow().onUpdateNow().notNull(),
-});
+}, (t) => ({
+  // Acelera lookup "card existente pra (escritorio, processo, cliente)"
+  // — usado pela idempotência do passo `kanban_criar_card` no SmartFlow.
+  idxProcessoCliente: index("kanban_cards_proc_cli_idx").on(
+    t.escritorioId, t.processoId, t.clienteId,
+  ),
+}));
 
 /** Log de movimentações de cards entre colunas — pra medir tempo por etapa */
 export const kanbanMovimentacoes = mysqlTable("kanban_movimentacoes", {

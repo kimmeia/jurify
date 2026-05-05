@@ -6,7 +6,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanTags, contatos, colaboradores } from "../../drizzle/schema";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanTags, contatos, colaboradores, clienteProcessos } from "../../drizzle/schema";
 import { eq, and, desc, asc, or, like } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
@@ -197,7 +197,19 @@ export const kanbanRouter = router({
               .where(eq(colaboradores.id, card.responsavelId)).limit(1);
             responsavelNome = r ? `Colab #${card.responsavelId}` : null;
           }
-          cardsEnriquecidos.push({ ...card, tags: tagsResolvidas, clienteNome, responsavelNome });
+          // Apelido da ação (se vinculada via processoId) — fallback pro
+          // CNJ se sem apelido. Permite ao usuário ver "Cliente · Ação"
+          // direto no card sem abrir os detalhes.
+          let acaoApelido: string | null = null;
+          if (card.processoId) {
+            const [p] = await db.select({
+              apelido: clienteProcessos.apelido,
+              numeroCnj: clienteProcessos.numeroCnj,
+            }).from(clienteProcessos)
+              .where(eq(clienteProcessos.id, card.processoId)).limit(1);
+            acaoApelido = p ? (p.apelido || p.numeroCnj) : null;
+          }
+          cardsEnriquecidos.push({ ...card, tags: tagsResolvidas, clienteNome, responsavelNome, acaoApelido });
         }
 
         result.push({ ...col, cards: cardsEnriquecidos });

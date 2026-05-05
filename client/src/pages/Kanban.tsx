@@ -286,6 +286,11 @@ export default function Kanban() {
                     {card.clienteNome && (
                       <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
                     )}
+                    {(card as any).acaoApelido && (
+                      <span className="rounded border border-blue-200 bg-blue-50 px-1 py-0 text-[9px] text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300" title="Ação vinculada">
+                        {(card as any).acaoApelido}
+                      </span>
+                    )}
                     {card.prazo && (
                       <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${isAtrasado ? "bg-red-100 text-red-700 font-bold" : "bg-blue-50 text-blue-700 font-medium"}`}>
                         <Clock className="h-3 w-3" />

@@ -308,7 +308,27 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
         if (!colunaId) throw new Error("Nenhum funil/coluna encontrado. Crie um funil no Kanban primeiro.");
 
-        if (params.asaasPaymentId) {
+        // Idempotência em 2 camadas:
+        //
+        // 1. (escritorio, processoId, clienteId) — ATIVA quando o passo
+        //    recebe ambos. Cobre o cenário multi-ação: 1 card por
+        //    (cliente, ação), independente de quantas cobranças/parcelas
+        //    pagas. Próximas execuções (parcelas seguintes) detectam o
+        //    card existente e retornam ele.
+        //
+        // 2. (escritorio, asaasPaymentId) — fallback legado, ATIVA
+        //    quando não há processoId (cobrança sem ação vinculada ou
+        //    SmartFlow antigo). Cria 1 card por COBRANÇA — comportamento
+        //    histórico preservado pra retrocompatibilidade.
+        if (params.processoId && params.clienteId) {
+          const [existente] = await db.select({ id: kanbanCards.id }).from(kanbanCards)
+            .where(and(
+              eq(kanbanCards.escritorioId, escritorioId),
+              eq(kanbanCards.processoId, params.processoId),
+              eq(kanbanCards.clienteId, params.clienteId),
+            )).limit(1);
+          if (existente) return existente.id;
+        } else if (params.asaasPaymentId) {
           const [existente] = await db.select({ id: kanbanCards.id }).from(kanbanCards)
             .where(eq(kanbanCards.asaasPaymentId, params.asaasPaymentId)).limit(1);
           if (existente) return existente.id;
@@ -356,6 +376,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           prazo,
           tags: params.tags || null,
           asaasPaymentId: params.asaasPaymentId || null,
+          processoId: params.processoId || null,
           ordem: 0,
         });
         const cardId = (r as { insertId: number }).insertId;

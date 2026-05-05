@@ -98,6 +98,13 @@ export interface PassoConfig {
   duracao?: number;
   /** Para webhook: URL */
   url?: string;
+  /**
+   * Para kanban_criar_card: força um processo (ação) específico.
+   * Caso comum: deixar vazio que o engine usa `{{acaoId}}` do contexto
+   * (multi-ação). Quando preenchido, força — útil pra "sempre criar
+   * card vinculado à ação X" independente do contexto.
+   */
+  processoId?: number;
 }
 
 export interface Passo {
@@ -197,6 +204,16 @@ export interface SmartflowExecutores {
     clienteId?: number;
     prioridade?: string;
     asaasPaymentId?: string;
+    /**
+     * ID da ação (cliente_processos.id). Quando passado JUNTO com
+     * `clienteId`, ativa idempotência forte: se já existe card pra
+     * (escritorio, processoId, clienteId), não cria duplicata.
+     *
+     * Cobre o cenário do "pacote": dispatcher dispara N eventos (1 por
+     * ação), cada um cria seu card de ação distinto, e parcelas
+     * subsequentes não duplicam.
+     */
+    processoId?: number;
     cnj?: string;
     responsavelId?: number;
     prazoDias?: number;
@@ -805,7 +822,21 @@ async function handleKanbanCriarCard(
       clienteId: ctx.contatoId as number | undefined,
       prioridade: cfg.prioridade || "media",
       asaasPaymentId: ctx.pagamentoId,
-      cnj: cfg.cnj || undefined,
+      // processoId vem do contexto do dispatcher (multi-ação) — quando
+      // a cobrança está vinculada a uma ação, esse valor está populado e
+      // o passo usa idempotência por (escritorio, processoId, clienteId)
+      // em vez de asaasPaymentId. Cobre cenário "pacote 1 cobrança / N
+      // ações" sem duplicar cards.
+      // O config do passo pode forçar um processoId fixo via cfg.processoId
+      // (ex: "sempre vincular a esse processo"), mas o caso comum é vir
+      // do contexto via {{acaoId}}.
+      processoId: (() => {
+        const fromCfg = cfg.processoId ? Number(cfg.processoId) : NaN;
+        if (Number.isFinite(fromCfg) && fromCfg > 0) return fromCfg;
+        const fromCtx = (ctx as any).acaoId;
+        return typeof fromCtx === "number" && fromCtx > 0 ? fromCtx : undefined;
+      })(),
+      cnj: cfg.cnj || (typeof (ctx as any).acaoNumeroCnj === "string" ? (ctx as any).acaoNumeroCnj : undefined) || undefined,
       responsavelId: responsavelIdResolvido,
       prazoDias: Number.isFinite(prazoDiasNum) && prazoDiasNum > 0 ? prazoDiasNum : undefined,
       tags: tagsInterpoladas || undefined,
