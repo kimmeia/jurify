@@ -449,23 +449,21 @@ export async function dispararPagamentoRecebido(
     clienteEmail?: string;
     clienteAsaasId?: string;
   },
-): Promise<{ executou: boolean }> {
+): Promise<{ executou: boolean; vezes: number }> {
   const db = await getDb();
-  if (!db) return { executou: false };
+  if (!db) return { executou: false, vezes: 0 };
 
   try {
-    // Pre-flight: só chama se há cenário ativo (evita overhead do kanban lookup)
+    // Pre-flight: só chama se há cenário ativo (evita overhead de queries)
     const cenario = await carregarCenarioAtivo(escritorioId, "pagamento_recebido");
-    if (!cenario) return { executou: false };
+    if (!cenario) return { executou: false, vezes: 0 };
 
-    // Verificar se já existe card Kanban com esse pagamentoId (evita duplicata)
-    const { kanbanCards } = await import("../../drizzle/schema");
-    const [cardExistente] = await db
-      .select({ id: kanbanCards.id })
-      .from(kanbanCards)
-      .where(eq(kanbanCards.asaasPaymentId, params.pagamentoId))
-      .limit(1);
+    const { asaasCobrancas, cobrancaAcoes, clienteProcessos } = await import(
+      "../../drizzle/schema"
+    );
+    const { verificarPrimeiraCobranca } = await import("./primeira-cobranca");
 
+    // 1. Resolve dados do contato + resumo financeiro (1× — não muda por ação).
     const resumo = await calcularResumoFinanceiroContato(escritorioId, {
       clienteAsaasId: params.clienteAsaasId,
     });
@@ -473,14 +471,68 @@ export async function dispararPagamentoRecebido(
       clienteAsaasId: params.clienteAsaasId,
     });
 
-    const contexto: SmartflowContexto = {
+    // 2. Busca a cobrança local pra descobrir se está vinculada a ações.
+    const [cobrancaLocal] = await db
+      .select({ id: asaasCobrancas.id })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasPaymentId, params.pagamentoId),
+        ),
+      )
+      .limit(1);
+
+    type AcaoVinculada = {
+      id: number;
+      apelido: string | null;
+      tipo: string | null;
+      classe: string | null;
+      numeroCnj: string;
+      // schema usa decimal — drizzle entrega como number | null
+      valorCausa: number | null;
+      polo: string | null;
+    };
+    let acoes: AcaoVinculada[] = [];
+    if (cobrancaLocal) {
+      acoes = await db
+        .select({
+          id: clienteProcessos.id,
+          apelido: clienteProcessos.apelido,
+          tipo: clienteProcessos.tipo,
+          classe: clienteProcessos.classe,
+          numeroCnj: clienteProcessos.numeroCnj,
+          valorCausa: clienteProcessos.valorCausa,
+          polo: clienteProcessos.polo,
+        })
+        .from(cobrancaAcoes)
+        .innerJoin(clienteProcessos, eq(clienteProcessos.id, cobrancaAcoes.processoId))
+        .where(eq(cobrancaAcoes.cobrancaId, cobrancaLocal.id));
+    }
+
+    // 3. Helper que monta contexto-base (compartilhado entre eventos).
+    // Quando o contato não foi resolvido (cliente Asaas órfão), pulamos
+    // a verificação detalhada e default = primeira (mais permissivo).
+    const primeiraCliente = contato.contatoId
+      ? await verificarPrimeiraCobranca({
+          escritorioId,
+          contatoId: contato.contatoId,
+          asaasPaymentIdAtual: params.pagamentoId,
+        })
+      : { doCliente: true, daAcao: null };
+
+    const contextoBase: SmartflowContexto = {
       mensagem: `Pagamento recebido: ${params.descricao}`,
       pagamentoId: params.pagamentoId,
       pagamentoValor: params.valor,
       pagamentoDescricao: params.descricao,
       pagamentoTipo: params.tipo,
       assinaturaId: params.assinaturaId || "",
-      primeiraCobranca: !cardExistente,
+      // Variável correta (renomeada). Compat: também populamos
+      // `primeiraCobranca` (deprecated alias) abaixo, com mesmo valor —
+      // SmartFlows antigos seguem funcionando.
+      primeiraCobrancaDoCliente: primeiraCliente.doCliente,
+      primeiraCobranca: primeiraCliente.doCliente,
       nomeCliente: params.clienteNome || contato.nome,
       telefoneCliente: contato.telefone,
       emailCliente: contato.email,
@@ -491,13 +543,57 @@ export async function dispararPagamentoRecebido(
       percentualPago: resumo.percentualPago,
     };
 
-    const r = await executarCenarioPorGatilho(escritorioId, "pagamento_recebido", contexto, {
-      contatoId: contato.contatoId,
-    });
-    return { executou: r.executou };
+    // 4a. Sem ações vinculadas → 1 evento (legado, comportamento preservado).
+    if (acoes.length === 0) {
+      const r = await executarCenarioPorGatilho(
+        escritorioId,
+        "pagamento_recebido",
+        contextoBase,
+        { contatoId: contato.contatoId },
+      );
+      return { executou: r.executou, vezes: r.executou ? 1 : 0 };
+    }
+
+    // 4b. Com N ações vinculadas → N eventos, cada um com sua ação.
+    let vezesExecutado = 0;
+    for (const acao of acoes) {
+      const primeiraDaAcao = contato.contatoId
+        ? await verificarPrimeiraCobranca({
+            escritorioId,
+            contatoId: contato.contatoId,
+            acaoId: acao.id,
+            asaasPaymentIdAtual: params.pagamentoId,
+          })
+        : { doCliente: true, daAcao: true as boolean | null };
+
+      const contextoComAcao: SmartflowContexto = {
+        ...contextoBase,
+        // Dados da ação no contexto — disponíveis nos templates do
+        // SmartFlow como {{acaoApelido}}, {{acaoTipo}}, etc.
+        acaoId: acao.id,
+        acaoApelido: acao.apelido || acao.numeroCnj,
+        acaoTipo: acao.tipo || "",
+        acaoClasse: acao.classe || "",
+        acaoNumeroCnj: acao.numeroCnj,
+        acaoValorCausa: acao.valorCausa != null ? String(acao.valorCausa) : "",
+        acaoPolo: acao.polo || "",
+        // Específico desta ação (vs. do cliente)
+        primeiraCobrancaDaAcao: primeiraDaAcao.daAcao ?? false,
+      };
+
+      const r = await executarCenarioPorGatilho(
+        escritorioId,
+        "pagamento_recebido",
+        contextoComAcao,
+        { contatoId: contato.contatoId },
+      );
+      if (r.executou) vezesExecutado++;
+    }
+
+    return { executou: vezesExecutado > 0, vezes: vezesExecutado };
   } catch (err: any) {
     log.error({ err: err.message }, "SmartFlow: erro ao processar pagamento");
-    return { executou: false };
+    return { executou: false, vezes: 0 };
   }
 }
 

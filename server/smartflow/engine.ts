@@ -38,7 +38,40 @@ export interface SmartflowContexto {
   pagamentoDescricao?: string;
   pagamentoTipo?: string; // "BOLETO", "PIX", etc
   assinaturaId?: string; // se tiver = é assinatura
+  /**
+   * @deprecated Bug histórico: era setado como `!cardExistente` (kanban)
+   * — significava "primeira VEZ que essa cobrança específica entra no
+   * SmartFlow", que era SEMPRE true (cobrança nasce com pagamentoId
+   * único). Hoje vira alias correto de `primeiraCobrancaDoCliente`.
+   *
+   * Cenários novos: prefira `primeiraCobrancaDoCliente` ou
+   * `primeiraCobrancaDaAcao` (mais específicos).
+   */
   primeiraCobranca?: boolean;
+  /** True se NENHUMA cobrança comissionável anterior do cliente foi paga. */
+  primeiraCobrancaDoCliente?: boolean;
+  /**
+   * True se NENHUMA cobrança comissionável anterior DESTA ação foi paga.
+   * Definido apenas quando há ação no contexto (cobrança vinculada).
+   * Cobre o cenário "pacote de R$ 3000 / 3 ações": dispara 1 evento por
+   * ação, e cada execução vê `primeiraCobrancaDaAcao=true` na primeira
+   * parcela paga (ideal pra criar card no Kanban da ação).
+   */
+  primeiraCobrancaDaAcao?: boolean;
+  /** ID da ação (cliente_processos.id) quando o evento veio de cobrança vinculada. */
+  acaoId?: number;
+  /** Apelido da ação (ex: "Revisional Banco X") — fallback pro CNJ se vazio. */
+  acaoApelido?: string;
+  /** Tipo: "litigioso" | "extrajudicial" | "" (sem ação). */
+  acaoTipo?: string;
+  /** Classe judicial (vem do Judit ou cadastro manual). */
+  acaoClasse?: string;
+  /** Número CNJ formatado. */
+  acaoNumeroCnj?: string;
+  /** Valor da causa (string pra preservar formatação BR). */
+  acaoValorCausa?: string;
+  /** Polo: "ativo" | "passivo" | "interessado" | "". */
+  acaoPolo?: string;
   /** ID do card criado no Kanban */
   kanbanCardId?: number;
   /** ID do atendente responsável pelo cliente (do cadastro CRM) — usado

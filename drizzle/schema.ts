@@ -1273,6 +1273,21 @@ export const asaasWebhookEventos = mysqlTable(
     escritorioId: int("escritorioIdWhEv").notNull(),
     asaasPaymentId: varchar("asaasPaymentIdWhEv", { length: 64 }).notNull(),
     eventType: varchar("eventTypeWhEv", { length: 64 }).notNull(),
+    /**
+     * ID da ação (cliente_processos.id) que gerou este disparo.
+     *
+     * Quando uma cobrança está vinculada a N ações via `cobranca_acoes`,
+     * o dispatcher dispara N eventos `pagamento_recebido` (1 por ação),
+     * cada um com seu próprio contexto. Idempotência fica por
+     * `(escritorio, payment, evento, acao)` em vez de só
+     * `(escritorio, payment, evento)`.
+     *
+     * `0` (default) = cobrança SEM ação vinculada (legado / sem multi-ação).
+     * Uso de NOT NULL com DEFAULT 0 (em vez de NULL) é proposital: MySQL
+     * trata NULLs como distintos em UNIQUE, então 2 NULLs do retry do
+     * Asaas burlariam a idempotência.
+     */
+    acaoId: int("acaoIdWhEv").notNull().default(0),
     processedAt: timestamp("processedAtWhEv").defaultNow().notNull(),
   },
   (t) => ({
@@ -1280,6 +1295,7 @@ export const asaasWebhookEventos = mysqlTable(
       t.escritorioId,
       t.asaasPaymentId,
       t.eventType,
+      t.acaoId,
     ),
   }),
 );
