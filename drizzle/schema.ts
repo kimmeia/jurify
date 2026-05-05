@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, uniqueIndex } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, uniqueIndex, primaryKey } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1223,6 +1223,40 @@ export type InsertAsaasCobranca = typeof asaasCobrancas.$inferInsert;
 // ═══════════════════════════════════════════════════════════════════════════════
 // ASAAS WEBHOOK — EVENTOS JÁ PROCESSADOS (idempotência do SmartFlow)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Vínculo N:M entre cobranças e ações (cliente_processos).
+ *
+ * Permite "1 cobrança ativa N ações" (cenário do pacote: cobro R$ 3.000
+ * e isso fecha 3 ações distintas) e "N cobranças por ação" (parcelamento).
+ *
+ * Quando um pagamento entra (webhook PAYMENT_RECEIVED), o dispatcher
+ * busca as ações vinculadas e dispara `pagamento_recebido` UMA VEZ por
+ * ação (cada execução do SmartFlow tem o contexto da ação dela). Sem
+ * vínculo nenhum, dispara 1 evento legado (sem `acaoId`).
+ *
+ * `ON DELETE CASCADE`:
+ *   - cobrancaId: se a cobrança é deletada, o vínculo some (não tem mais
+ *     o que vincular). Mantém ação intacta.
+ *   - processoId: se a ação é deletada, vínculo some (cobrança continua
+ *     existindo mas perde a referência).
+ */
+export const cobrancaAcoes = mysqlTable(
+  "cobranca_acoes",
+  {
+    cobrancaId: int("cobrancaIdAc").notNull(),
+    processoId: int("processoIdAc").notNull(),
+    createdAt: timestamp("createdAtCobAc").defaultNow().notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.cobrancaId, t.processoId] }),
+    idxCobranca: index("cob_acoes_cob_idx").on(t.cobrancaId),
+    idxProcesso: index("cob_acoes_proc_idx").on(t.processoId),
+  }),
+);
+
+export type CobrancaAcao = typeof cobrancaAcoes.$inferSelect;
+export type InsertCobrancaAcao = typeof cobrancaAcoes.$inferInsert;
 
 /**
  * Registro de eventos do webhook Asaas já processados. Evita que retries do
