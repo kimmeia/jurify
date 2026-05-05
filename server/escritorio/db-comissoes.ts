@@ -20,7 +20,7 @@ import {
   despesas,
   users,
 } from "../../drizzle/schema";
-import { and, asc, between, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, between, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   criarCategoriaDespesa,
   listarFaixasComissao,
@@ -39,6 +39,52 @@ const log = createLogger("db-comissoes");
 const NOME_CATEGORIA_COMISSAO = "Comissões";
 
 const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+
+/**
+ * Retorna mapa de cobranças que JÁ entraram em algum fechamento de
+ * comissão do escritório. Usado pra evitar duplicar comissão: uma
+ * cobrança só pode entrar em UM fechamento.
+ *
+ * Mapeia `asaasCobrancaId → comissaoFechadaId` pra o caller mostrar
+ * "esta cobrança já está no fechamento #X".
+ *
+ * Considera SÓ itens com `foiComissionavel = true` — itens que foram
+ * registrados como excluídos (override/categoria não-com/abaixo
+ * mínimo) não bloqueiam re-tentativa, porque podem ter sido
+ * re-classificados depois (ex: categoria mudou).
+ */
+async function carregarMapaCobrancasJaFechadas(
+  escritorioId: number,
+): Promise<Map<number, number>> {
+  const db = await getDb();
+  if (!db) return new Map();
+
+  const rows = await db
+    .select({
+      asaasCobrancaId: comissoesFechadasItens.asaasCobrancaId,
+      comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId,
+    })
+    .from(comissoesFechadasItens)
+    .innerJoin(
+      comissoesFechadas,
+      eq(comissoesFechadas.id, comissoesFechadasItens.comissaoFechadaId),
+    )
+    .where(
+      and(
+        eq(comissoesFechadas.escritorioId, escritorioId),
+        eq(comissoesFechadasItens.foiComissionavel, true),
+      ),
+    );
+
+  const m = new Map<number, number>();
+  for (const r of rows) {
+    // Se uma cobrança aparece em 2 fechamentos por algum bug histórico,
+    // mantém o primeiro (não importa qual — basta saber que JÁ está
+    // fechada e não deve entrar de novo).
+    if (!m.has(r.asaasCobrancaId)) m.set(r.asaasCobrancaId, r.comissaoFechadaId);
+  }
+  return m;
+}
 
 /** Simula comissão detalhada de um atendente em um período. Lê regra
  *  vigente, faixas (se modo=faixas) e cobranças com JOIN em categoria.
@@ -64,6 +110,27 @@ export async function simularComissao(
     aliquotaPercent: Number(f.aliquotaPercent),
   }));
 
+  // Cobranças que já entraram em algum fechamento (de qualquer atendente)
+  // — são excluídas pra impedir comissão duplicada. O vínculo "fechei
+  // contrato dia X" fica preservado: a cobrança foi originalmente do
+  // atendente A; mesmo que o cliente seja transferido pro B depois, as
+  // parcelas continuam apontando pro A (atendenteId não muda na cobrança)
+  // e ficam bloqueadas após o 1º fechamento.
+  const jaFechadasMap = await carregarMapaCobrancasJaFechadas(escritorioId);
+  const idsJaFechadas = Array.from(jaFechadasMap.keys());
+
+  const condicoes = [
+    eq(asaasCobrancas.escritorioId, escritorioId),
+    eq(asaasCobrancas.atendenteId, atendenteId),
+    isNotNull(asaasCobrancas.dataPagamento),
+    between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
+    inArray(asaasCobrancas.status, STATUS_PAGOS),
+  ];
+  // notInArray vazio gera SQL inválido (NOT IN ()) — só adiciona se houver
+  if (idsJaFechadas.length > 0) {
+    condicoes.push(notInArray(asaasCobrancas.id, idsJaFechadas));
+  }
+
   const linhas = await db
     .select({
       id: asaasCobrancas.id,
@@ -80,15 +147,7 @@ export async function simularComissao(
     })
     .from(asaasCobrancas)
     .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
-    .where(
-      and(
-        eq(asaasCobrancas.escritorioId, escritorioId),
-        eq(asaasCobrancas.atendenteId, atendenteId),
-        isNotNull(asaasCobrancas.dataPagamento),
-        between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
-        inArray(asaasCobrancas.status, STATUS_PAGOS),
-      ),
-    )
+    .where(and(...condicoes))
     .orderBy(asc(asaasCobrancas.dataPagamento));
 
   const cobrancasParaCalculo: CobrancaParaComissao[] = linhas.map((l) => ({
@@ -191,10 +250,15 @@ export async function diagnosticarComissao(
     sim.naoComissionaveis.map((n) => [n.id, n.motivoExclusao]),
   );
 
+  // 2b. Mapa "cobrança X já está no fechamento Y" — pra explicar quando o
+  //     motivo da exclusão for "já entrou em outro fechamento" (anti-duplicate).
+  const jaFechadasMap = await carregarMapaCobrancasJaFechadas(escritorioId);
+
   // 3. Pra cada cobrança paga, decide categoria:
   //    - "comissionavel": entra na comissão
-  //    - "excluida_motivo": pertence ao atendente, mas excluída (override/categoria/min)
+  //    - "ja_fechada": já entrou em outro fechamento (anti-duplicate)
   //    - "atendente_diferente": pertence a outro atendente
+  //    - "override_manual" / "categoria_nao_comissionavel" / "abaixo_minimo": excluída
   type LinhaDiag = {
     id: number;
     asaasPaymentId: string | null;
@@ -204,8 +268,10 @@ export async function diagnosticarComissao(
     categoriaNome: string | null;
     atendenteIdCobranca: number | null;
     motivo: "comissionavel" | "atendente_diferente" | "override_manual" |
-            "categoria_nao_comissionavel" | "abaixo_minimo";
+            "categoria_nao_comissionavel" | "abaixo_minimo" | "ja_fechada";
     detalhe: string;
+    /** ID do fechamento que já incluiu essa cobrança (só pra motivo=ja_fechada). */
+    fechamentoExistenteId?: number;
   };
 
   const linhas: LinhaDiag[] = todasPagas.map((c) => {
@@ -224,6 +290,18 @@ export async function diagnosticarComissao(
       return { ...base, motivo: "comissionavel" as const, detalhe: "Entra na comissão." };
     }
 
+    // Já-fechada vence override/categoria/atendente — é o motivo MAIS forte
+    // (a cobrança JÁ foi paga em outra ocasião, não importa o resto).
+    const fechamentoId = jaFechadasMap.get(c.id);
+    if (fechamentoId) {
+      return {
+        ...base,
+        motivo: "ja_fechada" as const,
+        detalhe: `Já entrou no fechamento #${fechamentoId}. Não conta de novo (anti-duplicate).`,
+        fechamentoExistenteId: fechamentoId,
+      };
+    }
+
     const motivoExclusao = naoComissionaveisMap.get(c.id);
     if (motivoExclusao) {
       const detalhes: Record<MotivoExclusao, string> = {
@@ -234,7 +312,7 @@ export async function diagnosticarComissao(
       return { ...base, motivo: motivoExclusao, detalhe: detalhes[motivoExclusao] };
     }
 
-    // Não está em nenhum dos dois → atendente da cobrança != atendente filtrado
+    // Não está em nenhum dos casos acima → atendente da cobrança != atendente filtrado
     return {
       ...base,
       motivo: "atendente_diferente" as const,
