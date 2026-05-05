@@ -166,7 +166,7 @@ export function phoneVariantsBR(phone: string): string[] {
 
 /**
  * Resolve o JID válido pra um número de telefone consultando o servidor do
- * WhatsApp via `socket.onWhatsApp([variantes])`. Resolve a quirk dos números
+ * WhatsApp via `socket.onWhatsApp(...numeros)`. Resolve a quirk dos números
  * BR sem "9" antecipado (ver `phoneVariantsBR`).
  *
  * Retorna:
@@ -176,6 +176,17 @@ export function phoneVariantsBR(phone: string): string[] {
  * Cache em memória (TTL 1h) — evita chamada extra a cada mensagem pro mesmo
  * número. Cache por número canônico (mesma resolução pra todos os formatos).
  *
+ * IMPORTANTE: A API do Baileys `onWhatsApp` é REST PARAMETERS:
+ *   `(...phoneNumber: string[]) => Promise<Array<{exists, jid}> | undefined>`
+ *
+ * Tem que chamar com SPREAD, NÃO passar array direto. Bug histórico:
+ * passar array fazia o Baileys interpretar o array stringified como
+ * UM telefone (`"5585...,558596..."`), retornar JID lixo, sendMessage()
+ * aceitava o JID, mas o servidor do WhatsApp ignorava silenciosamente.
+ *
+ * Resultado: SmartFlow reportava "ok" mas mensagem não chegava no
+ * celular do cliente.
+ *
  * `socket` aqui é o WASocket do Baileys (tipado como `any` porque o import
  * dinâmico não dá pra tipar sem trazer Baileys pra `shared/`).
  */
@@ -183,7 +194,11 @@ const jidCache = new Map<string, { jid: string | null; expiresAt: number }>();
 const JID_CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 export async function resolverJidValido(
-  socket: { onWhatsApp: (numbers: string[]) => Promise<Array<{ exists: boolean; jid: string }>> },
+  socket: {
+    onWhatsApp: (
+      ...phoneNumber: string[]
+    ) => Promise<Array<{ exists: boolean; jid: string }> | undefined>;
+  },
   phone: string,
 ): Promise<string | null> {
   const variantes = phoneVariantsBR(phone);
@@ -197,8 +212,9 @@ export async function resolverJidValido(
   }
 
   try {
-    // onWhatsApp aceita lista — Baileys consulta o servidor numa só round-trip
-    const results = await socket.onWhatsApp(variantes);
+    // SPREAD obrigatório — onWhatsApp espera N args separados, não array.
+    // Baileys consulta o servidor numa só round-trip.
+    const results = await socket.onWhatsApp(...variantes);
     const valido = (results || []).find((r) => r?.exists)?.jid || null;
     jidCache.set(cacheKey, { jid: valido, expiresAt: Date.now() + JID_CACHE_TTL_MS });
     return valido;

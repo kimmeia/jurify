@@ -243,17 +243,24 @@ class WhatsappSessionManager extends EventEmitter {
     let jid: string;
     if (destinatario.includes("@")) {
       jid = destinatario;
+      log.info({ canalId, destinatarioOriginal: destinatario, jid, modo: "direto" }, "[WhatsApp] envio");
     } else {
       const resolvido = await resolverJidValido(state.socket, destinatario);
       if (!resolvido) {
+        log.warn(
+          { canalId, destinatarioOriginal: destinatario },
+          "[WhatsApp] número NÃO está registrado no WhatsApp (variantes BR testadas)",
+        );
         throw new Error(
           `Número ${destinatario} não está registrado no WhatsApp (testadas variantes BR com/sem 9).`,
         );
       }
       jid = resolvido;
+      log.info(
+        { canalId, destinatarioOriginal: destinatario, jidResolvido: jid, modo: "onWhatsApp" },
+        "[WhatsApp] envio",
+      );
     }
-
-    log.info(`[WhatsApp] Enviando para JID: ${jid}`);
 
     try {
       let sent: any;

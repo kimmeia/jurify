@@ -142,22 +142,21 @@ describe("resolverJidValido", () => {
 
   it("retorna JID com 9 quando servidor confirma esse formato", async () => {
     const socket = {
-      onWhatsApp: vi.fn(async (numbers: string[]) => [
+      // API real do Baileys: rest parameters (...phoneNumber: string[])
+      onWhatsApp: vi.fn(async (...numbers: string[]) => [
         { exists: true, jid: `${numbers[0]}@s.whatsapp.net` },
         { exists: false, jid: `${numbers[1]}@s.whatsapp.net` },
       ]),
     };
     const jid = await resolverJidValido(socket, "5585999999999");
     expect(jid).toBe("5585999999999@s.whatsapp.net");
-    expect(socket.onWhatsApp).toHaveBeenCalledWith([
-      "5585999999999",
-      "558599999999",
-    ]);
+    // Cada variante chega como argumento separado (spread), não como array
+    expect(socket.onWhatsApp).toHaveBeenCalledWith("5585999999999", "558599999999");
   });
 
   it("retorna JID sem 9 quando só essa variante existe (caso real do bug)", async () => {
     const socket = {
-      onWhatsApp: vi.fn(async (numbers: string[]) => [
+      onWhatsApp: vi.fn(async (...numbers: string[]) => [
         { exists: false, jid: `${numbers[0]}@s.whatsapp.net` },
         { exists: true, jid: `${numbers[1]}@s.whatsapp.net` },
       ]),
@@ -168,7 +167,7 @@ describe("resolverJidValido", () => {
 
   it("retorna null quando nenhuma variante existe (cliente sem WhatsApp)", async () => {
     const socket = {
-      onWhatsApp: vi.fn(async (numbers: string[]) =>
+      onWhatsApp: vi.fn(async (...numbers: string[]) =>
         numbers.map((n) => ({ exists: false, jid: `${n}@s.whatsapp.net` })),
       ),
     };
@@ -178,7 +177,7 @@ describe("resolverJidValido", () => {
 
   it("cacheia resultado pra evitar nova chamada com mesmo número", async () => {
     const socket = {
-      onWhatsApp: vi.fn(async (numbers: string[]) => [
+      onWhatsApp: vi.fn(async (...numbers: string[]) => [
         { exists: true, jid: `${numbers[0]}@s.whatsapp.net` },
       ]),
     };
@@ -197,6 +196,15 @@ describe("resolverJidValido", () => {
     const jid = await resolverJidValido(socket, "5585999999999");
     // Sem cache — fallback usa primeira variante (preferida)
     expect(jid).toBe("5585999999999@s.whatsapp.net");
+  });
+
+  it("trata onWhatsApp retornando undefined (Baileys sem conexão)", async () => {
+    const socket = {
+      // Baileys retorna undefined quando socket não está pronto
+      onWhatsApp: vi.fn(async () => undefined),
+    };
+    const jid = await resolverJidValido(socket, "5585999999999");
+    expect(jid).toBeNull();
   });
 
   it("retorna null pra string vazia (sem variantes)", async () => {
