@@ -2086,6 +2086,16 @@ function ConfigKanbanCriarCardFields({
         )}
       </div>
 
+      {/* Aviso sobre o vínculo automático com ação (multi-ação) */}
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+        <b>📎 Vínculo automático com ação</b>: quando o gatilho é{" "}
+        <code className="rounded bg-blue-100 px-1 dark:bg-blue-900/50">pagamento_recebido</code>{" "}
+        e a cobrança está vinculada a 1+ ações, o passo dispara uma vez por
+        ação e cria <b>1 card por (cliente, ação)</b>. Próximas parcelas
+        pagas não duplicam — a idempotência detecta o card existente.
+        Use {"{{acaoApelido}}"} no título pra cada card mostrar sua ação.
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label className="text-xs">Título</Label>
