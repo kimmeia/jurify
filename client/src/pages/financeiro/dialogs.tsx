@@ -43,11 +43,24 @@ export function NovaCobrancaDialog({
   const [atendenteId, setAtendenteId] = useState<string>("auto"); // "auto" = herda do contato no backend
   const [categoriaId, setCategoriaId] = useState<string>("none");
   const [overrideComissao, setOverrideComissao] = useState<"padrao" | "sim" | "nao">("padrao");
+  // Ações vinculadas (cliente_processos.id) — multi-select. Quando o
+  // pagamento é recebido, o SmartFlow `pagamento_recebido` dispara UMA
+  // VEZ por ação, com o contexto da ação. Cobertura do "pacote": cobro
+  // R$ 3000 e abro 3 ações.
+  const [acoesIds, setAcoesIds] = useState<number[]>([]);
 
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const { data: categoriasList = [] } = trpc.financeiro.listarCategoriasCobranca.useQuery();
   const atendentes = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c) => c.cargo !== "estagiario");
   const categoriasAtivas = categoriasList.filter((c) => c.ativo);
+
+  // Lista ações do cliente selecionado pra popular o multi-select.
+  // Só carrega se há contatoId — evita chamada desnecessária.
+  const contatoIdNum = contatoId ? parseInt(contatoId) : 0;
+  const { data: acoesDoCliente = [] } = trpc.clienteProcessos.listar.useQuery(
+    { contatoId: contatoIdNum },
+    { enabled: contatoIdNum > 0 },
+  );
 
   const criarAvulsaMut = trpc.asaas.criarCobranca.useMutation({ onSuccess: (data) => { setResultado(data.cobranca); toast.success("Cobranca criada"); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
   const criarParcelaMut = trpc.asaas.criarParcelamento.useMutation({ onSuccess: () => { toast.success("Parcelamento criado"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
@@ -62,7 +75,7 @@ export function NovaCobrancaDialog({
     onError: (err: any) => toast.error("Erro", { description: err.message, duration: 8000 }),
   });
   const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending || criarManualMut.isPending;
-  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); };
+  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); setAcoesIds([]); };
   const handleCriar = () => {
     const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
     const comissaoFields = {
@@ -70,6 +83,10 @@ export function NovaCobrancaDialog({
       categoriaId: categoriaId === "none" ? undefined : parseInt(categoriaId),
       comissionavelOverride: overrideMap[overrideComissao],
     };
+    // Ações vinculadas — só envia se houver pelo menos uma. Recorrente
+    // (assinatura) ainda não suporta vínculo de ação por enquanto (cada
+    // cobrança gerada vem do webhook do Asaas, não de uma criação local).
+    const acoesField = acoesIds.length > 0 ? { processoIds: acoesIds } : {};
     if (modo === "avulsa") {
       criarAvulsaMut.mutate({
         contatoId: parseInt(contatoId),
@@ -78,6 +95,7 @@ export function NovaCobrancaDialog({
         formaPagamento: forma as any,
         descricao: descricao || undefined,
         ...comissaoFields,
+        ...acoesField,
       });
     } else if (modo === "parcelada") {
       criarParcelaMut.mutate({
@@ -88,6 +106,7 @@ export function NovaCobrancaDialog({
         formaPagamento: forma as any,
         descricao: descricao || undefined,
         ...comissaoFields,
+        ...acoesField,
       });
     } else if (modo === "recorrente") {
       criarAssinaturaMut.mutate({
@@ -107,6 +126,7 @@ export function NovaCobrancaDialog({
         vencimento,
         formaPagamento: forma as any,
         descricao: descricao || undefined,
+        ...acoesField,
         jaPaga,
         dataPagamento: jaPaga ? (dataPagamento || undefined) : undefined,
         ...comissaoFields,
@@ -142,6 +162,55 @@ export function NovaCobrancaDialog({
             )}
             {!esconderCliente && (
               <div><Label className="text-xs">Cliente</Label><ClienteCombobox value={contatoId} onChange={(id) => setContatoId(id)} /></div>
+            )}
+            {/* Multi-select de ações vinculadas — aparece apenas quando o
+                cliente tem pelo menos uma ação cadastrada. Cobre o caso
+                "pacote de R$ 3000 ativando 3 ações". Modo recorrente
+                (assinatura) não suporta vínculo de ação ainda. */}
+            {modo !== "recorrente" && contatoIdNum > 0 && acoesDoCliente.length > 0 && (
+              <div>
+                <Label className="text-xs">Ações vinculadas (opcional)</Label>
+                <p className="text-[10px] text-muted-foreground mb-1.5">
+                  Marque quais ações esta cobrança ativa. Quando paga, o SmartFlow
+                  dispara <b>uma execução por ação</b> com dados da ação no contexto
+                  ({"{{acaoApelido}}"}, {"{{acaoTipo}}"}, etc).
+                </p>
+                <div className="space-y-1 max-h-36 overflow-y-auto rounded border p-1.5">
+                  {acoesDoCliente.map((acao: any) => {
+                    const checked = acoesIds.includes(acao.id);
+                    return (
+                      <label
+                        key={acao.id}
+                        className="flex items-center gap-2 px-1.5 py-1 hover:bg-accent rounded cursor-pointer text-xs"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setAcoesIds((prev) =>
+                              checked ? prev.filter((id) => id !== acao.id) : [...prev, acao.id],
+                            );
+                          }}
+                          className="h-3.5 w-3.5 cursor-pointer"
+                        />
+                        <span className="flex-1 truncate">
+                          <b>{acao.apelido || acao.numeroCnj}</b>
+                          {acao.tipo && (
+                            <span className="ml-1.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                              {acao.tipo}
+                            </span>
+                          )}
+                          {acao.classe && (
+                            <span className="ml-1.5 text-[10px] text-muted-foreground">
+                              {acao.classe}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             )}
             <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">{modo === "parcelada" ? "Valor total (R$)" : "Valor (R$)"}</Label><Input type="number" step="0.01" min="0.01" placeholder="150.00" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">{modo === "recorrente" ? "Primeiro vencimento" : "Vencimento"}</Label><Input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className="mt-1" /></div></div>
             <div className="grid grid-cols-2 gap-2">

@@ -16,7 +16,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, colaboradores, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
@@ -72,6 +72,65 @@ async function requireEscritorio(userId: number) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Você precisa de um escritório para usar cobranças." });
   }
   return result;
+}
+
+/**
+ * Valida que os `processoIds` informados existem, pertencem ao escritório
+ * e ao mesmo contato. Retorna os IDs validados (filtra duplicatas/inválidos
+ * silenciosamente — não lança, pra não bloquear cobrança por erro de UX).
+ *
+ * Uso: chamado em `criarCobranca`/`criarParcelamento` antes de inserir
+ * vínculos em `cobranca_acoes`.
+ */
+async function validarProcessoIds(
+  escritorioId: number,
+  contatoId: number,
+  processoIds: number[] | undefined,
+): Promise<number[]> {
+  if (!processoIds || processoIds.length === 0) return [];
+  const db = await getDb();
+  if (!db) return [];
+  const unicos = Array.from(new Set(processoIds.filter((n) => Number.isInteger(n) && n > 0)));
+  if (unicos.length === 0) return [];
+
+  const rows = await db
+    .select({ id: clienteProcessos.id })
+    .from(clienteProcessos)
+    .where(
+      and(
+        inArray(clienteProcessos.id, unicos),
+        eq(clienteProcessos.escritorioId, escritorioId),
+        eq(clienteProcessos.contatoId, contatoId),
+      ),
+    );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Insere os vínculos cobrança ↔ ações em `cobranca_acoes`. Idempotente
+ * (PRIMARY KEY composta evita duplicatas — usa INSERT IGNORE).
+ */
+async function vincularCobrancaAcoes(
+  cobrancaId: number,
+  processoIds: number[],
+): Promise<void> {
+  if (processoIds.length === 0) return;
+  const db = await getDb();
+  if (!db) return;
+  // INSERT individual com try/catch — drizzle não tem onConflictDoNothing
+  // pra MySQL, então toleramos erro de duplicate key silenciosamente.
+  for (const processoId of processoIds) {
+    try {
+      await db.insert(cobrancaAcoes).values({ cobrancaId, processoId });
+    } catch (err: any) {
+      if (!/duplicate|primary key/i.test(err?.message || "")) {
+        log.warn(
+          { err: err.message, cobrancaId, processoId },
+          "[cobrancaAcoes] falha ao vincular (não-fatal)",
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -1061,6 +1120,13 @@ export const asaasRouter = router({
       categoriaId: z.number().optional(),
       /** Override manual: TRUE/FALSE força; null/undefined = obedece a categoria. */
       comissionavelOverride: z.boolean().nullable().optional(),
+      /**
+       * Ações vinculadas (cliente_processos.id). Quando o pagamento é
+       * recebido, o dispatcher dispara `pagamento_recebido` UMA VEZ por
+       * ação — cada execução do SmartFlow tem o contexto da ação dela.
+       * Vazio/omitido → comportamento legado (1 evento sem `acaoId`).
+       */
+      processoIds: z.array(z.number().int().positive()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -1144,8 +1210,9 @@ export const asaasRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Erro ao criar cobrança no Asaas" });
       }
 
-      // Salvar localmente
-      await db.insert(asaasCobrancas).values({
+      // Salvar localmente. INSERT retorna `insertId` em MySQL — usamos
+      // pra vincular as ações na tabela N:M `cobranca_acoes` logo abaixo.
+      const [resultInsert] = await db.insert(asaasCobrancas).values({
         escritorioId: esc.escritorio.id,
         contatoId: input.contatoId,
         asaasPaymentId: cobranca.id,
@@ -1163,6 +1230,16 @@ export const asaasRouter = router({
         categoriaId: input.categoriaId ?? null,
         comissionavelOverride: input.comissionavelOverride ?? null,
       });
+      const cobrancaIdLocal = (resultInsert as { insertId: number }).insertId;
+
+      // Vincular ações (N:M). Validação garante que os processos pertencem
+      // ao mesmo contato + escritório (anti-spoof). IDs inválidos viram no-op.
+      const acoesValidas = await validarProcessoIds(
+        esc.escritorio.id,
+        input.contatoId,
+        input.processoIds,
+      );
+      await vincularCobrancaAcoes(cobrancaIdLocal, acoesValidas);
 
       // Se é Pix, buscar QR Code
       let pixQrCode = null;
@@ -1270,6 +1347,8 @@ export const asaasRouter = router({
         atendenteId: z.number().optional(),
         categoriaId: z.number().optional(),
         comissionavelOverride: z.boolean().nullable().optional(),
+        /** Ações vinculadas (cliente_processos.id). Mesma semântica de criarCobranca. */
+        processoIds: z.array(z.number().int().positive()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1340,9 +1419,19 @@ export const asaasRouter = router({
         })
         .$returningId();
 
+      const cobrancaIdLocal = (r as { id: number }).id;
+
+      // Vincula ações (N:M)
+      const acoesValidas = await validarProcessoIds(
+        esc.escritorio.id,
+        input.contatoId,
+        input.processoIds,
+      );
+      await vincularCobrancaAcoes(cobrancaIdLocal, acoesValidas);
+
       return {
         success: true,
-        cobrancaId: (r as { id: number }).id,
+        cobrancaId: cobrancaIdLocal,
         status,
       };
     }),
@@ -1491,9 +1580,33 @@ export const asaasRouter = router({
           contatosMap = Object.fromEntries(contatosList.map((c) => [c.id, c.nome]));
         }
 
+        // Enriquecer com ações vinculadas (apelido / tipo). 1 query por
+        // batch — JOIN feito client-side em JS pra evitar N+1.
+        const cobrancaIds = items.map((i) => i.id);
+        type AcaoLinha = { cobrancaId: number; processoId: number; apelido: string | null; tipo: string | null };
+        let acoesPorCobranca: Map<number, AcaoLinha[]> = new Map();
+        if (cobrancaIds.length > 0) {
+          const acoesRows = await db
+            .select({
+              cobrancaId: cobrancaAcoes.cobrancaId,
+              processoId: cobrancaAcoes.processoId,
+              apelido: clienteProcessos.apelido,
+              tipo: clienteProcessos.tipo,
+            })
+            .from(cobrancaAcoes)
+            .innerJoin(clienteProcessos, eq(clienteProcessos.id, cobrancaAcoes.processoId))
+            .where(inArray(cobrancaAcoes.cobrancaId, cobrancaIds));
+          for (const r of acoesRows) {
+            const arr = acoesPorCobranca.get(r.cobrancaId) ?? [];
+            arr.push(r);
+            acoesPorCobranca.set(r.cobrancaId, arr);
+          }
+        }
+
         const enriched = items.map((i) => ({
           ...i,
           nomeContato: i.contatoId ? contatosMap[i.contatoId] || "—" : "—",
+          acoesVinculadas: acoesPorCobranca.get(i.id) ?? [],
         }));
 
         const allItems = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas).where(and(...conditions));
@@ -2441,6 +2554,12 @@ export const asaasRouter = router({
       atendenteId: z.number().optional(),
       categoriaId: z.number().optional(),
       comissionavelOverride: z.boolean().nullable().optional(),
+      /**
+       * Ações vinculadas (cliente_processos.id). Cada parcela criada
+       * herda o mesmo conjunto de ações — seu cenário do "pacote"
+       * (R$ 3.000 em 3x ativando 3 ações distintas) funciona aqui.
+       */
+      processoIds: z.array(z.number().int().positive()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -2460,6 +2579,14 @@ export const asaasRouter = router({
         .limit(1);
 
       if (!vinculo) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Contato não vinculado ao Asaas." });
+
+      // Valida ações UMA VEZ pra todo o parcelamento (mesmo conjunto vai
+      // pra cada parcela criada).
+      const acoesValidas = await validarProcessoIds(
+        esc.escritorio.id,
+        input.contatoId,
+        input.processoIds,
+      );
 
       const parcelamentoLocalId = nanoid(16);
       const descBase = input.descricao || "Parcelamento";
@@ -2510,6 +2637,24 @@ export const asaasRouter = router({
               comissionavelOverride: input.comissionavelOverride ?? null,
             },
           });
+
+          // Busca o id local pela chave única (asaasPaymentId) — o
+          // onDuplicateKeyUpdate não retorna insertId confiável em update.
+          if (acoesValidas.length > 0) {
+            const [cobLocal] = await db
+              .select({ id: asaasCobrancas.id })
+              .from(asaasCobrancas)
+              .where(
+                and(
+                  eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+                  eq(asaasCobrancas.asaasPaymentId, cobranca.id),
+                ),
+              )
+              .limit(1);
+            if (cobLocal) {
+              await vincularCobrancaAcoes(cobLocal.id, acoesValidas);
+            }
+          }
 
           parcelasCriadas.push({ asaasPaymentId: cobranca.id, parcelaAtual: p.parcelaAtual, valor: p.valor });
         } catch (err: any) {

@@ -723,7 +723,7 @@ export default function Financeiro() {
                       <TableCell>
                         <StatusBadge status={c.status} />
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground truncate max-w-[180px]">
+                      <TableCell className="text-xs text-muted-foreground max-w-[200px]">
                         <div className="flex items-center gap-1.5">
                           {c.parcelaAtual && c.parcelaTotal && (
                             <span
@@ -735,6 +735,28 @@ export default function Financeiro() {
                           )}
                           <span className="truncate">{c.descricao || "—"}</span>
                         </div>
+                        {Array.isArray(c.acoesVinculadas) && c.acoesVinculadas.length > 0 && (
+                          <div
+                            className="mt-0.5 flex flex-wrap gap-1"
+                            title={c.acoesVinculadas
+                              .map((a: any) => a.apelido || `#${a.processoId}`)
+                              .join(" · ")}
+                          >
+                            {c.acoesVinculadas.slice(0, 3).map((a: any) => (
+                              <span
+                                key={a.processoId}
+                                className="rounded border border-blue-200 bg-blue-50 px-1 py-0 text-[9px] text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                              >
+                                {a.apelido || `#${a.processoId}`}
+                              </span>
+                            ))}
+                            {c.acoesVinculadas.length > 3 && (
+                              <span className="text-[9px] text-muted-foreground">
+                                +{c.acoesVinculadas.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
