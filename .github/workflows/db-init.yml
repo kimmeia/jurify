@@ -1,0 +1,59 @@
+name: DB Init (one-shot)
+
+# Workflow manual para inicializar um banco MySQL VAZIO criando todas as
+# tabelas a partir do `drizzle/schema.ts`. Útil ao subir um environment
+# Railway novo (banco zerado, sem tabelas).
+#
+# Uso:
+#  1. Adicione um secret no repositório chamado `INIT_DATABASE_URL`
+#     contendo a connection string do MySQL alvo (ex.: MYSQL_PUBLIC_URL
+#     do Railway com TCP Proxy habilitado).
+#  2. Vai em Actions → "DB Init (one-shot)" → "Run workflow".
+#  3. Confirme digitando `INIT` no input de segurança.
+#  4. Aguarde o job terminar (criação das ~80 tabelas).
+#  5. Apague o secret `INIT_DATABASE_URL` e desabilite o TCP Proxy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite INIT para confirmar (vai criar tabelas no banco apontado pelo secret INIT_DATABASE_URL)'
+        required: true
+        type: string
+
+jobs:
+  db-init:
+    name: drizzle-kit push --force
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validar confirmação
+        if: ${{ inputs.confirm != 'INIT' }}
+        run: |
+          echo "❌ Confirmação inválida. Você digitou: '${{ inputs.confirm }}'"
+          echo "Esperado: INIT"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push schema (cria todas as tabelas)
+        env:
+          DATABASE_URL: ${{ secrets.INIT_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ Secret INIT_DATABASE_URL não está definido."
+            exit 1
+          fi
+          echo "🔧 Rodando drizzle-kit push --force..."
+          pnpm drizzle-kit push --force
+          echo "✅ Schema aplicado com sucesso."
