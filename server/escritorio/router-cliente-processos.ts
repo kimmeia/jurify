@@ -9,8 +9,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { clienteProcessos, contatos, juditMonitoramentos } from "../../drizzle/schema";
-import { eq, and, desc, or } from "drizzle-orm";
+import { asaasCobrancas, clienteProcessos, cobrancaAcoes, contatos, juditMonitoramentos } from "../../drizzle/schema";
+import { eq, and, desc, or, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
 
@@ -64,7 +64,32 @@ export const clienteProcessosRouter = router({
         )
         .orderBy(desc(clienteProcessos.createdAt));
 
-      // Enriquecer com status do monitoramento (se vinculado)
+      // Enriquecer com status do monitoramento (se vinculado) +
+      // contagem de cobranças vinculadas (pra UX do dialog "Nova
+      // cobrança" desabilitar ações já com cobrança ativa).
+      const ids = rows.map((r) => r.id);
+      const cobrancasVinculadas = new Map<
+        number,
+        { total: number; pendentes: number; pagas: number }
+      >();
+      if (ids.length > 0) {
+        const linhas = await db
+          .select({
+            processoId: cobrancaAcoes.processoId,
+            status: asaasCobrancas.status,
+          })
+          .from(cobrancaAcoes)
+          .innerJoin(asaasCobrancas, eq(asaasCobrancas.id, cobrancaAcoes.cobrancaId))
+          .where(inArray(cobrancaAcoes.processoId, ids));
+        for (const l of linhas) {
+          const cur = cobrancasVinculadas.get(l.processoId) ?? { total: 0, pendentes: 0, pagas: 0 };
+          cur.total++;
+          if (l.status === "PENDING" || l.status === "OVERDUE") cur.pendentes++;
+          if (l.status === "RECEIVED" || l.status === "CONFIRMED" || l.status === "RECEIVED_IN_CASH") cur.pagas++;
+          cobrancasVinculadas.set(l.processoId, cur);
+        }
+      }
+
       const result = [];
       for (const row of rows) {
         let monitoramentoStatus: string | null = null;
@@ -76,9 +101,13 @@ export const clienteProcessosRouter = router({
             .limit(1);
           monitoramentoStatus = mon?.statusJudit || null;
         }
+        const cob = cobrancasVinculadas.get(row.id) ?? { total: 0, pendentes: 0, pagas: 0 };
         result.push({
           ...row,
           monitoramentoStatus,
+          cobrancasTotal: cob.total,
+          cobrancasPendentes: cob.pendentes,
+          cobrancasPagas: cob.pagas,
         });
       }
 
