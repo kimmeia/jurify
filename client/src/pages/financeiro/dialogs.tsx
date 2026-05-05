@@ -166,7 +166,9 @@ export function NovaCobrancaDialog({
             {/* Multi-select de ações vinculadas — aparece apenas quando o
                 cliente tem pelo menos uma ação cadastrada. Cobre o caso
                 "pacote de R$ 3000 ativando 3 ações". Modo recorrente
-                (assinatura) não suporta vínculo de ação ainda. */}
+                (assinatura) não suporta vínculo de ação ainda.
+                Ações que já têm cobrança vinculada aparecem desabilitadas
+                pra evitar duplicar (faz visual de "ocupado"). */}
             {modo !== "recorrente" && contatoIdNum > 0 && acoesDoCliente.length > 0 && (
               <div>
                 <Label className="text-xs">Ações vinculadas (opcional)</Label>
@@ -178,20 +180,35 @@ export function NovaCobrancaDialog({
                 <div className="space-y-1 max-h-36 overflow-y-auto rounded border p-1.5">
                   {acoesDoCliente.map((acao: any) => {
                     const checked = acoesIds.includes(acao.id);
+                    const jaVinculada = (acao.cobrancasTotal ?? 0) > 0;
+                    const tooltipMotivo = jaVinculada
+                      ? `Esta ação já tem ${acao.cobrancasTotal} cobrança(s) vinculada(s)` +
+                        (acao.cobrancasPendentes > 0
+                          ? ` (${acao.cobrancasPendentes} aberta${acao.cobrancasPendentes > 1 ? "s" : ""})`
+                          : "") +
+                        ". Pra cobrar de novo, cadastre uma ação separada."
+                      : "";
                     return (
                       <label
                         key={acao.id}
-                        className="flex items-center gap-2 px-1.5 py-1 hover:bg-accent rounded cursor-pointer text-xs"
+                        title={tooltipMotivo}
+                        className={`flex items-center gap-2 px-1.5 py-1 rounded text-xs ${
+                          jaVinculada
+                            ? "opacity-50 cursor-not-allowed bg-muted/40"
+                            : "hover:bg-accent cursor-pointer"
+                        }`}
                       >
                         <input
                           type="checkbox"
                           checked={checked}
+                          disabled={jaVinculada}
                           onChange={() => {
+                            if (jaVinculada) return;
                             setAcoesIds((prev) =>
                               checked ? prev.filter((id) => id !== acao.id) : [...prev, acao.id],
                             );
                           }}
-                          className="h-3.5 w-3.5 cursor-pointer"
+                          className="h-3.5 w-3.5 cursor-pointer disabled:cursor-not-allowed"
                         />
                         <span className="flex-1 truncate">
                           <b>{acao.apelido || acao.numeroCnj}</b>
@@ -206,6 +223,11 @@ export function NovaCobrancaDialog({
                             </span>
                           )}
                         </span>
+                        {jaVinculada && (
+                          <span className="shrink-0 rounded border border-amber-300 bg-amber-50 px-1 py-0 text-[9px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                            ✓ vinculada
+                          </span>
+                        )}
                       </label>
                     );
                   })}
