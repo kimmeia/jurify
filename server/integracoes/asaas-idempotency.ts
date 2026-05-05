@@ -21,6 +21,15 @@ export async function marcarEventoProcessado(
   escritorioId: number,
   asaasPaymentId: string,
   eventType: string,
+  /**
+   * ID da ação (cliente_processos.id) que gera este disparo. Usado pra
+   * idempotência fina quando uma cobrança está vinculada a N ações
+   * (multi-ação): cada (paymentId, acaoId, eventType) processa uma vez.
+   *
+   * Cobrança SEM ação vinculada → omitir → trata como `0` (legado).
+   * NOT NULL DEFAULT 0 no schema garante UNIQUE consistente.
+   */
+  acaoId: number = 0,
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
@@ -28,7 +37,7 @@ export async function marcarEventoProcessado(
   try {
     const res = await db
       .insert(asaasWebhookEventos)
-      .values({ escritorioId, asaasPaymentId, eventType })
+      .values({ escritorioId, asaasPaymentId, eventType, acaoId })
       // No-op em caso de duplicata: preserva o processedAt original.
       .onDuplicateKeyUpdate({ set: { processedAt: sql`processedAtWhEv` } });
 
