@@ -9,6 +9,10 @@ import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/vali
 import { verificarLimite } from "../billing/plan-limits";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
+import { criarLead } from "./db-crm";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("router-clientes");
 
 /** Remove entradas vazias/nulas e serializa pra TEXT.
  *  - `null`, `""`, `undefined` → omitidos
@@ -66,7 +70,20 @@ export const clientesRouter = router({
     return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional(),
+    /**
+     * Marcar cliente como JÁ FECHADO no momento do cadastro manual.
+     * Quando true, cria lead automaticamente com etapaFunil="fechado_ganho" —
+     * cliente entra no relatório comercial como conversão (mesmo critério
+     * usado pelo pipeline kanban). Cobre o caso "fechei por ligação/
+     * indicação e quero registrar a venda sem passar pelo funil".
+     */
+    jaFechado: z.boolean().optional(),
+    /** Valor do contrato fechado (string pra preservar formatação BR). */
+    valorFechamento: z.string().max(20).optional(),
+    /** Origem da indicação ("indicacao", "ligacao", "evento", etc). */
+    origemFechamento: z.string().max(128).optional(),
+  }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
       if (!perm.allowed) throw new Error("Sem permissão para cadastrar clientes.");
@@ -85,7 +102,30 @@ export const clientesRouter = router({
       // e pelo menos um valor não-vazio.
       const camposJson = sanitizarCamposPersonalizados(input.camposPersonalizados);
       const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
-      return { id: (r as { insertId: number }).insertId };
+      const contatoId = (r as { insertId: number }).insertId;
+
+      // Se marcado "já fechado", cria lead com etapa fechado_ganho — entra
+      // no relatório comercial como conversão. Não-fatal: se falhar, o
+      // contato já está salvo e o operador pode criar o lead manualmente.
+      if (input.jaFechado) {
+        try {
+          await criarLead({
+            escritorioId: perm.escritorioId,
+            contatoId,
+            responsavelId: respId,
+            etapaFunil: "fechado_ganho",
+            valorEstimado: input.valorFechamento || undefined,
+            origemLead: input.origemFechamento || input.origem || "manual",
+          });
+        } catch (err: any) {
+          log.warn(
+            { err: err.message, contatoId },
+            "[clientes.criar] falha ao criar lead automático de fechamento (não-fatal)",
+          );
+        }
+      }
+
+      return { id: contatoId };
     }),
 
   atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
