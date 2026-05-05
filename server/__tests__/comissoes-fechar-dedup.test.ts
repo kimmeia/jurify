@@ -18,6 +18,7 @@ function makeSelectBuilder() {
   const builder: any = {
     from: () => builder,
     leftJoin: () => builder,
+    innerJoin: () => builder,
     where: () => builder,
     orderBy: () => builder,
     limit: () => next(),
@@ -102,9 +103,11 @@ describe("fecharComissao — dedup cross-origem", () => {
   });
 
   it("permite criar duplicado quando forcarDuplicado=true (skip da check)", async () => {
-    // SELECT em comissoes_fechadas — NÃO é chamada porque forcar=true
-    // Precisamos preparar selects pra simularComissao (cobranças=[])
-    // SELECT cobranças → vazio
+    // SELECT em comissoes_fechadas — NÃO é chamada porque forcar=true.
+    // Precisamos preparar selects pra simularComissao em ordem:
+    //   1. carregarMapaCobrancasJaFechadas (anti-duplicate) → vazio
+    //   2. SELECT cobranças do período → vazio
+    selectQueue.push([]);
     selectQueue.push([]);
 
     const r = await fecharComissao({

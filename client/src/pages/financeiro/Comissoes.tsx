@@ -345,16 +345,34 @@ function CalcularSection() {
             </Button>
           </div>
 
-          <ListaCobrancas
-            titulo="Cobranças que entram na comissão"
-            cor="emerald"
-            itens={sim.data.comissionaveis.map((c) => ({ ...c, motivo: null }))}
-          />
-          <ListaCobrancas
-            titulo="Cobranças que NÃO entram na comissão"
-            cor="slate"
-            itens={sim.data.naoComissionaveis}
-          />
+          {sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0 ? (
+            <Card className="border-violet-300 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
+              <CardContent className="py-6 text-center text-sm space-y-2">
+                <p className="font-medium text-violet-900 dark:text-violet-100">
+                  Nenhuma cobrança disponível pra fechamento neste período
+                </p>
+                <p className="text-xs text-violet-700 dark:text-violet-300">
+                  Pode ser que <b>todas as cobranças deste período já foram incluídas em
+                  fechamentos anteriores</b> (proteção anti-duplicata). Use o botão{" "}
+                  <b>🔍 Diagnosticar diferença</b> pra ver o histórico de cada uma e em
+                  qual fechamento ela está.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <ListaCobrancas
+                titulo="Cobranças que entram na comissão"
+                cor="emerald"
+                itens={sim.data.comissionaveis.map((c) => ({ ...c, motivo: null }))}
+              />
+              <ListaCobrancas
+                titulo="Cobranças que NÃO entram na comissão"
+                cor="slate"
+                itens={sim.data.naoComissionaveis}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -448,6 +466,8 @@ function CalcularSection() {
                           ? "text-emerald-700 bg-emerald-50/50 dark:text-emerald-300 dark:bg-emerald-950/20"
                           : l.motivo === "atendente_diferente"
                           ? "text-blue-700 bg-blue-50/50 dark:text-blue-300 dark:bg-blue-950/20"
+                          : l.motivo === "ja_fechada"
+                          ? "text-violet-700 bg-violet-50/50 dark:text-violet-300 dark:bg-violet-950/20"
                           : "text-amber-700 bg-amber-50/50 dark:text-amber-300 dark:bg-amber-950/20";
                       const labelMotivo = {
                         comissionavel: "✓ Entra",
@@ -455,6 +475,9 @@ function CalcularSection() {
                         override_manual: "Override manual",
                         categoria_nao_comissionavel: "Categoria não comiss.",
                         abaixo_minimo: "Abaixo do mínimo",
+                        ja_fechada: l.fechamentoExistenteId
+                          ? `Já fechada (#${l.fechamentoExistenteId})`
+                          : "Já fechada",
                       }[l.motivo];
                       return (
                         <tr key={l.id} className={`border-t ${cor}`}>
