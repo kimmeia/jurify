@@ -577,6 +577,13 @@ export async function listarMensagens(conversaId: number, limite = 50) {
 export async function criarLead(dados: {
   escritorioId: number; contatoId: number; conversaId?: number;
   responsavelId?: number; valorEstimado?: string; origemLead?: string;
+  /**
+   * Etapa do funil. Default: "novo" (lead acabou de chegar). Pra cliente
+   * cadastrado manualmente que JÁ fechou (ex: indicação, ligação),
+   * passar "fechado_ganho" — entra direto no relatório comercial como
+   * conversão.
+   */
+  etapaFunil?: "novo" | "qualificado" | "proposta" | "negociacao" | "fechado_ganho" | "fechado_perdido";
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -587,6 +594,7 @@ export async function criarLead(dados: {
     responsavelId: dados.responsavelId ?? null,
     valorEstimado: dados.valorEstimado || null,
     origemLead: dados.origemLead || null,
+    etapaFunil: dados.etapaFunil || "novo",
   });
   return (result as { insertId: number }).insertId;
 }

@@ -596,6 +596,12 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   const [erros, setErros] = useState<Record<string, string>>({});
   const [camposExtras, setCamposExtras] = useState<Record<string, any>>({});
   const [qualif, setQualif] = useState<QualificacaoEndereco>({ ...QUALIFICACAO_ENDERECO_VAZIO });
+  // Cliente cadastrado por canal externo (ligação/indicação) — quando
+  // marcado "já fechou", o backend cria um lead com etapaFunil="fechado_ganho"
+  // pra entrar no relatório comercial sem precisar passar pelo pipeline.
+  const [jaFechado, setJaFechado] = useState(false);
+  const [valorFechamento, setValorFechamento] = useState("");
+  const [origemFechamento, setOrigemFechamento] = useState("indicacao");
   const { data: defsCampos } = (trpc as any).camposCliente.listar.useQuery(undefined, { retry: false, enabled: open });
 
   // Lista de colaboradores ATIVOS — usado pra escolher responsável.
@@ -666,6 +672,57 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         </p>
       </div>
     )}
+    {/* Cliente já fechado (cadastrado por canal externo: indicação,
+        ligação, evento). Quando marcado, backend cria lead com
+        etapaFunil="fechado_ganho" — entra no relatório comercial
+        automaticamente sem passar pelo pipeline kanban. */}
+    <div className="space-y-2 pt-2 border-t">
+      <label className="flex items-start gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={jaFechado}
+          onChange={(e) => setJaFechado(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-emerald-600 cursor-pointer"
+        />
+        <div>
+          <span className="text-sm font-medium">✅ Cliente já fechou contrato</span>
+          <p className="text-[10px] text-muted-foreground">
+            Marque se você fechou esse cliente fora do pipeline (ex: indicação,
+            ligação). Cria conversão automática no <b>Relatório Comercial</b>{" "}
+            sem precisar passar pelo Kanban.
+          </p>
+        </div>
+      </label>
+      {jaFechado && (
+        <div className="grid grid-cols-2 gap-3 pl-6">
+          <div className="space-y-1">
+            <Label className="text-xs">Valor do contrato (R$)</Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={valorFechamento}
+              onChange={(e) => setValorFechamento(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Origem</Label>
+            <select
+              value={origemFechamento}
+              onChange={(e) => setOrigemFechamento(e.target.value)}
+              className="w-full h-8 px-2 text-sm rounded-md border bg-background"
+            >
+              <option value="indicacao">Indicação</option>
+              <option value="ligacao">Ligação</option>
+              <option value="evento">Evento</option>
+              <option value="presencial">Presencial</option>
+              <option value="manual">Outro</option>
+            </select>
+          </div>
+        </div>
+      )}
+    </div>
     {/* Documentação pendente — flag pra rastrear cliente que assinou
         contrato mas ainda não enviou todos os documentos. SmartFlow
         pode disparar cobrança automática usando essa flag. */}
@@ -731,6 +788,12 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       bairro: qualif.bairro || null,
       cidade: qualif.cidade || null,
       uf: qualif.uf || null,
+      // Marca como conversão (cria lead automático com fechado_ganho)
+      // quando o operador indica que cliente já fechou contrato fora
+      // do pipeline (ligação/indicação/etc).
+      jaFechado: jaFechado || undefined,
+      valorFechamento: jaFechado && valorFechamento ? valorFechamento : undefined,
+      origemFechamento: jaFechado ? origemFechamento : undefined,
     });
   }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
 }
