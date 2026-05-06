@@ -30,14 +30,34 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  ExternalLink,
   Gavel,
+  History,
   Loader2,
+  RotateCcw,
   Scale,
   Search,
   Users,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+
+const TRIBUNAIS_CONSULTA_URL: Record<string, string> = {
+  trt2: "https://pje.trt2.jus.br/consultaprocessual/",
+  trt15: "https://pje.trt15.jus.br/consultaprocessual/",
+};
+
+interface ConsultaHistorico {
+  id: string;
+  cnj: string;
+  tribunal: string;
+  ok: boolean;
+  latenciaMs: number;
+  movimentacoes: number;
+  partes: number;
+  categoriaErro: string | null;
+  timestamp: number;
+}
 
 const CATEGORIAS_ERRO_LABELS: Record<string, { label: string; descricao: string; cor: string }> = {
   cnj_nao_encontrado: {
@@ -96,6 +116,7 @@ export default function MotorProprioTeste() {
   const [tribunal, setTribunal] = useState<string>("trt2");
   const [cnj, setCnj] = useState("");
   const [resultado, setResultado] = useState<any>(null);
+  const [historico, setHistorico] = useState<ConsultaHistorico[]>([]);
 
   const ambienteQuery = (trpc as any).motorProprioTeste.ambienteSuportaTeste.useQuery();
   const tribunaisQuery = (trpc as any).motorProprioTeste.tribunaisDisponiveis.useQuery();
@@ -103,6 +124,22 @@ export default function MotorProprioTeste() {
   const consultarMut = (trpc as any).motorProprioTeste.testarCnj.useMutation({
     onSuccess: (data: any) => {
       setResultado(data);
+      setHistorico((prev) =>
+        [
+          {
+            id: `${Date.now()}`,
+            cnj: data.cnj,
+            tribunal: data.tribunal,
+            ok: data.ok,
+            latenciaMs: data.latenciaMs,
+            movimentacoes: data.movimentacoes?.length ?? 0,
+            partes: data.capa?.partes?.length ?? 0,
+            categoriaErro: data.categoriaErro,
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 10),
+      );
       if (data.ok) {
         toast.success(`Consulta concluída em ${data.latenciaMs}ms`);
       } else {
@@ -115,8 +152,14 @@ export default function MotorProprioTeste() {
     },
   });
 
+  const fecharBrowserMut = (trpc as any).motorProprioTeste.fecharBrowser.useMutation({
+    onSuccess: () => toast.success("Browser pool resetado — próxima consulta abre instância nova"),
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const ambiente = ambienteQuery.data?.ambiente || "carregando...";
   const suportaTeste = ambienteQuery.data?.suportaTeste ?? false;
+  const urlConsultaPublica = TRIBUNAIS_CONSULTA_URL[tribunal];
 
   const handleConsultar = () => {
     if (!cnj.trim()) {
@@ -125,6 +168,13 @@ export default function MotorProprioTeste() {
     }
     setResultado(null);
     consultarMut.mutate({ cnj: cnj.trim(), tribunal });
+  };
+
+  const handleRepetir = (item: ConsultaHistorico) => {
+    setTribunal(item.tribunal);
+    setCnj(item.cnj);
+    setResultado(null);
+    consultarMut.mutate({ cnj: item.cnj, tribunal: item.tribunal });
   };
 
   return (
@@ -158,11 +208,26 @@ export default function MotorProprioTeste() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Nova consulta</CardTitle>
-          <CardDescription>
-            Cole um CNJ válido (formato com máscara: 0001234-56.2024.5.02.0001).
-            A consulta leva tipicamente 5-15 segundos.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Nova consulta</CardTitle>
+              <CardDescription>
+                Cole um CNJ válido (formato com máscara: 0001234-56.2024.5.02.0001).
+                A consulta leva tipicamente 5-15 segundos.
+              </CardDescription>
+            </div>
+            {urlConsultaPublica && (
+              <a
+                href={urlConsultaPublica}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline flex items-center gap-1 whitespace-nowrap"
+              >
+                Pegar CNJ no {tribunal.toUpperCase()}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-[200px_1fr_auto] items-end">
@@ -213,6 +278,19 @@ export default function MotorProprioTeste() {
               )}
             </Button>
           </div>
+          <div className="flex justify-end pt-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fecharBrowserMut.mutate()}
+              disabled={fecharBrowserMut.isPending}
+              className="text-xs text-muted-foreground"
+              title="Útil quando o navegador headless trava ou pra forçar contexto limpo"
+            >
+              <RotateCcw className="mr-1 h-3 w-3" />
+              Resetar browser pool
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -221,7 +299,67 @@ export default function MotorProprioTeste() {
       {resultado && !consultarMut.isPending && (
         <ResultadoCard resultado={resultado} />
       )}
+
+      {historico.length > 0 && (
+        <HistoricoCard historico={historico} onRepetir={handleRepetir} onLimpar={() => setHistorico([])} />
+      )}
     </div>
+  );
+}
+
+function HistoricoCard({
+  historico,
+  onRepetir,
+  onLimpar,
+}: {
+  historico: ConsultaHistorico[];
+  onRepetir: (item: ConsultaHistorico) => void;
+  onLimpar: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Histórico desta sessão ({historico.length})
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={onLimpar} className="text-xs">
+            Limpar
+          </Button>
+        </div>
+        <CardDescription>
+          Últimas {historico.length} consultas. Não persiste — recarregar página apaga.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1">
+          {historico.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onRepetir(item)}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded hover:bg-accent text-left text-sm transition-colors"
+            >
+              <Badge
+                variant={item.ok ? "default" : "destructive"}
+                className="font-mono text-xs uppercase shrink-0"
+              >
+                {item.tribunal}
+              </Badge>
+              <span className="font-mono text-xs flex-1 truncate">{item.cnj}</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {item.ok
+                  ? `${item.movimentacoes} movs · ${item.partes} partes`
+                  : (CATEGORIAS_ERRO_LABELS[item.categoriaErro || "outro"]?.label ?? "erro")}
+              </span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap font-mono">
+                {item.latenciaMs}ms
+              </span>
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
