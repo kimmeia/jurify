@@ -106,13 +106,26 @@ jobs:
 
       - name: Validar secrets do environment production
         env:
+          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
           SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}
           ENV_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }}
         run: |
-          if [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ]; then
-            echo "::error::Secrets RAILWAY_SERVICE_ID_PRODUCTION ou RAILWAY_ENVIRONMENT_ID_PRODUCTION não estão definidos."
+          if [ -z "$PROJECT_ID" ] || [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ]; then
+            echo "::error::Secrets RAILWAY_PROJECT_ID/SERVICE_ID_PRODUCTION/ENVIRONMENT_ID_PRODUCTION ausentes."
             exit 1
           fi
+
+      - name: Linkar projeto Railway (production)
+        # Account Token não escopa projeto — `railway up` falha com
+        # "No linked project found" se o CWD não estiver linkado. `railway
+        # link` cria o link local apontando pro project/env/service certos.
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway link \
+            --project "${{ secrets.RAILWAY_PROJECT_ID }}" \
+            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }}" \
+            --service "${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}"
 
       - name: Deploy production
         env:
@@ -170,13 +183,23 @@ jobs:
 
       - name: Validar secrets do environment staging
         env:
+          PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
           SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_STAGING }}
           ENV_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }}
         run: |
-          if [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ]; then
-            echo "::error::Secrets RAILWAY_SERVICE_ID_STAGING ou RAILWAY_ENVIRONMENT_ID_STAGING não estão definidos."
+          if [ -z "$PROJECT_ID" ] || [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ]; then
+            echo "::error::Secrets RAILWAY_PROJECT_ID/SERVICE_ID_STAGING/ENVIRONMENT_ID_STAGING ausentes."
             exit 1
           fi
+
+      - name: Linkar projeto Railway (staging)
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway link \
+            --project "${{ secrets.RAILWAY_PROJECT_ID }}" \
+            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }}" \
+            --service "${{ secrets.RAILWAY_SERVICE_ID_STAGING }}"
 
       - name: Deploy staging
         env:
