@@ -33,11 +33,12 @@ console.log(
 );
 
 try {
-  // --with-deps instala libs do sistema (libnss, libxkbcommon, etc) que o
-  // Chromium headless precisa em containers Alpine/Debian. Em ambiente que
-  // não permite sudo (Railway Nixpacks), o flag é ignorado/no-op pras libs
-  // do sistema mas baixa o navegador normalmente.
-  execSync("npx playwright install --with-deps chromium", { stdio: "inherit" });
+  // Sem --with-deps: o postinstall do Railway/Nixpacks roda como user
+  // não-root, e --with-deps tentaria `sudo apt-get install` e falharia.
+  // As libs do sistema (libnss3, libxkbcommon, libgtk-3-0, etc) entram
+  // via nixpacks.toml > aptPkgs, que executa em fase privilegiada do
+  // build do container.
+  execSync("npx playwright install chromium", { stdio: "inherit" });
   console.log("[postinstall] Chromium instalado com sucesso.");
 } catch (err) {
   // Não falhar o pnpm install — motor próprio ainda não é blocker.
