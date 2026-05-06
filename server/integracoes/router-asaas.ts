@@ -1953,21 +1953,25 @@ export const asaasRouter = router({
           if (!refDate) continue;
           const chave = refDate.slice(0, sliceLen);
           const bucket = buckets.get(chave);
+          // Totais só contam o que cai DENTRO do range escolhido pelo usuário
+          // (bate com o que o gráfico mostra). Sem essa guarda, o número
+          // grande do hero ficaria com o acumulado histórico do escritório.
+          if (!bucket) continue;
 
           if (pago) {
             totalRecebido += valor;
-            if (bucket) bucket.recebido += valor;
+            bucket.recebido += valor;
           } else if (c.status === "PENDING") {
             if (c.vencimento < hojeStr) {
               totalVencido += valor;
-              if (bucket) bucket.vencido += valor;
+              bucket.vencido += valor;
             } else {
               totalPendente += valor;
-              if (bucket) bucket.pendente += valor;
+              bucket.pendente += valor;
             }
           } else if (c.status === "OVERDUE") {
             totalVencido += valor;
-            if (bucket) bucket.vencido += valor;
+            bucket.vencido += valor;
           }
         }
 
