@@ -155,6 +155,10 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
       "--events",
       "--set-gtid-purged=OFF",
       "--column-statistics=0",
+      // --verbose imprime "Dumping table_name (rows)" no stderr a cada
+      // tabela. Combinado com o stream de stderr no handler abaixo, dá
+      // progresso real-time nos logs do GitHub Actions.
+      "--verbose",
       conn.database,
     ],
     { stdio: ["ignore", "pipe", "pipe"] },
