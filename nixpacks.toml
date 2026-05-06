@@ -1,0 +1,17 @@
+# Configuração Nixpacks pra build do Railway.
+#
+# Por padrão, Nixpacks só instala Node.js no container final. O backup
+# diário precisa do binário `mysqldump` (parte do mysql-client) pra fazer
+# dump direto do banco interno do Railway sem passar pelo TCP Proxy
+# externo (que é lento demais pro tamanho de production).
+#
+# `default-mysql-client` é o metapackage Ubuntu que aponta pro MariaDB
+# client (compatível com MySQL 8 — mesmo dialeto de dump). Usar
+# `default-*` em vez de `mysql-client` evita problema com mudanças de
+# pacote ao longo das versões do Ubuntu.
+#
+# `["...", ...]` é a sintaxe Nixpacks pra ADICIONAR pacotes mantendo os
+# defaults do auto-detect (sem isso, sobrescreveria a lista inteira).
+
+[phases.setup]
+aptPkgs = ["...", "default-mysql-client"]
