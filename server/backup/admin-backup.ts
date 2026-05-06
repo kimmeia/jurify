@@ -133,6 +133,19 @@ export async function urlAssinadaDownload(
 /**
  * Dispara `mysqldump` sob demanda → gzip → upload streaming pro S3.
  * Retorna o registro criado quando termina.
+ *
+ * Observabilidade:
+ *  - stderr do mysqldump pipado pra `process.stderr` em tempo real (com
+ *    `--verbose`, mostra `Dumping table X` por tabela).
+ *  - console.log marca início/fim de cada fase pra timeline clara nos
+ *    logs do Railway, mesmo se o cliente HTTP cair antes do fim.
+ *
+ * Compatibilidade MariaDB-client × MySQL 8 server:
+ *  No container Railway o `default-mysql-client` aponta pro MariaDB.
+ *  MariaDB mysqldump NÃO conhece `--column-statistics=0` (flag exclusiva
+ *  do MySQL 8 client) e morre com `unknown option`. Removida — sem essa
+ *  flag o conteúdo do dump não muda; ela só servia pra silenciar warning
+ *  específico de MySQL 8 client contra MySQL 5.x server.
  */
 export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<BackupGlobalRegistro> {
   const inicio = Date.now();
@@ -140,6 +153,10 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
   const s3 = montarS3Client(cfg);
   const stamp = new Date(inicio).toISOString().replace(/[:.]/g, "-");
   const key = `mysql/${conn.database}/${stamp}.sql.gz`;
+
+  console.log(
+    `[backup-admin] iniciando: ${conn.host}:${conn.port}/${conn.database} -> s3://${cfg.bucket}/${key}`,
+  );
 
   const dump = spawn(
     "mysqldump",
@@ -154,7 +171,6 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
       "--triggers",
       "--events",
       "--set-gtid-purged=OFF",
-      "--column-statistics=0",
       // --verbose imprime "Dumping table_name (rows)" no stderr a cada
       // tabela. Combinado com o stream de stderr no handler abaixo, dá
       // progresso real-time nos logs do GitHub Actions.
@@ -172,6 +188,12 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
     // real nos logs (GitHub Actions). Sem isso, erros do mysqldump só
     // aparecem após exit — se o processo trava, fica invisível.
     process.stderr.write(`[mysqldump] ${str}`);
+  });
+  dump.on("error", (err) => {
+    // Spawn falhou (binário não existe, permissão negada, etc). dump.on("close")
+    // ainda dispara depois com exit code -2, mas logamos aqui pra a causa
+    // raiz aparecer nos logs antes do erro genérico.
+    console.error(`[backup-admin] erro ao spawnar mysqldump: ${err.message}`);
   });
 
   const gz = createGzip({ level: 9 });
@@ -194,12 +216,16 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
   });
 
   const dumpExit: number = await new Promise((resolve) => dump.on("close", resolve));
+  const dumpDur = Math.round((Date.now() - inicio) / 1000);
+  console.log(`[backup-admin] mysqldump terminou (exit=${dumpExit}) após ${dumpDur}s`);
   if (dumpExit !== 0) {
     upload.abort().catch(() => {});
-    throw new Error(`mysqldump falhou (exit=${dumpExit}). stderr:\n${stderr.slice(0, 500)}`);
+    throw new Error(`mysqldump falhou (exit=${dumpExit}). stderr (últimos 2KB):\n${stderr.slice(-2000)}`);
   }
 
+  console.log(`[backup-admin] aguardando upload finalizar em s3://${cfg.bucket}/${key}…`);
   const result = await upload.done();
+  console.log(`[backup-admin] upload OK em ${Math.round((Date.now() - inicio) / 1000)}s totais.`);
   // Tamanho não vem direto — fazemos um HEAD pra obter (rápido, sem custo).
   // Se falhar, cai pra estimativa baseada nos bytes que o gzip reportou.
   let tamanhoBytes = 0;
