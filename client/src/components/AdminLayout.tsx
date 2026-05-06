@@ -41,6 +41,7 @@ import {
   Radar,
   Bug,
   Database,
+  Scale,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation, Redirect } from "wouter";
@@ -183,6 +184,7 @@ function AdminSidebarContent({
     { icon: Tag, label: "Cupons", path: "/admin/cupons" },
     { icon: BrainCircuit, label: "Agentes IA", path: "/admin/agentes-ia" },
     { icon: Radar, label: "Judit Processos", path: "/admin/judit" },
+    { icon: Scale, label: "Motor Próprio (Spike)", path: "/admin/motor-proprio-teste" },
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
     { icon: Bug, label: "Erros", path: "/admin/erros" },

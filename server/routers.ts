@@ -18,6 +18,9 @@ import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 // Notificações in-app
 import { notificacoesRouter } from "./processos/router-notificacoes";
 
+// Motor próprio (Spike — staging-only, admin-only)
+import { motorProprioTesteRouter } from "./processos/router-motor-proprio-teste";
+
 // Escritório
 import { configuracoesRouter } from "./escritorio/router-configuracoes";
 import { agendamentoRouter } from "./escritorio/router-agendamento";
@@ -87,6 +90,9 @@ export const appRouter = router({
 
   // Notificações in-app
   notificacoes: notificacoesRouter,
+
+  // Motor próprio — endpoint de teste manual via UI (Spike)
+  motorProprioTeste: motorProprioTesteRouter,
 
   // Escritório e Configurações
   configuracoes: configuracoesRouter,
