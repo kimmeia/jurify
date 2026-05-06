@@ -162,7 +162,12 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
 
   let stderr = "";
   dump.stderr.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString();
+    const str = chunk.toString();
+    stderr += str;
+    // Stream stderr pro stdout do processo pai pra ficar visível em tempo
+    // real nos logs (GitHub Actions). Sem isso, erros do mysqldump só
+    // aparecem após exit — se o processo trava, fica invisível.
+    process.stderr.write(`[mysqldump] ${str}`);
   });
 
   const gz = createGzip({ level: 9 });
