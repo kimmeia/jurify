@@ -1,12 +1,15 @@
 name: Tests CI
 
-# Roda em todo PR pra `main` ou `staging`. Falha bloqueia merge.
+# Roda em todo PR pra `main` ou `develop`. Falha bloqueia merge.
 # 3 jobs sequenciais: unit (rápido) → smoke tRPC (DB local) → E2E.
+#
+# Em push direto: dispara também o Deploy Railway (workflow_run em
+# deploy.yml) — develop → staging, main → production.
 on:
   pull_request:
-    branches: [main, staging]
+    branches: [main, develop]
   push:
-    branches: [main, staging]
+    branches: [main, develop]
 
 jobs:
   unit:

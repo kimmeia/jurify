@@ -1,53 +1,85 @@
 name: Deploy Railway
 
-# Deploy automático no Railway só depois que toda a CI passa na main.
+# Deploy automático no Railway só depois que toda a CI passa.
+# Estratégia de branches:
+#   • push em `main`     → deploy em PRODUCTION (juridflow.com.br)
+#   • push em `develop`  → deploy em STAGING    (staging.juridflow.com.br)
 #
 # Pra mexer/debugar:
 #   • Ver últimos deploys: aba "Deployments" do serviço no Railway
-#   • Disparar manual sem push: botão "Run workflow" na aba Actions do GitHub
+#   • Disparar manual sem push: botão "Run workflow" na aba Actions
+#     (escolhe target=production ou staging)
 #   • Logs de build: clica no run específico → "Deploy" → expande os steps
 #
-# Secrets necessárias (configuradas em Settings > Secrets > Actions):
-#   RAILWAY_TOKEN          → Project Token criado no Railway
-#   RAILWAY_PROJECT_ID     → UUID do projeto
-#   RAILWAY_SERVICE_ID     → UUID do serviço (jurify)
-#   RAILWAY_ENVIRONMENT_ID → UUID do ambiente (production)
-#   RAILWAY_SERVICE_NAME   → Nome do serviço (jurify) — fallback caso o ID falhe
+# Secrets necessárias (Settings > Secrets and variables > Actions):
+#   RAILWAY_TOKEN                       → Project Token criado no Railway
+#   RAILWAY_PROJECT_ID                  → UUID do projeto (ambos environments
+#                                          compartilham o mesmo projeto)
+#
+#   RAILWAY_SERVICE_ID_PRODUCTION       → UUID do service do app no env production
+#   RAILWAY_ENVIRONMENT_ID_PRODUCTION   → UUID do environment "production"
+#
+#   RAILWAY_SERVICE_ID_STAGING          → UUID do service do app no env staging
+#   RAILWAY_ENVIRONMENT_ID_STAGING      → UUID do environment "staging"
+#
+# Como achar os IDs no Railway:
+#   • PROJECT_ID     → URL do projeto: railway.com/project/<PROJECT_ID>
+#   • ENVIRONMENT_ID → seleciona o environment, abre o seletor de envs e
+#                       passa o mouse / inspeciona; ou via Railway CLI
+#                       `railway environment` mostra os IDs.
+#   • SERVICE_ID     → clica no service, URL fica
+#                       railway.com/project/<...>/service/<SERVICE_ID>?...
 on:
-  # Dispara DEPOIS que o "Tests CI" terminar com sucesso na main.
-  # Se a CI quebrar, o deploy NÃO roda — produção fica protegida.
+  # Dispara DEPOIS que o "Tests CI" terminar com sucesso em main ou develop.
+  # Se a CI quebrar, o deploy NÃO roda — produção/staging ficam protegidos.
   workflow_run:
     workflows: ["Tests CI"]
     types: [completed]
-    branches: [main]
+    branches: [main, develop]
 
-  # Permite disparar manualmente via UI do GitHub (Actions > Deploy Railway > Run workflow).
+  # Permite disparar manualmente via UI do GitHub (Actions > Deploy Railway).
   # Útil pra re-deploy quando precisa, sem precisar fazer commit.
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+        default: staging
 
-# Cancela deploys antigos se um novo for disparado — evita duas builds
-# concorrentes no mesmo serviço (Railway aceitaria, mas vira corrida).
+# Cancela deploys antigos do MESMO ambiente. Production e staging têm grupos
+# separados — uma rebuild de staging não cancela production em curso.
 concurrency:
-  group: deploy-railway-production
-  cancel-in-progress: false # NÃO cancela em curso — deixa terminar pra não corromper
+  group: >-
+    deploy-railway-${{
+      github.event.workflow_run.head_branch == 'main' && 'production' ||
+      github.event.workflow_run.head_branch == 'develop' && 'staging' ||
+      inputs.target
+    }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  deploy-production:
     name: Deploy production
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
-    # Bloqueia deploy se a CI falhou. workflow_dispatch (run manual) não
-    # tem `event.workflow_run`, então passa direto — isso é proposital pra
-    # permitir re-deploy de emergência.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Só roda em duas situações:
+    #  1. CI passou em main → deploy automático
+    #  2. workflow_dispatch com target=production
+    if: |
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' &&
+        inputs.target == 'production')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # workflow_run roda no contexto do commit que disparou a CI;
-          # garante que pegamos o SHA certo da main.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
@@ -63,28 +95,97 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           railway whoami || {
-            echo "::error::Falha ao autenticar com RAILWAY_TOKEN. Confirma o secret no GitHub."
+            echo "::error::Falha ao autenticar com RAILWAY_TOKEN."
             exit 1
           }
 
-      - name: Deploy
+      - name: Validar secrets do environment production
+        env:
+          SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}
+          ENV_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }}
+        run: |
+          if [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ]; then
+            echo "::error::Secrets RAILWAY_SERVICE_ID_PRODUCTION ou RAILWAY_ENVIRONMENT_ID_PRODUCTION não estão definidos."
+            exit 1
+          fi
+
+      - name: Deploy production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           # `--detach` retorna assim que o deploy é DISPARADO (não espera
-          # o build terminar). Build do Jurify leva ~5min — esperar tudo
-          # estoura o timeout do GitHub Actions sem necessidade. Status
-          # final fica visível no dashboard do Railway.
+          # build terminar). Build do Jurify leva ~5min — esperar tudo
+          # estoura o timeout do GitHub Actions sem necessidade.
           railway up \
-            --service "${{ secrets.RAILWAY_SERVICE_ID }}" \
-            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID }}" \
+            --service "${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}" \
+            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }}" \
             --detach
 
       - name: Resumo
         if: always()
         run: |
-          echo "## Deploy disparado :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "## Deploy production :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Commit: \`${{ github.event.workflow_run.head_sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Serviço: ${{ secrets.RAILWAY_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Acompanhe o build em [Railway → Deployments](https://railway.com/project/${{ secrets.RAILWAY_PROJECT_ID }}/service/${{ secrets.RAILWAY_SERVICE_ID }}?environmentId=${{ secrets.RAILWAY_ENVIRONMENT_ID }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Acompanhe o build em [Railway → Deployments](https://railway.com/project/${{ secrets.RAILWAY_PROJECT_ID }}/service/${{ secrets.RAILWAY_SERVICE_ID_PRODUCTION }}?environmentId=${{ secrets.RAILWAY_ENVIRONMENT_ID_PRODUCTION }})" >> $GITHUB_STEP_SUMMARY
+
+  deploy-staging:
+    name: Deploy staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: |
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'develop') ||
+      (github.event_name == 'workflow_dispatch' &&
+        inputs.target == 'staging')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar Railway CLI
+        run: npm install -g @railway/cli@latest
+
+      - name: Confirma autenticação
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway whoami || {
+            echo "::error::Falha ao autenticar com RAILWAY_TOKEN."
+            exit 1
+          }
+
+      - name: Validar secrets do environment staging
+        env:
+          SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID_STAGING }}
+          ENV_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }}
+        run: |
+          if [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ]; then
+            echo "::error::Secrets RAILWAY_SERVICE_ID_STAGING ou RAILWAY_ENVIRONMENT_ID_STAGING não estão definidos."
+            exit 1
+          fi
+
+      - name: Deploy staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --service "${{ secrets.RAILWAY_SERVICE_ID_STAGING }}" \
+            --environment "${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }}" \
+            --detach
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "## Deploy staging :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.event.workflow_run.head_sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Acompanhe o build em [Railway → Deployments](https://railway.com/project/${{ secrets.RAILWAY_PROJECT_ID }}/service/${{ secrets.RAILWAY_SERVICE_ID_STAGING }}?environmentId=${{ secrets.RAILWAY_ENVIRONMENT_ID_STAGING }})" >> $GITHUB_STEP_SUMMARY
