@@ -12,7 +12,9 @@ name: Deploy Railway
 #   • Logs de build: clica no run específico → "Deploy" → expande os steps
 #
 # Secrets necessárias (Settings > Secrets and variables > Actions):
-#   RAILWAY_TOKEN                       → Project Token criado no Railway
+#   RAILWAY_TOKEN                       → Account Token criado no Railway
+#                                          (Account → Tokens). O CLI lê ele
+#                                          via RAILWAY_API_TOKEN abaixo.
 #   RAILWAY_PROJECT_ID                  → UUID do projeto (ambos environments
 #                                          compartilham o mesmo projeto)
 #
@@ -91,8 +93,11 @@ jobs:
         run: npm install -g @railway/cli@latest
 
       - name: Confirma autenticação
+        # Account Token usa env var RAILWAY_API_TOKEN (Project Token usaria
+        # RAILWAY_TOKEN). O secret no GitHub continua chamando RAILWAY_TOKEN
+        # por compatibilidade — só o nome da var injetada muda.
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           railway whoami || {
             echo "::error::Falha ao autenticar com RAILWAY_TOKEN."
@@ -111,7 +116,7 @@ jobs:
 
       - name: Deploy production
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           # `--detach` retorna assim que o deploy é DISPARADO (não espera
           # build terminar). Build do Jurify leva ~5min — esperar tudo
@@ -156,7 +161,7 @@ jobs:
 
       - name: Confirma autenticação
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           railway whoami || {
             echo "::error::Falha ao autenticar com RAILWAY_TOKEN."
@@ -175,7 +180,7 @@ jobs:
 
       - name: Deploy staging
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           railway up \
             --service "${{ secrets.RAILWAY_SERVICE_ID_STAGING }}" \
