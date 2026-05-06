@@ -60,6 +60,10 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   { nomeBanco: "atendimento_metricas_diarias", colunaEscritorio: "escritorioIdMetrica", categoria: "dados" },
   // Judit (monitoramento de processos — não inclui chaves):
   { nomeBanco: "judit_monitoramentos", colunaEscritorio: "escritorioIdJuditMon", categoria: "dados" },
+  // Motor próprio (Spike) — eventos detectados por scrapers/DJE. Conteúdo é
+  // texto público de movimentação, sem segredos. CPFs em dje_publicacoes já
+  // ficam fora do backup (tabela não tem escritorioId direto).
+  { nomeBanco: "eventos_processo", colunaEscritorio: "escritorioId", categoria: "dados" },
 
   // ─── CONFIGS DO ESCRITÓRIO ────────────────────────────────────────────
   { nomeBanco: "campos_personalizados_cliente", colunaEscritorio: "escritorioIdCpc", categoria: "configs" },
@@ -92,6 +96,7 @@ export const EXCLUIR_SEGREDO: ReadonlyArray<{ nomeBanco: string; motivo: string 
   { nomeBanco: "asaas_config", motivo: "API key criptografada + webhook token" },
   { nomeBanco: "judit_credenciais", motivo: "API keys do Judit" },
   { nomeBanco: "canais_integrados", motivo: "Tokens WhatsApp/Meta/IA, webhook secrets" },
+  { nomeBanco: "cofre_credenciais", motivo: "CPF/OAB + senha + TOTP do motor próprio criptografados — restore = recadastrar" },
 ];
 
 /**
@@ -232,6 +237,7 @@ export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
 
   // NÍVEL 2:
   "cliente_processos",
+  "eventos_processo", // FK opcional pra judit_monitoramentos (raiz)
   "agendamento_lembretes",
   "mensagens",
   "kanban_cards",
