@@ -60,8 +60,11 @@ WORKDIR /app
 RUN corepack enable
 
 # Layer caching: copia manifests primeiro pra dependency layer não
-# invalidar quando código de aplicação muda.
+# invalidar quando código de aplicação muda. `patches/` precisa vir
+# junto porque pnpm aplica patches de `patchedDependencies` durante
+# o install — sem o arquivo de patch, falha com ENOENT.
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 
 # Instala deps com --ignore-scripts pra controlar quando o postinstall
 # do Playwright roda. Sem isso, postinstall tentaria baixar Chromium
