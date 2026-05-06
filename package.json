@@ -13,7 +13,8 @@
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "postinstall": "node scripts/maybe-install-playwright.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
