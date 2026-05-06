@@ -195,6 +195,18 @@ export const escritorios = mysqlTable("escritorios", {
   mensagemBoasVindas: text("mensagemBoasVindas"),
   ownerId: int("ownerId").notNull(), // FK → users.id
   planoAtendimento: mysqlEnum("planoAtendimento", ["basico", "intermediario", "completo"]).default("basico").notNull(),
+  /**
+   * Feature flag do motor próprio de monitoramento jurídico.
+   * Quando true, os monitoramentos deste escritório usam scrapers
+   * próprios (PJe/E-SAJ/Eproc/DJE) em vez da Judit. Default false
+   * para garantir que escritórios existentes continuem na Judit
+   * (plano B) até a migração explícita pós-Spike.
+   *
+   * Em ambiente production, esta flag é ignorada se
+   * JURIFY_AMBIENTE !== "staging" durante o Spike — proteção contra
+   * ativação acidental antes da paridade comprovada.
+   */
+  usarMotorProprio: boolean("usarMotorProprio").default(false).notNull(),
   maxColaboradores: int("maxColaboradores").default(1).notNull(),
   maxConexoesWhatsapp: int("maxConexoesWhatsapp").default(0).notNull(),
   /**
@@ -2279,5 +2291,226 @@ export const asaasConfigCobrancaPai = mysqlTable(
     ),
   }),
 );
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOTOR PRÓPRIO DE MONITORAMENTO JURÍDICO — base do Spike
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tabelas isoladas, criadas pela migration 0050_motor_proprio_base.sql.
+// Coexistem com judit_* durante a validação técnica. Após paridade ≥95%
+// comprovada em staging, judit_* será renomeado para processos_* no
+// Sprint 1 oficial. Por ora, motor próprio escreve em eventos_processo
+// e Judit continua escrevendo em judit_respostas — ambos lidos pelo
+// frontend via mesmo router tRPC quando feature flag estiver ligada.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cofre de Credenciais — armazena CPF/OAB + senha + 2FA TOTP do advogado
+ * de forma criptografada (AES-256-GCM via server/escritorio/crypto-utils.ts).
+ *
+ * Usado pelo motor próprio para acessar sistemas autenticados (E-SAJ TJSP,
+ * PJe restrito, Eproc) e capturar processos em segredo de justiça ou que
+ * exigem login.
+ *
+ * SEGURANÇA: senha e TOTP secret nunca trafegam em claro depois do POST
+ * inicial. Backend nunca retorna esses campos em API responses — só
+ * `usernameMascarado` via `maskToken()`.
+ */
+export const cofreCredenciais = mysqlTable("cofre_credenciais", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioId").notNull(),
+  /** Sistema de tribunal — ver `SistemaCofre` em shared/cofre-credenciais-types.ts */
+  sistema: varchar("sistema", { length: 64 }).notNull(),
+  /** Label amigável definida pelo admin */
+  apelido: varchar("apelido", { length: 100 }).notNull(),
+  /** Username (CPF ou OAB) criptografado */
+  usernameEnc: text("usernameEnc").notNull(),
+  usernameIv: varchar("usernameIv", { length: 64 }).notNull(),
+  usernameTag: varchar("usernameTag", { length: 64 }).notNull(),
+  /** Senha criptografada */
+  passwordEnc: text("passwordEnc").notNull(),
+  passwordIv: varchar("passwordIv", { length: 64 }).notNull(),
+  passwordTag: varchar("passwordTag", { length: 64 }).notNull(),
+  /** TOTP secret (base32) criptografado — null quando credencial não tem 2FA */
+  totpSecretEnc: text("totpSecretEnc"),
+  totpSecretIv: varchar("totpSecretIv", { length: 64 }),
+  totpSecretTag: varchar("totpSecretTag", { length: 64 }),
+  status: mysqlEnum("statusCofre", ["validando", "ativa", "erro", "expirada", "removida"])
+    .default("validando")
+    .notNull(),
+  ultimoLoginSucessoEm: timestamp("ultimoLoginSucessoEm"),
+  ultimoLoginTentativaEm: timestamp("ultimoLoginTentativaEm"),
+  ultimoErro: text("ultimoErro"),
+  criadoPor: int("criadoPor").notNull(),
+  createdAt: timestamp("createdAtCofre").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtCofre").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CofreCredencial = typeof cofreCredenciais.$inferSelect;
+export type InsertCofreCredencial = typeof cofreCredenciais.$inferInsert;
+
+/**
+ * Sessões persistidas — cookies criptografados resultantes de logins
+ * bem-sucedidos. Permite que o robô acesse o sistema sem fazer login
+ * a cada raspagem (relogin frequente dispara captcha/lockout).
+ *
+ * Cada credencial pode ter múltiplas sessões ao longo do tempo —
+ * a sessão mais recente válida é usada; as antigas servem de auditoria.
+ */
+export const cofreSessoes = mysqlTable("cofre_sessoes", {
+  id: int("id").autoincrement().primaryKey(),
+  credencialId: int("credencialId").notNull(),
+  /** JSON do storageState do Playwright (cookies + localStorage) criptografado */
+  cookiesEnc: text("cookiesEnc").notNull(),
+  cookiesIv: varchar("cookiesIv", { length: 64 }).notNull(),
+  cookiesTag: varchar("cookiesTag", { length: 64 }).notNull(),
+  capturadoEm: timestamp("capturadoEm").defaultNow().notNull(),
+  /** Estimativa baseada em TTL típico do tribunal (geralmente 24-72h) */
+  expiraEmEstimado: timestamp("expiraEmEstimado"),
+  ultimoUsoEm: timestamp("ultimoUsoEm"),
+});
+
+export type CofreSessao = typeof cofreSessoes.$inferSelect;
+export type InsertCofreSessao = typeof cofreSessoes.$inferInsert;
+
+/**
+ * Eventos detectados pelo motor próprio — granularidade superior a
+ * juditRespostas. Cada linha é uma observação atômica: 1 movimentação,
+ * 1 publicação no DJE, 1 nova ação distribuída, 1 mandado, etc.
+ *
+ * `hashDedup` é UNIQUE para garantir idempotência quando o worker
+ * reentra na mesma página (reprocessamento, retries de fila).
+ *
+ * `monitoramentoId` é nullable: eventos descobertos via DJE podem não
+ * ter monitoramento prévio (caso clássico: cliente foi citado em ação
+ * nova).
+ */
+export const eventosProcesso = mysqlTable("eventos_processo", {
+  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+  monitoramentoId: int("monitoramentoId"),
+  escritorioId: int("escritorioId").notNull(),
+  tipo: mysqlEnum("tipoEvento", [
+    "movimentacao",
+    "publicacao_dje",
+    "nova_acao",
+    "mandado",
+    "intimacao",
+    "citacao",
+    "sentenca",
+    "despacho",
+    "audiencia",
+    "outro",
+  ]).notNull(),
+  /** Quando o evento aconteceu no tribunal (não quando foi coletado) */
+  dataEvento: timestamp("dataEvento").notNull(),
+  fonte: mysqlEnum("fonteEvento", ["judit", "pje", "esaj", "eproc", "dje", "manual"]).notNull(),
+  conteudo: text("conteudo").notNull(),
+  /** Versão estruturada quando parser conseguiu extrair campos. JSON dentro de TEXT. */
+  conteudoJson: text("conteudoJson"),
+  cnjAfetado: varchar("cnjAfetado", { length: 32 }),
+  /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
+  hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
+  lido: boolean("lido").default(false).notNull(),
+  alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
+  alertaEnviadoEm: timestamp("alertaEnviadoEm"),
+  createdAt: timestamp("createdAtEvento").defaultNow().notNull(),
+});
+
+export type EventoProcesso = typeof eventosProcesso.$inferSelect;
+export type InsertEventoProcesso = typeof eventosProcesso.$inferInsert;
+
+/**
+ * DJE — Documentos baixados (1 PDF = 1 dia × 1 caderno × 1 tribunal).
+ *
+ * `hashConteudo` é UNIQUE para evitar reprocessamento quando o tribunal
+ * retorna o mesmo conteúdo em datas diferentes (comum em dias sem
+ * publicação onde o sistema serve o PDF do dia útil anterior).
+ */
+export const djeDocumentos = mysqlTable("dje_documentos", {
+  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+  /** Identificação completa: ex "tjsp_caderno_1", "djen_unificado", "trt2_caderno_judiciario" */
+  tribunal: varchar("tribunal", { length: 64 }).notNull(),
+  sigla: varchar("sigla", { length: 32 }).notNull(),
+  /** Formato preservado da URL original (alguns tribunais retornam DD/MM/YYYY) */
+  dataPublicacao: varchar("dataPublicacao", { length: 10 }).notNull(),
+  urlOrigem: text("urlOrigem").notNull(),
+  s3Key: varchar("s3Key", { length: 512 }).notNull(),
+  tamanhoBytes: bigint("tamanhoBytes", { mode: "number" }),
+  paginas: int("paginas"),
+  status: mysqlEnum("statusDje", ["baixado", "parseado", "indexado", "erro"])
+    .default("baixado")
+    .notNull(),
+  ultimoErro: text("ultimoErro"),
+  /** SHA-256 do binário do PDF — UNIQUE evita reprocessamento */
+  hashConteudo: varchar("hashConteudo", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAtDjeDoc").defaultNow().notNull(),
+  parseadoEm: timestamp("parseadoEm"),
+  indexadoEm: timestamp("indexadoEm"),
+});
+
+export type DjeDocumento = typeof djeDocumentos.$inferSelect;
+export type InsertDjeDocumento = typeof djeDocumentos.$inferInsert;
+
+/**
+ * DJE — Publicações individuais extraídas de um documento.
+ *
+ * LGPD: armazenamos CNJ, nomes de partes, OABs e CNPJs (todos públicos
+ * por força do art. 93 IX da CF/88). CPF é único campo sensível — guardamos
+ * apenas SHA-256 hex do CPF normalizado (sem máscara/espaços), nunca o
+ * CPF cru. Match por CPF na busca compara hash com hash.
+ *
+ * `texto` está em LONGTEXT (criado pela migration) com FULLTEXT INDEX
+ * para busca por nome de parte / advogado / palavra-chave.
+ */
+export const djePublicacoes = mysqlTable("dje_publicacoes", {
+  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+  documentoId: bigint("documentoId", { mode: "number" }).notNull(),
+  /** Posição da publicação dentro do PDF (ordem de aparição) */
+  ordem: int("ordem").notNull(),
+  cnjAfetado: varchar("cnjAfetado", { length: 32 }),
+  /** JSON arrays — armazenados em TEXT por convenção do projeto */
+  partesNomes: text("partesNomes"),
+  /** Hashes SHA-256 dos CPFs das partes — sem CPFs crus (LGPD) */
+  partesCpfsHash: text("partesCpfsHash"),
+  partesCnpjs: text("partesCnpjs"),
+  advogadosOabs: text("advogadosOabs"),
+  /** Texto completo da publicação — alimenta FULLTEXT INDEX criado na migration */
+  texto: text("texto").notNull(),
+  /** SHA-256 do `texto` normalizado — UNIQUE evita duplicatas em retificações */
+  hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAtDjePub").defaultNow().notNull(),
+});
+
+export type DjePublicacao = typeof djePublicacoes.$inferSelect;
+export type InsertDjePublicacao = typeof djePublicacoes.$inferInsert;
+
+/**
+ * Worker Jobs Log — auditoria de cada execução de adapter de tribunal,
+ * crawler DJE ou job recorrente.
+ *
+ * NÃO é fila (BullMQ usa Redis para isso). É log persistido para
+ * dashboard de saúde (`/admin/motor-proprio`) e debug pós-falha.
+ */
+export const workerJobsLog = mysqlTable("worker_jobs_log", {
+  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+  /** Ex: workerName="tribunais", jobName="scrape_pje_trt2" */
+  workerName: varchar("workerName", { length: 64 }).notNull(),
+  jobName: varchar("jobName", { length: 128 }).notNull(),
+  /** Categoria livre: ex "scrape_cnj", "dje_download", "esaj_login_validate" */
+  tipo: varchar("tipoJob", { length: 64 }).notNull(),
+  /** Payloads JSON dentro de TEXT (convenção do projeto) */
+  payloadJson: text("payloadJson"),
+  resultadoJson: text("resultadoJson"),
+  status: mysqlEnum("statusJob", ["pendente", "em_andamento", "sucesso", "falha"])
+    .default("pendente")
+    .notNull(),
+  tentativas: int("tentativas").default(0).notNull(),
+  ultimoErro: text("ultimoErro"),
+  iniciadoEm: timestamp("iniciadoEm"),
+  finalizadoEm: timestamp("finalizadoEm"),
+  createdAt: timestamp("createdAtJobLog").defaultNow().notNull(),
+});
+
+export type WorkerJobLog = typeof workerJobsLog.$inferSelect;
+export type InsertWorkerJobLog = typeof workerJobsLog.$inferInsert;
 
 export type AsaasConfigCobrancaPai = typeof asaasConfigCobrancaPai.$inferSelect;
