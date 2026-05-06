@@ -18,7 +18,10 @@
  * pra não quebrar `pnpm install`).
  */
 
-const { execSync } = require("node:child_process");
+// O package.json tem "type": "module", então .js é ESM por default.
+// Usamos import dinâmico (sem await top-level pra manter compatibilidade
+// com Node mais antigo) ou import direto.
+import { execSync } from "node:child_process";
 
 const ambiente = process.env.JURIFY_AMBIENTE || "";
 const force = process.env.INSTALL_PLAYWRIGHT_CHROMIUM === "1";
