@@ -1,15 +1,24 @@
 name: Tests CI
 
 # Roda em todo PR pra `main` ou `develop`. Falha bloqueia merge.
-# 3 jobs sequenciais: unit (rápido) → smoke tRPC (DB local) → E2E.
+# 3 jobs em PARALELO: unit, smoke tRPC (DB local) e E2E.
+# (Antes eram sequenciais via `needs:`. Agora cada um faz seu próprio
+# pnpm install e roda independente — total cai de ~5min pra ~3-4min,
+# limitado pelo job mais lento. Custo: gasta ~3x compute em runs onde
+# Unit já falha.)
 #
-# Em push direto: dispara também o Deploy Railway (workflow_run em
-# deploy.yml) — develop → staging, main → production.
+# Por que NÃO há trigger `push:` aqui:
+#  Cada PR mergeada gerava 2 runs idênticos (1 do `pull_request`,
+#  outro do `push` pós-merge), atrasando deploy em ~5min sem ganho.
+#  Branch protection garante que `develop`/`main` só recebem código
+#  já validado pela CI da PR — push direto ficaria sem checagem, mas
+#  é prevenido pelas regras de proteção.
+#
+# Pra rodar manualmente: aba Actions → Tests CI → Run workflow.
 on:
   pull_request:
     branches: [main, develop]
-  push:
-    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   unit:
@@ -33,7 +42,6 @@ jobs:
   smoke-trpc:
     name: Smoke tRPC (todas as procedures)
     runs-on: ubuntu-latest
-    needs: unit
     timeout-minutes: 15
     services:
       mysql:
@@ -98,7 +106,6 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    needs: smoke-trpc
     timeout-minutes: 20
     services:
       mysql:

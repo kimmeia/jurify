@@ -141,11 +141,16 @@ export async function urlAssinadaDownload(
  *    logs do Railway, mesmo se o cliente HTTP cair antes do fim.
  *
  * Compatibilidade MariaDB-client × MySQL 8 server:
- *  No container Railway o `default-mysql-client` aponta pro MariaDB.
- *  MariaDB mysqldump NÃO conhece `--column-statistics=0` (flag exclusiva
- *  do MySQL 8 client) e morre com `unknown option`. Removida — sem essa
- *  flag o conteúdo do dump não muda; ela só servia pra silenciar warning
- *  específico de MySQL 8 client contra MySQL 5.x server.
+ *  No container Railway o `mariadb-client` (instalado via Dockerfile)
+ *  é o cliente MariaDB. Flags exclusivas do MySQL 8 client foram
+ *  removidas pra evitar `unknown variable`/`unknown option`:
+ *    • `--column-statistics=0` (MySQL 8 only)
+ *    • `--set-gtid-purged=OFF` (MySQL 8 only — MariaDB usa --gtid em
+ *      versões novas, mas não passa pelos warnings que essa flag
+ *      silencia em MySQL).
+ *  Sem essas flags o conteúdo do dump não muda; ambas serviam pra
+ *  silenciar warnings/header lines em cenários de replicação que não
+ *  se aplicam ao backup completo.
  */
 export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<BackupGlobalRegistro> {
   const inicio = Date.now();
@@ -170,7 +175,6 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
       "--routines",
       "--triggers",
       "--events",
-      "--set-gtid-purged=OFF",
       // --verbose imprime "Dumping table_name (rows)" no stderr a cada
       // tabela. Combinado com o stream de stderr no handler abaixo, dá
       // progresso real-time nos logs do GitHub Actions.
