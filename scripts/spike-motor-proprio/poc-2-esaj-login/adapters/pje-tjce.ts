@@ -553,6 +553,26 @@ export class PjeTjceScraper {
    * uppercase). Retorna null se nada parecer secret base32.
    */
   private async extrairSecretTotpDaTela(page: Page): Promise<string | null> {
+    // ESTRATÉGIA 0: forçar URL com mode=manual.
+    // O Keycloak do PDPJ-cloud TJCE aceita ?mode=manual na URL pra mostrar
+    // o secret em texto direto (sem precisar clicar link). Confirmado via
+    // screenshot do usuário em 07/05/2026:
+    // sso.cloud.pje.jus.br/.../required-action?...&mode=manual&execution=CONFIGURE_TOTP
+    const urlAtual = page.url();
+    if (urlAtual.includes("CONFIGURE_TOTP") && !urlAtual.includes("mode=manual")) {
+      const sep = urlAtual.includes("?") ? "&" : "?";
+      try {
+        await page.goto(`${urlAtual}${sep}mode=manual`, {
+          waitUntil: "domcontentloaded",
+          timeout: 10_000,
+        });
+        await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      } catch {
+        // ignora — segue tentando os selectors mesmo sem o redirect
+      }
+    }
+
     // Estratégia 1: clicar em links/botões/details que revelam o
     // secret em texto. Versões PT-BR/EN do Keycloak variam o texto.
     // Tentamos múltiplos sem `:visible` pra alcançar elementos
@@ -637,6 +657,36 @@ export class PjeTjceScraper {
       } catch {
         // ignora
       }
+    }
+
+    // Estratégia 2.5: busca POR TEXTO em elementos folha (sem children).
+    // O TJCE customizou o template do Keycloak — secret aparece destacado
+    // mas o elemento exato que contém é desconhecido. Filtramos elementos
+    // que têm texto matching o padrão do secret (16+ chars base32 com
+    // grupos de 4 separados por espaço) E não têm filhos (só folhas).
+    try {
+      const candidatos = await page.evaluate(() => {
+        const padrao = /^(?:[A-Z2-7]{4}\s+){3,}[A-Z2-7]{2,8}$/;
+        const resultados: string[] = [];
+        const todosNodes = document.querySelectorAll<HTMLElement>("*");
+        todosNodes.forEach((node) => {
+          if (resultados.length >= 5) return;
+          if (node.children.length > 0) return; // só folhas
+          const txt = (node.textContent || "").trim();
+          if (txt && padrao.test(txt)) {
+            resultados.push(txt);
+          }
+        });
+        return resultados;
+      });
+      for (const c of candidatos) {
+        const limpo = c.replace(/\s+/g, "").toUpperCase();
+        if (/^[A-Z2-7]{16,64}$/.test(limpo)) {
+          return limpo;
+        }
+      }
+    } catch {
+      // ignora
     }
 
     // Estratégia 3: busca regex no HTML visível (texto e atributos)
