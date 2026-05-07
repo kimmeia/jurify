@@ -39,9 +39,12 @@ import {
 const log = createLogger("cofre-credenciais");
 
 const SISTEMAS_VALIDOS: readonly SistemaCofre[] = [
-  "esaj_tjsp", "esaj_tjsc", "esaj_tjba", "esaj_tjce", "esaj_tjam",
-  "esaj_tjac", "esaj_tjto", "esaj_tjms", "esaj_tjal", "esaj_*",
-  "pje_restrito_trt1", "pje_restrito_trt2", "pje_restrito_trt15", "pje_restrito_*",
+  "pje_tjce", "pje_tjrj", "pje_tjmg", "pje_tjdft", "pje_tjpe", "pje_tjes",
+  "pje_tjpr", "pje_tjrs", "pje_tjgo", "pje_*",
+  "esaj_tjsp", "esaj_tjsc", "esaj_tjba", "esaj_tjam", "esaj_tjac",
+  "esaj_tjto", "esaj_tjms", "esaj_tjal", "esaj_*",
+  "pje_restrito_trt1", "pje_restrito_trt2", "pje_restrito_trt7",
+  "pje_restrito_trt15", "pje_restrito_*",
   "eproc_trf2", "eproc_trf4", "eproc_*",
 ] as const;
 
@@ -314,11 +317,11 @@ export const cofreCredenciaisRouter = router({
       // Resolução de adapter por sistema. Lazy import pra não carregar
       // Playwright em production (gate de ambiente já protege, mas
       // double-defense contra bundle de devDeps no esbuild).
-      if (cred.sistema === "esaj_tjce") {
-        const { EsajTjceScraper } = await import(
-          "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/tjce"
+      if (cred.sistema === "pje_tjce") {
+        const { PjeTjceScraper } = await import(
+          "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
         );
-        const scraper = new EsajTjceScraper({
+        const scraper = new PjeTjceScraper({
           username: cred.username,
           password: cred.password,
           totpSecret: cred.totpSecret,

@@ -298,13 +298,41 @@ export class EsajTjceScraper {
   /**
    * Implementação concreta do fluxo de login. Se o ESAJ mudar a UI,
    * altera só aqui — `testarLogin()` continua sendo o ponto público.
+   *
+   * DIAGNÓSTICO: este método produz informação detalhada via campo
+   * `diagnostico` da exceção (capturada em `testarLogin`) pra facilitar
+   * calibração quando login rejeita por motivo desconhecido — vê HTML
+   * dos erros, lista de inputs detectados, etc.
    */
   private async executarLogin(page: Page): Promise<void> {
     await page.goto(URLS.login, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
 
-    // Form do SAJCAS — campos típicos: usernameForm, passwordForm
-    // Selectors com fallback múltiplo pra resiliência.
+    // O SAJCAS do TJ-CE pode ter abas ("Acesso Profissional" /
+    // "Acesso Cidadão" / "Certificado Digital"). Tenta clicar em
+    // "Profissional" antes de buscar o form — sem isso, o form
+    // visível pode ser o de cidadão, que não aceita OAB.
+    const tabsProfissional = [
+      "a:has-text('Profissional')",
+      "button:has-text('Profissional')",
+      "[role='tab']:has-text('Profissional')",
+      "li:has-text('Profissional') a",
+    ];
+    for (const sel of tabsProfissional) {
+      try {
+        const tab = page.locator(sel).first();
+        if (await tab.isVisible({ timeout: 500 })) {
+          await tab.click({ timeout: 1500 });
+          await page.waitForTimeout(500);
+          break;
+        }
+      } catch {
+        // ignora
+      }
+    }
+
+    // Form do SAJCAS — campos típicos: usernameForm, passwordForm.
+    // Captura também CSRF token / hidden inputs pra log de diagnóstico.
     const inputUsuario = page
       .locator(
         [
@@ -329,10 +357,20 @@ export class EsajTjceScraper {
       .first();
 
     if (!(await inputUsuario.isVisible({ timeout: 5000 }).catch(() => false))) {
-      throw new Error(`Form de login não encontrado em ${page.url()}`);
+      const inputs = await this.listarInputsVisiveis(page);
+      throw new Error(
+        `Form de login não encontrado em ${page.url()}. ` +
+          `Inputs visíveis na página: ${JSON.stringify(inputs).slice(0, 800)}`,
+      );
     }
 
+    // Limpa antes de preencher pra evitar acumular texto se houve retry
+    await inputUsuario.click({ timeout: 3000 }).catch(() => {});
+    await inputUsuario.fill("");
     await inputUsuario.fill(this.credencial.username);
+
+    await inputSenha.click({ timeout: 3000 }).catch(() => {});
+    await inputSenha.fill("");
     await inputSenha.fill(this.credencial.password);
 
     const botaoLogin = page
@@ -351,12 +389,9 @@ export class EsajTjceScraper {
       botaoLogin.click({ timeout: 5000 }),
     ]);
 
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1500);
 
     // ─── Tratamento de 2FA ───
-    // ESAJ exibe tela de "Token" / "Código de Verificação" se 2FA está
-    // habilitado pra credencial. Detectamos pela presença de input
-    // específico ou texto na página.
     const indicadores2fa = [
       "input[name*='token' i]",
       "input[name*='codigo' i]",
@@ -403,14 +438,134 @@ export class EsajTjceScraper {
     // ou /esaj/intra/index.do após login bem-sucedido.
     const urlFinal = page.url();
     if (urlFinal.includes("/sajcas/login")) {
-      // Procura mensagem de erro visível
-      const msgErro = await page
-        .locator("text=/inv[áa]lido|incorreto|n[ãa]o autorizado|falha/i")
+      // Captura diagnóstico DETALHADO pra calibrar quando rejeição é
+      // misteriosa. Pega TODA mensagem de alerta visível, lista
+      // inputs encontrados, e trecho do HTML.
+      const diagnostico = await this.coletarDiagnosticoLogin(page);
+      const usernameDigitado = this.credencial.username;
+      const usernameMascarado =
+        usernameDigitado.length > 4
+          ? `${usernameDigitado.slice(0, 2)}***${usernameDigitado.slice(-2)}`
+          : "***";
+      throw new Error(
+        `Login rejeitado pelo ESAJ.\n` +
+          `Username usado: "${usernameMascarado}" (${usernameDigitado.length} chars).\n` +
+          `Mensagem do tribunal: ${diagnostico.mensagemErro || "(nenhuma mensagem capturada)"}.\n` +
+          `Inputs detectados: ${diagnostico.inputs}.\n` +
+          `URL final: ${urlFinal}.\n` +
+          `Page title: ${diagnostico.title}.\n` +
+          `Conteúdo (200 chars): ${diagnostico.htmlSnippet.slice(0, 200)}`,
+      );
+    }
+  }
+
+  /**
+   * Coleta diagnóstico da página de login após rejeição. Sem isso,
+   * a única mensagem é "credencial inválida" — que pode ser:
+   *   • Senha mesmo errada
+   *   • Username em formato errado (CPF vs OAB)
+   *   • Aba de login errada (Cidadão em vez de Profissional)
+   *   • CAPTCHA pulado
+   *   • CSRF token ausente
+   *   • Algum input hidden não preenchido
+   *
+   * Capturando a mensagem real do tribunal + lista de inputs
+   * conseguimos diagnosticar sem ficar tentando às cegas.
+   */
+  private async coletarDiagnosticoLogin(page: Page): Promise<{
+    mensagemErro: string;
+    inputs: string;
+    title: string;
+    htmlSnippet: string;
+  }> {
+    const candidatosMsgErro = [
+      ".alert",
+      ".alert-danger",
+      ".alert-warning",
+      ".error",
+      "[role='alert']",
+      ".message",
+      ".mensagem",
+      ".feedback",
+      ".validation-summary",
+      "div.error-message",
+      "span.error",
+      "p.error",
+    ];
+
+    let mensagemErro = "";
+    for (const sel of candidatosMsgErro) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 200 })) {
+          const texto = (await el.innerText().catch(() => "")).trim();
+          if (texto && texto.length < 500) {
+            mensagemErro = texto;
+            break;
+          }
+        }
+      } catch {
+        // ignora
+      }
+    }
+
+    // Fallback: procura QUALQUER texto que pareça mensagem de erro
+    if (!mensagemErro) {
+      try {
+        const texto = await page
+          .locator("text=/inv[áa]lid|incorret|n[ãa]o autoriz|falha|erro|rejeit/i")
+          .first()
+          .innerText()
+          .catch(() => "");
+        if (texto && texto.length < 500) mensagemErro = texto.trim();
+      } catch {
+        // ignora
+      }
+    }
+
+    const inputs = await this.listarInputsVisiveis(page);
+    const title = await page.title().catch(() => "?");
+
+    let htmlSnippet = "";
+    try {
+      // Pega só o conteúdo do <main> ou <body> pra evitar logar HEAD enorme
+      htmlSnippet = await page
+        .locator("main, body")
         .first()
         .innerText()
-        .catch(() => "credencial inválida");
-      throw new Error(`Login rejeitado pelo ESAJ: ${msgErro}`);
+        .catch(() => "");
+      htmlSnippet = htmlSnippet.replace(/\s+/g, " ").trim();
+    } catch {
+      // ignora
     }
+
+    return {
+      mensagemErro,
+      inputs: JSON.stringify(inputs).slice(0, 500),
+      title,
+      htmlSnippet,
+    };
+  }
+
+  /**
+   * Lista inputs visíveis na página com nome/id/type/placeholder.
+   * Útil em log de erro pra ver quais campos o adapter VIU vs quais
+   * o tribunal de fato espera.
+   */
+  private async listarInputsVisiveis(
+    page: Page,
+  ): Promise<Array<{ name: string; id: string; type: string; placeholder: string }>> {
+    return page
+      .locator("input:visible")
+      .evaluateAll((nodes) =>
+        (nodes as HTMLInputElement[]).slice(0, 20).map((n) => ({
+          name: n.getAttribute("name") || "",
+          id: n.getAttribute("id") || "",
+          type: n.getAttribute("type") || "text",
+          placeholder: n.getAttribute("placeholder") || "",
+        })),
+      )
+      .catch(() => []);
   }
 
   private classificarErroLogin(mensagem: string, urlFinal: string): string {

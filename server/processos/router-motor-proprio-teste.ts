@@ -69,7 +69,7 @@ interface TribunalMeta {
   /** Indica que esse tribunal exige credencial cadastrada no cofre */
   exigeCredencial: boolean;
   /** Sistema do cofre que casa com este tribunal (quando exigeCredencial) */
-  sistemaCofre?: "esaj_tjce" | "esaj_tjsp" | "esaj_*";
+  sistemaCofre?: "pje_tjce" | "esaj_tjsp" | "esaj_*" | "pje_*";
 }
 
 const TRIBUNAIS_METADATA: Record<TribunalDisponivel, TribunalMeta> = {
@@ -77,9 +77,9 @@ const TRIBUNAIS_METADATA: Record<TribunalDisponivel, TribunalMeta> = {
   trt7: { nome: "Tribunal Regional do Trabalho — 7ª Região (Ceará)", exigeCredencial: false },
   trt15: { nome: "Tribunal Regional do Trabalho — 15ª Região (Campinas)", exigeCredencial: false },
   tjce: {
-    nome: "Tribunal de Justiça do Ceará — E-SAJ",
+    nome: "Tribunal de Justiça do Ceará — PJe (autenticado)",
     exigeCredencial: true,
-    sistemaCofre: "esaj_tjce",
+    sistemaCofre: "pje_tjce",
   },
 };
 
@@ -131,16 +131,16 @@ async function criarAdapterLazy(
         message: "Credencial não encontrada no cofre",
       });
     }
-    if (cred.sistema !== "esaj_tjce" && cred.sistema !== "esaj_*") {
+    if (cred.sistema !== "pje_tjce" && cred.sistema !== "pje_*") {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: `Credencial é do sistema "${cred.sistema}", não compatível com TJCE`,
+        message: `Credencial é do sistema "${cred.sistema}", não compatível com PJe TJCE`,
       });
     }
     const mod = await import(
-      "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/tjce"
+      "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
     );
-    const scraper = new mod.EsajTjceScraper({
+    const scraper = new mod.PjeTjceScraper({
       username: cred.username,
       password: cred.password,
       totpSecret: cred.totpSecret,

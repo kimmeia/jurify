@@ -33,15 +33,25 @@ export type SistemaCofre =
   | "esaj_tjsp"
   | "esaj_tjsc"
   | "esaj_tjba"
-  | "esaj_tjce"
   | "esaj_tjam"
   | "esaj_tjac"
   | "esaj_tjto"
   | "esaj_tjms"
   | "esaj_tjal"
   | "esaj_*"
+  | "pje_tjce"
+  | "pje_tjrj"
+  | "pje_tjmg"
+  | "pje_tjdft"
+  | "pje_tjpe"
+  | "pje_tjes"
+  | "pje_tjpr"
+  | "pje_tjrs"
+  | "pje_tjgo"
+  | "pje_*"
   | "pje_restrito_trt1"
   | "pje_restrito_trt2"
+  | "pje_restrito_trt7"
   | "pje_restrito_trt15"
   | "pje_restrito_*"
   | "eproc_trf2"
@@ -126,10 +136,19 @@ export interface ResultadoValidacaoCredencial {
  * select de sistema com texto legível em vez do enum cru.
  */
 export const SISTEMAS_COFRE_LABELS: Record<SistemaCofre, { label: string; descricao: string }> = {
+  pje_tjce: { label: "PJe TJCE", descricao: "Tribunal de Justiça do Ceará (autenticado — área restrita)" },
+  pje_tjrj: { label: "PJe TJRJ", descricao: "Tribunal de Justiça do Rio de Janeiro (autenticado)" },
+  pje_tjmg: { label: "PJe TJMG", descricao: "Tribunal de Justiça de Minas Gerais (autenticado)" },
+  pje_tjdft: { label: "PJe TJDFT", descricao: "TJ do Distrito Federal e Territórios (autenticado)" },
+  pje_tjpe: { label: "PJe TJPE", descricao: "Tribunal de Justiça de Pernambuco (autenticado)" },
+  pje_tjes: { label: "PJe TJES", descricao: "Tribunal de Justiça do Espírito Santo (autenticado)" },
+  pje_tjpr: { label: "PJe TJPR", descricao: "Tribunal de Justiça do Paraná (autenticado)" },
+  pje_tjrs: { label: "PJe TJRS", descricao: "Tribunal de Justiça do Rio Grande do Sul (autenticado)" },
+  pje_tjgo: { label: "PJe TJGO", descricao: "Tribunal de Justiça de Goiás (autenticado)" },
+  "pje_*": { label: "PJe — qualquer (TJ)", descricao: "Credencial coringa pra qualquer TJ que use PJe" },
   esaj_tjsp: { label: "E-SAJ TJSP", descricao: "Tribunal de Justiça de São Paulo (autenticado)" },
   esaj_tjsc: { label: "E-SAJ TJSC", descricao: "Tribunal de Justiça de Santa Catarina (autenticado)" },
   esaj_tjba: { label: "E-SAJ TJBA", descricao: "Tribunal de Justiça da Bahia (autenticado)" },
-  esaj_tjce: { label: "E-SAJ TJCE", descricao: "Tribunal de Justiça do Ceará (autenticado)" },
   esaj_tjam: { label: "E-SAJ TJAM", descricao: "Tribunal de Justiça do Amazonas (autenticado)" },
   esaj_tjac: { label: "E-SAJ TJAC", descricao: "Tribunal de Justiça do Acre (autenticado)" },
   esaj_tjto: { label: "E-SAJ TJTO", descricao: "Tribunal de Justiça do Tocantins (autenticado)" },
@@ -138,8 +157,9 @@ export const SISTEMAS_COFRE_LABELS: Record<SistemaCofre, { label: string; descri
   "esaj_*": { label: "E-SAJ — qualquer", descricao: "Credencial coringa para qualquer tribunal E-SAJ" },
   pje_restrito_trt1: { label: "PJe TRT1", descricao: "TRT 1ª Região (Rio de Janeiro) — área restrita" },
   pje_restrito_trt2: { label: "PJe TRT2", descricao: "TRT 2ª Região (São Paulo) — área restrita" },
+  pje_restrito_trt7: { label: "PJe TRT7", descricao: "TRT 7ª Região (Ceará) — área restrita" },
   pje_restrito_trt15: { label: "PJe TRT15", descricao: "TRT 15ª Região (Campinas) — área restrita" },
-  "pje_restrito_*": { label: "PJe — qualquer", descricao: "Credencial coringa para PJe restrito" },
+  "pje_restrito_*": { label: "PJe TRT — qualquer", descricao: "Credencial coringa para PJe TRT restrito" },
   eproc_trf2: { label: "Eproc TRF2", descricao: "TRF 2ª Região (RJ/ES) — Eproc" },
   eproc_trf4: { label: "Eproc TRF4", descricao: "TRF 4ª Região (RS/SC/PR) — Eproc" },
   "eproc_*": { label: "Eproc — qualquer", descricao: "Credencial coringa para Eproc" },
