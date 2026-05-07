@@ -28,7 +28,7 @@
 
 import type { Browser, Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
-import { gerarCodigoTotp } from "./tjce-totp";
+import { gerarCodigoTotp, gerarCodigosVizinhos, type CodigosVizinhos } from "./tjce-totp";
 import type { ResultadoScraper } from "../../lib/types-spike";
 import { mascararCnj, normalizarCnj } from "../../lib/parser-utils";
 
@@ -102,6 +102,8 @@ interface DiagnosticoTotp {
   horaServidorUtc: string;
   /** Quantos segundos restam até a janela TOTP atual expirar (e código mudar) */
   segundosRestantesNaJanela: number;
+  /** Códigos das 5 janelas vizinhas — ajuda a detectar drift de clock */
+  vizinhos: CodigosVizinhos;
 }
 
 export class PjeTjceScraper {
@@ -473,6 +475,7 @@ export class PjeTjceScraper {
         .replace(/\s+/g, "")
         .toUpperCase();
       const codigo = gerarCodigoTotp(this.credencial.totpSecret);
+      const vizinhos = gerarCodigosVizinhos(this.credencial.totpSecret);
       const agoraUtc = new Date().toISOString();
       const segundosNaJanela = Math.floor(Date.now() / 1000) % 30;
       const segundosRestantes = 30 - segundosNaJanela;
@@ -483,6 +486,7 @@ export class PjeTjceScraper {
         codigoGerado: codigo,
         horaServidorUtc: agoraUtc,
         segundosRestantesNaJanela: segundosRestantes,
+        vizinhos,
       };
 
       await inputTotp.fill(codigo);
@@ -525,15 +529,24 @@ export class PjeTjceScraper {
 
       const blocoTotp = ehFalhaTotp && this.diagnosticoTotp
         ? `\n\n=== DIAGNÓSTICO TOTP (compare com seu app autenticador AGORA) ===\n` +
-          `Código gerado pelo cofre: ${this.diagnosticoTotp.codigoGerado}\n` +
+          `Código gerado pelo cofre (janela atual): ${this.diagnosticoTotp.codigoGerado}\n` +
           `Secret tamanho: ${this.diagnosticoTotp.secretTamanho} chars\n` +
           `Secret início: ${this.diagnosticoTotp.secretInicio}... fim: ...${this.diagnosticoTotp.secretFim}\n` +
           `Hora do servidor (UTC): ${this.diagnosticoTotp.horaServidorUtc}\n` +
           `Segundos restantes até próximo código: ${this.diagnosticoTotp.segundosRestantesNaJanela}\n` +
-          `\nSe esse código for DIFERENTE do que aparece no seu Google Authenticator/Authy AGORA: ` +
-          `secret cadastrado no cofre está errado — remove e cadastra de novo, ` +
-          `colando exatamente igual ao app.\n` +
-          `Se for IGUAL: provavelmente é drift de clock no servidor (raro). Avise o dev.`
+          `Counter TOTP atual: ${this.diagnosticoTotp.vizinhos.counterAtual}\n` +
+          `\n--- Códigos das 5 janelas vizinhas (detecção de drift de clock) ---\n` +
+          `Janela -60s (2 atrás): ${this.diagnosticoTotp.vizinhos.menos2}\n` +
+          `Janela -30s (1 atrás): ${this.diagnosticoTotp.vizinhos.menos1}\n` +
+          `Janela ATUAL:          ${this.diagnosticoTotp.vizinhos.atual}  ← essa foi enviada\n` +
+          `Janela +30s (1 frente): ${this.diagnosticoTotp.vizinhos.mais1}\n` +
+          `Janela +60s (2 frente): ${this.diagnosticoTotp.vizinhos.mais2}\n` +
+          `\nCompare o código que aparece NO SEU app autenticador AGORA com a lista acima:\n` +
+          `• Bate com a ATUAL → secret OK, mas Keycloak rejeitou (raro). Avise o dev.\n` +
+          `• Bate com -30s ou +30s → drift leve de clock, Keycloak rígido. Sincronizar NTP.\n` +
+          `• Bate com -60s ou +60s → drift maior. Sync NTP urgente no servidor.\n` +
+          `• NÃO bate com nenhuma → secret cadastrado no cofre é DIFERENTE do app.\n` +
+          `   Remove a credencial e cadastra de novo, copiando o secret EXATO do app.`
         : "";
 
       throw new Error(
