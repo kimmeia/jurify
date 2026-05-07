@@ -379,13 +379,45 @@ export class PjeTjceScraper {
           page,
           `pje-tjce-extracao-vazia-${cnjLimpo}`,
         );
+        // Diagnóstico: dump resumido de elementos relevantes pra eu ver
+        // selectors reais sem precisar do HTML inteiro.
+        const debug = await page.evaluate(() => {
+          const sample = (el: Element, len = 120) =>
+            el.outerHTML.replace(/\s+/g, " ").slice(0, len);
+          const tables = Array.from(document.querySelectorAll("table"))
+            .slice(0, 5)
+            .map((t) => {
+              const id = t.id || "(sem id)";
+              const rows = t.querySelectorAll("tr").length;
+              const firstRow = t.querySelector("tr")?.textContent?.trim().slice(0, 80) ?? "";
+              return `table#${id} rows=${rows} firstRow="${firstRow}"`;
+            });
+          const linksProc = Array.from(document.querySelectorAll("a"))
+            .filter((a) => /\d{7}-\d{2}\.\d{4}/.test(a.textContent ?? ""))
+            .slice(0, 3)
+            .map((a) => sample(a, 200));
+          const msgs = Array.from(
+            document.querySelectorAll(".rich-messages, .ui-messages, .alert, .erro, .mensagem"),
+          )
+            .slice(0, 3)
+            .map((el) => (el.textContent ?? "").trim().slice(0, 200))
+            .filter(Boolean);
+          return {
+            bodyLen: document.body.innerHTML.length,
+            tables,
+            linksProc,
+            msgs,
+          };
+        }).catch(() => null);
+
         return {
           ...baseResultado,
           latenciaMs: Date.now() - inicio,
           categoriaErro: "parse_falhou",
           mensagemErro:
-            `Extração retornou vazia — busca submetida mas não consegui ler dados ` +
-            `da página de detalhe. URL: ${page.url()}, title: ${await page.title().catch(() => "?")}`,
+            `Extração vazia. URL=${page.url()} | title=${await page.title().catch(() => "?")} | ` +
+            `bodyLen=${debug?.bodyLen ?? "?"} | tables=${JSON.stringify(debug?.tables ?? [])} | ` +
+            `linksCnj=${JSON.stringify(debug?.linksProc ?? [])} | msgs=${JSON.stringify(debug?.msgs ?? [])}`,
           screenshotPath,
           finalizadoEm: new Date().toISOString(),
         };
