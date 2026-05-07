@@ -221,7 +221,9 @@ export class PjeTjceScraper {
       viewport: { width: 1366, height: 768 },
       storageState: JSON.parse(storageStateJson),
     });
-    const page = await context.newPage();
+    // `let` em vez de `const` — substituímos pra newPage quando o
+    // PJe TJCE abre o detalhe em nova aba (estratégia abaixo).
+    let page = await context.newPage();
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
 
     try {
@@ -354,271 +356,40 @@ export class PjeTjceScraper {
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
-        // Tracker: registra TODAS as requests pra Detalhe/* (qualquer
-        // método). Se nenhuma aparecer após click, sabemos que A4J não
-        // disparou nada. Se aparecer mas não capturarmos, sabemos que
-        // o problema é a captura.
-        const detalheUrls: string[] = [];
-        const requestTracker = (req: import("@playwright/test").Request) => {
-          const url = req.url();
-          if (url.includes("Detalhe/") || url.includes("listProcessoCompletoAdvogado")) {
-            detalheUrls.push(`${req.method()} ${url}`);
-          }
-        };
-        page.on("request", requestTracker);
+        // INSIGHT CRÍTICO: no PJe TJCE, click no link de processo
+        // ABRE NOVA ABA (window.open/target=_blank). Por isso TODOS
+        // os detectores anteriores em `page.on("request")` retornavam
+        // detalheUrls=[] — a request real acontece em outra page do
+        // mesmo contexto.
+        //
+        // Estratégia correta: context.waitForEvent("page") captura a
+        // nova aba quando ela abre. Aí trabalhamos nela.
+        const newPagePromise = context.waitForEvent("page", { timeout: 15_000 });
 
-        // Aguarda modal de loading sumir
+        // Dispara click natural com force:true (ignora overlays).
+        // Se PJe usa target="_blank" ou window.open, nova page é criada.
         await page
-          .locator("#modalStatusContent, #modalStatusContentTable")
+          .locator(seletorLinkResultado)
           .first()
-          .waitFor({ state: "hidden", timeout: 5000 })
+          .click({ force: true, timeout: 5000 })
           .catch(() => {});
 
-        // Estratégia definitiva: POST AJAX manual via page.request,
-        // bypassa simulação de click. Sequência real do PJe TJCE:
-        //   1. POST AJAX `listView.seam` com viewState + ID do link
-        //   2. Servidor responde XML com <redirect url=".../Detalhe/...?id=X&ca=Y">
-        //   3. Browser segue redirect → carrega detalhe
-        // Replicamos 1+3 manualmente, sem depender de simular click.
-        const dadosLink = await page
-          .evaluate((sel) => {
-            const link = document.querySelector(sel) as HTMLAnchorElement | null;
-            if (!link) return null;
-            const linkId = link.id;
-            const form = link.closest("form") as HTMLFormElement | null;
-            if (!form) return null;
-            const viewStateInput = form.querySelector(
-              "input[name='javax.faces.ViewState']",
-            ) as HTMLInputElement | null;
-            const viewState = viewStateInput?.value ?? null;
-            const formId = form.id || form.name || "fPP";
-            // Parseia `parameters` do onclick A4J.AJAX.Submit. Padrão:
-            //   onclick="A4J.AJAX.Submit('fPP',event,{
-            //     'similarityGroupingId':'X',
-            //     'parameters':{'k1':'v1','k2':'v2'}
-            //   })"
-            // Usa eval no contexto da página com balanceamento de chaves
-            // pra suportar `parameters` aninhado (regex simples com
-            // [^}]+ truncava no primeiro `}`).
-            const onclickStr = link.getAttribute("onclick") ?? "";
-            let parameters: Record<string, unknown> = {};
-            const startToken = onclickStr.search(/['"]parameters['"]\s*:/);
-            if (startToken >= 0) {
-              const braceStart = onclickStr.indexOf("{", startToken);
-              if (braceStart >= 0) {
-                let depth = 0;
-                let braceEnd = -1;
-                let inStr = false;
-                let strChar = "";
-                for (let i = braceStart; i < onclickStr.length; i++) {
-                  const c = onclickStr[i];
-                  if (inStr) {
-                    if (c === strChar && onclickStr[i - 1] !== "\\") inStr = false;
-                    continue;
-                  }
-                  if (c === "'" || c === '"') {
-                    inStr = true;
-                    strChar = c;
-                  } else if (c === "{") {
-                    depth++;
-                  } else if (c === "}") {
-                    depth--;
-                    if (depth === 0) {
-                      braceEnd = i;
-                      break;
-                    }
-                  }
-                }
-                if (braceEnd > braceStart) {
-                  try {
-                    const objLiteral = onclickStr.substring(braceStart, braceEnd + 1);
-                    // eval no contexto da página (controlado, vem do
-                    // próprio HTML do PJe). Suporta aninhamento e qualquer
-                    // formato que o RichFaces gere.
-                    parameters = (Function(
-                      `"use strict"; return (${objLiteral});`,
-                    )() ?? {}) as Record<string, unknown>;
-                  } catch {
-                    parameters = {};
-                  }
-                }
-              }
-            }
-            return {
-              linkId,
-              formId,
-              viewState,
-              action: form.action,
-              parameters,
-            };
-          }, seletorLinkResultado)
-          .catch(() => null);
-
-        let urlDetalhe: string | null = null;
-        let postDiag: string | null = null;
-
-        if (dadosLink && dadosLink.viewState) {
-          // Monta payload padrão RichFaces 3.x AJAX
-          const payload = new URLSearchParams();
-          payload.append("AJAXREQUEST", "_viewRoot");
-          payload.append(dadosLink.formId, dadosLink.formId);
-          payload.append(dadosLink.linkId, dadosLink.linkId);
-          payload.append("ajaxSingle", dadosLink.linkId);
-          payload.append("similarityGroupingId", dadosLink.linkId);
-          // Injeta `parameters` parseados do onclick. Pode ter aninhamento
-          // (ex: idProcessoSelecionado=3253677, idTaskInstance=null) — só
-          // serializa o que for primitivo (string/number/bool).
-          for (const [k, v] of Object.entries(dadosLink.parameters)) {
-            if (v === null || v === undefined) continue;
-            const valor = typeof v === "object" ? JSON.stringify(v) : String(v);
-            payload.append(k, valor);
-          }
-          payload.append("javax.faces.ViewState", dadosLink.viewState);
-          payload.append("AJAX:EVENTS_COUNT", "1");
-
-          const ajaxResponse = await page.request
-            .post(dadosLink.action, {
-              data: payload.toString(),
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Faces-Request": "partial/ajax",
-                Accept: "text/xml,application/xml,*/*;q=0.5",
-                Referer: page.url(),
-              },
-              maxRedirects: 0,
-            })
-            .catch(() => null);
-
-          if (ajaxResponse) {
-            const xmlText = await ajaxResponse.text().catch(() => "");
-            const headers = ajaxResponse.headers();
-            postDiag =
-              `POST status=${ajaxResponse.status()} ` +
-              `len=${xmlText.length} ` +
-              `Location=${headers["location"] ?? "—"} ` +
-              `body0_3500="${xmlText.slice(0, 3500).replace(/\s+/g, " ")}"`;
-            // Tenta múltiplos formatos de redirect no XML:
-            // - <redirect url="..."/>  (clássico A4J)
-            // - window.location = "..."  (alguns templates)
-            // - location.href = "..."
-            // - meta refresh
-            const tryRegexes: RegExp[] = [
-              /<redirect[^>]+url="([^"]+)"/i,
-              /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/,
-              /location\.href\s*=\s*["']([^"']+)["']/,
-              /<a4j:redirect[^>]+url="([^"]+)"/i,
-              /<meta[^>]+http-equiv="refresh"[^>]+url=([^"';\s>]+)/i,
-            ];
-            for (const re of tryRegexes) {
-              const m = xmlText.match(re);
-              if (m) {
-                const urlRedirect = m[1].replace(/&amp;/g, "&");
-                urlDetalhe = urlRedirect.startsWith("http")
-                  ? urlRedirect
-                  : `https://pje.tjce.jus.br${urlRedirect.startsWith("/") ? "" : "/"}${urlRedirect}`;
-                break;
-              }
-            }
-            // Header Location também (alguns servidores enviam mesmo
-            // com status 200 em A4J)
-            if (!urlDetalhe && headers["location"]) {
-              const loc = headers["location"];
-              urlDetalhe = loc.startsWith("http")
-                ? loc
-                : `https://pje.tjce.jus.br${loc.startsWith("/") ? "" : "/"}${loc}`;
-            }
-          } else {
-            postDiag = "POST falhou (rejeitado/timeout)";
-          }
-        } else {
-          postDiag = `dadosLink incompleto (viewState=${!!dadosLink?.viewState})`;
+        let pageDetalhe: Page | null = null;
+        const newPage = await newPagePromise.catch(() => null);
+        if (newPage) {
+          await newPage.waitForLoadState("domcontentloaded", { timeout: 12_000 }).catch(() => {});
+          await newPage.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
+          await newPage.waitForTimeout(1000);
+          pageDetalhe = newPage;
+          // Substitui referência da page principal pra extrair daqui
+          page = newPage;
         }
 
-        // Fallback 2: chamar A4J.AJAX.Submit DIRETAMENTE no contexto
-        // da página com os parameters parseados. Diagnóstico confirmou
-        // que A4J.AJAX.Submit é uma função disponível no escopo.
-        if (!urlDetalhe && dadosLink) {
-          const respPromise = page
-            .waitForResponse(
-              (r) => r.url().includes("listProcessoCompletoAdvogado.seam"),
-              { timeout: 8000 },
-            )
-            .catch(() => null);
-          await page
-            .evaluate(
-              ({ formId, linkId, parameters }) => {
-                const w = window as unknown as {
-                  A4J?: { AJAX?: { Submit?: (...a: unknown[]) => unknown } };
-                };
-                const submit = w.A4J?.AJAX?.Submit;
-                if (!submit) return;
-                try {
-                  submit(formId, null, {
-                    similarityGroupingId: linkId,
-                    parameters: { ...parameters, [linkId]: linkId },
-                  });
-                } catch {
-                  // ignora
-                }
-              },
-              {
-                formId: dadosLink.formId,
-                linkId: dadosLink.linkId,
-                parameters: dadosLink.parameters,
-              },
-            )
-            .catch(() => {});
-          const resp = await respPromise;
-          if (resp) urlDetalhe = resp.url();
-        }
-
-        // Fallback 3: Locator.click({ force: true }) — bypassa overlay
-        if (!urlDetalhe) {
-          const respPromise = page
-            .waitForResponse(
-              (r) =>
-                r.url().includes("listProcessoCompletoAdvogado") ||
-                (r.url().includes("Detalhe/") && r.url().endsWith(".seam")),
-              { timeout: 8000 },
-            )
-            .catch(() => null);
-          await page
-            .locator(seletorLinkResultado)
-            .first()
-            .click({ force: true, timeout: 5000 })
-            .catch(() => {});
-          const resp = await respPromise;
-          if (resp) urlDetalhe = resp.url();
-        }
-
-        // Fallback 4: dispatchEvent + waitForResponse
-        if (!urlDetalhe) {
-          const respPromise = page
-            .waitForResponse(
-              (r) => r.url().includes("listProcessoCompletoAdvogado.seam"),
-              { timeout: 5000 },
-            )
-            .catch(() => null);
-          await page.dispatchEvent(seletorLinkResultado, "click").catch(() => {});
-          const resp = await respPromise;
-          if (resp) urlDetalhe = resp.url();
-        }
-
-        page.off("request", requestTracker);
-
-        if (urlDetalhe) {
-          await page.goto(urlDetalhe, { waitUntil: "domcontentloaded" });
-          await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
-          await page.waitForTimeout(1500);
-        }
-        // Stash diag pra logging em caso de falha (anexa via globalThis
-        // pra não mudar assinatura do adapter). Inclui detalheUrls
-        // capturadas pra ver se algum click disparou request real.
+        // Stash diag pra logging em caso de falha
+        const urlNova = pageDetalhe?.url() ?? "(nenhuma nova aba)";
         (globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag =
-          `${postDiag ?? "n/a"} | detalheUrls=${JSON.stringify(detalheUrls.slice(0, 5))}`;
+          `clickAbriuNovaAba=${!!pageDetalhe} | urlNova=${urlNova}`;
       }
-      // Se não há link, pode ser que a busca já redirecionou direto
-      // pro detalhe (PJe faz isso quando há match único). Seguimos
       // tentando extrair da página atual.
 
       // ─── Extração ───
