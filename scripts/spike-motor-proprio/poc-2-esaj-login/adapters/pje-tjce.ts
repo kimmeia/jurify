@@ -347,41 +347,61 @@ export class PjeTjceScraper {
       // tipicamente o link "Ver detalhes do processo" (primeira coluna).
       // Click dispara `A4J.AJAX.Submit('fPP',...)` — RichFaces AJAX que
       // navega pra detalhe (URL muda).
-      const linkProcesso = page
-        .locator(
-          [
-            "a[id*='processosTable'][id$=':j_id492']",
-            "a.btn-link[id*='processosTable']",
-            `a:has-text('${cnjMascarado}')`,
-            "tr.linhaResultado a",
-          ].join(", "),
-        )
-        .first();
+      const seletorLinkResultado =
+        "a[id*='processosTable'][id$=':j_id492'], a.btn-link[id*='processosTable']";
+      const linkProcesso = page.locator(seletorLinkResultado).first();
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
         const urlAntes = page.url();
-        await linkProcesso.click({ timeout: 5000 }).catch(() => {});
-        // RichFaces AJAX submit: pode mudar URL OU atualizar DOM in-place.
-        // Esperamos a primeira de várias condições possíveis.
-        await Promise.race([
-          page.waitForURL((u) => u.toString() !== urlAntes, { timeout: 12_000 }),
-          page
-            .waitForSelector(
-              [
-                "h1:has-text('Detalhes do Processo')",
-                "h2:has-text('Detalhes do Processo')",
-                "*:text-is('Movimentações')",
-                "*:text-is('Movimentação')",
-                "table[id*='movimentacao' i]",
-                "table[id*='movimento' i]",
-              ].join(", "),
-              { timeout: 12_000 },
-            )
-            .catch(() => null),
-        ]).catch(() => null);
-        await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
-        await page.waitForTimeout(1500);
+        const bodyLenAntes = await page.evaluate(() => document.body.innerHTML.length).catch(() => 0);
+
+        // 1. Aguarda modal de loading do RichFaces sumir (se visível)
+        await page
+          .locator("#modalStatusContent, #modalStatusContentTable")
+          .first()
+          .waitFor({ state: "hidden", timeout: 5000 })
+          .catch(() => {});
+
+        // 2. Click via JS evaluate — mais robusto contra overlays e
+        //    eventos sintéticos que o Playwright pode não disparar
+        //    corretamente em RichFaces.
+        const clicado = await page
+          .evaluate((sel) => {
+            const link = document.querySelector(sel) as HTMLAnchorElement | null;
+            if (!link) return false;
+            link.click();
+            return true;
+          }, seletorLinkResultado)
+          .catch(() => false);
+
+        if (clicado) {
+          // 3. Aguarda RichFaces AJAX: modal aparece (start) e some (end).
+          //    Se modal já estava visível ao clicar, podemos pular o "aparece".
+          await page
+            .locator("#modalStatusContent, #modalStatusContentTable")
+            .first()
+            .waitFor({ state: "visible", timeout: 3000 })
+            .catch(() => {});
+          await page
+            .locator("#modalStatusContent, #modalStatusContentTable")
+            .first()
+            .waitFor({ state: "hidden", timeout: 15_000 })
+            .catch(() => {});
+
+          // 4. Espera mudança real: URL OU bodyLen mudou
+          await Promise.race([
+            page.waitForURL((u) => u.toString() !== urlAntes, { timeout: 8_000 }),
+            page
+              .waitForFunction(
+                (oldLen) => Math.abs(document.body.innerHTML.length - oldLen) > 5000,
+                bodyLenAntes,
+                { timeout: 8_000 },
+              )
+              .catch(() => null),
+          ]).catch(() => null);
+          await page.waitForTimeout(1500);
+        }
       }
       // Se não há link, pode ser que a busca já redirecionou direto
       // pro detalhe (PJe faz isso quando há match único). Seguimos
