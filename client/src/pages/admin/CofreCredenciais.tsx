@@ -68,6 +68,7 @@ const STATUS_BADGE: Record<string, { label: string; className: string; icon: Rea
 
 export default function CofreCredenciais() {
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [secretAutoConfigurado, setSecretAutoConfigurado] = useState<string | null>(null);
 
   const listaQuery = (trpc as any).cofreCredenciais.listar.useQuery();
   const removerMut = (trpc as any).cofreCredenciais.remover.useMutation({
@@ -81,6 +82,13 @@ export default function CofreCredenciais() {
     onSuccess: (data: any) => {
       if (data.ok) toast.success(data.mensagem || "Credencial validada");
       else toast.info(data.mensagem || "Validação ainda não implementada");
+
+      // Se 2FA foi auto-configurado pelo robô, mostra modal proeminente
+      // com o secret pra usuário cadastrar no app autenticador dele.
+      if (data.totpSecretConfigurado) {
+        setSecretAutoConfigurado(data.totpSecretConfigurado);
+      }
+
       listaQuery.refetch();
     },
     onError: (err: any) => toast.error(err.message),
@@ -117,6 +125,63 @@ export default function CofreCredenciais() {
           />
         </Dialog>
       </div>
+
+      {secretAutoConfigurado && (
+        <Dialog open={!!secretAutoConfigurado} onOpenChange={(o) => !o && setSecretAutoConfigurado(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+                2FA configurado automaticamente
+              </DialogTitle>
+              <DialogDescription>
+                O Keycloak forçou a configuração inicial de 2FA — o robô concluiu por você.
+                Pra você também conseguir logar manualmente no PJe TJCE quando precisar,
+                cadastre o secret abaixo no seu Google Authenticator / Authy.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Secret base32 (cadastre no app autenticador)
+                </Label>
+                <div className="mt-1 p-3 bg-amber-50 border border-amber-300 rounded font-mono text-sm break-all select-all">
+                  {secretAutoConfigurado}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => {
+                    navigator.clipboard.writeText(secretAutoConfigurado);
+                    toast.success("Secret copiado pra clipboard");
+                  }}
+                >
+                  Copiar secret
+                </Button>
+              </div>
+              <Alert className="border-amber-500/40 bg-amber-50/40">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="text-sm">Importante</AlertTitle>
+                <AlertDescription className="text-xs leading-relaxed">
+                  Esse secret é equivalente à sua senha 2FA permanente. Não compartilhe.
+                  Já está salvo criptografado no nosso cofre — robô consegue logar sozinho.
+                  Adicione no seu app autenticador também caso queira logar manualmente
+                  no PJe TJCE pelo navegador.
+                </AlertDescription>
+              </Alert>
+              <div className="text-xs text-muted-foreground">
+                <strong>Como adicionar no app:</strong> Google Authenticator → "+" → "Inserir
+                chave de configuração" → cola o secret + dá um nome (ex: "PJe TJCE"). Authy:
+                "+" → "Add account" → "Enter setup key manually" → cola.
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setSecretAutoConfigurado(null)}>Entendi, fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Alert className="border-blue-500/30 bg-blue-50/30">
         <ShieldCheck className="h-4 w-4 text-blue-600" />

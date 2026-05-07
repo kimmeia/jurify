@@ -48,6 +48,17 @@ export interface ResultadoLoginPjeTjce {
   storageStateJson?: string;
   latenciaMs: number;
   screenshotPath: string | null;
+  /**
+   * Quando o Keycloak forçou CONFIGURE_TOTP e o robô auto-configurou,
+   * retorna o secret base32 NOVO que precisa ser cadastrado no app
+   * autenticador do usuário (Google Authenticator/Authy) pra que ele
+   * também consiga gerar códigos válidos manualmente.
+   *
+   * Caller deve:
+   *   1. Persistir esse secret no cofre (substituir o antigo)
+   *   2. Mostrar pro usuário com instrução de adicionar no app
+   */
+  totpSecretConfigurado?: string;
 }
 
 const TIMEOUT_LOGIN_MS = 60_000;
@@ -97,8 +108,11 @@ export class PjeTjceScraper {
     const page = await context.newPage();
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
 
+    let totpSecretConfigurado: string | undefined;
     try {
-      const operacao = this.executarLogin(page);
+      const operacao = this.executarLogin(page, (s) => {
+        totpSecretConfigurado = s;
+      });
       const timer = new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error(`timeout_login_${TIMEOUT_LOGIN_MS}ms`)),
@@ -112,10 +126,13 @@ export class PjeTjceScraper {
 
       return {
         ok: true,
-        mensagem: "Login no PJe TJCE via PDPJ-cloud bem-sucedido",
+        mensagem: totpSecretConfigurado
+          ? "Login OK + 2FA auto-configurado. Adicione o novo secret no seu app autenticador."
+          : "Login no PJe TJCE via PDPJ-cloud bem-sucedido",
         latenciaMs: Date.now() - inicio,
         storageStateJson,
         screenshotPath: null,
+        totpSecretConfigurado,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -221,7 +238,10 @@ export class PjeTjceScraper {
    *  4. Detecta 2FA na tela seguinte (id="otp" ou similar)
    *  5. Aguarda redirect de volta pra pje.tjce.jus.br
    */
-  private async executarLogin(page: Page): Promise<void> {
+  private async executarLogin(
+    page: Page,
+    onTotpAutoConfigurado: (secret: string) => void,
+  ): Promise<void> {
     await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
 
     // Aguarda redirect pro Keycloak. Pode demorar — TJCE faz vários
@@ -304,24 +324,85 @@ export class PjeTjceScraper {
 
     // ─── DETECTA "CONFIGURE_TOTP" — primeira configuração de 2FA ───
     // Keycloak força configurar 2FA na primeira vez se ainda não tem.
-    // Tela apresenta QR code + secret novo. O secret cadastrado pelo
-    // usuário no cofre NÃO bate com esse que o Keycloak gerou agora.
-    // Não tentamos auto-configurar — usuário precisa fazer manualmente
-    // no navegador uma vez pra sincronizar o secret entre app e cofre.
+    // Cada visita à tela gera SECRET NOVO no servidor — não dá pra usar
+    // secret cadastrado antes pelo usuário (já foi descartado).
+    //
+    // Estratégia: capturar o secret atual da página, gerar código com
+    // ele, completar a configuração, retornar o secret novo via callback.
+    // Caller atualiza o cofre + avisa o usuário pra adicionar o secret
+    // no app autenticador dele também.
     if (
       page.url().includes("CONFIGURE_TOTP") ||
       page.url().includes("execution=CONFIGURE")
     ) {
-      throw new Error(
-        "PDPJ_CONFIGURE_TOTP: sua conta no PDPJ-cloud ainda não tem 2FA configurado. " +
-          "O Keycloak está forçando configuração antes do primeiro acesso. Resolva em 2 passos:\n" +
-          "PASSO 1 (no navegador, 1 vez): acesse https://pje.tjce.jus.br/, faça login, " +
-          "quando aparecer 'Configure Two-Factor' clique em 'Não consegue escanear?' " +
-          "pra ver o secret em texto base32 (JBSWY3...). Anote. Escaneie o QR code com " +
-          "Google Authenticator/Authy no celular. Confirme com o código de 6 dígitos.\n" +
-          "PASSO 2 (no Jurify): remova esta credencial, cadastre de novo com o MESMO secret " +
-          "que você anotou no Passo 1. Aí valida — o robô vai gerar o mesmo código que seu app.",
-      );
+      const secretCapturado = await this.extrairSecretTotpDaTela(page);
+      if (!secretCapturado) {
+        throw new Error(
+          "PDPJ_CONFIGURE_TOTP: detectei a tela de configuração de 2FA mas não consegui " +
+            "capturar o secret base32 da página. Conclua a configuração manualmente: " +
+            "1) Acesse https://pje.tjce.jus.br/ no navegador, faça login. " +
+            "2) Na tela 'Configure Two-Factor', clique em 'Não consegue escanear?', " +
+            "anote o secret base32 que aparecer. " +
+            "3) Escaneie o QR no Google Authenticator/Authy E confirme com o código " +
+            "de 6 dígitos no Keycloak (importante: tem que CONFIRMAR pra finalizar). " +
+            "4) Remova esta credencial e cadastre nova com o secret anotado.",
+        );
+      }
+
+      // Gera código TOTP do secret capturado e completa a configuração
+      const codigoTotp = gerarCodigoTotp(secretCapturado);
+
+      const inputTotp = page.locator("input#totp, input[name='totp']").first();
+      const inputUserLabel = page
+        .locator("input#userLabel, input[name='userLabel']")
+        .first();
+
+      if (!(await inputTotp.isVisible({ timeout: 3000 }).catch(() => false))) {
+        throw new Error(
+          `Campo "totp" não encontrado na tela CONFIGURE_TOTP — Keycloak pode ter mudado. URL: ${page.url()}`,
+        );
+      }
+
+      await inputTotp.fill(codigoTotp);
+
+      // Campo opcional "Nome do dispositivo" — preenche pra deixar
+      // identificável quando o usuário olhar lista de devices no Keycloak
+      if (await inputUserLabel.isVisible({ timeout: 500 }).catch(() => false)) {
+        await inputUserLabel.fill("Jurify Motor Próprio (auto-configurado)");
+      }
+
+      const botaoSave = page
+        .locator(
+          [
+            "input#saveTOTPBtn",
+            "button[name='submitAction'][value='Save']",
+            "input[type='submit']",
+            "button[type='submit']",
+          ].join(", "),
+        )
+        .first();
+
+      await Promise.all([
+        page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
+        botaoSave.click({ timeout: 5000 }),
+      ]);
+      await page.waitForTimeout(2000);
+
+      // Confirma que saiu da tela CONFIGURE_TOTP
+      if (
+        page.url().includes("CONFIGURE_TOTP") ||
+        page.url().includes("execution=CONFIGURE")
+      ) {
+        const diag = await this.coletarDiagnosticoKeycloak(page);
+        throw new Error(
+          `Auto-configuração de TOTP falhou — Keycloak ainda está em CONFIGURE_TOTP. ` +
+            `Mensagem: ${diag.mensagemErro || "(sem mensagem)"}. ` +
+            `Inputs: ${diag.inputs}.`,
+        );
+      }
+
+      // Sucesso — secret é o novo TOTP da conta. Notifica caller.
+      onTotpAutoConfigurado(secretCapturado);
     }
 
     // ─── 2FA TOTP normal (já configurado) ───
@@ -442,6 +523,95 @@ export class PjeTjceScraper {
       inputs: JSON.stringify(inputs).slice(0, 400),
       title,
     };
+  }
+
+  /**
+   * Captura o secret base32 mostrado na tela CONFIGURE_TOTP do Keycloak.
+   *
+   * Keycloak apresenta o secret de várias formas dependendo da versão/
+   * tema:
+   *   • <kbd id="kc-totp-secret-key">JBSW Y3DP EHPK 3PXP</kbd>
+   *   • <span id="kc-totp-secret-key-value">JBSW Y3DP...</span>
+   *   • <input readonly value="JBSWY3DP..."> dentro de details/summary
+   *   • Texto livre num <p> ou <div> que parece base32
+   *
+   * Tenta múltiplas estratégias e retorna o secret limpo (sem espaços,
+   * uppercase). Retorna null se nada parecer secret base32.
+   */
+  private async extrairSecretTotpDaTela(page: Page): Promise<string | null> {
+    // Estratégia 1: clicar em "Não consegue escanear?" pra revelar
+    // o secret em texto (algumas versões só mostram após clicar)
+    const linksRevelar = [
+      "a:has-text('escanear')",
+      "a:has-text('Não consegue')",
+      "a:has-text('não consigo')",
+      "a:has-text('texto')",
+      "a#mode-detail-link",
+      "summary:has-text('escanear')",
+      "summary:has-text('Não consegue')",
+    ];
+    for (const sel of linksRevelar) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 500 })) {
+          await el.click({ timeout: 1500 });
+          await page.waitForTimeout(400);
+          break;
+        }
+      } catch {
+        // ignora
+      }
+    }
+
+    // Estratégia 2: selectors específicos do Keycloak
+    const seletoresSecret = [
+      "kbd#kc-totp-secret-key",
+      "kbd",
+      "#kc-totp-secret-key",
+      "#kc-totp-secret-key-value",
+      "[id*='totp-secret']",
+      "[class*='totp-secret']",
+      "input[readonly][type='text']",
+      "code",
+    ];
+    for (const sel of seletoresSecret) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.count()) {
+          const txt = (
+            (await el.getAttribute("value").catch(() => null)) ||
+            (await el.innerText().catch(() => "")) ||
+            ""
+          ).trim();
+          const limpo = txt.replace(/\s+/g, "").toUpperCase();
+          // Secret base32: A-Z + 2-7. Tipicamente 16-64 chars.
+          if (/^[A-Z2-7]{16,128}$/.test(limpo)) {
+            return limpo;
+          }
+        }
+      } catch {
+        // ignora
+      }
+    }
+
+    // Estratégia 3: busca regex em todo HTML visível
+    try {
+      const texto = await page.locator("body").innerText().catch(() => "");
+      // Procura sequência tipo "JBSW Y3DP EHPK 3PXP" (com ou sem espaço)
+      const matches = texto.match(/(?:[A-Z2-7]{4}\s?){4,}[A-Z2-7]{2,4}/g);
+      if (matches) {
+        for (const m of matches) {
+          const limpo = m.replace(/\s+/g, "").toUpperCase();
+          if (/^[A-Z2-7]{16,128}$/.test(limpo)) {
+            return limpo;
+          }
+        }
+      }
+    } catch {
+      // ignora
+    }
+
+    return null;
   }
 
   private async listarInputsVisiveis(

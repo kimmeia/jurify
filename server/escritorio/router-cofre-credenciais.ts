@@ -328,13 +328,33 @@ export const cofreCredenciaisRouter = router({
         });
         const resultado = await scraper.testarLogin();
 
+        // Se adapter auto-configurou 2FA (capturou secret da tela
+        // CONFIGURE_TOTP do Keycloak), atualiza credencial no cofre
+        // com o secret novo. ANTES de salvar status — se a atualização
+        // falhar, queremos saber.
+        if (resultado.ok && resultado.totpSecretConfigurado) {
+          const totpEnc = encrypt(resultado.totpSecretConfigurado);
+          await db
+            .update(cofreCredenciais)
+            .set({
+              totpSecretEnc: totpEnc.encrypted,
+              totpSecretIv: totpEnc.iv,
+              totpSecretTag: totpEnc.tag,
+            })
+            .where(eq(cofreCredenciais.id, input.id));
+          log.info(
+            { credencialId: input.id },
+            "[cofre] TOTP auto-configurado via Keycloak — secret atualizado no cofre",
+          );
+        }
+
         await atualizarStatusAposLogin(input.id, {
           ok: resultado.ok,
           mensagemErro: resultado.ok ? null : `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
         });
 
         if (resultado.ok && resultado.storageStateJson) {
-          // ESAJ TJCE costuma manter sessão por ~2h sem atividade.
+          // PDPJ-cloud (Keycloak) mantém sessão por ~2h via cookie KC.
           // Marcamos prazo conservador de 90min pra forçar relogin antes
           // que o tribunal expire e dê erro 401 inesperado.
           const expira = new Date(Date.now() + 90 * 60 * 1000);
@@ -346,6 +366,11 @@ export const cofreCredenciaisRouter = router({
           mensagem: resultado.mensagem,
           latenciaMs: resultado.latenciaMs,
           screenshotPath: resultado.screenshotPath,
+          // Quando 2FA foi auto-configurado, devolve o secret pro
+          // frontend mostrar pro usuário cadastrar no app autenticador
+          // dele também. Sem isso, ele NÃO consegue logar manualmente
+          // depois (só via Jurify).
+          totpSecretConfigurado: resultado.totpSecretConfigurado ?? null,
         };
       }
 
