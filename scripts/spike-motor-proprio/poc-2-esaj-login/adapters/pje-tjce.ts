@@ -1,25 +1,29 @@
 /**
- * Adapter PJe TJCE — login autenticado (advogado com OAB-CE).
+ * Adapter PJe TJCE — login via PDPJ-cloud (SSO unificado do CNJ).
  *
- * O TJCE migrou do E-SAJ pro PJe — diferente da maioria das outras
- * UFs. Sistema atual: PJe 2.x do TJCE em pje.tjce.jus.br.
+ * INSIGHT IMPORTANTE: o TJCE migrou pra Plataforma Digital do Poder
+ * Judiciário (PDPJ-cloud), que usa Keycloak como servidor de identidade
+ * em https://sso.cloud.pje.jus.br/auth/realms/pje/.
  *
- * Caminho de acesso pro advogado:
- *   1. https://pje.tjce.jus.br/pje/login.seam (PJe 1.x JSF) OU
- *      https://pje.tjce.jus.br/jus/Processo/ConsultaProcesso/listView.seam
- *      (PJe 2.x Angular — exige login antes de consultar)
- *   2. Login com CPF/OAB + senha
- *   3. 2FA TOTP se habilitado
- *   4. Acesso ao painel + busca de processos
+ * URL real que o usuário acessa:
+ *   https://sso.cloud.pje.jus.br/auth/realms/pje/login-actions/authenticate
+ *     ?execution=<uuid>&client_id=pje-tjce-1g&tab_id=<id>
  *
- * Diferença vs consulta pública (TRT-7 no PoC 1):
- *   • Consulta pública: tem captcha
- *   • Acesso autenticado: SEM captcha (advogado tem credencial)
- *   • Acesso autenticado: vê processos onde tem permissão (segredo de justiça)
+ * Os parâmetros `execution` e `tab_id` são gerados pelo Keycloak a cada
+ * acesso (não dá pra navegar direto pra essa URL — bate em sessão
+ * inválida). Caminho correto:
  *
- * STATUS: implementação inicial baseada em padrões conhecidos do PJe.
- * Diagnóstico forte habilitado — primeira validação real vai retornar
- * mensagem do tribunal + lista de inputs detectados pra calibrar.
+ *   1. Acessar https://pje.tjce.jus.br/ (porta de entrada do TJCE)
+ *   2. Aguardar redirect AUTOMÁTICO pra sso.cloud.pje.jus.br/auth/...
+ *   3. Form Keycloak padrão (id="username", id="password",
+ *      id="kc-login")
+ *   4. Submit → Keycloak valida → redirect de volta pra pje.tjce.jus.br
+ *   5. Se 2FA: tela intermediária do Keycloak pede TOTP
+ *
+ * Vantagem do PDPJ-cloud: este MESMO adapter serve pros outros TJs que
+ * migraram (TJRJ, TJMG, TJDFT, TJPE, etc) — só muda o client_id e a URL
+ * de entrada. Quando atacarmos esses, refatoramos pra classe base
+ * `PdpjCloudScraper` parametrizável.
  */
 
 import type { Browser, Page } from "@playwright/test";
@@ -28,17 +32,8 @@ import { gerarCodigoTotp } from "./tjce-totp";
 import type { ResultadoScraper } from "../../lib/types-spike";
 import { mascararCnj, normalizarCnj } from "../../lib/parser-utils";
 
-/**
- * URLs do PJe TJCE. Tenta múltiplas URLs porque o tribunal pode ter
- * mais de uma porta de entrada (1º grau, 2º grau, varas especiais).
- */
-const URLS_LOGIN = [
-  "https://pje.tjce.jus.br/pje/login.seam",
-  "https://pje.tjce.jus.br/pje1grau/login.seam",
-  "https://pje.tjce.jus.br/pje2grau/login.seam",
-] as const;
-
-const URL_PORTAL = "https://pje.tjce.jus.br/";
+const URL_ENTRADA_TJCE = "https://pje.tjce.jus.br/";
+const HOST_KEYCLOAK = "sso.cloud.pje.jus.br";
 
 export interface CredencialPjeTjce {
   username: string;
@@ -86,7 +81,7 @@ export async function fecharBrowserPjeTjce(): Promise<void> {
 
 export class PjeTjceScraper {
   readonly tribunal = "tjce";
-  readonly nome = "Tribunal de Justiça do Ceará — PJe (autenticado)";
+  readonly nome = "Tribunal de Justiça do Ceará — PJe via PDPJ-cloud";
 
   constructor(private credencial: CredencialPjeTjce) {}
 
@@ -102,11 +97,8 @@ export class PjeTjceScraper {
     const page = await context.newPage();
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
 
-    let urlTentadaUltima = "";
     try {
-      const operacao = this.executarLogin(page, (url) => {
-        urlTentadaUltima = url;
-      });
+      const operacao = this.executarLogin(page);
       const timer = new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error(`timeout_login_${TIMEOUT_LOGIN_MS}ms`)),
@@ -120,18 +112,18 @@ export class PjeTjceScraper {
 
       return {
         ok: true,
-        mensagem: "Login no PJe TJCE bem-sucedido",
+        mensagem: "Login no PJe TJCE via PDPJ-cloud bem-sucedido",
         latenciaMs: Date.now() - inicio,
         storageStateJson,
         screenshotPath: null,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const screenshotPath = await this.tirarScreenshotErro(page, "tjce-pje-erro");
+      const screenshotPath = await this.tirarScreenshotErro(page, "pje-tjce-erro");
       return {
         ok: false,
         mensagem: this.classificarErro(msg, page.url()),
-        detalhes: `${msg} — URL final: ${page.url()} — última tentada: ${urlTentadaUltima || "?"}`,
+        detalhes: `${msg} — URL final: ${page.url()}`,
         latenciaMs: Date.now() - inicio,
         screenshotPath,
       };
@@ -174,31 +166,30 @@ export class PjeTjceScraper {
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
 
     try {
-      // Vai pra portal — se sessão OK, abre painel; se expirou, redireciona pra login
-      await page.goto(URL_PORTAL, { waitUntil: "domcontentloaded" });
+      await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
 
-      const urlAtual = page.url();
-      if (urlAtual.includes("login.seam") || urlAtual.includes("/login")) {
+      // Se redirecionou pro SSO, sessão expirou
+      if (page.url().includes(HOST_KEYCLOAK)) {
         return {
           ...baseResultado,
           latenciaMs: Date.now() - inicio,
           categoriaErro: "tribunal_indisponivel",
-          mensagemErro: "Sessão expirada — PJe TJCE redirecionou pra login",
+          mensagemErro: "Sessão expirada — PDPJ-cloud redirecionou pra login do Keycloak",
           finalizadoEm: new Date().toISOString(),
         };
       }
 
       // Placeholder até calibrar com tela real do painel autenticado
-      const screenshotPath = await this.tirarScreenshotErro(page, `tjce-pje-painel-${cnjLimpo}`);
+      const screenshotPath = await this.tirarScreenshotErro(page, `pje-tjce-painel-${cnjLimpo}`);
       return {
         ...baseResultado,
         latenciaMs: Date.now() - inicio,
         categoriaErro: "parse_falhou",
         mensagemErro:
-          `Login OK — chegamos no painel autenticado (${urlAtual}). ` +
+          `Login OK e portal aberto (${page.url()}). ` +
           `Extração de processo por CNJ ainda não implementada — depende do layout ` +
-          `real do painel (calibrar com screenshot capturado).`,
+          `real do painel PDPJ-cloud (calibrar com screenshot).`,
         screenshotPath,
         finalizadoEm: new Date().toISOString(),
       };
@@ -206,7 +197,7 @@ export class PjeTjceScraper {
       const msg = err instanceof Error ? err.message : String(err);
       const screenshotPath = await this.tirarScreenshotErro(
         page,
-        `tjce-pje-consulta-erro-${cnjLimpo}`,
+        `pje-tjce-consulta-erro-${cnjLimpo}`,
       );
       return {
         ...baseResultado,
@@ -223,81 +214,44 @@ export class PjeTjceScraper {
   }
 
   /**
-   * Tenta logar em cada URL_LOGIN candidata até uma funcionar.
-   * Mantém diagnóstico estruturado pra cada falha.
+   * Fluxo de login PDPJ-cloud:
+   *  1. Acessa pje.tjce.jus.br → tribunal redireciona pro SSO
+   *  2. Aguarda chegar no Keycloak (host sso.cloud.pje.jus.br)
+   *  3. Form padrão Keycloak: id="username", id="password", id="kc-login"
+   *  4. Detecta 2FA na tela seguinte (id="otp" ou similar)
+   *  5. Aguarda redirect de volta pra pje.tjce.jus.br
    */
-  private async executarLogin(
-    page: Page,
-    setUrl: (url: string) => void,
-  ): Promise<void> {
-    const erros: string[] = [];
+  private async executarLogin(page: Page): Promise<void> {
+    await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
 
-    for (const url of URLS_LOGIN) {
-      setUrl(url);
-      try {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12_000 });
-        await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+    // Aguarda redirect pro Keycloak. Pode demorar — TJCE faz vários
+    // bounces antes de cair no SSO.
+    await page
+      .waitForURL((url) => url.host.includes(HOST_KEYCLOAK), {
+        timeout: 18_000,
+      })
+      .catch(() => {});
 
-        // Detecta se é PJe 1.x (JSF) ou 2.x (Angular)
-        const ehPje1 =
-          (await page.locator("input[id*='username' i], input[name*='username' i]").count()) > 0 ||
-          page.url().includes("login.seam");
-
-        if (!ehPje1) {
-          // PJe 2.x — pode ter SSO unificado, layout diferente, etc.
-          // Por enquanto só loga indício; primeira tentativa válida sempre é PJe 1.x
-          erros.push(`${url}: não parece PJe 1.x (sem inputs username) — pulando`);
-          continue;
-        }
-
-        await this.preencherFormPje1(page);
-
-        // Aguarda redirect pra painel ou erro
-        await page.waitForTimeout(2000);
-
-        const urlPosLogin = page.url();
-        if (
-          !urlPosLogin.includes("login.seam") &&
-          !urlPosLogin.includes("/login")
-        ) {
-          // Login OK
-          return;
-        }
-
-        // Capturou erro — coleta diagnóstico
-        const diag = await this.coletarDiagnostico(page);
-        const usernameMascarado =
-          this.credencial.username.length > 4
-            ? `${this.credencial.username.slice(0, 2)}***${this.credencial.username.slice(-2)}`
-            : "***";
-        erros.push(
-          `${url}: rejeitado. Username: ${usernameMascarado}. ` +
-            `Mensagem: ${diag.mensagemErro || "(sem mensagem)"}. ` +
-            `Inputs: ${diag.inputs}. ` +
-            `Title: ${diag.title}.`,
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        erros.push(`${url}: falhou na navegação — ${msg}`);
-      }
+    if (!page.url().includes(HOST_KEYCLOAK)) {
+      // Talvez já estava logado ou TJCE não redirecionou — tentamos
+      // direto a URL de auth. Sem execution/tab_id frescos, vai pedir
+      // pra reiniciar o login automaticamente.
+      throw new Error(
+        `TJCE não redirecionou pro PDPJ-cloud — URL atual: ${page.url()}. ` +
+          `Title: ${await page.title().catch(() => "?")}`,
+      );
     }
 
-    throw new Error(
-      `Nenhuma URL de login PJe TJCE funcionou. Tentativas:\n${erros.join("\n\n")}`,
-    );
-  }
+    await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
 
-  private async preencherFormPje1(page: Page): Promise<void> {
-    // PJe 1.x usa JSF/RichFaces. IDs típicos:
-    //   id="username" ou id="loginPanel:username"
-    //   id="password" ou id="loginPanel:password"
+    // ─── Form Keycloak ───
+    // Selectors padrão do Keycloak: id="username", id="password", id="kc-login"
     const inputUsuario = page
       .locator(
         [
-          "input[id='username']",
-          "input[id*='username' i]",
+          "input#username",
           "input[name='username']",
-          "input[name*='username' i]",
+          "input[autocomplete='username']",
           "input[type='text']:visible",
         ].join(", "),
       )
@@ -306,16 +260,23 @@ export class PjeTjceScraper {
     const inputSenha = page
       .locator(
         [
-          "input[id='password']",
-          "input[id*='password' i]",
+          "input#password",
           "input[name='password']",
-          "input[name*='password' i]",
+          "input[autocomplete='current-password']",
           "input[type='password']:visible",
         ].join(", "),
       )
       .first();
 
-    await inputUsuario.click({ timeout: 5000 }).catch(() => {});
+    if (!(await inputUsuario.isVisible({ timeout: 5000 }).catch(() => false))) {
+      const inputs = await this.listarInputsVisiveis(page);
+      throw new Error(
+        `Form Keycloak não encontrado em ${page.url()}. ` +
+          `Inputs visíveis: ${JSON.stringify(inputs).slice(0, 600)}`,
+      );
+    }
+
+    await inputUsuario.click({ timeout: 3000 }).catch(() => {});
     await inputUsuario.fill("");
     await inputUsuario.fill(this.credencial.username);
 
@@ -326,10 +287,10 @@ export class PjeTjceScraper {
     const botaoLogin = page
       .locator(
         [
-          "input[type='submit'][value*='Entrar' i]",
-          "input[type='submit'][value*='Acessar' i]",
-          "button[type='submit']",
+          "input#kc-login",
+          "button[name='login']",
           "input[type='submit']",
+          "button[type='submit']",
         ].join(", "),
       )
       .first();
@@ -341,23 +302,27 @@ export class PjeTjceScraper {
 
     await page.waitForTimeout(1500);
 
-    // Tratamento de 2FA
+    // ─── 2FA TOTP (Keycloak) ───
+    // Keycloak mostra tela separada com input id="otp" ou "totp"
     const inputTotp = page
       .locator(
         [
+          "input#otp",
+          "input#totp",
+          "input[name='otp']",
+          "input[name='totp']",
           "input[name*='token' i]",
-          "input[name*='codigo' i]",
-          "input[placeholder*='código' i]",
-          "input[placeholder*='token' i]",
+          "input[autocomplete='one-time-code']",
           "input[maxlength='6']",
         ].join(", "),
       )
       .first();
-    const tem2fa = await inputTotp.isVisible({ timeout: 2500 }).catch(() => false);
+    const tem2fa = await inputTotp.isVisible({ timeout: 3000 }).catch(() => false);
     if (tem2fa) {
       if (!this.credencial.totpSecret) {
         throw new Error(
-          "PJe TJCE pediu 2FA mas credencial não tem TOTP secret cadastrado",
+          "PDPJ-cloud pediu 2FA TOTP mas credencial não tem secret cadastrado. " +
+            "Cadastre o secret base32 no cofre antes de validar.",
         );
       }
       const codigo = gerarCodigoTotp(this.credencial.totpSecret);
@@ -366,11 +331,10 @@ export class PjeTjceScraper {
       const botaoValidar = page
         .locator(
           [
-            "button[type='submit']",
+            "input#kc-login",
+            "button[name='login']",
             "input[type='submit']",
-            "button:has-text('Validar')",
-            "button:has-text('Confirmar')",
-            "button:has-text('Entrar')",
+            "button[type='submit']",
           ].join(", "),
         )
         .first();
@@ -380,24 +344,48 @@ export class PjeTjceScraper {
       ]);
       await page.waitForTimeout(1500);
     }
+
+    // ─── Validação de sucesso ───
+    // Login OK quando redireciona DE VOLTA pra pje.tjce.jus.br
+    // (Keycloak conclui o flow OAuth/OIDC e devolve o token).
+    const urlFinal = page.url();
+    if (urlFinal.includes(HOST_KEYCLOAK)) {
+      const diag = await this.coletarDiagnosticoKeycloak(page);
+      const usernameMascarado =
+        this.credencial.username.length > 4
+          ? `${this.credencial.username.slice(0, 2)}***${this.credencial.username.slice(-2)}`
+          : "***";
+      throw new Error(
+        `Login rejeitado pelo Keycloak (PDPJ-cloud).\n` +
+          `Username usado: "${usernameMascarado}" (${this.credencial.username.length} chars).\n` +
+          `Mensagem do Keycloak: ${diag.mensagemErro || "(sem mensagem capturada)"}.\n` +
+          `Inputs detectados: ${diag.inputs}.\n` +
+          `URL: ${urlFinal}.\n` +
+          `Title: ${diag.title}.`,
+      );
+    }
   }
 
-  private async coletarDiagnostico(page: Page): Promise<{
+  /**
+   * Coleta mensagem de erro do Keycloak. Selectors específicos do KC.
+   */
+  private async coletarDiagnosticoKeycloak(page: Page): Promise<{
     mensagemErro: string;
     inputs: string;
     title: string;
   }> {
-    let mensagemErro = "";
     const candidatos = [
-      ".rich-messages-summary",
-      ".rich-messages-detail",
-      ".alert",
-      ".alert-danger",
-      ".error",
+      "#input-error",                   // erro de campo (Keycloak v18+)
+      ".kc-feedback-text",              // feedback genérico
+      ".alert-error",                   // alerta de erro
+      ".pf-c-alert.pf-m-danger",        // PatternFly (Keycloak)
       "[role='alert']",
-      ".message",
-      ".validation-summary",
+      "#input-error-username",
+      "#input-error-password",
+      "span.error",
+      ".alert",
     ];
+    let mensagemErro = "";
     for (const sel of candidatos) {
       try {
         const el = page.locator(sel).first();
@@ -415,7 +403,7 @@ export class PjeTjceScraper {
     if (!mensagemErro) {
       try {
         const t = await page
-          .locator("text=/inv[áa]lid|incorret|n[ãa]o autoriz|falha|erro|rejeit/i")
+          .locator("text=/inv[áa]lid|incorret|bloqueado|disabled|n[ãa]o autoriz/i")
           .first()
           .innerText()
           .catch(() => "");
@@ -425,34 +413,47 @@ export class PjeTjceScraper {
       }
     }
 
-    const inputs = await page
+    const inputs = await this.listarInputsVisiveis(page);
+    const title = await page.title().catch(() => "?");
+    return {
+      mensagemErro,
+      inputs: JSON.stringify(inputs).slice(0, 400),
+      title,
+    };
+  }
+
+  private async listarInputsVisiveis(
+    page: Page,
+  ): Promise<Array<{ name: string; id: string; type: string }>> {
+    return page
       .locator("input:visible")
       .evaluateAll((nodes) =>
-        (nodes as HTMLInputElement[])
-          .slice(0, 15)
-          .map((n) => `${n.name || n.id || "?"}:${n.type || "text"}`),
+        (nodes as HTMLInputElement[]).slice(0, 15).map((n) => ({
+          name: n.getAttribute("name") || "",
+          id: n.getAttribute("id") || "",
+          type: n.getAttribute("type") || "text",
+        })),
       )
       .catch(() => []);
-
-    const title = await page.title().catch(() => "?");
-    return { mensagemErro, inputs: JSON.stringify(inputs).slice(0, 400), title };
   }
 
   private classificarErro(mensagem: string, urlFinal: string): string {
     if (mensagem.startsWith("timeout_login")) {
-      return "Timeout no login (60s) — tribunal lento ou rede indisponível";
+      return "Timeout no login (60s) — PDPJ-cloud lento ou indisponível";
     }
     if (mensagem.includes("2FA") || mensagem.includes("TOTP")) {
       return mensagem;
     }
-    if (mensagem.includes("Nenhuma URL")) {
-      // Mensagem detalhada já vem no `detalhes`
-      return "Login PJe TJCE rejeitado em todas as URLs candidatas — ver detalhes";
+    if (mensagem.includes("Login rejeitado")) {
+      return mensagem; // já tem detalhe
     }
-    if (urlFinal.includes("login")) {
-      return `Login rejeitado pelo PJe TJCE: ${mensagem}`;
+    if (mensagem.includes("não redirecionou")) {
+      return mensagem;
     }
-    return `Falha inesperada no login: ${mensagem}`;
+    if (urlFinal.includes(HOST_KEYCLOAK)) {
+      return `Falha no login Keycloak: ${mensagem}`;
+    }
+    return `Falha inesperada no login PDPJ-cloud: ${mensagem}`;
   }
 
   private async tirarScreenshotErro(page: Page, prefixo: string): Promise<string | null> {
