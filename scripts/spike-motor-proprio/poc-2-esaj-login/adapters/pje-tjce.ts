@@ -420,6 +420,30 @@ export class PjeTjceScraper {
               link.dispatchEvent(event);
             }, seletorLinkResultado);
           },
+          // 4. Form.submit() direto, bypassa A4J completamente. Adiciona
+          //    hidden input com o ID do link clicado pra simular o que o
+          //    handler RichFaces faria, e submete o form `fPP` via POST
+          //    síncrono — vai navegar pra resposta do servidor (não-AJAX).
+          async () => {
+            await page.evaluate((sel) => {
+              const link = document.querySelector(sel) as HTMLAnchorElement | null;
+              if (!link) return;
+              const form = link.closest("form") as HTMLFormElement | null;
+              if (!form) return;
+              const linkId = link.id;
+              // Adiciona input hidden com o nome=valor=ID do link.
+              // RichFaces normalmente faz isso via JS antes de submit.
+              const existing = form.querySelector(`input[name="${linkId}"]`);
+              if (!existing) {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = linkId;
+                input.value = linkId;
+                form.appendChild(input);
+              }
+              form.submit();
+            }, seletorLinkResultado);
+          },
         ];
 
         let response: Awaited<ReturnType<typeof page.waitForResponse>> | null = null;
@@ -478,20 +502,40 @@ export class PjeTjceScraper {
               return `table#${id} rows=${rows} firstRow="${firstRow}"`;
             });
           const linksProc = Array.from(document.querySelectorAll("a"))
-            .filter((a) => /\d{7}-\d{2}\.\d{4}/.test(a.textContent ?? ""))
+            .filter((a) => /processosTable|processo/i.test(a.id ?? ""))
             .slice(0, 3)
-            .map((a) => sample(a, 200));
+            .map((a) => sample(a, 250));
           const msgs = Array.from(
             document.querySelectorAll(".rich-messages, .ui-messages, .alert, .erro, .mensagem"),
           )
             .slice(0, 3)
             .map((el) => (el.textContent ?? "").trim().slice(0, 200))
             .filter(Boolean);
+          // Diagnóstico do RichFaces / A4J
+          const w = window as unknown as Record<string, unknown>;
+          const a4j = w.A4J as Record<string, unknown> | undefined;
+          const ajax = a4j?.AJAX as Record<string, unknown> | undefined;
+          const a4jStatus = {
+            A4J: typeof w.A4J,
+            "A4J.AJAX": typeof a4j?.AJAX,
+            "A4J.AJAX.Submit": typeof ajax?.Submit,
+            jsf: typeof w.jsf,
+          };
+          // Forms da página + viewState
+          const forms = Array.from(document.querySelectorAll("form")).map((f) => ({
+            id: f.id || "(sem id)",
+            action: f.action.slice(0, 100),
+            method: f.method,
+            inputs: f.querySelectorAll("input").length,
+            hasViewState: !!f.querySelector("input[name='javax.faces.ViewState']"),
+          }));
           return {
             bodyLen: document.body.innerHTML.length,
             tables,
             linksProc,
             msgs,
+            a4jStatus,
+            forms,
           };
         }).catch(() => null);
 
@@ -502,7 +546,8 @@ export class PjeTjceScraper {
           mensagemErro:
             `Extração vazia. URL=${page.url()} | title=${await page.title().catch(() => "?")} | ` +
             `bodyLen=${debug?.bodyLen ?? "?"} | tables=${JSON.stringify(debug?.tables ?? [])} | ` +
-            `linksCnj=${JSON.stringify(debug?.linksProc ?? [])} | msgs=${JSON.stringify(debug?.msgs ?? [])}`,
+            `linksCnj=${JSON.stringify(debug?.linksProc ?? [])} | msgs=${JSON.stringify(debug?.msgs ?? [])} | ` +
+            `a4j=${JSON.stringify(debug?.a4jStatus ?? {})} | forms=${JSON.stringify(debug?.forms ?? [])}`,
           screenshotPath,
           finalizadoEm: new Date().toISOString(),
         };
