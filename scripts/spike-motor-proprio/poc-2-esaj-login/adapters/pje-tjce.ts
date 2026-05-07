@@ -286,23 +286,44 @@ export class PjeTjceScraper {
       await inputCnj.click({ timeout: 3000 }).catch(() => {});
       await inputCnj.fill(cnjMascarado);
 
-      // Botão "Pesquisar" — PJe 1.x usa input[type='submit'] com value.
-      const botaoPesquisar = page
-        .locator(
-          [
-            "input[type='submit'][value*='Pesquisar' i]",
-            "button[type='submit']:has-text('Pesquisar')",
-            "button:has-text('Pesquisar')",
-            "input[type='submit']:visible",
-          ].join(", "),
-        )
-        .first();
+      // Submit: tenta botão (input/button/link) primeiro; se falhar, fallback
+      // pra Enter no input. PJe 1.x JSF renderiza botões de várias formas
+      // (input[type=submit], button, a4j:commandButton -> <a>, etc).
+      const seletoresBotao = [
+        "input[type='submit'][value*='Pesquisar' i]",
+        "input[type='submit'][value*='Buscar' i]",
+        "input[type='submit'][value*='Consultar' i]",
+        "input[type='button'][value*='Pesquisar' i]",
+        "button[type='submit']:has-text('Pesquisar')",
+        "button:has-text('Pesquisar')",
+        "button:has-text('Buscar')",
+        "a:has-text('Pesquisar'):visible",
+        "a[id*='Pesquisar' i]:visible",
+        "a[onclick*='pesquis' i]:visible",
+        "input[type='submit']:visible",
+      ];
+      const botaoPesquisar = page.locator(seletoresBotao.join(", ")).first();
 
-      await Promise.all([
-        page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
-        botaoPesquisar.click({ timeout: 5000 }),
-      ]);
-      await page.waitForTimeout(1200);
+      const botaoVisivel = await botaoPesquisar
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
+
+      if (botaoVisivel) {
+        await Promise.all([
+          page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
+          botaoPesquisar.click({ timeout: 5000 }).catch(async () => {
+            // Se click falhar (ex: elemento overlapped), tenta Enter
+            await inputCnj.press("Enter").catch(() => {});
+          }),
+        ]);
+      } else {
+        // Sem botão visível — submete via Enter no input do CNJ
+        await Promise.all([
+          page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
+          inputCnj.press("Enter"),
+        ]);
+      }
+      await page.waitForTimeout(1500);
 
       // ─── Detecta cenários após submit ───
       const naoEncontrado = await page
