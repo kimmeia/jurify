@@ -357,120 +357,95 @@ export class PjeTjceScraper {
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
-        // Aguarda modal de loading sumir antes do click
+        // Aguarda modal de loading sumir
         await page
           .locator("#modalStatusContent, #modalStatusContentTable")
           .first()
           .waitFor({ state: "hidden", timeout: 5000 })
           .catch(() => {});
 
-        // Captura a URL completa do detalhe (com `id` + `ca`) via
-        // `waitForResponse` — RichFaces dispara request normal pra
-        // listProcessoCompletoAdvogado.seam?id=...&ca=...
-        const responsePromise = page
-          .waitForResponse(
-            (r) => {
-              const url = r.url();
-              return (
-                url.includes("listProcessoCompletoAdvogado.seam") ||
-                (url.includes("Detalhe") && url.includes(".seam"))
-              );
-            },
-            { timeout: 15_000 },
-          )
+        // Estratégia definitiva: POST AJAX manual via page.request,
+        // bypassa simulação de click. Sequência real do PJe TJCE:
+        //   1. POST AJAX `listView.seam` com viewState + ID do link
+        //   2. Servidor responde XML com <redirect url=".../Detalhe/...?id=X&ca=Y">
+        //   3. Browser segue redirect → carrega detalhe
+        // Replicamos 1+3 manualmente, sem depender de simular click.
+        const dadosLink = await page
+          .evaluate((sel) => {
+            const link = document.querySelector(sel) as HTMLAnchorElement | null;
+            if (!link) return null;
+            const linkId = link.id;
+            const form = link.closest("form") as HTMLFormElement | null;
+            if (!form) return null;
+            const viewStateInput = form.querySelector(
+              "input[name='javax.faces.ViewState']",
+            ) as HTMLInputElement | null;
+            const viewState = viewStateInput?.value ?? null;
+            // Form ID é tipicamente "fPP" no PJe TJCE 1º grau. Fallback
+            // se DOM tiver formato diferente.
+            const formId = form.id || form.name || "fPP";
+            return { linkId, formId, viewState, action: form.action };
+          }, seletorLinkResultado)
           .catch(() => null);
 
-        // Tenta múltiplas estratégias de click em sequência. PJe RichFaces
-        // pode ignorar Locator.click() (sintético, fica preso em overlay)
-        // e até `element.click()` via JS (handler precisa de event mock
-        // específico).
-        const clickEstrategias = [
-          // 1. dispatchEvent do Playwright — dispara evento DOM nativo
-          //    no contexto da página, mais robusto que Locator.click
-          async () => {
-            await page.dispatchEvent(seletorLinkResultado, "click").catch(() => {});
-          },
-          // 2. Executa onclick string com event mock (já tentado antes,
-          //    mas mantemos como fallback)
-          async () => {
-            await page.evaluate((sel) => {
-              const link = document.querySelector(sel) as HTMLAnchorElement | null;
-              if (!link) return;
-              const handler = link.getAttribute("onclick");
-              if (handler) {
-                try {
-                  const fn = new Function("event", handler);
-                  fn.call(link, new MouseEvent("click", { bubbles: true, cancelable: true }));
-                } catch {
-                  link.click();
-                }
-              }
-            }, seletorLinkResultado);
-          },
-          // 3. dispatch MouseEvent diretamente no element via JS
-          async () => {
-            await page.evaluate((sel) => {
-              const link = document.querySelector(sel) as HTMLAnchorElement | null;
-              if (!link) return;
-              const event = new MouseEvent("click", {
-                bubbles: true,
-                cancelable: true,
-                view: window,
-              });
-              link.dispatchEvent(event);
-            }, seletorLinkResultado);
-          },
-          // 4. Form.submit() direto, bypassa A4J completamente. Adiciona
-          //    hidden input com o ID do link clicado pra simular o que o
-          //    handler RichFaces faria, e submete o form `fPP` via POST
-          //    síncrono — vai navegar pra resposta do servidor (não-AJAX).
-          async () => {
-            await page.evaluate((sel) => {
-              const link = document.querySelector(sel) as HTMLAnchorElement | null;
-              if (!link) return;
-              const form = link.closest("form") as HTMLFormElement | null;
-              if (!form) return;
-              const linkId = link.id;
-              // Adiciona input hidden com o nome=valor=ID do link.
-              // RichFaces normalmente faz isso via JS antes de submit.
-              const existing = form.querySelector(`input[name="${linkId}"]`);
-              if (!existing) {
-                const input = document.createElement("input");
-                input.type = "hidden";
-                input.name = linkId;
-                input.value = linkId;
-                form.appendChild(input);
-              }
-              form.submit();
-            }, seletorLinkResultado);
-          },
-        ];
+        let urlDetalhe: string | null = null;
 
-        let response: Awaited<ReturnType<typeof page.waitForResponse>> | null = null;
-        for (const tentativa of clickEstrategias) {
-          await tentativa();
-          // Espera 3s pra ver se request foi disparado
-          response = (await Promise.race([
-            responsePromise,
-            page.waitForTimeout(3000).then(() => null),
-          ])) as typeof response;
-          if (response) break;
-        }
-        // Espera adicional caso click tenha sido tarde
-        if (!response) {
-          response = (await responsePromise) ?? null;
+        if (dadosLink && dadosLink.viewState) {
+          // Monta payload padrão RichFaces 3.x AJAX
+          const payload = new URLSearchParams();
+          payload.append("AJAXREQUEST", "_viewRoot");
+          payload.append(dadosLink.formId, dadosLink.formId);
+          payload.append(dadosLink.linkId, dadosLink.linkId);
+          payload.append("ajaxSingle", dadosLink.linkId);
+          payload.append("similarityGroupingId", dadosLink.linkId);
+          payload.append("javax.faces.ViewState", dadosLink.viewState);
+          payload.append("AJAX:EVENTS_COUNT", "1");
+
+          const ajaxResponse = await page.request
+            .post(dadosLink.action, {
+              data: payload.toString(),
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Faces-Request": "partial/ajax",
+                Accept: "text/xml,application/xml,*/*;q=0.5",
+                Referer: page.url(),
+              },
+              maxRedirects: 0,
+            })
+            .catch(() => null);
+
+          if (ajaxResponse) {
+            const xmlText = await ajaxResponse.text().catch(() => "");
+            // Parse `<redirect url="..."` no XML response
+            const redirectMatch = xmlText.match(/<redirect[^>]+url="([^"]+)"/i);
+            if (redirectMatch) {
+              const urlRedirect = redirectMatch[1].replace(/&amp;/g, "&");
+              urlDetalhe = urlRedirect.startsWith("http")
+                ? urlRedirect
+                : `https://pje.tjce.jus.br${urlRedirect.startsWith("/") ? "" : "/"}${urlRedirect}`;
+            }
+          }
         }
 
-        const urlDetalhe = response?.url() ?? null;
+        // Fallback: tenta ainda dispatchEvent (caso o POST manual falhe
+        // por algum detalhe de formato) e captura via waitForResponse
+        if (!urlDetalhe) {
+          const respPromise = page
+            .waitForResponse(
+              (r) => r.url().includes("listProcessoCompletoAdvogado.seam"),
+              { timeout: 8000 },
+            )
+            .catch(() => null);
+          await page.dispatchEvent(seletorLinkResultado, "click").catch(() => {});
+          const resp = await respPromise;
+          if (resp) urlDetalhe = resp.url();
+        }
 
         if (urlDetalhe) {
-          // Navega direto pra URL completa do detalhe (com id + ca)
           await page.goto(urlDetalhe, { waitUntil: "domcontentloaded" });
           await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
           await page.waitForTimeout(1500);
         }
-        // Sem fallback de URL incompleta — sem `ca` o JSF retorna
-        // "error.seam: Sem permissão para acessar a página" (testado).
       }
       // Se não há link, pode ser que a busca já redirecionou direto
       // pro detalhe (PJe faz isso quando há match único). Seguimos
