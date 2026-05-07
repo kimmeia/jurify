@@ -763,18 +763,25 @@ export class PjeTjceScraper {
           documento: string | null;
         }> = [];
 
-        // Tenta vários padrões de container — em ordem de probabilidade
-        const containers = [
+        // PJe TJCE 1º grau: #divTimeLine é um wrapper. Os primeiros
+        // 1500 chars do innerHTML mostram .pesquisa (filtros — input de
+        // busca + dropdowns "Inverter ordenação", "Exibir documentos").
+        // Os items reais ficam dentro de .timeline (data-target=".timeline"
+        // do header confirma).
+        let container: Element | null = null;
+        let containerSelUsado = "(body fallback)";
+        const tentativas = [
+          ".timeline",
+          "#divTimeLine .timeline",
+          "#divTimeLine ol",
+          "#divTimeLine ul",
           "#divTimeLine",
           "[id*='timeLine' i]",
           "[id*='timeline' i]",
           "[id*='movimento' i]",
-          "[class*='timeline']",
           "[class*='movimentacao']",
         ];
-        let container: Element | null = null;
-        let containerSelUsado = "(body fallback)";
-        for (const sel of containers) {
+        for (const sel of tentativas) {
           container = document.querySelector(sel);
           if (container) {
             containerSelUsado = sel;
@@ -784,9 +791,15 @@ export class PjeTjceScraper {
         if (!container) container = document.body;
 
         // Lista expandida de seletores de candidatos a item de mov.
+        // Inclui filhos diretos da timeline (div, li) que tipicamente são
+        // os cards de cada movimentação no PJe TJCE.
         const candidatos = Array.from(
           container.querySelectorAll(
-            "li, .timeline-item, .movimentacao, div[id*='mov' i], tr, dl > dd, [role='listitem'], div[class*='evento'], div[class*='item']",
+            ":scope > li, :scope > div, " +
+              "li, .timeline-item, .movimentacao, " +
+              "div[id*='mov' i], tr, dl > dd, " +
+              "[role='listitem'], div[class*='evento'], " +
+              "div[class*='item'], article",
           ),
         );
 
@@ -854,16 +867,27 @@ export class PjeTjceScraper {
         let diag: string | null = null;
         if (out.length === 0) {
           const inner = (container.innerHTML ?? "").replace(/\s+/g, " ");
-          const tags = ["li", "tr", "div", "span", "dl", "dd"].map((t) => {
-            const c = container?.querySelectorAll(t).length ?? 0;
-            return `${t}=${c}`;
-          });
+          const tags = ["li", "tr", "div", "span", "dl", "dd", "article"].map(
+            (t) => {
+              const c = container?.querySelectorAll(t).length ?? 0;
+              return `${t}=${c}`;
+            },
+          );
+          // Captura inner pulando os filtros (que ocupam ~1500 chars).
+          // Mostra trecho 2000-5000 onde provavelmente estão os items.
+          const innerMid = inner.slice(2000, 5000);
+          // Texto do panelDetalhesProcesso (onde costuma estar "Autuado em")
+          const panel = document.getElementById("panelDetalhesProcesso");
+          const panelText = panel
+            ? (panel.textContent ?? "").replace(/\s+/g, " ").slice(0, 800)
+            : "(panelDetalhesProcesso não encontrado)";
           diag =
             `containerSel=${containerSelUsado} ` +
             `bodyLen=${inner.length} ` +
             `tags=[${tags.join(",")}] ` +
             `firstChildren=${(container.childNodes.length || 0)} ` +
-            `inner0_1500="${inner.slice(0, 1500)}"`;
+            `innerMid2000_5000="${innerMid}" ` +
+            `panelDetalhes="${panelText}"`;
         }
         return { movs: out, diag };
       })
