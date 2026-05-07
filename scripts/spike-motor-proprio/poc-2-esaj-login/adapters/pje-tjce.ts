@@ -393,6 +393,24 @@ export class PjeTjceScraper {
       // tentando extrair da página atual.
 
       // ─── Extração ───
+      // Antes de extrair, aguarda divTimeLine ficar populado. PJe TJCE 1º
+      // grau renderiza a timeline via AJAX RichFaces APÓS domcontentloaded
+      // — sem isso, extrairMovimentacoes pega container vazio.
+      await page
+        .locator("#divTimeLine, [id*='timeLine' i], [id*='movimento' i]")
+        .first()
+        .waitFor({ state: "attached", timeout: 8_000 })
+        .catch(() => {});
+      // Espera pelo menos UM filho ficar visível (sinal de que AJAX rodou)
+      await page
+        .locator(
+          "#divTimeLine *:visible, [id*='timeLine' i] *:visible, [id*='movimento' i] *:visible",
+        )
+        .first()
+        .waitFor({ state: "visible", timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(2_000);
+
       const capa = await this.extrairCapa(page, cnjMascarado);
       const movimentacoes = await this.extrairMovimentacoes(page);
 
@@ -464,10 +482,28 @@ export class PjeTjceScraper {
             `bodyLen=${debug?.bodyLen ?? "?"} | tables=${JSON.stringify(debug?.tables ?? [])} | ` +
             `linksCnj=${JSON.stringify(debug?.linksProc ?? [])} | msgs=${JSON.stringify(debug?.msgs ?? [])} | ` +
             `a4j=${JSON.stringify(debug?.a4jStatus ?? {})} | forms=${JSON.stringify(debug?.forms ?? [])} | ` +
-            `postDiag=${(globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag ?? "n/a"}`,
+            `postDiag=${(globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag ?? "n/a"} | ` +
+            `movsDiag=${(globalThis as { __pjeTjceMovsDiag?: string }).__pjeTjceMovsDiag ?? "n/a"}`,
           screenshotPath,
           finalizadoEm: new Date().toISOString(),
         };
+      }
+
+      // Log diagnóstico se sucesso parcial (movs vazias) — vai pro Railway
+      // logs e ajuda calibrar próxima iteração sem precisar quebrar o success.
+      if (movimentacoes.length === 0) {
+        const movsDiag = (globalThis as { __pjeTjceMovsDiag?: string })
+          .__pjeTjceMovsDiag;
+        if (movsDiag) {
+          console.warn(
+            `[pje-tjce] consulta OK mas 0 movs extraídas. movsDiag=${movsDiag}`,
+          );
+        }
+      }
+      if (!capa.dataDistribuicao) {
+        console.warn(
+          `[pje-tjce] consulta OK mas dataDistribuicao=null pra ${cnjMascarado}`,
+        );
       }
 
       return {
@@ -585,14 +621,29 @@ export class PjeTjceScraper {
           "Valor da Causa",
           "Valor",
         ]);
-        const dataDist = procurarValorPorLabel([
+        let dataDist = procurarValorPorLabel([
           "Autuado em",
           "Distribuído em",
           "Data de Distribuição",
           "Data de distribuição",
-          "Distribuição",
+          "Data autuação",
+          "Data de autuação",
           "Data Autuação",
+          "Distribuição",
+          "Início",
         ]);
+        // Fallback: regex de data BR no panelDetalhesProcesso, perto de
+        // palavras-chave "autuad" ou "distribu"
+        if (!dataDist) {
+          const panel = document.getElementById("panelDetalhesProcesso");
+          if (panel) {
+            const txt = (panel.textContent ?? "").replace(/\s+/g, " ");
+            const m = txt.match(
+              /(autuad[oa]|distribu[ií]d[oa]|distribui[çc]?[ãa]o)\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i,
+            );
+            if (m) dataDist = m[2];
+          }
+        }
         const assuntos = procurarValorPorLabel(["Assunto", "Assuntos"]);
 
         return { header, classe, orgao, valor, dataDist, assuntos };
@@ -702,7 +753,7 @@ export class PjeTjceScraper {
     // PJe TJCE 1º grau: timeline das movimentações fica em #divTimeLine
     // (visto no diagnóstico). Estrutura típica é uma lista de cards
     // agrupados por dia, cada card com hora + texto.
-    return page
+    const result = await page
       .evaluate(() => {
         const trim = (s: string | null | undefined) => (s ?? "").trim();
         const out: Array<{
@@ -722,17 +773,20 @@ export class PjeTjceScraper {
           "[class*='movimentacao']",
         ];
         let container: Element | null = null;
+        let containerSelUsado = "(body fallback)";
         for (const sel of containers) {
           container = document.querySelector(sel);
-          if (container) break;
+          if (container) {
+            containerSelUsado = sel;
+            break;
+          }
         }
         if (!container) container = document.body;
 
-        // Cada movimentação tem padrão: data BR (DD/MM/YYYY ou DD MMM YYYY)
-        // seguida de descrição. Vamos extrair por proximidade textual.
+        // Lista expandida de seletores de candidatos a item de mov.
         const candidatos = Array.from(
           container.querySelectorAll(
-            "li, .timeline-item, .movimentacao, div[id*='mov' i], tr",
+            "li, .timeline-item, .movimentacao, div[id*='mov' i], tr, dl > dd, [role='listitem'], div[class*='evento'], div[class*='item']",
           ),
         );
 
@@ -794,9 +848,33 @@ export class PjeTjceScraper {
             });
           }
         }
-        return out;
+
+        // Diagnóstico: se 0 movs, dump estrutura do container pra próxima
+        // iteração calibrar selectors.
+        let diag: string | null = null;
+        if (out.length === 0) {
+          const inner = (container.innerHTML ?? "").replace(/\s+/g, " ");
+          const tags = ["li", "tr", "div", "span", "dl", "dd"].map((t) => {
+            const c = container?.querySelectorAll(t).length ?? 0;
+            return `${t}=${c}`;
+          });
+          diag =
+            `containerSel=${containerSelUsado} ` +
+            `bodyLen=${inner.length} ` +
+            `tags=[${tags.join(",")}] ` +
+            `firstChildren=${(container.childNodes.length || 0)} ` +
+            `inner0_1500="${inner.slice(0, 1500)}"`;
+        }
+        return { movs: out, diag };
       })
-      .catch(() => []);
+      .catch(() => ({ movs: [], diag: "evaluate-falhou" as string | null }));
+
+    // Stash diag se 0 movs (lido pelo erro no extracao-vazia handler)
+    if (result.movs.length === 0 && result.diag) {
+      const g = globalThis as { __pjeTjceMovsDiag?: string };
+      g.__pjeTjceMovsDiag = result.diag;
+    }
+    return result.movs;
   }
 
   /**
