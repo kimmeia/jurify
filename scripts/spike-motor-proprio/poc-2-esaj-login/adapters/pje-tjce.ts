@@ -422,18 +422,24 @@ export class PjeTjceScraper {
   /**
    * Extrai capa do processo (classe, partes, valor, etc) usando busca
    * por proximidade textual em vez de IDs JSF voláteis.
+   *
+   * Timeout curto (1500ms) por label pra não travar quando elemento não
+   * existe — `setDefaultTimeout(25_000)` da page faria cada miss esperar
+   * 25s, e com ~16 labels o adapter bloqueava por minutos.
    */
   private async extrairCapa(page: Page, cnj: string): Promise<ProcessoCapa> {
     const lerCampoPorLabel = async (labels: string[]): Promise<string | null> => {
       for (const label of labels) {
         try {
-          const valor = await page
+          const locator = page
             .locator(
               `xpath=(//*[normalize-space(text())='${label}' or normalize-space(text())='${label}:']/following-sibling::*[1] | //*[normalize-space(text())='${label}' or normalize-space(text())='${label}:']/..)[1]`,
             )
-            .first()
-            .innerText()
-            .catch(() => "");
+            .first();
+          // Checa existência rápido em vez de innerText timeout-eternal
+          const count = await locator.count().catch(() => 0);
+          if (count === 0) continue;
+          const valor = await locator.innerText({ timeout: 1500 }).catch(() => "");
           if (valor && valor.trim() && !valor.trim().endsWith(":")) {
             return valor.replace(label, "").replace(/^[:\s]+/, "").trim();
           }
@@ -505,7 +511,9 @@ export class PjeTjceScraper {
         const count = await blocos.count().catch(() => 0);
 
         for (let i = 0; i < Math.min(count, 20); i++) {
-          const texto = (await blocos.nth(i).innerText().catch(() => "")).trim();
+          const texto = (
+            await blocos.nth(i).innerText({ timeout: 1500 }).catch(() => "")
+          ).trim();
           if (!texto) continue;
           const nome = texto.split("\n")[0]?.trim() || texto;
           if (nome.length < 2 || nome.length > 200) continue;
@@ -548,7 +556,9 @@ export class PjeTjceScraper {
     if (count === 0) return [];
 
     for (let i = 0; i < Math.min(count, 500); i++) {
-      const textoCompleto = (await linhas.nth(i).innerText().catch(() => "")).trim();
+      const textoCompleto = (
+        await linhas.nth(i).innerText({ timeout: 1500 }).catch(() => "")
+      ).trim();
       if (!textoCompleto) continue;
 
       // Heurística: data BR no início (DD/MM/YYYY) seguida de texto
