@@ -507,56 +507,117 @@ export class PjeTjceScraper {
    * 25s, e com ~16 labels o adapter bloqueava por minutos.
    */
   private async extrairCapa(page: Page, cnj: string): Promise<ProcessoCapa> {
-    const lerCampoPorLabel = async (labels: string[]): Promise<string | null> => {
-      for (const label of labels) {
-        try {
-          const locator = page
-            .locator(
-              `xpath=(//*[normalize-space(text())='${label}' or normalize-space(text())='${label}:']/following-sibling::*[1] | //*[normalize-space(text())='${label}' or normalize-space(text())='${label}:']/..)[1]`,
-            )
-            .first();
-          // Checa existência rápido em vez de innerText timeout-eternal
-          const count = await locator.count().catch(() => 0);
-          if (count === 0) continue;
-          const valor = await locator.innerText({ timeout: 1500 }).catch(() => "");
-          if (valor && valor.trim() && !valor.trim().endsWith(":")) {
-            return valor.replace(label, "").replace(/^[:\s]+/, "").trim();
+    // Estratégia 1: extrair tudo via JS evaluate na página de detalhe.
+    // PJe TJCE 1º grau tem estrutura específica em #panelDetalhesProcesso
+    // e header com o nome do processo.
+    const capaRaw = await page
+      .evaluate(() => {
+        const trim = (s: string | null | undefined) => (s ?? "").trim();
+        const procurarValorPorLabel = (labels: string[]): string | null => {
+          for (const label of labels) {
+            // Procura elementos que contenham o label como text node
+            const xp = document.evaluate(
+              `//*[contains(normalize-space(text()), '${label}')]`,
+              document,
+              null,
+              XPathResult.FIRST_ORDERED_NODE_TYPE,
+              null,
+            );
+            const node = xp.singleNodeValue as HTMLElement | null;
+            if (!node) continue;
+            // Tenta:
+            // 1. Próximo irmão tiver valor
+            const sib = node.nextElementSibling;
+            if (sib) {
+              const txt = trim(sib.textContent);
+              if (txt && !labels.some((l) => txt.startsWith(l))) return txt;
+            }
+            // 2. Pai sem o label inicial
+            const parentTxt = trim(node.parentElement?.textContent ?? "");
+            if (parentTxt) {
+              const semLabel = parentTxt.replace(label, "").replace(/^[:\s]+/, "");
+              if (semLabel && semLabel !== parentTxt) return semLabel.trim();
+            }
+            // 3. O próprio elemento sem o label
+            const ownTxt = trim(node.textContent);
+            const semLabel = ownTxt.replace(label, "").replace(/^[:\s]+/, "");
+            if (semLabel && semLabel !== ownTxt) return semLabel.trim();
           }
-        } catch {
-          // ignora
-        }
-      }
-      return null;
-    };
+          return null;
+        };
 
-    const classe = await lerCampoPorLabel(["Classe Judicial", "Classe", "Tipo da Ação"]);
-    const orgao = await lerCampoPorLabel([
-      "Órgão Julgador",
-      "Vara",
-      "Juízo",
-      "Órgão Julgador Colegiado",
-    ]);
-    const valorRaw = await lerCampoPorLabel(["Valor da Causa", "Valor da causa", "Valor"]);
-    const dataDistRaw = await lerCampoPorLabel([
-      "Distribuído em",
-      "Data de Distribuição",
-      "Distribuição",
-      "Data Autuação",
-    ]);
-    const assuntosRaw = await lerCampoPorLabel(["Assuntos", "Assunto"]);
+        // Header do processo: PJe TJCE 1º grau costuma ter <h3> ou <span>
+        // grande com "ProceComCiv" + CNJ no topo.
+        const headerCandidatos = [
+          "h1", "h2", "h3", "h4",
+          "[class*='processoCabecalho']", "[id*='cabecalho']",
+          "[class*='headerProcess']", "title",
+        ];
+        let header = "";
+        for (const sel of headerCandidatos) {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (!el) continue;
+          const t = trim(el.textContent);
+          if (t.length > 5 && t.length < 300) {
+            header = t;
+            break;
+          }
+        }
+
+        // Classe judicial: vem antes do CNJ no header tipicamente
+        // ("Procedimento Comum Cível 3024938-55..."), ou via label
+        const classe =
+          procurarValorPorLabel(["Classe judicial", "Classe Judicial", "Classe"]) ||
+          (() => {
+            // Tenta extrair do header: tudo antes do número CNJ
+            const m = header.match(/^(.+?)\s+\d{7}-\d{2}\.\d{4}/);
+            return m?.[1]?.trim() ?? null;
+          })();
+
+        const orgao = procurarValorPorLabel([
+          "Órgão julgador",
+          "Órgão Julgador",
+          "Vara",
+          "Juízo",
+        ]);
+        const valor = procurarValorPorLabel([
+          "Valor da causa",
+          "Valor da Causa",
+          "Valor",
+        ]);
+        const dataDist = procurarValorPorLabel([
+          "Autuado em",
+          "Distribuído em",
+          "Data de Distribuição",
+          "Data de distribuição",
+          "Distribuição",
+          "Data Autuação",
+        ]);
+        const assuntos = procurarValorPorLabel(["Assunto", "Assuntos"]);
+
+        return { header, classe, orgao, valor, dataDist, assuntos };
+      })
+      .catch(() => ({
+        header: "",
+        classe: null,
+        orgao: null,
+        valor: null,
+        dataDist: null,
+        assuntos: null,
+      }));
 
     const partes = await this.extrairPartes(page);
 
     return {
       cnj,
-      classe,
-      assuntos: assuntosRaw ? this.parseAssuntos(assuntosRaw) : [],
-      orgaoJulgador: orgao,
+      classe: capaRaw.classe,
+      assuntos: capaRaw.assuntos ? this.parseAssuntos(capaRaw.assuntos) : [],
+      orgaoJulgador: capaRaw.orgao,
       juiz: null,
       comarca: null,
       uf: "CE",
-      valorCausaCentavos: parseValorBRLCentavos(valorRaw),
-      dataDistribuicao: parseDataBR(dataDistRaw),
+      valorCausaCentavos: parseValorBRLCentavos(capaRaw.valor),
+      dataDistribuicao: parseDataBR(capaRaw.dataDist),
       status: null,
       partes,
       segredoJustica: false,
@@ -571,45 +632,66 @@ export class PjeTjceScraper {
   }
 
   /**
-   * Extrai partes do processo. PJe costuma ter seções "Polo Ativo" e
-   * "Polo Passivo" — captura blocos seguintes a esses cabeçalhos.
+   * Extrai partes via tabelas "Polo ativo" e "Polo passivo" do PJe TJCE
+   * 1º grau. Estrutura confirmada via diagnóstico:
+   *   table firstRow="Polo ativo"  rows=2
+   *   table firstRow="Polo passivo" rows=2
    */
   private async extrairPartes(page: Page): Promise<ParteProcesso[]> {
-    const partes: ParteProcesso[] = [];
-    const polos: Array<{ label: string; polo: ParteProcesso["polo"] }> = [
-      { label: "Polo Ativo", polo: "ativo" },
-      { label: "Polo Passivo", polo: "passivo" },
-      { label: "Outros", polo: "terceiro" },
-    ];
+    return page
+      .evaluate(() => {
+        const trim = (s: string | null | undefined) => (s ?? "").trim();
+        const out: Array<{
+          nome: string;
+          polo: "ativo" | "passivo" | "terceiro";
+          tipo: "fisica" | "juridica";
+        }> = [];
 
-    for (const { label, polo } of polos) {
-      try {
-        const blocos = page.locator(
-          `xpath=//*[normalize-space(text())='${label}']/following::*[self::table or self::ul or self::div][1]//tr | //*[normalize-space(text())='${label}']/following::*[self::table or self::ul or self::div][1]//li`,
-        );
-        const count = await blocos.count().catch(() => 0);
+        const tabelas = Array.from(document.querySelectorAll("table"));
+        for (const table of tabelas) {
+          const txtTabela = trim(table.textContent).slice(0, 200).toLowerCase();
+          let polo: "ativo" | "passivo" | "terceiro" | null = null;
+          if (txtTabela.startsWith("polo ativo")) polo = "ativo";
+          else if (txtTabela.startsWith("polo passivo")) polo = "passivo";
+          else if (txtTabela.startsWith("outros") || txtTabela.startsWith("terceiros"))
+            polo = "terceiro";
+          if (!polo) continue;
 
-        for (let i = 0; i < Math.min(count, 20); i++) {
-          const texto = (
-            await blocos.nth(i).innerText({ timeout: 1500 }).catch(() => "")
-          ).trim();
-          if (!texto) continue;
-          const nome = texto.split("\n")[0]?.trim() || texto;
-          if (nome.length < 2 || nome.length > 200) continue;
-          partes.push({
-            nome,
-            polo,
-            tipo: nome.match(/\bLTDA\b|S\.A\.|EIRELI|MEI/i) ? "juridica" : "fisica",
-            documento: null,
-            advogados: [],
-          });
+          // Extrai partes: cada <tr> a partir da segunda (primeira é header
+          // "Polo ativo/passivo")
+          const rows = Array.from(table.querySelectorAll("tr")).slice(1);
+          for (const row of rows) {
+            const cells = Array.from(row.querySelectorAll("td"));
+            for (const cell of cells) {
+              const linhas = trim(cell.textContent)
+                .split(/\n|<br\s*\/?>/i)
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0 && l.length < 200);
+              for (const nome of linhas) {
+                if (nome.length < 3) continue;
+                if (/polo (ativo|passivo)/i.test(nome)) continue;
+                if (/^advogado/i.test(nome)) continue;
+                out.push({
+                  nome,
+                  polo,
+                  tipo: /\bLTDA\b|S\.?A\.?|EIRELI|MEI|S\/A/i.test(nome)
+                    ? "juridica"
+                    : "fisica",
+                });
+              }
+            }
+          }
         }
-      } catch {
-        // ignora
-      }
-    }
-
-    return partes;
+        return out;
+      })
+      .then((arr) =>
+        arr.map((p) => ({
+          ...p,
+          documento: null,
+          advogados: [],
+        })),
+      )
+      .catch(() => []);
   }
 
   /**
@@ -617,53 +699,104 @@ export class PjeTjceScraper {
    * "Data" e "Movimento". Cada linha é uma movimentação.
    */
   private async extrairMovimentacoes(page: Page): Promise<MovimentacaoProcesso[]> {
-    const movs: MovimentacaoProcesso[] = [];
+    // PJe TJCE 1º grau: timeline das movimentações fica em #divTimeLine
+    // (visto no diagnóstico). Estrutura típica é uma lista de cards
+    // agrupados por dia, cada card com hora + texto.
+    return page
+      .evaluate(() => {
+        const trim = (s: string | null | undefined) => (s ?? "").trim();
+        const out: Array<{
+          data: string;
+          texto: string;
+          tipo: string | null;
+          documento: string | null;
+        }> = [];
 
-    const linhas = page.locator(
-      [
-        "table.movimentacoes tbody tr",
-        "table[id*='movimentacao' i] tbody tr",
-        "table[id*='movimento' i] tbody tr",
-        "table[id*='historico' i] tbody tr",
-        "ul.movimentos li",
-        "div.movimentacao",
-        "table[role='grid'] tbody tr",
-      ].join(", "),
-    );
+        // Tenta vários padrões de container — em ordem de probabilidade
+        const containers = [
+          "#divTimeLine",
+          "[id*='timeLine' i]",
+          "[id*='timeline' i]",
+          "[id*='movimento' i]",
+          "[class*='timeline']",
+          "[class*='movimentacao']",
+        ];
+        let container: Element | null = null;
+        for (const sel of containers) {
+          container = document.querySelector(sel);
+          if (container) break;
+        }
+        if (!container) container = document.body;
 
-    const count = await linhas.count().catch(() => 0);
-    if (count === 0) return [];
+        // Cada movimentação tem padrão: data BR (DD/MM/YYYY ou DD MMM YYYY)
+        // seguida de descrição. Vamos extrair por proximidade textual.
+        const candidatos = Array.from(
+          container.querySelectorAll(
+            "li, .timeline-item, .movimentacao, div[id*='mov' i], tr",
+          ),
+        );
 
-    for (let i = 0; i < Math.min(count, 500); i++) {
-      const textoCompleto = (
-        await linhas.nth(i).innerText({ timeout: 1500 }).catch(() => "")
-      ).trim();
-      if (!textoCompleto) continue;
+        const ptMonths: Record<string, string> = {
+          jan: "01", fev: "02", mar: "03", abr: "04",
+          mai: "05", jun: "06", jul: "07", ago: "08",
+          set: "09", out: "10", nov: "11", dez: "12",
+        };
 
-      // Heurística: data BR no início (DD/MM/YYYY) seguida de texto
-      const matchData = textoCompleto.match(
-        /(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)/,
-      );
-      if (!matchData) continue;
+        let dataAtual: string | null = null;
+        for (const el of candidatos) {
+          const texto = trim(el.textContent).replace(/\s+/g, " ");
+          if (!texto || texto.length < 3) continue;
 
-      const dataIso = parseDataBR(matchData[1]);
-      if (!dataIso) continue;
+          // Padrão 1: separador "07 mai 2026" ou "07/05/2026"
+          const sepDM = texto.match(
+            /^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+(\d{4})$/i,
+          );
+          if (sepDM) {
+            const mes = ptMonths[sepDM[2].toLowerCase()] ?? "01";
+            dataAtual = `${sepDM[3]}-${mes}-${sepDM[1].padStart(2, "0")}`;
+            continue;
+          }
+          const sepBR = texto.match(/^(\d{2}\/\d{2}\/\d{4})$/);
+          if (sepBR) {
+            const [d, m, y] = sepBR[1].split("/");
+            dataAtual = `${y}-${m}-${d}`;
+            continue;
+          }
 
-      const texto = textoCompleto
-        .replace(matchData[0], "")
-        .replace(/^[\s\-:]+/, "")
-        .trim();
-      if (texto.length < 3) continue;
+          // Padrão 2: hora HH:MM no fim (timeline do PJe). Combina com
+          // dataAtual.
+          const horaMatch = texto.match(/(\d{2}):(\d{2})\s*$/);
+          if (horaMatch && dataAtual) {
+            const textoSemHora = texto.slice(0, horaMatch.index).trim();
+            if (textoSemHora.length >= 3) {
+              out.push({
+                data: `${dataAtual}T${horaMatch[1]}:${horaMatch[2]}:00`,
+                texto: textoSemHora,
+                tipo: null,
+                documento: null,
+              });
+              continue;
+            }
+          }
 
-      movs.push({
-        data: dataIso,
-        texto,
-        tipo: null,
-        documento: null,
-      });
-    }
-
-    return movs;
+          // Padrão 3: data BR no início ("07/05/2026 14:23 — texto")
+          const inicioBR = texto.match(
+            /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})?\s*[-:]?\s*(.+)/,
+          );
+          if (inicioBR) {
+            const [d, m, y] = inicioBR[1].split("/");
+            const hora = inicioBR[2] ? `T${inicioBR[2]}:00` : "";
+            out.push({
+              data: `${y}-${m}-${d}${hora}`,
+              texto: inicioBR[3].trim(),
+              tipo: null,
+              documento: null,
+            });
+          }
+        }
+        return out;
+      })
+      .catch(() => []);
   }
 
   /**
