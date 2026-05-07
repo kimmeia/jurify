@@ -242,7 +242,12 @@ CREATE TABLE IF NOT EXISTS `dje_publicacoes` (
   `advogadosOabs` JSON,
 
   -- Texto completo da publicação — alimenta FULLTEXT INDEX.
-  `texto` LONGTEXT NOT NULL,
+  -- TEXT (65KB) é mais que suficiente pra publicação individual
+  -- (geralmente <4KB). Mantemos consistência com `text()` do Drizzle
+  -- schema, que mapeia pra TEXT — evita drift entre `drizzle-kit push`
+  -- e auto-migrate. FULLTEXT INDEX funciona em TEXT no MySQL 8 igual
+  -- funciona em LONGTEXT.
+  `texto` TEXT NOT NULL,
 
   -- Hash SHA-256 do `texto` normalizado — UNIQUE evita duplicatas
   -- quando o mesmo texto reaparece em DJE retificado.
