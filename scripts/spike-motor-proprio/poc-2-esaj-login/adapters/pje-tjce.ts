@@ -397,16 +397,51 @@ export class PjeTjceScraper {
             //     'similarityGroupingId':'X',
             //     'parameters':{'k1':'v1','k2':'v2'}
             //   })"
-            // Esses parameters viram hidden inputs no submit AJAX.
+            // Usa eval no contexto da página com balanceamento de chaves
+            // pra suportar `parameters` aninhado (regex simples com
+            // [^}]+ truncava no primeiro `}`).
             const onclickStr = link.getAttribute("onclick") ?? "";
-            const parameters: Record<string, string> = {};
-            const paramsMatch = onclickStr.match(/['"]parameters['"]\s*:\s*\{([^}]+)\}/);
-            if (paramsMatch) {
-              // Extrai cada par 'chave':'valor'
-              const re = /['"]([^'"]+)['"]\s*:\s*['"]([^'"]*)['"]/g;
-              let m: RegExpExecArray | null;
-              while ((m = re.exec(paramsMatch[1])) !== null) {
-                parameters[m[1]] = m[2];
+            let parameters: Record<string, unknown> = {};
+            const startToken = onclickStr.search(/['"]parameters['"]\s*:/);
+            if (startToken >= 0) {
+              const braceStart = onclickStr.indexOf("{", startToken);
+              if (braceStart >= 0) {
+                let depth = 0;
+                let braceEnd = -1;
+                let inStr = false;
+                let strChar = "";
+                for (let i = braceStart; i < onclickStr.length; i++) {
+                  const c = onclickStr[i];
+                  if (inStr) {
+                    if (c === strChar && onclickStr[i - 1] !== "\\") inStr = false;
+                    continue;
+                  }
+                  if (c === "'" || c === '"') {
+                    inStr = true;
+                    strChar = c;
+                  } else if (c === "{") {
+                    depth++;
+                  } else if (c === "}") {
+                    depth--;
+                    if (depth === 0) {
+                      braceEnd = i;
+                      break;
+                    }
+                  }
+                }
+                if (braceEnd > braceStart) {
+                  try {
+                    const objLiteral = onclickStr.substring(braceStart, braceEnd + 1);
+                    // eval no contexto da página (controlado, vem do
+                    // próprio HTML do PJe). Suporta aninhamento e qualquer
+                    // formato que o RichFaces gere.
+                    parameters = (Function(
+                      `"use strict"; return (${objLiteral});`,
+                    )() ?? {}) as Record<string, unknown>;
+                  } catch {
+                    parameters = {};
+                  }
+                }
               }
             }
             return {
@@ -430,10 +465,13 @@ export class PjeTjceScraper {
           payload.append(dadosLink.linkId, dadosLink.linkId);
           payload.append("ajaxSingle", dadosLink.linkId);
           payload.append("similarityGroupingId", dadosLink.linkId);
-          // Injeta `parameters` parseados do onclick (ex:
-          // idProcessoSelecionado=3253677). Sem isso, servidor rejeita.
+          // Injeta `parameters` parseados do onclick. Pode ter aninhamento
+          // (ex: idProcessoSelecionado=3253677, idTaskInstance=null) — só
+          // serializa o que for primitivo (string/number/bool).
           for (const [k, v] of Object.entries(dadosLink.parameters)) {
-            payload.append(k, v);
+            if (v === null || v === undefined) continue;
+            const valor = typeof v === "object" ? JSON.stringify(v) : String(v);
+            payload.append(k, valor);
           }
           payload.append("javax.faces.ViewState", dadosLink.viewState);
           payload.append("AJAX:EVENTS_COUNT", "1");
