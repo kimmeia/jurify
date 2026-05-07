@@ -29,8 +29,18 @@
 import type { Browser, Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
 import { gerarCodigoTotp, gerarCodigosVizinhos, type CodigosVizinhos } from "./tjce-totp";
-import type { ResultadoScraper } from "../../lib/types-spike";
-import { mascararCnj, normalizarCnj } from "../../lib/parser-utils";
+import type {
+  MovimentacaoProcesso,
+  ParteProcesso,
+  ProcessoCapa,
+  ResultadoScraper,
+} from "../../lib/types-spike";
+import {
+  mascararCnj,
+  normalizarCnj,
+  parseDataBR,
+  parseValorBRLCentavos,
+} from "../../lib/parser-utils";
 
 const URL_ENTRADA_TJCE = "https://pje.tjce.jus.br/";
 const HOST_KEYCLOAK = "sso.cloud.pje.jus.br";
@@ -215,10 +225,18 @@ export class PjeTjceScraper {
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
 
     try {
-      await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
+      // PJe TJCE 1º grau usa JSF/Seam. URL inicial confirmada via teste real:
+      //   /pje1grau/QuadroAviso/listViewQuadroAvisoMensagem.seam (painel)
+      //   /pje1grau/Processo/ConsultaProcesso/listView.seam (busca)
+      //
+      // O .seam é stateful: precisa do `cid` (conversation id) na URL.
+      // Acessamos a URL de busca direta, JSF cria nova conversation.
+      const urlBusca =
+        "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam";
+      await page.goto(urlBusca, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
 
-      // Se redirecionou pro SSO, sessão expirou
+      // Se redirecionou pro SSO, sessão expirou — caller deve relogar
       if (page.url().includes(HOST_KEYCLOAK)) {
         return {
           ...baseResultado,
@@ -229,17 +247,135 @@ export class PjeTjceScraper {
         };
       }
 
-      // Placeholder até calibrar com tela real do painel autenticado
-      const screenshotPath = await this.tirarScreenshotErro(page, `pje-tjce-painel-${cnjLimpo}`);
+      // ─── Localiza input do CNJ ───
+      // PJe 1.x JSF tem IDs parametrizados (`fPP:numeroProcesso:...`) mas o
+      // atributo `name` costuma conter "numeroDigitoAnoUnificado" ou
+      // "numeroProcesso". Selectors flexíveis pra resiliência.
+      const inputCnj = page
+        .locator(
+          [
+            "input[name*='numeroDigitoAnoUnificado']",
+            "input[id*='numeroDigitoAnoUnificado']",
+            "input[name*='numeroProcesso' i]",
+            "input[id*='NumeroProcesso' i]",
+            "input[id*='numero' i][type='text']:visible",
+            "input[placeholder*='processo' i]",
+          ].join(", "),
+        )
+        .first();
+
+      if (!(await inputCnj.isVisible({ timeout: 5000 }).catch(() => false))) {
+        const html = await page.content().catch(() => "");
+        const screenshotPath = await this.tirarScreenshotErro(
+          page,
+          `pje-tjce-no-input-${cnjLimpo}`,
+        );
+        return {
+          ...baseResultado,
+          latenciaMs: Date.now() - inicio,
+          categoriaErro: "parse_falhou",
+          mensagemErro:
+            `Input de CNJ não encontrado na busca PJe TJCE. ` +
+            `URL: ${page.url()}, title: ${await page.title().catch(() => "?")}, ` +
+            `tamanho HTML: ${html.length}`,
+          screenshotPath,
+          finalizadoEm: new Date().toISOString(),
+        };
+      }
+
+      await inputCnj.click({ timeout: 3000 }).catch(() => {});
+      await inputCnj.fill(cnjMascarado);
+
+      // Botão "Pesquisar" — PJe 1.x usa input[type='submit'] com value.
+      const botaoPesquisar = page
+        .locator(
+          [
+            "input[type='submit'][value*='Pesquisar' i]",
+            "button[type='submit']:has-text('Pesquisar')",
+            "button:has-text('Pesquisar')",
+            "input[type='submit']:visible",
+          ].join(", "),
+        )
+        .first();
+
+      await Promise.all([
+        page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
+        botaoPesquisar.click({ timeout: 5000 }),
+      ]);
+      await page.waitForTimeout(1200);
+
+      // ─── Detecta cenários após submit ───
+      const naoEncontrado = await page
+        .locator("text=/Nenhum processo encontrado|nenhum registro|não encontrado/i")
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (naoEncontrado) {
+        return {
+          ...baseResultado,
+          latenciaMs: Date.now() - inicio,
+          categoriaErro: "cnj_nao_encontrado",
+          mensagemErro: "PJe TJCE respondeu mas não localizou o processo",
+          finalizadoEm: new Date().toISOString(),
+        };
+      }
+
+      // Procura link/linha do processo no resultado. JSF costuma ter <a>
+      // com texto do CNJ ou onclick que dispara navegação JSF.
+      const linkProcesso = page
+        .locator(
+          [
+            `a:has-text('${cnjMascarado}')`,
+            "tr.linhaResultado a",
+            "table a[onclick*='Processo']",
+            "a[id*='processo' i]",
+            "a:has-text('Detalhes')",
+          ].join(", "),
+        )
+        .first();
+
+      const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
+      if (linkVisible) {
+        await Promise.all([
+          page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {}),
+          linkProcesso.click(),
+        ]);
+        await page.waitForTimeout(1000);
+      }
+      // Se não há link, pode ser que a busca já redirecionou direto
+      // pro detalhe (PJe faz isso quando há match único). Seguimos
+      // tentando extrair da página atual.
+
+      // ─── Extração ───
+      const capa = await this.extrairCapa(page, cnjMascarado);
+      const movimentacoes = await this.extrairMovimentacoes(page);
+
+      // Validação básica: se não pegou nada, é provável que extração
+      // falhou (selectors errados ou página não é a de detalhe)
+      const conseguiuExtrair = capa.classe || capa.partes.length > 0 || movimentacoes.length > 0;
+      if (!conseguiuExtrair) {
+        const screenshotPath = await this.tirarScreenshotErro(
+          page,
+          `pje-tjce-extracao-vazia-${cnjLimpo}`,
+        );
+        return {
+          ...baseResultado,
+          latenciaMs: Date.now() - inicio,
+          categoriaErro: "parse_falhou",
+          mensagemErro:
+            `Extração retornou vazia — busca submetida mas não consegui ler dados ` +
+            `da página de detalhe. URL: ${page.url()}, title: ${await page.title().catch(() => "?")}`,
+          screenshotPath,
+          finalizadoEm: new Date().toISOString(),
+        };
+      }
+
       return {
         ...baseResultado,
+        ok: true,
+        capa,
+        movimentacoes,
         latenciaMs: Date.now() - inicio,
-        categoriaErro: "parse_falhou",
-        mensagemErro:
-          `Login OK e portal aberto (${page.url()}). ` +
-          `Extração de processo por CNJ ainda não implementada — depende do layout ` +
-          `real do painel PDPJ-cloud (calibrar com screenshot).`,
-        screenshotPath,
         finalizadoEm: new Date().toISOString(),
       };
     } catch (err) {
@@ -260,6 +396,164 @@ export class PjeTjceScraper {
       await page.close().catch(() => {});
       await context.close().catch(() => {});
     }
+  }
+
+  /**
+   * Extrai capa do processo (classe, partes, valor, etc) usando busca
+   * por proximidade textual em vez de IDs JSF voláteis.
+   */
+  private async extrairCapa(page: Page, cnj: string): Promise<ProcessoCapa> {
+    const lerCampoPorLabel = async (labels: string[]): Promise<string | null> => {
+      for (const label of labels) {
+        try {
+          const valor = await page
+            .locator(
+              `xpath=(//*[normalize-space(text())='${label}' or normalize-space(text())='${label}:']/following-sibling::*[1] | //*[normalize-space(text())='${label}' or normalize-space(text())='${label}:']/..)[1]`,
+            )
+            .first()
+            .innerText()
+            .catch(() => "");
+          if (valor && valor.trim() && !valor.trim().endsWith(":")) {
+            return valor.replace(label, "").replace(/^[:\s]+/, "").trim();
+          }
+        } catch {
+          // ignora
+        }
+      }
+      return null;
+    };
+
+    const classe = await lerCampoPorLabel(["Classe Judicial", "Classe", "Tipo da Ação"]);
+    const orgao = await lerCampoPorLabel([
+      "Órgão Julgador",
+      "Vara",
+      "Juízo",
+      "Órgão Julgador Colegiado",
+    ]);
+    const valorRaw = await lerCampoPorLabel(["Valor da Causa", "Valor da causa", "Valor"]);
+    const dataDistRaw = await lerCampoPorLabel([
+      "Distribuído em",
+      "Data de Distribuição",
+      "Distribuição",
+      "Data Autuação",
+    ]);
+    const assuntosRaw = await lerCampoPorLabel(["Assuntos", "Assunto"]);
+
+    const partes = await this.extrairPartes(page);
+
+    return {
+      cnj,
+      classe,
+      assuntos: assuntosRaw ? this.parseAssuntos(assuntosRaw) : [],
+      orgaoJulgador: orgao,
+      juiz: null,
+      comarca: null,
+      uf: "CE",
+      valorCausaCentavos: parseValorBRLCentavos(valorRaw),
+      dataDistribuicao: parseDataBR(dataDistRaw),
+      status: null,
+      partes,
+      segredoJustica: false,
+    };
+  }
+
+  private parseAssuntos(raw: string): string[] {
+    return raw
+      .split(/[,;\n]|\s+e\s+/)
+      .map((a) => a.trim())
+      .filter((a) => a.length > 2);
+  }
+
+  /**
+   * Extrai partes do processo. PJe costuma ter seções "Polo Ativo" e
+   * "Polo Passivo" — captura blocos seguintes a esses cabeçalhos.
+   */
+  private async extrairPartes(page: Page): Promise<ParteProcesso[]> {
+    const partes: ParteProcesso[] = [];
+    const polos: Array<{ label: string; polo: ParteProcesso["polo"] }> = [
+      { label: "Polo Ativo", polo: "ativo" },
+      { label: "Polo Passivo", polo: "passivo" },
+      { label: "Outros", polo: "terceiro" },
+    ];
+
+    for (const { label, polo } of polos) {
+      try {
+        const blocos = page.locator(
+          `xpath=//*[normalize-space(text())='${label}']/following::*[self::table or self::ul or self::div][1]//tr | //*[normalize-space(text())='${label}']/following::*[self::table or self::ul or self::div][1]//li`,
+        );
+        const count = await blocos.count().catch(() => 0);
+
+        for (let i = 0; i < Math.min(count, 20); i++) {
+          const texto = (await blocos.nth(i).innerText().catch(() => "")).trim();
+          if (!texto) continue;
+          const nome = texto.split("\n")[0]?.trim() || texto;
+          if (nome.length < 2 || nome.length > 200) continue;
+          partes.push({
+            nome,
+            polo,
+            tipo: nome.match(/\bLTDA\b|S\.A\.|EIRELI|MEI/i) ? "juridica" : "fisica",
+            documento: null,
+            advogados: [],
+          });
+        }
+      } catch {
+        // ignora
+      }
+    }
+
+    return partes;
+  }
+
+  /**
+   * Extrai movimentações. PJe geralmente lista em <table> com colunas
+   * "Data" e "Movimento". Cada linha é uma movimentação.
+   */
+  private async extrairMovimentacoes(page: Page): Promise<MovimentacaoProcesso[]> {
+    const movs: MovimentacaoProcesso[] = [];
+
+    const linhas = page.locator(
+      [
+        "table.movimentacoes tbody tr",
+        "table[id*='movimentacao' i] tbody tr",
+        "table[id*='movimento' i] tbody tr",
+        "table[id*='historico' i] tbody tr",
+        "ul.movimentos li",
+        "div.movimentacao",
+        "table[role='grid'] tbody tr",
+      ].join(", "),
+    );
+
+    const count = await linhas.count().catch(() => 0);
+    if (count === 0) return [];
+
+    for (let i = 0; i < Math.min(count, 500); i++) {
+      const textoCompleto = (await linhas.nth(i).innerText().catch(() => "")).trim();
+      if (!textoCompleto) continue;
+
+      // Heurística: data BR no início (DD/MM/YYYY) seguida de texto
+      const matchData = textoCompleto.match(
+        /(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)/,
+      );
+      if (!matchData) continue;
+
+      const dataIso = parseDataBR(matchData[1]);
+      if (!dataIso) continue;
+
+      const texto = textoCompleto
+        .replace(matchData[0], "")
+        .replace(/^[\s\-:]+/, "")
+        .trim();
+      if (texto.length < 3) continue;
+
+      movs.push({
+        data: dataIso,
+        texto,
+        tipo: null,
+        documento: null,
+      });
+    }
+
+    return movs;
   }
 
   /**
