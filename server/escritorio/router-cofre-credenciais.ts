@@ -349,12 +349,31 @@ export const cofreCredenciaisRouter = router({
         };
       }
 
-      // Sistemas não-implementados ainda
+      // Sistemas não-implementados ainda — mensagens específicas pra
+      // sistemas legados / descontinuados ajudam o admin a entender
+      // o que fazer.
+      if (cred.sistema === "esaj_tjce") {
+        await db
+          .update(cofreCredenciais)
+          .set({
+            ultimoLoginTentativaEm: new Date(),
+            ultimoErro:
+              "Sistema 'esaj_tjce' foi removido do Spike — TJCE migrou pro PJe. Remova esta credencial e cadastre nova como 'PJe TJCE'.",
+          })
+          .where(eq(cofreCredenciais.id, input.id));
+        return {
+          ok: false,
+          mensagem:
+            "TJCE não usa mais E-SAJ — migrou pro PJe há um tempo. " +
+            "Remova esta credencial (botão Remover) e cadastre uma nova selecionando 'PJe TJCE' no campo Sistema.",
+        };
+      }
+
       await db
         .update(cofreCredenciais)
         .set({
           ultimoLoginTentativaEm: new Date(),
-          ultimoErro: `Validação automática não implementada para sistema "${cred.sistema}" — apenas esaj_tjce está pronto no Spike atual`,
+          ultimoErro: `Validação automática não implementada para sistema "${cred.sistema}" — apenas pje_tjce está pronto no Spike atual`,
         })
         .where(eq(cofreCredenciais.id, input.id));
 
@@ -362,7 +381,7 @@ export const cofreCredenciaisRouter = router({
         ok: false,
         mensagem:
           `Sistema "${cred.sistema}" ainda não tem adapter de login automatizado. ` +
-          `Apenas esaj_tjce está pronto no Spike atual — outros virão conforme demanda.`,
+          `Apenas pje_tjce está pronto no Spike atual — outros virão conforme demanda.`,
       };
     }),
 });
