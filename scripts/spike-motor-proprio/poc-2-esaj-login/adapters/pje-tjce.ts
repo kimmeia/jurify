@@ -337,15 +337,29 @@ export class PjeTjceScraper {
     ) {
       const secretCapturado = await this.extrairSecretTotpDaTela(page);
       if (!secretCapturado) {
+        // Captura HTML pra diagnóstico — sem isso, fico tentando às cegas
+        // qual selector usar. Trunca pra não saturar log/UI.
+        const htmlBody = await page
+          .locator("body")
+          .innerHTML()
+          .catch(() => "");
+        const htmlLimpo = htmlBody
+          .replace(/\s+/g, " ")
+          .replace(/<svg[\s\S]*?<\/svg>/g, "<svg/>")
+          .replace(/<style[\s\S]*?<\/style>/g, "")
+          .replace(/<script[\s\S]*?<\/script>/g, "")
+          .trim();
+        const inputsCount = await page.locator("input").count().catch(() => 0);
+        const kbdCount = await page.locator("kbd").count().catch(() => 0);
+        const codeCount = await page.locator("code").count().catch(() => 0);
+        const linkCount = await page.locator("a").count().catch(() => 0);
+
         throw new Error(
-          "PDPJ_CONFIGURE_TOTP: detectei a tela de configuração de 2FA mas não consegui " +
-            "capturar o secret base32 da página. Conclua a configuração manualmente: " +
-            "1) Acesse https://pje.tjce.jus.br/ no navegador, faça login. " +
-            "2) Na tela 'Configure Two-Factor', clique em 'Não consegue escanear?', " +
-            "anote o secret base32 que aparecer. " +
-            "3) Escaneie o QR no Google Authenticator/Authy E confirme com o código " +
-            "de 6 dígitos no Keycloak (importante: tem que CONFIRMAR pra finalizar). " +
-            "4) Remova esta credencial e cadastre nova com o secret anotado.",
+          "PDPJ_CONFIGURE_TOTP: detectei a tela de configuração de 2FA mas não " +
+            `consegui capturar o secret base32 da página. ` +
+            `Diagnóstico: ${inputsCount} inputs, ${kbdCount} <kbd>, ${codeCount} <code>, ${linkCount} <a>. ` +
+            `URL: ${page.url()}. ` +
+            `HTML (primeiros 3000 chars, sem style/script/svg): ${htmlLimpo.slice(0, 3000)}`,
         );
       }
 
@@ -539,52 +553,83 @@ export class PjeTjceScraper {
    * uppercase). Retorna null se nada parecer secret base32.
    */
   private async extrairSecretTotpDaTela(page: Page): Promise<string | null> {
-    // Estratégia 1: clicar em "Não consegue escanear?" pra revelar
-    // o secret em texto (algumas versões só mostram após clicar)
+    // Estratégia 1: clicar em links/botões/details que revelam o
+    // secret em texto. Versões PT-BR/EN do Keycloak variam o texto.
+    // Tentamos múltiplos sem `:visible` pra alcançar elementos
+    // colapsados (details/summary).
     const linksRevelar = [
       "a:has-text('escanear')",
       "a:has-text('Não consegue')",
       "a:has-text('não consigo')",
+      "a:has-text('Não posso')",
+      "a:has-text('chave')",
       "a:has-text('texto')",
+      "a:has-text('manualmente')",
+      "a:has-text(\"can't scan\")",
+      "a:has-text('Unable to scan')",
+      "a:has-text('cannot scan')",
+      "a:has-text('display key')",
+      "a:has-text('Mostrar')",
+      "a:has-text('Exibir')",
       "a#mode-detail-link",
-      "summary:has-text('escanear')",
-      "summary:has-text('Não consegue')",
+      "a#mode-manual-link",
+      "button:has-text('escanear')",
+      "button:has-text('Não consegue')",
+      "summary",
+      "details summary",
+      "[role='button']:has-text('escanear')",
     ];
     for (const sel of linksRevelar) {
       try {
-        const el = page.locator(sel).first();
-        if (await el.isVisible({ timeout: 500 })) {
-          await el.click({ timeout: 1500 });
-          await page.waitForTimeout(400);
-          break;
+        const els = page.locator(sel);
+        const count = await els.count();
+        for (let i = 0; i < Math.min(count, 3); i++) {
+          const el = els.nth(i);
+          if (await el.isVisible({ timeout: 200 }).catch(() => false)) {
+            await el.click({ timeout: 1500 }).catch(() => {});
+            await page.waitForTimeout(300);
+          }
         }
       } catch {
         // ignora
       }
     }
 
-    // Estratégia 2: selectors específicos do Keycloak
+    // Estratégia 2: selectors específicos do Keycloak — varre TODOS
+    // os matches (não só primeiro) porque pode ter múltiplos kbd/code
     const seletoresSecret = [
       "kbd#kc-totp-secret-key",
       "kbd",
       "#kc-totp-secret-key",
       "#kc-totp-secret-key-value",
+      "#kc-totp-secret-qr-code",
       "[id*='totp-secret']",
+      "[id*='secret-key']",
+      "[id*='secret-value']",
       "[class*='totp-secret']",
+      "[class*='secret-key']",
       "input[readonly][type='text']",
+      "input[type='text'][readonly]",
       "code",
+      "pre",
+      "samp",
+      "[data-testid*='secret']",
+      "[aria-label*='secret' i]",
     ];
     for (const sel of seletoresSecret) {
       try {
-        const el = page.locator(sel).first();
-        if (await el.count()) {
+        const els = page.locator(sel);
+        const count = await els.count();
+        for (let i = 0; i < Math.min(count, 5); i++) {
+          const el = els.nth(i);
           const txt = (
             (await el.getAttribute("value").catch(() => null)) ||
+            (await el.getAttribute("data-secret").catch(() => null)) ||
             (await el.innerText().catch(() => "")) ||
+            (await el.textContent().catch(() => "")) ||
             ""
           ).trim();
           const limpo = txt.replace(/\s+/g, "").toUpperCase();
-          // Secret base32: A-Z + 2-7. Tipicamente 16-64 chars.
           if (/^[A-Z2-7]{16,128}$/.test(limpo)) {
             return limpo;
           }
@@ -594,15 +639,38 @@ export class PjeTjceScraper {
       }
     }
 
-    // Estratégia 3: busca regex em todo HTML visível
+    // Estratégia 3: busca regex no HTML visível (texto e atributos)
     try {
+      const html = await page.content().catch(() => "");
+      // Padrão 1: "JBSW Y3DP EHPK 3PXP" com ou sem espaço, em qualquer
+      // contexto (texto, value, data-*)
+      const padroes = [
+        /(?:[A-Z2-7]{4}\s+){3,}[A-Z2-7]{2,8}/g, // grupos de 4 separados por espaço
+        /\b[A-Z2-7]{16,128}\b/g, // bloco contínuo de base32
+      ];
+      for (const re of padroes) {
+        const matches = html.match(re);
+        if (matches) {
+          for (const m of matches) {
+            const limpo = m.replace(/\s+/g, "").toUpperCase();
+            if (/^[A-Z2-7]{16,128}$/.test(limpo)) {
+              // Filtro extra: ignora cookies/JWT/UUIDs (parecem base32 mas
+              // não são secret TOTP). Secrets TOTP típicos têm 16-32 chars.
+              if (limpo.length >= 16 && limpo.length <= 64) {
+                return limpo;
+              }
+            }
+          }
+        }
+      }
+
+      // Padrão 2: também busca em texto visível (innerText)
       const texto = await page.locator("body").innerText().catch(() => "");
-      // Procura sequência tipo "JBSW Y3DP EHPK 3PXP" (com ou sem espaço)
-      const matches = texto.match(/(?:[A-Z2-7]{4}\s?){4,}[A-Z2-7]{2,4}/g);
-      if (matches) {
-        for (const m of matches) {
+      const matches2 = texto.match(/(?:[A-Z2-7]{4}\s+){3,}[A-Z2-7]{2,8}/g);
+      if (matches2) {
+        for (const m of matches2) {
           const limpo = m.replace(/\s+/g, "").toUpperCase();
-          if (/^[A-Z2-7]{16,128}$/.test(limpo)) {
+          if (/^[A-Z2-7]{16,64}$/.test(limpo)) {
             return limpo;
           }
         }
