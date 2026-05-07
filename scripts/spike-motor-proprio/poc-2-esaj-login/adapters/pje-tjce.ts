@@ -342,14 +342,14 @@ export class PjeTjceScraper {
       }
 
       // Procura link/linha do processo no resultado.
-      // PJe TJCE 1º grau (RichFaces): cada linha tem múltiplos botões,
-      // identificados por `fPP:processosTable:{id}:j_id{N}`. Diagnóstico
-      // mostrou que `:j_id487` é o "Ver detalhes" (btn-default-sm) e
-      // `:j_id492` é outro botão (btn-link-condensed). Preferimos j_id487.
+      // PJe TJCE 1º grau (RichFaces): cada linha tem múltiplos botões:
+      //   - :j_id492 (btn-link-condensed) = link do CNJ → "Ver detalhes"
+      //   - :j_id487 (btn-default-sm) = botão "Ações" (ver autos, etc)
+      // Preferimos :j_id492 (link do CNJ) que vai pra página de detalhe.
       const seletorLinkResultado =
-        "a[id*='processosTable'][id$=':j_id487'], " +
         "a[id*='processosTable'][id$=':j_id492'], " +
-        "a.btn-link[id*='processosTable']";
+        "a.btn-link.btn-condensed[id*='processosTable'], " +
+        "a[id*='processosTable'][id$=':j_id487']";
       const linkProcesso = page.locator(seletorLinkResultado).first();
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
@@ -443,14 +443,26 @@ export class PjeTjceScraper {
             postDiag =
               `POST status=${ajaxResponse.status()} ` +
               `len=${xmlText.length} ` +
-              `body0_300="${xmlText.slice(0, 300).replace(/\s+/g, " ")}"`;
-            // Parse `<redirect url="..."` no XML response
-            const redirectMatch = xmlText.match(/<redirect[^>]+url="([^"]+)"/i);
-            if (redirectMatch) {
-              const urlRedirect = redirectMatch[1].replace(/&amp;/g, "&");
-              urlDetalhe = urlRedirect.startsWith("http")
-                ? urlRedirect
-                : `https://pje.tjce.jus.br${urlRedirect.startsWith("/") ? "" : "/"}${urlRedirect}`;
+              `body0_1500="${xmlText.slice(0, 1500).replace(/\s+/g, " ")}"`;
+            // Tenta múltiplos formatos de redirect no XML:
+            // - <redirect url="..."/>  (clássico A4J)
+            // - window.location = "..."  (alguns templates)
+            // - location.href = "..."
+            const tryRegexes: RegExp[] = [
+              /<redirect[^>]+url="([^"]+)"/i,
+              /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/,
+              /location\.href\s*=\s*["']([^"']+)["']/,
+              /<a4j:redirect[^>]+url="([^"]+)"/i,
+            ];
+            for (const re of tryRegexes) {
+              const m = xmlText.match(re);
+              if (m) {
+                const urlRedirect = m[1].replace(/&amp;/g, "&");
+                urlDetalhe = urlRedirect.startsWith("http")
+                  ? urlRedirect
+                  : `https://pje.tjce.jus.br${urlRedirect.startsWith("/") ? "" : "/"}${urlRedirect}`;
+                break;
+              }
             }
           } else {
             postDiag = "POST falhou (rejeitado/timeout)";
