@@ -302,7 +302,29 @@ export class PjeTjceScraper {
 
     await page.waitForTimeout(1500);
 
-    // ─── 2FA TOTP (Keycloak) ───
+    // ─── DETECTA "CONFIGURE_TOTP" — primeira configuração de 2FA ───
+    // Keycloak força configurar 2FA na primeira vez se ainda não tem.
+    // Tela apresenta QR code + secret novo. O secret cadastrado pelo
+    // usuário no cofre NÃO bate com esse que o Keycloak gerou agora.
+    // Não tentamos auto-configurar — usuário precisa fazer manualmente
+    // no navegador uma vez pra sincronizar o secret entre app e cofre.
+    if (
+      page.url().includes("CONFIGURE_TOTP") ||
+      page.url().includes("execution=CONFIGURE")
+    ) {
+      throw new Error(
+        "PDPJ_CONFIGURE_TOTP: sua conta no PDPJ-cloud ainda não tem 2FA configurado. " +
+          "O Keycloak está forçando configuração antes do primeiro acesso. Resolva em 2 passos:\n" +
+          "PASSO 1 (no navegador, 1 vez): acesse https://pje.tjce.jus.br/, faça login, " +
+          "quando aparecer 'Configure Two-Factor' clique em 'Não consegue escanear?' " +
+          "pra ver o secret em texto base32 (JBSWY3...). Anote. Escaneie o QR code com " +
+          "Google Authenticator/Authy no celular. Confirme com o código de 6 dígitos.\n" +
+          "PASSO 2 (no Jurify): remova esta credencial, cadastre de novo com o MESMO secret " +
+          "que você anotou no Passo 1. Aí valida — o robô vai gerar o mesmo código que seu app.",
+      );
+    }
+
+    // ─── 2FA TOTP normal (já configurado) ───
     // Keycloak mostra tela separada com input id="otp" ou "totp"
     const inputTotp = page
       .locator(
@@ -440,6 +462,10 @@ export class PjeTjceScraper {
   private classificarErro(mensagem: string, urlFinal: string): string {
     if (mensagem.startsWith("timeout_login")) {
       return "Timeout no login (60s) — PDPJ-cloud lento ou indisponível";
+    }
+    if (mensagem.startsWith("PDPJ_CONFIGURE_TOTP")) {
+      // Mensagem já tem instruções completas — só remove o prefixo
+      return mensagem.replace(/^PDPJ_CONFIGURE_TOTP:\s*/, "");
     }
     if (mensagem.includes("2FA") || mensagem.includes("TOTP")) {
       return mensagem;
