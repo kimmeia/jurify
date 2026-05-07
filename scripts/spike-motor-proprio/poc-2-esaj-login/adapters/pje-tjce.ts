@@ -96,6 +96,12 @@ interface DiagnosticoTotp {
   secretInicio: string;
   /** Últimos 4 chars do secret (mascarado) */
   secretFim: string;
+  /** Secret completo após limpeza (toUpperCase + remove whitespace) */
+  secretCompletoLimpo: string;
+  /** Char codes Unicode de cada char do secret limpo */
+  secretCharCodes: number[];
+  /** Tamanho do secret BRUTO (antes de limpar whitespace) */
+  secretTamanhoBruto: number;
   /** Código de 6 dígitos gerado pelo cofre na hora do submit */
   codigoGerado: string;
   /** Hora UTC do servidor quando o código foi gerado */
@@ -471,18 +477,21 @@ export class PjeTjceScraper {
 
       // Diagnóstico do TOTP — guardado em fechamento pra usar caso login falhe.
       // NÃO loga em stdout pra não vazar (Sentry/CloudWatch capturam logs).
-      const secretLimpo = this.credencial.totpSecret
-        .replace(/\s+/g, "")
-        .toUpperCase();
-      const codigo = gerarCodigoTotp(this.credencial.totpSecret);
-      const vizinhos = gerarCodigosVizinhos(this.credencial.totpSecret);
+      const secretBruto = this.credencial.totpSecret;
+      const secretLimpo = secretBruto.replace(/\s+/g, "").toUpperCase();
+      const secretCharCodes = Array.from(secretLimpo).map((c) => c.charCodeAt(0));
+      const codigo = gerarCodigoTotp(secretBruto);
+      const vizinhos = gerarCodigosVizinhos(secretBruto);
       const agoraUtc = new Date().toISOString();
       const segundosNaJanela = Math.floor(Date.now() / 1000) % 30;
       const segundosRestantes = 30 - segundosNaJanela;
       this.diagnosticoTotp = {
         secretTamanho: secretLimpo.length,
+        secretTamanhoBruto: secretBruto.length,
         secretInicio: secretLimpo.slice(0, 4),
         secretFim: secretLimpo.slice(-4),
+        secretCompletoLimpo: secretLimpo,
+        secretCharCodes,
         codigoGerado: codigo,
         horaServidorUtc: agoraUtc,
         segundosRestantesNaJanela: segundosRestantes,
@@ -530,23 +539,24 @@ export class PjeTjceScraper {
       const blocoTotp = ehFalhaTotp && this.diagnosticoTotp
         ? `\n\n=== DIAGNÓSTICO TOTP (compare com seu app autenticador AGORA) ===\n` +
           `Código gerado pelo cofre (janela atual): ${this.diagnosticoTotp.codigoGerado}\n` +
-          `Secret tamanho: ${this.diagnosticoTotp.secretTamanho} chars\n` +
+          `Secret tamanho limpo: ${this.diagnosticoTotp.secretTamanho} chars (bruto: ${this.diagnosticoTotp.secretTamanhoBruto})\n` +
           `Secret início: ${this.diagnosticoTotp.secretInicio}... fim: ...${this.diagnosticoTotp.secretFim}\n` +
           `Hora do servidor (UTC): ${this.diagnosticoTotp.horaServidorUtc}\n` +
           `Segundos restantes até próximo código: ${this.diagnosticoTotp.segundosRestantesNaJanela}\n` +
           `Counter TOTP atual: ${this.diagnosticoTotp.vizinhos.counterAtual}\n` +
           `\n--- Códigos das 5 janelas vizinhas (detecção de drift de clock) ---\n` +
-          `Janela -60s (2 atrás): ${this.diagnosticoTotp.vizinhos.menos2}\n` +
-          `Janela -30s (1 atrás): ${this.diagnosticoTotp.vizinhos.menos1}\n` +
-          `Janela ATUAL:          ${this.diagnosticoTotp.vizinhos.atual}  ← essa foi enviada\n` +
+          `Janela -60s (2 atrás):  ${this.diagnosticoTotp.vizinhos.menos2}\n` +
+          `Janela -30s (1 atrás):  ${this.diagnosticoTotp.vizinhos.menos1}\n` +
+          `Janela ATUAL:           ${this.diagnosticoTotp.vizinhos.atual}  ← essa foi enviada\n` +
           `Janela +30s (1 frente): ${this.diagnosticoTotp.vizinhos.mais1}\n` +
           `Janela +60s (2 frente): ${this.diagnosticoTotp.vizinhos.mais2}\n` +
-          `\nCompare o código que aparece NO SEU app autenticador AGORA com a lista acima:\n` +
-          `• Bate com a ATUAL → secret OK, mas Keycloak rejeitou (raro). Avise o dev.\n` +
-          `• Bate com -30s ou +30s → drift leve de clock, Keycloak rígido. Sincronizar NTP.\n` +
-          `• Bate com -60s ou +60s → drift maior. Sync NTP urgente no servidor.\n` +
-          `• NÃO bate com nenhuma → secret cadastrado no cofre é DIFERENTE do app.\n` +
-          `   Remove a credencial e cadastra de novo, copiando o secret EXATO do app.`
+          `\n--- SECRET COMPLETO armazenado no cofre (compare letra-a-letra com app) ---\n` +
+          `${this.diagnosticoTotp.secretCompletoLimpo}\n` +
+          `Char codes (Unicode decimal de cada char): [${this.diagnosticoTotp.secretCharCodes.join(",")}]\n` +
+          `Esperado: char codes A-Z = 65-90, 2-7 = 50-55. Qualquer outro valor → caractere problemático.\n` +
+          `\nSe o secret acima FOR DIFERENTE do que está no app autenticador, achou a causa.\n` +
+          `Se for IDÊNTICO mas códigos não batem, é problema diferente (drift de clock,\n` +
+          `bug no decoder base32, etc) — me avise.`
         : "";
 
       throw new Error(
