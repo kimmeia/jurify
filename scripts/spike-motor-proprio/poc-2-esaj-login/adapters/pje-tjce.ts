@@ -804,16 +804,21 @@ export class PjeTjceScraper {
         if (!container) container = document.body;
 
         // Items são <div class="media"> (sem outras classes especiais).
-        // Separadores de dia têm `.data-interna`. Pra simplificar,
-        // pegamos TODOS os .media filhos e parseamos por proximidade
-        // (separador define dataAtual, próximos items herdam).
+        // Separadores de dia têm `.data-interna`. Pegamos APENAS filhos
+        // diretos pra não duplicar (o .media pai contém .media filhos
+        // como sub-documentos da mesma petição).
         const candidatos = Array.from(
           container.querySelectorAll(
-            ".media, :scope > li, :scope > div, " +
-              "li, .timeline-item, .movimentacao, " +
-              "tr, dl > dd, [role='listitem']",
+            ":scope > .media, :scope > li, :scope > div",
           ),
         );
+
+        // Helper: extrai texto limpo (sem scripts/styles)
+        const textoLimpo = (el: Element): string => {
+          const clone = el.cloneNode(true) as HTMLElement;
+          clone.querySelectorAll("script, style").forEach((s) => s.remove());
+          return (clone.textContent ?? "").trim().replace(/\s+/g, " ");
+        };
 
         const ptMonths: Record<string, string> = {
           jan: "01", fev: "02", mar: "03", abr: "04",
@@ -823,13 +828,13 @@ export class PjeTjceScraper {
 
         let dataAtual: string | null = null;
         for (const el of candidatos) {
-          const elClasses = el.className || "";
+          const elClasses = typeof el.className === "string" ? el.className : "";
 
           // Caso 1: separador de dia. PJe TJCE usa <div class="media data">
           // com filho .data-interna que tem texto "07 mai 2026".
           const dataInterna = el.querySelector(".data-interna");
           if (dataInterna) {
-            const txtData = trim(dataInterna.textContent).replace(/\s+/g, " ");
+            const txtData = textoLimpo(dataInterna);
             const m1 = txtData.match(
               /(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+(\d{4})/i,
             );
@@ -848,14 +853,13 @@ export class PjeTjceScraper {
           // Skip se este .media é o "data div-data-rolagem" (é separador
           // visual, não tem conteúdo)
           if (
-            typeof elClasses === "string" &&
             (elClasses.includes("data ") || /\bdata\b/.test(elClasses)) &&
             !el.querySelector(".media-body span:not(.text-muted)")
           ) {
             continue;
           }
 
-          const texto = trim(el.textContent).replace(/\s+/g, " ");
+          const texto = textoLimpo(el);
           if (!texto || texto.length < 3) continue;
 
           // Caso 2: item de mov com hora HH:MM no fim. Combina com dataAtual.
