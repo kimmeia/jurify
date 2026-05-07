@@ -1,0 +1,38 @@
+# Excluir do build context — reduz tempo de upload e tamanho da imagem.
+# Conservador de propósito: itens que Vite/esbuild eventualmente
+# processam (incluindo __tests__) ficam — só excluímos o que é
+# garantidamente não-necessário pro build.
+
+# Dependências e artefatos locais (re-criados no build).
+node_modules
+dist
+.cache
+
+# Logs e temporários.
+*.log
+npm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log
+
+# Git e GitHub Actions (não rodam no container).
+.git
+.github
+
+# Variáveis de ambiente locais — Railway injeta as suas.
+.env
+.env.local
+.env.*.local
+
+# Editor / IDE.
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Backups e samples grandes.
+*.sql
+*.sql.gz
+playwright-report
+test-results
+coverage
+samples

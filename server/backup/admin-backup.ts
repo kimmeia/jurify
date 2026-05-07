@@ -133,6 +133,24 @@ export async function urlAssinadaDownload(
 /**
  * Dispara `mysqldump` sob demanda → gzip → upload streaming pro S3.
  * Retorna o registro criado quando termina.
+ *
+ * Observabilidade:
+ *  - stderr do mysqldump pipado pra `process.stderr` em tempo real (com
+ *    `--verbose`, mostra `Dumping table X` por tabela).
+ *  - console.log marca início/fim de cada fase pra timeline clara nos
+ *    logs do Railway, mesmo se o cliente HTTP cair antes do fim.
+ *
+ * Compatibilidade MariaDB-client × MySQL 8 server:
+ *  No container Railway o `mariadb-client` (instalado via Dockerfile)
+ *  é o cliente MariaDB. Flags exclusivas do MySQL 8 client foram
+ *  removidas pra evitar `unknown variable`/`unknown option`:
+ *    • `--column-statistics=0` (MySQL 8 only)
+ *    • `--set-gtid-purged=OFF` (MySQL 8 only — MariaDB usa --gtid em
+ *      versões novas, mas não passa pelos warnings que essa flag
+ *      silencia em MySQL).
+ *  Sem essas flags o conteúdo do dump não muda; ambas serviam pra
+ *  silenciar warnings/header lines em cenários de replicação que não
+ *  se aplicam ao backup completo.
  */
 export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<BackupGlobalRegistro> {
   const inicio = Date.now();
@@ -140,6 +158,10 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
   const s3 = montarS3Client(cfg);
   const stamp = new Date(inicio).toISOString().replace(/[:.]/g, "-");
   const key = `mysql/${conn.database}/${stamp}.sql.gz`;
+
+  console.log(
+    `[backup-admin] iniciando: ${conn.host}:${conn.port}/${conn.database} -> s3://${cfg.bucket}/${key}`,
+  );
 
   const dump = spawn(
     "mysqldump",
@@ -153,8 +175,10 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
       "--routines",
       "--triggers",
       "--events",
-      "--set-gtid-purged=OFF",
-      "--column-statistics=0",
+      // --verbose imprime "Dumping table_name (rows)" no stderr a cada
+      // tabela. Combinado com o stream de stderr no handler abaixo, dá
+      // progresso real-time nos logs do GitHub Actions.
+      "--verbose",
       conn.database,
     ],
     { stdio: ["ignore", "pipe", "pipe"] },
@@ -162,7 +186,18 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
 
   let stderr = "";
   dump.stderr.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString();
+    const str = chunk.toString();
+    stderr += str;
+    // Stream stderr pro stdout do processo pai pra ficar visível em tempo
+    // real nos logs (GitHub Actions). Sem isso, erros do mysqldump só
+    // aparecem após exit — se o processo trava, fica invisível.
+    process.stderr.write(`[mysqldump] ${str}`);
+  });
+  dump.on("error", (err) => {
+    // Spawn falhou (binário não existe, permissão negada, etc). dump.on("close")
+    // ainda dispara depois com exit code -2, mas logamos aqui pra a causa
+    // raiz aparecer nos logs antes do erro genérico.
+    console.error(`[backup-admin] erro ao spawnar mysqldump: ${err.message}`);
   });
 
   const gz = createGzip({ level: 9 });
@@ -185,12 +220,16 @@ export async function executarBackupGlobal(cfg: BackupGlobalConfig): Promise<Bac
   });
 
   const dumpExit: number = await new Promise((resolve) => dump.on("close", resolve));
+  const dumpDur = Math.round((Date.now() - inicio) / 1000);
+  console.log(`[backup-admin] mysqldump terminou (exit=${dumpExit}) após ${dumpDur}s`);
   if (dumpExit !== 0) {
     upload.abort().catch(() => {});
-    throw new Error(`mysqldump falhou (exit=${dumpExit}). stderr:\n${stderr.slice(0, 500)}`);
+    throw new Error(`mysqldump falhou (exit=${dumpExit}). stderr (últimos 2KB):\n${stderr.slice(-2000)}`);
   }
 
+  console.log(`[backup-admin] aguardando upload finalizar em s3://${cfg.bucket}/${key}…`);
   const result = await upload.done();
+  console.log(`[backup-admin] upload OK em ${Math.round((Date.now() - inicio) / 1000)}s totais.`);
   // Tamanho não vem direto — fazemos um HEAD pra obter (rápido, sem custo).
   // Se falhar, cai pra estimativa baseada nos bytes que o gzip reportou.
   let tamanhoBytes = 0;
