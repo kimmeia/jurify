@@ -44,6 +44,7 @@ import { toast } from "sonner";
 
 const TRIBUNAIS_CONSULTA_URL: Record<string, string> = {
   trt2: "https://pje.trt2.jus.br/consultaprocessual/",
+  trt7: "https://pje.trt7.jus.br/consultaprocessual/",
   trt15: "https://pje.trt15.jus.br/consultaprocessual/",
 };
 

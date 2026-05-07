@@ -57,11 +57,12 @@ async function garantirSentry() {
  * Playwright). Quando adicionar TJDFT/TJMG/TRF1 no Dia 3, registrar
  * aqui também.
  */
-const TRIBUNAIS_DISPONIVEIS = ["trt2", "trt15"] as const;
+const TRIBUNAIS_DISPONIVEIS = ["trt2", "trt7", "trt15"] as const;
 type TribunalDisponivel = (typeof TRIBUNAIS_DISPONIVEIS)[number];
 
 const TRIBUNAIS_METADATA: Record<TribunalDisponivel, { nome: string }> = {
   trt2: { nome: "Tribunal Regional do Trabalho — 2ª Região (SP)" },
+  trt7: { nome: "Tribunal Regional do Trabalho — 7ª Região (Ceará)" },
   trt15: { nome: "Tribunal Regional do Trabalho — 15ª Região (Campinas)" },
 };
 
@@ -75,6 +76,12 @@ async function criarAdapterLazy(tribunal: TribunalDisponivel) {
       "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt2"
     );
     return new mod.TRT2Scraper();
+  }
+  if (tribunal === "trt7") {
+    const mod = await import(
+      "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt7"
+    );
+    return new mod.TRT7Scraper();
   }
   if (tribunal === "trt15") {
     const mod = await import(
