@@ -168,8 +168,18 @@ export class TRT2Scraper implements ScraperTribunalAdapter {
       { tentativas: 3, baseMs: 1500, nome: `${this.tribunal}.goto` },
     );
 
+    // Aguarda JS terminar de renderizar. PJe usa JSF/RichFaces — DOMContentLoaded
+    // dispara antes do framework montar o form. Sem isso, scrapers veem
+    // página vazia e desistem cedo (latência ~2s no log do usuário).
+    await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
+    await page.waitForTimeout(800);
+
+    // Modal de cookies / termo de uso aparece em alguns TRTs no primeiro
+    // acesso. Tenta fechar — falha silenciosa se o modal não existe.
+    await this.fecharModaisInterstitiais(page);
+
     if (await temCaptchaNaPagina(page)) {
-      const screenshotPath = await capturarScreenshot(page, `trt2-captcha-${cnjLimpo}`);
+      const screenshotPath = await capturarScreenshot(page, `${this.tribunal}-captcha-${cnjLimpo}`);
       return {
         ...baseResultado,
         categoriaErro: "captcha_bloqueio",
@@ -178,32 +188,31 @@ export class TRT2Scraper implements ScraperTribunalAdapter {
       };
     }
 
-    // Localiza o input do CNJ. PJe varia o ID conforme versão (parametrizado
-    // por JSF), mas o atributo `name` costuma conter "numeroProcesso" e o
-    // input é do tipo text. Busca por placeholder também ajuda em layouts
-    // mais novos.
-    const inputCnj = page
-      .locator(
-        [
-          "input[name*='numeroProcesso' i]",
-          "input[id*='NumeroProcesso' i]",
-          "input[placeholder*='processo' i]",
-          "input[aria-label*='processo' i]",
-        ].join(", "),
-      )
-      .first();
+    // Localiza o input do CNJ. PJe varia bastante de versão pra versão:
+    //   • IDs JSF parametrizados (fPP:..., formularioBuscaProcessual:...)
+    //   • Inputs em iframe nas versões mais antigas
+    //   • Aba "Por número único" precisa ser clicada antes em algumas UIs
+    //   • Placeholder/aria-label como fallback resiliente
+    const inputCnj = await this.localizarInputCnj(page);
 
-    const inputVisible = await inputCnj.isVisible().catch(() => false);
-    if (!inputVisible) {
-      const screenshotPath = await capturarScreenshot(page, `trt2-no-input-${cnjLimpo}`);
+    if (!inputCnj) {
+      // Salva HTML da página inteira pra debug remoto — quando o screenshot
+      // não conta a história toda (ex: estrutura de formulário escondida).
+      const html = await page.content().catch(() => "");
+      const screenshotPath = await capturarScreenshot(page, `${this.tribunal}-no-input-${cnjLimpo}`);
       return {
         ...baseResultado,
         categoriaErro: "parse_falhou",
-        mensagemErro: "Input de CNJ não encontrado na página de consulta TRT2",
+        mensagemErro:
+          `Input de CNJ não encontrado na página de consulta ${this.tribunal.toUpperCase()}. ` +
+          `URL atual: ${page.url()}. ` +
+          `Tamanho HTML: ${html.length} chars. ` +
+          `Title: ${await page.title().catch(() => "?")}.`,
         screenshotPath,
       };
     }
 
+    await inputCnj.click({ timeout: 5000 }).catch(() => {});
     await inputCnj.fill(cnjMascarado);
 
     // Botão de busca: tipicamente "Pesquisar" ou ícone lupa.
@@ -293,6 +302,107 @@ export class TRT2Scraper implements ScraperTribunalAdapter {
    * "Valor da Causa", etc — buscamos por proximidade, não por seletores
    * fixos (que mudam entre versões).
    */
+  /**
+   * Tenta fechar modais que aparecem no primeiro acesso de alguns TRTs:
+   * "Aceitar termo de uso", "Aceitar cookies", "Continuar" no aviso de
+   * sistema. Falha silenciosa se modal não existe (cenário esperado em
+   * acessos subsequentes).
+   */
+  protected async fecharModaisInterstitiais(page: Page): Promise<void> {
+    const botoesParaFechar = [
+      "button:has-text('Aceitar')",
+      "button:has-text('Concordo')",
+      "button:has-text('Continuar')",
+      "button:has-text('OK')",
+      "button:has-text('Fechar')",
+      "button[aria-label*='Fechar' i]",
+      ".modal button.close",
+      "div[role='dialog'] button:visible",
+    ];
+    for (const sel of botoesParaFechar) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 500 })) {
+          await el.click({ timeout: 1500 });
+          await page.waitForTimeout(300);
+        }
+      } catch {
+        // ignora — modal pode não existir
+      }
+    }
+  }
+
+  /**
+   * Localiza o input do CNJ tentando estratégias múltiplas. Retorna o
+   * Locator pronto pra `.fill()` ou null se nada for encontrado.
+   *
+   * Ordem de tentativas:
+   *  1. Clica em aba "Número Único" se existir (PJe TRT modernos)
+   *  2. Procura input no DOM principal por name/id/placeholder/aria
+   *  3. Procura dentro de iframes (PJe v1 antigo embute em iframe)
+   */
+  protected async localizarInputCnj(page: Page) {
+    const seletoresInput = [
+      "input[name*='numeroProcesso' i]",
+      "input[id*='NumeroProcesso' i]",
+      "input[id*='numero' i][type='text']",
+      "input[placeholder*='processo' i]",
+      "input[placeholder*='CNJ' i]",
+      "input[placeholder*='Número' i]",
+      "input[aria-label*='processo' i]",
+      "input[aria-label*='número' i]",
+      "input[name*='NumProcesso' i]",
+      "input.numeroProcesso",
+      "input[maxlength='25']",
+      "input[maxlength='20']",
+    ];
+    const seletorComposto = seletoresInput.join(", ");
+
+    // 1. Aba "Número Único" — alguns PJes têm tabs separadas pra tipo
+    //    de busca. Clicar na aba certa coloca o input visível.
+    const tabsParaClicar = [
+      "a:has-text('Número Único')",
+      "a:has-text('Número do Processo')",
+      "a:has-text('Por Número')",
+      "button:has-text('Número Único')",
+      "[role='tab']:has-text('Número')",
+    ];
+    for (const sel of tabsParaClicar) {
+      try {
+        const tab = page.locator(sel).first();
+        if (await tab.isVisible({ timeout: 500 })) {
+          await tab.click({ timeout: 1500 });
+          await page.waitForTimeout(400);
+          break;
+        }
+      } catch {
+        // ignora
+      }
+    }
+
+    // 2. Tenta DOM principal
+    const inputDireto = page.locator(seletorComposto).first();
+    if (await inputDireto.isVisible({ timeout: 2000 }).catch(() => false)) {
+      return inputDireto;
+    }
+
+    // 3. Fallback: procura em iframes (PJe v1 antigo)
+    const frames = page.frames();
+    for (const frame of frames) {
+      if (frame === page.mainFrame()) continue;
+      try {
+        const inputFrame = frame.locator(seletorComposto).first();
+        if (await inputFrame.isVisible({ timeout: 1000 }).catch(() => false)) {
+          return inputFrame;
+        }
+      } catch {
+        // ignora frames que não permitem acesso
+      }
+    }
+
+    return null;
+  }
+
   private async extrairCapa(page: Page, cnj: string): Promise<ProcessoCapa> {
     const lerCampoPorLabel = async (labels: string[]): Promise<string | null> => {
       for (const label of labels) {
