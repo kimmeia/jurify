@@ -90,9 +90,33 @@ export async function fecharBrowserPjeTjce(): Promise<void> {
   }
 }
 
+interface DiagnosticoTotp {
+  secretTamanho: number;
+  /** Primeiros 4 chars do secret (mascarado) */
+  secretInicio: string;
+  /** Últimos 4 chars do secret (mascarado) */
+  secretFim: string;
+  /** Código de 6 dígitos gerado pelo cofre na hora do submit */
+  codigoGerado: string;
+  /** Hora UTC do servidor quando o código foi gerado */
+  horaServidorUtc: string;
+  /** Quantos segundos restam até a janela TOTP atual expirar (e código mudar) */
+  segundosRestantesNaJanela: number;
+}
+
 export class PjeTjceScraper {
   readonly tribunal = "tjce";
   readonly nome = "Tribunal de Justiça do Ceará — PJe via PDPJ-cloud";
+
+  /**
+   * Captura informação sobre o TOTP gerado quando preenchemos o input.
+   * Usado APENAS pra construir mensagem de erro detalhada se o
+   * Keycloak rejeitar o código — assim o usuário consegue comparar
+   * com o app autenticador dele em tempo real e diagnosticar drift.
+   *
+   * Nunca expõe o secret completo — só primeiros/últimos 4 chars.
+   */
+  private diagnosticoTotp: DiagnosticoTotp | null = null;
 
   constructor(private credencial: CredencialPjeTjce) {}
 
@@ -442,7 +466,25 @@ export class PjeTjceScraper {
             "Cadastre o secret base32 no cofre antes de validar.",
         );
       }
+
+      // Diagnóstico do TOTP — guardado em fechamento pra usar caso login falhe.
+      // NÃO loga em stdout pra não vazar (Sentry/CloudWatch capturam logs).
+      const secretLimpo = this.credencial.totpSecret
+        .replace(/\s+/g, "")
+        .toUpperCase();
       const codigo = gerarCodigoTotp(this.credencial.totpSecret);
+      const agoraUtc = new Date().toISOString();
+      const segundosNaJanela = Math.floor(Date.now() / 1000) % 30;
+      const segundosRestantes = 30 - segundosNaJanela;
+      this.diagnosticoTotp = {
+        secretTamanho: secretLimpo.length,
+        secretInicio: secretLimpo.slice(0, 4),
+        secretFim: secretLimpo.slice(-4),
+        codigoGerado: codigo,
+        horaServidorUtc: agoraUtc,
+        segundosRestantesNaJanela: segundosRestantes,
+      };
+
       await inputTotp.fill(codigo);
 
       const botaoValidar = page
@@ -472,13 +514,36 @@ export class PjeTjceScraper {
         this.credencial.username.length > 4
           ? `${this.credencial.username.slice(0, 2)}***${this.credencial.username.slice(-2)}`
           : "***";
+
+      // Se a falha foi na tela de TOTP especificamente, inclui diagnóstico
+      // do código gerado pelo cofre — ajuda a confirmar/refutar drift de
+      // secret entre cofre e app autenticador do usuário.
+      const ehFalhaTotp =
+        urlFinal.includes("authenticate") &&
+        (diag.inputs.includes("'otp'") || diag.inputs.includes("\"otp\"")) &&
+        this.diagnosticoTotp !== null;
+
+      const blocoTotp = ehFalhaTotp && this.diagnosticoTotp
+        ? `\n\n=== DIAGNÓSTICO TOTP (compare com seu app autenticador AGORA) ===\n` +
+          `Código gerado pelo cofre: ${this.diagnosticoTotp.codigoGerado}\n` +
+          `Secret tamanho: ${this.diagnosticoTotp.secretTamanho} chars\n` +
+          `Secret início: ${this.diagnosticoTotp.secretInicio}... fim: ...${this.diagnosticoTotp.secretFim}\n` +
+          `Hora do servidor (UTC): ${this.diagnosticoTotp.horaServidorUtc}\n` +
+          `Segundos restantes até próximo código: ${this.diagnosticoTotp.segundosRestantesNaJanela}\n` +
+          `\nSe esse código for DIFERENTE do que aparece no seu Google Authenticator/Authy AGORA: ` +
+          `secret cadastrado no cofre está errado — remove e cadastra de novo, ` +
+          `colando exatamente igual ao app.\n` +
+          `Se for IGUAL: provavelmente é drift de clock no servidor (raro). Avise o dev.`
+        : "";
+
       throw new Error(
         `Login rejeitado pelo Keycloak (PDPJ-cloud).\n` +
           `Username usado: "${usernameMascarado}" (${this.credencial.username.length} chars).\n` +
           `Mensagem do Keycloak: ${diag.mensagemErro || "(sem mensagem capturada)"}.\n` +
           `Inputs detectados: ${diag.inputs}.\n` +
           `URL: ${urlFinal}.\n` +
-          `Title: ${diag.title}.`,
+          `Title: ${diag.title}.` +
+          blocoTotp,
       );
     }
   }
