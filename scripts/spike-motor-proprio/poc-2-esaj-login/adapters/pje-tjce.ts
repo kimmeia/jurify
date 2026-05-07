@@ -354,6 +354,19 @@ export class PjeTjceScraper {
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
+        // Tracker: registra TODAS as requests pra Detalhe/* (qualquer
+        // método). Se nenhuma aparecer após click, sabemos que A4J não
+        // disparou nada. Se aparecer mas não capturarmos, sabemos que
+        // o problema é a captura.
+        const detalheUrls: string[] = [];
+        const requestTracker = (req: import("@playwright/test").Request) => {
+          const url = req.url();
+          if (url.includes("Detalhe/") || url.includes("listProcessoCompletoAdvogado")) {
+            detalheUrls.push(`${req.method()} ${url}`);
+          }
+        };
+        page.on("request", requestTracker);
+
         // Aguarda modal de loading sumir
         await page
           .locator("#modalStatusContent, #modalStatusContentTable")
@@ -440,19 +453,23 @@ export class PjeTjceScraper {
 
           if (ajaxResponse) {
             const xmlText = await ajaxResponse.text().catch(() => "");
+            const headers = ajaxResponse.headers();
             postDiag =
               `POST status=${ajaxResponse.status()} ` +
               `len=${xmlText.length} ` +
-              `body0_1500="${xmlText.slice(0, 1500).replace(/\s+/g, " ")}"`;
+              `Location=${headers["location"] ?? "—"} ` +
+              `body0_3500="${xmlText.slice(0, 3500).replace(/\s+/g, " ")}"`;
             // Tenta múltiplos formatos de redirect no XML:
             // - <redirect url="..."/>  (clássico A4J)
             // - window.location = "..."  (alguns templates)
             // - location.href = "..."
+            // - meta refresh
             const tryRegexes: RegExp[] = [
               /<redirect[^>]+url="([^"]+)"/i,
               /window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/,
               /location\.href\s*=\s*["']([^"']+)["']/,
               /<a4j:redirect[^>]+url="([^"]+)"/i,
+              /<meta[^>]+http-equiv="refresh"[^>]+url=([^"';\s>]+)/i,
             ];
             for (const re of tryRegexes) {
               const m = xmlText.match(re);
@@ -463,6 +480,14 @@ export class PjeTjceScraper {
                   : `https://pje.tjce.jus.br${urlRedirect.startsWith("/") ? "" : "/"}${urlRedirect}`;
                 break;
               }
+            }
+            // Header Location também (alguns servidores enviam mesmo
+            // com status 200 em A4J)
+            if (!urlDetalhe && headers["location"]) {
+              const loc = headers["location"];
+              urlDetalhe = loc.startsWith("http")
+                ? loc
+                : `https://pje.tjce.jus.br${loc.startsWith("/") ? "" : "/"}${loc}`;
             }
           } else {
             postDiag = "POST falhou (rejeitado/timeout)";
@@ -509,12 +534,31 @@ export class PjeTjceScraper {
           if (resp) urlDetalhe = resp.url();
         }
 
-        // Fallback 3: dispatchEvent + waitForResponse
+        // Fallback 3: Locator.click({ force: true }) — bypassa overlay
+        if (!urlDetalhe) {
+          const respPromise = page
+            .waitForResponse(
+              (r) =>
+                r.url().includes("listProcessoCompletoAdvogado") ||
+                (r.url().includes("Detalhe/") && r.url().endsWith(".seam")),
+              { timeout: 8000 },
+            )
+            .catch(() => null);
+          await page
+            .locator(seletorLinkResultado)
+            .first()
+            .click({ force: true, timeout: 5000 })
+            .catch(() => {});
+          const resp = await respPromise;
+          if (resp) urlDetalhe = resp.url();
+        }
+
+        // Fallback 4: dispatchEvent + waitForResponse
         if (!urlDetalhe) {
           const respPromise = page
             .waitForResponse(
               (r) => r.url().includes("listProcessoCompletoAdvogado.seam"),
-              { timeout: 8000 },
+              { timeout: 5000 },
             )
             .catch(() => null);
           await page.dispatchEvent(seletorLinkResultado, "click").catch(() => {});
@@ -522,14 +566,18 @@ export class PjeTjceScraper {
           if (resp) urlDetalhe = resp.url();
         }
 
+        page.off("request", requestTracker);
+
         if (urlDetalhe) {
           await page.goto(urlDetalhe, { waitUntil: "domcontentloaded" });
           await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
           await page.waitForTimeout(1500);
         }
         // Stash diag pra logging em caso de falha (anexa via globalThis
-        // pra não mudar assinatura do adapter)
-        (globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag = postDiag ?? "n/a";
+        // pra não mudar assinatura do adapter). Inclui detalheUrls
+        // capturadas pra ver se algum click disparou request real.
+        (globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag =
+          `${postDiag ?? "n/a"} | detalheUrls=${JSON.stringify(detalheUrls.slice(0, 5))}`;
       }
       // Se não há link, pode ser que a busca já redirecionou direto
       // pro detalhe (PJe faz isso quando há match único). Seguimos
