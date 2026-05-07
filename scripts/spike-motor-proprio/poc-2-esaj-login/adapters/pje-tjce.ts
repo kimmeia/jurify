@@ -407,6 +407,7 @@ export class PjeTjceScraper {
           .catch(() => null);
 
         let urlDetalhe: string | null = null;
+        let postDiag: string | null = null;
 
         if (dadosLink && dadosLink.viewState) {
           // Monta payload padrão RichFaces 3.x AJAX
@@ -439,6 +440,10 @@ export class PjeTjceScraper {
 
           if (ajaxResponse) {
             const xmlText = await ajaxResponse.text().catch(() => "");
+            postDiag =
+              `POST status=${ajaxResponse.status()} ` +
+              `len=${xmlText.length} ` +
+              `body0_300="${xmlText.slice(0, 300).replace(/\s+/g, " ")}"`;
             // Parse `<redirect url="..."` no XML response
             const redirectMatch = xmlText.match(/<redirect[^>]+url="([^"]+)"/i);
             if (redirectMatch) {
@@ -447,11 +452,52 @@ export class PjeTjceScraper {
                 ? urlRedirect
                 : `https://pje.tjce.jus.br${urlRedirect.startsWith("/") ? "" : "/"}${urlRedirect}`;
             }
+          } else {
+            postDiag = "POST falhou (rejeitado/timeout)";
           }
+        } else {
+          postDiag = `dadosLink incompleto (viewState=${!!dadosLink?.viewState})`;
         }
 
-        // Fallback: tenta ainda dispatchEvent (caso o POST manual falhe
-        // por algum detalhe de formato) e captura via waitForResponse
+        // Fallback 2: chamar A4J.AJAX.Submit DIRETAMENTE no contexto
+        // da página com os parameters parseados. Diagnóstico confirmou
+        // que A4J.AJAX.Submit é uma função disponível no escopo.
+        if (!urlDetalhe && dadosLink) {
+          const respPromise = page
+            .waitForResponse(
+              (r) => r.url().includes("listProcessoCompletoAdvogado.seam"),
+              { timeout: 8000 },
+            )
+            .catch(() => null);
+          await page
+            .evaluate(
+              ({ formId, linkId, parameters }) => {
+                const w = window as unknown as {
+                  A4J?: { AJAX?: { Submit?: (...a: unknown[]) => unknown } };
+                };
+                const submit = w.A4J?.AJAX?.Submit;
+                if (!submit) return;
+                try {
+                  submit(formId, null, {
+                    similarityGroupingId: linkId,
+                    parameters: { ...parameters, [linkId]: linkId },
+                  });
+                } catch {
+                  // ignora
+                }
+              },
+              {
+                formId: dadosLink.formId,
+                linkId: dadosLink.linkId,
+                parameters: dadosLink.parameters,
+              },
+            )
+            .catch(() => {});
+          const resp = await respPromise;
+          if (resp) urlDetalhe = resp.url();
+        }
+
+        // Fallback 3: dispatchEvent + waitForResponse
         if (!urlDetalhe) {
           const respPromise = page
             .waitForResponse(
@@ -469,6 +515,9 @@ export class PjeTjceScraper {
           await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
           await page.waitForTimeout(1500);
         }
+        // Stash diag pra logging em caso de falha (anexa via globalThis
+        // pra não mudar assinatura do adapter)
+        (globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag = postDiag ?? "n/a";
       }
       // Se não há link, pode ser que a busca já redirecionou direto
       // pro detalhe (PJe faz isso quando há match único). Seguimos
@@ -545,7 +594,8 @@ export class PjeTjceScraper {
             `Extração vazia. URL=${page.url()} | title=${await page.title().catch(() => "?")} | ` +
             `bodyLen=${debug?.bodyLen ?? "?"} | tables=${JSON.stringify(debug?.tables ?? [])} | ` +
             `linksCnj=${JSON.stringify(debug?.linksProc ?? [])} | msgs=${JSON.stringify(debug?.msgs ?? [])} | ` +
-            `a4j=${JSON.stringify(debug?.a4jStatus ?? {})} | forms=${JSON.stringify(debug?.forms ?? [])}`,
+            `a4j=${JSON.stringify(debug?.a4jStatus ?? {})} | forms=${JSON.stringify(debug?.forms ?? [])} | ` +
+            `postDiag=${(globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag ?? "n/a"}`,
           screenshotPath,
           finalizadoEm: new Date().toISOString(),
         };
