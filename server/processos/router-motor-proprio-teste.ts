@@ -33,6 +33,10 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, router } from "../_core/trpc";
+import {
+  resolverAmbiente,
+  ambienteSuportaTeste as ambientePermiteTeste,
+} from "../_core/ambiente";
 import { validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import { createLogger } from "../_core/logger";
 
@@ -98,10 +102,13 @@ async function criarAdapterLazy(tribunal: TribunalDisponivel) {
  * Em production, retorna FORBIDDEN — proteção em camadas com a feature
  * flag `escritorios.usarMotorProprio` que ainda não existe per-user
  * neste endpoint.
+ *
+ * Resolução de ambiente centralizada em `_core/ambiente.ts` — usa
+ * RAILWAY_ENVIRONMENT_NAME como fallback pra evitar bug de env var
+ * não-configurada acidentalmente no dashboard do Railway.
  */
 function exigirAmbienteTeste() {
-  const ambiente = process.env.JURIFY_AMBIENTE;
-  if (ambiente !== "staging" && process.env.NODE_ENV !== "development") {
+  if (!ambientePermiteTeste()) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message:
@@ -127,12 +134,14 @@ export const motorProprioTesteRouter = router({
   /**
    * Indica se o ambiente atual permite chamar `testarCnj`.
    * Frontend usa pra desabilitar o botão e mostrar aviso em production.
+   *
+   * Reusa a resolução centralizada de `_core/ambiente.ts` — assim a
+   * UI exibe o MESMO valor que o gate do backend usa pra autorizar.
    */
   ambienteSuportaTeste: adminProcedure.query(() => {
-    const ambiente = process.env.JURIFY_AMBIENTE || process.env.NODE_ENV || "unknown";
     return {
-      ambiente,
-      suportaTeste: ambiente === "staging" || ambiente === "development",
+      ambiente: resolverAmbiente(),
+      suportaTeste: ambientePermiteTeste(),
     };
   }),
 

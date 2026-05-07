@@ -19,6 +19,7 @@ import { rateLimit, globalApiRateLimit } from "./rate-limit";
 import { createLogger } from "./logger";
 import { runMigrations } from "./auto-migrate";
 import { initSentry, captureError } from "./sentry";
+import { resolverAmbiente } from "./ambiente";
 
 // Sentry tem que inicializar ANTES de qualquer outro código rodar — caso
 // contrário erros lançados durante o boot (ex: migrations) escapam.
@@ -152,14 +153,13 @@ async function startServer() {
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);
 
-  // Resolução de ambiente — `JURIFY_AMBIENTE` tem precedência (set
-  // explicitamente no Railway de staging). Fallback pra `NODE_ENV`.
+  // Resolução de ambiente — centralizada em ./ambiente.ts. Ordem:
+  //   1. JURIFY_AMBIENTE  (override manual)
+  //   2. RAILWAY_ENVIRONMENT_NAME  (auto-setado pelo Railway)
+  //   3. NODE_ENV  (fallback)
   // Frontend lê isso via /api/health/live pra mostrar banner amarelo
   // em staging.
-  const ambiente = (process.env.JURIFY_AMBIENTE
-    || (process.env.NODE_ENV === "production" ? "production"
-        : process.env.NODE_ENV === "staging" ? "staging"
-        : "development")) as "production" | "staging" | "development";
+  const ambiente = resolverAmbiente();
 
   // Health check — usado pelo Railway/loadbalancer pra saber se o app respira.
   // Faz ping no MySQL com timeout curto pra detectar DB caído. Sem ele,
