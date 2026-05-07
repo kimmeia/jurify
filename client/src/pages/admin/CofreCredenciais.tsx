@@ -301,7 +301,7 @@ export default function CofreCredenciais() {
 }
 
 function NovaCredencialDialog({ onCriado }: { onCriado: () => void }) {
-  const [sistema, setSistema] = useState<string>("esaj_tjce");
+  const [sistema, setSistema] = useState<string>("pje_tjce");
   const [apelido, setApelido] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
