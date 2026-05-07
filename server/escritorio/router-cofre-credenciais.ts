@@ -259,16 +259,18 @@ export const cofreCredenciaisRouter = router({
   /**
    * Dispara validação real da credencial via login no tribunal.
    *
-   * STATUS ATUAL (Sprint do cofre): placeholder — apenas atualiza o
-   * timestamp pra indicar tentativa. Login real será implementado quando
-   * o adapter E-SAJ TJCE estiver pronto (próxima task da Frente B).
+   * Fluxo:
+   *  1. Decripta credencial via `buscarCredencialDecriptada()`
+   *  2. Resolve adapter pelo sistema (esaj_tjce → EsajTjceScraper)
+   *  3. Tenta login real (Playwright headless)
+   *  4. Se ok → salva storageState em cofre_sessoes + status="ativa"
+   *  5. Se falha → status="erro" + mensagem técnica
    *
-   * Quando o adapter estiver pronto, este endpoint vai:
-   *  1. Decriptar credencial
-   *  2. Carregar adapter ESAJ correspondente ao sistema
-   *  3. Tentar login real (Playwright)
-   *  4. Se sucesso → status="ativa", salvar storageState em cofre_sessoes
-   *  5. Se falha → status="erro", mensagem específica
+   * Latência típica: 8-25s (boot Chromium + navegação + auth + 2FA).
+   *
+   * Sistemas suportados (atualmente):
+   *  - `esaj_tjce` — implementação completa
+   *  - outros ESAJ — fallback "não implementado" até PoC validar TJCE
    */
   validar: adminProcedure
     .input(z.object({ id: z.number().int().positive() }))
@@ -293,26 +295,71 @@ export const cofreCredenciaisRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
       }
 
-      // Placeholder até adapter ESAJ ficar pronto. Marca tentativa
-      // mas não muda status final (continua "validando" / "ativa" como estava).
+      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao } =
+        await import("./cofre-helpers");
+
+      const cred = await buscarCredencialDecriptada(input.id);
+      if (!cred) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Credencial não pode ser decriptada (chave de criptografia mudou?)",
+        });
+      }
+
+      log.info(
+        { admin: ctx.user.id, credencialId: input.id, sistema: cred.sistema },
+        "[cofre] validando credencial via login real",
+      );
+
+      // Resolução de adapter por sistema. Lazy import pra não carregar
+      // Playwright em production (gate de ambiente já protege, mas
+      // double-defense contra bundle de devDeps no esbuild).
+      if (cred.sistema === "esaj_tjce") {
+        const { EsajTjceScraper } = await import(
+          "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/tjce"
+        );
+        const scraper = new EsajTjceScraper({
+          username: cred.username,
+          password: cred.password,
+          totpSecret: cred.totpSecret,
+        });
+        const resultado = await scraper.testarLogin();
+
+        await atualizarStatusAposLogin(input.id, {
+          ok: resultado.ok,
+          mensagemErro: resultado.ok ? null : `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
+        });
+
+        if (resultado.ok && resultado.storageStateJson) {
+          // ESAJ TJCE costuma manter sessão por ~2h sem atividade.
+          // Marcamos prazo conservador de 90min pra forçar relogin antes
+          // que o tribunal expire e dê erro 401 inesperado.
+          const expira = new Date(Date.now() + 90 * 60 * 1000);
+          await salvarSessao(input.id, resultado.storageStateJson, expira);
+        }
+
+        return {
+          ok: resultado.ok,
+          mensagem: resultado.mensagem,
+          latenciaMs: resultado.latenciaMs,
+          screenshotPath: resultado.screenshotPath,
+        };
+      }
+
+      // Sistemas não-implementados ainda
       await db
         .update(cofreCredenciais)
         .set({
           ultimoLoginTentativaEm: new Date(),
-          ultimoErro: "Validação real ainda não implementada — adapter ESAJ pendente (Frente B em curso)",
+          ultimoErro: `Validação automática não implementada para sistema "${cred.sistema}" — apenas esaj_tjce está pronto no Spike atual`,
         })
         .where(eq(cofreCredenciais.id, input.id));
-
-      log.info(
-        { admin: ctx.user.id, credencialId: input.id, sistema: row.sistema },
-        "[cofre] validação placeholder — adapter ESAJ ainda pendente",
-      );
 
       return {
         ok: false,
         mensagem:
-          "Validação real chega na próxima task da Frente B (adapter E-SAJ TJCE). " +
-          "Por ora, credencial fica salva como 'validando' até o adapter conseguir testar via login real.",
+          `Sistema "${cred.sistema}" ainda não tem adapter de login automatizado. ` +
+          `Apenas esaj_tjce está pronto no Spike atual — outros virão conforme demanda.`,
       };
     }),
 });

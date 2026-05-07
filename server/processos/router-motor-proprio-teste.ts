@@ -61,20 +61,40 @@ async function garantirSentry() {
  * Playwright). Quando adicionar TJDFT/TJMG/TRF1 no Dia 3, registrar
  * aqui também.
  */
-const TRIBUNAIS_DISPONIVEIS = ["trt2", "trt7", "trt15"] as const;
+const TRIBUNAIS_DISPONIVEIS = ["trt2", "trt7", "trt15", "tjce"] as const;
 type TribunalDisponivel = (typeof TRIBUNAIS_DISPONIVEIS)[number];
 
-const TRIBUNAIS_METADATA: Record<TribunalDisponivel, { nome: string }> = {
-  trt2: { nome: "Tribunal Regional do Trabalho — 2ª Região (SP)" },
-  trt7: { nome: "Tribunal Regional do Trabalho — 7ª Região (Ceará)" },
-  trt15: { nome: "Tribunal Regional do Trabalho — 15ª Região (Campinas)" },
+interface TribunalMeta {
+  nome: string;
+  /** Indica que esse tribunal exige credencial cadastrada no cofre */
+  exigeCredencial: boolean;
+  /** Sistema do cofre que casa com este tribunal (quando exigeCredencial) */
+  sistemaCofre?: "esaj_tjce" | "esaj_tjsp" | "esaj_*";
+}
+
+const TRIBUNAIS_METADATA: Record<TribunalDisponivel, TribunalMeta> = {
+  trt2: { nome: "Tribunal Regional do Trabalho — 2ª Região (SP)", exigeCredencial: false },
+  trt7: { nome: "Tribunal Regional do Trabalho — 7ª Região (Ceará)", exigeCredencial: false },
+  trt15: { nome: "Tribunal Regional do Trabalho — 15ª Região (Campinas)", exigeCredencial: false },
+  tjce: {
+    nome: "Tribunal de Justiça do Ceará — E-SAJ",
+    exigeCredencial: true,
+    sistemaCofre: "esaj_tjce",
+  },
 };
 
 /**
  * Cria o adapter via lazy import. Só executa quando endpoint é chamado
  * de fato (após o gate de ambiente bloquear production).
+ *
+ * Para tribunais que exigem credencial (ex: TJCE), o caller passa o
+ * `credencialId` resolvido. O helper busca + decripta credencial e
+ * retorna adapter pronto pra usar.
  */
-async function criarAdapterLazy(tribunal: TribunalDisponivel) {
+async function criarAdapterLazy(
+  tribunal: TribunalDisponivel,
+  credencialId?: number,
+) {
   if (tribunal === "trt2") {
     const mod = await import(
       "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt2"
@@ -92,6 +112,74 @@ async function criarAdapterLazy(tribunal: TribunalDisponivel) {
       "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt15"
     );
     return new mod.TRT15Scraper();
+  }
+  if (tribunal === "tjce") {
+    if (!credencialId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "TJCE exige credencial cadastrada — selecione uma credencial ativa do cofre antes de consultar.",
+      });
+    }
+    const { buscarCredencialDecriptada, recuperarSessao } = await import(
+      "../escritorio/cofre-helpers"
+    );
+    const cred = await buscarCredencialDecriptada(credencialId);
+    if (!cred) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Credencial não encontrada no cofre",
+      });
+    }
+    if (cred.sistema !== "esaj_tjce" && cred.sistema !== "esaj_*") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Credencial é do sistema "${cred.sistema}", não compatível com TJCE`,
+      });
+    }
+    const mod = await import(
+      "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/tjce"
+    );
+    const scraper = new mod.EsajTjceScraper({
+      username: cred.username,
+      password: cred.password,
+      totpSecret: cred.totpSecret,
+    });
+    // Adapta a interface do EsajTjceScraper pra ScraperTribunalAdapter:
+    // primeiro recupera sessão (ou loga se não tem), depois consulta.
+    return {
+      tribunal: "tjce",
+      nome: TRIBUNAIS_METADATA.tjce.nome,
+      consultarPorCnj: async (cnj: string) => {
+        let storageState = await recuperarSessao(credencialId);
+        if (!storageState) {
+          // Sem sessão válida — loga primeiro
+          const login = await scraper.testarLogin();
+          if (!login.ok || !login.storageStateJson) {
+            return {
+              ok: false,
+              tribunal: "tjce",
+              cnj,
+              latenciaMs: login.latenciaMs,
+              capa: null,
+              movimentacoes: [],
+              categoriaErro: "outro" as const,
+              mensagemErro: `Login falhou antes da consulta: ${login.mensagem}`,
+              screenshotPath: login.screenshotPath,
+              finalizadoEm: new Date().toISOString(),
+            };
+          }
+          storageState = login.storageStateJson;
+          const { salvarSessao } = await import("../escritorio/cofre-helpers");
+          await salvarSessao(
+            credencialId,
+            storageState,
+            new Date(Date.now() + 90 * 60 * 1000),
+          );
+        }
+        return scraper.consultarPorCnj(cnj, storageState);
+      },
+    };
   }
   // exhaustive check — TS força incluir todos os cases
   throw new Error(`Tribunal não implementado: ${tribunal satisfies never}`);
@@ -122,12 +210,15 @@ export const motorProprioTesteRouter = router({
   /**
    * Lista de tribunais com adapter implementado (pra dropdown da UI).
    * Retorna metadata estática — não instancia adapter (que carregaria
-   * Playwright à toa).
+   * Playwright à toa). Inclui flag `exigeCredencial` pra UI mostrar
+   * seletor de credencial quando necessário.
    */
   tribunaisDisponiveis: adminProcedure.query(() => {
     return TRIBUNAIS_DISPONIVEIS.map((t) => ({
       codigo: t,
       nome: TRIBUNAIS_METADATA[t].nome,
+      exigeCredencial: TRIBUNAIS_METADATA[t].exigeCredencial,
+      sistemaCofre: TRIBUNAIS_METADATA[t].sistemaCofre,
     }));
   }),
 
@@ -166,6 +257,8 @@ export const motorProprioTesteRouter = router({
             message: "CNJ inválido (módulo 97 não bate)",
           }),
         tribunal: z.enum(TRIBUNAIS_DISPONIVEIS),
+        /** Obrigatório quando tribunal exige credencial (ex: TJCE) */
+        credencialId: z.number().int().positive().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -173,11 +266,16 @@ export const motorProprioTesteRouter = router({
       await garantirSentry();
 
       log.info(
-        { admin: ctx.user.id, tribunal: input.tribunal, cnj: input.cnj },
+        {
+          admin: ctx.user.id,
+          tribunal: input.tribunal,
+          cnj: input.cnj,
+          credencialId: input.credencialId ?? null,
+        },
         "[motor-proprio-teste] consulta iniciada",
       );
 
-      const adapter = await criarAdapterLazy(input.tribunal);
+      const adapter = await criarAdapterLazy(input.tribunal, input.credencialId);
       const resultado = await adapter.consultarPorCnj(input.cnj);
 
       log.info(
