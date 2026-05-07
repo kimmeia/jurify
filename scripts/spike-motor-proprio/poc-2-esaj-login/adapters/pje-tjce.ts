@@ -341,27 +341,47 @@ export class PjeTjceScraper {
         };
       }
 
-      // Procura link/linha do processo no resultado. JSF costuma ter <a>
-      // com texto do CNJ ou onclick que dispara navegação JSF.
+      // Procura link/linha do processo no resultado.
+      // PJe TJCE 1º grau (RichFaces): linha de cada processo tem links
+      // com id `fPP:processosTable:{idInterno}:j_id{N}`. O `:j_id492` é
+      // tipicamente o link "Ver detalhes do processo" (primeira coluna).
+      // Click dispara `A4J.AJAX.Submit('fPP',...)` — RichFaces AJAX que
+      // navega pra detalhe (URL muda).
       const linkProcesso = page
         .locator(
           [
+            "a[id*='processosTable'][id$=':j_id492']",
+            "a.btn-link[id*='processosTable']",
             `a:has-text('${cnjMascarado}')`,
             "tr.linhaResultado a",
-            "table a[onclick*='Processo']",
-            "a[id*='processo' i]",
-            "a:has-text('Detalhes')",
           ].join(", "),
         )
         .first();
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
-        await Promise.all([
-          page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {}),
-          linkProcesso.click(),
-        ]);
-        await page.waitForTimeout(1000);
+        const urlAntes = page.url();
+        await linkProcesso.click({ timeout: 5000 }).catch(() => {});
+        // RichFaces AJAX submit: pode mudar URL OU atualizar DOM in-place.
+        // Esperamos a primeira de várias condições possíveis.
+        await Promise.race([
+          page.waitForURL((u) => u.toString() !== urlAntes, { timeout: 12_000 }),
+          page
+            .waitForSelector(
+              [
+                "h1:has-text('Detalhes do Processo')",
+                "h2:has-text('Detalhes do Processo')",
+                "*:text-is('Movimentações')",
+                "*:text-is('Movimentação')",
+                "table[id*='movimentacao' i]",
+                "table[id*='movimento' i]",
+              ].join(", "),
+              { timeout: 12_000 },
+            )
+            .catch(() => null),
+        ]).catch(() => null);
+        await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
+        await page.waitForTimeout(1500);
       }
       // Se não há link, pode ser que a busca já redirecionou direto
       // pro detalhe (PJe faz isso quando há match único). Seguimos
