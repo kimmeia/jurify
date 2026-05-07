@@ -342,17 +342,14 @@ export class PjeTjceScraper {
       }
 
       // Procura link/linha do processo no resultado.
-      // PJe TJCE 1º grau (RichFaces): linha de cada processo tem links
-      // com id `fPP:processosTable:{idInterno}:j_id{N}`. O `:j_id492` é
-      // tipicamente o link "Ver detalhes do processo".
-      //
-      // URL final esperada (capturada manualmente):
-      //   /pje1grau/Processo/ConsultaProcesso/Detalhe/
-      //     listProcessoCompletoAdvogado.seam?id={ID}&ca={TOKEN}
-      // O `id` corresponde ao número entre `processosTable:` e `:j_id`
-      // do link. O `ca` é gerado dinamicamente pelo Seam.
+      // PJe TJCE 1º grau (RichFaces): cada linha tem múltiplos botões,
+      // identificados por `fPP:processosTable:{id}:j_id{N}`. Diagnóstico
+      // mostrou que `:j_id487` é o "Ver detalhes" (btn-default-sm) e
+      // `:j_id492` é outro botão (btn-link-condensed). Preferimos j_id487.
       const seletorLinkResultado =
-        "a[id*='processosTable'][id$=':j_id492'], a.btn-link[id*='processosTable']";
+        "a[id*='processosTable'][id$=':j_id487'], " +
+        "a[id*='processosTable'][id$=':j_id492'], " +
+        "a.btn-link[id*='processosTable']";
       const linkProcesso = page.locator(seletorLinkResultado).first();
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
@@ -381,10 +378,31 @@ export class PjeTjceScraper {
               "input[name='javax.faces.ViewState']",
             ) as HTMLInputElement | null;
             const viewState = viewStateInput?.value ?? null;
-            // Form ID é tipicamente "fPP" no PJe TJCE 1º grau. Fallback
-            // se DOM tiver formato diferente.
             const formId = form.id || form.name || "fPP";
-            return { linkId, formId, viewState, action: form.action };
+            // Parseia `parameters` do onclick A4J.AJAX.Submit. Padrão:
+            //   onclick="A4J.AJAX.Submit('fPP',event,{
+            //     'similarityGroupingId':'X',
+            //     'parameters':{'k1':'v1','k2':'v2'}
+            //   })"
+            // Esses parameters viram hidden inputs no submit AJAX.
+            const onclickStr = link.getAttribute("onclick") ?? "";
+            const parameters: Record<string, string> = {};
+            const paramsMatch = onclickStr.match(/['"]parameters['"]\s*:\s*\{([^}]+)\}/);
+            if (paramsMatch) {
+              // Extrai cada par 'chave':'valor'
+              const re = /['"]([^'"]+)['"]\s*:\s*['"]([^'"]*)['"]/g;
+              let m: RegExpExecArray | null;
+              while ((m = re.exec(paramsMatch[1])) !== null) {
+                parameters[m[1]] = m[2];
+              }
+            }
+            return {
+              linkId,
+              formId,
+              viewState,
+              action: form.action,
+              parameters,
+            };
           }, seletorLinkResultado)
           .catch(() => null);
 
@@ -398,6 +416,11 @@ export class PjeTjceScraper {
           payload.append(dadosLink.linkId, dadosLink.linkId);
           payload.append("ajaxSingle", dadosLink.linkId);
           payload.append("similarityGroupingId", dadosLink.linkId);
+          // Injeta `parameters` parseados do onclick (ex:
+          // idProcessoSelecionado=3253677). Sem isso, servidor rejeita.
+          for (const [k, v] of Object.entries(dadosLink.parameters)) {
+            payload.append(k, v);
+          }
           payload.append("javax.faces.ViewState", dadosLink.viewState);
           payload.append("AJAX:EVENTS_COUNT", "1");
 
