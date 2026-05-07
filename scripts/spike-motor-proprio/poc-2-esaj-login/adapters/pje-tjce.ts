@@ -500,7 +500,22 @@ export class PjeTjceScraper {
           );
         }
       }
-      if (!capa.dataDistribuicao) {
+
+      // Fallback: dataDistribuicao via mov "Distribuído por sorteio".
+      // PJe TJCE 1º grau não expõe "Autuado em" no painel principal,
+      // mas sempre tem uma movimentação inicial tipo "Distribuído".
+      let capaFinal = capa;
+      if (!capaFinal.dataDistribuicao && movimentacoes.length > 0) {
+        const movDistribuido = movimentacoes.find((m) =>
+          /distribu[ií]d[oa]|autuad[oa]|distribui[çc][ãa]o/i.test(m.texto),
+        );
+        if (movDistribuido) {
+          // Extrai só YYYY-MM-DD (data ISO sem hora)
+          const dataIso = movDistribuido.data.split("T")[0] ?? null;
+          capaFinal = { ...capaFinal, dataDistribuicao: dataIso };
+        }
+      }
+      if (!capaFinal.dataDistribuicao) {
         console.warn(
           `[pje-tjce] consulta OK mas dataDistribuicao=null pra ${cnjMascarado}`,
         );
@@ -509,7 +524,7 @@ export class PjeTjceScraper {
       return {
         ...baseResultado,
         ok: true,
-        capa,
+        capa: capaFinal,
         movimentacoes,
         latenciaMs: Date.now() - inicio,
         finalizadoEm: new Date().toISOString(),
