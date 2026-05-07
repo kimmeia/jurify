@@ -357,85 +357,96 @@ export class PjeTjceScraper {
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
-        // Captura a URL final via interceptação de network. RichFaces vai
-        // disparar GET pra `listProcessoCompletoAdvogado.seam?id=...&ca=...`
-        // — pegamos essa URL e navegamos direto.
-        let urlDetalhe: string | null = null;
-        const requestListener = (req: import("@playwright/test").Request) => {
-          const url = req.url();
-          if (
-            url.includes("listProcessoCompletoAdvogado.seam") ||
-            url.includes("Detalhe/listView.seam")
-          ) {
-            urlDetalhe = url;
-          }
-        };
-        page.on("request", requestListener);
+        // Aguarda modal de loading sumir antes do click
+        await page
+          .locator("#modalStatusContent, #modalStatusContentTable")
+          .first()
+          .waitFor({ state: "hidden", timeout: 5000 })
+          .catch(() => {});
 
-        try {
-          // Aguarda modal de loading sumir antes do click
-          await page
-            .locator("#modalStatusContent, #modalStatusContentTable")
-            .first()
-            .waitFor({ state: "hidden", timeout: 5000 })
-            .catch(() => {});
+        // Captura a URL completa do detalhe (com `id` + `ca`) via
+        // `waitForResponse` — RichFaces dispara request normal pra
+        // listProcessoCompletoAdvogado.seam?id=...&ca=...
+        const responsePromise = page
+          .waitForResponse(
+            (r) => {
+              const url = r.url();
+              return (
+                url.includes("listProcessoCompletoAdvogado.seam") ||
+                (url.includes("Detalhe") && url.includes(".seam"))
+              );
+            },
+            { timeout: 15_000 },
+          )
+          .catch(() => null);
 
-          // Dispara o onclick handler manualmente. `Locator.click` e
-          // `element.click()` falharam — provavelmente porque o handler
-          // RichFaces precisa do contexto de evento adequado. Executar o
-          // string do `onclick` via `new Function(...)` resolve.
-          await page.evaluate((sel) => {
-            const link = document.querySelector(sel) as HTMLAnchorElement | null;
-            if (!link) return;
-            const handler = link.getAttribute("onclick");
-            if (handler) {
-              try {
-                const fn = new Function("event", handler);
-                fn.call(link, new MouseEvent("click", { bubbles: true, cancelable: true }));
-              } catch {
-                // se onclick falhar, tenta click padrão
-                link.click();
+        // Tenta múltiplas estratégias de click em sequência. PJe RichFaces
+        // pode ignorar Locator.click() (sintético, fica preso em overlay)
+        // e até `element.click()` via JS (handler precisa de event mock
+        // específico).
+        const clickEstrategias = [
+          // 1. dispatchEvent do Playwright — dispara evento DOM nativo
+          //    no contexto da página, mais robusto que Locator.click
+          async () => {
+            await page.dispatchEvent(seletorLinkResultado, "click").catch(() => {});
+          },
+          // 2. Executa onclick string com event mock (já tentado antes,
+          //    mas mantemos como fallback)
+          async () => {
+            await page.evaluate((sel) => {
+              const link = document.querySelector(sel) as HTMLAnchorElement | null;
+              if (!link) return;
+              const handler = link.getAttribute("onclick");
+              if (handler) {
+                try {
+                  const fn = new Function("event", handler);
+                  fn.call(link, new MouseEvent("click", { bubbles: true, cancelable: true }));
+                } catch {
+                  link.click();
+                }
               }
-            } else {
-              link.click();
-            }
-          }, seletorLinkResultado);
+            }, seletorLinkResultado);
+          },
+          // 3. dispatch MouseEvent diretamente no element via JS
+          async () => {
+            await page.evaluate((sel) => {
+              const link = document.querySelector(sel) as HTMLAnchorElement | null;
+              if (!link) return;
+              const event = new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+              });
+              link.dispatchEvent(event);
+            }, seletorLinkResultado);
+          },
+        ];
 
-          // Aguarda interceptação capturar a URL (até 12s)
-          for (let i = 0; i < 60; i++) {
-            if (urlDetalhe) break;
-            await page.waitForTimeout(200);
-          }
-        } finally {
-          page.off("request", requestListener);
+        let response: Awaited<ReturnType<typeof page.waitForResponse>> | null = null;
+        for (const tentativa of clickEstrategias) {
+          await tentativa();
+          // Espera 3s pra ver se request foi disparado
+          response = (await Promise.race([
+            responsePromise,
+            page.waitForTimeout(3000).then(() => null),
+          ])) as typeof response;
+          if (response) break;
+        }
+        // Espera adicional caso click tenha sido tarde
+        if (!response) {
+          response = (await responsePromise) ?? null;
         }
 
+        const urlDetalhe = response?.url() ?? null;
+
         if (urlDetalhe) {
-          // Navega direto pra URL completa do detalhe
+          // Navega direto pra URL completa do detalhe (com id + ca)
           await page.goto(urlDetalhe, { waitUntil: "domcontentloaded" });
           await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
           await page.waitForTimeout(1500);
-        } else {
-          // Fallback: tenta extrair só o `id` interno do link e navegar
-          // sem `ca`. PJe às vezes aceita só o id se houver sessão válida.
-          const idInterno = await page
-            .evaluate((sel) => {
-              const link = document.querySelector(sel) as HTMLAnchorElement | null;
-              if (!link) return null;
-              const m = link.id.match(/processosTable:(\d+):/);
-              return m?.[1] ?? null;
-            }, seletorLinkResultado)
-            .catch(() => null);
-
-          if (idInterno) {
-            const urlFallback =
-              "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/Detalhe/" +
-              `listProcessoCompletoAdvogado.seam?id=${idInterno}`;
-            await page.goto(urlFallback, { waitUntil: "domcontentloaded" }).catch(() => {});
-            await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
-            await page.waitForTimeout(1500);
-          }
         }
+        // Sem fallback de URL incompleta — sem `ca` o JSF retorna
+        // "error.seam: Sem permissão para acessar a página" (testado).
       }
       // Se não há link, pode ser que a busca já redirecionou direto
       // pro detalhe (PJe faz isso quando há match único). Seguimos
