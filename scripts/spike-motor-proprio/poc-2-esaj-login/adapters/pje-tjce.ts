@@ -344,63 +344,97 @@ export class PjeTjceScraper {
       // Procura link/linha do processo no resultado.
       // PJe TJCE 1º grau (RichFaces): linha de cada processo tem links
       // com id `fPP:processosTable:{idInterno}:j_id{N}`. O `:j_id492` é
-      // tipicamente o link "Ver detalhes do processo" (primeira coluna).
-      // Click dispara `A4J.AJAX.Submit('fPP',...)` — RichFaces AJAX que
-      // navega pra detalhe (URL muda).
+      // tipicamente o link "Ver detalhes do processo".
+      //
+      // URL final esperada (capturada manualmente):
+      //   /pje1grau/Processo/ConsultaProcesso/Detalhe/
+      //     listProcessoCompletoAdvogado.seam?id={ID}&ca={TOKEN}
+      // O `id` corresponde ao número entre `processosTable:` e `:j_id`
+      // do link. O `ca` é gerado dinamicamente pelo Seam.
       const seletorLinkResultado =
         "a[id*='processosTable'][id$=':j_id492'], a.btn-link[id*='processosTable']";
       const linkProcesso = page.locator(seletorLinkResultado).first();
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
-        const urlAntes = page.url();
-        const bodyLenAntes = await page.evaluate(() => document.body.innerHTML.length).catch(() => 0);
+        // Captura a URL final via interceptação de network. RichFaces vai
+        // disparar GET pra `listProcessoCompletoAdvogado.seam?id=...&ca=...`
+        // — pegamos essa URL e navegamos direto.
+        let urlDetalhe: string | null = null;
+        const requestListener = (req: import("@playwright/test").Request) => {
+          const url = req.url();
+          if (
+            url.includes("listProcessoCompletoAdvogado.seam") ||
+            url.includes("Detalhe/listView.seam")
+          ) {
+            urlDetalhe = url;
+          }
+        };
+        page.on("request", requestListener);
 
-        // 1. Aguarda modal de loading do RichFaces sumir (se visível)
-        await page
-          .locator("#modalStatusContent, #modalStatusContentTable")
-          .first()
-          .waitFor({ state: "hidden", timeout: 5000 })
-          .catch(() => {});
+        try {
+          // Aguarda modal de loading sumir antes do click
+          await page
+            .locator("#modalStatusContent, #modalStatusContentTable")
+            .first()
+            .waitFor({ state: "hidden", timeout: 5000 })
+            .catch(() => {});
 
-        // 2. Click via JS evaluate — mais robusto contra overlays e
-        //    eventos sintéticos que o Playwright pode não disparar
-        //    corretamente em RichFaces.
-        const clicado = await page
-          .evaluate((sel) => {
+          // Dispara o onclick handler manualmente. `Locator.click` e
+          // `element.click()` falharam — provavelmente porque o handler
+          // RichFaces precisa do contexto de evento adequado. Executar o
+          // string do `onclick` via `new Function(...)` resolve.
+          await page.evaluate((sel) => {
             const link = document.querySelector(sel) as HTMLAnchorElement | null;
-            if (!link) return false;
-            link.click();
-            return true;
-          }, seletorLinkResultado)
-          .catch(() => false);
+            if (!link) return;
+            const handler = link.getAttribute("onclick");
+            if (handler) {
+              try {
+                const fn = new Function("event", handler);
+                fn.call(link, new MouseEvent("click", { bubbles: true, cancelable: true }));
+              } catch {
+                // se onclick falhar, tenta click padrão
+                link.click();
+              }
+            } else {
+              link.click();
+            }
+          }, seletorLinkResultado);
 
-        if (clicado) {
-          // 3. Aguarda RichFaces AJAX: modal aparece (start) e some (end).
-          //    Se modal já estava visível ao clicar, podemos pular o "aparece".
-          await page
-            .locator("#modalStatusContent, #modalStatusContentTable")
-            .first()
-            .waitFor({ state: "visible", timeout: 3000 })
-            .catch(() => {});
-          await page
-            .locator("#modalStatusContent, #modalStatusContentTable")
-            .first()
-            .waitFor({ state: "hidden", timeout: 15_000 })
-            .catch(() => {});
+          // Aguarda interceptação capturar a URL (até 12s)
+          for (let i = 0; i < 60; i++) {
+            if (urlDetalhe) break;
+            await page.waitForTimeout(200);
+          }
+        } finally {
+          page.off("request", requestListener);
+        }
 
-          // 4. Espera mudança real: URL OU bodyLen mudou
-          await Promise.race([
-            page.waitForURL((u) => u.toString() !== urlAntes, { timeout: 8_000 }),
-            page
-              .waitForFunction(
-                (oldLen) => Math.abs(document.body.innerHTML.length - oldLen) > 5000,
-                bodyLenAntes,
-                { timeout: 8_000 },
-              )
-              .catch(() => null),
-          ]).catch(() => null);
+        if (urlDetalhe) {
+          // Navega direto pra URL completa do detalhe
+          await page.goto(urlDetalhe, { waitUntil: "domcontentloaded" });
+          await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
           await page.waitForTimeout(1500);
+        } else {
+          // Fallback: tenta extrair só o `id` interno do link e navegar
+          // sem `ca`. PJe às vezes aceita só o id se houver sessão válida.
+          const idInterno = await page
+            .evaluate((sel) => {
+              const link = document.querySelector(sel) as HTMLAnchorElement | null;
+              if (!link) return null;
+              const m = link.id.match(/processosTable:(\d+):/);
+              return m?.[1] ?? null;
+            }, seletorLinkResultado)
+            .catch(() => null);
+
+          if (idInterno) {
+            const urlFallback =
+              "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/Detalhe/" +
+              `listProcessoCompletoAdvogado.seam?id=${idInterno}`;
+            await page.goto(urlFallback, { waitUntil: "domcontentloaded" }).catch(() => {});
+            await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
+            await page.waitForTimeout(1500);
+          }
         }
       }
       // Se não há link, pode ser que a busca já redirecionou direto
