@@ -763,14 +763,24 @@ export class PjeTjceScraper {
           documento: string | null;
         }> = [];
 
-        // PJe TJCE 1º grau: #divTimeLine é um wrapper. Os primeiros
-        // 1500 chars do innerHTML mostram .pesquisa (filtros — input de
-        // busca + dropdowns "Inverter ordenação", "Exibir documentos").
-        // Os items reais ficam dentro de .timeline (data-target=".timeline"
-        // do header confirma).
+        // PJe TJCE 1º grau: estrutura real revelada via diag (commit d8aa569):
+        //   <div id="divTimeLine:divEventosTimeLine" class="eventos-timeline">
+        //     <div id="divTimeLine:eventosTimeLineElement">
+        //       <div class="media data">  ← separador de dia
+        //         <span class="data-interna">07 mai 2026</span>
+        //       </div>
+        //       <div class="media">  ← item de movimentação
+        //         ...
+        //       </div>
+        //     </div>
+        //   </div>
         let container: Element | null = null;
         let containerSelUsado = "(body fallback)";
         const tentativas = [
+          "#divTimeLine\\:eventosTimeLineElement",
+          "[id$=':eventosTimeLineElement']",
+          ".eventos-timeline",
+          "[id$=':divEventosTimeLine']",
           ".timeline",
           "#divTimeLine .timeline",
           "#divTimeLine ol",
@@ -778,11 +788,14 @@ export class PjeTjceScraper {
           "#divTimeLine",
           "[id*='timeLine' i]",
           "[id*='timeline' i]",
-          "[id*='movimento' i]",
-          "[class*='movimentacao']",
         ];
         for (const sel of tentativas) {
-          container = document.querySelector(sel);
+          try {
+            container = document.querySelector(sel);
+          } catch {
+            // selector pode falhar se id tem chars especiais sem escape
+            container = null;
+          }
           if (container) {
             containerSelUsado = sel;
             break;
@@ -790,16 +803,15 @@ export class PjeTjceScraper {
         }
         if (!container) container = document.body;
 
-        // Lista expandida de seletores de candidatos a item de mov.
-        // Inclui filhos diretos da timeline (div, li) que tipicamente são
-        // os cards de cada movimentação no PJe TJCE.
+        // Items são <div class="media"> (sem outras classes especiais).
+        // Separadores de dia têm `.data-interna`. Pra simplificar,
+        // pegamos TODOS os .media filhos e parseamos por proximidade
+        // (separador define dataAtual, próximos items herdam).
         const candidatos = Array.from(
           container.querySelectorAll(
-            ":scope > li, :scope > div, " +
+            ".media, :scope > li, :scope > div, " +
               "li, .timeline-item, .movimentacao, " +
-              "div[id*='mov' i], tr, dl > dd, " +
-              "[role='listitem'], div[class*='evento'], " +
-              "div[class*='item'], article",
+              "tr, dl > dd, [role='listitem']",
           ),
         );
 
@@ -811,10 +823,73 @@ export class PjeTjceScraper {
 
         let dataAtual: string | null = null;
         for (const el of candidatos) {
+          const elClasses = el.className || "";
+
+          // Caso 1: separador de dia. PJe TJCE usa <div class="media data">
+          // com filho .data-interna que tem texto "07 mai 2026".
+          const dataInterna = el.querySelector(".data-interna");
+          if (dataInterna) {
+            const txtData = trim(dataInterna.textContent).replace(/\s+/g, " ");
+            const m1 = txtData.match(
+              /(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+(\d{4})/i,
+            );
+            if (m1) {
+              const mes = ptMonths[m1[2].toLowerCase()] ?? "01";
+              dataAtual = `${m1[3]}-${mes}-${m1[1].padStart(2, "0")}`;
+              continue;
+            }
+            const m2 = txtData.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            if (m2) {
+              dataAtual = `${m2[3]}-${m2[2]}-${m2[1]}`;
+              continue;
+            }
+          }
+
+          // Skip se este .media é o "data div-data-rolagem" (é separador
+          // visual, não tem conteúdo)
+          if (
+            typeof elClasses === "string" &&
+            (elClasses.includes("data ") || /\bdata\b/.test(elClasses)) &&
+            !el.querySelector(".media-body span:not(.text-muted)")
+          ) {
+            continue;
+          }
+
           const texto = trim(el.textContent).replace(/\s+/g, " ");
           if (!texto || texto.length < 3) continue;
 
-          // Padrão 1: separador "07 mai 2026" ou "07/05/2026"
+          // Caso 2: item de mov com hora HH:MM no fim. Combina com dataAtual.
+          const horaMatch = texto.match(/(\d{2}):(\d{2})\s*$/);
+          if (horaMatch && dataAtual) {
+            const textoSemHora = texto.slice(0, horaMatch.index).trim();
+            if (textoSemHora.length >= 3) {
+              out.push({
+                data: `${dataAtual}T${horaMatch[1]}:${horaMatch[2]}:00`,
+                texto: textoSemHora,
+                tipo: null,
+                documento: null,
+              });
+              continue;
+            }
+          }
+
+          // Caso 3: data BR no início ("07/05/2026 14:23 — texto")
+          const inicioBR = texto.match(
+            /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})?\s*[-:]?\s*(.+)/,
+          );
+          if (inicioBR) {
+            const [d, m, y] = inicioBR[1].split("/");
+            const hora = inicioBR[2] ? `T${inicioBR[2]}:00` : "";
+            out.push({
+              data: `${y}-${m}-${d}${hora}`,
+              texto: inicioBR[3].trim(),
+              tipo: null,
+              documento: null,
+            });
+            continue;
+          }
+
+          // Caso 4: separador formato "DD MMM YYYY" sozinho (sem .data-interna)
           const sepDM = texto.match(
             /^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+(\d{4})$/i,
           );
@@ -830,32 +905,13 @@ export class PjeTjceScraper {
             continue;
           }
 
-          // Padrão 2: hora HH:MM no fim (timeline do PJe). Combina com
-          // dataAtual.
-          const horaMatch = texto.match(/(\d{2}):(\d{2})\s*$/);
-          if (horaMatch && dataAtual) {
-            const textoSemHora = texto.slice(0, horaMatch.index).trim();
-            if (textoSemHora.length >= 3) {
-              out.push({
-                data: `${dataAtual}T${horaMatch[1]}:${horaMatch[2]}:00`,
-                texto: textoSemHora,
-                tipo: null,
-                documento: null,
-              });
-              continue;
-            }
-          }
-
-          // Padrão 3: data BR no início ("07/05/2026 14:23 — texto")
-          const inicioBR = texto.match(
-            /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})?\s*[-:]?\s*(.+)/,
-          );
-          if (inicioBR) {
-            const [d, m, y] = inicioBR[1].split("/");
-            const hora = inicioBR[2] ? `T${inicioBR[2]}:00` : "";
+          // Caso 5: item sem hora explícita mas com dataAtual conhecida
+          // (cria mov com hora 00:00). Só se o texto parece descrição
+          // de mov (>10 chars, não só números).
+          if (dataAtual && texto.length > 10 && /[a-zA-Z]/.test(texto)) {
             out.push({
-              data: `${y}-${m}-${d}${hora}`,
-              texto: inicioBR[3].trim(),
+              data: `${dataAtual}T00:00:00`,
+              texto: texto.slice(0, 500),
               tipo: null,
               documento: null,
             });
@@ -873,21 +929,29 @@ export class PjeTjceScraper {
               return `${t}=${c}`;
             },
           );
-          // Captura inner pulando os filtros (que ocupam ~1500 chars).
-          // Mostra trecho 2000-5000 onde provavelmente estão os items.
-          const innerMid = inner.slice(2000, 5000);
-          // Texto do panelDetalhesProcesso (onde costuma estar "Autuado em")
-          const panel = document.getElementById("panelDetalhesProcesso");
-          const panelText = panel
-            ? (panel.textContent ?? "").replace(/\s+/g, " ").slice(0, 800)
-            : "(panelDetalhesProcesso não encontrado)";
+          // Trecho 4000-10000 onde devem estar os items reais (depois dos
+          // filtros + dos primeiros separadores de data).
+          const innerMid = inner.slice(4000, 10000);
+          // Procura "Autuado em" / "Distribu" no documento todo
+          const docText = (document.body.textContent ?? "").replace(/\s+/g, " ");
+          const autuadoMatch = docText.match(
+            /(autuad[oa]\s+em|distribu[ií]d[oa]\s+em|data\s+(?:de\s+)?distribu[ií]ç[ãa]o)\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i,
+          );
+          // Pega 200 chars ao redor da palavra "autuad"/"distribu" pra
+          // ver context exato
+          const ctxIdx = docText.search(/autuad|distribu/i);
+          const ctxAround =
+            ctxIdx >= 0
+              ? docText.slice(Math.max(0, ctxIdx - 50), ctxIdx + 200)
+              : "(autuad/distribu não encontrado)";
           diag =
             `containerSel=${containerSelUsado} ` +
             `bodyLen=${inner.length} ` +
             `tags=[${tags.join(",")}] ` +
             `firstChildren=${(container.childNodes.length || 0)} ` +
-            `innerMid2000_5000="${innerMid}" ` +
-            `panelDetalhes="${panelText}"`;
+            `innerMid4000_10000="${innerMid}" ` +
+            `autuadoMatch=${autuadoMatch ? autuadoMatch[2] : "null"} ` +
+            `ctxAutuad="${ctxAround}"`;
         }
         return { movs: out, diag };
       })
