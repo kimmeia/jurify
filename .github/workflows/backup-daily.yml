@@ -9,7 +9,7 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -19,8 +19,6 @@ jobs:
           sudo apt-get install -y mysql-client
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
 
       - uses: actions/setup-node@v4
         with:

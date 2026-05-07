@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import {
   formatBRL, formatBRLShort, formatMes, formatDiaCurto, formatDiaCompleto, StatusBadge, FormaBadge, CICLO_LABELS,
@@ -489,15 +489,16 @@ export default function Financeiro() {
                 </div>
               </div>
 
-              {/* AreaChart com gradient — mesmo estilo do Dashboard. Em
-                  vez de barras justapostas (Recebido/Pendente/Vencido) que
-                  ocupavam muito espaço vertical, mostra Recebido + Pendente
-                  como áreas sobrepostas com fade vertical. Vencido vai pra
-                  KPI separado abaixo. */}
+              {/* ComposedChart com gradient — mesmo estilo do Dashboard.
+                  Recebido + Pendente como áreas sobrepostas com fade vertical
+                  e Vencido como Line vermelha (status=OVERDUE pelo Asaas, +
+                  PENDING já passada do vencimento, agrupado por data de
+                  vencimento). KPI "Vencido" abaixo continua mostrando o
+                  total geral. */}
               <div className="h-56 -mx-2">
                 {cashFlow && cashFlow.pontos.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                    <ComposedChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="financeiroColorRecebido" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
@@ -547,7 +548,16 @@ export default function Financeiro() {
                         fill="url(#financeiroColorPendente)"
                         name="Pendente"
                       />
-                    </AreaChart>
+                      <Line
+                        type="monotone"
+                        dataKey="vencido"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        dot={{ r: 2, fill: "#ef4444" }}
+                        activeDot={{ r: 4 }}
+                        name="Vencido"
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-sm text-muted-foreground">

@@ -248,7 +248,35 @@ async function startServer() {
 
   server.listen(port, () => {
     log.info({ port }, `Server running on http://localhost:${port}/`);
+    verificarMysqldumpDisponivel();
     iniciarJobs();
+  });
+}
+
+// Diagnóstico de boot: confirma se o binário `mysqldump` está disponível
+// no PATH. Backup global usa spawn("mysqldump", ...) — se o binário não
+// estiver no container, falha com ENOENT/exit=-2 só na hora do uso, e a
+// causa raiz fica obscurecida (especialmente no admin UI, onde HTTP
+// timeouta antes do erro chegar). Logando no startup, qualquer regressão
+// no nixpacks.toml fica visível imediatamente.
+function verificarMysqldumpDisponivel(): void {
+  import("node:child_process").then(({ spawnSync }) => {
+    const r = spawnSync("mysqldump", ["--version"], { encoding: "utf-8" });
+    if (r.error || r.status !== 0) {
+      const log = createLogger("backup-startup");
+      log.error(
+        {
+          err: r.error?.message,
+          status: r.status,
+          stderr: r.stderr?.slice(0, 500),
+          path: process.env.PATH,
+        },
+        "[backup-startup] mysqldump NÃO disponível no container — backups vão falhar com ENOENT",
+      );
+      return;
+    }
+    const log = createLogger("backup-startup");
+    log.info({ versao: r.stdout.trim() }, "[backup-startup] mysqldump OK");
   });
 }
 

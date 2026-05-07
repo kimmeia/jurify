@@ -1,0 +1,64 @@
+# Configuração Nixpacks pra build do Railway.
+#
+# Por padrão, Nixpacks só instala Node.js no container final. O backup
+# diário precisa do binário `mysqldump` (parte do mariadb client) pra
+# fazer dump direto do banco interno do Railway sem passar pelo TCP
+# Proxy externo (que é lento demais pro tamanho de production).
+#
+# IMPORTANTE — apt vs nix: tentativa anterior usava `default-mysql-client`
+# em `aptPkgs`, mas o binário não chegava no runtime (mysqldump falhava
+# com ENOENT/exit=-2). O stage final do Nixpacks parece não copiar
+# binários instalados via apt em /usr/bin pra imagem final em todos os
+# casos. Solução confiável: usar Nix package, que vai pra /nix/store/
+# e tem PATH garantido pelo runtime do Nixpacks.
+#
+# `aptPkgs` continua usado APENAS pras libs do Chromium (Playwright
+# precisa de libs do sistema em /usr/lib pra carregar o headless via
+# dlopen — package Nix do Chromium não funcionaria nesse fluxo).
+#
+# `["...", ...]` é a sintaxe Nixpacks pra ADICIONAR pacotes mantendo os
+# defaults do auto-detect (sem isso, sobrescreveria a lista inteira).
+
+[phases.setup]
+# mariadb (Nix package) → fornece `mysqldump` e cia. compatível com
+# MySQL 8.0 (mesmo dialeto de dump). Pacote inclui o servidor também
+# mas não rodamos — só usamos os binários cliente. Custo: ~80MB na
+# imagem; aceitável pra ter backup interno funcional.
+nixPkgs = [
+    "...",
+    "mariadb",
+]
+
+# libs do Chromium → necessárias pelo Playwright headless do motor próprio
+#   (PoC 1 — scrapers PJe). Postinstall em staging baixa só o binário do
+#   navegador; estas libs do sistema têm que estar pré-instaladas porque
+#   o postinstall roda sem sudo.
+#
+#   O conjunto abaixo é o mínimo testado pra `chromium --headless` em
+#   Debian/Ubuntu base do Nixpacks. Em production o binário do Chromium
+#   NÃO é baixado (gate por JURIFY_AMBIENTE em maybe-install-playwright.js),
+#   então essas libs ficam ociosas mas não afetam comportamento — apenas
+#   ~50MB extras na imagem, custo aceitável até motor próprio sair pra
+#   worker dedicado (Sprint 1 oficial).
+aptPkgs = [
+    "...",
+    "libnss3",
+    "libnspr4",
+    "libdbus-1-3",
+    "libatk1.0-0",
+    "libatk-bridge2.0-0",
+    "libcups2",
+    "libdrm2",
+    "libxkbcommon0",
+    "libxcomposite1",
+    "libxdamage1",
+    "libxfixes3",
+    "libxrandr2",
+    "libgbm1",
+    "libxcb1",
+    "libpango-1.0-0",
+    "libcairo2",
+    "libasound2",
+    "libatspi2.0-0",
+    "libgtk-3-0",
+]
