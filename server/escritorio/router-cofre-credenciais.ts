@@ -1,0 +1,318 @@
+/**
+ * Router admin — Cofre de Credenciais (Frente B do Spike).
+ *
+ * Armazena credenciais (CPF/OAB + senha + 2FA TOTP) que permitem ao
+ * motor próprio acessar tribunais autenticados (E-SAJ TJSP, TJCE,
+ * PJe restrito, Eproc) com a OAB do dono do escritório.
+ *
+ * SEGURANÇA EM CAMADAS:
+ *  1. `adminProcedure` — só admin do Jurify acessa endpoints
+ *  2. Senha + TOTP secret criptografados com AES-256-GCM
+ *     (server/escritorio/crypto-utils.ts) ANTES de tocar disco
+ *  3. Backend NUNCA retorna senha/TOTP em claro — só `usernameMascarado`
+ *  4. `cofre_credenciais.escritorioId` isola credenciais por escritório
+ *  5. Soft delete via status="removida" preserva auditoria
+ *
+ * O admin do Jurify cadastra as credenciais associadas ao próprio
+ * escritório (pega via `getEscritorioPorUsuario(ctx.user.id)`). Quando
+ * a feature for promovida pra usuários comuns, este router muda de
+ * adminProcedure pra protectedProcedure + verificação de cargo "dono".
+ */
+
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq, and, desc, ne } from "drizzle-orm";
+import { adminProcedure, router } from "../_core/trpc";
+import { getDb } from "../db";
+import { cofreCredenciais } from "../../drizzle/schema";
+import { encrypt, maskToken } from "./crypto-utils";
+import { getEscritorioPorUsuario } from "./db-escritorio";
+import { createLogger } from "../_core/logger";
+import { ambienteSuportaTeste } from "../_core/ambiente";
+import {
+  COFRE_VALIDACOES,
+  type CofreCredencialView,
+  type SistemaCofre,
+  type StatusCredencial,
+} from "@shared/cofre-credenciais-types";
+
+const log = createLogger("cofre-credenciais");
+
+const SISTEMAS_VALIDOS: readonly SistemaCofre[] = [
+  "esaj_tjsp", "esaj_tjsc", "esaj_tjba", "esaj_tjce", "esaj_tjam",
+  "esaj_tjac", "esaj_tjto", "esaj_tjms", "esaj_tjal", "esaj_*",
+  "pje_restrito_trt1", "pje_restrito_trt2", "pje_restrito_trt15", "pje_restrito_*",
+  "eproc_trf2", "eproc_trf4", "eproc_*",
+] as const;
+
+/**
+ * Resolve o escritório do admin logado. Lança FORBIDDEN se admin não
+ * tem escritório vinculado (caso típico: SuperAdmin que ainda não
+ * configurou escritório próprio durante o Spike).
+ *
+ * Quando o cofre virar feature genérica, esta função vira `getEscritorioOuLancar`
+ * em `db-escritorio.ts` e é reusada por outros routers.
+ */
+async function resolverEscritorioId(userId: number): Promise<number> {
+  const esc = await getEscritorioPorUsuario(userId);
+  if (!esc) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Cofre de credenciais exige escritório cadastrado. " +
+        "Crie um escritório primeiro em /configuracoes.",
+    });
+  }
+  return esc.escritorio.id;
+}
+
+/**
+ * Confirma que estamos em ambiente de teste antes de aceitar credenciais.
+ * Em production o cofre fica desabilitado durante o Spike — a UI sequer
+ * fica acessível na interface (admin-only), e este gate é defesa
+ * adicional caso alguém chame o endpoint diretamente.
+ */
+function exigirAmbienteTeste() {
+  if (!ambienteSuportaTeste()) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        "Cofre de credenciais só está disponível em ambiente staging durante o Spike. " +
+        "Em production será habilitado quando a Frente B do plano for promovida.",
+    });
+  }
+}
+
+/**
+ * Converte uma row do banco (com campos criptografados) em view segura
+ * para enviar ao frontend. NUNCA inclui senha ou TOTP secret.
+ */
+async function rowParaView(
+  row: typeof cofreCredenciais.$inferSelect,
+): Promise<CofreCredencialView> {
+  // Username está criptografado — desencripta só o suficiente pra mostrar
+  // mascarado. Decrypt completo é pra adapter na hora do login.
+  const { decrypt } = await import("./crypto-utils");
+  let usernameClean = "";
+  try {
+    usernameClean = decrypt(row.usernameEnc, row.usernameIv, row.usernameTag);
+  } catch {
+    usernameClean = "??";
+  }
+  return {
+    id: row.id,
+    escritorioId: row.escritorioId,
+    sistema: row.sistema as SistemaCofre,
+    apelido: row.apelido,
+    usernameMascarado: maskToken(usernameClean, 4),
+    tem2fa: !!row.totpSecretEnc,
+    status: row.status as StatusCredencial,
+    ultimoLoginSucessoEm: row.ultimoLoginSucessoEm?.toISOString() ?? null,
+    ultimoErro: row.ultimoErro,
+    criadoEm: row.createdAt.toISOString(),
+    atualizadoEm: row.updatedAt.toISOString(),
+  };
+}
+
+export const cofreCredenciaisRouter = router({
+  /**
+   * Lista credenciais do escritório do admin logado, ordenadas por
+   * mais recente primeiro. Não inclui as marcadas como `removida`.
+   */
+  listar: adminProcedure.query(async ({ ctx }) => {
+    exigirAmbienteTeste();
+    const db = await getDb();
+    if (!db) return [];
+    const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+    const rows = await db
+      .select()
+      .from(cofreCredenciais)
+      .where(
+        and(
+          eq(cofreCredenciais.escritorioId, escritorioId),
+          ne(cofreCredenciais.status, "removida"),
+        ),
+      )
+      .orderBy(desc(cofreCredenciais.createdAt));
+
+    return Promise.all(rows.map(rowParaView));
+  }),
+
+  /**
+   * Cadastra uma credencial nova. Criptografa todos os campos sensíveis
+   * antes de gravar. Status inicial = "validando" (pendente de verificação
+   * via login real — Sprint posterior).
+   *
+   * Validação real (com login no tribunal) virá no endpoint `validar`.
+   * Por ora, status fica "validando" e o adapter vai aceitar pra teste
+   * (`exigirAmbienteTeste()` já restringe o uso).
+   */
+  criar: adminProcedure
+    .input(
+      z.object({
+        sistema: z.enum(SISTEMAS_VALIDOS as readonly [SistemaCofre, ...SistemaCofre[]]),
+        apelido: z
+          .string()
+          .min(COFRE_VALIDACOES.apelidoMinLen)
+          .max(COFRE_VALIDACOES.apelidoMaxLen),
+        username: z
+          .string()
+          .min(COFRE_VALIDACOES.usernameMinLen)
+          .max(COFRE_VALIDACOES.usernameMaxLen),
+        password: z
+          .string()
+          .min(COFRE_VALIDACOES.passwordMinLen)
+          .max(COFRE_VALIDACOES.passwordMaxLen),
+        totpSecret: z
+          .string()
+          .min(COFRE_VALIDACOES.totpSecretMinLen)
+          .max(COFRE_VALIDACOES.totpSecretMaxLen)
+          .optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      exigirAmbienteTeste();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+      const userEnc = encrypt(input.username);
+      const passEnc = encrypt(input.password);
+      const totpEnc = input.totpSecret ? encrypt(input.totpSecret) : null;
+
+      const result = await db.insert(cofreCredenciais).values({
+        escritorioId,
+        sistema: input.sistema,
+        apelido: input.apelido,
+        usernameEnc: userEnc.encrypted,
+        usernameIv: userEnc.iv,
+        usernameTag: userEnc.tag,
+        passwordEnc: passEnc.encrypted,
+        passwordIv: passEnc.iv,
+        passwordTag: passEnc.tag,
+        totpSecretEnc: totpEnc?.encrypted,
+        totpSecretIv: totpEnc?.iv,
+        totpSecretTag: totpEnc?.tag,
+        status: "validando",
+        criadoPor: ctx.user.id,
+      });
+      const insertId = (result as unknown as { insertId: number }[])[0]?.insertId
+        ?? (result as unknown as { insertId: number }).insertId;
+
+      log.info(
+        { admin: ctx.user.id, escritorioId, sistema: input.sistema, credencialId: insertId },
+        "[cofre] credencial cadastrada",
+      );
+
+      const [row] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(eq(cofreCredenciais.id, insertId))
+        .limit(1);
+
+      return rowParaView(row);
+    }),
+
+  /**
+   * Soft delete — marca status="removida". Preserva linha pra auditoria
+   * (quem cadastrou, quando, último login bem-sucedido). A linha NÃO
+   * volta nas listagens depois de removida.
+   */
+  remover: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      exigirAmbienteTeste();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+      // Confirma que credencial pertence ao escritório do admin antes de remover
+      const [existente] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(
+            eq(cofreCredenciais.id, input.id),
+            eq(cofreCredenciais.escritorioId, escritorioId),
+          ),
+        )
+        .limit(1);
+
+      if (!existente) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+      }
+
+      await db
+        .update(cofreCredenciais)
+        .set({ status: "removida" })
+        .where(eq(cofreCredenciais.id, input.id));
+
+      log.info(
+        { admin: ctx.user.id, credencialId: input.id },
+        "[cofre] credencial removida (soft delete)",
+      );
+
+      return { ok: true };
+    }),
+
+  /**
+   * Dispara validação real da credencial via login no tribunal.
+   *
+   * STATUS ATUAL (Sprint do cofre): placeholder — apenas atualiza o
+   * timestamp pra indicar tentativa. Login real será implementado quando
+   * o adapter E-SAJ TJCE estiver pronto (próxima task da Frente B).
+   *
+   * Quando o adapter estiver pronto, este endpoint vai:
+   *  1. Decriptar credencial
+   *  2. Carregar adapter ESAJ correspondente ao sistema
+   *  3. Tentar login real (Playwright)
+   *  4. Se sucesso → status="ativa", salvar storageState em cofre_sessoes
+   *  5. Se falha → status="erro", mensagem específica
+   */
+  validar: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      exigirAmbienteTeste();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+      const [row] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(
+            eq(cofreCredenciais.id, input.id),
+            eq(cofreCredenciais.escritorioId, escritorioId),
+          ),
+        )
+        .limit(1);
+
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+      }
+
+      // Placeholder até adapter ESAJ ficar pronto. Marca tentativa
+      // mas não muda status final (continua "validando" / "ativa" como estava).
+      await db
+        .update(cofreCredenciais)
+        .set({
+          ultimoLoginTentativaEm: new Date(),
+          ultimoErro: "Validação real ainda não implementada — adapter ESAJ pendente (Frente B em curso)",
+        })
+        .where(eq(cofreCredenciais.id, input.id));
+
+      log.info(
+        { admin: ctx.user.id, credencialId: input.id, sistema: row.sistema },
+        "[cofre] validação placeholder — adapter ESAJ ainda pendente",
+      );
+
+      return {
+        ok: false,
+        mensagem:
+          "Validação real chega na próxima task da Frente B (adapter E-SAJ TJCE). " +
+          "Por ora, credencial fica salva como 'validando' até o adapter conseguir testar via login real.",
+      };
+    }),
+});
