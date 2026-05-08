@@ -9,6 +9,7 @@ import {
   contatos,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 import {
   atribuirCobrancasEmMassa,
   atualizarCategoriaCobranca,
@@ -44,12 +45,32 @@ function requireGestao(cargo: string) {
   }
 }
 
+/**
+ * Gate de leitura do módulo Financeiro. Respeita matriz `financeiro.ver`
+ * incluindo cargos personalizados. Atendente/SDR/estagiário têm
+ * `financeiro=(false, false, false, false, false)` na matriz padrão →
+ * negados. Gestor/dono têm `verTodos=true` → liberados.
+ *
+ * Diferente de `requireGestao` que checa cargo legado hardcoded — esta
+ * função respeita configuração customizada do admin no painel.
+ */
+async function requireFinanceiroVer(userId: number): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", "ver");
+  if (!perm.allowed) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Sem permissão para acessar Financeiro.",
+    });
+  }
+}
+
 const NOME_CAT = z.string().min(1).max(80);
 
 export const financeiroRouter = router({
   // ─── Categorias de cobrança ────────────────────────────────────────────────
 
   listarCategoriasCobranca: protectedProcedure.query(async ({ ctx }) => {
+    await requireFinanceiroVer(ctx.user.id);
     const esc = await requireEscritorio(ctx.user.id);
     await garantirCategoriasPadrao(esc.escritorio.id);
     return listarCategoriasCobranca(esc.escritorio.id);
@@ -88,6 +109,7 @@ export const financeiroRouter = router({
   // ─── Categorias de despesa ─────────────────────────────────────────────────
 
   listarCategoriasDespesa: protectedProcedure.query(async ({ ctx }) => {
+    await requireFinanceiroVer(ctx.user.id);
     const esc = await requireEscritorio(ctx.user.id);
     await garantirCategoriasPadrao(esc.escritorio.id);
     return listarCategoriasDespesa(esc.escritorio.id);
@@ -121,6 +143,7 @@ export const financeiroRouter = router({
   // ─── Regra de comissão (singleton por escritório) ──────────────────────────
 
   obterRegraComissao: protectedProcedure.query(async ({ ctx }) => {
+    await requireFinanceiroVer(ctx.user.id);
     const esc = await requireEscritorio(ctx.user.id);
     const regra = await obterRegraComissao(esc.escritorio.id);
     const faixas = await listarFaixasComissao(esc.escritorio.id);
