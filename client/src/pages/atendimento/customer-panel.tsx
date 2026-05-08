@@ -565,7 +565,7 @@ function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
   const [cnj, setCnj] = useState("");
   const [apelido, setApelido] = useState("");
 
-  const mut = trpc.juditOperacoes.criarMonitoramento.useMutation({
+  const mut = (trpc as any).juditOperacoes.criarMonitoramento.useMutation({
     onSuccess: () => {
       toast.success("Processo monitorado via Judit.IO — atualizações diárias ativadas");
       setCnj("");

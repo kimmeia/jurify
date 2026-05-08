@@ -105,7 +105,8 @@ function aliasTjPorCodigo(codigo: number): string | null {
 /**
  * Parse de data brasileira em vários formatos comuns:
  *   "10/05/2024", "10/05/2024 14:30:00", "10/05/2024 14:30",
- *   "2024-05-10", "2024-05-10T14:30:00"
+ *   "2024-05-10", "2024-05-10T14:30:00",
+ *   "10 mai 2024", "10 mai. 2024" (pt-br abreviado, usado pelo PJe TJCE)
  *
  * Retorna ISO 8601 ou null se não conseguir parsear.
  */
@@ -122,11 +123,30 @@ export function parseDataBR(input: string | null | undefined): string | null {
 
   // DD/MM/YYYY [HH:MM[:SS]]
   const m = trimmed.match(
-    /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/,
+    /^(\d{1,2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/,
   );
   if (m) {
     const [, dd, mm, yyyy, hh = "00", mi = "00", ss = "00"] = m;
-    const d = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}-03:00`);
+    const d = new Date(
+      `${yyyy}-${mm}-${dd.padStart(2, "0")}T${hh}:${mi}:${ss}-03:00`,
+    );
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // "DD mmm YYYY" pt-br abreviado (PJe TJCE expõe assim no painel lateral)
+  const ptMonths: Record<string, string> = {
+    jan: "01", fev: "02", mar: "03", abr: "04",
+    mai: "05", jun: "06", jul: "07", ago: "08",
+    set: "09", out: "10", nov: "11", dez: "12",
+  };
+  const m2 = trimmed.match(
+    /^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\.?\s+(\d{4})$/i,
+  );
+  if (m2) {
+    const dd = m2[1].padStart(2, "0");
+    const mm = ptMonths[m2[2].toLowerCase()] ?? "01";
+    const yyyy = m2[3];
+    const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00-03:00`);
     if (!isNaN(d.getTime())) return d.toISOString();
   }
 
@@ -170,8 +190,33 @@ export function parseValorBRLCentavos(input: string | null | undefined): number 
     .trim();
   if (!limpo) return null;
 
+  // Detecta formato:
+  //   "1.234,56"   → tem vírgula decimal → reais (R$ 1.234,56)
+  //   "1234.56"    → tem ponto decimal (sem vírgula) → reais
+  //   "5449470"    → só dígitos, sem decimal → CENTAVOS sem máscara
+  //                  (PJe TJCE expõe valor da causa assim em alguns campos)
+  //   "100"        → só dígitos pequeno → reais ("R$ 100,00")
+  const temVirgula = limpo.includes(",");
+  const temPontoDecimal = !temVirgula && /\.\d{1,2}$/.test(limpo);
+  const ehSoDigitos = /^\d+$/.test(limpo);
+
+  if (ehSoDigitos) {
+    // Heurística: dígitos puros sem máscara. Se >= 1000, assume que
+    // são centavos (PJe sem máscara expõe "5449470" pra R$ 54.494,70).
+    // Valores menores são raros pra valor de causa, mas tratamos como
+    // reais (ex: "100" = R$ 100,00 — embora improvável, não vamos
+    // estourar 100x à toa).
+    const num = parseInt(limpo, 10);
+    if (isNaN(num)) return null;
+    return num >= 1000 ? num : num * 100;
+  }
+
   // Formato BR: ponto como separador de milhar, vírgula como decimal
-  const valor = limpo.replace(/\./g, "").replace(",", ".");
+  const valor = temVirgula
+    ? limpo.replace(/\./g, "").replace(",", ".")
+    : temPontoDecimal
+      ? limpo // já está em formato US (ponto decimal)
+      : limpo;
   const num = parseFloat(valor);
   if (isNaN(num)) return null;
 

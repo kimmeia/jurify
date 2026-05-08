@@ -26,9 +26,9 @@ FROM node:22-slim
 #    OpenAI, Anthropic, Sentry).
 #  • libs do Chromium → Playwright headless do motor próprio (PoC 1).
 #    Essas libs precisam estar em /usr/lib pro dlopen do Chromium achar.
-#    O binário do Chromium em si é baixado pelo postinstall do
-#    Playwright (gate por JURIFY_AMBIENTE em
-#    scripts/maybe-install-playwright.js — só baixa em staging).
+#    O binário do Chromium em si é baixado SEMPRE no build step abaixo
+#    (sem gate de ambiente — env vars de runtime não estão disponíveis
+#    em build time, então gate condicional não funciona aqui).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     mariadb-client \
     ca-certificates \
@@ -73,14 +73,22 @@ COPY patches ./patches
 # trivial de código.
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Copia código e roda postinstall manualmente (já com tudo no lugar).
-# JURIFY_AMBIENTE vem dos build args do Railway quando configurado;
-# se não vier, postinstall sai silencioso (gate na própria função).
 COPY . .
 
-# Postinstall do Playwright — cliente de motor próprio. Falha não-fatal
-# (script é robusto a erro de rede, sai 0 mesmo se download falhar).
-RUN node scripts/maybe-install-playwright.js || true
+# Chromium do Playwright — motor próprio (PoC 1) precisa em runtime.
+# Instalamos SEMPRE, sem gate. Por quê:
+#  • Build time não recebe env vars de runtime (JURIFY_AMBIENTE só existe
+#    quando o container já está rodando), então um gate condicional aqui
+#    NÃO funciona — rejeitaria sempre, mesmo em staging.
+#  • Em production o `exigirAmbienteTeste()` no router bloqueia execução
+#    do Playwright, então o binário fica baixado mas nunca é invocado —
+#    custo é só ~280MB extras na imagem.
+#  • Quando motor próprio sair pra worker dedicado (Sprint 1+), o
+#    Dockerfile da app principal volta a ser slim.
+#
+# `--with-deps` desnecessário porque as libs do sistema (libnss3, etc.)
+# já foram instaladas via apt acima.
+RUN pnpm exec playwright install chromium
 
 # Build: Vite (client estático em dist/public/) + esbuild (server em
 # dist/index.js).

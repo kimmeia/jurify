@@ -60,6 +60,7 @@ const TRT2_FALLBACK: CnjTeste[] = [
   // { cnj: "1000123-45.2024.5.02.0001", descricao: "Reclamação trabalhista 1ª Vara SP" },
 ];
 
+const TRT7_FALLBACK: CnjTeste[] = [];
 const TRT15_FALLBACK: CnjTeste[] = [];
 const TJDFT_FALLBACK: CnjTeste[] = [];
 const TJMG_FALLBACK: CnjTeste[] = [];
@@ -68,6 +69,9 @@ const TRF1_FALLBACK: CnjTeste[] = [];
 export const CNJS_PUBLICOS = {
   get trt2() {
     return lerCnjsEnv("SPIKE_CNJS_TRT2", TRT2_FALLBACK);
+  },
+  get trt7() {
+    return lerCnjsEnv("SPIKE_CNJS_TRT7", TRT7_FALLBACK);
   },
   get trt15() {
     return lerCnjsEnv("SPIKE_CNJS_TRT15", TRT15_FALLBACK);
@@ -93,6 +97,7 @@ export function cnjsDoTribunal(tribunal: keyof typeof CNJS_PUBLICOS): CnjTeste[]
 
 export const TRIBUNAIS_DO_POC_1: Array<keyof typeof CNJS_PUBLICOS> = [
   "trt2",
+  "trt7",
   "trt15",
   "tjdft",
   "tjmg",

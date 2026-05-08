@@ -44,6 +44,7 @@ import { toast } from "sonner";
 
 const TRIBUNAIS_CONSULTA_URL: Record<string, string> = {
   trt2: "https://pje.trt2.jus.br/consultaprocessual/",
+  trt7: "https://pje.trt7.jus.br/consultaprocessual/",
   trt15: "https://pje.trt15.jus.br/consultaprocessual/",
 };
 
@@ -114,12 +115,29 @@ function formatDataHora(iso: string | null | undefined): string {
 
 export default function MotorProprioTeste() {
   const [tribunal, setTribunal] = useState<string>("trt2");
+  const [credencialId, setCredencialId] = useState<string>("");
   const [cnj, setCnj] = useState("");
   const [resultado, setResultado] = useState<any>(null);
   const [historico, setHistorico] = useState<ConsultaHistorico[]>([]);
 
   const ambienteQuery = (trpc as any).motorProprioTeste.ambienteSuportaTeste.useQuery();
   const tribunaisQuery = (trpc as any).motorProprioTeste.tribunaisDisponiveis.useQuery();
+  const credenciaisQuery = (trpc as any).cofreCredenciais.listar.useQuery();
+
+  const tribunaisData: any[] = tribunaisQuery.data ?? [];
+  const tribunalAtual = tribunaisData.find((t) => t.codigo === tribunal);
+  const exigeCredencial = tribunalAtual?.exigeCredencial ?? false;
+  const sistemaCofre = tribunalAtual?.sistemaCofre as string | undefined;
+
+  // Filtra credenciais compatíveis com o tribunal selecionado.
+  // Aceita credencial do sistema exato OU coringa (esaj_*).
+  const credenciaisCompativeis = (credenciaisQuery.data ?? []).filter((c: any) => {
+    if (!sistemaCofre) return false;
+    if (c.sistema === sistemaCofre) return true;
+    // Coringa: esaj_tjce aceita credencial cadastrada como esaj_*
+    const prefixo = sistemaCofre.split("_")[0];
+    return c.sistema === `${prefixo}_*`;
+  });
 
   const consultarMut = (trpc as any).motorProprioTeste.testarCnj.useMutation({
     onSuccess: (data: any) => {
@@ -166,15 +184,31 @@ export default function MotorProprioTeste() {
       toast.error("Cole um CNJ pra consultar");
       return;
     }
+    if (exigeCredencial && !credencialId) {
+      toast.error(
+        "Esse tribunal exige credencial cadastrada. Selecione uma credencial ativa do cofre ou cadastre em /admin/cofre-credenciais.",
+      );
+      return;
+    }
     setResultado(null);
-    consultarMut.mutate({ cnj: cnj.trim(), tribunal });
+    consultarMut.mutate({
+      cnj: cnj.trim(),
+      tribunal,
+      credencialId: exigeCredencial ? Number(credencialId) : undefined,
+    });
   };
 
   const handleRepetir = (item: ConsultaHistorico) => {
     setTribunal(item.tribunal);
     setCnj(item.cnj);
     setResultado(null);
-    consultarMut.mutate({ cnj: item.cnj, tribunal: item.tribunal });
+    const tMeta = tribunaisData.find((t) => t.codigo === item.tribunal);
+    consultarMut.mutate({
+      cnj: item.cnj,
+      tribunal: item.tribunal,
+      credencialId:
+        tMeta?.exigeCredencial && credencialId ? Number(credencialId) : undefined,
+    });
   };
 
   return (
@@ -233,14 +267,23 @@ export default function MotorProprioTeste() {
           <div className="grid gap-4 md:grid-cols-[200px_1fr_auto] items-end">
             <div className="space-y-2">
               <Label htmlFor="tribunal">Tribunal</Label>
-              <Select value={tribunal} onValueChange={setTribunal}>
+              <Select
+                value={tribunal}
+                onValueChange={(v) => {
+                  setTribunal(v);
+                  setCredencialId(""); // reset credencial ao trocar tribunal
+                }}
+              >
                 <SelectTrigger id="tribunal">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(tribunaisQuery.data ?? []).map((t: any) => (
+                  {tribunaisData.map((t: any) => (
                     <SelectItem key={t.codigo} value={t.codigo}>
                       <span className="font-mono uppercase">{t.codigo}</span>
+                      {t.exigeCredencial && (
+                        <span className="ml-1 text-amber-600">🔒</span>
+                      )}
                       <span className="ml-2 text-muted-foreground text-xs">{t.nome}</span>
                     </SelectItem>
                   ))}
@@ -278,6 +321,56 @@ export default function MotorProprioTeste() {
               )}
             </Button>
           </div>
+          {exigeCredencial && (
+            <div className="space-y-2 p-3 rounded-md border border-amber-500/30 bg-amber-50/30">
+              <Label htmlFor="credencial" className="flex items-center gap-1">
+                🔒 Credencial do cofre
+                <span className="text-xs text-muted-foreground font-normal ml-1">
+                  — {tribunalAtual?.nome} exige login automatizado
+                </span>
+              </Label>
+              {credenciaisCompativeis.length === 0 ? (
+                <div className="text-xs text-amber-700 bg-amber-100/50 rounded p-2">
+                  Nenhuma credencial compatível com <strong>{sistemaCofre}</strong> cadastrada.{" "}
+                  <a href="/admin/cofre-credenciais" className="underline font-medium">
+                    Cadastrar credencial agora →
+                  </a>
+                </div>
+              ) : (
+                <Select value={credencialId} onValueChange={setCredencialId}>
+                  <SelectTrigger id="credencial">
+                    <SelectValue placeholder="Selecione uma credencial cadastrada" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {credenciaisCompativeis.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        <span className="font-medium">{c.apelido}</span>
+                        <span className="ml-2 text-xs text-muted-foreground font-mono">
+                          {c.usernameMascarado}
+                        </span>
+                        <span
+                          className={`ml-2 text-xs ${
+                            c.status === "ativa"
+                              ? "text-emerald-600"
+                              : c.status === "erro"
+                              ? "text-red-600"
+                              : "text-amber-600"
+                          }`}
+                        >
+                          [{c.status}]
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Robô loga no tribunal automaticamente usando esta credencial. Sessão fica
+                cacheada por ~90min pra evitar relogin a cada consulta. Senha e 2FA nunca
+                aparecem em logs.
+              </p>
+            </div>
+          )}
           <div className="flex justify-end pt-2 border-t">
             <Button
               variant="ghost"

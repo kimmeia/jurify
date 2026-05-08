@@ -42,6 +42,7 @@ import type {
 } from "../lib/types-spike";
 import type { ScraperTribunalAdapter } from "./adapters/base";
 import { TRT2Scraper } from "./adapters/trt2";
+import { TRT7Scraper } from "./adapters/trt7";
 import { TRT15Scraper } from "./adapters/trt15";
 import { TJDFTScraper, TJMGScraper, TRF1Scraper } from "./adapters/placeholders";
 
@@ -49,6 +50,7 @@ const SAMPLES_DIR = path.resolve(process.cwd(), "scripts/spike-motor-proprio/sam
 
 const ADAPTERS: Record<string, () => ScraperTribunalAdapter> = {
   trt2: () => new TRT2Scraper(),
+  trt7: () => new TRT7Scraper(),
   trt15: () => new TRT15Scraper(),
   tjdft: () => new TJDFTScraper(),
   tjmg: () => new TJMGScraper(),

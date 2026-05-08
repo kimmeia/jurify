@@ -11,6 +11,19 @@
  *     (mesmo que caia merge inadvertido pra main)
  *  3. Rate limit aplicado pelo middleware global tRPC
  *
+ * NOTA SOBRE LAZY IMPORTS:
+ * Os adapters (`TRT2Scraper`, `TRT15Scraper`) e o `playwright-helpers`
+ * dependem de `@playwright/test` que vive em devDependencies. Se
+ * importássemos estaticamente aqui, o esbuild iria deixar o pacote
+ * external no bundle do server, e em production (sem devDeps instaladas)
+ * o `node dist/index.js` crasha no startup com `Cannot find module
+ * '@playwright/test'`.
+ *
+ * Solução: lazy `await import()` dentro das mutations. Em production,
+ * `exigirAmbienteTeste()` lança FORBIDDEN antes do import, então o
+ * pacote nunca é resolvido. Em staging, o postinstall já instalou
+ * Playwright via `JURIFY_AMBIENTE=staging`.
+ *
  * Quando o Spike completar e virar Sprint 1 oficial, este router vai
  * ser substituído por `processosRouter.consultarPorCnj()` chamando
  * worker dedicado. Por ora chama o adapter direto na request — síncrono,
@@ -20,28 +33,21 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, router } from "../_core/trpc";
-import { TRT2Scraper } from "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt2";
-import { TRT15Scraper } from "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt15";
 import {
-  closeBrowser,
-} from "../../scripts/spike-motor-proprio/lib/playwright-helpers";
-import {
-  initSpikeSentry,
-} from "../../scripts/spike-motor-proprio/lib/sentry-spike";
-import type { ScraperTribunalAdapter } from "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/base";
+  resolverAmbiente,
+  ambienteSuportaTeste as ambientePermiteTeste,
+} from "../_core/ambiente";
 import { validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("motor-proprio-teste");
 
-/**
- * Inicialização lazy do Sentry do Spike — só registra na primeira chamada.
- * Evita bagunçar startup do servidor com tags de Spike caso a feature
- * nunca seja usada.
- */
 let sentryInicializado = false;
-function garantirSentry() {
+async function garantirSentry() {
   if (sentryInicializado) return;
+  const { initSpikeSentry } = await import(
+    "../../scripts/spike-motor-proprio/lib/sentry-spike"
+  );
   initSpikeSentry({ pocId: 1, workerName: "spike-pje-scraper-trpc" });
   sentryInicializado = true;
 }
@@ -49,20 +55,134 @@ function garantirSentry() {
 /**
  * Tribunais disponíveis pra teste — mantém em sync com adapters
  * implementados em `scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/`.
+ *
+ * Metadata estática (nome legível) fica aqui pra que `tribunaisDisponiveis`
+ * possa retornar dropdown sem instanciar adapter (que carregaria
+ * Playwright). Quando adicionar TJDFT/TJMG/TRF1 no Dia 3, registrar
+ * aqui também.
  */
-const TRIBUNAIS_DISPONIVEIS = ["trt2", "trt15"] as const;
+const TRIBUNAIS_DISPONIVEIS = ["trt2", "trt7", "trt15", "tjce"] as const;
 type TribunalDisponivel = (typeof TRIBUNAIS_DISPONIVEIS)[number];
 
-function criarAdapter(tribunal: TribunalDisponivel): ScraperTribunalAdapter {
-  switch (tribunal) {
-    case "trt2":
-      return new TRT2Scraper();
-    case "trt15":
-      return new TRT15Scraper();
-    default:
-      // exhaustive check — TS força incluir todos os cases
-      throw new Error(`Tribunal não implementado: ${tribunal satisfies never}`);
+interface TribunalMeta {
+  nome: string;
+  /** Indica que esse tribunal exige credencial cadastrada no cofre */
+  exigeCredencial: boolean;
+  /** Sistema do cofre que casa com este tribunal (quando exigeCredencial) */
+  sistemaCofre?: "pje_tjce" | "esaj_tjsp" | "esaj_*" | "pje_*";
+}
+
+const TRIBUNAIS_METADATA: Record<TribunalDisponivel, TribunalMeta> = {
+  trt2: { nome: "Tribunal Regional do Trabalho — 2ª Região (SP)", exigeCredencial: false },
+  trt7: { nome: "Tribunal Regional do Trabalho — 7ª Região (Ceará)", exigeCredencial: false },
+  trt15: { nome: "Tribunal Regional do Trabalho — 15ª Região (Campinas)", exigeCredencial: false },
+  tjce: {
+    nome: "Tribunal de Justiça do Ceará — PJe (autenticado)",
+    exigeCredencial: true,
+    sistemaCofre: "pje_tjce",
+  },
+};
+
+/**
+ * Cria o adapter via lazy import. Só executa quando endpoint é chamado
+ * de fato (após o gate de ambiente bloquear production).
+ *
+ * Para tribunais que exigem credencial (ex: TJCE), o caller passa o
+ * `credencialId` resolvido. O helper busca + decripta credencial e
+ * retorna adapter pronto pra usar.
+ */
+async function criarAdapterLazy(
+  tribunal: TribunalDisponivel,
+  credencialId?: number,
+) {
+  if (tribunal === "trt2") {
+    const mod = await import(
+      "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt2"
+    );
+    return new mod.TRT2Scraper();
   }
+  if (tribunal === "trt7") {
+    const mod = await import(
+      "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt7"
+    );
+    return new mod.TRT7Scraper();
+  }
+  if (tribunal === "trt15") {
+    const mod = await import(
+      "../../scripts/spike-motor-proprio/poc-1-pje-scraper/adapters/trt15"
+    );
+    return new mod.TRT15Scraper();
+  }
+  if (tribunal === "tjce") {
+    if (!credencialId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "TJCE exige credencial cadastrada — selecione uma credencial ativa do cofre antes de consultar.",
+      });
+    }
+    const { buscarCredencialDecriptada, recuperarSessao } = await import(
+      "../escritorio/cofre-helpers"
+    );
+    const cred = await buscarCredencialDecriptada(credencialId);
+    if (!cred) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Credencial não encontrada no cofre",
+      });
+    }
+    if (cred.sistema !== "pje_tjce" && cred.sistema !== "pje_*") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Credencial é do sistema "${cred.sistema}", não compatível com PJe TJCE`,
+      });
+    }
+    const mod = await import(
+      "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
+    );
+    const scraper = new mod.PjeTjceScraper({
+      username: cred.username,
+      password: cred.password,
+      totpSecret: cred.totpSecret,
+    });
+    // Adapta a interface do EsajTjceScraper pra ScraperTribunalAdapter:
+    // primeiro recupera sessão (ou loga se não tem), depois consulta.
+    return {
+      tribunal: "tjce",
+      nome: TRIBUNAIS_METADATA.tjce.nome,
+      consultarPorCnj: async (cnj: string) => {
+        let storageState = await recuperarSessao(credencialId);
+        if (!storageState) {
+          // Sem sessão válida — loga primeiro
+          const login = await scraper.testarLogin();
+          if (!login.ok || !login.storageStateJson) {
+            return {
+              ok: false,
+              tribunal: "tjce",
+              cnj,
+              latenciaMs: login.latenciaMs,
+              capa: null,
+              movimentacoes: [],
+              categoriaErro: "outro" as const,
+              mensagemErro: `Login falhou antes da consulta: ${login.mensagem}`,
+              screenshotPath: login.screenshotPath,
+              finalizadoEm: new Date().toISOString(),
+            };
+          }
+          storageState = login.storageStateJson;
+          const { salvarSessao } = await import("../escritorio/cofre-helpers");
+          await salvarSessao(
+            credencialId,
+            storageState,
+            new Date(Date.now() + 90 * 60 * 1000),
+          );
+        }
+        return scraper.consultarPorCnj(cnj, storageState);
+      },
+    };
+  }
+  // exhaustive check — TS força incluir todos os cases
+  throw new Error(`Tribunal não implementado: ${tribunal satisfies never}`);
 }
 
 /**
@@ -70,10 +190,13 @@ function criarAdapter(tribunal: TribunalDisponivel): ScraperTribunalAdapter {
  * Em production, retorna FORBIDDEN — proteção em camadas com a feature
  * flag `escritorios.usarMotorProprio` que ainda não existe per-user
  * neste endpoint.
+ *
+ * Resolução de ambiente centralizada em `_core/ambiente.ts` — usa
+ * RAILWAY_ENVIRONMENT_NAME como fallback pra evitar bug de env var
+ * não-configurada acidentalmente no dashboard do Railway.
  */
 function exigirAmbienteTeste() {
-  const ambiente = process.env.JURIFY_AMBIENTE;
-  if (ambiente !== "staging" && process.env.NODE_ENV !== "development") {
+  if (!ambientePermiteTeste()) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message:
@@ -86,24 +209,30 @@ function exigirAmbienteTeste() {
 export const motorProprioTesteRouter = router({
   /**
    * Lista de tribunais com adapter implementado (pra dropdown da UI).
-   * Não exige ambiente de teste — apenas lista metadados.
+   * Retorna metadata estática — não instancia adapter (que carregaria
+   * Playwright à toa). Inclui flag `exigeCredencial` pra UI mostrar
+   * seletor de credencial quando necessário.
    */
   tribunaisDisponiveis: adminProcedure.query(() => {
-    return TRIBUNAIS_DISPONIVEIS.map((t) => {
-      const adapter = criarAdapter(t);
-      return { codigo: t, nome: adapter.nome };
-    });
+    return TRIBUNAIS_DISPONIVEIS.map((t) => ({
+      codigo: t,
+      nome: TRIBUNAIS_METADATA[t].nome,
+      exigeCredencial: TRIBUNAIS_METADATA[t].exigeCredencial,
+      sistemaCofre: TRIBUNAIS_METADATA[t].sistemaCofre,
+    }));
   }),
 
   /**
    * Indica se o ambiente atual permite chamar `testarCnj`.
    * Frontend usa pra desabilitar o botão e mostrar aviso em production.
+   *
+   * Reusa a resolução centralizada de `_core/ambiente.ts` — assim a
+   * UI exibe o MESMO valor que o gate do backend usa pra autorizar.
    */
   ambienteSuportaTeste: adminProcedure.query(() => {
-    const ambiente = process.env.JURIFY_AMBIENTE || process.env.NODE_ENV || "unknown";
     return {
-      ambiente,
-      suportaTeste: ambiente === "staging" || ambiente === "development",
+      ambiente: resolverAmbiente(),
+      suportaTeste: ambientePermiteTeste(),
     };
   }),
 
@@ -128,18 +257,25 @@ export const motorProprioTesteRouter = router({
             message: "CNJ inválido (módulo 97 não bate)",
           }),
         tribunal: z.enum(TRIBUNAIS_DISPONIVEIS),
+        /** Obrigatório quando tribunal exige credencial (ex: TJCE) */
+        credencialId: z.number().int().positive().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       exigirAmbienteTeste();
-      garantirSentry();
+      await garantirSentry();
 
       log.info(
-        { admin: ctx.user.id, tribunal: input.tribunal, cnj: input.cnj },
+        {
+          admin: ctx.user.id,
+          tribunal: input.tribunal,
+          cnj: input.cnj,
+          credencialId: input.credencialId ?? null,
+        },
         "[motor-proprio-teste] consulta iniciada",
       );
 
-      const adapter = criarAdapter(input.tribunal);
+      const adapter = await criarAdapterLazy(input.tribunal, input.credencialId);
       const resultado = await adapter.consultarPorCnj(input.cnj);
 
       log.info(
@@ -163,6 +299,9 @@ export const motorProprioTesteRouter = router({
    */
   fecharBrowser: adminProcedure.mutation(async () => {
     exigirAmbienteTeste();
+    const { closeBrowser } = await import(
+      "../../scripts/spike-motor-proprio/lib/playwright-helpers"
+    );
     await closeBrowser();
     return { ok: true };
   }),

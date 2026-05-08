@@ -35,6 +35,7 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   // ─── DADOS OPERACIONAIS ──────────────────────────────────────────────
   { nomeBanco: "colaboradores", colunaEscritorio: "escritorioId", categoria: "dados" },
   { nomeBanco: "convites_colaborador", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "motor_monitoramentos", colunaEscritorio: "escritorio_id", categoria: "dados" },
   { nomeBanco: "contatos", colunaEscritorio: "escritorioIdContato", categoria: "dados" },
   { nomeBanco: "cliente_anotacoes", colunaEscritorio: "escritorioId", categoria: "dados" },
   { nomeBanco: "cliente_arquivos", colunaEscritorio: "escritorioId", categoria: "dados" },
@@ -58,8 +59,6 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   { nomeBanco: "comissoes_lancamentos_log", colunaEscritorio: "escritorioIdComLog", categoria: "dados" },
   // Métricas de atendimento:
   { nomeBanco: "atendimento_metricas_diarias", colunaEscritorio: "escritorioIdMetrica", categoria: "dados" },
-  // Judit (monitoramento de processos — não inclui chaves):
-  { nomeBanco: "judit_monitoramentos", colunaEscritorio: "escritorioIdJuditMon", categoria: "dados" },
   // Motor próprio (Spike) — eventos detectados por scrapers/DJE. Conteúdo é
   // texto público de movimentação, sem segredos. CPFs em dje_publicacoes já
   // ficam fora do backup (tabela não tem escritorioId direto).
@@ -94,7 +93,6 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
  */
 export const EXCLUIR_SEGREDO: ReadonlyArray<{ nomeBanco: string; motivo: string }> = [
   { nomeBanco: "asaas_config", motivo: "API key criptografada + webhook token" },
-  { nomeBanco: "judit_credenciais", motivo: "API keys do Judit" },
   { nomeBanco: "canais_integrados", motivo: "Tokens WhatsApp/Meta/IA, webhook secrets" },
   { nomeBanco: "cofre_credenciais", motivo: "CPF/OAB + senha + TOTP do motor próprio criptografados — restore = recadastrar" },
 ];
@@ -106,8 +104,8 @@ export const EXCLUIR_SEGREDO: ReadonlyArray<{ nomeBanco: string; motivo: string 
 export const EXCLUIR_NAO_RELEVANTE: ReadonlyArray<{ nomeBanco: string; motivo: string }> = [
   { nomeBanco: "integracao_audit_log", motivo: "Auditoria de integrações — log interno" },
   { nomeBanco: "asaas_webhook_eventos", motivo: "Idempotency log de webhooks — não tem valor pro dono" },
-  { nomeBanco: "judit_creditos", motivo: "Créditos do escritório no Judit — financeiro Jurify" },
-  { nomeBanco: "judit_transacoes", motivo: "Histórico de uso Judit — financeiro Jurify" },
+  { nomeBanco: "motor_creditos", motivo: "Créditos do escritório no motor próprio — financeiro Jurify" },
+  { nomeBanco: "motor_transacoes", motivo: "Histórico de uso motor próprio — financeiro Jurify" },
 ];
 
 /**
@@ -211,7 +209,7 @@ export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
   "smartflow_cenarios",
   "agentes_ia",
   "comissoes_agenda",
-  "judit_monitoramentos",
+  "motor_monitoramentos",
   "atendimento_metricas_diarias",
 
   // NÍVEL 1 — depende só de raízes:

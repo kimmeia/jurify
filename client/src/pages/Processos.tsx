@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   SearchHistorySidebar,
@@ -197,16 +197,40 @@ function ConsultarTab() {
   const history = useSearchHistory();
 
   // Credenciais do cofre para segredo de justiça
-  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
-  const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
-  const consultarDoc = trpc.juditProcessos.consultarDocumento.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
+  const consultarCNJ = trpc.processos.consultarCNJ.useMutation({
+    onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); },
+    onError: (e: any) => {
+      setBuscando(false);
+      // Erros do motor próprio (PRECONDITION_FAILED) trazem mensagem
+      // instrutiva com link → /admin/cofre-credenciais. Mostra como
+      // toast com action.
+      const isCredencialAusente = /credencial OAB|cadastre/i.test(e.message);
+      const isSessaoExpirada = /sess[aã]o.*expirou|Validar pra renovar/i.test(e.message);
+      if (isCredencialAusente || isSessaoExpirada) {
+        toast.error(isCredencialAusente ? "Cadastre credencial" : "Sessão expirou", {
+          description: e.message.replace(/→.*$/, "").trim(),
+          action: {
+            label: "Abrir Cofre",
+            onClick: () => {
+              window.location.href = "/cofre-credenciais";
+            },
+          },
+          duration: 10000,
+        });
+      } else {
+        toast.error(e.message);
+      }
+    },
+  });
+  const consultarDoc = (trpc.processos as any).consultarDocumento.useMutation({ onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e: any) => { setBuscando(false); toast.error(e.message); } });
   // Buscar clientes do escritório para verificar se partes do processo são clientes
   const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });
   const todosClientes = clientesData?.clientes || [];
 
-  const monitorarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
+  const monitorarMut = (trpc.processos.criarMonitoramento as any).useMutation({
     onSuccess: () => toast.success("Processo adicionado às Movimentações (5 cred/mês)"),
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
@@ -242,11 +266,11 @@ function ConsultarTab() {
     }
   };
 
-  const { data: statusData } = trpc.juditProcessos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
+  const { data: statusData } = trpc.processos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
 
   // `resultados` virou mutation (tem efeito colateral: cobra créditos por
   // processo encontrado). Chamamos uma vez quando o status fica completed.
-  const resultadosMut = trpc.juditProcessos.resultados.useMutation({
+  const resultadosMut = trpc.processos.resultados.useMutation({
     onSuccess: (data: any) => {
       setResultados(data);
       if (data?.custoExtraCobrado && data.custoExtraCobrado > 0) {
@@ -260,7 +284,7 @@ function ConsultarTab() {
         );
       }
     },
-    onError: (e) => { toast.error("Erro ao buscar resultados: " + e.message); setBuscando(false); setPolling(false); },
+    onError: (e: any) => { toast.error("Erro ao buscar resultados: " + e.message); setBuscando(false); setPolling(false); },
   });
 
   useEffect(() => {
@@ -271,6 +295,18 @@ function ConsultarTab() {
       if (requestId && !resultados) {
         resultadosMut.mutate({ requestId });
       }
+    }
+    // `status: "error"` é reservado pra exceções não tratadas no runner
+    // (Playwright crash, timeout duro). Erros de domínio (credencial
+    // faltando, captcha, tribunal off) chegam como "completed" com
+    // `application_error` no resultado.
+    if (statusData?.status === "error") {
+      setPolling(false);
+      setBuscando(false);
+      toast.error("Falha inesperada no motor", {
+        description: "O scraper não conseguiu completar. Tente novamente; se persistir, valide a credencial em /cofre-credenciais.",
+        duration: 10000,
+      });
     }
     if (polling) setTentativas(t => t + 1);
   }, [statusData?.status, polling, requestId]);
@@ -283,8 +319,8 @@ function ConsultarTab() {
     setBuscando(true); setResultados(null); setRequestId(""); setTentativas(0);
     history.add(tipo, valor.trim());
     const credId = credencialId ? Number(credencialId) : undefined;
-    if (tipo === "lawsuit_cnj") consultarCNJ.mutate({ cnj: valor.trim(), credencialId: credId });
-    else consultarDoc.mutate({ tipo: tipo as any, valor: valor.trim(), credencialId: credId });
+    if (tipo === "lawsuit_cnj") (consultarCNJ.mutate as any)({ cnj: valor.trim(), credencialId: credId });
+    else (consultarDoc.mutate as any)({ tipo: tipo as any, valor: valor.trim(), credencialId: credId });
   };
 
   const handleSelectHistorico = (t: string, v: string) => {
@@ -389,7 +425,29 @@ function ConsultarTab() {
       {resultados && resultados.page_data && resultados.page_data.length > 0 ? (
         <div className="space-y-3">
           {(() => {
-            // Filtra respostas com dados de processo (ignora application_info, application_error)
+            // Detecta application_error (motor próprio falhou — credencial,
+            // tribunal off, captcha, parser quebrou)
+            const erros = resultados.page_data.filter(
+              (item: any) => item.response_type === "application_error",
+            );
+            if (erros.length > 0) {
+              const e = erros[0].response_data || {};
+              const codigo = String(e.code || "outro");
+              const isCredencial = /credencial|sess[aã]o|login/i.test(codigo) || /credencial|sess[aã]o|login/i.test(e.message || "");
+              return (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-2">
+                  <p className="text-sm font-semibold text-red-900">Falha na consulta</p>
+                  <p className="text-sm text-red-800">{e.message || "Erro desconhecido"}</p>
+                  {isCredencial && (
+                    <Button size="sm" variant="outline" onClick={() => (window.location.href = "/cofre-credenciais")}>
+                      Abrir Cofre de Credenciais
+                    </Button>
+                  )}
+                  <p className="text-xs text-red-700/70">Código: {codigo}</p>
+                </div>
+              );
+            }
+            // Filtra respostas com dados de processo (ignora application_info)
             const processos = resultados.page_data.filter(
               (item: any) =>
                 (item.response_type === "lawsuit" || item.response_type === "lawsuits") &&
@@ -491,7 +549,7 @@ function MonitoramentoCard({
 
   const [processoCompleto, setProcessoCompleto] = useState<any>(null);
 
-  const resumoMut = trpc.juditProcessos.resumoIA.useMutation({
+  const resumoMut = (trpc.processos as any).resumoIA.useMutation({
     onSuccess: (data: any) => {
       setResumoIA(data.resumo);
       // O resumo IA agora retorna o processo completo junto
@@ -502,7 +560,7 @@ function MonitoramentoCard({
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });
 
-  const buscarCompletoMut = trpc.juditProcessos.buscarProcessoCompleto.useMutation({
+  const buscarCompletoMut = (trpc.processos as any).buscarProcessoCompleto.useMutation({
     onSuccess: (data: any) => {
       if (data.encontrado && data.processo) {
         setProcessoCompleto(data.processo);
@@ -520,7 +578,7 @@ function MonitoramentoCard({
   const st = STATUS_MON[status] || { label: status, cor: "" };
 
   // Busca o histórico de movimentações quando o card abre (local DB — atualizações do webhook)
-  const { data: historico, isLoading: loadingHist, refetch: refetchHist } = trpc.juditUsuario.historico.useQuery(
+  const { data: historico, isLoading: loadingHist, refetch: refetchHist } = (trpc.processos as any).historicoMonitoramento.useQuery(
     { monitoramentoId: mon.id, page: 1, pageSize: 50 },
     { enabled: aberto && !!mon.id, retry: false },
   );
@@ -575,7 +633,7 @@ function MonitoramentoCard({
                   variant="ghost"
                   size="sm"
                   className="h-7 text-[10px] text-indigo-600"
-                  title="Buscar processo completo na Judit (1 crédito)"
+                  title="Atualizar processo agora — consulta tribunal (1 crédito)"
                   disabled={buscarCompletoMut.isPending}
                   onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id })}
                 >
@@ -638,7 +696,7 @@ function MonitoramentoCard({
               <div className="text-center py-8 text-xs text-muted-foreground">
                 <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>Ainda não há dados do processo.</p>
-                <p className="text-[10px] mt-1">Aguarde a primeira consulta da Judit (geralmente até 24h).</p>
+                <p className="text-[10px] mt-1">Clique em <strong>Histórico</strong> pra puxar agora (1 crédito) ou aguarde o próximo poll automático (até 6h).</p>
               </div>
             ) : (
               <>
@@ -737,17 +795,17 @@ function MonitorarTab() {
   const [novoValor, setNovoValor] = useState("");
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
 
-  const { data: mons, refetch, isLoading } = trpc.juditUsuario.meusMonitoramentos.useQuery(
+  const { data: mons, refetch, isLoading } = trpc.processos.meusMonitoramentos.useQuery(
     { tipoMonitoramento: "movimentacoes" },
     { retry: false },
   );
   const listaMons = mons || [];
 
   // Credenciais do cofre
-  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
-  const criarMut = trpc.juditUsuario.criarMonitoramento.useMutation({
+  const criarMut = (trpc.processos.criarMonitoramento as any).useMutation({
     onSuccess: () => {
       toast.success("Monitoramento de movimentações criado!");
       setNovoOpen(false);
@@ -757,9 +815,9 @@ function MonitorarTab() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const pausarMut = trpc.juditUsuario.pausar.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
-  const reativarMut = trpc.juditUsuario.reativar.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
-  const deletarMut = trpc.juditUsuario.deletar.useMutation({
+  const pausarMut = trpc.processos.pausarMonitoramento.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
+  const reativarMut = trpc.processos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
+  const deletarMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}` });
       else toast.success("Monitoramento removido");
@@ -895,13 +953,14 @@ function MonitorarTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CreditosTab() {
-  const { data: saldoData, refetch } = trpc.juditProcessos.saldo.useQuery(undefined, { retry: false });
-  const { data: txs } = trpc.juditProcessos.transacoes.useQuery({ limit: 30 }, { retry: false });
-  const comprarMut = trpc.juditProcessos.adicionarCreditos.useMutation({ onSuccess: (d) => { toast.success(`+${d.adicionados} creditos adicionados!`); refetch(); }, onError: (e) => toast.error(e.message) });
+  const { data: saldoData, refetch } = trpc.processos.saldo.useQuery(undefined, { retry: false });
+  const { data: txs } = (trpc.processos.transacoes.useQuery as any)({ limit: 30 }, { retry: false });
+  const { data: pacotesData } = trpc.processos.pacotes.useQuery(undefined, { retry: false });
+  const comprarMut = (trpc.processos.adicionarCreditos.useMutation as any)({ onSuccess: (d: any) => { toast.success(`+${d.adicionados} creditos adicionados!`); refetch(); }, onError: (e: any) => toast.error(e.message) });
 
   const saldo = saldoData?.saldo ?? 0;
-  const pacotes = saldoData?.pacotes || [];
-  const custos = saldoData?.custos || {};
+  const pacotes = pacotesData?.pacotes ?? [];
+  const custos = pacotesData?.custos ?? {};
 
   return (
     <div className="space-y-6">
@@ -921,7 +980,7 @@ function CreditosTab() {
                 <p className="text-xs text-muted-foreground mb-1">creditos</p>
                 <p className="text-sm font-semibold text-indigo-600">{formatBRL(p.preco)}</p>
                 <p className="text-[10px] text-muted-foreground mb-2">{formatBRL(p.preco / p.creditos)}/credito</p>
-                <Button size="sm" className="w-full text-xs" variant={p.popular ? "default" : "outline"} onClick={() => comprarMut.mutate({ pacoteId: p.id })} disabled={comprarMut.isPending}>Comprar</Button>
+                <Button size="sm" className="w-full text-xs" variant={p.popular ? "default" : "outline"} onClick={() => (comprarMut.mutate as any)({ pacoteId: p.id })} disabled={comprarMut.isPending}>Comprar</Button>
               </CardContent>
             </Card>
           ))}
@@ -958,7 +1017,7 @@ function CreditosTab() {
 
 export default function Processos() {
   const [tab, setTab] = useState("consultar");
-  const { data: saldoData } = trpc.juditProcessos.saldo.useQuery(undefined, { retry: false });
+  const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
 
   return (
@@ -1007,7 +1066,7 @@ export default function Processos() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function NovasAcoesBadge() {
-  const { data } = trpc.juditUsuario.listarNovasAcoes.useQuery(
+  const { data } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas: true, limite: 1 },
     { retry: false, refetchInterval: 60000 },
   );
@@ -1043,8 +1102,12 @@ function NovasAcoesTab() {
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  const [credencialId, setCredencialId] = useState<string>("");
 
-  const { data, refetch, isLoading } = trpc.juditUsuario.listarNovasAcoes.useQuery(
+  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
+
+  const { data, refetch, isLoading } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas, limite: 100 },
     { retry: false },
   );
@@ -1056,7 +1119,7 @@ function NovasAcoesTab() {
   );
   const clientes = (clientesData?.clientes || []).filter((c: any) => c.cpfCnpj);
 
-  const criarMut = trpc.juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
+  const criarMut = (trpc.processos as any).criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento criado!");
       setNovoOpen(false);
@@ -1067,11 +1130,32 @@ function NovasAcoesTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const marcarLidaMut = trpc.juditUsuario.marcarNovaAcaoLida.useMutation({
+  const marcarLidaMut = trpc.processos.marcarNovaAcaoLida.useMutation({
     onSuccess: () => refetch(),
   });
 
-  const deletarMonMut = trpc.juditUsuario.deletar.useMutation({
+  const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
+    onSuccess: (r: any) => {
+      if (!r.ok) {
+        toast.error("Falha na busca", { description: r.mensagem ?? "Erro desconhecido", duration: 8000 });
+        return;
+      }
+      if (r.baseline) {
+        toast.success(`Baseline registrado: ${r.cnjsTotal} processo(s) já existentes (${(r.latenciaMs / 1000).toFixed(1)}s)`, {
+          description: "Próximas execuções avisarão apenas dos NOVOS.",
+          duration: 8000,
+        });
+      } else if (r.cnjsNovos > 0) {
+        toast.success(`${r.cnjsNovos} nova(s) ação(ões) detectada(s)!`);
+      } else {
+        toast.info(`Nenhuma ação nova (${r.cnjsTotal} processos já conhecidos)`);
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Erro ao atualizar", { description: e.message }),
+  });
+
+  const deletarMonMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) {
         toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.` });
@@ -1143,6 +1227,18 @@ function NovasAcoesTab() {
                         {m.totalNovasAcoes}
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Atualizar agora — força consulta imediata (sem custo extra)"
+                      onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
+                      disabled={atualizarAgoraMut.isPending}
+                    >
+                      {atualizarAgoraMut.isPending && atualizarAgoraMut.variables?.monitoramentoId === m.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCcw className="h-3.5 w-3.5" />}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1345,6 +1441,30 @@ function NovasAcoesTab() {
               </div>
             )}
 
+            {/* Credencial pra busca PJe (necessária pra consultar lista) */}
+            {clienteSelecionado && (
+              <div>
+                <Label>Credencial OAB *</Label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm"
+                  value={credencialId}
+                  onChange={(e) => setCredencialId(e.target.value)}
+                >
+                  <option value="">Selecione a credencial pra consultar</option>
+                  {credsAtivas.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.apelido || c.username} ({c.sistema})
+                    </option>
+                  ))}
+                </select>
+                {credsAtivas.length === 0 && (
+                  <p className="text-[10px] text-orange-600 mt-1">
+                    Sem credenciais ativas. Cadastre uma em /cofre-credenciais primeiro.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
               <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
               <div className="text-blue-900 dark:text-blue-200 space-y-1">
@@ -1352,7 +1472,7 @@ function NovasAcoesTab() {
                 <p>
                   O monitoramento de novas ações é permitido apenas para clientes cadastrados
                   no seu escritório, garantindo que existe relação jurídica legítima para o
-                  tratamento dos dados processuais. Custo: 35 créditos/mês.
+                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>.
                 </p>
               </div>
             </div>
@@ -1361,16 +1481,17 @@ function NovasAcoesTab() {
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
               onClick={() => {
-                if (!clienteSelecionado) return;
+                if (!clienteSelecionado || !credencialId) return;
                 const clean = (clienteSelecionado.cpfCnpj || "").replace(/\D/g, "");
                 const tipo = clean.length === 14 ? "cnpj" : "cpf";
                 criarMut.mutate({
                   tipo: tipo as any,
                   valor: clean,
                   apelido: clienteSelecionado.nome,
+                  credencialId: Number(credencialId),
                 });
               }}
-              disabled={!clienteSelecionado || criarMut.isPending}
+              disabled={!clienteSelecionado || !credencialId || criarMut.isPending}
             >
               {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar monitoramento
@@ -1387,8 +1508,8 @@ function NovasAcoesTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CofreTab() {
-  const { data: credenciais, refetch, isLoading } = trpc.juditCredenciais.listar.useQuery();
-  const { data: sistemas } = trpc.juditCredenciais.listarSistemasSuportados.useQuery();
+  const { data: credenciais, refetch, isLoading } = trpc.cofreCredenciais.listarMinhas.useQuery();
+  const { data: sistemas } = (trpc.cofreCredenciais as any).listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState({
@@ -1401,7 +1522,7 @@ function CofreTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
 
-  const cadastrarMut = (trpc as any).juditCredenciais.cadastrar.useMutation({
+  const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
       if (data.status === "ativa") {
         toast.success("Credencial válida!", { description: data.mensagem, duration: 8000 });
@@ -1417,12 +1538,12 @@ function CofreTab() {
     onError: (e: any) => toast.error("Erro ao cadastrar", { description: e.message }),
   });
 
-  const removerMut = trpc.juditCredenciais.remover.useMutation({
+  const removerMut = trpc.cofreCredenciais.removerMinha.useMutation({
     onSuccess: () => {
       toast.success("Credencial removida");
       refetch();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   const creds = credenciais || [];
@@ -1612,7 +1733,7 @@ function CofreTab() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() => cadastrarMut.mutate(form)}
+              onClick={() => (cadastrarMut.mutate as any)(form)}
               disabled={
                 !form.customerKey || !form.systemName || !form.username || !form.password ||
                 cadastrarMut.isPending

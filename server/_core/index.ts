@@ -8,7 +8,6 @@ import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
 import { registerAgenteChatPDFRoute } from "../integracoes/agente-chat-pdf-route";
 import { registerCalcomWebhook } from "../integracoes/calcom-webhook";
-import { registerJuditWebhook } from "../integracoes/judit-webhook";
 import { registerAsaasWebhook } from "../integracoes/asaas-webhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -19,6 +18,7 @@ import { rateLimit, globalApiRateLimit } from "./rate-limit";
 import { createLogger } from "./logger";
 import { runMigrations } from "./auto-migrate";
 import { initSentry, captureError } from "./sentry";
+import { resolverAmbiente } from "./ambiente";
 
 // Sentry tem que inicializar ANTES de qualquer outro código rodar — caso
 // contrário erros lançados durante o boot (ex: migrations) escapam.
@@ -142,8 +142,6 @@ async function startServer() {
   registerAgenteChatPDFRoute(app);
   // Cal.com webhook
   registerCalcomWebhook(app);
-  // Judit.IO webhook
-  registerJuditWebhook(app);
   // Asaas webhook (escritório → seus clientes)
   registerAsaasWebhook(app);
   // Asaas webhook (Jurify → mensalidades dos escritórios)
@@ -152,14 +150,13 @@ async function startServer() {
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);
 
-  // Resolução de ambiente — `JURIFY_AMBIENTE` tem precedência (set
-  // explicitamente no Railway de staging). Fallback pra `NODE_ENV`.
+  // Resolução de ambiente — centralizada em ./ambiente.ts. Ordem:
+  //   1. JURIFY_AMBIENTE  (override manual)
+  //   2. RAILWAY_ENVIRONMENT_NAME  (auto-setado pelo Railway)
+  //   3. NODE_ENV  (fallback)
   // Frontend lê isso via /api/health/live pra mostrar banner amarelo
   // em staging.
-  const ambiente = (process.env.JURIFY_AMBIENTE
-    || (process.env.NODE_ENV === "production" ? "production"
-        : process.env.NODE_ENV === "staging" ? "staging"
-        : "development")) as "production" | "staging" | "development";
+  const ambiente = resolverAmbiente();
 
   // Health check — usado pelo Railway/loadbalancer pra saber se o app respira.
   // Faz ping no MySQL com timeout curto pra detectar DB caído. Sem ele,

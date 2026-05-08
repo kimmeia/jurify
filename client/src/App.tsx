@@ -27,6 +27,8 @@ import AdminCupons from "./pages/admin/AdminCupons";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
 import MotorProprioTeste from "./pages/admin/MotorProprioTeste";
+import CofreCredenciais from "./pages/admin/CofreCredenciais";
+import CofreCredenciaisPessoal from "./pages/CofreCredenciais";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
 import Imobiliario from "./pages/calculos/Imobiliario";
@@ -154,6 +156,11 @@ function Router() {
           <MotorProprioTeste />
         </AdminArea>
       </Route>
+      <Route path="/admin/cofre-credenciais">
+        <AdminArea>
+          <CofreCredenciais />
+        </AdminArea>
+      </Route>
       <Route path="/admin/reports">
         <AdminArea>
           <AdminReports />
@@ -229,6 +236,11 @@ function Router() {
       <Route path="/processos">
         <ClientArea>
           <Processos />
+        </ClientArea>
+      </Route>
+      <Route path="/cofre-credenciais">
+        <ClientArea>
+          <CofreCredenciaisPessoal />
         </ClientArea>
       </Route>
       <Route path="/financeiro">
