@@ -228,7 +228,7 @@ export const juditProcessosRouter = router({
                 .from(cofreCredenciais)
                 .where(
                   and(
-                    eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+                    eq(cofreCredenciais.criadoPor, ctx.user.id),
                     eq(cofreCredenciais.sistema, sistemaCofre),
                     eq(cofreCredenciais.status, "ativa"),
                   ),
@@ -238,14 +238,14 @@ export const juditProcessosRouter = router({
 
           if (credencial.length === 0) {
             // Bloqueio com mensagem instrutiva — usuário precisa cadastrar
-            // credencial pra usar motor próprio. UI pode capturar TRPCError
-            // e mostrar dialog com link pro cofre.
+            // SUA PRÓPRIA credencial (cofre pessoal por user). UI captura
+            // TRPCError e mostra dialog com link pra /cofre-credenciais.
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
               message:
                 `Pra consultar processos do ${tribunal.siglaTribunal}, ` +
                 `cadastre sua credencial OAB-${tribunal.uf ?? ""} no Cofre. ` +
-                `→ /admin/cofre-credenciais`,
+                `→ /cofre-credenciais`,
               cause: { motivo: "credencial_ausente", tribunal: tribunal.codigoTribunal },
             });
           }
@@ -284,28 +284,18 @@ export const juditProcessosRouter = router({
         }
       }
 
-      // ─── Fluxo Judit padrão (fallback) ────────────────────────────────────
-      const client = await getJuditClientOrThrow();
-      await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.consulta_cnj, "consulta_cnj", `CNJ: ${input.cnj}`);
-
-      // Resolver credencial do cofre pra segredo de justiça
-      let customerKey: string | undefined;
-      if (input.credencialId) {
-        const db = await getDb();
-        if (db) {
-          const { juditCredenciais } = await import("../../drizzle/schema");
-          const [cred] = await db.select().from(juditCredenciais)
-            .where(and(eq(juditCredenciais.id, input.credencialId), eq(juditCredenciais.escritorioId, esc.escritorio.id)))
-            .limit(1);
-          if (cred?.customerKey) customerKey = cred.customerKey;
-        }
-      }
-
-      const request = await client.criarRequest({
-        search: { search_type: "lawsuit_cnj", search_key: input.cnj.replace(/[^\d.-]/g, "") },
-        ...(customerKey ? { customer_key: customerKey } : {}),
+      // ─── Tribunal sem adapter motor próprio ─────────────────────────────
+      // Decisão (08/05/2026): substituição completa de Judit. Em vez de
+      // fallback Judit, mostramos mensagem clara "em desenvolvimento" e
+      // listamos os tribunais já cobertos. Reduz custo Judit a zero.
+      throw new TRPCError({
+        code: "NOT_IMPLEMENTED",
+        message:
+          `Consulta para ${tribunal?.siglaTribunal ?? "este tribunal"} ainda está em ` +
+          `desenvolvimento. Tribunais cobertos pelo Jurify hoje: TJCE 1º grau. ` +
+          `Próximos: TJSP, TRT-7, TJRJ. Aguarde anúncio nas próximas semanas.`,
+        cause: { motivo: "tribunal_sem_motor", tribunal: tribunal?.codigoTribunal },
       });
-      return { requestId: request.request_id, status: request.status };
     }),
 
   /**

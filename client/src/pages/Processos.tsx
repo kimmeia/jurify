@@ -215,7 +215,7 @@ function ConsultarTab() {
           action: {
             label: "Abrir Cofre",
             onClick: () => {
-              window.location.href = "/admin/cofre-credenciais";
+              window.location.href = "/cofre-credenciais";
             },
           },
           duration: 10000,

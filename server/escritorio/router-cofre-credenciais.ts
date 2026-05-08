@@ -22,7 +22,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, and, desc, ne } from "drizzle-orm";
-import { adminProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { cofreCredenciais } from "../../drizzle/schema";
 import { encrypt, maskToken } from "./crypto-utils";
@@ -407,6 +407,202 @@ export const cofreCredenciaisRouter = router({
         mensagem:
           `Sistema "${cred.sistema}" ainda não tem adapter de login automatizado. ` +
           `Apenas pje_tjce está pronto no Spike atual — outros virão conforme demanda.`,
+      };
+    }),
+
+  // ─── COFRE PESSOAL (não-admin) ──────────────────────────────────────────
+  // Cada usuário cadastra suas próprias credenciais OAB. Filtra por
+  // `criadoPor = ctx.user.id`. Usado pela UI /cofre-credenciais e
+  // pelo roteador de consultas em /processos (motor próprio busca a
+  // credencial DO USUÁRIO ATUAL, não do escritório admin).
+
+  /** Lista credenciais pessoais do usuário logado. */
+  listarMinhas: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select()
+      .from(cofreCredenciais)
+      .where(
+        and(
+          eq(cofreCredenciais.criadoPor, ctx.user.id),
+          ne(cofreCredenciais.status, "removida"),
+        ),
+      )
+      .orderBy(desc(cofreCredenciais.createdAt));
+    return Promise.all(rows.map(rowParaView));
+  }),
+
+  /** Cadastra credencial pessoal. */
+  cadastrarMinha: protectedProcedure
+    .input(
+      z.object({
+        sistema: z.enum(SISTEMAS_VALIDOS as readonly [SistemaCofre, ...SistemaCofre[]]),
+        apelido: z.string().min(COFRE_VALIDACOES.apelidoMinLen).max(COFRE_VALIDACOES.apelidoMaxLen),
+        username: z.string().min(COFRE_VALIDACOES.usernameMinLen).max(COFRE_VALIDACOES.usernameMaxLen),
+        password: z.string().min(COFRE_VALIDACOES.passwordMinLen).max(COFRE_VALIDACOES.passwordMaxLen),
+        totpSecret: z.string().min(COFRE_VALIDACOES.totpSecretMinLen).max(COFRE_VALIDACOES.totpSecretMaxLen).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
+
+      const userEnc = encrypt(input.username);
+      const passEnc = encrypt(input.password);
+      const totpEnc = input.totpSecret ? encrypt(input.totpSecret) : null;
+
+      const result = await db.insert(cofreCredenciais).values({
+        escritorioId,
+        sistema: input.sistema,
+        apelido: input.apelido,
+        usernameEnc: userEnc.encrypted,
+        usernameIv: userEnc.iv,
+        usernameTag: userEnc.tag,
+        passwordEnc: passEnc.encrypted,
+        passwordIv: passEnc.iv,
+        passwordTag: passEnc.tag,
+        totpSecretEnc: totpEnc?.encrypted,
+        totpSecretIv: totpEnc?.iv,
+        totpSecretTag: totpEnc?.tag,
+        status: "validando",
+        criadoPor: ctx.user.id,
+      });
+      const insertId =
+        (result as unknown as { insertId: number }[])[0]?.insertId ??
+        (result as unknown as { insertId: number }).insertId;
+
+      log.info(
+        { user: ctx.user.id, escritorioId, sistema: input.sistema, credencialId: insertId },
+        "[cofre-pessoal] credencial cadastrada",
+      );
+
+      const [row] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(eq(cofreCredenciais.id, insertId))
+        .limit(1);
+      return rowParaView(row);
+    }),
+
+  /** Soft delete da credencial pessoal — só dono pode remover. */
+  removerMinha: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const [existente] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(
+            eq(cofreCredenciais.id, input.id),
+            eq(cofreCredenciais.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!existente) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+      }
+
+      await db
+        .update(cofreCredenciais)
+        .set({ status: "removida" })
+        .where(eq(cofreCredenciais.id, input.id));
+
+      log.info({ user: ctx.user.id, credencialId: input.id }, "[cofre-pessoal] credencial removida");
+      return { ok: true };
+    }),
+
+  /** Validar credencial pessoal — login real no tribunal. */
+  validarMinha: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const [row] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(
+            eq(cofreCredenciais.id, input.id),
+            eq(cofreCredenciais.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+
+      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao } =
+        await import("./cofre-helpers");
+      const cred = await buscarCredencialDecriptada(input.id);
+      if (!cred) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Credencial não pode ser decriptada",
+        });
+      }
+
+      log.info(
+        { user: ctx.user.id, credencialId: input.id, sistema: cred.sistema },
+        "[cofre-pessoal] validando credencial via login real",
+      );
+
+      if (cred.sistema === "pje_tjce") {
+        const { PjeTjceScraper } = await import(
+          "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
+        );
+        const scraper = new PjeTjceScraper({
+          username: cred.username,
+          password: cred.password,
+          totpSecret: cred.totpSecret,
+        });
+        const resultado = await scraper.testarLogin();
+
+        if (resultado.ok && resultado.totpSecretConfigurado) {
+          const totpEnc = encrypt(resultado.totpSecretConfigurado);
+          await db
+            .update(cofreCredenciais)
+            .set({
+              totpSecretEnc: totpEnc.encrypted,
+              totpSecretIv: totpEnc.iv,
+              totpSecretTag: totpEnc.tag,
+            })
+            .where(eq(cofreCredenciais.id, input.id));
+        }
+
+        await atualizarStatusAposLogin(input.id, {
+          ok: resultado.ok,
+          mensagemErro: resultado.ok
+            ? null
+            : `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
+        });
+
+        if (resultado.ok && resultado.storageStateJson) {
+          const expira = new Date(Date.now() + 90 * 60 * 1000);
+          await salvarSessao(input.id, resultado.storageStateJson, expira);
+        }
+
+        return {
+          ok: resultado.ok,
+          mensagem: resultado.mensagem,
+          latenciaMs: resultado.latenciaMs,
+        };
+      }
+
+      await db
+        .update(cofreCredenciais)
+        .set({
+          ultimoLoginTentativaEm: new Date(),
+          ultimoErro: `Validação automática não implementada para "${cred.sistema}" — apenas pje_tjce`,
+        })
+        .where(eq(cofreCredenciais.id, input.id));
+
+      return {
+        ok: false,
+        mensagem: `Sistema "${cred.sistema}" ainda sem adapter automatizado.`,
       };
     }),
 });
