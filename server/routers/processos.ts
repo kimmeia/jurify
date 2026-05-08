@@ -16,7 +16,7 @@
  */
 
 import { z } from "zod";
-import { eq, desc, and, or, ne } from "drizzle-orm";
+import { eq, desc, and, or, ne, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -355,28 +355,49 @@ export const processosRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      const conditions = [
-        eq(motorMonitoramentos.criadoPor, ctx.user.id),
-        ne(motorMonitoramentos.status, "pausado" as const), // mostra ativo + erro
-      ];
-      // Filtro opcional por tipo
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return [];
+
+      // Permissão: gestor/dono vê todos do escritório. Atendente/SDR vê
+      // apenas mon de clientes onde ele é responsável (JOIN com contatos
+      // por searchKey/cpfCnpj e responsavelId).
+      const { checkPermission } = await import("../escritorio/check-permission");
+      const perm = await checkPermission(ctx.user.id, "processos", "ver");
+      const filtraPorResponsavel = !perm.verTodos && perm.verProprios;
+
+      const filtros = [eq(motorMonitoramentos.escritorioId, esc.escritorio.id)];
       if (input?.tipoMonitoramento) {
-        conditions.push(
-          eq(motorMonitoramentos.tipoMonitoramento, input.tipoMonitoramento),
-        );
+        filtros.push(eq(motorMonitoramentos.tipoMonitoramento, input.tipoMonitoramento));
       }
-      // Sempre lista todos do user, incluindo pausados (UI filtra na exibição)
-      const rows = await db
+
+      let rows;
+      if (filtraPorResponsavel) {
+        // INNER JOIN com contatos: monitoramento.searchKey = contato.cpfCnpj
+        // (sanitizado) E contato.responsavelId = colabId. Cliente sem contato
+        // cadastrado fica invisível pra atendente.
+        const { contatos } = await import("../../drizzle/schema");
+        rows = await db
+          .select({ mon: motorMonitoramentos })
+          .from(motorMonitoramentos)
+          .innerJoin(
+            contatos,
+            and(
+              eq(contatos.escritorioId, esc.escritorio.id),
+              eq(contatos.responsavelId, esc.colaborador.id),
+              // Match flexível: searchKey vs cpfCnpj limpo (sem máscara)
+              sql`REPLACE(REPLACE(REPLACE(${contatos.cpfCnpj}, '.', ''), '-', ''), '/', '') = ${motorMonitoramentos.searchKey}`,
+            ),
+          )
+          .where(and(...filtros))
+          .orderBy(desc(motorMonitoramentos.createdAt));
+        return rows.map((r) => r.mon);
+      }
+
+      // Gestor/dono: tudo do escritório
+      rows = await db
         .select()
         .from(motorMonitoramentos)
-        .where(
-          input?.tipoMonitoramento
-            ? and(
-                eq(motorMonitoramentos.criadoPor, ctx.user.id),
-                eq(motorMonitoramentos.tipoMonitoramento, input.tipoMonitoramento),
-              )
-            : eq(motorMonitoramentos.criadoPor, ctx.user.id),
-        )
+        .where(and(...filtros))
         .orderBy(desc(motorMonitoramentos.createdAt));
       return rows;
     }),
@@ -467,13 +488,15 @@ export const processosRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
       const [mon] = await db
         .select()
         .from(motorMonitoramentos)
         .where(
           and(
             eq(motorMonitoramentos.id, input.id),
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
           ),
         )
         .limit(1);
@@ -490,13 +513,15 @@ export const processosRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
       const [mon] = await db
         .select()
         .from(motorMonitoramentos)
         .where(
           and(
             eq(motorMonitoramentos.id, input.id),
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
           ),
         )
         .limit(1);
@@ -513,14 +538,16 @@ export const processosRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-      // Verifica posse
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+      // Verifica que monitoramento pertence ao escritório
       const [mon] = await db
         .select()
         .from(motorMonitoramentos)
         .where(
           and(
             eq(motorMonitoramentos.id, input.id),
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
           ),
         )
         .limit(1);
@@ -544,13 +571,15 @@ export const processosRouter = router({
       const db = await getDb();
       const limite = input.limite ?? input.pageSize ?? 50;
       if (!db) return { items: [], eventos: [], totalNaoLidas: 0 };
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { items: [], eventos: [], totalNaoLidas: 0 };
       const [mon] = await db
         .select()
         .from(motorMonitoramentos)
         .where(
           and(
             eq(motorMonitoramentos.id, input.monitoramentoId),
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
           ),
         )
         .limit(1);
@@ -595,7 +624,7 @@ export const processosRouter = router({
         .where(
           and(
             eq(motorMonitoramentos.id, input.monitoramentoId),
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
           ),
         )
         .limit(1);
@@ -810,7 +839,7 @@ export const processosRouter = router({
         .from(motorMonitoramentos)
         .where(
           and(
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
             eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
           ),
         );
@@ -849,6 +878,8 @@ export const processosRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
 
       const [mon] = await db
         .select()
@@ -856,7 +887,7 @@ export const processosRouter = router({
         .where(
           and(
             eq(motorMonitoramentos.id, input.monitoramentoId),
-            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
             eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
           ),
         )

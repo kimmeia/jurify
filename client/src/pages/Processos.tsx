@@ -26,16 +26,40 @@ const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ",
 
 /**
  * Indicador de saúde do monitoramento baseado na última atualização.
+ * - vermelho pulsante: ultimoErro presente (sessão expirada, captcha, etc)
  * - verde pulsante: atualizado nas últimas 48h (OK)
  * - amarelo: sem atualização entre 48h e 7 dias (atenção)
  * - vermelho: sem atualização há mais de 7 dias (provável falha)
  * - cinza: pausado ou recém-criado sem dados ainda
  */
-function MonitorHealthDot({ statusJudit, updatedAt, createdAt }: { statusJudit: string; updatedAt?: string | null; createdAt?: string | null }) {
+function MonitorHealthDot({
+  statusJudit,
+  updatedAt,
+  createdAt,
+  ultimoErro,
+}: {
+  statusJudit: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  ultimoErro?: string | null;
+}) {
   if (statusJudit === "paused") {
     return (
       <span className="relative flex h-3 w-3 shrink-0" title="Monitoramento pausado">
         <span className="h-3 w-3 rounded-full bg-gray-400" />
+      </span>
+    );
+  }
+
+  // Erro registrado na última consulta — prioriza sobre tempo desde update
+  if (ultimoErro) {
+    return (
+      <span
+        className="relative flex h-3 w-3 shrink-0"
+        title={`ALERTA — última consulta falhou: ${ultimoErro}`}
+      >
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
       </span>
     );
   }
@@ -611,6 +635,7 @@ function MonitoramentoCard({
             statusJudit={status}
             updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
             createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
+            ultimoErro={(mon as any).ultimoErro}
           />
           <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
             {searchType === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
@@ -1210,6 +1235,7 @@ function NovasAcoesTab() {
                       statusJudit={m.statusJudit}
                       updatedAt={m.updatedAt}
                       createdAt={m.createdAt}
+                      ultimoErro={m.ultimoErro}
                     />
                     <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                       <User className="h-3.5 w-3.5 text-violet-600" />
