@@ -8,7 +8,6 @@ import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
 import { registerAgenteChatPDFRoute } from "../integracoes/agente-chat-pdf-route";
 import { registerCalcomWebhook } from "../integracoes/calcom-webhook";
-import { registerJuditWebhook } from "../integracoes/judit-webhook";
 import { registerAsaasWebhook } from "../integracoes/asaas-webhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -143,8 +142,6 @@ async function startServer() {
   registerAgenteChatPDFRoute(app);
   // Cal.com webhook
   registerCalcomWebhook(app);
-  // Judit.IO webhook
-  registerJuditWebhook(app);
   // Asaas webhook (escritório → seus clientes)
   registerAsaasWebhook(app);
   // Asaas webhook (Jurify → mensalidades dos escritórios)

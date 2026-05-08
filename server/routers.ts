@@ -52,9 +52,6 @@ import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
 import { adminBackupRouter } from "./admin/router-admin-backup";
 import { roadmapRouter } from "./router-roadmap";
-import { juditOperacoesRouter } from "./integracoes/router-judit-operacoes";
-import { juditUsuarioRouter } from "./integracoes/router-judit-usuario";
-import { juditCredenciaisRouter } from "./integracoes/router-judit-credenciais";
 import { asaasRouter } from "./integracoes/router-asaas";
 
 // Outros
@@ -66,12 +63,11 @@ import { subscriptionRouter } from "./routers/subscription";
 import { whatsappCoexRouter } from "./routers/whatsapp-coex";
 import { metaChannelsRouter } from "./routers/meta-channels";
 import { customer360Router } from "./routers/customer360";
-import { juditProcessosRouter } from "./routers/judit-processos";
+import { processosRouter } from "./routers/processos";
 import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
 import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
-import { adminJuditRouter } from "./routers/admin-judit";
 import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
 
@@ -129,15 +125,14 @@ export const appRouter = router({
   whatsappCoex: whatsappCoexRouter, // legado — mantido para retrocompatibilidade
   metaChannels: metaChannelsRouter, // unificado: WhatsApp + Instagram + Messenger
   customer360: customer360Router, // perfil 360° do cliente para Atendimento
-  juditProcessos: juditProcessosRouter,
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
   adminBackup: adminBackupRouter,
   roadmap: roadmapRouter,
-  juditOperacoes: juditOperacoesRouter,
-  juditUsuario: juditUsuarioRouter,
-  juditCredenciais: juditCredenciaisRouter,
   asaas: asaasRouter,
+
+  // Motor próprio (substituiu Judit em 08/05/2026)
+  processos: processosRouter,
 
   // Dashboard do utilizador
   dashboard: dashboardRouter,
@@ -146,7 +141,6 @@ export const appRouter = router({
   admin: adminRouter,
   adminFinanceiro: adminFinanceiroRouter,
   adminAgentesIa: adminAgentesIaRouter,
-  adminJudit: adminJuditRouter,
   smartflow: smartflowRouter,
   kanban: kanbanRouter,
 });

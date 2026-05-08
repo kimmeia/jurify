@@ -18,7 +18,7 @@ import {
   calcularCustoExtraConsultaHistorica,
   calcularCustoMensalMonitoramentos,
   estimarCustoConsulta,
-} from "../routers/judit-credit-calc";
+} from "../processos/credit-calc";
 
 describe("calcularCustoConsultaHistorica", () => {
   it("cobra apenas o base quando 0 processos encontrados", () => {

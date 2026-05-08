@@ -60,7 +60,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
 
   // Verifica se já existe monitoramento ativo
   const { data: monsData, refetch: refetchMons } =
-    trpc.juditUsuario.meusMonitoramentos.useQuery(
+    (trpc as any).juditUsuario.meusMonitoramentos.useQuery(
       { busca: clean, tipoMonitoramento: "novas_acoes" },
       { retry: false },
     );
@@ -71,7 +71,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
       m.statusJudit !== "deleted",
   );
 
-  const criarMut = trpc.juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
+  const criarMut = (trpc as any).juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
       toast.success(`Monitoramento criado para ${nome}!`, {
         description: "Vamos avisar quando novas ações forem distribuídas.",
@@ -85,7 +85,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
     onError: (e: any) => toast.error("Erro ao criar monitoramento", { description: e.message }),
   });
 
-  const deletarMut = trpc.juditUsuario.deletar.useMutation({
+  const deletarMut = (trpc as any).juditUsuario.deletar.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) {
         toast.warning("Monitoramento removido localmente", {

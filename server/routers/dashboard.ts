@@ -22,7 +22,6 @@ import {
   leads,
   mensagens,
   asaasCobrancas,
-  juditMonitoramentos,
   notificacoes,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -218,42 +217,17 @@ export const dashboardRouter = router({
         }
       }
 
-      // ─── Processos (via Judit) ──────────────────────────────
-      // Conta monitoramentos ativos do escritório (statusJudit ∈ created/updating/updated)
-      // e pega as 5 últimas movimentações conhecidas. Movimentações não lidas
-      // vêm da tabela `notificacoes` (tipo=movimentacao).
-      const processosAtivos = await db
-        .select({
-          id: juditMonitoramentos.id,
-          searchKey: juditMonitoramentos.searchKey,
-          searchType: juditMonitoramentos.searchType,
-          ultimaMov: juditMonitoramentos.ultimaMovimentacao,
-          ultimaMovData: juditMonitoramentos.ultimaMovimentacaoData,
-        })
-        .from(juditMonitoramentos)
-        .where(
-          and(
-            eq(juditMonitoramentos.escritorioId, escritorioId),
-            or(
-              eq(juditMonitoramentos.statusJudit, "created"),
-              eq(juditMonitoramentos.statusJudit, "updating"),
-              eq(juditMonitoramentos.statusJudit, "updated"),
-            ),
-          ),
-        );
-
-      const totalProcessos = processosAtivos.length;
-
-      const movimentacoesRecentes = processosAtivos
-        .filter((p) => p.ultimaMov && p.ultimaMovData)
-        .sort((a, b) => (b.ultimaMovData || "").localeCompare(a.ultimaMovData || ""))
-        .slice(0, 5)
-        .map((p) => ({
-          id: p.id,
-          nome: (p.ultimaMov || "").slice(0, 200),
-          numeroCnj: p.searchType === "lawsuit_cnj" ? p.searchKey : "",
-          dataHora: p.ultimaMovData || "",
-        }));
+      // ─── Processos (motor próprio) ──────────────────────────
+      // Monitoramento próprio entra na Sprint 2. Por enquanto, conta
+      // só clienteProcessos (vinculados manualmente) e mostra lista
+      // vazia de movimentações.
+      const totalProcessos = 0;
+      const movimentacoesRecentes: Array<{
+        id: number;
+        nome: string;
+        numeroCnj: string;
+        dataHora: string;
+      }> = [];
 
       // Não lidas = notificações de tipo "movimentacao" ainda não lidas
       const movsNaoLidasRows = await db
@@ -517,40 +491,10 @@ export const dashboardRouter = router({
           });
         }
 
-        // 3. Movimentações processuais (via Judit)
-        // Pega monitoramentos do escritório atualizados nos últimos 7 dias.
-        // Cada monitoramento pode ter recebido várias atualizações via webhook;
-        // como não temos histórico granular aqui, registramos a última.
-        const monsRecentes = await db
-          .select({
-            id: juditMonitoramentos.id,
-            searchKey: juditMonitoramentos.searchKey,
-            searchType: juditMonitoramentos.searchType,
-            ultimaMov: juditMonitoramentos.ultimaMovimentacao,
-            updatedAt: juditMonitoramentos.updatedAt,
-          })
-          .from(juditMonitoramentos)
-          .where(
-            and(
-              eq(juditMonitoramentos.escritorioId, esc.escritorio.id),
-              gte(juditMonitoramentos.updatedAt, desde),
-            ),
-          )
-          .orderBy(desc(juditMonitoramentos.updatedAt))
-          .limit(limit);
-
-        for (const m of monsRecentes) {
-          if (!m.ultimaMov) continue;
-          const ref = m.searchType === "lawsuit_cnj" ? m.searchKey : (m.searchKey || "");
-          items.push({
-            id: `mov-${m.id}`,
-            tipo: "movimentacao",
-            titulo: `Movimentação processual`,
-            descricao: `${ref} — ${m.ultimaMov.slice(0, 60)}`,
-            timestamp: (m.updatedAt as Date).toISOString(),
-            link: "/processos",
-          });
-        }
+        // 3. Movimentações processuais (motor próprio — Sprint 2)
+        // Antes vinha de juditMonitoramentos. Cron de monitoramento próprio
+        // popular esse feed entra na Sprint 2 (cobre processos vinculados
+        // em clienteProcessos via TJCE adapter).
 
         // 4. Tarefas concluídas recentemente
         const tarefasConcluidas = await db

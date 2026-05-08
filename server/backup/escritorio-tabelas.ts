@@ -106,8 +106,8 @@ export const EXCLUIR_SEGREDO: ReadonlyArray<{ nomeBanco: string; motivo: string 
 export const EXCLUIR_NAO_RELEVANTE: ReadonlyArray<{ nomeBanco: string; motivo: string }> = [
   { nomeBanco: "integracao_audit_log", motivo: "Auditoria de integrações — log interno" },
   { nomeBanco: "asaas_webhook_eventos", motivo: "Idempotency log de webhooks — não tem valor pro dono" },
-  { nomeBanco: "judit_creditos", motivo: "Créditos do escritório no Judit — financeiro Jurify" },
-  { nomeBanco: "judit_transacoes", motivo: "Histórico de uso Judit — financeiro Jurify" },
+  { nomeBanco: "motor_creditos", motivo: "Créditos do escritório no motor próprio — financeiro Jurify" },
+  { nomeBanco: "motor_transacoes", motivo: "Histórico de uso motor próprio — financeiro Jurify" },
 ];
 
 /**

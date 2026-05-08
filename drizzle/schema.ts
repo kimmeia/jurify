@@ -720,8 +720,6 @@ export const clienteProcessos = mysqlTable("cliente_processos", {
   numeroCnj: varchar("numeroCnjCliProc", { length: 30 }).notNull(),
   /** Apelido/descrição livre (ex: "Divórcio", "Trabalhista") */
   apelido: varchar("apelidoCliProc", { length: 255 }),
-  /** ID do monitoramento em judit_monitoramentos (se estiver monitorando) */
-  monitoramentoId: int("monitoramentoIdCliProc"),
   /** Tribunal identificado */
   tribunal: varchar("tribunalCliProc", { length: 16 }),
   /** Classe processual */
@@ -894,194 +892,16 @@ export type InsertAdminIntegracao = typeof adminIntegracoes.$inferInsert;
 // ADMIN — JUDIT.IO MONITORAMENTOS E CONSULTAS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Monitoramentos criados via Judit.IO pelo admin.
- * Cada registro corresponde a um tracking_id na Judit.
- * O admin pode monitorar processos para seus clientes (userId opcional).
- */
-export const juditMonitoramentos = mysqlTable("judit_monitoramentos", {
-  id: int("id").autoincrement().primaryKey(),
-  /** tracking_id retornado pela Judit */
-  trackingId: varchar("trackingId", { length: 128 }).notNull().unique(),
-  /** Tipo de busca: lawsuit_cnj, cpf, cnpj, oab, name */
-  searchType: varchar("searchType", { length: 32 }).notNull(),
-  /** Chave de busca (CNJ, CPF, etc) */
-  searchKey: varchar("searchKey", { length: 128 }).notNull(),
-  /**
-   * Tipo de monitoramento (novo campo para diferenciar claramente):
-   *   - "movimentacoes": monitora atualizações em UM processo específico
-   *     (search_type costuma ser "lawsuit_cnj")
-   *   - "novas_acoes": monitora se NOVAS ações são distribuídas contra
-   *     uma pessoa/empresa (search_type costuma ser cpf/cnpj/oab/name)
-   *
-   * Se null, inferir a partir de searchType (lawsuit_cnj → movimentacoes,
-   * resto → novas_acoes) pra compatibilidade com rows antigas.
-   */
-  tipoMonitoramento: mysqlEnum("tipoMonitoramento", ["movimentacoes", "novas_acoes"]),
-  /** ID da credencial do cofre usada para acessar processos em segredo de justiça */
-  credencialId: int("credencialIdJuditMon"),
-  /** Escritório dono do monitoramento (null = admin/global) */
-  escritorioId: int("escritorioIdJuditMon"),
-  /** Recorrência em dias */
-  recurrence: int("recurrence").default(1).notNull(),
-  /** Status do tracking na Judit */
-  statusJudit: mysqlEnum("statusJudit", ["created", "updating", "updated", "paused", "deleted"]).default("created").notNull(),
-  /** Apelido/descrição dado pelo admin */
-  apelido: varchar("apelidoJudit", { length: 255 }),
-  /** userId do cliente associado (opcional — admin pode monitorar sem vincular) */
-  clienteUserId: int("clienteUserId"),
-  /** Tribunal identificado */
-  tribunal: varchar("tribunalJudit", { length: 16 }),
-  /** Nome das partes (capa do processo) */
-  nomePartes: varchar("nomePartes", { length: 512 }),
-  /** Última movimentação recebida */
-  ultimaMovimentacao: text("ultimaMovJudit"),
-  /** Data da última movimentação */
-  ultimaMovimentacaoData: varchar("ultimaMovDataJudit", { length: 32 }),
-  /** Total de atualizações recebidas via webhook */
-  totalAtualizacoes: int("totalAtualizacoes").default(0).notNull(),
-  /** Total de NOVAS AÇÕES detectadas (se tipoMonitoramento = "novas_acoes") */
-  totalNovasAcoes: int("totalNovasAcoes").default(0).notNull(),
-  /** Com anexos */
-  withAttachments: boolean("withAttachments").default(false).notNull(),
-  /**
-   * Data da última cobrança mensal bem-sucedida via cron. Serve pra
-   * o cron mensal saber quais monitoramentos já foram cobrados no ciclo
-   * atual e evitar cobrar duas vezes. Se null, nunca foi cobrado mensal
-   * ainda (a cobrança inicial é de criação, não mensal).
-   */
-  ultimaCobrancaMensal: timestamp("ultimaCobrancaMensal"),
-  createdAt: timestamp("createdAtJuditMon").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAtJuditMon").defaultNow().onUpdateNow().notNull(),
-});
-
-export type JuditMonitoramento = typeof juditMonitoramentos.$inferSelect;
-export type InsertJuditMonitoramento = typeof juditMonitoramentos.$inferInsert;
-
-/**
- * Cofre de Credenciais — armazena credenciais de advogados (CPF/OAB + senha)
- * necessárias para acessar processos em segredo de justiça. As senhas são
- * criptografadas pelo backend do Jurify E também pela Judit (duas camadas).
- *
- * A Judit cadastra essas credenciais no próprio cofre dela via POST
- * /credentials e retorna um identificador opaco. Armazenamos o
- * identificador + metadados pra poder listar/remover — mas NUNCA o
- * password original (a Judit não permite recuperar).
- *
- * Cada escritório pode ter múltiplas credenciais (um advogado por
- * sistema de tribunal, por exemplo).
- */
-export const juditCredenciais = mysqlTable("judit_credenciais", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorioIdJuditCred").notNull(),
-  /**
-   * Label amigável — ex: "Dr. João Silva - TJSP" — usada pro admin
-   * identificar rapidamente qual credencial é qual.
-   */
-  customerKey: varchar("customerKeyJuditCred", { length: 128 }).notNull(),
-  /**
-   * Sistema de tribunal (ex: "tjsp", "trf3", etc) ou "*" para curinga.
-   * A Judit aceita "*" pra credenciais genéricas que funcionam em
-   * múltiplos tribunais.
-   */
-  systemName: varchar("systemNameJuditCred", { length: 64 }).notNull(),
-  /** CPF ou número OAB do advogado */
-  username: varchar("usernameJuditCred", { length: 64 }).notNull(),
-  /**
-   * Flag indicando se a credencial tem 2FA configurado. Não armazenamos
-   * o secret aqui — ele é enviado direto pra Judit no cadastro.
-   */
-  has2fa: boolean("has2faJuditCred").default(false).notNull(),
-  /**
-   * Status da credencial:
-   *   - ativa: cadastrada e funcionando
-   *   - erro: última tentativa de uso retornou erro de auth
-   *   - expirada: senha do tribunal vence/mudou, precisa recadastrar
-   *   - removida: deletada (soft delete pra preservar auditoria)
-   */
-  status: mysqlEnum("statusJuditCred", ["ativa", "validando", "erro", "expirada", "removida"]).default("validando").notNull(),
-  /** Mensagem do último erro (se status="erro") */
-  mensagemErro: text("mensagemErroJuditCred"),
-  /**
-   * Credential ID retornado pela API da Judit (opaco).
-   * Nós usamos esse ID quando fazemos referência à credencial
-   * em chamadas subsequentes (tracking, requests).
-   */
-  juditCredentialId: varchar("juditCredIdJuditCred", { length: 128 }),
-  /** Quem cadastrou */
-  criadoPor: int("criadoPorJuditCred").notNull(),
-  createdAt: timestamp("createdAtJuditCred").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAtJuditCred").defaultNow().onUpdateNow().notNull(),
-});
-
-export type JuditCredencial = typeof juditCredenciais.$inferSelect;
-export type InsertJuditCredencial = typeof juditCredenciais.$inferInsert;
-
-/**
- * Novas ações detectadas pelo monitoramento de NOVAS AÇÕES.
- * Cada registro é uma ação nova distribuída contra a pessoa/empresa
- * sendo monitorada. Difere da `juditRespostas` (que são atualizações
- * de processos já conhecidos).
- */
-export const juditNovasAcoes = mysqlTable("judit_novas_acoes", {
-  id: int("id").autoincrement().primaryKey(),
-  monitoramentoId: int("monitoramentoIdNovaAcao").notNull(),
-  /** CNJ da nova ação detectada */
-  cnj: varchar("cnjNovaAcao", { length: 32 }).notNull(),
-  /** Tribunal onde a ação foi distribuída */
-  tribunal: varchar("tribunalNovaAcao", { length: 16 }),
-  /** Classe/assunto do processo (ex: "Reclamação Trabalhista") */
-  classeProcesso: varchar("classeNovaAcao", { length: 255 }),
-  /** Área do direito (ex: "Trabalhista", "Civil", "Tributário") */
-  areaDireito: varchar("areaDireitoNovaAcao", { length: 64 }),
-  /** Polo ativo (quem está processando) — JSON array */
-  poloAtivo: text("poloAtivoNovaAcao"),
-  /** Polo passivo (quem está sendo processado) — JSON array */
-  poloPassivo: text("poloPassivoNovaAcao"),
-  /** Data de distribuição */
-  dataDistribuicao: varchar("dataDistribuicaoNovaAcao", { length: 32 }),
-  /** Valor da causa (em centavos pra precisão) */
-  valorCausa: bigint("valorCausaNovaAcao", { mode: "number" }),
-  /** Payload completo recebido no webhook pra consulta detalhada */
-  payloadCompleto: text("payloadCompletoNovaAcao"),
-  /**
-   * Status de leitura — true quando o usuário abriu a nova ação na UI.
-   * Usado pra badge de "não lidas" no menu.
-   */
-  lido: boolean("lidoNovaAcao").default(false).notNull(),
-  /** Se foi gerado alerta por email/notificação */
-  alertaEnviado: boolean("alertaEnviadoNovaAcao").default(false).notNull(),
-  createdAt: timestamp("createdAtNovaAcao").defaultNow().notNull(),
-});
-
-export type JuditNovaAcao = typeof juditNovasAcoes.$inferSelect;
-export type InsertJuditNovaAcao = typeof juditNovasAcoes.$inferInsert;
-
-/**
- * Respostas/atualizações recebidas da Judit (via webhook ou polling).
- * Cada registro é um snapshot completo do processo em determinado momento.
- */
-export const juditRespostas = mysqlTable("judit_respostas", {
-  id: int("id").autoincrement().primaryKey(),
-  /** FK para judit_monitoramentos.id */
-  monitoramentoId: int("monitoramentoId").notNull(),
-  /** response_id da Judit */
-  responseId: varchar("responseId", { length: 128 }),
-  /** request_id da Judit */
-  requestId: varchar("requestIdJudit", { length: 128 }),
-  /** Tipo: lawsuit, application_info, application_error */
-  responseType: varchar("responseType", { length: 64 }).notNull(),
-  /** JSON completo da response_data */
-  responseData: text("responseDataJudit"),
-  /** Se é resposta em cache */
-  cachedResponse: boolean("cachedResponse").default(false),
-  /** Número de movimentações nesta resposta */
-  stepsCount: int("stepsCountJudit").default(0),
-  createdAt: timestamp("createdAtJuditResp").defaultNow().notNull(),
-});
-
-export type JuditResposta = typeof juditRespostas.$inferSelect;
-export type InsertJuditResposta = typeof juditRespostas.$inferInsert;
+// ═══════════════════════════════════════════════════════════════════════════════
+// JUDIT — REMOVIDO 08/05/2026
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tabelas juditMonitoramentos / juditCredenciais / juditNovasAcoes /
+// juditRespostas removidas (DROP) na migration 0070_remove_judit.sql.
+// Substituídas pelo motor próprio:
+//   - Cofre: cofre_credenciais (já existe)
+//   - Sessões: cofre_sessoes (já existe)
+//   - Eventos: motor_proprio_eventos (já existe)
+//   - Monitoramentos: motor_proprio_monitoramentos (Sprint 2)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ASAAS — INTEGRAÇÃO DE COBRANÇAS POR ESCRITÓRIO
@@ -1333,10 +1153,12 @@ export const mensagemTemplates = mysqlTable("mensagem_templates", {
 export type MensagemTemplate = typeof mensagemTemplates.$inferSelect;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CRÉDITOS JUDIT — Sistema de créditos por escritório
+// CRÉDITOS MOTOR PRÓPRIO — Sistema de créditos por escritório
 // ═══════════════════════════════════════════════════════════════════════════════
+// Renomeado de judit_creditos / judit_transacoes na migration 0070
+// (pós-remoção do Judit). Schema preservado.
 
-export const juditCreditos = mysqlTable("judit_creditos", {
+export const motorCreditos = mysqlTable("motor_creditos", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdJCred").notNull(),
   saldo: int("saldoJCred").default(0).notNull(),
@@ -1345,7 +1167,7 @@ export const juditCreditos = mysqlTable("judit_creditos", {
   updatedAt: timestamp("updatedAtJCred").defaultNow().onUpdateNow().notNull(),
 });
 
-export const juditTransacoes = mysqlTable("judit_transacoes", {
+export const motorTransacoes = mysqlTable("motor_transacoes", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdJTx").notNull(),
   tipo: mysqlEnum("tipoJTx", ["compra", "consumo", "bonus", "estorno"]).notNull(),
@@ -1357,6 +1179,11 @@ export const juditTransacoes = mysqlTable("judit_transacoes", {
   userId: int("userIdJTx").notNull(),
   createdAt: timestamp("createdAtJTx").defaultNow().notNull(),
 });
+
+// Aliases pra retrocompatibilidade com código que ainda importa nomes
+// antigos. Removidos em sprint posterior conforme refator avança.
+export const juditCreditos = motorCreditos;
+export const juditTransacoes = motorTransacoes;
 
 /**
  * Notas internas do admin sobre clientes — visíveis apenas no painel admin.

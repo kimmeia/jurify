@@ -9,7 +9,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { asaasCobrancas, clienteProcessos, cobrancaAcoes, contatos, juditMonitoramentos } from "../../drizzle/schema";
+import { asaasCobrancas, clienteProcessos, cobrancaAcoes, contatos } from "../../drizzle/schema";
 import { eq, and, desc, or, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
@@ -92,19 +92,11 @@ export const clienteProcessosRouter = router({
 
       const result = [];
       for (const row of rows) {
-        let monitoramentoStatus: string | null = null;
-        if (row.monitoramentoId) {
-          const [mon] = await db
-            .select({ statusJudit: juditMonitoramentos.statusJudit, updatedAt: juditMonitoramentos.updatedAt })
-            .from(juditMonitoramentos)
-            .where(eq(juditMonitoramentos.id, row.monitoramentoId))
-            .limit(1);
-          monitoramentoStatus = mon?.statusJudit || null;
-        }
+        // monitoramentoStatus removido: monitoramento próprio entra na Sprint 2
         const cob = cobrancasVinculadas.get(row.id) ?? { total: 0, pendentes: 0, pagas: 0 };
         result.push({
           ...row,
-          monitoramentoStatus,
+          monitoramentoStatus: null as string | null,
           cobrancasTotal: cob.total,
           cobrancasPendentes: cob.pendentes,
           cobrancasPagas: cob.pagas,
@@ -152,53 +144,8 @@ export const clienteProcessosRouter = router({
         .limit(1);
       if (existente) throw new TRPCError({ code: "CONFLICT", message: "Este processo já está vinculado a este cliente." });
 
-      // Verificar se já existe monitoramento pra este CNJ (vincula automaticamente)
-      let monitoramentoId: number | null = null;
-      try {
-        const [monExistente] = await db
-          .select({ id: juditMonitoramentos.id })
-          .from(juditMonitoramentos)
-          .where(
-            and(
-              eq(juditMonitoramentos.searchKey, input.numeroCnj),
-              eq(juditMonitoramentos.clienteUserId, ctx.user.id),
-              or(
-                eq(juditMonitoramentos.statusJudit, "created"),
-                eq(juditMonitoramentos.statusJudit, "updating"),
-                eq(juditMonitoramentos.statusJudit, "updated"),
-              ),
-            ),
-          )
-          .limit(1);
-
-        if (monExistente) {
-          monitoramentoId = monExistente.id;
-        } else if (input.monitorar) {
-          const { getJuditClient } = await import("../integracoes/judit-webhook");
-          const client = await getJuditClient();
-          if (client) {
-            const tracking = await client.criarMonitoramento({
-              recurrence: 1,
-              search: { search_type: "lawsuit_cnj", search_key: input.numeroCnj },
-              with_attachments: false,
-            });
-            const [monResult] = await db.insert(juditMonitoramentos).values({
-              trackingId: tracking.tracking_id,
-              searchType: "lawsuit_cnj",
-              searchKey: input.numeroCnj,
-              tipoMonitoramento: "movimentacoes",
-              recurrence: 1,
-              statusJudit: tracking.status as any,
-              apelido: input.apelido || null,
-              clienteUserId: ctx.user.id,
-              withAttachments: false,
-            });
-            monitoramentoId = (monResult as { insertId: number }).insertId;
-          }
-        }
-      } catch {
-        // Falha no monitoramento não bloqueia o vínculo
-      }
+      // Monitoramento removido (08/05/2026 — Judit). Cron próprio
+      // entra na Sprint 2; vínculo cria registro sem monitoramento ainda.
 
       const [result] = await db.insert(clienteProcessos).values({
         escritorioId: esc.escritorio.id,
@@ -207,14 +154,13 @@ export const clienteProcessosRouter = router({
         apelido: input.apelido || null,
         polo: (input.polo as any) || null,
         tipo: (input.tipo as any) || "litigioso",
-        monitoramentoId,
         criadoPor: ctx.user.id,
       });
 
       return {
         id: (result as { insertId: number }).insertId,
-        monitoramentoId,
-        monitorando: !!monitoramentoId,
+        monitoramentoId: null as number | null,
+        monitorando: false,
       };
     }),
 

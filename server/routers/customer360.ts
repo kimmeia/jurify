@@ -31,7 +31,6 @@ import {
   assinaturasDigitais,
   asaasClientes,
   asaasCobrancas,
-  juditMonitoramentos,
   clienteProcessos,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -286,16 +285,14 @@ export const customer360Router = router({
           .orderBy(desc(conversas.ultimaMensagemAt))
           .limit(5);
 
-        // ─── Processos VINCULADOS AO CLIENTE (via Judit) ─────────────
-        // Usa clienteProcessos (tabela de vínculo cliente↔processo) e
-        // enriquece com dados frescos de juditMonitoramentos quando o
-        // vínculo aponta pra um monitoramento ativo.
+        // ─── Processos VINCULADOS AO CLIENTE (motor próprio) ─────────
+        // Apenas dados estáticos do vínculo. Enriquecimento com última
+        // movimentação entra na Sprint 2 (cron monitoramento próprio).
         const vinculados = await db
           .select({
             id: clienteProcessos.id,
             numeroCnj: clienteProcessos.numeroCnj,
             apelido: clienteProcessos.apelido,
-            monitoramentoId: clienteProcessos.monitoramentoId,
             tribunalV: clienteProcessos.tribunal,
             classeV: clienteProcessos.classe,
           })
@@ -316,48 +313,19 @@ export const customer360Router = router({
           ultimaMovimentacao: string | null;
           ultimaMovimentacaoData: string | null;
           status: string;
-          fonte: "judit";
+          fonte: "motor_proprio";
         };
 
-        const processosNormalizados: ProcessoNoCard[] = [];
-
-        for (const v of vinculados) {
-          let mon: {
-            tribunal: string | null;
-            ultimaMov: string | null;
-            ultimaMovData: string | null;
-            statusJudit: string;
-          } | null = null;
-
-          if (v.monitoramentoId) {
-            try {
-              const [m] = await db
-                .select({
-                  tribunal: juditMonitoramentos.tribunal,
-                  ultimaMov: juditMonitoramentos.ultimaMovimentacao,
-                  ultimaMovData: juditMonitoramentos.ultimaMovimentacaoData,
-                  statusJudit: juditMonitoramentos.statusJudit,
-                })
-                .from(juditMonitoramentos)
-                .where(eq(juditMonitoramentos.id, v.monitoramentoId))
-                .limit(1);
-              if (m) mon = m;
-            } catch {
-              /* Judit indisponível — segue só com dados do vínculo */
-            }
-          }
-
-          processosNormalizados.push({
-            id: v.id,
-            numeroCnj: v.numeroCnj,
-            classe: v.classeV,
-            tribunal: mon?.tribunal || v.tribunalV,
-            ultimaMovimentacao: mon?.ultimaMov || null,
-            ultimaMovimentacaoData: mon?.ultimaMovData || null,
-            status: mon?.statusJudit === "paused" ? "pausado" : "ativo",
-            fonte: "judit",
-          });
-        }
+        const processosNormalizados: ProcessoNoCard[] = vinculados.map((v) => ({
+          id: v.id,
+          numeroCnj: v.numeroCnj,
+          classe: v.classeV,
+          tribunal: v.tribunalV,
+          ultimaMovimentacao: null,
+          ultimaMovimentacaoData: null,
+          status: "ativo",
+          fonte: "motor_proprio" as const,
+        }));
 
         const processosDoUser = processosNormalizados.slice(0, 10);
 
