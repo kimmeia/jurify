@@ -94,13 +94,13 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Lista campos básicos faltando (nome/cpf/tel/email) — qualificação
+  // Lista campos básicos faltando (nome/cpf/tel) — qualificação
   // tem helper próprio. Junto, mostra um aviso no topo quando há gaps.
+  // Email é opcional (não bloqueia cadastro/contrato).
   const camposBasicosFaltando: string[] = [];
   if (!nome.trim()) camposBasicosFaltando.push("Nome");
   if (!cpf.trim()) camposBasicosFaltando.push("CPF/CNPJ");
   if (!tel.trim()) camposBasicosFaltando.push("Telefone");
-  if (!email.trim()) camposBasicosFaltando.push("Email");
   const qualifFaltando = validarQualificacaoCompleta(qualif);
   const todosFaltando = [...camposBasicosFaltando, ...qualifFaltando];
 
@@ -124,7 +124,7 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5"><Label className="text-xs">Telefone <span className="text-destructive">*</span></Label><Input value={tel} onChange={e => setTel(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label className="text-xs">Email <span className="text-destructive">*</span></Label><Input value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label className="text-xs">Email</Label><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="opcional" /></div>
         </div>
 
         <CamposQualificacaoEndereco
@@ -617,14 +617,14 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
 
   const validar = () => {
     const e: Record<string, string> = {};
-    // Nome/CPF/Telefone/Email agora todos obrigatórios (UX pra contrato)
+    // Nome/CPF/Telefone obrigatórios. Email é opcional — se preenchido,
+    // valida formato.
     if (!nome || nome.trim().length < 2) e.nome = "Nome obrigatório (mín. 2 caracteres)";
     if (!cpf.trim()) e.cpf = "CPF/CNPJ obrigatório";
     else { const c = cpf.replace(/\D/g, ""); if (c.length !== 11 && c.length !== 14) e.cpf = "CPF (11 dígitos) ou CNPJ (14 dígitos)"; }
     if (!tel.trim()) e.tel = "Telefone obrigatório";
     else { const t = tel.replace(/\D/g, ""); if (t.length < 10 || t.length > 13) e.tel = "Telefone inválido"; }
-    if (!email.trim()) e.email = "Email obrigatório";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Email inválido";
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Email inválido";
     // Qualificação + endereço (helper compartilhado)
     const qualifFaltando = validarQualificacaoCompleta(qualif);
     if (qualifFaltando.length > 0) {
@@ -647,7 +647,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
 
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
     <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-red-400" : ""} />{erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}</div>
-    <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email <span className="text-destructive">*</span></Label><Input placeholder="email@exemplo.com" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
+    <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
     <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-red-400" : ""} />{erros.cpf && <p className="text-[10px] text-red-500">{erros.cpf}</p>}</div>
     <CamposQualificacaoEndereco
       obrigatorios
