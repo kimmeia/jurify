@@ -501,18 +501,36 @@ export class PjeTjceScraper {
         }
       }
 
-      // Fallback: dataDistribuicao via mov "Distribuído por sorteio".
+      // Fallback: dataDistribuicao via mov de início.
       // PJe TJCE 1º grau não expõe "Autuado em" no painel principal,
-      // mas sempre tem uma movimentação inicial tipo "Distribuído".
+      // mas sempre tem uma movimentação inicial. Estratégia em camadas:
+      //   1. Busca por palavras-chave (distribuído, autuado, recebido, etc)
+      //   2. Se nada bater → usa a ÚLTIMA mov (mais antiga, já que vem
+      //      em ordem cronológica decrescente)
       let capaFinal = capa;
       if (!capaFinal.dataDistribuicao && movimentacoes.length > 0) {
         const movDistribuido = movimentacoes.find((m) =>
-          /distribu[ií]d[oa]|autuad[oa]|distribui[çc][ãa]o/i.test(m.texto),
+          /distribu[ií]d[oa]|autuad[oa]|distribui[çc][ãa]o|recebid[oa]|autua[çc][ãa]o|in[ií]cio/i.test(
+            m.texto,
+          ),
         );
+        // Camada 1: regex casou
         if (movDistribuido) {
-          // Extrai só YYYY-MM-DD (data ISO sem hora)
           const dataIso = movDistribuido.data.split("T")[0] ?? null;
           capaFinal = { ...capaFinal, dataDistribuicao: dataIso };
+        } else {
+          // Camada 2: usa última mov (mais antiga). PJe sempre tem ao
+          // menos a "criação" do processo como primeiro item cronológico,
+          // então essa data é uma aproximação válida da distribuição.
+          const ultimaMov = movimentacoes[movimentacoes.length - 1];
+          if (ultimaMov) {
+            const dataIso = ultimaMov.data.split("T")[0] ?? null;
+            capaFinal = { ...capaFinal, dataDistribuicao: dataIso };
+            console.warn(
+              `[pje-tjce] dataDistribuicao via fallback "última mov" pra ${cnjMascarado} ` +
+                `— data=${dataIso}, textoUltimaMov="${ultimaMov.texto.slice(0, 80)}"`,
+            );
+          }
         }
       }
       if (!capaFinal.dataDistribuicao) {
