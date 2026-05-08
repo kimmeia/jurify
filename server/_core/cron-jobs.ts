@@ -239,6 +239,19 @@ export function iniciarJobs() {
     }
   }, 30 * 60 * 1000);
 
+  // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
+  // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal
+  // ao saldo (preserva sobras + pacotes pré-pagos).
+  setInterval(async () => {
+    try {
+      const { resetCotaMensalEscritorios } = await import("../billing/escritorio-creditos");
+      const { resetados } = await resetCotaMensalEscritorios();
+      if (resetados > 0) log.info(`[Cron] resetCotaMensal: ${resetados} escritórios renovados`);
+    } catch (err: any) {
+      log.error("[Cron] resetCotaMensal falhou:", err.message);
+    }
+  }, 6 * 60 * 60 * 1000);
+
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
 
