@@ -34,6 +34,7 @@ import {
   Loader2,
   ShieldCheck,
   Mail,
+  KeyRound,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -245,6 +246,9 @@ function IntegracaoCard({
 }) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  // Em estado de erro, user pode clicar "Trocar chave" pra inserir nova
+  // sem precisar passar por "Desconectar → Conectar".
+  const [showEditForm, setShowEditForm] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isRetesting, setIsRetesting] = useState(false);
@@ -483,7 +487,7 @@ function IntegracaoCard({
           </div>
         )}
 
-        {/* Se está com erro — mostra mensagem e permite reconectar */}
+        {/* Se está com erro — mostra mensagem e permite trocar chave / retestar / remover */}
         {isErro && (
           <div className="space-y-3 pt-1">
             {integracao.mensagemErro && (
@@ -493,21 +497,122 @@ function IntegracaoCard({
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            {/* Form inline de trocar chave (toggle pelo botão abaixo). Pulamos
+                pra WhatsApp/Sentry que têm formulários multi-campo próprios —
+                pra esses o user clica "Desconectar" e re-cadastra. */}
+            {showEditForm && integracao.id !== "whatsapp_cloud" && integracao.id !== "sentry" && (
+              <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 p-2.5">
+                <Label className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">
+                  Nova API key
+                </Label>
+                <div className="relative">
+                  <Input
+                    type={showKey ? "text" : "password"}
+                    placeholder="Cole a nova chave"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && apiKey.trim()) {
+                        handleConnect();
+                      }
+                    }}
+                    className="pr-8 font-mono text-xs h-8"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    onClick={() => handleConnect()}
+                    disabled={isConnecting || !apiKey.trim()}
+                    size="sm"
+                    className="flex-1 h-7 text-xs"
+                  >
+                    {isConnecting ? (
+                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                    ) : (
+                      <Plug className="h-3 w-3 mr-1.5" />
+                    )}
+                    Salvar e testar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => { setShowEditForm(false); setApiKey(""); }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {!showEditForm && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowEditForm(true)}
+                  className="text-xs h-7"
+                >
+                  <KeyRound className="h-3 w-3 mr-1.5" />
+                  Trocar chave
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRetest}
                 disabled={isRetesting}
-                className="text-xs"
+                className="text-xs h-7"
               >
                 {isRetesting ? (
                   <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
                 ) : (
                   <RefreshCw className="h-3 w-3 mr-1.5" />
                 )}
-                Retestar conexão
+                Retestar
               </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive/50 hover:bg-destructive/5 ml-auto"
+                    disabled={isDisconnecting}
+                  >
+                    {isDisconnecting ? (
+                      <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                    ) : (
+                      <Unplug className="h-3 w-3 mr-1.5" />
+                    )}
+                    Remover
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remover {integracao.nome}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      A API key inválida será removida. Você poderá cadastrar uma nova depois.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDisconnect}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Remover
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         )}
