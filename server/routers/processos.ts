@@ -37,6 +37,7 @@ import {
   obterStatusMotorProprio,
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
+import { consultarTjce } from "../processos/adapters/pje-tjce";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 
 const log = createLogger("processos-motor");
@@ -53,6 +54,48 @@ export const CUSTOS = {
   monitorar_processo_mes: 2,    // ANTES: Judit cobrava 5
   monitorar_pessoa_mes: 15,     // ANTES: Judit cobrava 35
 } as const;
+
+function safeParse(json: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Converte ResultadoScraper (motor próprio) para o shape "lawsuit"
+ * que o frontend MonitoramentoCard espera (legado Judit). Mantém
+ * compat até refator profundo do componente.
+ *
+ * - amount em REAIS (não cents) — frontend formata com formatBRL direto
+ * - parties[].side: "Active"/"Passive" (frontend filtra por isso)
+ * - steps[].step_date / content: shape Judit
+ */
+function adaptarParaJuditShape(r: any, cnj: string) {
+  const capa = r?.capa ?? {};
+  const partes: Array<{ nome?: string; polo?: string; documento?: string | null }> = capa.partes ?? [];
+  const movs: Array<{ data?: string; texto?: string }> = r?.movimentacoes ?? [];
+  return {
+    code: cnj,
+    name: capa.classe ?? null,
+    classifications: capa.classe ? [{ name: capa.classe }] : [],
+    amount:
+      typeof capa.valorCausaCentavos === "number"
+        ? capa.valorCausaCentavos / 100
+        : null,
+    distribution_date: capa.dataDistribuicao ?? null,
+    parties: partes.map((p) => ({
+      name: p.nome ?? "",
+      side: (p.polo ?? "").toLowerCase().startsWith("ativ") ? "Active" : "Passive",
+      main_document: p.documento ?? null,
+    })),
+    steps: movs.map((m) => ({
+      step_date: m.data ?? null,
+      content: m.texto ?? "",
+    })),
+  };
+}
 
 async function consumirCreditos(
   escritorioId: number,
@@ -526,13 +569,16 @@ export const processosRouter = router({
     .input(
       z.object({
         monitoramentoId: z.number().int().positive(),
-        limite: z.number().int().min(1).max(200).default(50),
+        page: z.number().int().min(1).default(1).optional(),
+        pageSize: z.number().int().min(1).max(200).default(50).optional(),
+        // mantido pra compat com chamadas antigas
+        limite: z.number().int().min(1).max(200).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) return { eventos: [], totalNaoLidas: 0 };
-      // Confirma posse
+      const limite = input.limite ?? input.pageSize ?? 50;
+      if (!db) return { items: [], eventos: [], totalNaoLidas: 0 };
       const [mon] = await db
         .select()
         .from(motorMonitoramentos)
@@ -550,9 +596,106 @@ export const processosRouter = router({
         .from(eventosProcesso)
         .where(eq(eventosProcesso.monitoramentoId, input.monitoramentoId))
         .orderBy(desc(eventosProcesso.dataEvento))
-        .limit(input.limite);
+        .limit(limite);
+
+      // Shape compat com frontend antigo (esperava resp Judit):
+      // items[].responseType + items[].responseData. Mapeia eventos
+      // pra esse formato. Se não há eventos, retorna [].
+      const items = eventos.map((e) => ({
+        id: e.id,
+        responseType: e.tipo === "movimentacao" ? "step" : e.tipo,
+        responseData: e.conteudoJson ? safeParse(e.conteudoJson) : { texto: e.conteudo, data: e.dataEvento },
+        createdAt: e.createdAt,
+        lido: e.lido,
+      }));
       const naoLidas = eventos.filter((e) => !e.lido).length;
-      return { eventos, totalNaoLidas: naoLidas };
+      return { items, eventos, totalNaoLidas: naoLidas };
+    }),
+
+  // Dispara consulta direta do processo associado a um monitoramento.
+  // Cobra 1 cred. Útil quando o user clica "Histórico" no card pra
+  // forçar atualização imediata em vez de esperar o cron de 6h.
+  buscarProcessoCompleto: protectedProcedure
+    .input(z.object({ monitoramentoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const [mon] = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.monitoramentoId),
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+
+      if (!mon.credencialId) {
+        return { encontrado: false, mensagem: "Monitoramento sem credencial vinculada" };
+      }
+
+      const sessao = await recuperarSessao(mon.credencialId);
+      if (!sessao) {
+        return {
+          encontrado: false,
+          mensagem: "Sessão expirou. Vá em Cofre de Credenciais → Validar pra renovar.",
+        };
+      }
+
+      // Cobra 1 cred (mesma tarifa de consultarCNJ direta)
+      await consumirCreditos(
+        esc.escritorio.id,
+        ctx.user.id,
+        CUSTOS.consulta_cnj,
+        "consulta_cnj",
+        `Histórico monitoramento ${mon.searchKey}`,
+      );
+
+      let resultado;
+      if (mon.tribunal === "tjce") {
+        resultado = await consultarTjce(mon.searchKey, sessao);
+      } else {
+        return {
+          encontrado: false,
+          mensagem: `Tribunal ${mon.tribunal} ainda sem adapter implementado.`,
+        };
+      }
+
+      if (!resultado.ok) {
+        await db
+          .update(motorMonitoramentos)
+          .set({ ultimoErro: resultado.mensagemErro ?? "Erro na consulta", ultimaConsultaEm: new Date() })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        return { encontrado: false, mensagem: resultado.mensagemErro ?? "Erro desconhecido" };
+      }
+
+      // Atualiza monitoramento + insere movs novas (best effort)
+      try {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            ultimaConsultaEm: new Date(),
+            ultimaMovimentacaoEm: resultado.movimentacoes[0]?.data
+              ? new Date(resultado.movimentacoes[0].data)
+              : null,
+            ultimaMovimentacaoTexto: resultado.movimentacoes[0]?.texto?.slice(0, 500) ?? null,
+            ultimoErro: null,
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+      } catch {
+        /* best-effort */
+      }
+
+      // Adapta ResultadoScraper → shape JuditLawsuit-like que o
+      // frontend `MonitoramentoCard` espera (steps, parties, code, etc).
+      const processoAdaptado = adaptarParaJuditShape(resultado, mon.searchKey);
+      return { encontrado: true, processo: processoAdaptado };
     }),
 
   // ─── NOVAS AÇÕES por CPF/CNPJ (Sub-sprint 2.2) ─────────────────────────

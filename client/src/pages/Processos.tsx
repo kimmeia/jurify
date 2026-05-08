@@ -633,7 +633,7 @@ function MonitoramentoCard({
                   variant="ghost"
                   size="sm"
                   className="h-7 text-[10px] text-indigo-600"
-                  title="Buscar processo completo na Judit (1 crédito)"
+                  title="Atualizar processo agora — consulta tribunal (1 crédito)"
                   disabled={buscarCompletoMut.isPending}
                   onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id })}
                 >
@@ -696,7 +696,7 @@ function MonitoramentoCard({
               <div className="text-center py-8 text-xs text-muted-foreground">
                 <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>Ainda não há dados do processo.</p>
-                <p className="text-[10px] mt-1">Aguarde a primeira consulta da Judit (geralmente até 24h).</p>
+                <p className="text-[10px] mt-1">Clique em <strong>Histórico</strong> pra puxar agora (1 crédito) ou aguarde o próximo poll automático (até 6h).</p>
               </div>
             ) : (
               <>
