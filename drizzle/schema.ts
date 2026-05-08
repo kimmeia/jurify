@@ -918,7 +918,7 @@ export const asaasConfig = mysqlTable("asaas_config", {
   apiKeyIv: varchar("apiKeyIvAsaas", { length: 64 }),
   apiKeyTag: varchar("apiKeyTagAsaas", { length: 64 }),
   modo: mysqlEnum("modoAsaas", ["sandbox", "producao"]).default("producao").notNull(),
-  status: mysqlEnum("statusAsaas", ["conectado", "desconectado", "erro"]).default("desconectado").notNull(),
+  status: mysqlEnum("statusAsaas", ["conectado", "desconectado", "erro", "aguardando_validacao"]).default("desconectado").notNull(),
   webhookToken: varchar("webhookTokenAsaas", { length: 128 }),
   ultimoTeste: timestamp("ultimoTesteAsaas"),
   mensagemErro: varchar("mensagemErroAsaas", { length: 512 }),
@@ -1158,19 +1158,24 @@ export type MensagemTemplate = typeof mensagemTemplates.$inferSelect;
 // Renomeado de judit_creditos / judit_transacoes na migration 0070
 // (pós-remoção do Judit). Schema preservado.
 
-export const motorCreditos = mysqlTable("motor_creditos", {
+export const escritorioCreditos = mysqlTable("escritorio_creditos", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdJCred").notNull(),
   saldo: int("saldoJCred").default(0).notNull(),
   totalComprado: int("totalCompradoJCred").default(0).notNull(),
   totalConsumido: int("totalConsumidoJCred").default(0).notNull(),
+  cotaMensal: int("cotaMensal").default(0).notNull(),
+  ultimoReset: timestamp("ultimoReset"),
   updatedAt: timestamp("updatedAtJCred").defaultNow().onUpdateNow().notNull(),
 });
 
-export const motorTransacoes = mysqlTable("motor_transacoes", {
+// Aliases pra compat retroativa enquanto migra todos os call sites
+export const motorCreditos = escritorioCreditos;
+
+export const escritorioTransacoes = mysqlTable("escritorio_transacoes", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdJTx").notNull(),
-  tipo: mysqlEnum("tipoJTx", ["compra", "consumo", "bonus", "estorno"]).notNull(),
+  tipo: mysqlEnum("tipoJTx", ["compra", "consumo", "bonus", "estorno", "reset_mensal"]).notNull(),
   quantidade: int("quantidadeJTx").notNull(),
   saldoAnterior: int("saldoAnteriorJTx").notNull(),
   saldoDepois: int("saldoDepoisJTx").notNull(),
@@ -1182,8 +1187,9 @@ export const motorTransacoes = mysqlTable("motor_transacoes", {
 
 // Aliases pra retrocompatibilidade com código que ainda importa nomes
 // antigos. Removidos em sprint posterior conforme refator avança.
-export const juditCreditos = motorCreditos;
-export const juditTransacoes = motorTransacoes;
+export const motorTransacoes = escritorioTransacoes;
+export const juditCreditos = escritorioCreditos;
+export const juditTransacoes = escritorioTransacoes;
 
 /**
  * Motor próprio — Monitoramentos.

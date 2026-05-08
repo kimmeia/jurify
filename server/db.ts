@@ -463,20 +463,44 @@ export async function getUserCreditsInfo(userId: number) {
 
 /**
  * Consumir um crédito ao realizar um cálculo.
+ *
+ * Após migration 0073: usa saldo unificado por escritório
+ * (escritorio_creditos). user_credits fica deprecated mas é
+ * atualizado em paralelo pra preservar dashboards legados que
+ * ainda lêem dele (até refator de UI passar todos pro novo helper).
  */
 export async function consumirCredito(userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return true;
 
-  const credits = await getUserCreditsInfo(userId);
-  if (!credits) return false;
+  // 1. Cobra do saldo unificado do escritório (fonte de verdade)
+  try {
+    const { getEscritorioPorUsuario } = await import("./escritorio/db-escritorio");
+    const { consumirCreditosEscritorio } = await import("./billing/escritorio-creditos");
 
-  if (credits.creditsRemaining <= 0) return false;
+    const esc = await getEscritorioPorUsuario(userId);
+    if (!esc) return false;
 
-  await db
-    .update(userCredits)
-    .set({ creditsUsed: sql`${userCredits.creditsUsed} + 1` })
-    .where(eq(userCredits.userId, userId));
+    await consumirCreditosEscritorio(esc.escritorio.id, userId, 1, "calculo", "Cálculo jurídico");
+  } catch (err: any) {
+    // PRECONDITION_FAILED = sem saldo
+    if (err?.code === "PRECONDITION_FAILED") return false;
+    throw err;
+  }
+
+  // 2. Espelha em user_credits pro UI legado mostrar coerente
+  // (creditsUsed += 1). Não bloqueia: se falhar, log e segue.
+  try {
+    const credits = await getUserCreditsInfo(userId);
+    if (credits) {
+      await db
+        .update(userCredits)
+        .set({ creditsUsed: sql`${userCredits.creditsUsed} + 1` })
+        .where(eq(userCredits.userId, userId));
+    }
+  } catch {
+    /* legado, não-bloqueante */
+  }
 
   return true;
 }

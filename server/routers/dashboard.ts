@@ -41,8 +41,38 @@ export const dashboardRouter = router({
     return getCalculosRecentes(ctx.user.id, 5);
   }),
 
-  /** Informações de créditos */
+  /**
+   * Informações de créditos.
+   *
+   * Pós-migration 0073 (saldo único): retorna saldo do escritório
+   * (calc + processos + monitoramentos juntos) no formato esperado
+   * pelo header (creditsTotal, creditsUsed, creditsRemaining).
+   *
+   * Quando user não tem escritório (ex: trial recém-cadastrado),
+   * cai pro user_credits legado.
+   */
   credits: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      const { getSaldoEscritorio } = await import("../billing/escritorio-creditos");
+
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (esc) {
+        const s = await getSaldoEscritorio(esc.escritorio.id);
+        // Mantém shape esperado pelo frontend: creditsTotal/Used/Remaining.
+        // creditsTotal = saldo + cotaMensal_consumida_aprox.
+        // Heurística: usamos saldo "atual" como creditsRemaining,
+        // total = saldo + totalConsumido pra mostrar evolução fiel.
+        return {
+          creditsTotal: s.saldo + s.totalConsumido,
+          creditsUsed: s.totalConsumido,
+          creditsRemaining: s.saldo,
+          resetAt: s.ultimoReset,
+        };
+      }
+    } catch {
+      /* fallback */
+    }
     return getUserCreditsInfo(ctx.user.id);
   }),
 

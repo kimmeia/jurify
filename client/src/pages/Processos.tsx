@@ -1513,8 +1513,8 @@ function CofreTab() {
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState({
-    customerKey: "",
-    systemName: "*",
+    apelido: "",
+    sistema: "pje_tjce",
     username: "",
     password: "",
     totpSecret: "",
@@ -1532,7 +1532,7 @@ function CofreTab() {
         toast.warning("Validação pendente", { description: data.mensagem, duration: 10000 });
       }
       setNovoOpen(false);
-      setForm({ customerKey: "", systemName: "*", username: "", password: "", totpSecret: "" });
+      setForm({ apelido: "", sistema: "pje_tjce", username: "", password: "", totpSecret: "" });
       refetch();
     },
     onError: (e: any) => toast.error("Erro ao cadastrar", { description: e.message }),
@@ -1561,9 +1561,9 @@ function CofreTab() {
                 <p className="font-semibold text-sm">Cofre de Credenciais de Advogado</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Cadastre o login OAB de um advogado do escritório pra acessar processos
-                  em <strong>segredo de justiça</strong>. As senhas ficam criptografadas pela Judit e
-                  NUNCA são expostas depois do cadastro — se precisar trocar, delete e cadastre
-                  uma nova.
+                  em <strong>segredo de justiça</strong>. As senhas ficam criptografadas com
+                  AES-256 e <strong>nunca</strong> são expostas após o cadastro — se precisar
+                  trocar, delete e cadastre uma nova.
                 </p>
               </div>
             </div>
@@ -1597,9 +1597,9 @@ function CofreTab() {
                     <KeyRound className="h-4 w-4 text-violet-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{c.customerKey}</p>
+                    <p className="text-sm font-semibold truncate">{c.apelido || c.customerKey}</p>
                     <p className="text-[10px] text-muted-foreground truncate">
-                      {c.systemName === "*" ? "Todos os tribunais" : c.systemName.toUpperCase()}
+                      {(c.sistema || c.systemName || "").toUpperCase()}
                     </p>
                   </div>
                   <Badge
@@ -1619,16 +1619,16 @@ function CofreTab() {
                 <div className="mt-2 space-y-1 text-xs">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <User className="h-3 w-3" />
-                    <span className="font-mono truncate">{c.username}</span>
+                    <span className="font-mono truncate">{c.usernameMascarado || c.username}</span>
                   </div>
-                  {c.has2fa && (
+                  {(c.tem2fa || c.has2fa) && (
                     <div className="flex items-center gap-1.5 text-violet-600">
                       <ShieldAlert className="h-3 w-3" />
                       <span>2FA ativado</span>
                     </div>
                   )}
-                  {c.mensagemErro && (
-                    <p className={`text-[10px] ${c.status === "erro" ? "text-red-600" : "text-blue-600"}`}>{c.mensagemErro}</p>
+                  {(c.ultimoErro || c.mensagemErro) && (
+                    <p className={`text-[10px] ${c.status === "erro" ? "text-red-600" : "text-blue-600"}`}>{c.ultimoErro || c.mensagemErro}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 pt-2 mt-2 border-t">
@@ -1637,7 +1637,7 @@ function CofreTab() {
                     variant="ghost"
                     className="h-7 text-xs text-destructive ml-auto"
                     onClick={() => {
-                      if (confirm(`Remover credencial "${c.customerKey}"? Monitoramentos que dependem dela vão parar de funcionar.`)) {
+                      if (confirm(`Remover credencial "${c.apelido || c.customerKey}"? Monitoramentos que dependem dela vão parar de funcionar.`)) {
                         removerMut.mutate({ id: c.id });
                       }
                     }}
@@ -1665,18 +1665,20 @@ function CofreTab() {
             <div>
               <Label>Apelido da credencial *</Label>
               <Input
-                placeholder="Ex: Dr. João Silva - TJSP"
-                value={form.customerKey}
-                onChange={(e) => setForm({ ...form, customerKey: e.target.value })}
+                placeholder="Ex: Dr. João Silva - TJCE"
+                value={form.apelido}
+                onChange={(e) => setForm({ ...form, apelido: e.target.value })}
               />
             </div>
             <div>
               <Label>Tribunal/Sistema *</Label>
-              <Select value={form.systemName} onValueChange={(v) => setForm({ ...form, systemName: v })}>
+              <Select value={form.sistema} onValueChange={(v) => setForm({ ...form, sistema: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="max-h-64">
                   {(sistemas || []).map((s: any) => (
-                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                    <SelectItem key={s.id} value={s.id} disabled={s.disponivel === false}>
+                      {s.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1735,7 +1737,7 @@ function CofreTab() {
             <Button
               onClick={() => (cadastrarMut.mutate as any)(form)}
               disabled={
-                !form.customerKey || !form.systemName || !form.username || !form.password ||
+                !form.apelido || !form.sistema || !form.username || !form.password ||
                 cadastrarMut.isPending
               }
             >

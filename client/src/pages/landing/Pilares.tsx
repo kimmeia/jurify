@@ -63,7 +63,7 @@ const pilares = [
   {
     icon: FileSearch,
     titulo: "Processos & Kanban",
-    desc: "Monitoramento Judit por CPF/CNPJ, kanban de prazos, alertas de movimentação. Não perde audiência.",
+    desc: "Monitoramento por CPF/CNPJ via motor próprio, kanban de prazos, alertas de movimentação. Não perde audiência.",
     tom: "warning",
   },
 ] as const;

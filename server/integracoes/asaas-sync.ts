@@ -449,6 +449,76 @@ export function agregarVinculosPorContato(
  * Sincroniza cobranças de TODOS os escritórios conectados ao Asaas.
  * Chamado pelo cron job a cada 10 minutos.
  */
+/**
+ * Cron: re-tenta validar configs Asaas em estado "aguardando_validacao".
+ *
+ * Quando user conecta Asaas e a API retorna 429 (rate limit 12h),
+ * salvamos a key como "aguardando_validacao". Esta função roda a cada
+ * 30min e retesta. Se passar, vira "conectado". Se ainda 429, mantém
+ * pendente. Se outro erro (chave inválida etc), vira "erro".
+ *
+ * Faz no máximo 1 request por config — não faz pool agressivo. 6 escritórios
+ * pendentes = 6 requests em 30min, longe do limite Asaas.
+ */
+export async function validarConexoesAsaasPendentes(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const pendentes = await db.select()
+    .from(asaasConfig)
+    .where(eq(asaasConfig.status, "aguardando_validacao"));
+
+  if (pendentes.length === 0) return;
+
+  log.info(`[Asaas Validação] Retentando ${pendentes.length} config(s) em rate limit...`);
+
+  const { AsaasClient } = await import("./asaas-client");
+  const { decrypt } = await import("../escritorio/crypto-utils");
+
+  for (const cfg of pendentes) {
+    if (!cfg.apiKeyEncrypted) continue;
+    let apiKey: string;
+    try {
+      apiKey = decrypt(cfg.apiKeyEncrypted, cfg.apiKeyIv ?? "", cfg.apiKeyTag ?? "");
+    } catch {
+      log.warn(`[Asaas Validação] Escritório ${cfg.escritorioId}: falha ao descriptografar`);
+      continue;
+    }
+
+    const client = new AsaasClient(apiKey);
+    const teste = await client.testarConexao();
+
+    const isRateLimit =
+      !teste.ok &&
+      (/HTTP 429/i.test(teste.mensagem) ||
+        /cota.*requisi[çc][õo]es|rate.?limit/i.test(teste.detalhes ?? ""));
+
+    if (teste.ok) {
+      await db.update(asaasConfig).set({
+        status: "conectado",
+        ultimoTeste: new Date(),
+        mensagemErro: null,
+        saldo: teste.saldo?.toString() || null,
+      }).where(eq(asaasConfig.id, cfg.id));
+      log.info(`[Asaas Validação] Escritório ${cfg.escritorioId}: validado, agora "conectado"`);
+    } else if (isRateLimit) {
+      await db.update(asaasConfig).set({
+        ultimoTeste: new Date(),
+        mensagemErro: "rate_limit_429: ainda bloqueado, retentando em 30min",
+      }).where(eq(asaasConfig.id, cfg.id));
+      // mantém status="aguardando_validacao"
+    } else {
+      // 401 etc — chave realmente inválida agora
+      await db.update(asaasConfig).set({
+        status: "erro",
+        ultimoTeste: new Date(),
+        mensagemErro: teste.mensagem + (teste.detalhes ? ` (${teste.detalhes})` : ""),
+      }).where(eq(asaasConfig.id, cfg.id));
+      log.warn(`[Asaas Validação] Escritório ${cfg.escritorioId}: erro real → ${teste.mensagem}`);
+    }
+  }
+}
+
 export async function syncTodosEscritorios(): Promise<void> {
   const db = await getDb();
   if (!db) return;

@@ -43,7 +43,6 @@ export default function AdminSettings() {
   const { data: health, isLoading: loadHealth } = trpc.admin.systemHealth.useQuery(undefined, { retry: false });
   const { data: planos, isLoading: loadPlanos } = trpc.admin.planosAtuais.useQuery(undefined, { retry: false });
   const { data: ops, isLoading: loadOps } = trpc.admin.operacional.useQuery(undefined, { retry: false });
-  const { data: juditKpis } = (trpc as any).adminJudit?.kpis?.useQuery?.(undefined, { refetchInterval: 30000 }) || { data: undefined };
 
   const formatCurrency = (cents: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -256,62 +255,6 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
       </div>
-      {/* Saúde Judit */}
-      {juditKpis && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Radar className="h-4 w-4 text-indigo-500" />
-              Integração Judit.IO
-              <Badge variant="outline" className="text-[9px] ml-2 gap-1">
-                <Activity className="h-2.5 w-2.5 text-emerald-500 animate-pulse" /> Tempo real
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Coins className="h-3 w-3" /> Créditos
-                </div>
-                <p className="text-lg font-bold">{(juditKpis.creditos?.saldoTotal || 0).toLocaleString("pt-BR")}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  saldo total · {juditKpis.creditos?.escritoriosComCredito || 0} escritórios
-                </p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Radar className="h-3 w-3" /> Monitoramentos
-                </div>
-                <p className="text-lg font-bold">{juditKpis.monitoramentos?.ativos || 0}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  ativos · {juditKpis.monitoramentos?.pausados || 0} pausados
-                </p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <KeyRound className="h-3 w-3" /> Credenciais
-                </div>
-                <p className="text-lg font-bold">{juditKpis.credenciais?.ativas || 0}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  ativas · {juditKpis.credenciais?.erro || 0} com erro
-                </p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <AlertTriangle className="h-3 w-3" /> Alertas
-                </div>
-                <p className={`text-lg font-bold ${juditKpis.creditos?.escritoriosSaldoBaixo > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                  {juditKpis.creditos?.escritoriosSaldoBaixo || 0}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  escritórios saldo &lt;10 · 24h: -{juditKpis.ultimas24h?.creditosConsumidos || 0} cred
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

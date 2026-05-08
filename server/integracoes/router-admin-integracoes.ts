@@ -17,7 +17,6 @@ import { getDb } from "../db";
 import { adminIntegracoes } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt, maskToken, generateWebhookSecret } from "../escritorio/crypto-utils";
-// JuditClient removido em 08/05/2026 — substituído por motor próprio
 import { AsaasClient } from "./asaas-client";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-router-admin-integracoes");
@@ -41,13 +40,6 @@ const PROVEDORES: ProvedorMeta[] = [
     descricao: "Gateway de pagamento para mensalidades dos escritórios (substitui Stripe).",
     docUrl: "https://docs.asaas.com/reference",
     services: ["Assinaturas", "PIX", "Boleto", "Cartão"],
-  },
-  {
-    id: "judit",
-    nome: "Judit.IO",
-    descricao: "Monitoramento processual em 90+ tribunais por CNJ/CPF/CNPJ/OAB.",
-    docUrl: "https://docs.judit.io",
-    services: ["Processos", "Monitoramento", "Webhooks"],
   },
   {
     id: "whatsapp_cloud",
@@ -98,11 +90,6 @@ function getProvedorMeta(provedor: string): ProvedorMeta | undefined {
 
 async function testarConexaoProvedor(provedor: string, apiKey: string) {
   switch (provedor) {
-    case "judit": {
-      // Judit removido. Mantém case pra compat retro com configs antigas
-      // mas retorna "não implementado" — admin pode remover esse provedor.
-      return { ok: false, mensagem: "Judit removido — use motor próprio (TJCE 1º grau)" };
-    }
     case "whatsapp_cloud": {
       // apiKey is JSON: {"appId":"...", "appSecret":"...", "webhookVerifyToken":"..."}
       try {

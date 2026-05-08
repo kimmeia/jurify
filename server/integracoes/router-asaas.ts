@@ -406,7 +406,16 @@ export const asaasRouter = router({
       const client = new AsaasClient(input.apiKey);
       const teste = await client.testarConexao();
 
-      if (!teste.ok) {
+      // Detecção de rate limit (429) — Asaas tem janela de 12h.
+      // Em vez de falhar, salvamos a key com status="aguardando_validacao".
+      // Cron `validarConexoesAsaasPendentes` retenta quando liberar.
+      const isRateLimit =
+        !teste.ok &&
+        (/HTTP 429/i.test(teste.mensagem) ||
+          /cota.*requisi[çc][õo]es|rate.?limit/i.test(teste.detalhes ?? ""));
+
+      // 401 = chave inválida. NÃO salva — falha imediato.
+      if (!teste.ok && !isRateLimit) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: teste.mensagem + (teste.detalhes ? ` (${teste.detalhes})` : ""),
@@ -416,6 +425,11 @@ export const asaasRouter = router({
       // Criptografar
       const { encrypted, iv, tag } = encrypt(input.apiKey);
       const webhookToken = generateWebhookSecret();
+
+      const novoStatus = isRateLimit ? ("aguardando_validacao" as const) : ("conectado" as const);
+      const novaMsgErro = isRateLimit
+        ? "rate_limit_429: Asaas em cota excedida (janela 12h). Validação automática em background."
+        : null;
 
       // Upsert config
       const [existing] = await db.select().from(asaasConfig)
@@ -427,10 +441,10 @@ export const asaasRouter = router({
           apiKeyIv: iv,
           apiKeyTag: tag,
           modo: client.modo,
-          status: "conectado",
+          status: novoStatus,
           webhookToken,
           ultimoTeste: new Date(),
-          mensagemErro: null,
+          mensagemErro: novaMsgErro,
           saldo: teste.saldo?.toString() || null,
         }).where(eq(asaasConfig.id, existing.id));
       } else {
@@ -440,11 +454,28 @@ export const asaasRouter = router({
           apiKeyIv: iv,
           apiKeyTag: tag,
           modo: client.modo,
-          status: "conectado",
+          status: novoStatus,
           webhookToken,
           ultimoTeste: new Date(),
+          mensagemErro: novaMsgErro,
           saldo: teste.saldo?.toString() || null,
         });
+      }
+
+      // Se rate-limited, retorna sucesso com aviso (frontend mostra
+      // mensagem amigável). Webhook só registra quando validar.
+      if (isRateLimit) {
+        return {
+          success: true,
+          modo: client.modo,
+          saldo: null,
+          webhookRegistrado: false,
+          webhookErro: null,
+          aguardandoValidacao: true,
+          mensagem:
+            "Sua chave foi salva, mas o Asaas está em cota excedida (rate limit 12h). " +
+            "Vamos validar automaticamente em background. Status atualiza pra \"conectado\" quando liberar.",
+        };
       }
 
       // Auto-registrar webhook no Asaas
@@ -509,6 +540,77 @@ export const asaasRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: `Falha ao registrar webhook: ${msg}` });
       }
     }),
+
+  /**
+   * Força validação manual de uma config existente. Útil quando user
+   * tá aguardando rate limit liberar e quer testar agora em vez de
+   * esperar o cron de 30min.
+   */
+  validarAgora: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db.select().from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id)).limit(1);
+    if (!cfg || !cfg.apiKeyEncrypted) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma chave salva. Conecte primeiro." });
+    }
+
+    let apiKey: string;
+    try {
+      apiKey = decrypt(cfg.apiKeyEncrypted, cfg.apiKeyIv ?? "", cfg.apiKeyTag ?? "");
+    } catch {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao descriptografar a key salva" });
+    }
+
+    const client = new AsaasClient(apiKey);
+    const teste = await client.testarConexao();
+
+    const isRateLimit =
+      !teste.ok &&
+      (/HTTP 429/i.test(teste.mensagem) ||
+        /cota.*requisi[çc][õo]es|rate.?limit/i.test(teste.detalhes ?? ""));
+
+    if (teste.ok) {
+      await db.update(asaasConfig).set({
+        status: "conectado",
+        ultimoTeste: new Date(),
+        mensagemErro: null,
+        saldo: teste.saldo?.toString() || null,
+      }).where(eq(asaasConfig.id, cfg.id));
+      return { ok: true, status: "conectado" as const, saldo: teste.saldo };
+    }
+
+    if (isRateLimit) {
+      await db.update(asaasConfig).set({
+        status: "aguardando_validacao",
+        ultimoTeste: new Date(),
+        mensagemErro: "rate_limit_429: continua bloqueado. Próxima tentativa automática em ~30min.",
+      }).where(eq(asaasConfig.id, cfg.id));
+      return {
+        ok: false,
+        status: "aguardando_validacao" as const,
+        mensagem: "Asaas ainda em rate limit. Vamos retentar automaticamente em até 30min.",
+      };
+    }
+
+    // Erro real (chave inválida etc)
+    await db.update(asaasConfig).set({
+      status: "erro",
+      ultimoTeste: new Date(),
+      mensagemErro: teste.mensagem + (teste.detalhes ? ` (${teste.detalhes})` : ""),
+    }).where(eq(asaasConfig.id, cfg.id));
+    return {
+      ok: false,
+      status: "erro" as const,
+      mensagem: teste.mensagem,
+    };
+  }),
 
   desconectar: protectedProcedure.mutation(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "financeiro", "editar");

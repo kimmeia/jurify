@@ -104,70 +104,33 @@ async function consumirCreditos(
   operacao: string,
   detalhes?: string,
 ): Promise<void> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-  }
-
-  const [creditos] = await db
-    .select()
-    .from(motorCreditos)
-    .where(eq(motorCreditos.escritorioId, escritorioId))
-    .limit(1);
-
-  if (!creditos) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Escritório sem saldo de créditos. Compre um pacote pra começar.",
-    });
-  }
-
-  if (creditos.saldo < custo) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `Créditos insuficientes (saldo=${creditos.saldo}, custo=${custo}). Compre mais.`,
-    });
-  }
-
-  const novoSaldo = creditos.saldo - custo;
-  await db
-    .update(motorCreditos)
-    .set({
-      saldo: novoSaldo,
-      totalConsumido: creditos.totalConsumido + custo,
-    })
-    .where(eq(motorCreditos.id, creditos.id));
-
-  await db.insert(motorTransacoes).values({
-    escritorioId,
-    tipo: "consumo",
-    quantidade: custo,
-    saldoAnterior: creditos.saldo,
-    saldoDepois: novoSaldo,
-    operacao,
-    detalhes: detalhes ?? null,
-    userId,
-  });
+  // Saldo unificado por escritório (migration 0073).
+  // Helper trata: garante registro existe (cria com cota do plano se não),
+  // valida saldo, debita, registra transação. Lança TRPCError se sem saldo.
+  const { consumirCreditosEscritorio } = await import("../billing/escritorio-creditos");
+  await consumirCreditosEscritorio(escritorioId, userId, custo, operacao, detalhes);
 }
 
 export const processosRouter = router({
   saldo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return { saldo: 0, totalConsumido: 0, totalComprado: 0 };
-    const db = await getDb();
-    if (!db) return { saldo: 0, totalConsumido: 0, totalComprado: 0 };
+    if (!esc) return { saldo: 0, totalConsumido: 0, totalComprado: 0, cotaMensal: 0, ultimoReset: null };
 
-    const [c] = await db
-      .select()
-      .from(motorCreditos)
-      .where(eq(motorCreditos.escritorioId, esc.escritorio.id))
-      .limit(1);
-
-    return {
-      saldo: c?.saldo ?? 0,
-      totalConsumido: c?.totalConsumido ?? 0,
-      totalComprado: c?.totalComprado ?? 0,
-    };
+    // Helper garante registro existe (cria com cota do plano se primeiro
+    // acesso). Sem race conditions porque getSaldoEscritorio é idempotente.
+    try {
+      const { getSaldoEscritorio } = await import("../billing/escritorio-creditos");
+      const s = await getSaldoEscritorio(esc.escritorio.id);
+      return {
+        saldo: s.saldo,
+        totalConsumido: s.totalConsumido,
+        totalComprado: s.totalComprado,
+        cotaMensal: s.cotaMensal,
+        ultimoReset: s.ultimoReset,
+      };
+    } catch {
+      return { saldo: 0, totalConsumido: 0, totalComprado: 0, cotaMensal: 0, ultimoReset: null };
+    }
   }),
 
   pacotes: protectedProcedure.query(() => ({ pacotes: PACOTES_CREDITOS, custos: CUSTOS })),
