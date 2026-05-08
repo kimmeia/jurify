@@ -94,13 +94,21 @@ async function executarConsulta(
         dataDistribuicao: resultado.capa?.dataDistribuicao ?? null,
         movsCount: resultado.movimentacoes.length,
         latenciaMs: resultado.latenciaMs,
+        // Quando ok=false, mensagemErro é a chave do diagnóstico
+        mensagemErro: resultado.ok ? null : resultado.mensagemErro,
+        categoriaErro: resultado.ok ? null : resultado.categoriaErro,
       },
       "[motor-proprio-runner] consulta finalizada",
     );
 
     cache.set(requestId, {
       ...(cache.get(requestId) as EntradaCache),
-      status: resultado.ok ? "completed" : "error",
+      // "completed" mesmo quando ok=false: o adapter terminou normalmente
+      // mas com erro de domínio (ex: tribunal indisponível, captcha,
+      // credencial faltando). Frontend chama `resultados` e vê
+      // `application_error` no payload. Status "error" é reservado pra
+      // exceções no catch abaixo (Playwright crash, timeout duro, etc).
+      status: "completed",
       resultado,
     });
   } catch (err) {

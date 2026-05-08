@@ -296,6 +296,18 @@ function ConsultarTab() {
         resultadosMut.mutate({ requestId });
       }
     }
+    // `status: "error"` é reservado pra exceções não tratadas no runner
+    // (Playwright crash, timeout duro). Erros de domínio (credencial
+    // faltando, captcha, tribunal off) chegam como "completed" com
+    // `application_error` no resultado.
+    if (statusData?.status === "error") {
+      setPolling(false);
+      setBuscando(false);
+      toast.error("Falha inesperada no motor", {
+        description: "O scraper não conseguiu completar. Tente novamente; se persistir, valide a credencial em /cofre-credenciais.",
+        duration: 10000,
+      });
+    }
     if (polling) setTentativas(t => t + 1);
   }, [statusData?.status, polling, requestId]);
 
@@ -413,7 +425,29 @@ function ConsultarTab() {
       {resultados && resultados.page_data && resultados.page_data.length > 0 ? (
         <div className="space-y-3">
           {(() => {
-            // Filtra respostas com dados de processo (ignora application_info, application_error)
+            // Detecta application_error (motor próprio falhou — credencial,
+            // tribunal off, captcha, parser quebrou)
+            const erros = resultados.page_data.filter(
+              (item: any) => item.response_type === "application_error",
+            );
+            if (erros.length > 0) {
+              const e = erros[0].response_data || {};
+              const codigo = String(e.code || "outro");
+              const isCredencial = /credencial|sess[aã]o|login/i.test(codigo) || /credencial|sess[aã]o|login/i.test(e.message || "");
+              return (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-2">
+                  <p className="text-sm font-semibold text-red-900">Falha na consulta</p>
+                  <p className="text-sm text-red-800">{e.message || "Erro desconhecido"}</p>
+                  {isCredencial && (
+                    <Button size="sm" variant="outline" onClick={() => (window.location.href = "/cofre-credenciais")}>
+                      Abrir Cofre de Credenciais
+                    </Button>
+                  )}
+                  <p className="text-xs text-red-700/70">Código: {codigo}</p>
+                </div>
+              );
+            }
+            // Filtra respostas com dados de processo (ignora application_info)
             const processos = resultados.page_data.filter(
               (item: any) =>
                 (item.response_type === "lawsuit" || item.response_type === "lawsuits") &&
