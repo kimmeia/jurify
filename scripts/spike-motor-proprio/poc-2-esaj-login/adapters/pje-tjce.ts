@@ -539,6 +539,20 @@ export class PjeTjceScraper {
         );
       }
 
+      // Diag valor: se parsed é maior que R$ 1M ou null, loga raw pra
+      // calibrar parser (PJe pode expor valor sem máscara — "5449470"
+      // sem vírgula, que parser interpreta como reais e dá 100x off)
+      const valorRaw = (globalThis as { __pjeTjceValorRaw?: string | null })
+        .__pjeTjceValorRaw;
+      const valorCents = capaFinal.valorCausaCentavos ?? 0;
+      if (valorRaw && (valorCents === 0 || valorCents > 100_000_000)) {
+        console.warn(
+          `[pje-tjce] valor suspeito pra ${cnjMascarado} ` +
+            `— rawString="${valorRaw}" parsedCents=${valorCents} ` +
+            `(esperado se >R$ 1M ou null — talvez PJe expõe sem máscara)`,
+        );
+      }
+
       return {
         ...baseResultado,
         ok: true,
@@ -691,6 +705,11 @@ export class PjeTjceScraper {
       }));
 
     const partes = await this.extrairPartes(page);
+
+    // Stash raw via globalThis pra debug em consultarPorCnj (não polui
+    // o tipo ProcessoCapa que vai pro frontend)
+    (globalThis as { __pjeTjceValorRaw?: string | null }).__pjeTjceValorRaw =
+      capaRaw.valor;
 
     return {
       cnj,
