@@ -1166,8 +1166,26 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
 
   const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
   const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
-    onSuccess: (r: any) => {
-      toast.success(r.monitorando ? "Processo vinculado e monitoramento criado!" : "Processo vinculado!");
+    onSuccess: (_r: any, vars: any) => {
+      // Como o backend hoje não cria monitoramento automaticamente
+      // (cron próprio em desenvolvimento), oferecemos botão pra abrir
+      // a tela de criação de monitoramento com CNJ pré-preenchido. Sem
+      // isso o user achava que tinha monitorado mas não tinha.
+      const cnjVinculado = vars?.numeroCnj;
+      if (vars?.monitorar && cnjVinculado) {
+        toast.success("Processo vinculado", {
+          description: "Pra criar monitoramento, abra o módulo Processos.",
+          action: {
+            label: "Abrir Processos",
+            onClick: () => {
+              window.location.href = `/processos?cnj=${encodeURIComponent(cnjVinculado)}&abrirMonitor=1`;
+            },
+          },
+          duration: 12000,
+        });
+      } else {
+        toast.success("Processo vinculado!");
+      }
       setNovoOpen(false);
       setNovoCnj("");
       setNovoApelido("");
@@ -1284,9 +1302,10 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 className="accent-primary"
               />
               <div>
-                <p className="text-xs font-medium">Monitorar movimentações</p>
+                <p className="text-xs font-medium">Quero monitorar este processo</p>
                 <p className="text-[10px] text-muted-foreground">
-                  Criar monitoramento automático (5 créditos/mês). Receba alertas de novos despachos e sentenças.
+                  Após vincular, abriremos a tela de monitoramento (módulo Processos) com este CNJ
+                  pré-preenchido pra você escolher a credencial e confirmar (5 créditos/mês).
                 </p>
               </div>
             </label>

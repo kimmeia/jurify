@@ -457,6 +457,36 @@ export const cofreCredenciaisRouter = router({
   }),
 
   /**
+   * Variante de `listarMinhas` SEM gate de admin — qualquer colaborador
+   * do escritório pode chamar pra preencher dropdown de "selecionar
+   * credencial" no fluxo de criar monitoramento. Retorna a mesma view
+   * mascarada (sem expor senha/secret) — usuário comum só vê apelido,
+   * username mascarado e status, o suficiente pra escolher.
+   *
+   * Justificativa: criar monitoramento é operação user-level (qualquer
+   * colaborador com permissão `processos.editar` pode), mas só donos/
+   * gestores podem CADASTRAR/EDITAR credenciais (`listarMinhas`).
+   * Misturar os dois exigia gate admin no listar — quebrava dropdown
+   * pra atendentes/estagiários e dropdown sumia silenciosamente.
+   */
+  listarParaSelecao: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const escritorioId = await resolverEscritorioId(ctx.user.id);
+    const rows = await db
+      .select()
+      .from(cofreCredenciais)
+      .where(
+        and(
+          eq(cofreCredenciais.escritorioId, escritorioId),
+          ne(cofreCredenciais.status, "removida"),
+        ),
+      )
+      .orderBy(desc(cofreCredenciais.createdAt));
+    return Promise.all(rows.map(rowParaView));
+  }),
+
+  /**
    * Lista os sistemas de tribunal disponíveis pra cadastro no cofre.
    * Usado pelo dropdown "Tribunal/Sistema" do frontend.
    *
