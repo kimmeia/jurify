@@ -191,6 +191,23 @@ export default function Configuracoes() {
     onSuccess: () => { toast.success("Convite cancelado."); refetchConvites(); },
   });
 
+  // Reenviar email de convite pendente — quando primeiro envio falhou
+  // (Resend rejeitado, domínio não verificado, etc).
+  const reenviarConviteMut = (trpc.configuracoes as any).reenviarConvite?.useMutation({
+    onSuccess: (res: any) => {
+      if (res.emailEnviado) {
+        toast.success("Email reenviado com sucesso");
+      } else {
+        toast.warning("Reenvio falhou", {
+          description: res.emailErro || "Servidor de email indisponível.",
+          duration: 10000,
+        });
+      }
+      refetchConvites();
+    },
+    onError: (e: any) => toast.error("Erro ao reenviar", { description: e.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+
   const removerColabMut = trpc.configuracoes.removerColaborador.useMutation({
     onSuccess: () => { toast.success("Colaborador removido."); refetchEquipe(); },
     onError: (e) => toast.error(e.message),
@@ -563,6 +580,27 @@ export default function Configuracoes() {
                       <Badge variant={conv.status === "pendente" ? "outline" : conv.status === "aceito" ? "default" : "secondary"} className="text-xs shrink-0">
                         {conv.status === "pendente" ? "Pendente" : conv.status === "aceito" ? "Aceito" : conv.status === "expirado" ? "Expirado" : "Cancelado"}
                       </Badge>
+                      {conv.status === "pendente" && (conv as any).emailEnviado === false && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] bg-red-50 text-red-700 border-red-200 shrink-0"
+                          title={(conv as any).ultimoErroEmail || "Email não enviado"}
+                        >
+                          email falhou
+                        </Badge>
+                      )}
+                      {conv.status === "pendente" && (conv as any).emailEnviado === false && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 text-blue-600"
+                          title={(conv as any).ultimoErroEmail || "Reenviar email"}
+                          onClick={() => reenviarConviteMut.mutate({ conviteId: conv.id })}
+                          disabled={reenviarConviteMut.isPending}
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {conv.status === "pendente" && conv.token && (
                         <Button
                           variant="ghost"

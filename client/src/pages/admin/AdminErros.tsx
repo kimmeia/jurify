@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertCircle, AlertTriangle, ChevronLeft, ChevronRight, CheckCircle2,
-  ExternalLink, Search, Bug, Settings,
+  ExternalLink, Search, Bug, Settings, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -124,17 +124,68 @@ export default function AdminErros() {
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
             </div>
           ) : issues.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-500 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  {motivo === "timeout" ? "Sentry demorou mais de 10s pra responder. Tente novamente."
-                    : motivo?.startsWith("sentry_http_") ? `Sentry retornou ${motivo.replace("sentry_http_", "HTTP ")}.`
-                    : motivo === "erro_rede" ? "Erro de rede ao consultar Sentry."
-                    : "Nenhum erro encontrado nos filtros atuais. Bom sinal."}
-                </p>
-              </CardContent>
-            </Card>
+            (() => {
+              // Discrimina entre "tudo OK, sem erros" (verde) e "API Sentry
+              // falhou" (vermelho com CTA pra retestar). Antes mostrava o
+              // mesmo card verde pra ambos os casos, escondendo o problema.
+              const ehFalhaSentry =
+                motivo === "timeout" ||
+                motivo === "erro_rede" ||
+                motivo?.startsWith("sentry_http_");
+
+              if (ehFalhaSentry) {
+                const httpStatus = motivo?.startsWith("sentry_http_") ? motivo.replace("sentry_http_", "") : null;
+                const mensagemFalha =
+                  motivo === "timeout"
+                    ? "Sentry demorou mais de 10s pra responder."
+                    : motivo === "erro_rede"
+                    ? "Erro de rede ao consultar Sentry."
+                    : httpStatus === "401" || httpStatus === "403"
+                    ? "Token Sentry inválido ou sem permissão. Provavelmente expirou ou foi revogado."
+                    : httpStatus === "404"
+                    ? "Projeto Sentry não encontrado. Verifique se org/projeto estão corretos."
+                    : `Sentry retornou HTTP ${httpStatus}.`;
+
+                return (
+                  <Card className="border-red-500/40 bg-red-50/40 dark:bg-red-500/5">
+                    <CardContent className="py-8 text-center space-y-3">
+                      <AlertTriangle className="h-12 w-12 mx-auto text-red-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                          Não foi possível buscar erros do Sentry
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">{mensagemFalha}</p>
+                      </div>
+                      <div className="flex gap-2 justify-center">
+                        <Button size="sm" variant="outline" onClick={() => refetch()}>
+                          <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                          Tentar de novo
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            window.location.href = "/admin/integrations";
+                          }}
+                        >
+                          Reconfigurar Sentry
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-500 mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum erro encontrado nos filtros atuais. Bom sinal.
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })()
           ) : (
             <div className="space-y-2">
               {issues.map((issue: any) => (

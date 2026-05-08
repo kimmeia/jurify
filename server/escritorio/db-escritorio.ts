@@ -313,7 +313,7 @@ export async function criarConvite(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // 7 dias para aceitar
 
-  await db.insert(convitesColaborador).values({
+  const result = await db.insert(convitesColaborador).values({
     escritorioId,
     email: email.toLowerCase(),
     cargo,
@@ -322,8 +322,28 @@ export async function criarConvite(
     convidadoPorId,
     expiresAt,
   });
+  const inviteId =
+    (result as unknown as { insertId: number }[])[0]?.insertId ??
+    (result as unknown as { insertId: number }).insertId;
 
-  return { token, expiresAt: expiresAt.toISOString() };
+  return { id: inviteId, token, expiresAt: expiresAt.toISOString() };
+}
+
+/** Persiste resultado do último envio de email pra um convite. */
+export async function atualizarStatusEmailConvite(
+  conviteId: number,
+  emailEnviado: boolean,
+  ultimoErroEmail?: string | null,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(convitesColaborador)
+    .set({
+      emailEnviado,
+      ultimoErroEmail: ultimoErroEmail ?? null,
+    })
+    .where(eq(convitesColaborador.id, conviteId));
 }
 
 /** Lista convites do escritório */

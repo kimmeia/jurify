@@ -43,6 +43,50 @@ async function carregarConfigSentry(): Promise<SentryConfig | null> {
   }
 }
 
+/**
+ * Auto-cura de status: quando uma chamada real à API Sentry falha com
+ * 4xx (token expirado, projeto não existe, etc), persiste isso em
+ * `admin_integracoes.status="erro"` + `mensagemErro`. Assim o painel
+ * /admin/integrations mostra o estado REAL, não o congelado do teste
+ * inicial.
+ *
+ * Idempotente — se status já é "erro" com mesma mensagem, nada acontece.
+ */
+async function persistirErroSentry(httpStatus: number, mensagem: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db
+      .update(adminIntegracoes)
+      .set({
+        status: "erro",
+        mensagemErro: `HTTP ${httpStatus}: ${mensagem}`,
+        ultimoTeste: new Date(),
+      })
+      .where(eq(adminIntegracoes.provedor, "sentry"));
+  } catch (err: any) {
+    log.warn({ err: err.message }, "Falha persistindo erro Sentry no DB");
+  }
+}
+
+/** Auto-cura: limpa status de erro quando chamada à API funciona. */
+async function persistirSucessoSentry(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db
+      .update(adminIntegracoes)
+      .set({
+        status: "conectado",
+        mensagemErro: null,
+        ultimoTeste: new Date(),
+      })
+      .where(eq(adminIntegracoes.provedor, "sentry"));
+  } catch (err: any) {
+    log.warn({ err: err.message }, "Falha persistindo sucesso Sentry no DB");
+  }
+}
+
 interface SentryIssue {
   id: string;
   title: string;
@@ -95,9 +139,15 @@ export const adminErrosRouter = router({
         clearTimeout(t);
         if (!resp.ok) {
           log.warn({ status: resp.status }, "Sentry API retornou erro");
+          // Auto-cura: persiste o erro real no DB pra painel /admin/integrations
+          // mostrar status correto, não o congelado do teste inicial.
+          const corpo = await resp.text().catch(() => "");
+          await persistirErroSentry(resp.status, corpo.slice(0, 200) || resp.statusText);
           return { configurado: true as const, issues: [], total: 0, motivo: `sentry_http_${resp.status}` };
         }
         const data = (await resp.json()) as SentryIssue[];
+        // Sucesso real → marca como conectado (cura status "erro" anterior)
+        await persistirSucessoSentry();
         return {
           configurado: true as const,
           issues: data.map((i) => ({
