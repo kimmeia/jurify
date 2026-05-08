@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
@@ -20,6 +21,9 @@ import {
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("relatorios");
 
 const PeriodoInput = z
   .object({ dias: z.number().min(1).max(365).optional() })
@@ -68,9 +72,26 @@ export const relatoriosRouter = router({
     const desde = desdeDias(dias);
 
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para acessar relatórios.",
+      });
+    }
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
     const filtroResp = soProprios ? [eq(conversas.atendenteId, colabId)] : [];
+
+    log.info({
+      proc: "atendimento",
+      userId: ctx.user.id,
+      colabId,
+      escritorioId: eid,
+      cargo: esc.colaborador.cargo,
+      perm: { verTodos: perm.verTodos, verProprios: perm.verProprios, allowed: perm.allowed },
+      soProprios,
+      dias,
+    }, "[relatorios] diagnóstico atendimento");
 
     const statusRows = await db
       .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
@@ -155,13 +176,36 @@ export const relatoriosRouter = router({
 
     // ── Permissão + filtro por atendente ───────────────────────────────────
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para acessar relatórios.",
+      });
+    }
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
 
     // verProprios trava no próprio colaborador. verTodos pode escolher um.
+    // Atendente sem verTodos só pode filtrar por ELE MESMO — ignora qualquer
+    // tentativa de filtrar por outro colaborador via input (proteção contra
+    // dropdown comprometido).
     const filtroAtendente = soProprios
       ? colabId
       : (input?.responsavelId ?? null);
+
+    log.info({
+      proc: "comercial",
+      userId: ctx.user.id,
+      colabId,
+      escritorioId: eid,
+      cargo: esc.colaborador.cargo,
+      perm: { verTodos: perm.verTodos, verProprios: perm.verProprios, allowed: perm.allowed },
+      soProprios,
+      inputResponsavelId: input?.responsavelId ?? null,
+      filtroAtendente,
+      dataInicio: dataInicio.toISOString(),
+      dataFim: dataFim.toISOString(),
+    }, "[relatorios] diagnóstico comercial");
 
     const filtroLeadResp = filtroAtendente
       ? [eq(leads.responsavelId, filtroAtendente)]
@@ -281,9 +325,27 @@ export const relatoriosRouter = router({
 
     // Permissão: verProprios filtra cards por responsavelId
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para acessar relatórios.",
+      });
+    }
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
     const filtroResp = soProprios ? [eq(kanbanCards.responsavelId, colabId)] : [];
+
+    log.info({
+      proc: "producao",
+      userId: ctx.user.id,
+      colabId,
+      escritorioId: eid,
+      cargo: esc.colaborador.cargo,
+      perm: { verTodos: perm.verTodos, verProprios: perm.verProprios, allowed: perm.allowed },
+      soProprios,
+      funilId: funilId ?? null,
+      dias,
+    }, "[relatorios] diagnóstico producao");
 
     // ── Helpers ─────────────────────────────────────────────────────────────
     // Quando há filtro de funil, todos os counts de cards precisam fazer

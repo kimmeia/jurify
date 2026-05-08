@@ -20,15 +20,63 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw,
+  AlertTriangle, RotateCcw, Users as UsersIcon,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState } from "react";
 import { toast } from "sonner";
 
-function RoleBadge({ role }: { role: string }) {
-  return role === "admin"
-    ? <Badge variant="default"><ShieldCheck className="h-3 w-3 mr-1" />Admin</Badge>
-    : <Badge variant="secondary"><User className="h-3 w-3 mr-1" />Cliente</Badge>;
+/**
+ * Badge de tipo de usuário no painel admin.
+ *
+ * 3 estados:
+ *   - admin: staff Jurify (azul)
+ *   - cliente: dono de escritório pagante (cinza)
+ *   - colaborador: membro de escritório de outro user (verde)
+ *     mostra tooltip com escritório vinculado e cargo
+ *
+ * Aceita formato antigo (só `role`) pra compat retroativa enquanto
+ * o backend é deployed. Quando `tipoUsuario` não vem, cai no shape antigo.
+ */
+function RoleBadge({
+  role,
+  tipoUsuario,
+  escritorioVinculado,
+  cargoColaborador,
+}: {
+  role: string;
+  tipoUsuario?: "admin" | "cliente" | "colaborador";
+  escritorioVinculado?: string | null;
+  cargoColaborador?: string | null;
+}) {
+  // Fallback compat: sem tipoUsuario, usa só role
+  const tipo = tipoUsuario ?? (role === "admin" ? "admin" : "cliente");
+
+  if (tipo === "admin") {
+    return <Badge variant="default"><ShieldCheck className="h-3 w-3 mr-1" />Admin</Badge>;
+  }
+
+  if (tipo === "colaborador") {
+    const tooltipMsg = escritorioVinculado
+      ? `${escritorioVinculado}${cargoColaborador ? ` — ${cargoColaborador}` : ""}`
+      : "Colaborador de escritório";
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/15 cursor-help">
+              <UsersIcon className="h-3 w-3 mr-1" />Colaborador
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="text-xs">{tooltipMsg}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return <Badge variant="secondary"><User className="h-3 w-3 mr-1" />Cliente</Badge>;
 }
 
 function SubBadge({ active }: { active: boolean }) {
@@ -687,7 +735,14 @@ export default function AdminClients() {
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.name || "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{u.email || "—"}</TableCell>
-                    <TableCell><RoleBadge role={u.role} /></TableCell>
+                    <TableCell>
+                      <RoleBadge
+                        role={u.role}
+                        tipoUsuario={(u as any).tipoUsuario}
+                        escritorioVinculado={(u as any).escritorioVinculado}
+                        cargoColaborador={(u as any).cargoColaborador}
+                      />
+                    </TableCell>
                     <TableCell><SubBadge active={u.hasActiveSubscription} /></TableCell>
                     <TableCell className="text-muted-foreground text-sm">{new Date(u.createdAt).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{new Date(u.lastSignedIn).toLocaleDateString("pt-BR")}</TableCell>

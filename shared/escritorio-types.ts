@@ -5,7 +5,7 @@
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
-export type CargoColaborador = "dono" | "gestor" | "atendente" | "estagiario";
+export type CargoColaborador = "dono" | "gestor" | "atendente" | "estagiario" | "sdr";
 export type StatusConvite = "pendente" | "aceito" | "expirado" | "cancelado";
 export type PlanoAtendimento = "basico" | "intermediario" | "completo";
 
@@ -14,6 +14,7 @@ export const CARGO_LABELS: Record<CargoColaborador, string> = {
   gestor: "Gestor",
   atendente: "Atendente",
   estagiario: "Estagiário",
+  sdr: "SDR",
 };
 
 export const CARGO_DESCRICAO: Record<CargoColaborador, string> = {
@@ -21,6 +22,7 @@ export const CARGO_DESCRICAO: Record<CargoColaborador, string> = {
   gestor: "Gerencia equipe, reatribui conversas, acessa relatórios",
   atendente: "Atende clientes, gerencia seus leads e conversas",
   estagiario: "Atende clientes sob supervisão, acesso limitado",
+  sdr: "Sales Development Representative — qualifica leads, gerencia pipeline próprio, acessa relatórios próprios",
 };
 
 export const PLANO_LABELS: Record<PlanoAtendimento, string> = {
@@ -146,6 +148,12 @@ export const PERMISSOES_POR_CARGO: Record<CargoColaborador, Permissao[]> = {
   ],
   estagiario: [
     "enviar_mensagens",
+  ],
+  // SDR = atendente + acesso a relatórios próprios + foco em qualificação
+  // de leads. Mesma matriz que atendente nas permissões compartilhadas;
+  // diferença real está em check-permission.ts (relatórios.verProprios=true).
+  sdr: [
+    "enviar_mensagens", "ver_pipeline", "exportar_relatorios",
   ],
 };
 

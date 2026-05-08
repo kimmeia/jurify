@@ -93,6 +93,29 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     pipeline: perm(false, false, false, false, false),
     agendamento: perm(false, true, false, false, false),
   },
+  // SDR (Sales Development Representative): atendente + acesso a relatórios
+  // próprios. Foco em qualificar leads e gerenciar pipeline próprio.
+  // Diferenças vs atendente:
+  //   - relatorios: verProprios=true (atendente=false)
+  //   - pipeline: criar/editar=true (já era no atendente)
+  //   - kanban: criar=true (mover cards do funil)
+  sdr: {
+    dashboard: perm(true, true, false, false, false),
+    calculos: perm(true, true, true, true, false),
+    clientes: perm(false, true, true, true, false),
+    processos: perm(false, true, true, true, false),
+    atendimento: perm(false, true, true, true, false),
+    kanban: perm(false, true, true, true, false),
+    agenda: perm(false, true, true, true, false),
+    smartflow: perm(false, false, false, false, false),
+    agentesIa: perm(false, true, false, false, false),
+    relatorios: perm(false, true, false, false, false),  // ← chave: vê próprios
+    financeiro: perm(false, false, false, false, false),
+    configuracoes: perm(false, false, false, false, false),
+    equipe: perm(false, true, false, false, false),
+    pipeline: perm(false, true, true, true, false),
+    agendamento: perm(false, true, true, true, false),
+  },
 };
 
 function perm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): PermissionResult {
@@ -152,6 +175,7 @@ export async function checkPermission(
       gestor: "Gestor",
       atendente: "Atendente",
       estagiario: "Estagiário",
+      sdr: "SDR",
     };
     const nomeCargo = NOMES_CARGO[esc.colaborador.cargo];
     if (nomeCargo) {

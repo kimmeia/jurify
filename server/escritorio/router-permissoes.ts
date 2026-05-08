@@ -110,6 +110,23 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     configuracoes: p(false, false, false, false, false),
     equipe: p(false, true, false, false, false),
   },
+  // SDR: atendente + acesso aos próprios dados em relatórios. Foco em
+  // qualificar leads e gerenciar pipeline próprio.
+  "SDR": {
+    dashboard: p(true, true, false, false, false),
+    calculos: p(true, true, true, true, false),
+    clientes: p(false, true, true, true, false),
+    processos: p(false, true, true, true, false),
+    atendimento: p(false, true, true, true, false),
+    kanban: p(false, true, true, true, false),
+    agenda: p(false, true, true, true, false),
+    smartflow: p(false, false, false, false, false),
+    agentesIa: p(false, true, false, false, false),
+    relatorios: p(false, true, false, false, false),  // ← chave: vê próprios
+    financeiro: p(false, false, false, false, false),
+    configuracoes: p(false, false, false, false, false),
+    equipe: p(false, true, false, false, false),
+  },
 };
 
 /** Cria cargos padrão para um escritório (chamado ao criar escritório) */
@@ -414,7 +431,7 @@ export const permissoesRouter = router({
     // permissões que o admin configurou no painel.
     let cargoId = (esc.colaborador as any).cargoPersonalizadoId as number | null | undefined;
     if (!cargoId) {
-      const nomeMap: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
+      const nomeMap: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário", sdr: "SDR" };
       const nomeCargo = nomeMap[esc.colaborador.cargo];
       if (nomeCargo) {
         const [cp] = await db.select({ id: cargosPersonalizados.id }).from(cargosPersonalizados)
@@ -427,7 +444,7 @@ export const permissoesRouter = router({
     if (!cargoId) {
       // Não encontrou cargo personalizado nem legado conhecido → fallback PADRAO
       const legado = esc.colaborador.cargo;
-      const nomeMap: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
+      const nomeMap: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário", sdr: "SDR" };
       const perms = PERMISSOES_PADRAO[nomeMap[legado] || "Atendente"];
       return { cargo: nomeMap[legado] || legado, cor: "#6366f1", permissoes: perms || {} };
     }

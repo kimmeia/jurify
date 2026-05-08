@@ -54,9 +54,10 @@ const DIAS_SEMANA = [
   { key: "dom", label: "Dom" },
 ];
 
-const CARGOS_CONVITE: { value: "gestor" | "atendente" | "estagiario"; label: string }[] = [
+const CARGOS_CONVITE: { value: "gestor" | "atendente" | "estagiario" | "sdr"; label: string }[] = [
   { value: "gestor", label: "Gestor" },
   { value: "atendente", label: "Atendente" },
+  { value: "sdr", label: "SDR (Sales Development Rep)" },
   { value: "estagiario", label: "Estagiário" },
 ];
 
@@ -66,6 +67,7 @@ function CargoBadge({ cargo }: { cargo: CargoColaborador }) {
     gestor: "bg-blue-100 text-blue-700 border-blue-200",
     atendente: "bg-emerald-100 text-emerald-700 border-emerald-200",
     estagiario: "bg-amber-100 text-amber-700 border-amber-200",
+    sdr: "bg-orange-100 text-orange-700 border-orange-200",
   };
   return <Badge variant="outline" className={`text-xs ${colors[cargo]}`}>{CARGO_LABELS[cargo]}</Badge>;
 }
