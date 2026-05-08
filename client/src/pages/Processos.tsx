@@ -200,7 +200,31 @@ function ConsultarTab() {
   const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
   const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
-  const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
+  const consultarCNJ = trpc.juditProcessos.consultarCNJ.useMutation({
+    onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); },
+    onError: (e) => {
+      setBuscando(false);
+      // Erros do motor próprio (PRECONDITION_FAILED) trazem mensagem
+      // instrutiva com link → /admin/cofre-credenciais. Mostra como
+      // toast com action.
+      const isCredencialAusente = /credencial OAB|cadastre/i.test(e.message);
+      const isSessaoExpirada = /sess[aã]o.*expirou|Validar pra renovar/i.test(e.message);
+      if (isCredencialAusente || isSessaoExpirada) {
+        toast.error(isCredencialAusente ? "Cadastre credencial" : "Sessão expirou", {
+          description: e.message.replace(/→.*$/, "").trim(),
+          action: {
+            label: "Abrir Cofre",
+            onClick: () => {
+              window.location.href = "/admin/cofre-credenciais";
+            },
+          },
+          duration: 10000,
+        });
+      } else {
+        toast.error(e.message);
+      }
+    },
+  });
   const consultarDoc = trpc.juditProcessos.consultarDocumento.useMutation({ onSuccess: (d) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e) => { setBuscando(false); toast.error(e.message); } });
   // Buscar clientes do escritório para verificar se partes do processo são clientes
   const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });

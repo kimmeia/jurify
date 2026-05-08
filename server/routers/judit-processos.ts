@@ -7,9 +7,10 @@
 
 import { z } from "zod";
 import { eq, desc, and, like } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { juditCreditos, juditTransacoes } from "../../drizzle/schema";
+import { juditCreditos, juditTransacoes, cofreCredenciais } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import {
@@ -17,6 +18,14 @@ import {
   calcularCustoExtraConsultaHistorica,
   estimarCustoConsulta,
 } from "./judit-credit-calc";
+import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
+import {
+  ehRequestMotorProprio,
+  iniciarConsultaMotorProprio,
+  obterStatusMotorProprio,
+  obterResultadoMotorProprio,
+} from "../processos/motor-proprio-runner";
+import { recuperarSessao } from "../escritorio/cofre-helpers";
 
 const log = createLogger("judit-processos");
 
@@ -196,6 +205,86 @@ export const juditProcessosRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
+
+      // ─── Roteador de fonte: motor próprio | Judit ─────────────────────────
+      // Se CNJ é de tribunal coberto pelo motor próprio E escritório tem
+      // credencial ativa no cofre, executamos motor próprio (margem 100%).
+      // Senão, segue Judit normal.
+      const tribunal = parseCnjTribunal(input.cnj);
+      if (tribunal?.temMotorProprio) {
+        const sistemaCofre = sistemaCofrePorTribunal(tribunal.codigoTribunal);
+        if (!sistemaCofre) {
+          // Motor mapeado mas sem entry no `sistemaCofrePorTribunal` —
+          // bug interno; cai pra Judit como fallback defensivo.
+          log.warn(
+            { cnj: input.cnj, codigo: tribunal.codigoTribunal },
+            "motor próprio sem mapeamento de cofre — fallback Judit",
+          );
+        } else {
+          const db = await getDb();
+          const credencial = db
+            ? await db
+                .select()
+                .from(cofreCredenciais)
+                .where(
+                  and(
+                    eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+                    eq(cofreCredenciais.sistema, sistemaCofre),
+                    eq(cofreCredenciais.status, "ativa"),
+                  ),
+                )
+                .limit(1)
+            : [];
+
+          if (credencial.length === 0) {
+            // Bloqueio com mensagem instrutiva — usuário precisa cadastrar
+            // credencial pra usar motor próprio. UI pode capturar TRPCError
+            // e mostrar dialog com link pro cofre.
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                `Pra consultar processos do ${tribunal.siglaTribunal}, ` +
+                `cadastre sua credencial OAB-${tribunal.uf ?? ""} no Cofre. ` +
+                `→ /admin/cofre-credenciais`,
+              cause: { motivo: "credencial_ausente", tribunal: tribunal.codigoTribunal },
+            });
+          }
+
+          const credId = credencial[0].id;
+          const storageState = await recuperarSessao(credId);
+          if (!storageState) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                `Sua credencial ${tribunal.siglaTribunal} expirou. ` +
+                `Vá em Cofre de Credenciais → Validar pra renovar.`,
+              cause: { motivo: "sessao_expirada", credencialId: credId },
+            });
+          }
+
+          // Cobra crédito IGUAL Judit (cliente paga o mesmo, motor próprio
+          // fica com 100% da margem — não paga API externa).
+          await consumirCreditos(
+            esc.escritorio.id,
+            ctx.user.id,
+            CUSTOS_OPERACOES.consulta_cnj,
+            "consulta_cnj_motor",
+            `CNJ: ${input.cnj} (motor próprio ${tribunal.siglaTribunal})`,
+          );
+
+          const { requestId, status } = iniciarConsultaMotorProprio(
+            input.cnj,
+            storageState,
+          );
+          log.info(
+            { cnj: input.cnj, requestId, tribunal: tribunal.codigoTribunal },
+            "[motor-proprio] consulta iniciada",
+          );
+          return { requestId, status };
+        }
+      }
+
+      // ─── Fluxo Judit padrão (fallback) ────────────────────────────────────
       const client = await getJuditClientOrThrow();
       await consumirCreditos(esc.escritorio.id, ctx.user.id, CUSTOS_OPERACOES.consulta_cnj, "consulta_cnj", `CNJ: ${input.cnj}`);
 
@@ -269,6 +358,17 @@ export const juditProcessosRouter = router({
   statusConsulta: protectedProcedure
     .input(z.object({ requestId: z.string() }))
     .query(async ({ input }) => {
+      // Roteia motor próprio se requestId for nosso
+      if (ehRequestMotorProprio(input.requestId)) {
+        const status = obterStatusMotorProprio(input.requestId);
+        if (!status) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Consulta não encontrada ou expirou (TTL 30min)",
+          });
+        }
+        return status;
+      }
       const client = await getJuditClientOrThrow();
       const status = await client.consultarRequest(input.requestId);
       return { status: status.status, requestId: status.request_id, updatedAt: status.updated_at };
@@ -293,6 +393,20 @@ export const juditProcessosRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
+
+      // Motor próprio: já cobrou no consultarCNJ; não há cobrança extra
+      // (volume de 1 processo só → não tem custo variável). Retorna direto.
+      if (ehRequestMotorProprio(input.requestId)) {
+        const motor = obterResultadoMotorProprio(input.requestId);
+        if (!motor) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Consulta motor próprio não encontrada ou expirou (TTL 30min)",
+          });
+        }
+        return motor;
+      }
+
       const client = await getJuditClientOrThrow();
       const resultado = await client.buscarRespostas(input.requestId, input.page ?? 1, 20);
 
