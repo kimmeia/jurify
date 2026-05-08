@@ -23,6 +23,7 @@ const CARGO_LABELS: Record<string, string> = {
   gestor: "Gestor",
   atendente: "Atendente",
   estagiario: "Estagiário",
+  sdr: "SDR",
 };
 
 export default function AceitarConvite({ token }: { token: string }) {

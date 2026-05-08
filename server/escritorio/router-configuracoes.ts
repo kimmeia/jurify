@@ -189,7 +189,7 @@ export const configuracoesRouter = router({
 
   // ─── Equipe ───────────────────────────────────────────────────────────────
 
-  /** Lista colaboradores do escritório */
+  /** Lista colaboradores do escritório (gestão de equipe) */
   listarColaboradores: protectedProcedure.query(async ({ ctx }) => {
     const result = await getEscritorioPorUsuario(ctx.user.id);
     if (!result) return { colaboradores: [], total: 0, limite: 1, extras: 0, custoExtras: 0 };
@@ -208,11 +208,45 @@ export const configuracoesRouter = router({
     };
   }),
 
+  /**
+   * Lista colaboradores para popular dropdowns de filtro em relatórios.
+   *
+   * Respeita permissão de visibilidade:
+   *   - Sem verTodos (atendente/estagiário/SDR): retorna SÓ ele mesmo
+   *   - Com verTodos (gestor/dono): retorna todos os colaboradores ativos
+   *
+   * Diferente de `listarColaboradores` que sempre retorna tudo (usado
+   * pela tela de gestão de equipe). Aqui filtramos pra evitar que
+   * atendente possa filtrar relatórios por outros colaboradores.
+   */
+  listarColaboradoresParaFiltro: protectedProcedure
+    .input(z.object({ modulo: z.string().default("relatorios") }))
+    .query(async ({ ctx, input }) => {
+      const result = await getEscritorioPorUsuario(ctx.user.id);
+      if (!result) return { colaboradores: [] };
+
+      const { checkPermission } = await import("./check-permission");
+      const perm = await checkPermission(ctx.user.id, input.modulo, "ver");
+
+      const lista = await listarColaboradores(result.escritorio.id);
+      const ativos = lista.filter(c => c.ativo);
+
+      // Sem verTodos: filtra pra mostrar só ele mesmo no dropdown
+      if (!perm.verTodos) {
+        const proprioColabId = result.colaborador.id;
+        return {
+          colaboradores: ativos.filter((c) => c.id === proprioColabId),
+        };
+      }
+
+      return { colaboradores: ativos };
+    }),
+
   /** Atualiza dados de um colaborador (dono/gestor) */
   atualizarColaborador: protectedProcedure
     .input(z.object({
       colaboradorId: z.number(),
-      cargo: z.enum(["gestor", "atendente", "estagiario"]).optional(),
+      cargo: z.enum(["gestor", "atendente", "estagiario", "sdr"]).optional(),
       departamento: z.string().max(64).optional(),
       ativo: z.boolean().optional(),
       maxAtendimentosSimultaneos: z.number().int().min(1).max(50).optional(),
@@ -269,7 +303,7 @@ export const configuracoesRouter = router({
 
       // Validação do cargo: ou é default OU é cargo personalizado existente
       // daquele escritório. Evita aceitar strings arbitrárias.
-      const CARGOS_DEFAULT = new Set(["gestor", "atendente", "estagiario"]);
+      const CARGOS_DEFAULT = new Set(["gestor", "atendente", "estagiario", "sdr"]);
       let nomeCargoFinal = input.cargo;
       if (!CARGOS_DEFAULT.has(input.cargo)) {
         const { getDb } = await import("../db");
@@ -303,7 +337,7 @@ export const configuracoesRouter = router({
 
       // Enviar email de convite via Resend.
       // Pra defaults usa label amigável; pra cargo custom usa o próprio nome.
-      const CARGO_LABELS: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário" };
+      const CARGO_LABELS: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário", sdr: "SDR" };
       let emailEnviado = false;
       let emailErro: string | undefined;
       try {

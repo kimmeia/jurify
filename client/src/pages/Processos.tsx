@@ -26,16 +26,40 @@ const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ",
 
 /**
  * Indicador de saúde do monitoramento baseado na última atualização.
+ * - vermelho pulsante: ultimoErro presente (sessão expirada, captcha, etc)
  * - verde pulsante: atualizado nas últimas 48h (OK)
  * - amarelo: sem atualização entre 48h e 7 dias (atenção)
  * - vermelho: sem atualização há mais de 7 dias (provável falha)
  * - cinza: pausado ou recém-criado sem dados ainda
  */
-function MonitorHealthDot({ statusJudit, updatedAt, createdAt }: { statusJudit: string; updatedAt?: string | null; createdAt?: string | null }) {
+function MonitorHealthDot({
+  statusJudit,
+  updatedAt,
+  createdAt,
+  ultimoErro,
+}: {
+  statusJudit: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  ultimoErro?: string | null;
+}) {
   if (statusJudit === "paused") {
     return (
       <span className="relative flex h-3 w-3 shrink-0" title="Monitoramento pausado">
         <span className="h-3 w-3 rounded-full bg-gray-400" />
+      </span>
+    );
+  }
+
+  // Erro registrado na última consulta — prioriza sobre tempo desde update
+  if (ultimoErro) {
+    return (
+      <span
+        className="relative flex h-3 w-3 shrink-0"
+        title={`ALERTA — última consulta falhou: ${ultimoErro}`}
+      >
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
       </span>
     );
   }
@@ -205,7 +229,7 @@ function ConsultarTab() {
     onError: (e: any) => {
       setBuscando(false);
       // Erros do motor próprio (PRECONDITION_FAILED) trazem mensagem
-      // instrutiva com link → /admin/cofre-credenciais. Mostra como
+      // instrutiva com link → aba Cofre em /processos. Mostra como
       // toast com action.
       const isCredencialAusente = /credencial OAB|cadastre/i.test(e.message);
       const isSessaoExpirada = /sess[aã]o.*expirou|Validar pra renovar/i.test(e.message);
@@ -215,7 +239,7 @@ function ConsultarTab() {
           action: {
             label: "Abrir Cofre",
             onClick: () => {
-              window.location.href = "/cofre-credenciais";
+              window.location.href = "/processos?tab=cofre";
             },
           },
           duration: 10000,
@@ -304,7 +328,7 @@ function ConsultarTab() {
       setPolling(false);
       setBuscando(false);
       toast.error("Falha inesperada no motor", {
-        description: "O scraper não conseguiu completar. Tente novamente; se persistir, valide a credencial em /cofre-credenciais.",
+        description: "O scraper não conseguiu completar. Tente novamente; se persistir, valide a credencial na aba Cofre.",
         duration: 10000,
       });
     }
@@ -439,7 +463,7 @@ function ConsultarTab() {
                   <p className="text-sm font-semibold text-red-900">Falha na consulta</p>
                   <p className="text-sm text-red-800">{e.message || "Erro desconhecido"}</p>
                   {isCredencial && (
-                    <Button size="sm" variant="outline" onClick={() => (window.location.href = "/cofre-credenciais")}>
+                    <Button size="sm" variant="outline" onClick={() => (window.location.href = "/processos?tab=cofre")}>
                       Abrir Cofre de Credenciais
                     </Button>
                   )}
@@ -611,6 +635,7 @@ function MonitoramentoCard({
             statusJudit={status}
             updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
             createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
+            ultimoErro={(mon as any).ultimoErro}
           />
           <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
             {searchType === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
@@ -1210,6 +1235,7 @@ function NovasAcoesTab() {
                       statusJudit={m.statusJudit}
                       updatedAt={m.updatedAt}
                       createdAt={m.createdAt}
+                      ultimoErro={m.ultimoErro}
                     />
                     <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                       <User className="h-3.5 w-3.5 text-violet-600" />
@@ -1546,6 +1572,23 @@ function CofreTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Re-valida credencial fazendo login real no tribunal — usado quando
+  // status fica preso em "validando" ou pra confirmar manualmente que o
+  // login ainda funciona (senha pode ter mudado, conta pode ter caído).
+  const validarMut = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.status === "ativa") {
+        toast.success("Credencial válida!", { description: data.mensagem || "Login confirmado." });
+      } else if (data?.status === "erro") {
+        toast.error("Credencial inválida", { description: data.mensagem || "Login falhou." });
+      } else {
+        toast.info("Validação em andamento", { description: data?.mensagem });
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Erro ao validar", { description: e.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+
   const creds = credenciais || [];
 
   return (
@@ -1632,6 +1675,16 @@ function CofreTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 pt-2 mt-2 border-t">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => validarMut.mutate({ id: c.id })}
+                    disabled={validarMut.isPending}
+                  >
+                    <RefreshCcw className={`h-3 w-3 mr-1 ${validarMut.isPending ? "animate-spin" : ""}`} />
+                    Validar
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"

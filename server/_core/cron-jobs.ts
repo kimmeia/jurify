@@ -276,6 +276,27 @@ export function iniciarJobs() {
     }
   }, 60 * 60 * 1000);
 
+  // A cada 60 minutos: revalida credenciais ativas do cofre.
+  // Sessões TJCE expiram em 90min — revalidamos a cada 75min pra
+  // garantir sessão fresca antes do cron de monitoramento usar.
+  // Inicia 90 segundos após boot pra não competir com outros jobs.
+  setTimeout(async () => {
+    try {
+      const { revalidarCofreCredenciais } = await import("../escritorio/cron-revalidar-cofre");
+      await revalidarCofreCredenciais();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] revalidarCofreCredenciais primeira falhou");
+    }
+  }, 90 * 1000);
+  setInterval(async () => {
+    try {
+      const { revalidarCofreCredenciais } = await import("../escritorio/cron-revalidar-cofre");
+      await revalidarCofreCredenciais();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] revalidarCofreCredenciais interval falhou");
+    }
+  }, 60 * 60 * 1000);
+
   // A cada 6h: cobrança mensal de monitoramentos
   setInterval(async () => {
     try {

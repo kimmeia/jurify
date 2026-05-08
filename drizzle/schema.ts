@@ -236,7 +236,7 @@ export const colaboradores = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     escritorioId: int("escritorioId").notNull(), // FK → escritorios.id
     userId: int("userId").notNull(), // FK → users.id
-    cargo: mysqlEnum("cargo", ["dono", "gestor", "atendente", "estagiario"]).notNull(),
+    cargo: mysqlEnum("cargo", ["dono", "gestor", "atendente", "estagiario", "sdr"]).notNull(),
     departamento: varchar("departamento", { length: 64 }),
     ativo: boolean("ativo").default(true).notNull(),
     maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),

@@ -321,11 +321,14 @@ function AbaComercial({ dias }: { dias: number }) {
   const [rangeInicioInput, setRangeInicioInput] = useState("");
   const [rangeFimInput, setRangeFimInput] = useState("");
 
-  // Atendentes do escritório pra alimentar o select
-  const { data: colaboradoresData } = trpc.configuracoes.listarColaboradores.useQuery(
-    undefined,
+  // Atendentes do escritório pra alimentar o select.
+  // Usa procedure dedicada que filtra por permissão: atendente/SDR/estagiário
+  // só vê ele mesmo aqui (não consegue filtrar relatório por outro colaborador).
+  // Gestor/dono vê todos.
+  const { data: colaboradoresData } = (trpc.configuracoes as any).listarColaboradoresParaFiltro?.useQuery(
+    { modulo: "relatorios" },
     { retry: false, refetchOnWindowFocus: false },
-  );
+  ) ?? { data: undefined };
   const atendentes = colaboradoresData?.colaboradores ?? [];
 
   const responsavelId =

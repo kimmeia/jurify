@@ -1,6 +1,6 @@
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico } from "../drizzle/schema";
+import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico, escritorios, colaboradores } from "../drizzle/schema";
 import { PLANS } from "./billing/products";
 import { createLogger } from "./_core/logger";
 const log = createLogger("db");
@@ -148,6 +148,15 @@ function getPlanPrice(planId: string | null): number {
 
 /**
  * Get all users with subscription status (admin).
+ *
+ * Distingue 3 tipos de usuário pra UI do painel admin:
+ *   - "admin": staff Jurify (users.role === "admin")
+ *   - "cliente": dono de escritório (escritorios.ownerId === user.id)
+ *   - "colaborador": membro de escritório de outro user (linha em
+ *     `colaboradores` ativa, mas NÃO é dono de escritório)
+ *
+ * Pra "colaborador", retorna `escritorioVinculado` (nome) e
+ * `cargoColaborador` pro frontend mostrar no tooltip.
  */
 export async function getAllUsersWithSubscription() {
   const db = await getDb();
@@ -162,15 +171,64 @@ export async function getAllUsersWithSubscription() {
   const activeUserIds = new Set<number>();
   activeSubs.forEach((s) => activeUserIds.add(s.userId));
 
-  return allUsersList.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    hasActiveSubscription: activeUserIds.has(u.id),
-    createdAt: u.createdAt,
-    lastSignedIn: u.lastSignedIn,
-  }));
+  // Mapa userId → escritório (como dono)
+  const escritoriosOwned = await db
+    .select({ ownerId: escritorios.ownerId, nome: escritorios.nome })
+    .from(escritorios);
+  const ownersMap = new Map<number, string>();
+  for (const e of escritoriosOwned) ownersMap.set(e.ownerId, e.nome);
+
+  // Mapa userId → colaboração ativa (escritorioId + cargo + escritório nome)
+  const colabsAtivos = await db
+    .select({
+      userId: colaboradores.userId,
+      cargo: colaboradores.cargo,
+      escritorioId: colaboradores.escritorioId,
+      escritorioNome: escritorios.nome,
+    })
+    .from(colaboradores)
+    .leftJoin(escritorios, eq(escritorios.id, colaboradores.escritorioId))
+    .where(eq(colaboradores.ativo, true));
+  // Um user pode estar em mais de um escritório como colaborador — pegamos
+  // o primeiro (caso raro; aceitar limitação por enquanto).
+  const colabsMap = new Map<number, { cargo: string; escritorioNome: string | null }>();
+  for (const c of colabsAtivos) {
+    if (!colabsMap.has(c.userId)) {
+      colabsMap.set(c.userId, { cargo: c.cargo, escritorioNome: c.escritorioNome });
+    }
+  }
+
+  return allUsersList.map((u) => {
+    const escritorioOwned = ownersMap.get(u.id) ?? null;
+    const colab = colabsMap.get(u.id);
+    let tipoUsuario: "admin" | "cliente" | "colaborador" = "cliente";
+    let escritorioVinculado: string | null = null;
+    let cargoColaborador: string | null = null;
+
+    if (u.role === "admin") {
+      tipoUsuario = "admin";
+    } else if (escritorioOwned) {
+      tipoUsuario = "cliente";
+      escritorioVinculado = escritorioOwned;
+    } else if (colab) {
+      tipoUsuario = "colaborador";
+      escritorioVinculado = colab.escritorioNome;
+      cargoColaborador = colab.cargo;
+    }
+
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      hasActiveSubscription: activeUserIds.has(u.id),
+      createdAt: u.createdAt,
+      lastSignedIn: u.lastSignedIn,
+      tipoUsuario,
+      escritorioVinculado,
+      cargoColaborador,
+    };
+  });
 }
 
 /**

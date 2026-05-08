@@ -405,6 +405,7 @@ export async function aceitarConvite(token: string, userId: number) {
     gestor: "Gestor",
     atendente: "Atendente",
     estagiario: "Estagiário",
+    sdr: "SDR",
   };
   const ehDefault = convite.cargo in NOMES_CARGO_DEFAULT;
   const nomeBuscado = ehDefault ? NOMES_CARGO_DEFAULT[convite.cargo] : convite.cargo;
