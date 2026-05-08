@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   SearchHistorySidebar,
@@ -1134,6 +1134,27 @@ function NovasAcoesTab() {
     onSuccess: () => refetch(),
   });
 
+  const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
+    onSuccess: (r: any) => {
+      if (!r.ok) {
+        toast.error("Falha na busca", { description: r.mensagem ?? "Erro desconhecido", duration: 8000 });
+        return;
+      }
+      if (r.baseline) {
+        toast.success(`Baseline registrado: ${r.cnjsTotal} processo(s) já existentes (${(r.latenciaMs / 1000).toFixed(1)}s)`, {
+          description: "Próximas execuções avisarão apenas dos NOVOS.",
+          duration: 8000,
+        });
+      } else if (r.cnjsNovos > 0) {
+        toast.success(`${r.cnjsNovos} nova(s) ação(ões) detectada(s)!`);
+      } else {
+        toast.info(`Nenhuma ação nova (${r.cnjsTotal} processos já conhecidos)`);
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Erro ao atualizar", { description: e.message }),
+  });
+
   const deletarMonMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) {
@@ -1206,6 +1227,18 @@ function NovasAcoesTab() {
                         {m.totalNovasAcoes}
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      title="Atualizar agora — força consulta imediata (sem custo extra)"
+                      onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
+                      disabled={atualizarAgoraMut.isPending}
+                    >
+                      {atualizarAgoraMut.isPending && atualizarAgoraMut.variables?.monitoramentoId === m.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCcw className="h-3.5 w-3.5" />}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

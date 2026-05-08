@@ -849,4 +849,127 @@ export const processosRouter = router({
         );
       return { ok: true };
     }),
+
+  /**
+   * Força polling sob demanda de UM monitoramento de novas ações.
+   * Não cobra crédito (já está na mensalidade de 15 cred/mês).
+   * Útil pra validar adapter sem esperar cron de 1h.
+   */
+  atualizarNovasAcoesAgora: protectedProcedure
+    .input(z.object({ monitoramentoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const [mon] = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.monitoramentoId),
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          ),
+        )
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+
+      if (!mon.credencialId) {
+        return { ok: false, mensagem: "Credencial não vinculada" };
+      }
+
+      const sessao = await recuperarSessao(mon.credencialId);
+      if (!sessao) {
+        return {
+          ok: false,
+          mensagem: "Sessão expirou. Vá em Cofre de Credenciais → Validar pra renovar.",
+        };
+      }
+
+      let resultado;
+      if (mon.tribunal === "tjce") {
+        const { consultarTjcePorCpf } = await import("../processos/adapters/pje-tjce");
+        resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
+      } else {
+        return { ok: false, mensagem: `Tribunal ${mon.tribunal} sem adapter de CPF` };
+      }
+
+      if (!resultado.ok) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            ultimaConsultaEm: new Date(),
+            ultimoErro: resultado.mensagemErro ?? "Erro na consulta",
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        return {
+          ok: false,
+          mensagem: resultado.mensagemErro ?? "Erro desconhecido",
+        };
+      }
+
+      // Compara com cnjsConhecidos (igual cron faz)
+      const cnjsConhecidos: string[] = mon.cnjsConhecidos
+        ? (JSON.parse(mon.cnjsConhecidos) as string[])
+        : [];
+      const cnjsNovos = resultado.cnjs.filter((c) => !cnjsConhecidos.includes(c));
+      const isPrimeiraExecucao = cnjsConhecidos.length === 0;
+
+      // Atualiza cnjsConhecidos
+      const todosCnjs = isPrimeiraExecucao
+        ? resultado.cnjs
+        : [...cnjsConhecidos, ...cnjsNovos];
+
+      await db
+        .update(motorMonitoramentos)
+        .set({
+          cnjsConhecidos: JSON.stringify(todosCnjs),
+          totalNovasAcoes: isPrimeiraExecucao
+            ? mon.totalNovasAcoes
+            : mon.totalNovasAcoes + cnjsNovos.length,
+          ultimaConsultaEm: new Date(),
+          ultimoErro: null,
+        })
+        .where(eq(motorMonitoramentos.id, mon.id));
+
+      // Se NÃO é primeira execução E há CNJs novos, INSERT eventos
+      if (!isPrimeiraExecucao && cnjsNovos.length > 0) {
+        const crypto = await import("node:crypto");
+        for (const cnj of cnjsNovos) {
+          const dedup = crypto
+            .createHash("sha256")
+            .update(["nova_acao", String(mon.id), cnj].join("|"))
+            .digest("hex");
+          try {
+            await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "nova_acao",
+              dataEvento: new Date(),
+              fonte: "pje",
+              conteudo: `Nova ação: ${cnj} contra ${mon.apelido ?? mon.searchKey}`,
+              conteudoJson: JSON.stringify({
+                cnj,
+                searchKey: mon.searchKey,
+                searchType: mon.searchType,
+                tribunal: mon.tribunal,
+              }),
+              cnjAfetado: cnj,
+              hashDedup: dedup,
+              lido: false,
+            });
+          } catch {
+            /* dedup */
+          }
+        }
+      }
+
+      return {
+        ok: true,
+        cnjsTotal: resultado.cnjs.length,
+        cnjsNovos: isPrimeiraExecucao ? 0 : cnjsNovos.length,
+        baseline: isPrimeiraExecucao,
+        latenciaMs: resultado.latenciaMs,
+      };
+    }),
 });
