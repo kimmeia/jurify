@@ -200,7 +200,7 @@ function ConsultarTab() {
   const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
   const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
-  const consultarCNJ = (trpc as any).juditProcessos.consultarCNJ.useMutation({
+  const consultarCNJ = trpc.processos.consultarCNJ.useMutation({
     onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); },
     onError: (e: any) => {
       setBuscando(false);
@@ -225,7 +225,7 @@ function ConsultarTab() {
       }
     },
   });
-  const consultarDoc = (trpc as any).juditProcessos.consultarDocumento.useMutation({ onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e: any) => { setBuscando(false); toast.error(e.message); } });
+  const consultarDoc = (trpc.processos as any).consultarDocumento.useMutation({ onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e: any) => { setBuscando(false); toast.error(e.message); } });
   // Buscar clientes do escritório para verificar se partes do processo são clientes
   const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });
   const todosClientes = clientesData?.clientes || [];
@@ -266,11 +266,11 @@ function ConsultarTab() {
     }
   };
 
-  const { data: statusData } = (trpc as any).juditProcessos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
+  const { data: statusData } = trpc.processos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
 
   // `resultados` virou mutation (tem efeito colateral: cobra créditos por
   // processo encontrado). Chamamos uma vez quando o status fica completed.
-  const resultadosMut = (trpc as any).juditProcessos.resultados.useMutation({
+  const resultadosMut = trpc.processos.resultados.useMutation({
     onSuccess: (data: any) => {
       setResultados(data);
       if (data?.custoExtraCobrado && data.custoExtraCobrado > 0) {
@@ -307,8 +307,8 @@ function ConsultarTab() {
     setBuscando(true); setResultados(null); setRequestId(""); setTentativas(0);
     history.add(tipo, valor.trim());
     const credId = credencialId ? Number(credencialId) : undefined;
-    if (tipo === "lawsuit_cnj") consultarCNJ.mutate({ cnj: valor.trim(), credencialId: credId });
-    else consultarDoc.mutate({ tipo: tipo as any, valor: valor.trim(), credencialId: credId });
+    if (tipo === "lawsuit_cnj") (consultarCNJ.mutate as any)({ cnj: valor.trim(), credencialId: credId });
+    else (consultarDoc.mutate as any)({ tipo: tipo as any, valor: valor.trim(), credencialId: credId });
   };
 
   const handleSelectHistorico = (t: string, v: string) => {
@@ -515,7 +515,7 @@ function MonitoramentoCard({
 
   const [processoCompleto, setProcessoCompleto] = useState<any>(null);
 
-  const resumoMut = (trpc as any).juditProcessos.resumoIA.useMutation({
+  const resumoMut = (trpc.processos as any).resumoIA.useMutation({
     onSuccess: (data: any) => {
       setResumoIA(data.resumo);
       // O resumo IA agora retorna o processo completo junto
@@ -526,7 +526,7 @@ function MonitoramentoCard({
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });
 
-  const buscarCompletoMut = (trpc as any).juditProcessos.buscarProcessoCompleto.useMutation({
+  const buscarCompletoMut = (trpc.processos as any).buscarProcessoCompleto.useMutation({
     onSuccess: (data: any) => {
       if (data.encontrado && data.processo) {
         setProcessoCompleto(data.processo);
@@ -919,13 +919,14 @@ function MonitorarTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CreditosTab() {
-  const { data: saldoData, refetch } = (trpc as any).juditProcessos.saldo.useQuery(undefined, { retry: false });
-  const { data: txs } = (trpc as any).juditProcessos.transacoes.useQuery({ limit: 30 }, { retry: false });
-  const comprarMut = (trpc as any).juditProcessos.adicionarCreditos.useMutation({ onSuccess: (d: any) => { toast.success(`+${d.adicionados} creditos adicionados!`); refetch(); }, onError: (e: any) => toast.error(e.message) });
+  const { data: saldoData, refetch } = trpc.processos.saldo.useQuery(undefined, { retry: false });
+  const { data: txs } = (trpc.processos.transacoes.useQuery as any)({ limit: 30 }, { retry: false });
+  const { data: pacotesData } = trpc.processos.pacotes.useQuery(undefined, { retry: false });
+  const comprarMut = (trpc.processos.adicionarCreditos.useMutation as any)({ onSuccess: (d: any) => { toast.success(`+${d.adicionados} creditos adicionados!`); refetch(); }, onError: (e: any) => toast.error(e.message) });
 
   const saldo = saldoData?.saldo ?? 0;
-  const pacotes = saldoData?.pacotes || [];
-  const custos = saldoData?.custos || {};
+  const pacotes = pacotesData?.pacotes ?? [];
+  const custos = pacotesData?.custos ?? {};
 
   return (
     <div className="space-y-6">
@@ -945,7 +946,7 @@ function CreditosTab() {
                 <p className="text-xs text-muted-foreground mb-1">creditos</p>
                 <p className="text-sm font-semibold text-indigo-600">{formatBRL(p.preco)}</p>
                 <p className="text-[10px] text-muted-foreground mb-2">{formatBRL(p.preco / p.creditos)}/credito</p>
-                <Button size="sm" className="w-full text-xs" variant={p.popular ? "default" : "outline"} onClick={() => comprarMut.mutate({ pacoteId: p.id })} disabled={comprarMut.isPending}>Comprar</Button>
+                <Button size="sm" className="w-full text-xs" variant={p.popular ? "default" : "outline"} onClick={() => (comprarMut.mutate as any)({ pacoteId: p.id })} disabled={comprarMut.isPending}>Comprar</Button>
               </CardContent>
             </Card>
           ))}
@@ -982,7 +983,7 @@ function CreditosTab() {
 
 export default function Processos() {
   const [tab, setTab] = useState("consultar");
-  const { data: saldoData } = (trpc as any).juditProcessos.saldo.useQuery(undefined, { retry: false });
+  const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
 
   return (
