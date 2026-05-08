@@ -63,7 +63,7 @@ const planos = [
       "Tudo do Intermediário, mais:",
       "Múltiplas conexões WhatsApp",
       "Agentes IA personalizados",
-      "Monitoramento Judit ilimitado",
+      "Monitoramento de processos ilimitado",
       "Suporte prioritário",
       "Onboarding dedicado",
     ],

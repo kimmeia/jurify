@@ -433,6 +433,24 @@ export const cofreCredenciaisRouter = router({
     return Promise.all(rows.map(rowParaView));
   }),
 
+  /**
+   * Lista os sistemas de tribunal disponíveis pra cadastro no cofre.
+   * Usado pelo dropdown "Tribunal/Sistema" do frontend.
+   *
+   * Hoje retorna lista FIXA dos PJe TJCE (única implementação real
+   * em produção). Outros sistemas vêm como entradas "(em breve)" pra
+   * setar expectativa correta.
+   */
+  listarMinhasSistemasSuportados: protectedProcedure.query(() => {
+    return [
+      { id: "pje_tjce", label: "PJe TJCE — 1º grau (disponível)", disponivel: true },
+      { id: "esaj_tjsp", label: "E-SAJ TJSP — em desenvolvimento", disponivel: false },
+      { id: "pje_tjrj", label: "PJe TJRJ — em desenvolvimento", disponivel: false },
+      { id: "pje_tjmg", label: "PJe TJMG — em desenvolvimento", disponivel: false },
+      { id: "pje_restrito_trt7", label: "PJe TRT-7 — em desenvolvimento", disponivel: false },
+    ];
+  }),
+
   /** Cadastra credencial pessoal. */
   cadastrarMinha: protectedProcedure
     .input(
