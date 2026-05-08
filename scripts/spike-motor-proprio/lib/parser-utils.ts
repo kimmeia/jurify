@@ -105,7 +105,8 @@ function aliasTjPorCodigo(codigo: number): string | null {
 /**
  * Parse de data brasileira em vários formatos comuns:
  *   "10/05/2024", "10/05/2024 14:30:00", "10/05/2024 14:30",
- *   "2024-05-10", "2024-05-10T14:30:00"
+ *   "2024-05-10", "2024-05-10T14:30:00",
+ *   "10 mai 2024", "10 mai. 2024" (pt-br abreviado, usado pelo PJe TJCE)
  *
  * Retorna ISO 8601 ou null se não conseguir parsear.
  */
@@ -122,11 +123,30 @@ export function parseDataBR(input: string | null | undefined): string | null {
 
   // DD/MM/YYYY [HH:MM[:SS]]
   const m = trimmed.match(
-    /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/,
+    /^(\d{1,2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/,
   );
   if (m) {
     const [, dd, mm, yyyy, hh = "00", mi = "00", ss = "00"] = m;
-    const d = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}-03:00`);
+    const d = new Date(
+      `${yyyy}-${mm}-${dd.padStart(2, "0")}T${hh}:${mi}:${ss}-03:00`,
+    );
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // "DD mmm YYYY" pt-br abreviado (PJe TJCE expõe assim no painel lateral)
+  const ptMonths: Record<string, string> = {
+    jan: "01", fev: "02", mar: "03", abr: "04",
+    mai: "05", jun: "06", jul: "07", ago: "08",
+    set: "09", out: "10", nov: "11", dez: "12",
+  };
+  const m2 = trimmed.match(
+    /^(\d{1,2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\.?\s+(\d{4})$/i,
+  );
+  if (m2) {
+    const dd = m2[1].padStart(2, "0");
+    const mm = ptMonths[m2[2].toLowerCase()] ?? "01";
+    const yyyy = m2[3];
+    const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00-03:00`);
     if (!isNaN(d.getTime())) return d.toISOString();
   }
 

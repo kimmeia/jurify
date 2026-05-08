@@ -596,9 +596,53 @@ export class PjeTjceScraper {
     const capaRaw = await page
       .evaluate(() => {
         const trim = (s: string | null | undefined) => (s ?? "").trim();
+
+        // Helper PRIMÁRIO pro PJe TJCE 1º grau: painel lateral é
+        // <dl><dt>Label</dt><dd>Valor</dd></dl> ou tabela com
+        // <th>Label</th><td>Valor</td>. Procura match exato do label
+        // em <dt>/<th>/<label>, retorna conteúdo do irmão/célula adjacente.
+        // Mais preciso que `procurarValorPorLabel` (que pegava qualquer
+        // ocorrência de "Valor" e podia capturar "Valor do bem", etc).
+        const lerEmListaDefinicao = (labels: string[]): string | null => {
+          // <dl><dt>...</dt><dd>...</dd>
+          const dts = Array.from(document.querySelectorAll("dt, th, label"));
+          for (const dt of dts) {
+            const tx = trim(dt.textContent).toLowerCase();
+            for (const label of labels) {
+              if (tx === label.toLowerCase() || tx === label.toLowerCase() + ":") {
+                // Pega <dd>/<td> seguinte
+                let next: Element | null = dt.nextElementSibling;
+                // Se for <dt> ou <th>, pula até dd/td
+                while (next && !["DD", "TD"].includes(next.tagName)) {
+                  next = next.nextElementSibling;
+                }
+                if (next) {
+                  const v = trim(next.textContent);
+                  if (v) return v;
+                }
+                // Fallback: alguns layouts têm dt e dd no mesmo <tr>
+                // ou wrappers — procura por irmão posicional via XPath
+                const xpath = document.evaluate(
+                  `following-sibling::*[1] | ../following-sibling::td[1] | ../following-sibling::dd[1]`,
+                  dt,
+                  null,
+                  XPathResult.FIRST_ORDERED_NODE_TYPE,
+                  null,
+                );
+                const node = xpath.singleNodeValue as HTMLElement | null;
+                if (node) {
+                  const v = trim(node.textContent);
+                  if (v) return v;
+                }
+              }
+            }
+          }
+          return null;
+        };
+
+        // FALLBACK pra layouts não-semânticos (texto solto)
         const procurarValorPorLabel = (labels: string[]): string | null => {
           for (const label of labels) {
-            // Procura elementos que contenham o label como text node
             const xp = document.evaluate(
               `//*[contains(normalize-space(text()), '${label}')]`,
               document,
@@ -608,26 +652,26 @@ export class PjeTjceScraper {
             );
             const node = xp.singleNodeValue as HTMLElement | null;
             if (!node) continue;
-            // Tenta:
-            // 1. Próximo irmão tiver valor
             const sib = node.nextElementSibling;
             if (sib) {
               const txt = trim(sib.textContent);
               if (txt && !labels.some((l) => txt.startsWith(l))) return txt;
             }
-            // 2. Pai sem o label inicial
             const parentTxt = trim(node.parentElement?.textContent ?? "");
             if (parentTxt) {
               const semLabel = parentTxt.replace(label, "").replace(/^[:\s]+/, "");
               if (semLabel && semLabel !== parentTxt) return semLabel.trim();
             }
-            // 3. O próprio elemento sem o label
             const ownTxt = trim(node.textContent);
             const semLabel = ownTxt.replace(label, "").replace(/^[:\s]+/, "");
             if (semLabel && semLabel !== ownTxt) return semLabel.trim();
           }
           return null;
         };
+
+        // Helper combinado: dl/th primeiro (mais preciso), texto livre depois
+        const ler = (labels: string[]): string | null =>
+          lerEmListaDefinicao(labels) ?? procurarValorPorLabel(labels);
 
         // Header do processo: PJe TJCE 1º grau costuma ter <h3> ou <span>
         // grande com "ProceComCiv" + CNJ no topo.
@@ -647,28 +691,35 @@ export class PjeTjceScraper {
           }
         }
 
-        // Classe judicial: vem antes do CNJ no header tipicamente
-        // ("Procedimento Comum Cível 3024938-55..."), ou via label
+        // Classe judicial: prefere ler do painel <dl> (precisão), fallback
+        // pra header que tem "Classe + CNJ".
         const classe =
-          procurarValorPorLabel(["Classe judicial", "Classe Judicial", "Classe"]) ||
+          ler(["Classe judicial", "Classe Judicial", "Classe"]) ||
           (() => {
-            // Tenta extrair do header: tudo antes do número CNJ
             const m = header.match(/^(.+?)\s+\d{7}-\d{2}\.\d{4}/);
             return m?.[1]?.trim() ?? null;
           })();
 
-        const orgao = procurarValorPorLabel([
+        const orgao = ler([
           "Órgão julgador",
           "Órgão Julgador",
           "Vara",
           "Juízo",
         ]);
-        const valor = procurarValorPorLabel([
+        // CRÍTICO: só "Valor da causa" — NUNCA fallback "Valor" sozinho
+        // (pegava "Valor do bem alienado" ≠ valor da causa, dando 100x off).
+        const valor = ler([
           "Valor da causa",
           "Valor da Causa",
-          "Valor",
         ]);
-        let dataDist = procurarValorPorLabel([
+        // PJe TJCE 1º grau usa labels:
+        //   "Autuação", "Última distribuição"  ← painel lateral
+        // formato pt-br abreviado: "11 ago 2025"
+        let dataDist = ler([
+          "Última distribuição",
+          "Ultima distribuicao",
+          "Autuação",
+          "Autuacao",
           "Autuado em",
           "Distribuído em",
           "Data de Distribuição",
@@ -679,19 +730,24 @@ export class PjeTjceScraper {
           "Distribuição",
           "Início",
         ]);
-        // Fallback: regex de data BR no panelDetalhesProcesso, perto de
+        // Fallback: regex de data BR/pt-br no panelDetalhesProcesso, perto de
         // palavras-chave "autuad" ou "distribu"
         if (!dataDist) {
           const panel = document.getElementById("panelDetalhesProcesso");
           if (panel) {
             const txt = (panel.textContent ?? "").replace(/\s+/g, " ");
-            const m = txt.match(
-              /(autuad[oa]|distribu[ií]d[oa]|distribui[çc]?[ãa]o)\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i,
-            );
+            // Tenta DD/MM/YYYY primeiro, depois "DD MMM YYYY" (pt-br)
+            const m =
+              txt.match(
+                /(autuad[oa]|distribu[ií]d[oa]|distribui[çc]?[ãa]o|última\s+distribui[çc][ãa]o)\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i,
+              ) ??
+              txt.match(
+                /(autuad[oa]|distribu[ií]d[oa]|distribui[çc]?[ãa]o|última\s+distribui[çc][ãa]o)\s*[:\-]?\s*(\d{1,2}\s+(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+\d{4})/i,
+              );
             if (m) dataDist = m[2];
           }
         }
-        const assuntos = procurarValorPorLabel(["Assunto", "Assuntos"]);
+        const assuntos = ler(["Assunto", "Assuntos"]);
 
         return { header, classe, orgao, valor, dataDist, assuntos };
       })
