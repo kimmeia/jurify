@@ -1546,6 +1546,23 @@ function CofreTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Re-valida credencial fazendo login real no tribunal — usado quando
+  // status fica preso em "validando" ou pra confirmar manualmente que o
+  // login ainda funciona (senha pode ter mudado, conta pode ter caído).
+  const validarMut = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.status === "ativa") {
+        toast.success("Credencial válida!", { description: data.mensagem || "Login confirmado." });
+      } else if (data?.status === "erro") {
+        toast.error("Credencial inválida", { description: data.mensagem || "Login falhou." });
+      } else {
+        toast.info("Validação em andamento", { description: data?.mensagem });
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Erro ao validar", { description: e.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+
   const creds = credenciais || [];
 
   return (
@@ -1632,6 +1649,16 @@ function CofreTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 pt-2 mt-2 border-t">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => validarMut.mutate({ id: c.id })}
+                    disabled={validarMut.isPending}
+                  >
+                    <RefreshCcw className={`h-3 w-3 mr-1 ${validarMut.isPending ? "animate-spin" : ""}`} />
+                    Validar
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"

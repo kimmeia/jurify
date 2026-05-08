@@ -671,7 +671,9 @@ export const processosRouter = router({
         tipo: z.enum(["cpf", "cnpj"]),
         valor: z.string().min(11).max(20),
         apelido: z.string().max(255).optional(),
-        credencialId: z.number().int().positive(),
+        // Opcional: se omitido, backend auto-seleciona a primeira credencial
+        // ativa do usuário (TJCE). Frontend pode chamar sem credencial.
+        credencialId: z.number().int().positive().optional(),
         recurrenceHoras: z.number().int().min(1).max(168).default(6),
       }),
     )
@@ -690,22 +692,46 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Confirma posse da credencial
-      const [cred] = await db
-        .select()
-        .from(cofreCredenciais)
-        .where(
-          and(
-            eq(cofreCredenciais.id, input.credencialId),
-            eq(cofreCredenciais.criadoPor, ctx.user.id),
-            eq(cofreCredenciais.status, "ativa"),
-          ),
-        )
-        .limit(1);
+      // Confirma posse da credencial. Se input.credencialId vier, valida ID
+      // específico; se não vier, auto-seleciona primeira credencial ATIVA
+      // do user com sistema suportado (TJCE) — fluxo 1-clique do botão
+      // "Monitorar" da tela de clientes.
+      let cred: typeof cofreCredenciais.$inferSelect | undefined;
+      if (input.credencialId) {
+        [cred] = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.id, input.credencialId),
+              eq(cofreCredenciais.criadoPor, ctx.user.id),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
+      } else {
+        // Auto-seleção: prefere pje_tjce, fallback esaj_tjce, ordem por ID
+        // (determinístico). Se houver mais de uma, qualquer uma serve —
+        // todas validam o mesmo tribunal.
+        const todas = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.criadoPor, ctx.user.id),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          );
+        const suportadas = todas.filter(
+          (c) => c.sistema === "pje_tjce" || c.sistema === "esaj_tjce",
+        );
+        cred = suportadas.find((c) => c.sistema === "pje_tjce") ?? suportadas[0];
+      }
       if (!cred) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Credencial inválida ou inativa. Cadastre/valide em /cofre-credenciais.",
+          message:
+            "Nenhuma credencial ativa de TJCE encontrada. Cadastre uma em Processos → Cofre antes de criar monitoramento.",
         });
       }
 
@@ -735,7 +761,7 @@ export const processosRouter = router({
         searchKey: docLimpo,
         apelido: input.apelido ?? `${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
         tribunal: tribunalDaCred,
-        credencialId: input.credencialId,
+        credencialId: cred.id,
         status: "ativo",
         recurrenceHoras: input.recurrenceHoras,
         cnjsConhecidos: "[]",
