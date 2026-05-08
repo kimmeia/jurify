@@ -1045,6 +1045,16 @@ export default function Processos() {
   const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
 
+  // Cofre é restrito a admin do módulo (verTodos em processos = dono/gestor).
+  // Atendente/SDR/estagiário não veem a aba nem as credenciais.
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeCofre =
+    minhasPerms?.cargo === "Dono" ||
+    !!minhasPerms?.permissoes?.processos?.verTodos;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1061,7 +1071,7 @@ export default function Processos() {
       {saldo < 5 && (<div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5"><AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /><span className="text-sm text-amber-700">Saldo baixo. Compre creditos para consultar e monitorar processos.</span><Button size="sm" variant="outline" className="ml-auto text-xs" onClick={() => setTab("creditos")}>Comprar</Button></div>)}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4 h-auto">
+        <TabsList className={`grid w-full ${podeCofre ? "grid-cols-4" : "grid-cols-3"} h-auto`}>
           <TabsTrigger value="consultar" className="gap-1.5 text-xs py-2">
             <Search className="h-3.5 w-3.5" />Consultar
           </TabsTrigger>
@@ -1072,15 +1082,17 @@ export default function Processos() {
             <Siren className="h-3.5 w-3.5" />Novas Ações
             <NovasAcoesBadge />
           </TabsTrigger>
-          <TabsTrigger value="cofre" className="gap-1.5 text-xs py-2">
-            <KeyRound className="h-3.5 w-3.5" />Cofre
-          </TabsTrigger>
+          {podeCofre && (
+            <TabsTrigger value="cofre" className="gap-1.5 text-xs py-2">
+              <KeyRound className="h-3.5 w-3.5" />Cofre
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="consultar" className="mt-4"><ConsultarTab /></TabsContent>
         <TabsContent value="movimentacoes" className="mt-4"><MonitorarTab /></TabsContent>
         <TabsContent value="novas-acoes" className="mt-4"><NovasAcoesTab /></TabsContent>
-        <TabsContent value="cofre" className="mt-4"><CofreTab /></TabsContent>
+        {podeCofre && <TabsContent value="cofre" className="mt-4"><CofreTab /></TabsContent>}
       </Tabs>
     </div>
   );
