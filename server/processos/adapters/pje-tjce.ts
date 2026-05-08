@@ -47,4 +47,20 @@ export async function consultarTjce(
   return scraper.consultarPorCnj(cnj, storageStateJson);
 }
 
+/**
+ * Busca processos onde uma pessoa (CPF/CNPJ) aparece como parte
+ * (Sub-sprint 2.2). Retorna apenas lista de CNJs únicos.
+ */
+export async function consultarTjcePorCpf(
+  documento: string,
+  storageStateJson: string,
+) {
+  const scraper = new PjeTjceScraper({
+    username: "(via-sessao)",
+    password: "(via-sessao)",
+    totpSecret: null,
+  });
+  return scraper.consultarPorCpf(documento, storageStateJson);
+}
+
 export { PjeTjceScraper };

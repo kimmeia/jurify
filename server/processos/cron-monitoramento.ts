@@ -27,7 +27,7 @@ import {
   notificacoes,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
-import { consultarTjce } from "./adapters/pje-tjce";
+import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
@@ -349,4 +349,200 @@ export async function cobrarMonitoramentosMensais(): Promise<void> {
       "[motor-cron] cobrança mensal concluída",
     );
   }
+}
+
+/**
+ * Cron de poll pra monitoramentos tipo "novas_acoes".
+ *
+ * Pra cada CPF/CNPJ monitorado: chama consultarTjcePorCpf, compara
+ * lista de CNJs com cnjsConhecidos. CNJs que não estão na lista são
+ * "novas ações" → INSERT eventos_processo tipo='nova_acao' + notif.
+ *
+ * Não puxa dados completos do CNJ novo (capa/movs) — só registra que
+ * apareceu. User pode clicar e disparar consulta detalhada se quiser.
+ */
+export async function pollMonitoramentosNovasAcoes(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const pendentes = await db
+    .select()
+    .from(motorMonitoramentos)
+    .where(
+      and(
+        eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
+        eq(motorMonitoramentos.status, "ativo"),
+        or(
+          isNull(motorMonitoramentos.ultimaConsultaEm),
+          lt(
+            motorMonitoramentos.ultimaConsultaEm,
+            sql`DATE_SUB(NOW(), INTERVAL recurrence_horas HOUR)`,
+          ),
+        ),
+      ),
+    );
+
+  if (pendentes.length === 0) return;
+
+  log.info(
+    { total: pendentes.length },
+    "[motor-cron] poll novas ações iniciado",
+  );
+
+  let detectadas = 0;
+  let erros = 0;
+
+  for (const mon of pendentes) {
+    try {
+      if (!mon.credencialId) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            status: "erro",
+            ultimoErro: "Credencial não vinculada",
+            ultimaConsultaEm: new Date(),
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        erros++;
+        continue;
+      }
+
+      const sessao = await recuperarSessao(mon.credencialId);
+      if (!sessao) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            status: "erro",
+            ultimoErro: "Sessão expirada — revalide a credencial",
+            ultimaConsultaEm: new Date(),
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        erros++;
+        continue;
+      }
+
+      let resultado;
+      if (mon.tribunal === "tjce") {
+        resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
+      } else {
+        log.warn(
+          { tribunal: mon.tribunal, monId: mon.id },
+          "[motor-cron] tribunal sem adapter de CPF",
+        );
+        continue;
+      }
+
+      if (!resultado.ok) {
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            ultimaConsultaEm: new Date(),
+            ultimoErro: resultado.mensagemErro ?? "Erro na consulta CPF",
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        erros++;
+        continue;
+      }
+
+      const cnjsConhecidos: string[] = mon.cnjsConhecidos
+        ? (JSON.parse(mon.cnjsConhecidos) as string[])
+        : [];
+      const cnjsNovos = resultado.cnjs.filter((c) => !cnjsConhecidos.includes(c));
+
+      if (cnjsNovos.length > 0) {
+        for (const cnj of cnjsNovos) {
+          const dedup = hashEvento(["nova_acao", String(mon.id), cnj]);
+          try {
+            await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "nova_acao",
+              dataEvento: new Date(),
+              fonte: "pje",
+              conteudo: `Nova ação detectada: ${cnj} contra ${mon.apelido ?? mon.searchKey}`,
+              conteudoJson: JSON.stringify({
+                cnj,
+                searchKey: mon.searchKey,
+                searchType: mon.searchType,
+                tribunal: mon.tribunal,
+              }),
+              cnjAfetado: cnj,
+              hashDedup: dedup,
+              lido: false,
+            });
+          } catch {
+            /* duplicate hashDedup → ignora */
+          }
+        }
+
+        const todosCnjs = [...cnjsConhecidos, ...cnjsNovos];
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            cnjsConhecidos: JSON.stringify(todosCnjs),
+            totalNovasAcoes: mon.totalNovasAcoes + cnjsNovos.length,
+            ultimaConsultaEm: new Date(),
+            ultimoErro: null,
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+
+        // Notificação in-app + SSE
+        try {
+          await db.insert(notificacoes).values({
+            userId: mon.criadoPor,
+            titulo: `${cnjsNovos.length} nova(s) ação(ões) detectada(s)`,
+            mensagem: `${mon.apelido ?? mon.searchKey}: ${cnjsNovos.slice(0, 3).join(", ")}${cnjsNovos.length > 3 ? "..." : ""}`,
+            tipo: "movimentacao",
+          });
+        } catch {
+          /* best-effort */
+        }
+
+        emitirNotificacao(mon.criadoPor, {
+          tipo: "nova_acao",
+          titulo: "Nova ação detectada",
+          mensagem: `${cnjsNovos.length} processo(s) novo(s) contra ${mon.apelido ?? mon.searchKey}`,
+          dados: {
+            monitoramentoId: mon.id,
+            cnjsNovos,
+          },
+        });
+
+        detectadas += cnjsNovos.length;
+      } else {
+        // Primeira execução: armazena baseline de CNJs sem disparar notif
+        if (cnjsConhecidos.length === 0 && resultado.cnjs.length > 0) {
+          await db
+            .update(motorMonitoramentos)
+            .set({
+              cnjsConhecidos: JSON.stringify(resultado.cnjs),
+              ultimaConsultaEm: new Date(),
+              ultimoErro: null,
+            })
+            .where(eq(motorMonitoramentos.id, mon.id));
+        } else {
+          await db
+            .update(motorMonitoramentos)
+            .set({ ultimaConsultaEm: new Date(), ultimoErro: null })
+            .where(eq(motorMonitoramentos.id, mon.id));
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error({ monId: mon.id, err: msg }, "[motor-cron] erro no poll de CPF");
+      await db
+        .update(motorMonitoramentos)
+        .set({
+          ultimaConsultaEm: new Date(),
+          ultimoErro: msg.slice(0, 1000),
+        })
+        .where(eq(motorMonitoramentos.id, mon.id));
+      erros++;
+    }
+  }
+
+  log.info(
+    { total: pendentes.length, detectadas, erros },
+    "[motor-cron] poll novas ações concluído",
+  );
 }

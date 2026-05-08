@@ -708,15 +708,86 @@ export const processosRouter = router({
         tipo: z.enum(["cpf", "cnpj"]),
         valor: z.string().min(11).max(20),
         apelido: z.string().max(255).optional(),
+        credencialId: z.number().int().positive(),
+        recurrenceHoras: z.number().int().min(1).max(168).default(6),
       }),
     )
-    .mutation(async () => {
-      throw new TRPCError({
-        code: "NOT_IMPLEMENTED",
-        message:
-          "Monitoramento de novas ações por CPF/CNPJ entra na próxima sprint. " +
-          "Por enquanto, monitore processos individuais por CNJ.",
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const docLimpo = input.valor.replace(/\D/g, "");
+      if (input.tipo === "cpf" && docLimpo.length !== 11) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "CPF deve ter 11 dígitos" });
+      }
+      if (input.tipo === "cnpj" && docLimpo.length !== 14) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ deve ter 14 dígitos" });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Confirma posse da credencial
+      const [cred] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(
+            eq(cofreCredenciais.id, input.credencialId),
+            eq(cofreCredenciais.criadoPor, ctx.user.id),
+            eq(cofreCredenciais.status, "ativa"),
+          ),
+        )
+        .limit(1);
+      if (!cred) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Credencial inválida ou inativa. Cadastre/valide em /cofre-credenciais.",
+        });
+      }
+
+      // Mapeia sistema cofre → tribunal. Hoje só TJCE 1º grau.
+      const tribunalDaCred = cred.sistema === "esaj_tjce" || cred.sistema === "pje_tjce" ? "tjce" : null;
+      if (!tribunalDaCred) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Monitoramento de novas ações ainda só funciona pra TJCE. Sistema ${cred.sistema} entra em sprint futura.`,
+        });
+      }
+
+      // Cobra primeira mensalidade (15 cred)
+      await consumirCreditos(
+        esc.escritorio.id,
+        ctx.user.id,
+        CUSTOS.monitorar_pessoa_mes,
+        "monitorar_pessoa_mes",
+        `Monitor ${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
+      );
+
+      const result = await db.insert(motorMonitoramentos).values({
+        escritorioId: esc.escritorio.id,
+        criadoPor: ctx.user.id,
+        tipoMonitoramento: "novas_acoes",
+        searchType: input.tipo,
+        searchKey: docLimpo,
+        apelido: input.apelido ?? `${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
+        tribunal: tribunalDaCred,
+        credencialId: input.credencialId,
+        status: "ativo",
+        recurrenceHoras: input.recurrenceHoras,
+        cnjsConhecidos: "[]",
+        ultimaCobrancaEm: new Date(),
       });
+      const insertId =
+        (result as unknown as { insertId: number }[])[0]?.insertId ??
+        (result as unknown as { insertId: number }).insertId;
+
+      log.info(
+        { user: ctx.user.id, monId: insertId, tipo: input.tipo, tribunal: tribunalDaCred },
+        "[motor-proprio] monitoramento de novas ações criado",
+      );
+
+      return { id: insertId, custoCred: CUSTOS.monitorar_pessoa_mes };
     }),
 
   listarNovasAcoes: protectedProcedure

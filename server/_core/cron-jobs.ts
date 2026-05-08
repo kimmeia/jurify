@@ -244,6 +244,16 @@ export function iniciarJobs() {
     }
   }, 60 * 60 * 1000);
 
+  // A cada 1h (offset de 30min): poll de novas ações (CPF/CNPJ)
+  setInterval(async () => {
+    try {
+      const { pollMonitoramentosNovasAcoes } = await lazyMotorCrons();
+      await pollMonitoramentosNovasAcoes();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] pollMonitoramentosNovasAcoes interval falhou");
+    }
+  }, 60 * 60 * 1000);
+
   // A cada 6h: cobrança mensal de monitoramentos
   setInterval(async () => {
     try {

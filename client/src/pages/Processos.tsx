@@ -1102,6 +1102,10 @@ function NovasAcoesTab() {
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  const [credencialId, setCredencialId] = useState<string>("");
+
+  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
   const { data, refetch, isLoading } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas, limite: 100 },
@@ -1404,6 +1408,30 @@ function NovasAcoesTab() {
               </div>
             )}
 
+            {/* Credencial pra busca PJe (necessária pra consultar lista) */}
+            {clienteSelecionado && (
+              <div>
+                <Label>Credencial OAB *</Label>
+                <select
+                  className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm"
+                  value={credencialId}
+                  onChange={(e) => setCredencialId(e.target.value)}
+                >
+                  <option value="">Selecione a credencial pra consultar</option>
+                  {credsAtivas.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.apelido || c.username} ({c.sistema})
+                    </option>
+                  ))}
+                </select>
+                {credsAtivas.length === 0 && (
+                  <p className="text-[10px] text-orange-600 mt-1">
+                    Sem credenciais ativas. Cadastre uma em /cofre-credenciais primeiro.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
               <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
               <div className="text-blue-900 dark:text-blue-200 space-y-1">
@@ -1411,7 +1439,7 @@ function NovasAcoesTab() {
                 <p>
                   O monitoramento de novas ações é permitido apenas para clientes cadastrados
                   no seu escritório, garantindo que existe relação jurídica legítima para o
-                  tratamento dos dados processuais. Custo: 35 créditos/mês.
+                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>.
                 </p>
               </div>
             </div>
@@ -1420,16 +1448,17 @@ function NovasAcoesTab() {
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
               onClick={() => {
-                if (!clienteSelecionado) return;
+                if (!clienteSelecionado || !credencialId) return;
                 const clean = (clienteSelecionado.cpfCnpj || "").replace(/\D/g, "");
                 const tipo = clean.length === 14 ? "cnpj" : "cpf";
                 criarMut.mutate({
                   tipo: tipo as any,
                   valor: clean,
                   apelido: clienteSelecionado.nome,
+                  credencialId: Number(credencialId),
                 });
               }}
-              disabled={!clienteSelecionado || criarMut.isPending}
+              disabled={!clienteSelecionado || !credencialId || criarMut.isPending}
             >
               {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar monitoramento

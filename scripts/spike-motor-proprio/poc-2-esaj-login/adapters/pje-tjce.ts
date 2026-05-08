@@ -582,6 +582,216 @@ export class PjeTjceScraper {
   }
 
   /**
+   * Busca processos onde uma pessoa aparece como parte (Sub-sprint 2.2).
+   *
+   * O form do PJe TJCE 1º grau permite buscar por:
+   *   - Número único (já implementado em consultarPorCnj)
+   *   - CPF/CNPJ da parte (este método)
+   *   - Nome da parte
+   *
+   * Retorna lista de CNJs únicos sem abrir cada processo (otimização —
+   * monitor de novas ações só precisa saber QUE CNJs existem, não os
+   * detalhes completos).
+   *
+   * @param documento CPF (11 dígitos) ou CNPJ (14 dígitos), com ou sem máscara
+   * @returns lista de CNJs encontrados, ou erro categorizado
+   */
+  async consultarPorCpf(
+    documento: string,
+    storageStateJson: string,
+  ): Promise<{
+    ok: boolean;
+    tribunal: string;
+    cnjs: string[];
+    total: number;
+    latenciaMs: number;
+    categoriaErro: string | null;
+    mensagemErro: string | null;
+    finalizadoEm: string;
+  }> {
+    const inicio = Date.now();
+    const docLimpo = documento.replace(/\D/g, "");
+    const tipoDoc = docLimpo.length === 11 ? "cpf" : docLimpo.length === 14 ? "cnpj" : null;
+
+    const baseResultado = {
+      ok: false,
+      tribunal: this.tribunal,
+      cnjs: [] as string[],
+      total: 0,
+      latenciaMs: 0,
+      categoriaErro: null as string | null,
+      mensagemErro: null as string | null,
+      finalizadoEm: new Date().toISOString(),
+    };
+
+    if (!tipoDoc) {
+      return {
+        ...baseResultado,
+        latenciaMs: Date.now() - inicio,
+        categoriaErro: "validacao",
+        mensagemErro: `Documento inválido: esperava 11 dígitos (CPF) ou 14 (CNPJ), recebi ${docLimpo.length}`,
+      };
+    }
+
+    const browser = await getBrowserPje();
+    const context = await browser.newContext({
+      userAgent: USER_AGENT,
+      locale: "pt-BR",
+      timezoneId: "America/Fortaleza",
+      viewport: { width: 1366, height: 768 },
+      storageState: JSON.parse(storageStateJson),
+    });
+    const page = await context.newPage();
+    page.setDefaultTimeout(TIMEOUT_NAV_MS);
+
+    try {
+      const urlBusca =
+        "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam";
+      await page.goto(urlBusca, { waitUntil: "domcontentloaded" });
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+
+      if (page.url().includes(HOST_KEYCLOAK)) {
+        return {
+          ...baseResultado,
+          latenciaMs: Date.now() - inicio,
+          categoriaErro: "tribunal_indisponivel",
+          mensagemErro: "Sessão expirada — PDPJ-cloud redirecionou pra login",
+        };
+      }
+
+      // Localiza input CPF/CNPJ — o PJe TJCE 1º grau costuma ter UM
+      // input pra ambos (com máscara dinâmica) ou dois separados.
+      // Selectors flexíveis: tenta vários atributos.
+      const seletoresInput = [
+        // Atributos que costumam ter "cpf" ou "cnpj" no name/id
+        "input[name*='Cpf' i][type='text']",
+        "input[id*='Cpf' i][type='text']",
+        "input[name*='Cnpj' i][type='text']",
+        "input[id*='Cnpj' i][type='text']",
+        "input[name*='documento' i][type='text']",
+        "input[id*='documento' i][type='text']",
+        "input[name*='documentoParte' i]",
+        "input[id*='documentoParte' i]",
+        "input[placeholder*='CPF' i]",
+        "input[placeholder*='CNPJ' i]",
+        "input[placeholder*='documento' i]",
+        // Por label próximo
+        "label:has-text('CPF') ~ input",
+        "label:has-text('CPF/CNPJ') ~ input",
+      ];
+
+      const inputDoc = page.locator(seletoresInput.join(", ")).first();
+
+      const inputVisivel = await inputDoc
+        .isVisible({ timeout: 5000 })
+        .catch(() => false);
+
+      if (!inputVisivel) {
+        // Lista inputs visíveis pra diagnóstico — primeira iteração
+        // costuma precisar calibrar selectors.
+        const inputsDiag = await this.listarInputsVisiveis(page);
+        const screenshotPath = await this.tirarScreenshotErro(
+          page,
+          `pje-tjce-no-cpf-input-${docLimpo.slice(0, 4)}`,
+        );
+        return {
+          ...baseResultado,
+          latenciaMs: Date.now() - inicio,
+          categoriaErro: "parse_falhou",
+          mensagemErro:
+            `Input CPF/CNPJ não encontrado na busca PJe TJCE. ` +
+            `URL: ${page.url()}, title: ${await page.title().catch(() => "?")}. ` +
+            `Inputs visíveis: ${inputsDiag.slice(0, 800)}`,
+        };
+      }
+
+      await inputDoc.click({ timeout: 3000 }).catch(() => {});
+      // Preenche com máscara que o PJe espera (alguns campos têm máscara
+      // automática; outros aceitam só dígitos).
+      const docMascarado = tipoDoc === "cpf"
+        ? `${docLimpo.slice(0, 3)}.${docLimpo.slice(3, 6)}.${docLimpo.slice(6, 9)}-${docLimpo.slice(9)}`
+        : `${docLimpo.slice(0, 2)}.${docLimpo.slice(2, 5)}.${docLimpo.slice(5, 8)}/${docLimpo.slice(8, 12)}-${docLimpo.slice(12)}`;
+      await inputDoc.fill(docMascarado);
+
+      // Submit (mesmo padrão do consultarPorCnj)
+      const seletoresBotao = [
+        "input[type='submit'][value*='Pesquisar' i]",
+        "input[type='submit'][value*='Buscar' i]",
+        "input[type='submit'][value*='Consultar' i]",
+        "button[type='submit']:has-text('Pesquisar')",
+        "button:has-text('Pesquisar')",
+        "button:has-text('Buscar')",
+        "a:has-text('Pesquisar'):visible",
+        "a[id*='Pesquisar' i]:visible",
+        "input[type='submit']:visible",
+      ];
+      const botaoPesquisar = page.locator(seletoresBotao.join(", ")).first();
+
+      const botaoVisivel = await botaoPesquisar
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
+
+      if (botaoVisivel) {
+        await Promise.all([
+          page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
+          botaoPesquisar.click({ timeout: 5000 }).catch(async () => {
+            await inputDoc.press("Enter").catch(() => {});
+          }),
+        ]);
+      } else {
+        await Promise.all([
+          page.waitForLoadState("networkidle", { timeout: 18_000 }).catch(() => {}),
+          inputDoc.press("Enter"),
+        ]);
+      }
+      await page.waitForTimeout(2000);
+
+      // Detecta "nenhum resultado"
+      const naoEncontrado = await page
+        .locator("text=/Nenhum processo encontrado|nenhum registro|não encontrado|sem resultado/i")
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (naoEncontrado) {
+        return {
+          ...baseResultado,
+          ok: true,
+          latenciaMs: Date.now() - inicio,
+          mensagemErro: null,
+        };
+      }
+
+      // Extrai CNJs da lista de resultados.
+      // CNJ tem formato 0000000-00.0000.0.00.0000 (20 chars com máscara).
+      // Captura tudo via regex no HTML da tabela de resultados.
+      const html = await page.content();
+      const regexCnj = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g;
+      const cnjsBrutos = html.match(regexCnj) ?? [];
+      // Dedup (PJe pode duplicar CNJ em link e em texto da linha)
+      const cnjsUnicos = Array.from(new Set(cnjsBrutos));
+
+      return {
+        ...baseResultado,
+        ok: true,
+        cnjs: cnjsUnicos,
+        total: cnjsUnicos.length,
+        latenciaMs: Date.now() - inicio,
+        finalizadoEm: new Date().toISOString(),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        ...baseResultado,
+        latenciaMs: Date.now() - inicio,
+        categoriaErro: "exception",
+        mensagemErro: msg.slice(0, 800),
+      };
+    } finally {
+      await context.close().catch(() => {});
+    }
+  }
+
+  /**
    * Extrai capa do processo (classe, partes, valor, etc) usando busca
    * por proximidade textual em vez de IDs JSF voláteis.
    *
