@@ -180,12 +180,14 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+      // Cofre é compartilhado pelo escritório: qualquer membro
+      // (dono ou colaborador) usa as credenciais cadastradas no escritório.
       const credencial = await db
         .select()
         .from(cofreCredenciais)
         .where(
           and(
-            eq(cofreCredenciais.criadoPor, ctx.user.id),
+            eq(cofreCredenciais.escritorioId, esc.escritorio.id),
             eq(cofreCredenciais.sistema, sistemaCofre),
             eq(cofreCredenciais.status, "ativa"),
           ),
@@ -406,14 +408,14 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Confirma credencial pertence ao user
+      // Confirma credencial pertence ao escritório (compartilhado entre dono + colaboradores)
       const [cred] = await db
         .select()
         .from(cofreCredenciais)
         .where(
           and(
             eq(cofreCredenciais.id, input.credencialId),
-            eq(cofreCredenciais.criadoPor, ctx.user.id),
+            eq(cofreCredenciais.escritorioId, esc.escritorio.id),
             eq(cofreCredenciais.status, "ativa"),
           ),
         )
@@ -692,10 +694,9 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Confirma posse da credencial. Se input.credencialId vier, valida ID
-      // específico; se não vier, auto-seleciona primeira credencial ATIVA
-      // do user com sistema suportado (TJCE) — fluxo 1-clique do botão
-      // "Monitorar" da tela de clientes.
+      // Confirma posse da credencial. Cofre é compartilhado pelo escritório:
+      // qualquer membro (dono ou colaborador) usa as credenciais cadastradas
+      // pelo escritório.
       let cred: typeof cofreCredenciais.$inferSelect | undefined;
       if (input.credencialId) {
         [cred] = await db
@@ -704,21 +705,20 @@ export const processosRouter = router({
           .where(
             and(
               eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.criadoPor, ctx.user.id),
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
               eq(cofreCredenciais.status, "ativa"),
             ),
           )
           .limit(1);
       } else {
-        // Auto-seleção: prefere pje_tjce, fallback esaj_tjce, ordem por ID
-        // (determinístico). Se houver mais de uma, qualquer uma serve —
-        // todas validam o mesmo tribunal.
+        // Auto-seleção: prefere pje_tjce, fallback esaj_tjce. Qualquer
+        // credencial ativa do escritório com sistema suportado.
         const todas = await db
           .select()
           .from(cofreCredenciais)
           .where(
             and(
-              eq(cofreCredenciais.criadoPor, ctx.user.id),
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
               eq(cofreCredenciais.status, "ativa"),
             ),
           );

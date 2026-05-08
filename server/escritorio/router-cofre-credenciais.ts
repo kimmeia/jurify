@@ -416,16 +416,17 @@ export const cofreCredenciaisRouter = router({
   // pelo roteador de consultas em /processos (motor próprio busca a
   // credencial DO USUÁRIO ATUAL, não do escritório admin).
 
-  /** Lista credenciais pessoais do usuário logado. */
+  /** Lista credenciais do escritório (compartilhadas entre dono + colaboradores). */
   listarMinhas: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
+    const escritorioId = await resolverEscritorioId(ctx.user.id);
     const rows = await db
       .select()
       .from(cofreCredenciais)
       .where(
         and(
-          eq(cofreCredenciais.criadoPor, ctx.user.id),
+          eq(cofreCredenciais.escritorioId, escritorioId),
           ne(cofreCredenciais.status, "removida"),
         ),
       )
@@ -504,12 +505,13 @@ export const cofreCredenciaisRouter = router({
       return rowParaView(row);
     }),
 
-  /** Soft delete da credencial pessoal — só dono pode remover. */
+  /** Soft delete da credencial — qualquer membro do escritório pode remover. */
   removerMinha: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
 
       const [existente] = await db
         .select()
@@ -517,7 +519,7 @@ export const cofreCredenciaisRouter = router({
         .where(
           and(
             eq(cofreCredenciais.id, input.id),
-            eq(cofreCredenciais.criadoPor, ctx.user.id),
+            eq(cofreCredenciais.escritorioId, escritorioId),
           ),
         )
         .limit(1);
@@ -530,16 +532,17 @@ export const cofreCredenciaisRouter = router({
         .set({ status: "removida" })
         .where(eq(cofreCredenciais.id, input.id));
 
-      log.info({ user: ctx.user.id, credencialId: input.id }, "[cofre-pessoal] credencial removida");
+      log.info({ user: ctx.user.id, escritorioId, credencialId: input.id }, "[cofre] credencial removida");
       return { ok: true };
     }),
 
-  /** Validar credencial pessoal — login real no tribunal. */
+  /** Validar credencial — login real no tribunal. Qualquer membro do escritório. */
   validarMinha: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const escritorioId = await resolverEscritorioId(ctx.user.id);
 
       const [row] = await db
         .select()
@@ -547,7 +550,7 @@ export const cofreCredenciaisRouter = router({
         .where(
           and(
             eq(cofreCredenciais.id, input.id),
-            eq(cofreCredenciais.criadoPor, ctx.user.id),
+            eq(cofreCredenciais.escritorioId, escritorioId),
           ),
         )
         .limit(1);
