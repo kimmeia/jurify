@@ -28,17 +28,25 @@ export interface CodigosVizinhos {
 /**
  * Gera os códigos das 5 janelas TOTP vizinhas (atual ± 2).
  *
- * IMPORTANTE: usa `authenticator.options.epoch` em vez de
- * `hotp.generate(secret, counter)`. Razão: `hotp` por default não
- * decodifica base32, então `hotp.generate("MZDW6ZLS...", counter)`
- * trata o secret como ASCII raw — código resultante NÃO BATE com
- * `authenticator.generate(secret)` que decodifica base32 corretamente.
- * Bug detectado em 07/05/2026 quando "janela atual" via authenticator
- * gerava 164735 e via hotp gerava 702342 com mesmo secret/counter.
+ * IMPORTANTE: NUNCA mexer no singleton `authenticator.options` global.
+ * Bug crítico detectado em 08/05/2026: o setter de `authenticator.options`
+ * faz MERGE (não REPLACE), e o getter mergeia defaults+options. Então
+ * "salvar opts originais e restaurar" deixa `_options.epoch` permanentemente
+ * fixado no `Date.now()` capturado na primeira chamada — pois o getter
+ * do default sempre retorna `epoch: Date.now()` no momento da captura,
+ * e o setter persiste isso em `_options`.
  *
- * Solução: muda `authenticator.options.epoch` (timestamp em ms) pra
- * cada janela e gera com o mesmo decoder de base32 do código atual.
- * Restaura opção original ao terminar.
+ * Como `authenticator` é singleton de processo (otplib exporta uma
+ * instância única), isso contamina TODAS as outras chamadas no
+ * processo: cron de revalidação, validação manual concorrente de
+ * outras credenciais, qualquer `authenticator.generate(...)` daí
+ * pra frente passa a usar epoch travado no passado → códigos da
+ * janela errada → Keycloak rejeita.
+ *
+ * Solução: usa `authenticator.clone()` pra cada janela. clone()
+ * cria instância nova com mesmas opções, mas modificações nela
+ * NÃO vazam pro singleton. Isolamento total entre callers
+ * concorrentes.
  */
 export function gerarCodigosVizinhos(secret: string): CodigosVizinhos {
   const secretLimpo = secret.replace(/\s+/g, "").toUpperCase();
@@ -46,25 +54,20 @@ export function gerarCodigosVizinhos(secret: string): CodigosVizinhos {
   const stepMs = 30_000;
   const counterAtual = Math.floor(agoraMs / stepMs);
 
-  const optsOriginal = { ...authenticator.options };
-
   const gerarEm = (deltaMs: number): string => {
-    authenticator.options = { ...optsOriginal, epoch: agoraMs + deltaMs };
-    return authenticator.generate(secretLimpo);
+    // clone() retorna instância isolada; mexer em .options dela não
+    // afeta o singleton global compartilhado por outros callers.
+    const inst = authenticator.clone();
+    inst.options = { epoch: agoraMs + deltaMs };
+    return inst.generate(secretLimpo);
   };
 
-  try {
-    return {
-      menos2: gerarEm(-2 * stepMs),
-      menos1: gerarEm(-1 * stepMs),
-      atual: gerarEm(0),
-      mais1: gerarEm(1 * stepMs),
-      mais2: gerarEm(2 * stepMs),
-      counterAtual,
-    };
-  } finally {
-    // Restaura sempre — mesmo se algum gerarEm lançar exceção,
-    // não deixa estado modificado pro próximo chamador.
-    authenticator.options = optsOriginal;
-  }
+  return {
+    menos2: gerarEm(-2 * stepMs),
+    menos1: gerarEm(-1 * stepMs),
+    atual: gerarEm(0),
+    mais1: gerarEm(1 * stepMs),
+    mais2: gerarEm(2 * stepMs),
+    counterAtual,
+  };
 }
