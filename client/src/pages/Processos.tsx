@@ -197,7 +197,7 @@ function ConsultarTab() {
   const history = useSearchHistory();
 
   // Credenciais do cofre para segredo de justiça
-  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const consultarCNJ = trpc.processos.consultarCNJ.useMutation({
@@ -230,7 +230,7 @@ function ConsultarTab() {
   const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });
   const todosClientes = clientesData?.clientes || [];
 
-  const monitorarMut = (trpc as any).juditUsuario.criarMonitoramento.useMutation({
+  const monitorarMut = (trpc.processos.criarMonitoramento as any).useMutation({
     onSuccess: () => toast.success("Processo adicionado às Movimentações (5 cred/mês)"),
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
@@ -544,7 +544,7 @@ function MonitoramentoCard({
   const st = STATUS_MON[status] || { label: status, cor: "" };
 
   // Busca o histórico de movimentações quando o card abre (local DB — atualizações do webhook)
-  const { data: historico, isLoading: loadingHist, refetch: refetchHist } = (trpc as any).juditUsuario.historico.useQuery(
+  const { data: historico, isLoading: loadingHist, refetch: refetchHist } = (trpc.processos as any).historicoMonitoramento.useQuery(
     { monitoramentoId: mon.id, page: 1, pageSize: 50 },
     { enabled: aberto && !!mon.id, retry: false },
   );
@@ -761,17 +761,17 @@ function MonitorarTab() {
   const [novoValor, setNovoValor] = useState("");
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
 
-  const { data: mons, refetch, isLoading } = (trpc as any).juditUsuario.meusMonitoramentos.useQuery(
+  const { data: mons, refetch, isLoading } = trpc.processos.meusMonitoramentos.useQuery(
     { tipoMonitoramento: "movimentacoes" },
     { retry: false },
   );
   const listaMons = mons || [];
 
   // Credenciais do cofre
-  const { data: credenciais } = (trpc as any).juditCredenciais?.listar?.useQuery?.(undefined, { retry: false }) || { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
-  const criarMut = (trpc as any).juditUsuario.criarMonitoramento.useMutation({
+  const criarMut = (trpc.processos.criarMonitoramento as any).useMutation({
     onSuccess: () => {
       toast.success("Monitoramento de movimentações criado!");
       setNovoOpen(false);
@@ -781,9 +781,9 @@ function MonitorarTab() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const pausarMut = (trpc as any).juditUsuario.pausar.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
-  const reativarMut = (trpc as any).juditUsuario.reativar.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
-  const deletarMut = (trpc as any).juditUsuario.deletar.useMutation({
+  const pausarMut = trpc.processos.pausarMonitoramento.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
+  const reativarMut = trpc.processos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
+  const deletarMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}` });
       else toast.success("Monitoramento removido");
@@ -1032,7 +1032,7 @@ export default function Processos() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function NovasAcoesBadge() {
-  const { data } = (trpc as any).juditUsuario.listarNovasAcoes.useQuery(
+  const { data } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas: true, limite: 1 },
     { retry: false, refetchInterval: 60000 },
   );
@@ -1069,7 +1069,7 @@ function NovasAcoesTab() {
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
 
-  const { data, refetch, isLoading } = (trpc as any).juditUsuario.listarNovasAcoes.useQuery(
+  const { data, refetch, isLoading } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas, limite: 100 },
     { retry: false },
   );
@@ -1081,7 +1081,7 @@ function NovasAcoesTab() {
   );
   const clientes = (clientesData?.clientes || []).filter((c: any) => c.cpfCnpj);
 
-  const criarMut = (trpc as any).juditUsuario.criarMonitoramentoNovasAcoes.useMutation({
+  const criarMut = (trpc.processos as any).criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento criado!");
       setNovoOpen(false);
@@ -1092,11 +1092,11 @@ function NovasAcoesTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const marcarLidaMut = (trpc as any).juditUsuario.marcarNovaAcaoLida.useMutation({
+  const marcarLidaMut = trpc.processos.marcarNovaAcaoLida.useMutation({
     onSuccess: () => refetch(),
   });
 
-  const deletarMonMut = (trpc as any).juditUsuario.deletar.useMutation({
+  const deletarMonMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) {
         toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.` });
@@ -1412,8 +1412,8 @@ function NovasAcoesTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function CofreTab() {
-  const { data: credenciais, refetch, isLoading } = (trpc as any).juditCredenciais.listar.useQuery();
-  const { data: sistemas } = (trpc as any).juditCredenciais.listarSistemasSuportados.useQuery();
+  const { data: credenciais, refetch, isLoading } = trpc.cofreCredenciais.listarMinhas.useQuery();
+  const { data: sistemas } = (trpc.cofreCredenciais as any).listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState({
@@ -1426,7 +1426,7 @@ function CofreTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
 
-  const cadastrarMut = (trpc as any).juditCredenciais.cadastrar.useMutation({
+  const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
       if (data.status === "ativa") {
         toast.success("Credencial válida!", { description: data.mensagem, duration: 8000 });
@@ -1442,7 +1442,7 @@ function CofreTab() {
     onError: (e: any) => toast.error("Erro ao cadastrar", { description: e.message }),
   });
 
-  const removerMut = (trpc as any).juditCredenciais.remover.useMutation({
+  const removerMut = trpc.cofreCredenciais.removerMinha.useMutation({
     onSuccess: () => {
       toast.success("Credencial removida");
       refetch();
@@ -1637,7 +1637,7 @@ function CofreTab() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() => cadastrarMut.mutate(form)}
+              onClick={() => (cadastrarMut.mutate as any)(form)}
               disabled={
                 !form.customerKey || !form.systemName || !form.username || !form.password ||
                 cadastrarMut.isPending

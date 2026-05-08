@@ -194,9 +194,32 @@ async function verificarPrazosKanban() {
 export function iniciarJobs() {
   log.info("[Cron] Jobs iniciados");
 
+  // Lazy import dos crons motor próprio (evita carregar Playwright em
+  // testes ou ambientes sem deps)
+  const lazyMotorCrons = async () => {
+    const m = await import("../processos/cron-monitoramento");
+    return m;
+  };
+
   // Executar imediatamente na inicialização (com delay)
   setTimeout(() => expirarAssinaturas(), 5000);
   setTimeout(() => syncAsaas(), 15000);
+  setTimeout(async () => {
+    try {
+      const { cobrarMonitoramentosMensais } = await lazyMotorCrons();
+      await cobrarMonitoramentosMensais();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] cobrarMonitoramentosMensais falhou");
+    }
+  }, 25000);
+  setTimeout(async () => {
+    try {
+      const { pollMonitoramentosMovs } = await lazyMotorCrons();
+      await pollMonitoramentosMovs();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] pollMonitoramentosMovs falhou");
+    }
+  }, 40000);
   setTimeout(() => notificarPrazos(), 20000);
   setTimeout(() => verificarPrazosKanban(), 35000);
 
@@ -209,6 +232,27 @@ export function iniciarJobs() {
 
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
+
+  // ─── Motor próprio (Sprint 2 — 08/05/2026) ─────────────────────────────
+  // A cada 1h: poll de monitoramentos de movimentações (recurrence default 6h)
+  setInterval(async () => {
+    try {
+      const { pollMonitoramentosMovs } = await lazyMotorCrons();
+      await pollMonitoramentosMovs();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] pollMonitoramentosMovs interval falhou");
+    }
+  }, 60 * 60 * 1000);
+
+  // A cada 6h: cobrança mensal de monitoramentos
+  setInterval(async () => {
+    try {
+      const { cobrarMonitoramentosMensais } = await lazyMotorCrons();
+      await cobrarMonitoramentosMensais();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] cobrarMonitoramentosMensais interval falhou");
+    }
+  }, 6 * 60 * 60 * 1000);
 
   // Cron de monitoramento próprio entra em Sprint 2 (substitui antigo
   // cron Judit que cobrava monitoramentos mensais)

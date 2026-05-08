@@ -1186,6 +1186,47 @@ export const juditCreditos = motorCreditos;
 export const juditTransacoes = motorTransacoes;
 
 /**
+ * Motor próprio — Monitoramentos.
+ *
+ * Cobre 2 cenários:
+ *   - tipo='movimentacoes': monitora UM processo específico (CNJ).
+ *     Cron polls cada N horas → detecta movs novas → cria evento.
+ *   - tipo='novas_acoes': monitora pessoa (CPF/CNPJ). Cron polls
+ *     cada N horas → busca por documento → detecta CNJs novos →
+ *     cria evento "nova_acao".
+ *
+ * Eventos detectados são gravados em `eventos_processo` (sem FK
+ * porque Drizzle/MySQL não dá conta de FK polimórficas).
+ */
+export const motorMonitoramentos = mysqlTable("motor_monitoramentos", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorio_id").notNull(),
+  criadoPor: int("criado_por").notNull(),
+  tipoMonitoramento: mysqlEnum("tipo_monitoramento", ["movimentacoes", "novas_acoes"]).notNull(),
+  searchType: mysqlEnum("search_type", ["lawsuit_cnj", "cpf", "cnpj"]).notNull(),
+  searchKey: varchar("search_key", { length: 64 }).notNull(),
+  apelido: varchar("apelido", { length: 255 }),
+  tribunal: varchar("tribunal", { length: 16 }).notNull(),
+  credencialId: int("credencial_id"),
+  status: mysqlEnum("status", ["ativo", "pausado", "erro"]).default("ativo").notNull(),
+  recurrenceHoras: int("recurrence_horas").default(6).notNull(),
+  ultimaConsultaEm: timestamp("ultima_consulta_em"),
+  ultimaMovimentacaoEm: timestamp("ultima_movimentacao_em"),
+  ultimaMovimentacaoTexto: text("ultima_movimentacao_texto"),
+  totalAtualizacoes: int("total_atualizacoes").default(0).notNull(),
+  totalNovasAcoes: int("total_novas_acoes").default(0).notNull(),
+  hashUltimasMovs: varchar("hash_ultimas_movs", { length: 64 }),
+  cnjsConhecidos: text("cnjs_conhecidos"),
+  ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
+  ultimoErro: text("ultimo_erro"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MotorMonitoramento = typeof motorMonitoramentos.$inferSelect;
+export type InsertMotorMonitoramento = typeof motorMonitoramentos.$inferInsert;
+
+/**
  * Notas internas do admin sobre clientes — visíveis apenas no painel admin.
  *
  * Usado pelo time de suporte/financeiro pra registrar contexto sobre um

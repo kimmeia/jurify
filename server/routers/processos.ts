@@ -16,14 +16,21 @@
  */
 
 import { z } from "zod";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { motorCreditos, motorTransacoes, cofreCredenciais } from "../../drizzle/schema";
+import {
+  motorCreditos,
+  motorTransacoes,
+  cofreCredenciais,
+  motorMonitoramentos,
+  eventosProcesso,
+} from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
+import { normalizarCnj, mascararCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
   iniciarConsultaMotorProprio,
@@ -41,8 +48,10 @@ const PACOTES_CREDITOS = [
   { id: "pack_1000", nome: "1000 creditos", creditos: 1000, preco: 499.9, popular: false },
 ] as const;
 
-const CUSTOS = {
+export const CUSTOS = {
   consulta_cnj: 1,
+  monitorar_processo_mes: 2,    // ANTES: Judit cobrava 5
+  monitorar_pessoa_mes: 15,     // ANTES: Judit cobrava 35
 } as const;
 
 async function consumirCreditos(
@@ -321,5 +330,309 @@ export const processosRouter = router({
       });
 
       return { adicionados: input.quantidade, saldoNovo: novoSaldo };
+    }),
+
+  // ─── MONITORAMENTOS (Sprint 2) ──────────────────────────────────────────
+  // Cobra cred imediatamente (primeira mensalidade) na criação. Cron mensal
+  // (cobrarMonitoramentosMensais) cobra renovação após 30 dias.
+
+  meusMonitoramentos: protectedProcedure
+    .input(
+      z
+        .object({
+          tipoMonitoramento: z.enum(["movimentacoes", "novas_acoes"]).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conditions = [
+        eq(motorMonitoramentos.criadoPor, ctx.user.id),
+        ne(motorMonitoramentos.status, "pausado" as const), // mostra ativo + erro
+      ];
+      // Filtro opcional por tipo
+      if (input?.tipoMonitoramento) {
+        conditions.push(
+          eq(motorMonitoramentos.tipoMonitoramento, input.tipoMonitoramento),
+        );
+      }
+      // Sempre lista todos do user, incluindo pausados (UI filtra na exibição)
+      const rows = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          input?.tipoMonitoramento
+            ? and(
+                eq(motorMonitoramentos.criadoPor, ctx.user.id),
+                eq(motorMonitoramentos.tipoMonitoramento, input.tipoMonitoramento),
+              )
+            : eq(motorMonitoramentos.criadoPor, ctx.user.id),
+        )
+        .orderBy(desc(motorMonitoramentos.createdAt));
+      return rows;
+    }),
+
+  criarMonitoramento: protectedProcedure
+    .input(
+      z.object({
+        numeroCnj: z.string().min(15).max(30),
+        credencialId: z.number().int().positive(),
+        apelido: z.string().max(255).optional(),
+        recurrenceHoras: z.number().int().min(1).max(168).default(6),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const tribunal = parseCnjTribunal(input.numeroCnj);
+      if (!tribunal) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "CNJ inválido" });
+      }
+      if (!tribunal.temMotorProprio) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Monitoramento para ${tribunal.siglaTribunal} ainda em desenvolvimento. Hoje cobrimos: TJCE 1º grau.`,
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Confirma credencial pertence ao user
+      const [cred] = await db
+        .select()
+        .from(cofreCredenciais)
+        .where(
+          and(
+            eq(cofreCredenciais.id, input.credencialId),
+            eq(cofreCredenciais.criadoPor, ctx.user.id),
+            eq(cofreCredenciais.status, "ativa"),
+          ),
+        )
+        .limit(1);
+      if (!cred) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Credencial não encontrada ou inativa. Cadastre/valide em /cofre-credenciais.",
+        });
+      }
+
+      // Cobra primeira mensalidade
+      await consumirCreditos(
+        esc.escritorio.id,
+        ctx.user.id,
+        CUSTOS.monitorar_processo_mes,
+        "monitorar_processo_mes",
+        `Monitor CNJ ${input.numeroCnj} (${tribunal.siglaTribunal})`,
+      );
+
+      const cnjMascarado = mascararCnj(input.numeroCnj);
+      const result = await db.insert(motorMonitoramentos).values({
+        escritorioId: esc.escritorio.id,
+        criadoPor: ctx.user.id,
+        tipoMonitoramento: "movimentacoes",
+        searchType: "lawsuit_cnj",
+        searchKey: cnjMascarado,
+        apelido: input.apelido ?? cnjMascarado,
+        tribunal: tribunal.codigoTribunal,
+        credencialId: input.credencialId,
+        status: "ativo",
+        recurrenceHoras: input.recurrenceHoras,
+        ultimaCobrancaEm: new Date(),
+      });
+      const insertId =
+        (result as unknown as { insertId: number }[])[0]?.insertId ??
+        (result as unknown as { insertId: number }).insertId;
+
+      log.info(
+        { user: ctx.user.id, monId: insertId, cnj: cnjMascarado, tribunal: tribunal.codigoTribunal },
+        "[motor-proprio] monitoramento de processo criado",
+      );
+
+      return { id: insertId, custoCred: CUSTOS.monitorar_processo_mes };
+    }),
+
+  pausarMonitoramento: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [mon] = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.id),
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+      await db
+        .update(motorMonitoramentos)
+        .set({ status: "pausado" })
+        .where(eq(motorMonitoramentos.id, input.id));
+      return { ok: true };
+    }),
+
+  reativarMonitoramento: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const [mon] = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.id),
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+      await db
+        .update(motorMonitoramentos)
+        .set({ status: "ativo" })
+        .where(eq(motorMonitoramentos.id, input.id));
+      return { ok: true };
+    }),
+
+  deletarMonitoramento: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      // Verifica posse
+      const [mon] = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.id),
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+      // Hard delete — eventos_processo associados ficam (auditoria)
+      await db.delete(motorMonitoramentos).where(eq(motorMonitoramentos.id, input.id));
+      return { ok: true };
+    }),
+
+  historicoMonitoramento: protectedProcedure
+    .input(
+      z.object({
+        monitoramentoId: z.number().int().positive(),
+        limite: z.number().int().min(1).max(200).default(50),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { eventos: [], totalNaoLidas: 0 };
+      // Confirma posse
+      const [mon] = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.monitoramentoId),
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+          ),
+        )
+        .limit(1);
+      if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+
+      const eventos = await db
+        .select()
+        .from(eventosProcesso)
+        .where(eq(eventosProcesso.monitoramentoId, input.monitoramentoId))
+        .orderBy(desc(eventosProcesso.dataEvento))
+        .limit(input.limite);
+      const naoLidas = eventos.filter((e) => !e.lido).length;
+      return { eventos, totalNaoLidas: naoLidas };
+    }),
+
+  // ─── NOVAS AÇÕES por CPF/CNPJ (Sub-sprint 2.2) ─────────────────────────
+  // Implementa em sub-sprint 2.2 quando consultarPorCpf adapter estiver pronto.
+  // Stubs aqui pra typecheck do frontend não quebrar.
+
+  criarMonitoramentoNovasAcoes: protectedProcedure
+    .input(
+      z.object({
+        tipo: z.enum(["cpf", "cnpj"]),
+        valor: z.string().min(11).max(20),
+        apelido: z.string().max(255).optional(),
+      }),
+    )
+    .mutation(async () => {
+      throw new TRPCError({
+        code: "NOT_IMPLEMENTED",
+        message:
+          "Monitoramento de novas ações por CPF/CNPJ entra na próxima sprint. " +
+          "Por enquanto, monitore processos individuais por CNJ.",
+      });
+    }),
+
+  listarNovasAcoes: protectedProcedure
+    .input(
+      z.object({
+        apenasNaoLidas: z.boolean().optional(),
+        limite: z.number().int().min(1).max(100).default(20),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { acoes: [], monitoramentos: [], totalNaoLidas: 0 };
+      // Por enquanto retorna eventos tipo "nova_acao" do escritório
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return { acoes: [], monitoramentos: [], totalNaoLidas: 0 };
+
+      const acoes = await db
+        .select()
+        .from(eventosProcesso)
+        .where(
+          and(
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+            eq(eventosProcesso.tipo, "nova_acao"),
+          ),
+        )
+        .orderBy(desc(eventosProcesso.createdAt))
+        .limit(input.limite);
+
+      const monitoramentos = await db
+        .select()
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.criadoPor, ctx.user.id),
+            eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          ),
+        );
+
+      const naoLidas = acoes.filter((a) => !a.lido).length;
+      return { acoes, monitoramentos, totalNaoLidas: naoLidas };
+    }),
+
+  marcarNovaAcaoLida: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      await db
+        .update(eventosProcesso)
+        .set({ lido: true })
+        .where(
+          and(
+            eq(eventosProcesso.id, input.id),
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { ok: true };
     }),
 });
