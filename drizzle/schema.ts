@@ -284,6 +284,13 @@ export const convitesColaborador = mysqlTable("convites_colaborador", {
   aceitoPorUserId: int("aceitoPorUserId"), // FK → users.id (preenchido ao aceitar)
   expiresAt: timestamp("expiresAt").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /**
+   * Resultado do envio do email pelo Resend. False quando convite criado
+   * mas email rejeitado (domínio não verificado, quota, etc). Permite
+   * `reenviarConvite` tentar de novo + admin ver pendências.
+   */
+  emailEnviado: boolean("emailEnviado").default(false).notNull(),
+  ultimoErroEmail: varchar("ultimoErroEmail", { length: 512 }),
 });
 
 export type ConviteColaborador = typeof convitesColaborador.$inferSelect;
