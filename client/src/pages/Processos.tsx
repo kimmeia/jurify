@@ -221,7 +221,11 @@ function ConsultarTab() {
   const history = useSearchHistory();
 
   // Credenciais do cofre para segredo de justiça
-  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  // listarParaSelecao em vez de listarMinhas: dropdown precisa funcionar
+  // pra qualquer colaborador (não só admin do cofre). View retornada já
+  // é mascarada — usuário comum vê apelido + usernameMascarado, sem
+  // expor senha/secret.
+  const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const consultarCNJ = trpc.processos.consultarCNJ.useMutation({
@@ -394,7 +398,7 @@ function ConsultarTab() {
                   <option value="">Sem credencial (apenas processos públicos)</option>
                   {credsDisponiveis.map((c: any) => (
                     <option key={c.id} value={String(c.id)}>
-                      {c.customerKey} ({c.username}) {c.status === "validando" ? "— validando" : ""}
+                      {c.apelido} ({c.usernameMascarado}) {c.status === "validando" ? "— validando" : ""}
                     </option>
                   ))}
                 </select>
@@ -820,6 +824,26 @@ function MonitorarTab() {
   const [novoValor, setNovoValor] = useState("");
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
 
+  // Suporte a deep-link de Clientes.tsx: ?abrirMonitor=1&cnj=...
+  // abre o modal já preenchido com o CNJ vindo do vínculo de processo
+  // do cliente, evitando re-digitação. Limpa os params após consumir
+  // pra modal não reabrir em refresh.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("abrirMonitor") === "1") {
+      const cnj = sp.get("cnj");
+      if (cnj) setNovoValor(cnj);
+      setNovoOpen(true);
+      sp.delete("abrirMonitor");
+      sp.delete("cnj");
+      const novoUrl = sp.toString()
+        ? `${window.location.pathname}?${sp.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", novoUrl);
+    }
+  }, []);
+
   const { data: mons, refetch, isLoading } = trpc.processos.meusMonitoramentos.useQuery(
     { tipoMonitoramento: "movimentacoes" },
     { retry: false },
@@ -827,7 +851,7 @@ function MonitorarTab() {
   const listaMons = mons || [];
 
   // Credenciais do cofre
-  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const criarMut = (trpc.processos.criarMonitoramento as any).useMutation({
@@ -934,7 +958,7 @@ function MonitorarTab() {
                     <SelectItem key={c.id} value={String(c.id)}>
                       <span className="flex items-center gap-2">
                         <KeyRound className="h-3 w-3" />
-                        {c.customerKey} ({c.username})
+                        {c.apelido} ({c.usernameMascarado})
                       </span>
                     </SelectItem>
                   ))}
@@ -1041,7 +1065,23 @@ function CreditosTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function Processos() {
-  const [tab, setTab] = useState("consultar");
+  // Lê ?tab= da URL pra suportar deep-links (ex: vínculo de processo do
+  // cliente redireciona pra /processos?tab=movimentacoes&cnj=...&abrirMonitor=1).
+  const tabInicial = (() => {
+    if (typeof window === "undefined") return "consultar";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "movimentacoes" || t === "novas-acoes" || t === "cofre" || t === "creditos"
+      ? t
+      : "consultar";
+  })();
+  const [tab, setTab] = useState(tabInicial);
+  // Compatibilidade com link antigo `?abrirMonitor=1` sem `?tab=`: força
+  // ir pra movimentacoes pra que o MonitorarTab abra o modal.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("abrirMonitor") === "1" && tab === "consultar") setTab("movimentacoes");
+  }, [tab]);
   const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
 
@@ -1141,7 +1181,7 @@ function NovasAcoesTab() {
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [credencialId, setCredencialId] = useState<string>("");
 
-  const { data: credenciais } = trpc.cofreCredenciais.listarMinhas.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
   const { data, refetch, isLoading } = (trpc.processos as any).listarNovasAcoes.useQuery(
@@ -1491,7 +1531,7 @@ function NovasAcoesTab() {
                   <option value="">Selecione a credencial pra consultar</option>
                   {credsAtivas.map((c: any) => (
                     <option key={c.id} value={c.id}>
-                      {c.apelido || c.username} ({c.sistema})
+                      {c.apelido || c.usernameMascarado} ({c.sistema})
                     </option>
                   ))}
                 </select>
@@ -1652,7 +1692,7 @@ function CofreTab() {
                     <KeyRound className="h-4 w-4 text-violet-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{c.apelido || c.customerKey}</p>
+                    <p className="text-sm font-semibold truncate">{c.apelido || c.usernameMascarado}</p>
                     <p className="text-[10px] text-muted-foreground truncate">
                       {(c.sistema || c.systemName || "").toUpperCase()}
                     </p>
@@ -1674,7 +1714,7 @@ function CofreTab() {
                 <div className="mt-2 space-y-1 text-xs">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <User className="h-3 w-3" />
-                    <span className="font-mono truncate">{c.usernameMascarado || c.username}</span>
+                    <span className="font-mono truncate">{c.usernameMascarado}</span>
                   </div>
                   {(c.tem2fa || c.has2fa) && (
                     <div className="flex items-center gap-1.5 text-violet-600">
@@ -1702,7 +1742,7 @@ function CofreTab() {
                     variant="ghost"
                     className="h-7 text-xs text-destructive ml-auto"
                     onClick={() => {
-                      if (confirm(`Remover credencial "${c.apelido || c.customerKey}"? Monitoramentos que dependem dela vão parar de funcionar.`)) {
+                      if (confirm(`Remover credencial "${c.apelido}"? Monitoramentos que dependem dela vão parar de funcionar.`)) {
                         removerMut.mutate({ id: c.id });
                       }
                     }}

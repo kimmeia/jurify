@@ -114,6 +114,10 @@ export const clienteProcessosRouter = router({
       apelido: z.string().max(255).optional(),
       polo: z.enum(["ativo", "passivo", "interessado"]).optional(),
       tipo: z.enum(["extrajudicial", "litigioso"]).optional(),
+      // monitorar: aceito por compatibilidade com clientes que ainda enviam,
+      // mas vínculo NÃO cria monitoramento — UI redireciona pra /processos
+      // pra que user escolha credencial e confirme cobrança. Manter aqui
+      // só pra Zod não rejeitar requests legados.
       monitorar: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
