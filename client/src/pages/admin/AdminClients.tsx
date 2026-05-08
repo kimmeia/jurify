@@ -333,7 +333,7 @@ function ClienteDetalheDialog({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Válida até:</span>
-                      <span>{sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd * 1000).toLocaleDateString("pt-BR") : "—"}</span>
+                      <span>{sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).toLocaleDateString("pt-BR") : "—"}</span>
                     </div>
                   </div>
                 ) : (
@@ -427,6 +427,25 @@ function ClienteDetalheDialog({
                     Retirar
                   </Button>
                 </div>
+                {(data as any)?.creditsSource === "escritorio" && (() => {
+                  const saldoAtual = (credits as any)?.saldo ?? 0;
+                  if (saldoAtual <= 0) return null;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full text-xs text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        if (!confirm(`Zerar todo o saldo do escritório (${saldoAtual} créditos)? Útil pra resetar testes.`)) return;
+                        retirarMut.mutate({ userId: userId!, quantidade: saldoAtual, motivo: "Zerado pelo admin" });
+                      }}
+                      disabled={retirarMut.isPending}
+                    >
+                      {retirarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                      Zerar saldo ({saldoAtual} cred)
+                    </Button>
+                  );
+                })()}
               </div>
 
               {/* Estatísticas */}
