@@ -11,7 +11,7 @@
 import { getDb } from "../db";
 import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes } from "../../drizzle/schema";
 import { eq, and, lt, sql, or, gte, lte, isNull } from "drizzle-orm";
-import { syncTodosEscritorios } from "../integracoes/asaas-sync";
+import { syncTodosEscritorios, validarConexoesAsaasPendentes } from "../integracoes/asaas-sync";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "./logger";
 const log = createLogger("_core-cron-jobs");
@@ -229,6 +229,15 @@ export function iniciarJobs() {
 
   // A cada 10 minutos: sincronizar cobranças do Asaas
   setInterval(() => syncAsaas(), 10 * 60 * 1000);
+
+  // A cada 30 minutos: re-tenta validar configs Asaas em rate limit (429)
+  setInterval(async () => {
+    try {
+      await validarConexoesAsaasPendentes();
+    } catch (err: any) {
+      log.error("[Cron] validarConexoesAsaasPendentes falhou:", err.message);
+    }
+  }, 30 * 60 * 1000);
 
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);

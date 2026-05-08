@@ -28,8 +28,16 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
   const [showKey, setShowKey] = useState(false);
 
   const conectarMut = trpc.asaas.conectar.useMutation({
-    onSuccess: (data) => {
-      toast.success(data.mensagem);
+    onSuccess: (data: any) => {
+      // 429 → backend salvou key mas marcou aguardandoValidacao
+      if (data.aguardandoValidacao) {
+        toast.warning("Chave salva — Asaas em rate limit", {
+          description: data.mensagem,
+          duration: 12000,
+        });
+      } else {
+        toast.success(data.mensagem);
+      }
       setApiKey("");
       onRefresh();
     },
@@ -40,6 +48,20 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
     onSuccess: () => { toast.success("Asaas desconectado"); onRefresh(); },
     onError: (err: any) => toast.error(err.message),
   });
+
+  const validarAgoraMut = (trpc.asaas as any).validarAgora?.useMutation?.({
+    onSuccess: (r: any) => {
+      if (r.ok) {
+        toast.success("Conexão validada — Asaas conectado!");
+      } else if (r.status === "aguardando_validacao") {
+        toast.warning("Ainda em rate limit", { description: r.mensagem, duration: 10000 });
+      } else {
+        toast.error("Validação falhou", { description: r.mensagem, duration: 10000 });
+      }
+      onRefresh();
+    },
+    onError: (err: any) => toast.error("Erro ao validar", { description: err.message }),
+  }) || {};
 
   const syncMut = trpc.asaas.sincronizarClientes.useMutation({
     onSuccess: (data: any) => toast.success(`${data.vinculados} vinculados, ${data.novos} novos, ${data.removidos || 0} removidos`),
@@ -52,6 +74,8 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
   }) || {};
 
   const conectado = asaasStatus?.conectado;
+  const aguardandoValidacao = asaasStatus?.status === "aguardando_validacao";
+  const erroConexao = asaasStatus?.status === "erro";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -71,7 +95,57 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
             Conecte sua conta do Asaas para criar cobranças (boleto, Pix, cartão de crédito) e acompanhar o status financeiro dos seus clientes direto no CRM e Atendimento.
           </p>
 
-          {conectado ? (
+          {aguardandoValidacao ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-amber-900 dark:text-amber-200 font-semibold">Aguardando validação</span>
+                  <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Pendente
+                  </Badge>
+                </div>
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  Sua chave foi <strong>salva com sucesso</strong>, mas o Asaas está em
+                  cota excedida (rate limit 12h). Vamos retentar automaticamente a cada
+                  30min — você não precisa fazer nada.
+                </p>
+                {asaasStatus?.mensagemErro && (
+                  <p className="text-[10px] text-amber-700/70 font-mono bg-amber-100/50 dark:bg-amber-900/20 p-1.5 rounded">
+                    {asaasStatus.mensagemErro}
+                  </p>
+                )}
+                {asaasStatus?.apiKeyPreview && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">API Key salva</span>
+                    <span className="font-mono">{asaasStatus.apiKeyPreview}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => validarAgoraMut.mutate?.()}
+                  disabled={validarAgoraMut.isPending}
+                >
+                  {validarAgoraMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Plug className="h-3 w-3 mr-1" />}
+                  Tentar validar agora
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs text-destructive hover:text-destructive"
+                  onClick={() => { if (confirm("Remover chave Asaas salva?")) desconectarMut.mutate(); }}
+                  disabled={desconectarMut.isPending}
+                >
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : conectado ? (
             <div className="space-y-3">
               <div className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
@@ -115,6 +189,14 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
             </div>
           ) : (
             <div className="space-y-3">
+              {erroConexao && asaasStatus?.mensagemErro && (
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3">
+                  <p className="text-xs font-semibold text-red-900 dark:text-red-200">Última tentativa falhou</p>
+                  <p className="text-xs text-red-800 dark:text-red-200 mt-1">
+                    {asaasStatus.mensagemErro}
+                  </p>
+                </div>
+              )}
               <div>
                 <Label className="text-xs">API Key do Asaas</Label>
                 <div className="flex gap-2 mt-1">

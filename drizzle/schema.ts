@@ -918,7 +918,7 @@ export const asaasConfig = mysqlTable("asaas_config", {
   apiKeyIv: varchar("apiKeyIvAsaas", { length: 64 }),
   apiKeyTag: varchar("apiKeyTagAsaas", { length: 64 }),
   modo: mysqlEnum("modoAsaas", ["sandbox", "producao"]).default("producao").notNull(),
-  status: mysqlEnum("statusAsaas", ["conectado", "desconectado", "erro"]).default("desconectado").notNull(),
+  status: mysqlEnum("statusAsaas", ["conectado", "desconectado", "erro", "aguardando_validacao"]).default("desconectado").notNull(),
   webhookToken: varchar("webhookTokenAsaas", { length: 128 }),
   ultimoTeste: timestamp("ultimoTesteAsaas"),
   mensagemErro: varchar("mensagemErroAsaas", { length: 512 }),
