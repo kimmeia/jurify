@@ -190,8 +190,33 @@ export function parseValorBRLCentavos(input: string | null | undefined): number 
     .trim();
   if (!limpo) return null;
 
+  // Detecta formato:
+  //   "1.234,56"   → tem vírgula decimal → reais (R$ 1.234,56)
+  //   "1234.56"    → tem ponto decimal (sem vírgula) → reais
+  //   "5449470"    → só dígitos, sem decimal → CENTAVOS sem máscara
+  //                  (PJe TJCE expõe valor da causa assim em alguns campos)
+  //   "100"        → só dígitos pequeno → reais ("R$ 100,00")
+  const temVirgula = limpo.includes(",");
+  const temPontoDecimal = !temVirgula && /\.\d{1,2}$/.test(limpo);
+  const ehSoDigitos = /^\d+$/.test(limpo);
+
+  if (ehSoDigitos) {
+    // Heurística: dígitos puros sem máscara. Se >= 1000, assume que
+    // são centavos (PJe sem máscara expõe "5449470" pra R$ 54.494,70).
+    // Valores menores são raros pra valor de causa, mas tratamos como
+    // reais (ex: "100" = R$ 100,00 — embora improvável, não vamos
+    // estourar 100x à toa).
+    const num = parseInt(limpo, 10);
+    if (isNaN(num)) return null;
+    return num >= 1000 ? num : num * 100;
+  }
+
   // Formato BR: ponto como separador de milhar, vírgula como decimal
-  const valor = limpo.replace(/\./g, "").replace(",", ".");
+  const valor = temVirgula
+    ? limpo.replace(/\./g, "").replace(",", ".")
+    : temPontoDecimal
+      ? limpo // já está em formato US (ponto decimal)
+      : limpo;
   const num = parseFloat(valor);
   if (isNaN(num)) return null;
 

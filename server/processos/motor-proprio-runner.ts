@@ -22,6 +22,9 @@ import { consultarTjce } from "./adapters/pje-tjce";
 import { resultadoScraperParaJuditLawsuit } from "./motor-bridge";
 import { parseCnjTribunal } from "./cnj-parser";
 import type { JuditLawsuit } from "../integracoes/judit-client";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("motor-proprio-runner");
 
 export type StatusMotorProprio = "running" | "completed" | "error";
 
@@ -118,6 +121,24 @@ async function executarConsulta(
         `Adapter motor próprio pra ${codigoTribunal} não implementado`,
       );
     }
+
+    // Log estruturado do raw value extraído — ajuda calibrar parser
+    // quando valor sai 100x off (PJe TJCE expõe sem máscara em alguns
+    // lugares). console.warn em background não chega no Railway, mas
+    // log.warn (pino) chega.
+    const valorRaw = (globalThis as { __pjeTjceValorRaw?: string | null })
+      .__pjeTjceValorRaw;
+    log.warn(
+      {
+        cnj,
+        codigoTribunal,
+        valorRaw,
+        valorCents: resultado.capa?.valorCausaCentavos ?? null,
+        dataDistribuicao: resultado.capa?.dataDistribuicao ?? null,
+        movsCount: resultado.movimentacoes.length,
+      },
+      "[motor-proprio-runner] resultado consulta",
+    );
 
     if (!resultado.ok) {
       cache.set(requestId, {
