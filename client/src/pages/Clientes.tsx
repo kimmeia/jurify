@@ -57,6 +57,8 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
   const clean = cpfCnpj.replace(/\D/g, "");
   const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
   const [, setLocation] = useLocation();
+  const [confirmCriarOpen, setConfirmCriarOpen] = useState(false);
+  const [confirmPararOpen, setConfirmPararOpen] = useState(false);
 
   // Verifica se já existe monitoramento ativo
   const { data: monsData, refetch: refetchMons } =
@@ -80,6 +82,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
           onClick: () => setLocation("/processos"),
         },
       });
+      setConfirmCriarOpen(false);
       refetchMons();
     },
     onError: (e: any) => toast.error("Erro ao criar monitoramento", { description: e.message }),
@@ -96,6 +99,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
           description: "A cobrança mensal foi interrompida.",
         });
       }
+      setConfirmPararOpen(false);
       refetchMons();
     },
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
@@ -103,58 +107,110 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
 
   if (monAtivo) {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={deletarMut.isPending}
-        onClick={() => {
-          if (
-            confirm(
-              `Parar de monitorar ${nome}?\n\nVocê deixará de ser avisado sobre novas ações e a cobrança mensal recorrente será interrompida.`,
-            )
-          ) {
-            deletarMut.mutate({ id: monAtivo.id });
-          }
-        }}
-        className="border-emerald-500/30 text-emerald-700 hover:bg-red-50 hover:border-red-500/30 hover:text-red-700 group"
-      >
-        {deletarMut.isPending ? (
-          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-        ) : (
-          <>
-            <CheckCircle2 className="h-4 w-4 mr-1 group-hover:hidden" />
-            <Trash2 className="h-4 w-4 mr-1 hidden group-hover:block" />
-          </>
-        )}
-        <span className="group-hover:hidden">Monitorado</span>
-        <span className="hidden group-hover:inline">Parar</span>
-      </Button>
+      <>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={deletarMut.isPending}
+          onClick={() => setConfirmPararOpen(true)}
+          className="border-emerald-500/30 text-emerald-700 hover:bg-red-50 hover:border-red-500/30 hover:text-red-700 group"
+        >
+          {deletarMut.isPending ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <>
+              <CheckCircle2 className="h-4 w-4 mr-1 group-hover:hidden" />
+              <Trash2 className="h-4 w-4 mr-1 hidden group-hover:block" />
+            </>
+          )}
+          <span className="group-hover:hidden">Monitorado</span>
+          <span className="hidden group-hover:inline">Parar</span>
+        </Button>
+        <AlertDialog open={confirmPararOpen} onOpenChange={setConfirmPararOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Parar de monitorar {nome}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você deixará de ser avisado sobre novas ações distribuídas contra
+                este cliente, e a <strong>cobrança mensal recorrente</strong> será
+                interrompida imediatamente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletarMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  deletarMut.mutate({ id: monAtivo.id });
+                }}
+                disabled={deletarMut.isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deletarMut.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : null}
+                Parar monitoramento
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
     );
   }
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        if (confirm(`Criar monitoramento de novas ações para ${nome}?\n\nVocê será avisado quando alguém processar este cliente. Cobrança: 35 créditos/mês.`)) {
-          criarMut.mutate({
-            tipo,
-            valor: clean,
-            apelido: nome,
-          });
-        }
-      }}
-      disabled={criarMut.isPending}
-      className="border-red-500/30 text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-    >
-      {criarMut.isPending ? (
-        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-      ) : (
-        <Siren className="h-4 w-4 mr-1" />
-      )}
-      Monitorar
-    </Button>
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setConfirmCriarOpen(true)}
+        disabled={criarMut.isPending}
+        className="border-red-500/30 text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+      >
+        {criarMut.isPending ? (
+          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+        ) : (
+          <Siren className="h-4 w-4 mr-1" />
+        )}
+        Monitorar
+      </Button>
+      <AlertDialog open={confirmCriarOpen} onOpenChange={setConfirmCriarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Criar monitoramento para {nome}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você será avisado <strong>imediatamente</strong> quando alguém processar
+              este cliente — antes mesmo da citação chegar.
+              <br />
+              <br />
+              <span className="text-foreground font-medium">Cobrança: 35 créditos/mês</span>
+              {" "}— renovada automaticamente, podendo ser cancelada a qualquer momento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={criarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                criarMut.mutate({
+                  tipo,
+                  valor: clean,
+                  apelido: nome,
+                });
+              }}
+              disabled={criarMut.isPending}
+            >
+              {criarMut.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Siren className="h-4 w-4 mr-1" />
+              )}
+              Criar monitoramento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -1110,8 +1166,26 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
 
   const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
   const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
-    onSuccess: (r: any) => {
-      toast.success(r.monitorando ? "Processo vinculado e monitoramento criado!" : "Processo vinculado!");
+    onSuccess: (_r: any, vars: any) => {
+      // Como o backend hoje não cria monitoramento automaticamente
+      // (cron próprio em desenvolvimento), oferecemos botão pra abrir
+      // a tela de criação de monitoramento com CNJ pré-preenchido. Sem
+      // isso o user achava que tinha monitorado mas não tinha.
+      const cnjVinculado = vars?.numeroCnj;
+      if (vars?.monitorar && cnjVinculado) {
+        toast.success("Processo vinculado", {
+          description: "Pra criar monitoramento, abra o módulo Processos.",
+          action: {
+            label: "Abrir Processos",
+            onClick: () => {
+              window.location.href = `/processos?cnj=${encodeURIComponent(cnjVinculado)}&abrirMonitor=1`;
+            },
+          },
+          duration: 12000,
+        });
+      } else {
+        toast.success("Processo vinculado!");
+      }
       setNovoOpen(false);
       setNovoCnj("");
       setNovoApelido("");
@@ -1228,9 +1302,10 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 className="accent-primary"
               />
               <div>
-                <p className="text-xs font-medium">Monitorar movimentações</p>
+                <p className="text-xs font-medium">Quero monitorar este processo</p>
                 <p className="text-[10px] text-muted-foreground">
-                  Criar monitoramento automático (5 créditos/mês). Receba alertas de novos despachos e sentenças.
+                  Após vincular, abriremos a tela de monitoramento (módulo Processos) com este CNJ
+                  pré-preenchido pra você escolher a credencial e confirmar (5 créditos/mês).
                 </p>
               </div>
             </label>

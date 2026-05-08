@@ -4,6 +4,8 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq, and } from "drizzle-orm";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
   getEscritorioPorUsuario,
@@ -17,6 +19,7 @@ import {
   aceitarConvite,
   cancelarConvite,
   contarColaboradoresAtivos,
+  atualizarStatusEmailConvite,
 } from "./db-escritorio";
 import {
   listarCanais,
@@ -327,7 +330,7 @@ export const configuracoesRouter = router({
         nomeCargoFinal = cargoExistente.nome;
       }
 
-      const { token, expiresAt } = await criarConvite(
+      const { id, token, expiresAt } = await criarConvite(
         result.escritorio.id,
         result.colaborador.id,
         input.email,
@@ -356,7 +359,66 @@ export const configuracoesRouter = router({
         emailErro = err?.message || "Erro inesperado ao enviar email.";
       }
 
-      return { token, expiresAt, emailEnviado, emailErro };
+      // Persiste status do envio pra admin saber + permitir reenviar depois
+      await atualizarStatusEmailConvite(id, emailEnviado, emailErro ?? null);
+
+      return { id, token, expiresAt, emailEnviado, emailErro };
+    }),
+
+  /** Reenvia email de convite pendente. Útil quando primeiro envio falhou
+   *  (Resend rejeitado, domínio não verificado, etc). Mantém token original. */
+  reenviarConvite: protectedProcedure
+    .input(z.object({ conviteId: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      const result = await getEscritorioPorUsuario(ctx.user.id);
+      if (!result) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
+
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const { convitesColaborador } = await import("../../drizzle/schema");
+      const [convite] = await db
+        .select()
+        .from(convitesColaborador)
+        .where(
+          and(
+            eq(convitesColaborador.id, input.conviteId),
+            eq(convitesColaborador.escritorioId, result.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!convite) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Convite não encontrado." });
+      }
+      if (convite.status !== "pendente") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Convite já está ${convite.status}, não pode ser reenviado.`,
+        });
+      }
+
+      const CARGO_LABELS_R: Record<string, string> = { gestor: "Gestor", atendente: "Atendente", estagiario: "Estagiário", sdr: "SDR" };
+      let emailEnviado = false;
+      let emailErro: string | undefined;
+      try {
+        const { enviarEmailConvite } = await import("../_core/email");
+        const resultado = await enviarEmailConvite({
+          email: convite.email,
+          nomeEscritorio: result.escritorio.nome,
+          cargo: CARGO_LABELS_R[convite.cargo] || convite.cargo,
+          token: convite.token,
+          convidadoPor: ctx.user.name || ctx.user.email || "Admin",
+        });
+        emailEnviado = resultado.success;
+        if (!resultado.success) emailErro = resultado.error;
+      } catch (err: any) {
+        emailErro = err?.message || "Erro inesperado ao enviar email.";
+      }
+
+      await atualizarStatusEmailConvite(input.conviteId, emailEnviado, emailErro ?? null);
+
+      return { emailEnviado, emailErro };
     }),
 
   /** Lista convites do escritório */

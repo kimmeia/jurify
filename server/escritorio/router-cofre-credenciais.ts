@@ -27,8 +27,29 @@ import { getDb } from "../db";
 import { cofreCredenciais } from "../../drizzle/schema";
 import { encrypt, maskToken } from "./crypto-utils";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 import { createLogger } from "../_core/logger";
 import { ambienteSuportaTeste } from "../_core/ambiente";
+
+/**
+ * Cofre é restrito a admin do módulo processos: cargo com `verTodos=true`
+ * em processos. Hoje na matriz: dono e gestor. Atendente/SDR/estagiário
+ * ficam bloqueados (têm verProprios mas não verTodos).
+ *
+ * Por que não criar módulo "cofre" separado: a matriz já discrimina
+ * naturalmente quem é admin de processos. Criar um módulo novo
+ * exigiria atualizar 4 lugares (PERMISSOES_LEGADO + PERMISSOES_PADRAO
+ * em router-permissoes + check no menu + UI específica) sem ganho.
+ */
+async function exigirAdminProcessos(userId: number): Promise<void> {
+  const perm = await checkPermission(userId, "processos", "ver");
+  if (!perm.verTodos) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Apenas dono ou gestor pode gerenciar credenciais do cofre.",
+    });
+  }
+}
 import {
   COFRE_VALIDACOES,
   type CofreCredencialView,
@@ -416,8 +437,39 @@ export const cofreCredenciaisRouter = router({
   // pelo roteador de consultas em /processos (motor próprio busca a
   // credencial DO USUÁRIO ATUAL, não do escritório admin).
 
-  /** Lista credenciais do escritório (compartilhadas entre dono + colaboradores). */
+  /** Lista credenciais do escritório. Apenas admin de processos (dono/gestor). */
   listarMinhas: protectedProcedure.query(async ({ ctx }) => {
+    await exigirAdminProcessos(ctx.user.id);
+    const db = await getDb();
+    if (!db) return [];
+    const escritorioId = await resolverEscritorioId(ctx.user.id);
+    const rows = await db
+      .select()
+      .from(cofreCredenciais)
+      .where(
+        and(
+          eq(cofreCredenciais.escritorioId, escritorioId),
+          ne(cofreCredenciais.status, "removida"),
+        ),
+      )
+      .orderBy(desc(cofreCredenciais.createdAt));
+    return Promise.all(rows.map(rowParaView));
+  }),
+
+  /**
+   * Variante de `listarMinhas` SEM gate de admin — qualquer colaborador
+   * do escritório pode chamar pra preencher dropdown de "selecionar
+   * credencial" no fluxo de criar monitoramento. Retorna a mesma view
+   * mascarada (sem expor senha/secret) — usuário comum só vê apelido,
+   * username mascarado e status, o suficiente pra escolher.
+   *
+   * Justificativa: criar monitoramento é operação user-level (qualquer
+   * colaborador com permissão `processos.editar` pode), mas só donos/
+   * gestores podem CADASTRAR/EDITAR credenciais (`listarMinhas`).
+   * Misturar os dois exigia gate admin no listar — quebrava dropdown
+   * pra atendentes/estagiários e dropdown sumia silenciosamente.
+   */
+  listarParaSelecao: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
     const escritorioId = await resolverEscritorioId(ctx.user.id);
@@ -464,6 +516,7 @@ export const cofreCredenciaisRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await exigirAdminProcessos(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const escritorioId = await resolverEscritorioId(ctx.user.id);
@@ -505,10 +558,11 @@ export const cofreCredenciaisRouter = router({
       return rowParaView(row);
     }),
 
-  /** Soft delete da credencial — qualquer membro do escritório pode remover. */
+  /** Soft delete da credencial — apenas admin de processos (dono/gestor). */
   removerMinha: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
+      await exigirAdminProcessos(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const escritorioId = await resolverEscritorioId(ctx.user.id);
@@ -536,10 +590,11 @@ export const cofreCredenciaisRouter = router({
       return { ok: true };
     }),
 
-  /** Validar credencial — login real no tribunal. Qualquer membro do escritório. */
+  /** Validar credencial — login real no tribunal. Apenas admin de processos (dono/gestor). */
   validarMinha: protectedProcedure
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
+      await exigirAdminProcessos(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const escritorioId = await resolverEscritorioId(ctx.user.id);
