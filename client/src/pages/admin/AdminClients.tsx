@@ -147,10 +147,21 @@ function ClienteDetalheDialog({
     onSuccess: (res) => {
       toast.success(res.mensagem);
       setCreditosQtd("");
+      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
       onRefresh();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
+
+  const retirarMut = (trpc.admin as any).retirarCreditos?.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(res.mensagem);
+      setCreditosQtd("");
+      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      onRefresh();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  }) ?? { mutate: () => {}, isPending: false };
 
   const bloquearMut = trpc.admin.bloquearUsuario.useMutation({
     onSuccess: () => {
@@ -335,23 +346,37 @@ function ClienteDetalheDialog({
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Coins className="h-4 w-4 text-muted-foreground" />
                   Créditos
+                  {(data as any)?.creditsSource === "escritorio" && (
+                    <Badge variant="outline" className="text-[9px] ml-auto">Escritório</Badge>
+                  )}
+                  {(data as any)?.creditsSource === "legacy" && (
+                    <Badge variant="outline" className="text-[9px] ml-auto bg-amber-50 text-amber-700 border-amber-200">Legacy</Badge>
+                  )}
                 </div>
                 {credits ? (
                   <div className="text-sm space-y-1">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Disponíveis:</span>
                       <span className="font-bold text-emerald-600">
-                        {(credits.creditsTotal ?? 0) - (credits.creditsUsed ?? 0)}
+                        {(credits as any).saldo ?? ((credits.creditsTotal ?? 0) - (credits.creditsUsed ?? 0))}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Usados:</span>
-                      <span>{credits.creditsUsed ?? 0}</span>
+                      <span>{(credits as any).totalConsumido ?? credits.creditsUsed ?? 0}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total:</span>
-                      <span>{credits.creditsTotal ?? 0}</span>
-                    </div>
+                    {(credits as any).cotaMensal !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Cota mensal:</span>
+                        <span>{(credits as any).cotaMensal}</span>
+                      </div>
+                    )}
+                    {(credits as any).totalComprado !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total comprado:</span>
+                        <span>{(credits as any).totalComprado}</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">Sem créditos</p>
@@ -364,7 +389,7 @@ function ClienteDetalheDialog({
                     placeholder="Qtd"
                     value={creditosQtd}
                     onChange={(e) => setCreditosQtd(e.target.value)}
-                    className="w-24 text-sm"
+                    className="w-20 text-sm"
                   />
                   <Button
                     size="sm"
@@ -374,10 +399,32 @@ function ClienteDetalheDialog({
                       if (!qtd || qtd < 1) { toast.error("Quantidade inválida"); return; }
                       concederMut.mutate({ userId: userId!, quantidade: qtd });
                     }}
-                    disabled={concederMut.isPending}
+                    disabled={concederMut.isPending || retirarMut.isPending}
+                    className="flex-1"
                   >
                     {concederMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Coins className="h-3 w-3 mr-1" />}
                     Conceder
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const qtd = parseInt(creditosQtd);
+                      if (!qtd || qtd < 1) { toast.error("Quantidade inválida"); return; }
+                      const saldoAtual = (credits as any)?.saldo ?? ((credits?.creditsTotal ?? 0) - (credits?.creditsUsed ?? 0));
+                      if (qtd > saldoAtual) {
+                        toast.error("Quantidade maior que saldo", { description: `Saldo atual: ${saldoAtual}` });
+                        return;
+                      }
+                      if (!confirm(`Retirar ${qtd} créditos do escritório?`)) return;
+                      retirarMut.mutate({ userId: userId!, quantidade: qtd });
+                    }}
+                    disabled={concederMut.isPending || retirarMut.isPending || (data as any)?.creditsSource !== "escritorio"}
+                    className="flex-1 text-destructive hover:text-destructive"
+                    title={(data as any)?.creditsSource !== "escritorio" ? "Disponível só pra users com escritório" : ""}
+                  >
+                    {retirarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Coins className="h-3 w-3 mr-1" />}
+                    Retirar
                   </Button>
                 </div>
               </div>
@@ -676,6 +723,18 @@ export default function AdminClients() {
   const [detalheUserId, setDetalheUserId] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
 
+  // Migração one-shot userCredits (legacy) → escritorio_creditos. Idempotente.
+  const migrarLegacyMut = (trpc.admin as any).migrarCreditosLegacy?.useMutation({
+    onSuccess: (res: any) => {
+      toast.success("Migração concluída", {
+        description: `${res.migrados} escritório(s) migrados, ${res.totalCreditos} créditos transferidos. ${res.pulados} pulados (já migrados ou sem saldo).`,
+        duration: 10000,
+      });
+      refetch();
+    },
+    onError: (err: any) => toast.error("Erro na migração", { description: err.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+
   const filtrados = allUsers?.filter((u) => {
     if (!busca.trim()) return true;
     const b = busca.toLowerCase();
@@ -699,14 +758,29 @@ export default function AdminClients() {
               <CardTitle className="text-base">Todos os clientes</CardTitle>
               <CardDescription>{filtrados?.length ?? 0} utilizadores registados</CardDescription>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou email..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-9 text-sm"
-              />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!confirm("Migrar saldo userCredits (legacy) para escritorio_creditos?\n\nIdempotente — pode rodar várias vezes sem duplicar saldo. Roda 1x em produção após deploy.")) return;
+                  migrarLegacyMut.mutate({});
+                }}
+                disabled={migrarLegacyMut.isPending}
+                className="text-xs"
+              >
+                {migrarLegacyMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RotateCcw className="h-3 w-3 mr-1" />}
+                Migrar legacy
+              </Button>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nome ou email..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  className="pl-9 text-sm"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
