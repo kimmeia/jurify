@@ -229,7 +229,7 @@ function ConsultarTab() {
     onError: (e: any) => {
       setBuscando(false);
       // Erros do motor próprio (PRECONDITION_FAILED) trazem mensagem
-      // instrutiva com link → /admin/cofre-credenciais. Mostra como
+      // instrutiva com link → aba Cofre em /processos. Mostra como
       // toast com action.
       const isCredencialAusente = /credencial OAB|cadastre/i.test(e.message);
       const isSessaoExpirada = /sess[aã]o.*expirou|Validar pra renovar/i.test(e.message);
@@ -239,7 +239,7 @@ function ConsultarTab() {
           action: {
             label: "Abrir Cofre",
             onClick: () => {
-              window.location.href = "/cofre-credenciais";
+              window.location.href = "/processos?tab=cofre";
             },
           },
           duration: 10000,
@@ -328,7 +328,7 @@ function ConsultarTab() {
       setPolling(false);
       setBuscando(false);
       toast.error("Falha inesperada no motor", {
-        description: "O scraper não conseguiu completar. Tente novamente; se persistir, valide a credencial em /cofre-credenciais.",
+        description: "O scraper não conseguiu completar. Tente novamente; se persistir, valide a credencial na aba Cofre.",
         duration: 10000,
       });
     }
@@ -463,7 +463,7 @@ function ConsultarTab() {
                   <p className="text-sm font-semibold text-red-900">Falha na consulta</p>
                   <p className="text-sm text-red-800">{e.message || "Erro desconhecido"}</p>
                   {isCredencial && (
-                    <Button size="sm" variant="outline" onClick={() => (window.location.href = "/cofre-credenciais")}>
+                    <Button size="sm" variant="outline" onClick={() => (window.location.href = "/processos?tab=cofre")}>
                       Abrir Cofre de Credenciais
                     </Button>
                   )}
