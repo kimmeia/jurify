@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Calculator, TrendingUp, Clock, Zap, ArrowRight, DollarSign, Users,
-  MessageCircle, CheckSquare, Wallet, Scale, Bell, Gavel, Sun,
+  MessageCircle, CheckSquare, Wallet, Scale, Gavel, Sun,
   AlertTriangle, Activity, Sparkles, ArrowUpRight, CalendarDays,
   Landmark, Briefcase, ShieldCheck, Headphones, Settings,
 } from "lucide-react";
@@ -105,16 +105,6 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {ok && r.notificacoesNaoLidas > 0 && (
-            <Badge
-              variant="destructive"
-              className="text-xs gap-1 cursor-pointer"
-              onClick={() => nav("/atendimento")}
-            >
-              <Bell className="h-3 w-3" />
-              {r.notificacoesNaoLidas}
-            </Badge>
-          )}
           {subscription && (
             <Badge
               variant={subscription.status === "active" ? "default" : "secondary"}
@@ -300,7 +290,7 @@ export default function Dashboard() {
                   value={r.processos.movimentacoesNaoLidas}
                   label="Mov. novas"
                   color="text-indigo-600"
-                  onClick={() => nav("/processos")}
+                  onClick={() => nav("/processos?tab=movimentacoes")}
                 />
                 {aguardandoDocs > 0 && (
                   <SubMetric

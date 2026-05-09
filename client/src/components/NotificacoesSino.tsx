@@ -40,8 +40,20 @@ const tipoLabelMap: Record<string, string> = {
   plano: "Plano",
 };
 
+type FiltroTipo = "todos" | "processos" | "sistema";
+
+// Mapeia o filtro UX pra lista de tipos do enum no DB. "Processos"
+// agrupa movs reais e novas ações pra ficar simples no popover; o
+// click handler decide a tab certa por tipo individual.
+const FILTRO_PRA_TIPOS: Record<FiltroTipo, ("movimentacao" | "sistema" | "plano" | "nova_acao")[] | undefined> = {
+  todos: undefined,
+  processos: ["movimentacao", "nova_acao"],
+  sistema: ["sistema", "plano"],
+};
+
 export default function NotificacoesSino() {
   const [open, setOpen] = useState(false);
+  const [filtro, setFiltro] = useState<FiltroTipo>("todos");
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
@@ -51,7 +63,7 @@ export default function NotificacoesSino() {
   });
 
   const listarQuery = trpc.notificacoes.listar.useQuery(
-    { limit: 20 },
+    { limit: 50, tipos: FILTRO_PRA_TIPOS[filtro] },
     {
       enabled: open,
       refetchOnWindowFocus: false,
@@ -139,6 +151,23 @@ export default function NotificacoesSino() {
               Marcar todas
             </Button>
           )}
+        </div>
+
+        {/* Filtros por tipo: necessários quando há volume alto (ex:
+            cron de comissões cria muitas) e o tipo procurado fica
+            soterrado nos primeiros 50 do listar. */}
+        <div className="flex gap-1 px-4 pb-2">
+          {(["todos", "processos", "sistema"] as const).map((f) => (
+            <Button
+              key={f}
+              variant={filtro === f ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 text-[11px] px-2.5 capitalize"
+              onClick={() => setFiltro(f)}
+            >
+              {f}
+            </Button>
+          ))}
         </div>
         <Separator />
 
