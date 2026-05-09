@@ -30,7 +30,7 @@ import {
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
-import { normalizarCnj, mascararCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
+import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
   iniciarConsultaMotorProprio,
@@ -871,8 +871,17 @@ export const processosRouter = router({
           ),
         );
 
-      const naoLidas = acoesRaw.filter((a) => !a.lido).length;
-      return { acoes: acoesRaw, monitoramentos, totalNaoLidas: naoLidas };
+      // Filtra eventos cujo CNJ tem DV inválido — defesa em profundidade
+      // contra "CNJs fantasmas" que o cron pré-fix capturou (ex: o
+      // placeholder "9999999-99.9999.9.99.9999" do form do PJe TJCE).
+      // O fix do scraper (PR #205) já impede contaminação futura via
+      // validarCnj em extrairCnjs, mas o lixo histórico fica no DB —
+      // este filtro garante que não polui a UI mesmo sem cleanup
+      // explícito de cada placeholder conhecido.
+      const acoesValidas = acoesRaw.filter((a) => a.cnj && validarCnj(a.cnj));
+
+      const naoLidas = acoesValidas.filter((a) => !a.lido).length;
+      return { acoes: acoesValidas, monitoramentos, totalNaoLidas: naoLidas };
     }),
 
   marcarNovaAcaoLida: protectedProcedure
