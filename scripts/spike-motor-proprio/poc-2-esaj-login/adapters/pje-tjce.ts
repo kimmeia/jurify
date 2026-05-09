@@ -36,6 +36,7 @@ import type {
   ResultadoScraper,
 } from "../../lib/types-spike";
 import {
+  extrairCnjs,
   mascararCnj,
   normalizarCnj,
   parseDataBR,
@@ -761,14 +762,22 @@ export class PjeTjceScraper {
         };
       }
 
-      // Extrai CNJs da lista de resultados.
-      // CNJ tem formato 0000000-00.0000.0.00.0000 (20 chars com máscara).
-      // Captura tudo via regex no HTML da tabela de resultados.
-      const html = await page.content();
-      const regexCnj = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g;
-      const cnjsBrutos = html.match(regexCnj) ?? [];
-      // Dedup (PJe pode duplicar CNJ em link e em texto da linha)
-      const cnjsUnicos = Array.from(new Set(cnjsBrutos));
+      // Restringe a extração ao container da tabela de resultados (id JSF
+      // "processosTable", mesmo seletor usado em consultarPorCnj). Sem este
+      // escopo, page.content() varre o HTML inteiro e captura CNJs que
+      // moram fora da tabela (exemplo no header, breadcrumb, hidden inputs
+      // do form, footer com versão), inflando o total em +1 a cada
+      // execução. Se a tabela não estiver no DOM (sem resultados ou layout
+      // mudou), ficamos com lista vazia — consistente com o caminho
+      // `naoEncontrado` acima.
+      const tabelaHtml = await page
+        .locator("[id*='processosTable']")
+        .first()
+        .innerHTML()
+        .catch(() => "");
+      // extrairCnjs valida DV; new Set deduplica (PJe repete o CNJ em
+      // link e em texto da linha).
+      const cnjsUnicos = Array.from(new Set(extrairCnjs(tabelaHtml)));
 
       return {
         ...baseResultado,
