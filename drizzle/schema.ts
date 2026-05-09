@@ -159,8 +159,8 @@ export const notificacoes = mysqlTable("notificacoes", {
   titulo: varchar("titulo", { length: 255 }).notNull(),
   /** Mensagem da notificação */
   mensagem: text("mensagem").notNull(),
-  /** Tipo: movimentacao, sistema, plano */
-  tipo: mysqlEnum("tipoNotif", ["movimentacao", "sistema", "plano"]).default("sistema").notNull(),
+  /** Tipo: movimentacao, sistema, plano, nova_acao */
+  tipo: mysqlEnum("tipoNotif", ["movimentacao", "sistema", "plano", "nova_acao"]).default("sistema").notNull(),
   /** ID do processo relacionado (se tipo = movimentacao) */
   processoId: int("processoId"),
   /** Se o utilizador já leu a notificação */

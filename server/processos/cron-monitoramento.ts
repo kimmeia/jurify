@@ -486,13 +486,17 @@ export async function pollMonitoramentosNovasAcoes(): Promise<void> {
           })
           .where(eq(motorMonitoramentos.id, mon.id));
 
-        // Notificação in-app + SSE
+        // Notificação in-app + SSE.
+        // tipo='nova_acao' (não 'movimentacao'): o contador de
+        // "movimentações novas" no dashboard conta só tipo='movimentacao'
+        // — misturar inflava o contador com novas ações detectadas (que
+        // têm tela própria em /processos?tab=novas-acoes).
         try {
           await db.insert(notificacoes).values({
             userId: mon.criadoPor,
             titulo: `${cnjsNovos.length} nova(s) ação(ões) detectada(s)`,
             mensagem: `${mon.apelido ?? mon.searchKey}: ${cnjsNovos.slice(0, 3).join(", ")}${cnjsNovos.length > 3 ? "..." : ""}`,
-            tipo: "movimentacao",
+            tipo: "nova_acao",
           });
         } catch {
           /* best-effort */
