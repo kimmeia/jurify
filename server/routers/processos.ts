@@ -818,13 +818,40 @@ export const processosRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { acoes: [], monitoramentos: [], totalNaoLidas: 0 };
-      // Por enquanto retorna eventos tipo "nova_acao" do escritório
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return { acoes: [], monitoramentos: [], totalNaoLidas: 0 };
 
-      const acoes = await db
-        .select()
+      // Frontend (Processos.tsx) espera campos enriquecidos: cnj,
+      // tribunal, clienteApelido, clienteSearchKey/Type — eventos_processo
+      // só tem cnjAfetado e os ids relacionais. JOIN com
+      // motor_monitoramentos puxa apelido/searchKey/searchType/tribunal
+      // do contexto do monitoramento que disparou o evento.
+      // Campos detalhados do CNJ (classeProcesso, valorCausa, polos) não
+      // existem em eventos_processo — o cron registra só "apareceu". Pra
+      // ver detalhes o user clica e dispara consulta sob demanda.
+      // dataDistribuicao no frontend é só "quando aconteceu" — pra novas
+      // ações é a hora em que o cron detectou (não temos a distribuição
+      // real sem consulta detalhada). Mapeamos dataEvento pro nome que
+      // o frontend já espera pra evitar mexer na UI.
+      const acoesRaw = await db
+        .select({
+          id: eventosProcesso.id,
+          cnj: eventosProcesso.cnjAfetado,
+          tribunal: motorMonitoramentos.tribunal,
+          dataDistribuicao: eventosProcesso.dataEvento,
+          conteudo: eventosProcesso.conteudo,
+          lido: eventosProcesso.lido,
+          createdAt: eventosProcesso.createdAt,
+          monitoramentoId: eventosProcesso.monitoramentoId,
+          clienteApelido: motorMonitoramentos.apelido,
+          clienteSearchKey: motorMonitoramentos.searchKey,
+          clienteSearchType: motorMonitoramentos.searchType,
+        })
         .from(eventosProcesso)
+        .leftJoin(
+          motorMonitoramentos,
+          eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId),
+        )
         .where(
           and(
             eq(eventosProcesso.escritorioId, esc.escritorio.id),
@@ -844,8 +871,8 @@ export const processosRouter = router({
           ),
         );
 
-      const naoLidas = acoes.filter((a) => !a.lido).length;
-      return { acoes, monitoramentos, totalNaoLidas: naoLidas };
+      const naoLidas = acoesRaw.filter((a) => !a.lido).length;
+      return { acoes: acoesRaw, monitoramentos, totalNaoLidas: naoLidas };
     }),
 
   marcarNovaAcaoLida: protectedProcedure

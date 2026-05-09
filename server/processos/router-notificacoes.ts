@@ -1,12 +1,15 @@
 /**
  * Router de Notificações In-App.
- * 
+ *
  * SEGURANÇA:
  * - Todas as queries filtram por ctx.user.id (isolamento por utilizador)
  * - Nunca expor notificações de outros utilizadores
- * 
+ *
  * Tipos de notificação:
  * - movimentacao: nova movimentação num processo monitorado
+ * - nova_acao: nova ação contra cliente monitorado por CPF/CNPJ
+ *              (separado de movimentacao pra não inflar contador do
+ *              dashboard que conta só movs reais)
  * - sistema: avisos do sistema (manutenção, novidades)
  * - plano: alterações no plano (upgrade, downgrade, créditos)
  */
@@ -32,7 +35,7 @@ export async function criarNotificacao(params: {
   userId: number;
   titulo: string;
   mensagem: string;
-  tipo: "movimentacao" | "sistema" | "plano";
+  tipo: "movimentacao" | "sistema" | "plano" | "nova_acao";
   processoId?: number;
 }): Promise<void> {
   const db = await getDb();
