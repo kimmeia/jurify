@@ -22,17 +22,20 @@ import {
   Info,
   CreditCard,
   Loader2,
+  Siren,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
 const tipoIconMap: Record<string, React.ReactNode> = {
   movimentacao: <FileSearch className="h-4 w-4 text-blue-500" />,
+  nova_acao: <Siren className="h-4 w-4 text-red-500" />,
   sistema: <Info className="h-4 w-4 text-amber-500" />,
   plano: <CreditCard className="h-4 w-4 text-emerald-500" />,
 };
 
 const tipoLabelMap: Record<string, string> = {
   movimentacao: "Processo",
+  nova_acao: "Nova Ação",
   sistema: "Sistema",
   plano: "Plano",
 };
@@ -84,9 +87,16 @@ export default function NotificacoesSino() {
     if (!notif.lida) {
       marcarLidaMutation.mutate({ notificacaoId: notif.id });
     }
-    if (notif.tipo === "movimentacao" && notif.processoId) {
+    // Abre direto na tab certa em /processos: movimentacoes pra movs
+    // detectadas em CNJs monitorados, novas-acoes pra processos novos
+    // contra clientes monitorados por CPF/CNPJ.
+    if (notif.tipo === "movimentacao") {
       setOpen(false);
-      setLocation("/processos");
+      setLocation("/processos?tab=movimentacoes");
+    }
+    if (notif.tipo === "nova_acao") {
+      setOpen(false);
+      setLocation("/processos?tab=novas-acoes");
     }
     if (notif.tipo === "plano") {
       setOpen(false);

@@ -138,7 +138,7 @@ export default function Dashboard() {
                 icon={Gavel}
                 color="blue"
                 label={`${r.processos.movimentacoesNaoLidas} movimentação(ões) nova(s)`}
-                onClick={() => nav("/processos")}
+                onClick={() => nav("/processos?tab=movimentacoes")}
               />
             )}
             {r.agenda.atrasados > 0 && (
