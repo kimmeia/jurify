@@ -19,7 +19,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { notificacoes } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 const log = createLogger("processos-router-notificacoes");
 
@@ -67,6 +67,13 @@ export const notificacoesRouter = router({
       z.object({
         limit: z.number().min(1).max(100).default(50),
         apenasNaoLidas: z.boolean().default(false),
+        // Filtro opcional por tipo. Permite ao popover mostrar abas
+        // (Processos / Sistema) sem precisar carregar tudo e filtrar
+        // client-side — útil quando o usuário tem centenas de notifs
+        // e as raras de um tipo ficam soterradas.
+        tipos: z
+          .array(z.enum(["movimentacao", "sistema", "plano", "nova_acao"]))
+          .optional(),
       }).optional()
     )
     .query(async ({ ctx, input }) => {
@@ -75,10 +82,14 @@ export const notificacoesRouter = router({
 
       const limit = input?.limit ?? 50;
       const apenasNaoLidas = input?.apenasNaoLidas ?? false;
+      const tipos = input?.tipos;
 
       const conditions = [eq(notificacoes.userId, ctx.user.id)];
       if (apenasNaoLidas) {
         conditions.push(eq(notificacoes.lida, false));
+      }
+      if (tipos && tipos.length > 0) {
+        conditions.push(inArray(notificacoes.tipo, tipos));
       }
 
       const items = await db
