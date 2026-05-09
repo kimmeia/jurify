@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useNotificacoes } from "@/hooks/useNotificacoes";
+import NotificacoesSino from "@/components/NotificacoesSino";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +54,6 @@ import {
   Settings,
   Users,
   BarChart3,
-  Bell,
   CheckSquare,
   DollarSign,
   BrainCircuit,
@@ -274,7 +274,9 @@ function AppSidebarContent({
   const heartbeatMut = (trpc as any).configuracoes?.heartbeat?.useMutation?.() || { mutate: () => {} };
 
   // Notificações em tempo real via SSE
-  const { naoLidas, limpar: limparNotificacoes } = useNotificacoes(user?.id);
+  // Conecta SSE pra mostrar toasts em tempo real (chat, etc).
+  // O badge de contagem persistente fica no <NotificacoesSino /> abaixo.
+  useNotificacoes(user?.id);
   useEffect(() => {
     heartbeatMut.mutate?.();
     const interval = setInterval(() => heartbeatMut.mutate?.(), 5 * 60 * 1000);
@@ -336,11 +338,10 @@ function AppSidebarContent({
                   )}
                 </div>
               ) : null}
-              {!isCollapsed && naoLidas > 0 && (
-                <button onClick={limparNotificacoes} className="relative h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors ml-auto shrink-0" title={`${naoLidas} notificação(ões)`}>
-                  <Bell className="h-4 w-4 text-muted-foreground" />
-                  <span className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center px-1">{naoLidas > 99 ? "99+" : naoLidas}</span>
-                </button>
+              {!isCollapsed && (
+                <div className="ml-auto shrink-0">
+                  <NotificacoesSino />
+                </div>
               )}
             </div>
           </SidebarHeader>
