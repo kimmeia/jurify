@@ -6,7 +6,10 @@
 import { describe, it, expect } from "vitest";
 import {
   CATALOGO_BASE,
+  detectarPlaceholders,
   detectarPlaceholdersNumerados,
+  inferirVariavelDeNome,
+  normalizarNomePlaceholder,
   resolverVariavel,
   type ContextoContrato,
 } from "../../shared/modelos-contrato-variaveis";
@@ -140,6 +143,64 @@ describe("resolverVariavel — escritório e data", () => {
 
   it("formata data BR", () => {
     expect(resolverVariavel("data.hojeBR", ctx)).toBe("30/04/2026");
+  });
+});
+
+describe("detectarPlaceholders (nomes amigáveis)", () => {
+  it("detecta nomes amigáveis preservando capitalização", () => {
+    const tokens = detectarPlaceholders(
+      "Eu, {{Nome Completo}}, {{nacionalidade}}, declaro que {{CPF}} é válido",
+    );
+    expect(tokens).toEqual(["Nome Completo", "nacionalidade", "CPF"]);
+  });
+
+  it("dedup tokens repetidos", () => {
+    expect(
+      detectarPlaceholders("{{nome}} repete {{nome}} aqui"),
+    ).toEqual(["nome"]);
+  });
+
+  it("aceita espaços ao redor", () => {
+    expect(detectarPlaceholders("{{ nome  completo }}")).toEqual(["nome  completo"]);
+  });
+
+  it("detecta numéricos legados como tokens string", () => {
+    expect(detectarPlaceholders("{{1}} e {{nome}}")).toEqual(["1", "nome"]);
+  });
+
+  it("ignora chaves vazias", () => {
+    expect(detectarPlaceholders("{{}} e {{   }}")).toEqual([]);
+  });
+
+  it("retorna vazio sem placeholders", () => {
+    expect(detectarPlaceholders("Texto sem placeholder")).toEqual([]);
+  });
+});
+
+describe("normalizarNomePlaceholder", () => {
+  it("trim + lowercase", () => {
+    expect(normalizarNomePlaceholder("  Nome Completo  ")).toBe("nome completo");
+    expect(normalizarNomePlaceholder("CPF")).toBe("cpf");
+  });
+});
+
+describe("inferirVariavelDeNome", () => {
+  it("acha por label do catálogo (case-insensitive)", () => {
+    const v = inferirVariavelDeNome("Nome completo", CATALOGO_BASE);
+    expect(v?.path).toBe("cliente.nome");
+    expect(inferirVariavelDeNome("nome completo", CATALOGO_BASE)?.path).toBe("cliente.nome");
+    expect(inferirVariavelDeNome("NACIONALIDADE", CATALOGO_BASE)?.path).toBe("cliente.nacionalidade");
+  });
+
+  it("acha por path direto", () => {
+    expect(inferirVariavelDeNome("cliente.cpfCnpj", CATALOGO_BASE)?.path).toBe(
+      "cliente.cpfCnpj",
+    );
+  });
+
+  it("retorna null quando não bate", () => {
+    expect(inferirVariavelDeNome("valor da causa", CATALOGO_BASE)).toBeNull();
+    expect(inferirVariavelDeNome("foo bar", CATALOGO_BASE)).toBeNull();
   });
 });
 

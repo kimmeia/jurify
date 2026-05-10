@@ -32,7 +32,9 @@ import { TRPCError } from "@trpc/server";
 import { createLogger } from "../_core/logger";
 import {
   CATALOGO_BASE,
+  detectarPlaceholders,
   detectarPlaceholdersNumerados,
+  inferirVariavelDeNome,
   resolverVariavel,
   type Placeholder,
   type VariavelCatalogo,
@@ -91,14 +93,17 @@ function renderizarDocx(
 
 const placeholderSchema = z.discriminatedUnion("tipo", [
   z.object({
-    numero: z.number().int().positive(),
+    nome: z.string().min(1).max(120),
+    numero: z.number().int().positive().optional(),
     tipo: z.literal("variavel"),
     variavel: z.string().min(1).max(120),
+    label: z.string().max(120).optional(),
   }),
   z.object({
-    numero: z.number().int().positive(),
+    nome: z.string().min(1).max(120),
+    numero: z.number().int().positive().optional(),
     tipo: z.literal("manual"),
-    label: z.string().min(1).max(80),
+    label: z.string().min(1).max(120),
     dica: z.string().max(120).optional(),
   }),
 ]);
@@ -140,6 +145,7 @@ export const modelosContratoRouter = router({
         arquivoNome: modelosContrato.arquivoNome,
         tamanho: modelosContrato.tamanho,
         placeholders: modelosContrato.placeholders,
+        pasta: modelosContrato.pasta,
         createdAt: modelosContrato.createdAt,
       })
       .from(modelosContrato)
@@ -175,14 +181,17 @@ export const modelosContratoRouter = router({
       };
     }),
 
-  /** Faz upload do DOCX e parseia placeholders. Salva como `placeholders`
-   *  inicial todos como tipo='manual' com labels genéricos — operador
-   *  customiza depois via `salvarMapping`. */
+  /** Faz upload do DOCX e parseia placeholders. Detecta nomes amigáveis
+   *  ({{nome completo}}, {{nacionalidade}}) e tenta inferir do catálogo
+   *  como variável automática. Tokens que não batem no catálogo viram
+   *  manual com label = nome original. Numéricos legados ({{1}}, {{2}})
+   *  ficam como manual com label genérico — usuário customiza no wizard. */
   upload: protectedProcedure
     .input(
       z.object({
         nome: z.string().min(1).max(150),
         descricao: z.string().max(500).optional(),
+        pasta: z.string().max(255).nullable().optional(),
         arquivoNome: z.string().min(1).max(255),
         mimetype: z.string().max(128),
         base64: z.string().min(10),
@@ -223,7 +232,25 @@ export const modelosContratoRouter = router({
           message: "Arquivo DOCX corrompido ou inválido.",
         });
       }
-      const numerosDetectados = detectarPlaceholdersNumerados(texto);
+      const tokensDetectados = detectarPlaceholders(texto);
+
+      // Catálogo do escritório (base + campos personalizados) pra inferência
+      const camposExtrasRows = await db
+        .select({
+          chave: camposPersonalizadosCliente.chave,
+          label: camposPersonalizadosCliente.label,
+        })
+        .from(camposPersonalizadosCliente)
+        .where(eq(camposPersonalizadosCliente.escritorioId, esc.escritorio.id));
+      const catalogo: VariavelCatalogo[] = [
+        ...CATALOGO_BASE,
+        ...camposExtrasRows.map((c) => ({
+          path: `cliente.campos.${c.chave}`,
+          label: c.label,
+          grupo: "Campos personalizados",
+          exemplo: "",
+        })),
+      ];
 
       // Salva o arquivo no disco
       const escDir = path.join(UPLOAD_DIR, `escritorio_${esc.escritorio.id}`);
@@ -235,17 +262,43 @@ export const modelosContratoRouter = router({
       fs.writeFileSync(filepath, buffer);
       const url = `/uploads/modelos-contrato/escritorio_${esc.escritorio.id}/${filename}`;
 
-      // Mapping inicial: cada placeholder vira "manual" com label genérico
-      const placeholdersInit: Placeholder[] = numerosDetectados.map((n) => ({
-        numero: n,
-        tipo: "manual" as const,
-        label: `Campo ${n}`,
-      }));
+      // Mapping inicial: tenta inferir do catálogo, senão vira manual.
+      const placeholdersInit: Placeholder[] = tokensDetectados.map((nome) => {
+        // Numérico legado ({{1}}, {{2}}): mantém comportamento antigo
+        // — vira manual com label "Campo N" pra user customizar.
+        if (/^\d+$/.test(nome)) {
+          const numero = Number(nome);
+          return {
+            nome,
+            numero,
+            tipo: "manual" as const,
+            label: `Campo ${numero}`,
+          };
+        }
+        // Nome amigável: tenta match com catálogo (label ou path).
+        const variavel = inferirVariavelDeNome(nome, catalogo);
+        if (variavel) {
+          return {
+            nome,
+            tipo: "variavel" as const,
+            variavel: variavel.path,
+            label: variavel.label,
+          };
+        }
+        // Token não bate no catálogo → manual, label = nome original
+        // (user pode mudar pra variável ou ajustar label depois).
+        return {
+          nome,
+          tipo: "manual" as const,
+          label: nome,
+        };
+      });
 
       const [r] = await db.insert(modelosContrato).values({
         escritorioId: esc.escritorio.id,
         nome: input.nome,
         descricao: input.descricao || null,
+        pasta: input.pasta || null,
         arquivoUrl: url,
         arquivoNome: input.arquivoNome.replace(/[^a-zA-Z0-9._\- ]/g, "_").slice(0, 200),
         tamanho: buffer.length,
@@ -255,7 +308,7 @@ export const modelosContratoRouter = router({
 
       return {
         id: (r as { insertId: number }).insertId,
-        placeholdersDetectados: numerosDetectados,
+        placeholdersDetectados: tokensDetectados,
       };
     }),
 
@@ -266,6 +319,7 @@ export const modelosContratoRouter = router({
         id: z.number(),
         nome: z.string().min(1).max(150).optional(),
         descricao: z.string().max(500).nullable().optional(),
+        pasta: z.string().max(255).nullable().optional(),
         placeholders: z.array(placeholderSchema),
       }),
     )
@@ -293,11 +347,57 @@ export const modelosContratoRouter = router({
       };
       if (input.nome !== undefined) upd.nome = input.nome;
       if (input.descricao !== undefined) upd.descricao = input.descricao;
+      if (input.pasta !== undefined) upd.pasta = input.pasta;
 
       await db
         .update(modelosContrato)
         .set(upd)
         .where(eq(modelosContrato.id, input.id));
+      return { success: true };
+    }),
+
+  /** Lista paths distintos de pasta usados no escritório, pra autocomplete
+   *  da UI ao mover/criar modelo. NULL (raiz) é omitido — frontend
+   *  representa como item "Sem pasta" separadamente. */
+  listarPastas: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .selectDistinct({ pasta: modelosContrato.pasta })
+      .from(modelosContrato)
+      .where(eq(modelosContrato.escritorioId, esc.escritorio.id));
+    return rows
+      .map((r) => r.pasta)
+      .filter((p): p is string => typeof p === "string" && p.length > 0)
+      .sort();
+  }),
+
+  /** Move um modelo pra outra pasta (ou pra raiz com `pasta=null`). */
+  mover: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        pasta: z.string().max(255).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      requireGestao(esc.colaborador.cargo);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(modelosContrato)
+        .set({ pasta: input.pasta })
+        .where(
+          and(
+            eq(modelosContrato.id, input.id),
+            eq(modelosContrato.escritorioId, esc.escritorio.id),
+          ),
+        );
       return { success: true };
     }),
 
@@ -427,11 +527,18 @@ export const modelosContratoRouter = router({
       const placeholders = JSON.parse(modelo.placeholders) as Placeholder[];
       const valores: Record<string, string> = {};
       for (const p of placeholders) {
-        const key = String(p.numero);
+        // Chave do docxtemplater = nome exato do token no DOCX. Suporta
+        // espaços e case-sensitive nativamente (ex: "Nome Completo").
         if (p.tipo === "variavel") {
-          valores[key] = resolverVariavel(p.variavel, ctxContrato);
+          valores[p.nome] = resolverVariavel(p.variavel, ctxContrato);
         } else {
-          valores[key] = input.valoresManuais?.[key] || "";
+          // Fallback pra modelos legados que ainda usam chave numérica
+          // no frontend: aceita ambos `valoresManuais[nome]` e
+          // `valoresManuais[String(numero)]`.
+          valores[p.nome] =
+            input.valoresManuais?.[p.nome] ??
+            (p.numero != null ? input.valoresManuais?.[String(p.numero)] : undefined) ??
+            "";
         }
       }
 
