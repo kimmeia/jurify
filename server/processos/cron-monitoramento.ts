@@ -184,9 +184,27 @@ export async function pollMonitoramentosMovs(): Promise<void> {
               hashDedup: dedup,
               lido: true,
             });
-          } catch {
-            // Duplicate hashDedup: evento já capturado em tentativa
-            // anterior do baseline (ex: se o cron crashar no meio).
+          } catch (err) {
+            // Distingue dedup (esperado, idempotente) de erro real
+            // — mesma estratégia do buscarProcessoCompleto. Sem isso
+            // o cron silenciava QUALQUER falha (incluindo schema
+            // mismatch), e o user só percebia o sintoma muito depois.
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!(msg.includes("Duplicate") || msg.includes("ER_DUP_ENTRY"))) {
+              const errAny = err as any;
+              log.warn(
+                {
+                  err: msg,
+                  causeMessage: errAny?.cause?.message,
+                  causeCode: errAny?.cause?.code,
+                  causeSqlMessage: errAny?.cause?.sqlMessage,
+                  causeSqlState: errAny?.cause?.sqlState,
+                  monId: mon.id,
+                  cnj: mon.searchKey,
+                },
+                "[motor-cron] baseline INSERT eventoProcesso falhou (não-dedup)",
+              );
+            }
           }
         }
         const ultimaMov = resultado.movimentacoes[0]; // mais recente
@@ -244,8 +262,23 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             });
             const eventoId = (result as { insertId: number }).insertId;
             movsNovas.push({ mov, eventoId });
-          } catch {
-            // Duplicate key → mov já capturada antes, ignora
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!(msg.includes("Duplicate") || msg.includes("ER_DUP_ENTRY"))) {
+              const errAny = err as any;
+              log.warn(
+                {
+                  err: msg,
+                  causeMessage: errAny?.cause?.message,
+                  causeCode: errAny?.cause?.code,
+                  causeSqlMessage: errAny?.cause?.sqlMessage,
+                  causeSqlState: errAny?.cause?.sqlState,
+                  monId: mon.id,
+                  cnj: mon.searchKey,
+                },
+                "[motor-cron] poll INSERT eventoProcesso falhou (não-dedup)",
+              );
+            }
           }
         }
 

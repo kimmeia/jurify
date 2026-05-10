@@ -792,8 +792,23 @@ export const processosRouter = router({
               dedup++;
             } else {
               erroInsert++;
+              // Drizzle envolve o erro do MySQL em DrizzleError.
+              // err.message é só "Failed query: ..." — a razão real
+              // fica em err.cause (mysql2 OkPacket com sqlMessage,
+              // code tipo "ER_BAD_NULL_ERROR" etc).
+              const errAny = err as any;
               log.warn(
-                { err: msg, monId: mon.id, cnj: mon.searchKey, movData: mov.data },
+                {
+                  err: msg,
+                  causeMessage: errAny?.cause?.message,
+                  causeCode: errAny?.cause?.code,
+                  causeSqlMessage: errAny?.cause?.sqlMessage,
+                  causeSqlState: errAny?.cause?.sqlState,
+                  causeErrno: errAny?.cause?.errno,
+                  monId: mon.id,
+                  cnj: mon.searchKey,
+                  movData: mov.data,
+                },
                 "[buscarProcessoCompleto] INSERT eventoProcesso falhou (não-dedup)",
               );
             }
