@@ -64,7 +64,12 @@ async function startServer() {
       if (!stat.isDirectory()) {
         log.error({ uploadsDir }, "uploads/ existe mas não é diretório");
       } else if (!process.env.RAILWAY_VOLUME_MOUNT_PATH && !process.env.UPLOADS_PERSISTENT) {
-        log.warn({ uploadsDir }, "uploads/ presente mas sem volume persistente declarado. Defina UPLOADS_PERSISTENT=1 quando montar volume Railway.");
+        log.warn(
+          { uploadsDir },
+          "⚠️  uploads/ sem volume persistente. Arquivos (modelos, assinaturas, PDFs) " +
+            "serão APAGADOS no próximo deploy. Configure conforme " +
+            "docs/setup-volume-railway.md e defina UPLOADS_PERSISTENT=1.",
+        );
       } else {
         log.info({ uploadsDir }, "uploads/ ok");
       }

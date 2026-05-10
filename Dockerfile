@@ -109,6 +109,12 @@ RUN pnpm build
 
 ENV NODE_ENV=production
 
+# Garante que /app/uploads existe como mountpoint pro volume Railway.
+# Sem isso, primeiro upload em ambiente local sem volume pode falhar
+# com ENOENT antes do ensureDir do código rodar. Em Railway com volume
+# montado, a pasta é substituída pelo volume real no boot.
+RUN mkdir -p /app/uploads
+
 # Railway define PORT em runtime; defaultamos pra 3000 pra rodar local.
 EXPOSE 3000
 
