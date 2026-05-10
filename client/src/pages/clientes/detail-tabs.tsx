@@ -827,6 +827,25 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     toast.success("Link copiado!");
   };
 
+  // HEAD check antes de abrir nova aba. Se arquivo sumiu (típico em
+  // assinaturas pré-volume-persistente), mostra toast explicativo em
+  // vez de página de 404 do browser sem contexto.
+  const abrirArquivoOuAvisar = async (url: string, msg: string) => {
+    try {
+      const r = await fetch(url, { method: "HEAD" });
+      if (!r.ok) {
+        toast.error(msg, {
+          description:
+            "O arquivo provavelmente foi perdido em um redeploy anterior (antes do volume persistente). Re-gere o documento.",
+        });
+        return;
+      }
+      window.open(url, "_blank");
+    } catch {
+      toast.error("Erro ao acessar arquivo. Tente novamente.");
+    }
+  };
+
   const enviarWhatsApp = (token: string) => {
     const link = `${window.location.origin}/assinar/${token}`;
     const tel = (cliente.telefone || "").replace(/\D/g, "");
@@ -882,7 +901,12 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
               </div>
               <Badge className={`text-[9px] px-1.5 py-0 ${STATUS_ASSINATURA_CORES[a.status] || ""}`}>{STATUS_ASSINATURA_LABELS[a.status]}</Badge>
               <div className="flex gap-1 shrink-0">
-                {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento" onClick={() => window.open(a.documentoUrl, "_blank")}><ExternalLink className="h-3 w-3" /></Button>}
+                {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento original" onClick={() => abrirArquivoOuAvisar(a.documentoUrl, "Documento original indisponível")}><ExternalLink className="h-3 w-3" /></Button>}
+                {a.status === "assinado" && a.documentoAssinadoUrl && (
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
+                    <Download className="h-3 w-3" />
+                  </Button>
+                )}
                 {a.tokenAssinatura && a.status !== "assinado" && a.status !== "expirado" && (<>
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
                   {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}

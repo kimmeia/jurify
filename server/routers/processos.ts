@@ -663,14 +663,20 @@ export const processosRouter = router({
       const movsParaAdapter = eventos
         .filter((e) => e.tipo === "movimentacao")
         .map((e) => {
-          const parsed = e.conteudoJson ? safeParse(e.conteudoJson) : null;
+          const parsed = (e.conteudoJson ? safeParse(e.conteudoJson) : null) as
+            | { data?: string; texto?: string }
+            | null;
           if (parsed && (parsed.data || parsed.texto)) return parsed;
           return { data: e.dataEvento, texto: e.conteudo };
         });
-      const capa = capaParsed
+      const capaParsedTyped = capaParsed as { partes?: unknown[] } | null;
+      const capa = capaParsedTyped
         ? adaptarParaJuditShape(
             {
-              capa: { ...capaParsed, partes: partesParsed ?? capaParsed.partes ?? [] },
+              capa: {
+                ...capaParsedTyped,
+                partes: partesParsed ?? capaParsedTyped.partes ?? [],
+              },
               movimentacoes: movsParaAdapter,
               tribunal: mon.tribunal,
             },

@@ -89,6 +89,74 @@ function splitStatements(sql: string): string[] {
 }
 
 /**
+ * Pré-processa statements com `IF NOT EXISTS` em construtos que MySQL 8
+ * não suporta (suporte é específico do MariaDB).
+ *
+ * Migrations antigas (0003, 0004, 0011-0017, 0021, etc.) usam:
+ *   - ALTER TABLE X ADD COLUMN IF NOT EXISTS Y ...
+ *   - CREATE [UNIQUE] INDEX IF NOT EXISTS idx ON tbl (...)
+ *
+ * MySQL 8 retorna syntax error. O auto-migrate marcava a migration como
+ * falha e re-tentava todo boot, gerando ruído nos logs.
+ *
+ * Solução: detectar esses 2 patterns ANTES de executar, checar
+ * pré-existência via INFORMATION_SCHEMA e:
+ *   - Se já existe → skip (sucesso silencioso, idempotente)
+ *   - Se não existe → reescrever sem `IF NOT EXISTS` e executar normal
+ *
+ * Retorna `{ skip: true }` quando a coluna/índice já existe;
+ * `{ skip: false, sql }` com o statement (reescrito ou original) caso
+ * contrário.
+ */
+async function prepararStatement(
+  connection: mysql.Connection,
+  sql: string,
+): Promise<{ skip: boolean; sql: string }> {
+  // Pattern: ALTER TABLE `tbl` ADD [COLUMN] IF NOT EXISTS `col` ...
+  // Permite o backtick opcional e a palavra COLUMN opcional.
+  const colMatch = sql.match(
+    /ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(?:COLUMN\s+)?IF\s+NOT\s+EXISTS\s+`?(\w+)`?/i,
+  );
+  if (colMatch) {
+    const [, table, col] = colMatch;
+    const [rows] = await connection.query(
+      `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [table, col],
+    );
+    if ((rows as unknown[]).length > 0) {
+      return { skip: true, sql };
+    }
+    return {
+      skip: false,
+      sql: sql.replace(/\bIF\s+NOT\s+EXISTS\s+/i, ""),
+    };
+  }
+
+  // Pattern: CREATE [UNIQUE] INDEX IF NOT EXISTS `idx` ON `tbl` (...)
+  const idxMatch = sql.match(
+    /CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+`?(\w+)`?\s+ON\s+`?(\w+)`?/i,
+  );
+  if (idxMatch) {
+    const [, idx, table] = idxMatch;
+    const [rows] = await connection.query(
+      `SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+      [table, idx],
+    );
+    if ((rows as unknown[]).length > 0) {
+      return { skip: true, sql };
+    }
+    return {
+      skip: false,
+      sql: sql.replace(/\bIF\s+NOT\s+EXISTS\s+/i, ""),
+    };
+  }
+
+  return { skip: false, sql };
+}
+
+/**
  * Garantia hardcoded de schema para auth (passwordHash, googleSub).
  *
  * Roda ANTES das migrations baseadas em arquivo. Garante que as colunas
@@ -1397,7 +1465,15 @@ export async function runMigrations(): Promise<void> {
       let fileFailed = false;
       for (const stmt of statements) {
         try {
-          await connection.query(stmt);
+          // Pré-processa IF NOT EXISTS em ALTER TABLE ADD COLUMN /
+          // CREATE INDEX (MySQL 8 não suporta — só MariaDB). Reescreve
+          // sem IF NOT EXISTS ou skip se já existe.
+          const prep = await prepararStatement(connection, stmt);
+          if (prep.skip) {
+            warnings++;
+            continue;
+          }
+          await connection.query(prep.sql);
         } catch (err: any) {
           const msg = err.message || String(err);
           if (isHarmlessError(msg)) {

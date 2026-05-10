@@ -38,7 +38,25 @@ function reportToSentry(err: unknown, kind: "query" | "mutation") {
   Sentry.captureException(err, { tags: { kind } });
 }
 
-const queryClient = new QueryClient();
+// Defaults conservadores pra evitar tempestade de requests:
+//   - staleTime 60s: dados são considerados frescos por 1min, então
+//     re-render de componente (mudança de tab interno, etc) NÃO refaz
+//     request. Cada query pode override pra mais (ex: 5min em badges
+//     menos sensíveis) ou menos (ex: 0s em consultas on-demand).
+//   - refetchOnWindowFocus false: trocar de aba do browser e voltar
+//     NÃO dispara refetch. Antes (default true), abrir /financeiro
+//     com 4 queries em polling + alternar abas várias vezes/hora
+//     gerava picos de chamada que estouravam o rate limit do Asaas.
+//   - refetchOnReconnect mantém true (default): ao voltar online faz
+//     sentido refetch porque cache pode estar genuinamente velho.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Evita disparar logout/redirect múltiplas vezes em paralelo.
 let logoutInFlight = false;

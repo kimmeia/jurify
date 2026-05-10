@@ -825,6 +825,10 @@ export const assinaturasDigitais = mysqlTable("assinaturas_digitais", {
   assinantNome: varchar("assinantNome", { length: 255 }),
   assinantEmail: varchar("assinantEmail", { length: 320 }),
   assinantTelefone: varchar("assinantTelefone", { length: 20 }),
+  /** CPF informado pelo signatário no /assinar/:token (opcional). */
+  assinanteCpf: varchar("assinanteCpf", { length: 20 }),
+  /** Path do PNG capturado do canvas signature_pad (assinatura manuscrita). */
+  assinaturaImagemUrl: varchar("assinaturaImagemUrl", { length: 500 }),
   tokenAssinatura: varchar("tokenAssinatura", { length: 128 }),
   enviadoPor: int("enviadoPor"),
   enviadoAt: timestamp("enviadoAt"),
@@ -965,6 +969,15 @@ export const asaasClientes = mysqlTable("asaas_clientes", {
   nome: varchar("nomeAsaasCli", { length: 255 }),
   primario: boolean("primarioAsaasCli").notNull().default(true),
   sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
+  /**
+   * Flag de soft-disable. Cron de sync skipa rows com ativo=false.
+   * Marcado false quando o Asaas retorna 403 sistemicamente pra
+   * GET /payments?customer=X — chave sem permissão de ler aquele
+   * customer. Admin pode reativar via UI quando resolver.
+   */
+  ativo: boolean("ativo").notNull().default(true),
+  ultimoErro403Em: timestamp("ultimoErro403Em"),
+  ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
 });
 
 export type AsaasCliente = typeof asaasClientes.$inferSelect;
@@ -2154,11 +2167,30 @@ export const modelosContrato = mysqlTable("modelos_contrato", {
    *    operador preenche no modal "Gerar contrato"
    */
   placeholders: text("placeholdersModCt").notNull(),
+  /**
+   * Pasta hierárquica (separador `/`), ex: "Contratos/Honorários".
+   * NULL = raiz. MVP sem tabela `pastas` separada — pastas existem
+   * implicitamente porque têm modelos dentro.
+   */
+  pasta: varchar("pasta", { length: 255 }),
+  /**
+   * Flag que marca o modelo como "contrato para assinatura digital".
+   * Quando true, aparece no GerarContratoDialog (detalhe do cliente).
+   * Quando false, fica oculto desse fluxo (petições, pareceres,
+   * procurações que não exigem assinatura digital). Admin marca
+   * manualmente.
+   */
+  ehParaAssinatura: boolean("ehParaAssinatura").notNull().default(false),
   criadoPorUserId: int("criadoPorUserIdModCt").notNull(),
   createdAt: timestamp("createdAtModCt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtModCt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
   modCtEscIdx: index("modct_esc_idx").on(t.escritorioId),
+  modCtPastaIdx: index("idx_modct_pasta").on(t.pasta),
+  modCtEhParaAssinaturaIdx: index("idx_modct_eh_para_assinatura").on(
+    t.escritorioId,
+    t.ehParaAssinatura,
+  ),
 }));
 
 export type ModeloContrato = typeof modelosContrato.$inferSelect;

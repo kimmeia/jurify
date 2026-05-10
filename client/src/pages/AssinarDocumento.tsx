@@ -4,14 +4,15 @@
  * URL: /assinar/:token
  */
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import SignaturePad from "signature_pad";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { PenLine, FileText, CheckCircle, XCircle, Clock, Loader2, ExternalLink, ShieldCheck, AlertTriangle } from "lucide-react";
+import { PenLine, FileText, CheckCircle, XCircle, Clock, Loader2, ExternalLink, ShieldCheck, AlertTriangle, Eraser } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -25,8 +26,13 @@ const STATUS_ICONS: Record<string, any> = {
 
 export default function AssinarDocumento({ token }: { token: string }) {
   const [nomeCompleto, setNomeCompleto] = useState("");
+  const [cpf, setCpf] = useState("");
   const [concordo, setConcordo] = useState(false);
   const [assinado, setAssinado] = useState(false);
+  const [assinaturaVazia, setAssinaturaVazia] = useState(true);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const padRef = useRef<SignaturePad | null>(null);
 
   const { data: doc, isLoading, error } = (trpc as any).assinaturas.visualizarPorToken.useQuery(
     { token },
@@ -40,6 +46,64 @@ export default function AssinarDocumento({ token }: { token: string }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Inicializa signature_pad. Resize handler mantém ratio em rotação
+  // mobile (portrait ↔ landscape) e em zooms variados.
+  const setupCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.scale(ratio, ratio);
+    padRef.current?.clear();
+    setAssinaturaVazia(true);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const pad = new SignaturePad(canvas, {
+      backgroundColor: "rgba(255, 255, 255, 0)",
+      penColor: "#1a1a2e",
+      minWidth: 1.2,
+      maxWidth: 3,
+    });
+    pad.addEventListener("endStroke", () => setAssinaturaVazia(pad.isEmpty()));
+    padRef.current = pad;
+    setupCanvas();
+    window.addEventListener("resize", setupCanvas);
+    return () => {
+      window.removeEventListener("resize", setupCanvas);
+      pad.off();
+    };
+    // doc é dep porque o canvas só renderiza quando o card "podeAssinar"
+    // aparece; sem isso o pad inicializa antes do canvas existir no DOM.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc?.status]);
+
+  function handleLimparAssinatura() {
+    padRef.current?.clear();
+    setAssinaturaVazia(true);
+  }
+
+  function handleAssinar() {
+    if (!padRef.current || padRef.current.isEmpty()) {
+      toast.error("Desenhe sua assinatura no quadro abaixo.");
+      return;
+    }
+    if (!nomeCompleto.trim() || nomeCompleto.length < 3 || !concordo) return;
+    const dataUrl = padRef.current.toDataURL("image/png");
+    const assinaturaImagemBase64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+    assinarMut.mutate({
+      token,
+      nomeCompleto: nomeCompleto.trim(),
+      cpf: cpf.trim() || undefined,
+      concordo: true,
+      assinaturaImagemBase64,
+    });
+  }
 
   // Loading
   if (isLoading) {
@@ -167,6 +231,45 @@ export default function AssinarDocumento({ token }: { token: string }) {
                   )}
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">CPF (opcional)</Label>
+                  <Input
+                    value={cpf}
+                    onChange={e => setCpf(e.target.value)}
+                    placeholder="000.000.000-00"
+                    className="h-10"
+                    inputMode="numeric"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Sua assinatura *</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLimparAssinatura}
+                      className="h-7 text-xs"
+                    >
+                      <Eraser className="h-3 w-3 mr-1" />
+                      Limpar
+                    </Button>
+                  </div>
+                  <div className="rounded-lg border-2 border-dashed bg-white">
+                    {/* touch-none é crítico em mobile: sem ele o scroll do
+                        navegador captura o gesto e não dá pra desenhar. */}
+                    <canvas
+                      ref={canvasRef}
+                      className="w-full h-[180px] touch-none cursor-crosshair rounded-lg"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Desenhe com o dedo (celular) ou com o mouse (computador).
+                    {assinaturaVazia && " A assinatura aparecerá no documento final."}
+                  </p>
+                </div>
+
                 <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-muted/30 transition-colors">
                   <input
                     type="checkbox"
@@ -183,8 +286,14 @@ export default function AssinarDocumento({ token }: { token: string }) {
 
                 <Button
                   className="w-full h-11 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold"
-                  onClick={() => assinarMut.mutate({ token, nomeCompleto, concordo })}
-                  disabled={!nomeCompleto || nomeCompleto.length < 3 || !concordo || assinarMut.isPending}
+                  onClick={handleAssinar}
+                  disabled={
+                    !nomeCompleto ||
+                    nomeCompleto.length < 3 ||
+                    !concordo ||
+                    assinaturaVazia ||
+                    assinarMut.isPending
+                  }
                 >
                   {assinarMut.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
