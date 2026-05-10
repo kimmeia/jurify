@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import MovimentacaoDetalheDrawer from "@/components/MovimentacaoDetalheDrawer";
 import {
   Bell,
   Check,
@@ -54,6 +55,7 @@ const FILTRO_PRA_TIPOS: Record<FiltroTipo, ("movimentacao" | "sistema" | "plano"
 export default function NotificacoesSino() {
   const [open, setOpen] = useState(false);
   const [filtro, setFiltro] = useState<FiltroTipo>("todos");
+  const [eventoIdAberto, setEventoIdAberto] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
@@ -99,16 +101,23 @@ export default function NotificacoesSino() {
     if (!notif.lida) {
       marcarLidaMutation.mutate({ notificacaoId: notif.id });
     }
-    // Abre direto na tab certa em /processos: movimentacoes pra movs
-    // detectadas em CNJs monitorados, novas-acoes pra processos novos
-    // contra clientes monitorados por CPF/CNPJ.
+    // Movimentação com eventoId: abre drawer de detalhe (texto completo,
+    // data real do PJe, monitoramento). Sem eventoId (notifs antigas
+    // pré-PR #214): cai no comportamento legado de redirect.
     if (notif.tipo === "movimentacao") {
+      if (notif.eventoId) {
+        setOpen(false);
+        setEventoIdAberto(Number(notif.eventoId));
+        return;
+      }
       setOpen(false);
       setLocation("/processos?tab=movimentacoes");
+      return;
     }
     if (notif.tipo === "nova_acao") {
       setOpen(false);
       setLocation("/processos?tab=novas-acoes");
+      return;
     }
     if (notif.tipo === "plano") {
       setOpen(false);
@@ -255,6 +264,11 @@ export default function NotificacoesSino() {
           )}
         </div>
       </PopoverContent>
+
+      <MovimentacaoDetalheDrawer
+        eventoId={eventoIdAberto}
+        onClose={() => setEventoIdAberto(null)}
+      />
     </Popover>
   );
 }
