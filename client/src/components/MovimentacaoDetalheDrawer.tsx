@@ -9,7 +9,10 @@
  * PR 3 vai adicionar botões de "Criar prazo" e "Criar tarefa"
  * pré-preenchidos com dados da mov.
  */
+import { useState } from "react";
 import { useLocation } from "wouter";
+import { addBusinessDays, format } from "date-fns";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import {
   Sheet,
@@ -18,10 +21,36 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink, Clock, FileText, User, Loader2 } from "lucide-react";
+import {
+  ExternalLink,
+  Clock,
+  FileText,
+  User,
+  Loader2,
+  CalendarClock,
+  CheckSquare,
+} from "lucide-react";
 
 interface Props {
   eventoId: number | null;
@@ -36,6 +65,8 @@ const TIPO_LABEL: Record<string, string> = {
 
 export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) {
   const [, setLocation] = useLocation();
+  const [criarPrazoOpen, setCriarPrazoOpen] = useState(false);
+  const [criarTarefaOpen, setCriarTarefaOpen] = useState(false);
 
   const { data, isLoading, error } = trpc.notificacoes.detalheEvento.useQuery(
     { eventoId: eventoId ?? 0 },
@@ -121,6 +152,24 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
 
             {/* Ações */}
             <section className="flex flex-col gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setCriarPrazoOpen(true)}
+                >
+                  <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
+                  Criar prazo
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setCriarTarefaOpen(true)}
+                >
+                  <CheckSquare className="h-3.5 w-3.5 mr-1.5" />
+                  Criar tarefa
+                </Button>
+              </div>
               {data.monitoramentoId && (
                 <Button
                   variant="outline"
@@ -134,7 +183,6 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
                   Ver monitoramento completo
                 </Button>
               )}
-              {/* PR 3: botões "Criar prazo" e "Criar tarefa" entram aqui */}
             </section>
           </div>
         ) : eventoId !== null ? (
@@ -143,6 +191,239 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
           </div>
         ) : null}
       </SheetContent>
+
+      {data && (
+        <>
+          <CriarPrazoDialog
+            open={criarPrazoOpen}
+            onClose={() => setCriarPrazoOpen(false)}
+            evento={data}
+            onSuccess={() => {
+              setCriarPrazoOpen(false);
+              onClose();
+            }}
+          />
+          <CriarTarefaDialog
+            open={criarTarefaOpen}
+            onClose={() => setCriarTarefaOpen(false)}
+            evento={data}
+            onSuccess={() => {
+              setCriarTarefaOpen(false);
+              onClose();
+            }}
+          />
+        </>
+      )}
     </Sheet>
+  );
+}
+
+interface DialogProps {
+  open: boolean;
+  onClose: () => void;
+  evento: {
+    cnjAfetado: string | null;
+    apelido: string | null;
+    searchKey: string | null;
+    dataEvento: Date | string;
+    conteudo: string;
+  };
+  onSuccess: () => void;
+}
+
+/**
+ * Sugestão de prazo: 5 dias úteis após a data da movimentação. Reflete
+ * prazo padrão CPC pra resposta a despachos. Usuário pode ajustar.
+ */
+function dataSugerida(dataEvento: Date | string): string {
+  const base = typeof dataEvento === "string" ? new Date(dataEvento) : dataEvento;
+  return format(addBusinessDays(base, 5), "yyyy-MM-dd");
+}
+
+function tituloSugerido(evento: DialogProps["evento"]): string {
+  const cliente = evento.apelido || evento.searchKey || "cliente";
+  const trecho = evento.conteudo.split("\n")[0].slice(0, 60);
+  return `${cliente}: ${trecho}`;
+}
+
+function CriarPrazoDialog({ open, onClose, evento, onSuccess }: DialogProps) {
+  const [titulo, setTitulo] = useState(tituloSugerido(evento));
+  const [dataLimite, setDataLimite] = useState(dataSugerida(evento.dataEvento));
+  const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "critica">("normal");
+
+  const criarMut = trpc.agendamento.criar.useMutation({
+    onSuccess: () => {
+      toast.success("Prazo criado!");
+      onSuccess();
+    },
+    onError: (e) => toast.error("Falha ao criar prazo", { description: e.message }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Criar prazo a partir da movimentação</DialogTitle>
+          <DialogDescription>
+            CNJ: <span className="font-mono">{evento.cnjAfetado || "—"}</span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="prazo-titulo">Título</Label>
+            <Input
+              id="prazo-titulo"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="prazo-data">Data limite</Label>
+              <Input
+                id="prazo-data"
+                type="date"
+                value={dataLimite}
+                onChange={(e) => setDataLimite(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="prazo-prio">Prioridade</Label>
+              <Select value={prioridade} onValueChange={(v) => setPrioridade(v as typeof prioridade)}>
+                <SelectTrigger id="prazo-prio">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baixa">Baixa</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="alta">Alta</SelectItem>
+                  <SelectItem value="critica">Crítica</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Sugestão: 5 dias úteis após a movimentação. Ajuste se a regra
+            do processo for diferente.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={criarMut.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() =>
+              criarMut.mutate({
+                tipo: "prazo_processual",
+                titulo,
+                descricao: evento.conteudo,
+                dataInicio: `${dataLimite}T09:00:00`,
+                diaInteiro: true,
+                prioridade,
+              })
+            }
+            disabled={criarMut.isPending || !titulo.trim() || !dataLimite}
+          >
+            {criarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Criar prazo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CriarTarefaDialog({ open, onClose, evento, onSuccess }: DialogProps) {
+  const [titulo, setTitulo] = useState(tituloSugerido(evento));
+  const [descricao, setDescricao] = useState(evento.conteudo);
+  const [dataVencimento, setDataVencimento] = useState(dataSugerida(evento.dataEvento));
+  const [prioridade, setPrioridade] = useState<"baixa" | "normal" | "alta" | "urgente">("normal");
+
+  const criarMut = trpc.tarefas.criar.useMutation({
+    onSuccess: () => {
+      toast.success("Tarefa criada!");
+      onSuccess();
+    },
+    onError: (e) => toast.error("Falha ao criar tarefa", { description: e.message }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Criar tarefa a partir da movimentação</DialogTitle>
+          <DialogDescription>
+            CNJ: <span className="font-mono">{evento.cnjAfetado || "—"}</span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="tarefa-titulo">Título</Label>
+            <Input
+              id="tarefa-titulo"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tarefa-desc">Descrição</Label>
+            <Textarea
+              id="tarefa-desc"
+              rows={4}
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="tarefa-data">Vencimento</Label>
+              <Input
+                id="tarefa-data"
+                type="date"
+                value={dataVencimento}
+                onChange={(e) => setDataVencimento(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tarefa-prio">Prioridade</Label>
+              <Select value={prioridade} onValueChange={(v) => setPrioridade(v as typeof prioridade)}>
+                <SelectTrigger id="tarefa-prio">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baixa">Baixa</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="alta">Alta</SelectItem>
+                  <SelectItem value="urgente">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={criarMut.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() =>
+              criarMut.mutate({
+                titulo,
+                descricao: descricao || undefined,
+                dataVencimento: dataVencimento ? `${dataVencimento}T23:59:59` : undefined,
+                prioridade,
+              })
+            }
+            disabled={criarMut.isPending || !titulo.trim()}
+          >
+            {criarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Criar tarefa
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
