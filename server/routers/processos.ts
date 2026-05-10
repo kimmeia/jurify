@@ -744,9 +744,26 @@ export const processosRouter = router({
       const partesJson = resultado.capa?.partes
         ? JSON.stringify(resultado.capa.partes)
         : null;
+
+      // Contadores pra log diagnóstico — sem visibilidade no que está
+      // sendo persistido, fica difícil distinguir "scraper veio vazio"
+      // de "INSERT falhou silenciosamente" quando o user reporta movs
+      // não aparecendo após refresh.
+      let inseridos = 0;
+      let dedup = 0;
+      let dataInvalida = 0;
+      let erroInsert = 0;
       try {
         for (const mov of resultado.movimentacoes) {
-          const dedup = hashEvento([
+          // Valida data antes de tentar inserir — Invalid Date faz
+          // MySQL rejeitar com erro genérico que cai no catch dedup
+          // sem distinção. Pula explicitamente.
+          const dataParsed = new Date(mov.data);
+          if (Number.isNaN(dataParsed.getTime())) {
+            dataInvalida++;
+            continue;
+          }
+          const dedupHash = hashEvento([
             "movimentacao",
             mon.searchKey,
             mov.data,
@@ -757,16 +774,29 @@ export const processosRouter = router({
               monitoramentoId: mon.id,
               escritorioId: mon.escritorioId,
               tipo: "movimentacao",
-              dataEvento: new Date(mov.data),
+              dataEvento: dataParsed,
               fonte: "pje",
               conteudo: mov.texto,
               conteudoJson: JSON.stringify(mov),
               cnjAfetado: mon.searchKey,
-              hashDedup: dedup,
+              hashDedup: dedupHash,
               lido: true,
             });
-          } catch {
-            // Duplicate hashDedup → já capturado pelo cron, ignora
+            inseridos++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // Distingue dedup (esperado, idempotente) de erro real.
+            // Erro real fica logado pra Sentry — sintoma "movs não
+            // aparecem após refresh" geralmente é INSERT falhando aqui.
+            if (msg.includes("Duplicate") || msg.includes("ER_DUP_ENTRY")) {
+              dedup++;
+            } else {
+              erroInsert++;
+              log.warn(
+                { err: msg, monId: mon.id, cnj: mon.searchKey, movData: mov.data },
+                "[buscarProcessoCompleto] INSERT eventoProcesso falhou (não-dedup)",
+              );
+            }
           }
         }
         await db
@@ -783,8 +813,12 @@ export const processosRouter = router({
             ultimoErro: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
-      } catch {
-        /* best-effort: se UPDATE falhar, ainda retornamos o processo */
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err: msg, monId: mon.id, cnj: mon.searchKey },
+          "[buscarProcessoCompleto] persistência falhou (UPDATE ou loop externo)",
+        );
       }
 
       // Adapta ResultadoScraper → shape JuditLawsuit-like que o
@@ -792,7 +826,7 @@ export const processosRouter = router({
       const processoAdaptado = adaptarParaJuditShape(resultado, mon.searchKey);
       const totalMovs = resultado.movimentacoes.length;
       log.info(
-        { monId: mon.id, cnj: mon.searchKey, totalMovs, latenciaMs: resultado.latenciaMs },
+        { monId: mon.id, cnj: mon.searchKey, totalMovs, inseridos, dedup, dataInvalida, erroInsert, latenciaMs: resultado.latenciaMs },
         "[motor-proprio] buscarProcessoCompleto",
       );
       return { encontrado: true, processo: processoAdaptado, totalMovs };
