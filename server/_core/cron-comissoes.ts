@@ -148,7 +148,7 @@ async function listarAtendentesComCobrancas(
 }
 
 /** Quem deve receber a notificação? Dono + gestores do escritório. */
-async function listarDestinatariosNotificacao(escritorioId: number): Promise<number[]> {
+export async function listarDestinatariosNotificacao(escritorioId: number): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
   const rows = await db

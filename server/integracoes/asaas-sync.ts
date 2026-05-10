@@ -12,7 +12,7 @@
  */
 
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, contatos } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, contatos, colaboradores, notificacoes } from "../../drizzle/schema";
 import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
@@ -292,6 +292,57 @@ export async function syncTodasCobrancasDoContato(
  * Sincroniza TODAS as cobranças de TODOS os clientes vinculados de um escritório.
  * Retorna contadores discriminados para o caller exibir um toast preciso.
  */
+/**
+ * Soft-disable de vínculo Asaas após 403. Marca inativo, grava
+ * timestamp/mensagem e notifica dono+gestores. Próximas execuções
+ * do cron skipam pelo filtro `ativo=true` em syncCobrancasEscritorio.
+ *
+ * Dedup natural: como o filtro acima exclui inativos, esta função só
+ * roda quando o vínculo ainda estava ativo — então a notif sai 1 vez
+ * por (vinculo × ativação).
+ */
+async function desativarVinculoPor403(
+  escritorioId: number,
+  vinculo: typeof asaasClientes.$inferSelect,
+  errMensagem: string,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db
+    .update(asaasClientes)
+    .set({
+      ativo: false,
+      ultimoErro403Em: new Date(),
+      ultimoErro403Mensagem: errMensagem.slice(0, 255),
+    })
+    .where(eq(asaasClientes.id, vinculo.id));
+
+  log.warn(
+    `[Asaas Sync] Vínculo ${vinculo.asaasCustomerId} desativado por 403 (escritório ${escritorioId})`,
+  );
+
+  // Notif in-app pra dono+gestores. Reusa o helper já existente em
+  // cron-comissoes pra não duplicar a regra de "quem recebe notif".
+  try {
+    const { listarDestinatariosNotificacao } = await import("../_core/cron-comissoes");
+    const dests = await listarDestinatariosNotificacao(escritorioId);
+    if (dests.length === 0) return;
+    await db.insert(notificacoes).values(
+      dests.map((userId) => ({
+        userId,
+        titulo: "Customer Asaas desativado",
+        mensagem: `${vinculo.nome ?? vinculo.asaasCustomerId} retornou 403 — API key sem permissão. Verifique a chave em /admin/integrations e reative o customer quando resolver.`,
+        tipo: "sistema" as const,
+      })),
+    );
+  } catch (err: any) {
+    log.warn(
+      `[Asaas Sync] Falha ao notificar dono+gestores sobre desativação: ${err.message}`,
+    );
+  }
+}
+
 export async function syncCobrancasEscritorio(
   escritorioId: number,
 ): Promise<{ clientes: number } & SyncCobrancasStats> {
@@ -302,8 +353,14 @@ export async function syncCobrancasEscritorio(
   const db = await getDb();
   if (!db) return zero;
 
+  // Filtra ativo=true: customers que deram 403 sistemicamente (sem
+  // permissão da API key) ficam fora do polling automático. Admin pode
+  // reativar manualmente quando resolver permissão no painel Asaas.
   const vinculos = await db.select().from(asaasClientes)
-    .where(eq(asaasClientes.escritorioId, escritorioId));
+    .where(and(
+      eq(asaasClientes.escritorioId, escritorioId),
+      eq(asaasClientes.ativo, true),
+    ));
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
 
@@ -317,6 +374,14 @@ export async function syncCobrancasEscritorio(
       );
       totais = somarStats(totais, s);
     } catch (err: any) {
+      // 403: API key sem permissão de ler esse customer. Consumir cota
+      // a cada 10min sem efeito é desperdício — soft-disable. Admin
+      // recebe notif e pode reativar via SQL/UI quando resolver.
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      if (status === 403) {
+        await desativarVinculoPor403(escritorioId, vinculo, err?.message ?? "HTTP 403");
+        continue;
+      }
       log.warn(`[Asaas Sync] Erro ao sincronizar cobranças de ${vinculo.asaasCustomerId}: ${err.message}`);
     }
   }

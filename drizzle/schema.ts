@@ -965,6 +965,15 @@ export const asaasClientes = mysqlTable("asaas_clientes", {
   nome: varchar("nomeAsaasCli", { length: 255 }),
   primario: boolean("primarioAsaasCli").notNull().default(true),
   sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
+  /**
+   * Flag de soft-disable. Cron de sync skipa rows com ativo=false.
+   * Marcado false quando o Asaas retorna 403 sistemicamente pra
+   * GET /payments?customer=X — chave sem permissão de ler aquele
+   * customer. Admin pode reativar via UI quando resolver.
+   */
+  ativo: boolean("ativo").notNull().default(true),
+  ultimoErro403Em: timestamp("ultimoErro403Em"),
+  ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
 });
 
 export type AsaasCliente = typeof asaasClientes.$inferSelect;
