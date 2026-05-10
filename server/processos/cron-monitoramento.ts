@@ -185,13 +185,15 @@ export async function pollMonitoramentosMovs(): Promise<void> {
               lido: true,
             });
           } catch (err) {
-            // Distingue dedup (esperado, idempotente) de erro real
-            // — mesma estratégia do buscarProcessoCompleto. Sem isso
-            // o cron silenciava QUALQUER falha (incluindo schema
-            // mismatch), e o user só percebia o sintoma muito depois.
-            const msg = err instanceof Error ? err.message : String(err);
-            if (!(msg.includes("Duplicate") || msg.includes("ER_DUP_ENTRY"))) {
-              const errAny = err as any;
+            // Drizzle envolve mysql2; "Duplicate" não está em
+            // err.message — só em err.cause.message. Checa code/errno
+            // pra distinguir dedup esperado de erro real.
+            const errAny = err as any;
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (!isDedup) {
+              const msg = err instanceof Error ? err.message : String(err);
               log.warn(
                 {
                   err: msg,
@@ -263,9 +265,12 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             const eventoId = (result as { insertId: number }).insertId;
             movsNovas.push({ mov, eventoId });
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            if (!(msg.includes("Duplicate") || msg.includes("ER_DUP_ENTRY"))) {
-              const errAny = err as any;
+            const errAny = err as any;
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (!isDedup) {
+              const msg = err instanceof Error ? err.message : String(err);
               log.warn(
                 {
                   err: msg,
