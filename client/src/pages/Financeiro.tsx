@@ -51,6 +51,7 @@ function rangeMesCorrente(): { inicio: string; fim: string } {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function Financeiro() {
+  const utils = trpc.useUtils();
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
@@ -73,11 +74,14 @@ export default function Financeiro() {
   const [rangeFimInput, setRangeFimInput] = useState("");
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
 
-  // Auto-refresh: cron sincroniza a cada 10min; webhook pode atualizar a qualquer
-  // momento. Revalidamos no frontend a cada 60s e quando o usuário volta à aba.
-  const REFRESH_MS = 60_000;
+  // Auto-refresh: cron sincroniza a cada 10min; webhook pode atualizar a
+  // qualquer momento. Revalidamos a cada 5min — antes era 60s mas com 4
+  // queries em polling simultâneo + multi-usuário, batia rate limit 429
+  // do Asaas (12h de bloqueio). 5min cobre o pior caso do cron sem inflar
+  // tráfego. refetchOnWindowFocus desligado pelo default global.
+  const REFRESH_MS = 5 * 60_000;
 
-  const { data: statusAsaas, isLoading: loadStatus, refetch: refetchStatus } =
+  const { data: statusAsaas, isLoading: loadStatus } =
     trpc.asaas.status.useQuery(undefined, { retry: false });
 
   // Range efetivo (dataInicio/dataFim concretos) derivado do estado atual.
@@ -105,7 +109,6 @@ export default function Financeiro() {
       retry: false,
       enabled: statusAsaas?.conectado,
       refetchInterval: REFRESH_MS,
-      refetchOnWindowFocus: true,
     },
   );
   const { data: saldo } = trpc.asaas.obterSaldo.useQuery(undefined, {
@@ -145,7 +148,6 @@ export default function Financeiro() {
         retry: false,
         enabled: statusAsaas?.conectado,
         refetchInterval: REFRESH_MS,
-        refetchOnWindowFocus: true,
       },
     );
   const { data: clientesVinculados, refetch: refetchClientes } =
@@ -169,7 +171,12 @@ export default function Financeiro() {
       } else {
         toast.success("Sincronização concluída", { description: p.join(" · ") });
       }
-      refetchAll();
+      // Sync mexe em clientes + cobranças (afeta KPIs). status não muda.
+      // invalidate marca como stale e refetch só roda quando a query
+      // ainda está montada — evita 4 requests paralelos imediatos.
+      utils.asaas.kpis.invalidate();
+      utils.asaas.listarCobrancas.invalidate();
+      utils.asaas.listarClientesVinculados.invalidate();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
@@ -177,8 +184,8 @@ export default function Financeiro() {
   const excluirCobMut = trpc.asaas.excluirCobranca.useMutation({
     onSuccess: () => {
       toast.success("Cobrança cancelada");
-      refetchCob();
-      refetchKpis();
+      utils.asaas.listarCobrancas.invalidate();
+      utils.asaas.kpis.invalidate();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
@@ -189,13 +196,6 @@ export default function Financeiro() {
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
-
-  const refetchAll = () => {
-    refetchStatus();
-    refetchKpis();
-    refetchCob();
-    refetchClientes();
-  };
 
   // Filtra cobranças visíveis (filtros client-side adicionais).
   // Forma já vai pro backend, mas mantemos o filtro de busca livre.
