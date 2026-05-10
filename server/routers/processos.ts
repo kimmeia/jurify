@@ -598,10 +598,23 @@ export const processosRouter = router({
         .limit(1);
       if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
 
+      // Filtra por (escritorioId + cnjAfetado) em vez de só
+      // monitoramentoId. Caso de uso real: user delete e recria
+      // monitoramento do mesmo CNJ — events antigos ficam órfãos
+      // com monitoramentoId antigo, novos INSERT batem dedup
+      // (hashDedup não inclui monId), e a UI ficava vazia mesmo
+      // com dados no DB. Filtrando por CNJ pega o histórico todo
+      // do escritório, independente de quantas vezes o monitoramento
+      // foi recriado. escritorioId garante isolamento multi-tenant.
       const eventos = await db
         .select()
         .from(eventosProcesso)
-        .where(eq(eventosProcesso.monitoramentoId, input.monitoramentoId))
+        .where(
+          and(
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+            eq(eventosProcesso.cnjAfetado, mon.searchKey),
+          ),
+        )
         .orderBy(desc(eventosProcesso.dataEvento))
         .limit(limite);
 
@@ -784,19 +797,20 @@ export const processosRouter = router({
             });
             inseridos++;
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            // Distingue dedup (esperado, idempotente) de erro real.
-            // Erro real fica logado pra Sentry — sintoma "movs não
-            // aparecem após refresh" geralmente é INSERT falhando aqui.
-            if (msg.includes("Duplicate") || msg.includes("ER_DUP_ENTRY")) {
+            const errAny = err as any;
+            // Drizzle envolve mysql2 — err.message é só "Failed
+            // query: ..." (sem "Duplicate"). A verdade fica em
+            // err.cause.code === "ER_DUP_ENTRY". Antes o detector
+            // checava err.message, classificava dedup como erro real
+            // e enchia o log de warns falsos.
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (isDedup) {
               dedup++;
             } else {
               erroInsert++;
-              // Drizzle envolve o erro do MySQL em DrizzleError.
-              // err.message é só "Failed query: ..." — a razão real
-              // fica em err.cause (mysql2 OkPacket com sqlMessage,
-              // code tipo "ER_BAD_NULL_ERROR" etc).
-              const errAny = err as any;
+              const msg = err instanceof Error ? err.message : String(err);
               log.warn(
                 {
                   err: msg,
