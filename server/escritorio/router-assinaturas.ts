@@ -6,12 +6,22 @@
  */
 
 import { z } from "zod";
+import path from "path";
+import fs from "fs";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { assinaturasDigitais, contatos } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import crypto from "crypto";
+import { estamparAssinatura } from "./pdf-stamp-assinatura";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("router-assinaturas");
+
+function ensureDir(p: string) {
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+}
 
 function gerarToken(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -201,12 +211,28 @@ export const assinaturasRouter = router({
       return mapDoc(doc);
     }),
 
-  /** Assinar documento (cliente confirma assinatura) */
+  /**
+   * Cliente assina documento via /assinar/:token.
+   *
+   * Recebe a assinatura manuscrita capturada pelo signature_pad como PNG
+   * base64. Faz:
+   *   1. Salva PNG em /uploads/assinaturas/escritorio_<id>/assinatura_*.png
+   *   2. Lê PDF original do disco (gerado anteriormente pelo LibreOffice)
+   *   3. Estampa imagem na última página + adiciona página de certificação
+   *   4. Salva PDF assinado em /uploads/assinaturas/escritorio_<id>/assinado_*.pdf
+   *   5. UPDATE status=assinado + URLs novos
+   *
+   * Se PDF original não está acessível em disco (volume efêmero perdeu),
+   * fallback graceful: registra status=assinado mas sem documentoAssinadoUrl,
+   * com warning. Operador precisa re-uploadar o documento.
+   */
   assinarPorToken: publicProcedure
     .input(z.object({
       token: z.string().min(10),
       nomeCompleto: z.string().min(3),
+      cpf: z.string().max(20).optional(),
       concordo: z.boolean(),
+      assinaturaImagemBase64: z.string().min(100),
       ip: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -230,24 +256,77 @@ export const assinaturasRouter = router({
         throw new Error("Documento expirado.");
       }
 
-      // Gerar URL do documento assinado (adiciona metadados de assinatura)
-      const docAssinadoUrl = doc.documentoUrl; // Em produção, geraria PDF com carimbo
+      // 1. Salva PNG da assinatura
+      const pngBuffer = Buffer.from(input.assinaturaImagemBase64, "base64");
+      const sigDir = path.resolve(`./uploads/assinaturas/escritorio_${doc.escritorioId}`);
+      ensureDir(sigDir);
+      const sigFilename = `assinatura_${doc.id}_${Date.now()}.png`;
+      fs.writeFileSync(path.join(sigDir, sigFilename), pngBuffer);
+      const assinaturaImagemUrl = `/uploads/assinaturas/escritorio_${doc.escritorioId}/${sigFilename}`;
 
+      // 2. Lê PDF original e estampa
+      const assinadoAt = new Date();
+      let documentoAssinadoUrl: string | null = null;
+      try {
+        const docPath = path.resolve("." + doc.documentoUrl);
+        if (!fs.existsSync(docPath)) {
+          throw new Error(`PDF original não encontrado em ${docPath}`);
+        }
+        const pdfOriginal = fs.readFileSync(docPath);
+        const pdfAssinado = await estamparAssinatura({
+          pdfOriginal,
+          assinaturaImagem: pngBuffer,
+          nomeCompleto: input.nomeCompleto,
+          cpf: input.cpf,
+          ip: input.ip,
+          assinadoAt,
+        });
+        const pdfFilename = `assinado_${doc.id}_${Date.now()}.pdf`;
+        fs.writeFileSync(path.join(sigDir, pdfFilename), pdfAssinado);
+        documentoAssinadoUrl = `/uploads/assinaturas/escritorio_${doc.escritorioId}/${pdfFilename}`;
+      } catch (err: unknown) {
+        // Não bloqueia a assinatura se a estampa falhar — registra mesmo
+        // assim com warning. Escritório pode regenerar o PDF assinado
+        // depois quando o original estiver disponível.
+        log.warn(
+          {
+            err: err instanceof Error ? err.message : String(err),
+            assinaturaId: doc.id,
+            documentoUrl: doc.documentoUrl,
+          },
+          "Falha ao estampar PDF — assinatura registrada sem documentoAssinadoUrl",
+        );
+      }
+
+      // 3. UPDATE
       await db.update(assinaturasDigitais).set({
         status: "assinado",
-        assinadoAt: new Date(),
+        assinadoAt,
         assinantNome: input.nomeCompleto,
+        assinanteCpf: input.cpf || null,
         ipAssinatura: input.ip || null,
-        documentoAssinadoUrl: docAssinadoUrl,
+        assinaturaImagemUrl,
+        documentoAssinadoUrl,
       }).where(eq(assinaturasDigitais.id, doc.id));
 
-      // Notificar escritório via SSE
+      // SSE notif
       try {
         const { emitirParaEscritorio } = await import("../_core/sse-notifications");
-        emitirParaEscritorio(doc.escritorioId, { tipo: "assinatura_concluida", titulo: "Documento assinado!", mensagem: `${input.nomeCompleto} assinou "${doc.titulo}"`, dados: { assinaturaId: doc.id, contatoId: doc.contatoId } });
-      } catch { /* SSE indisponível */ }
+        emitirParaEscritorio(doc.escritorioId, {
+          tipo: "assinatura_concluida",
+          titulo: "Documento assinado!",
+          mensagem: `${input.nomeCompleto} assinou "${doc.titulo}"`,
+          dados: { assinaturaId: doc.id, contatoId: doc.contatoId },
+        });
+      } catch {
+        /* SSE indisponível */
+      }
 
-      return { success: true, message: "Documento assinado com sucesso!" };
+      return {
+        success: true,
+        message: "Documento assinado com sucesso!",
+        documentoAssinadoUrl,
+      };
     }),
 });
 
@@ -258,6 +337,7 @@ function mapDoc(doc: any) {
     descricao: doc.descricao,
     status: doc.status,
     documentoUrl: doc.documentoUrl,
+    documentoAssinadoUrl: doc.documentoAssinadoUrl ?? null,
     assinantNome: doc.assinantNome,
     expiracaoAt: doc.expiracaoAt ? (doc.expiracaoAt as Date).toISOString() : null,
   };

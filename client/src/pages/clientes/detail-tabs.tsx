@@ -882,7 +882,12 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
               </div>
               <Badge className={`text-[9px] px-1.5 py-0 ${STATUS_ASSINATURA_CORES[a.status] || ""}`}>{STATUS_ASSINATURA_LABELS[a.status]}</Badge>
               <div className="flex gap-1 shrink-0">
-                {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento" onClick={() => window.open(a.documentoUrl, "_blank")}><ExternalLink className="h-3 w-3" /></Button>}
+                {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento original" onClick={() => window.open(a.documentoUrl, "_blank")}><ExternalLink className="h-3 w-3" /></Button>}
+                {a.status === "assinado" && a.documentoAssinadoUrl && (
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => window.open(a.documentoAssinadoUrl, "_blank")}>
+                    <Download className="h-3 w-3" />
+                  </Button>
+                )}
                 {a.tokenAssinatura && a.status !== "assinado" && a.status !== "expirado" && (<>
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
                   {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}

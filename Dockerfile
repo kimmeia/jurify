@@ -29,6 +29,14 @@ FROM node:22-slim
 #    O binário do Chromium em si é baixado SEMPRE no build step abaixo
 #    (sem gate de ambiente — env vars de runtime não estão disponíveis
 #    em build time, então gate condicional não funciona aqui).
+#
+# LibreOffice (writer + core): conversão DOCX → PDF preservando layout
+#  original do Word (logos, fontes, headers/footers). Usado pelo
+#  helper `server/escritorio/docx-to-pdf.ts` via `soffice --headless`.
+#  Trade-off: +400MB na imagem, +1-2min de build, mas fidelidade ~100%
+#  vs alternativa anterior (mammoth+chromium) que perdia logos.
+# fonts-liberation + dejavu: cobrem fontes comuns em docs jurídicos
+#  brasileiros (Times, Arial substitutos via Liberation, DejaVu).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     mariadb-client \
     ca-certificates \
@@ -51,6 +59,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     libatspi2.0-0 \
     libgtk-3-0 \
+    libreoffice-core \
+    libreoffice-writer \
+    libreoffice-common \
+    fonts-liberation \
+    fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
