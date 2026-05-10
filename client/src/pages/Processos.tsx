@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -598,19 +598,43 @@ function MonitoramentoCard({
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });
 
+  // Lock síncrono pra impedir double-click cobrar 2 créditos. mutation.isPending
+  // só vira true no próximo render — entre o 1º click e o re-render, um 2º click
+  // passaria pelo disabled e dispararia 2ª request. Lock baseado em ref bloqueia
+  // imediatamente.
+  const buscarLockRef = useRef(false);
   const buscarCompletoMut = (trpc.processos as any).buscarProcessoCompleto.useMutation({
     onSuccess: (data: any) => {
       if (data.encontrado && data.processo) {
         setProcessoCompleto(data.processo);
-        toast.success("Histórico completo carregado e salvo (1 crédito)");
-        // Refetch historico local pra que o dado persistido apareça na próxima abertura
+        const totalMovs = typeof data.totalMovs === "number" ? data.totalMovs : null;
+        if (totalMovs === 0) {
+          toast.success("Processo encontrado, sem movimentações no tribunal (1 crédito)", {
+            description: "O tribunal retornou 0 movimentações. O processo pode estar sem trâmite recente ou em segredo de justiça.",
+            duration: 8000,
+          });
+        } else if (totalMovs !== null) {
+          toast.success(`${totalMovs} movimentação(ões) carregada(s) e salva(s) (1 crédito)`);
+        } else {
+          toast.success("Histórico completo carregado e salvo (1 crédito)");
+        }
+        // Refetch historico local pra que o dado persistido apareça
         if (mon.id) refetchHist();
       } else {
         toast.error(data.mensagem || "Processo não encontrado");
       }
     },
     onError: (e: any) => toast.error("Erro ao buscar", { description: e.message }),
+    onSettled: () => {
+      buscarLockRef.current = false;
+    },
   });
+
+  function clickHistorico() {
+    if (buscarLockRef.current) return;
+    buscarLockRef.current = true;
+    buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id });
+  }
 
   const searchType = mon.searchType || mon.search?.search_type || "";
   const st = STATUS_MON[status] || { label: status, cor: "" };
@@ -688,7 +712,7 @@ function MonitoramentoCard({
                   className="h-7 text-[10px] text-indigo-600"
                   title="Atualizar processo agora — consulta tribunal (1 crédito)"
                   disabled={buscarCompletoMut.isPending}
-                  onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id })}
+                  onClick={clickHistorico}
                 >
                   {buscarCompletoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
                   Histórico
@@ -825,6 +849,15 @@ function MonitoramentoCard({
                       ))}
                     </div>
                   </div>
+                ) : processoData ? (
+                  // Capa veio (do DB ou da consulta), mas sem movs:
+                  // tribunal retornou processo "vazio" — pode ser
+                  // segredo de justiça ou processo recém-distribuído.
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    Tribunal não retornou movimentações pra este processo.
+                    <br />
+                    <span className="text-[10px]">Pode estar em segredo de justiça ou sem trâmite recente.</span>
+                  </p>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-4">
                     Sem movimentações registradas ainda.

@@ -750,7 +750,12 @@ export const processosRouter = router({
       // Adapta ResultadoScraper → shape JuditLawsuit-like que o
       // frontend `MonitoramentoCard` espera (steps, parties, code, etc).
       const processoAdaptado = adaptarParaJuditShape(resultado, mon.searchKey);
-      return { encontrado: true, processo: processoAdaptado };
+      const totalMovs = resultado.movimentacoes.length;
+      log.info(
+        { monId: mon.id, cnj: mon.searchKey, totalMovs, latenciaMs: resultado.latenciaMs },
+        "[motor-proprio] buscarProcessoCompleto",
+      );
+      return { encontrado: true, processo: processoAdaptado, totalMovs };
     }),
 
   // ─── NOVAS AÇÕES por CPF/CNPJ (Sub-sprint 2.2) ─────────────────────────
