@@ -1,104 +1,73 @@
 /**
- * Converte DOCX → PDF reusando o Chromium do Playwright que já está
- * instalado no container pro motor próprio.
+ * Converte DOCX → PDF via LibreOffice headless (`soffice --convert-to pdf`).
  *
- * Estratégia:
- *   1. mammoth gera HTML semântico do DOCX (preserva texto, tabelas
- *      simples, listas, formatação básica)
- *   2. Playwright renderiza via Chromium e exporta como PDF A4
+ * Por que LibreOffice e não mammoth (versão anterior): mammoth converte
+ * DOCX→HTML perdendo logos embutidas, fontes custom, headers/footers,
+ * alinhamentos complexos. LibreOffice abre o DOCX nativamente —
+ * fidelidade ~100% do Word. Trade-off: imagem Docker +400MB, build
+ * +1-2min, conversão 3-5s por chamada.
  *
- * Trade-off: layout pode divergir levemente do Word (fontes exatas,
- * headers/footers, numeração de páginas custom). Pra contratos
- * jurídicos típicos (texto + tabelas básicas), aceitável. Pra layout
- * pixel-perfect precisaria libreoffice no container — fora do escopo.
+ * Concorrência: cada chamada usa --user-profile-dir único pra evitar
+ * conflito entre instâncias paralelas (LibreOffice trava o profile dir
+ * default quando múltiplos processos rodam ao mesmo tempo).
  *
- * Custo: ~2-5s por conversão, ~200MB RAM por instância de Chromium
- * (criada e fechada dentro da função). Aceitável pra volume baixo.
+ * Pré-requisito: `soffice` (libreoffice-writer) instalado no PATH.
+ * Em local sem libreoffice → erro claro com instrução; em produção
+ * (Docker) sempre disponível.
  */
 
-import mammoth from "mammoth";
-import { chromium } from "@playwright/test";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { promises as fs } from "fs";
+import path from "path";
+import os from "os";
 import { createLogger } from "../_core/logger";
 
+const execAsync = promisify(exec);
 const log = createLogger("docx-to-pdf");
-
-const CSS_BASE = `
-  body {
-    font-family: "Times New Roman", Times, serif;
-    line-height: 1.5;
-    font-size: 12pt;
-    color: #111;
-    margin: 0;
-    padding: 0;
-  }
-  h1, h2, h3, h4 {
-    font-weight: bold;
-    margin: 1em 0 0.5em;
-    line-height: 1.3;
-  }
-  h1 { font-size: 16pt; }
-  h2 { font-size: 14pt; }
-  h3 { font-size: 13pt; }
-  p {
-    margin: 0.5em 0;
-    text-align: justify;
-  }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 1em 0;
-  }
-  td, th {
-    border: 1px solid #999;
-    padding: 6px 10px;
-    vertical-align: top;
-  }
-  ol, ul {
-    margin: 0.5em 0 0.5em 2em;
-  }
-  strong, b { font-weight: bold; }
-  em, i { font-style: italic; }
-  @page { size: A4; margin: 2cm; }
-`;
 
 export async function converterDocxParaPdf(docxBuffer: Buffer): Promise<Buffer> {
   const t0 = Date.now();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "jurify-docx2pdf-"));
+  const profileDir = path.join(tmpDir, "profile");
+  const docxPath = path.join(tmpDir, "input.docx");
 
-  const { value: html, messages } = await mammoth.convertToHtml({
-    buffer: docxBuffer,
-  });
-  if (messages.length > 0) {
-    log.debug(
-      { issues: messages.slice(0, 5).map((m) => m.message) },
-      "mammoth warnings",
-    );
-  }
-
-  const fullHtml = `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <style>${CSS_BASE}</style>
-</head>
-<body>${html}</body>
-</html>`;
-
-  const browser = await chromium.launch({ args: ["--no-sandbox"] });
   try {
-    const ctx = await browser.newContext();
-    const page = await ctx.newPage();
-    await page.setContent(fullHtml, { waitUntil: "networkidle" });
-    const pdf = await page.pdf({
-      format: "A4",
-      margin: { top: "2cm", right: "2cm", bottom: "2cm", left: "2cm" },
-      printBackground: true,
-    });
+    await fs.writeFile(docxPath, docxBuffer);
+    const cmd = [
+      "soffice",
+      "--headless",
+      `-env:UserInstallation=file://${profileDir}`,
+      "--convert-to",
+      "pdf",
+      "--outdir",
+      `"${tmpDir}"`,
+      `"${docxPath}"`,
+    ].join(" ");
+
+    try {
+      await execAsync(cmd, { timeout: 60_000 });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("ENOENT") || msg.includes("not found")) {
+        throw new Error(
+          "LibreOffice (soffice) não encontrado. Instale com 'apt install libreoffice-writer' " +
+            "ou rode em ambiente Docker do projeto.",
+        );
+      }
+      throw new Error(`Falha na conversão DOCX→PDF: ${msg}`);
+    }
+
+    const pdfPath = path.join(tmpDir, "input.pdf");
+    const pdf = await fs.readFile(pdfPath);
     log.info(
       { latenciaMs: Date.now() - t0, tamanhoPdf: pdf.length },
       "DOCX → PDF concluído",
     );
     return pdf;
   } finally {
-    await browser.close();
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {
+      /* best effort cleanup */
+    });
   }
 }

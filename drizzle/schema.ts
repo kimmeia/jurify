@@ -825,6 +825,10 @@ export const assinaturasDigitais = mysqlTable("assinaturas_digitais", {
   assinantNome: varchar("assinantNome", { length: 255 }),
   assinantEmail: varchar("assinantEmail", { length: 320 }),
   assinantTelefone: varchar("assinantTelefone", { length: 20 }),
+  /** CPF informado pelo signatário no /assinar/:token (opcional). */
+  assinanteCpf: varchar("assinanteCpf", { length: 20 }),
+  /** Path do PNG capturado do canvas signature_pad (assinatura manuscrita). */
+  assinaturaImagemUrl: varchar("assinaturaImagemUrl", { length: 500 }),
   tokenAssinatura: varchar("tokenAssinatura", { length: 128 }),
   enviadoPor: int("enviadoPor"),
   enviadoAt: timestamp("enviadoAt"),
