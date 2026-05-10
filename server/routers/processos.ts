@@ -595,11 +595,30 @@ export const processosRouter = router({
 
       // Shape compat com frontend antigo (esperava resp Judit):
       // items[].responseType + items[].responseData. Mapeia eventos
-      // pra esse formato. Se não há eventos, retorna [].
+      // pra esse formato. O frontend (Processos.tsx steps.map) lê
+      // s.step_date e s.content (Judit shape). Quando o evento veio
+      // do scraper TJCE, conteudoJson tem {data, texto, tipo} —
+      // adaptamos aqui pro frontend não precisar saber de qual fonte
+      // vem o dado.
+      function adaptarMov(parsed: any, fallbackTexto: string, fallbackData: Date | string) {
+        if (parsed && typeof parsed === "object") {
+          // Já no shape Judit: passa direto.
+          if ("step_date" in parsed || "content" in parsed) return parsed;
+          // Shape MovimentacaoProcesso (TJCE scraper): adapta.
+          if ("data" in parsed || "texto" in parsed) {
+            return {
+              step_date: parsed.data ?? fallbackData,
+              content: parsed.texto ?? fallbackTexto,
+              type: parsed.tipo ?? null,
+            };
+          }
+        }
+        return { step_date: fallbackData, content: fallbackTexto };
+      }
       const items = eventos.map((e) => ({
         id: e.id,
         responseType: e.tipo === "movimentacao" ? "step" : e.tipo,
-        responseData: e.conteudoJson ? safeParse(e.conteudoJson) : { texto: e.conteudo, data: e.dataEvento },
+        responseData: adaptarMov(e.conteudoJson ? safeParse(e.conteudoJson) : null, e.conteudo, e.dataEvento),
         createdAt: e.createdAt,
         lido: e.lido,
       }));

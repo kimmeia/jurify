@@ -36,9 +36,14 @@ export async function revalidarCofreCredenciais(): Promise<{
 
   const corte = new Date(Date.now() - IDADE_MAXIMA_MS);
 
-  // Credenciais ativas cuja última tentativa de login foi há mais de 75min
-  // OU nunca foi (recém cadastradas — geralmente já validam no cadastro,
-  // mas se ficaram presas em "validando" o cron resgata).
+  // Inclui status="erro" pra recuperação automática: quando o PJe falha
+  // temporariamente (instabilidade, timeout) a credencial cai em "erro"
+  // — sem este OR, o user precisava revalidar manualmente no Cofre, e
+  // o monitoramento parava silenciosamente. Agora o cron tenta de novo
+  // a cada 60min até voltar (atualizarStatusAposLogin restaura "ativa"
+  // no sucesso). Se a senha mudou de fato, a credencial fica em "erro"
+  // (warning logado) até intervenção manual — mas reabre tentativa
+  // toda hora. Status "removida" continua sendo excluído.
   const candidatas = await db
     .select()
     .from(cofreCredenciais)
@@ -47,6 +52,7 @@ export async function revalidarCofreCredenciais(): Promise<{
         or(
           eq(cofreCredenciais.status, "ativa"),
           eq(cofreCredenciais.status, "validando"),
+          eq(cofreCredenciais.status, "erro"),
         ),
         or(
           isNull(cofreCredenciais.ultimoLoginTentativaEm),
