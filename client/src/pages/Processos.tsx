@@ -283,8 +283,24 @@ function ConsultarTab() {
 
   /** Ao clicar "Monitorar" num ProcessoCard: cria monitoramento E verifica se partes são clientes */
   const handleMonitorar = (cnj: string, processo?: any) => {
+    // Resolve credencial: usa a selecionada no dropdown se houver,
+    // senão pega a 1ª ativa do cofre. credencialId é obrigatório no
+    // backend (Zod) — sem fallback, click em "Monitorar" depois de
+    // consulta pública dava erro Zod opaco no toast.
+    const credSelecionada = credencialId ? Number(credencialId) : null;
+    const credAuto = credsDisponiveis[0]?.id ?? null;
+    const credId = credSelecionada ?? credAuto;
+
+    if (!credId) {
+      toast.error("Sem credencial OAB ativa", {
+        description: "Cadastre/valide uma credencial em Cofre antes de monitorar.",
+        duration: 8000,
+      });
+      return;
+    }
+
     // 1. Criar monitoramento
-    monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined });
+    monitorarMut.mutate({ numeroCnj: cnj, credencialId: credId });
 
     // 2. Verificar se alguma parte do processo é cliente cadastrado
     if (processo && todosClientes.length > 0) {
