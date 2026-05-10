@@ -75,7 +75,7 @@ function safeParse(json: string): unknown {
  */
 function adaptarParaJuditShape(r: any, cnj: string) {
   const capa = r?.capa ?? {};
-  const partes: Array<{ nome?: string; polo?: string; documento?: string | null }> = capa.partes ?? [];
+  const partes: Array<{ nome?: string; polo?: string; documento?: string | null; advogados?: any[] }> = capa.partes ?? [];
   const movs: Array<{ data?: string; texto?: string }> = r?.movimentacoes ?? [];
   return {
     code: cnj,
@@ -86,10 +86,22 @@ function adaptarParaJuditShape(r: any, cnj: string) {
         ? capa.valorCausaCentavos / 100
         : null,
     distribution_date: capa.dataDistribuicao ?? null,
+    // Frontend (MonitoramentoCard) lê esses 2 campos em badges:
+    // tribunal_acronym (ex: "TJCE") + instance (ex: 1) — sem eles o
+    // card renderiza sem cabeçalho. tribunal vem de r.tribunal (top
+    // do ResultadoScraper, pe TJCE/TJSP) ou capa.tribunal.
+    tribunal_acronym:
+      typeof r?.tribunal === "string"
+        ? r.tribunal.toUpperCase()
+        : typeof capa.tribunal === "string"
+          ? capa.tribunal.toUpperCase()
+          : null,
+    instance: capa.grauTribunal ?? capa.instancia ?? 1,
     parties: partes.map((p) => ({
       name: p.nome ?? "",
       side: (p.polo ?? "").toLowerCase().startsWith("ativ") ? "Active" : "Passive",
       main_document: p.documento ?? null,
+      lawyers: p.advogados ?? [],
     })),
     steps: movs.map((m) => ({
       step_date: m.data ?? null,
@@ -625,12 +637,27 @@ export const processosRouter = router({
       const naoLidas = eventos.filter((e) => !e.lido).length;
 
       // Capa e partes vêm do monitoramento (persistidos pelo cron e
-      // pela busca sob demanda). Frontend usa pra renderizar o card
-      // sem depender de state in-memory que perde no refresh.
-      const capa = mon.capaJson ? safeParse(mon.capaJson) : null;
-      const partes = mon.partesJson ? safeParse(mon.partesJson) : null;
+      // pela busca sob demanda). Adaptamos pra Judit shape aqui pra
+      // que o frontend (MonitoramentoCard) leia os mesmos campos
+      // (tribunal_acronym, amount, instance, parties[].name/side/...)
+      // que ele já renderiza no caminho do `processoCompleto` state.
+      // Sem essa adaptação o spread {...historico.capa} traz nomes
+      // em PT (tribunal/valorCausaCentavos/partes[].nome) que o
+      // frontend não conhece, deixando o card visualmente vazio
+      // mesmo com dados no DB.
+      const capaParsed = mon.capaJson ? safeParse(mon.capaJson) : null;
+      const partesParsed = mon.partesJson ? safeParse(mon.partesJson) : null;
+      const capa = capaParsed
+        ? adaptarParaJuditShape(
+            {
+              capa: { ...capaParsed, partes: partesParsed ?? capaParsed.partes ?? [] },
+              movimentacoes: [],
+            },
+            mon.searchKey,
+          )
+        : null;
 
-      return { items, eventos, capa, partes, totalNaoLidas: naoLidas };
+      return { items, eventos, capa, partes: capa?.parties ?? [], totalNaoLidas: naoLidas };
     }),
 
   // Dispara consulta direta do processo associado a um monitoramento.
