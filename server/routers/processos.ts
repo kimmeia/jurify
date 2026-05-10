@@ -38,6 +38,7 @@ import {
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
 import { consultarTjce } from "../processos/adapters/pje-tjce";
+import { hashEvento } from "../processos/cron-monitoramento";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 
 const log = createLogger("processos-motor");
@@ -74,7 +75,7 @@ function safeParse(json: string): unknown {
  */
 function adaptarParaJuditShape(r: any, cnj: string) {
   const capa = r?.capa ?? {};
-  const partes: Array<{ nome?: string; polo?: string; documento?: string | null }> = capa.partes ?? [];
+  const partes: Array<{ nome?: string; polo?: string; documento?: string | null; advogados?: any[] }> = capa.partes ?? [];
   const movs: Array<{ data?: string; texto?: string }> = r?.movimentacoes ?? [];
   return {
     code: cnj,
@@ -85,10 +86,22 @@ function adaptarParaJuditShape(r: any, cnj: string) {
         ? capa.valorCausaCentavos / 100
         : null,
     distribution_date: capa.dataDistribuicao ?? null,
+    // Frontend (MonitoramentoCard) lê esses 2 campos em badges:
+    // tribunal_acronym (ex: "TJCE") + instance (ex: 1) — sem eles o
+    // card renderiza sem cabeçalho. tribunal vem de r.tribunal (top
+    // do ResultadoScraper, pe TJCE/TJSP) ou capa.tribunal.
+    tribunal_acronym:
+      typeof r?.tribunal === "string"
+        ? r.tribunal.toUpperCase()
+        : typeof capa.tribunal === "string"
+          ? capa.tribunal.toUpperCase()
+          : null,
+    instance: capa.grauTribunal ?? capa.instancia ?? 1,
     parties: partes.map((p) => ({
       name: p.nome ?? "",
       side: (p.polo ?? "").toLowerCase().startsWith("ativ") ? "Active" : "Passive",
       main_document: p.documento ?? null,
+      lawyers: p.advogados ?? [],
     })),
     steps: movs.map((m) => ({
       step_date: m.data ?? null,
@@ -585,25 +598,92 @@ export const processosRouter = router({
         .limit(1);
       if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
 
+      // Filtra por (escritorioId + cnjAfetado) em vez de só
+      // monitoramentoId. Caso de uso real: user delete e recria
+      // monitoramento do mesmo CNJ — events antigos ficam órfãos
+      // com monitoramentoId antigo, novos INSERT batem dedup
+      // (hashDedup não inclui monId), e a UI ficava vazia mesmo
+      // com dados no DB. Filtrando por CNJ pega o histórico todo
+      // do escritório, independente de quantas vezes o monitoramento
+      // foi recriado. escritorioId garante isolamento multi-tenant.
       const eventos = await db
         .select()
         .from(eventosProcesso)
-        .where(eq(eventosProcesso.monitoramentoId, input.monitoramentoId))
+        .where(
+          and(
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+            eq(eventosProcesso.cnjAfetado, mon.searchKey),
+          ),
+        )
         .orderBy(desc(eventosProcesso.dataEvento))
         .limit(limite);
 
       // Shape compat com frontend antigo (esperava resp Judit):
       // items[].responseType + items[].responseData. Mapeia eventos
-      // pra esse formato. Se não há eventos, retorna [].
+      // pra esse formato. O frontend (Processos.tsx steps.map) lê
+      // s.step_date e s.content (Judit shape). Quando o evento veio
+      // do scraper TJCE, conteudoJson tem {data, texto, tipo} —
+      // adaptamos aqui pro frontend não precisar saber de qual fonte
+      // vem o dado.
+      function adaptarMov(parsed: any, fallbackTexto: string, fallbackData: Date | string) {
+        if (parsed && typeof parsed === "object") {
+          // Já no shape Judit: passa direto.
+          if ("step_date" in parsed || "content" in parsed) return parsed;
+          // Shape MovimentacaoProcesso (TJCE scraper): adapta.
+          if ("data" in parsed || "texto" in parsed) {
+            return {
+              step_date: parsed.data ?? fallbackData,
+              content: parsed.texto ?? fallbackTexto,
+              type: parsed.tipo ?? null,
+            };
+          }
+        }
+        return { step_date: fallbackData, content: fallbackTexto };
+      }
       const items = eventos.map((e) => ({
         id: e.id,
         responseType: e.tipo === "movimentacao" ? "step" : e.tipo,
-        responseData: e.conteudoJson ? safeParse(e.conteudoJson) : { texto: e.conteudo, data: e.dataEvento },
+        responseData: adaptarMov(e.conteudoJson ? safeParse(e.conteudoJson) : null, e.conteudo, e.dataEvento),
         createdAt: e.createdAt,
         lido: e.lido,
       }));
       const naoLidas = eventos.filter((e) => !e.lido).length;
-      return { items, eventos, totalNaoLidas: naoLidas };
+
+      // Capa e partes vêm do monitoramento (persistidos pelo cron e
+      // pela busca sob demanda). Adaptamos pra Judit shape aqui pra
+      // que o frontend (MonitoramentoCard) leia os mesmos campos
+      // (tribunal_acronym, amount, instance, parties[].name/side/...)
+      // que ele já renderiza no caminho do `processoCompleto` state.
+      const capaParsed = mon.capaJson ? safeParse(mon.capaJson) : null;
+      const partesParsed = mon.partesJson ? safeParse(mon.partesJson) : null;
+      // Passar movs reais (extraídas dos eventos_processo) pro adapter
+      // pra que `capa.steps` também tenha dados como redundância. Se o
+      // frontend cair em algum fluxo que não monta steps via items,
+      // ainda pega do spread {...capa}.
+      const movsParaAdapter = eventos
+        .filter((e) => e.tipo === "movimentacao")
+        .map((e) => {
+          const parsed = e.conteudoJson ? safeParse(e.conteudoJson) : null;
+          if (parsed && (parsed.data || parsed.texto)) return parsed;
+          return { data: e.dataEvento, texto: e.conteudo };
+        });
+      const capa = capaParsed
+        ? adaptarParaJuditShape(
+            {
+              capa: { ...capaParsed, partes: partesParsed ?? capaParsed.partes ?? [] },
+              movimentacoes: movsParaAdapter,
+              tribunal: mon.tribunal,
+            },
+            mon.searchKey,
+          )
+        : null;
+
+      log.info(
+        { monId: mon.id, totalEventos: eventos.length, totalMovs: movsParaAdapter.length, temCapa: !!capa },
+        "[processos] historicoMonitoramento",
+      );
+
+      return { items, eventos, capa, partes: capa?.parties ?? [], totalNaoLidas: naoLidas };
     }),
 
   // Dispara consulta direta do processo associado a um monitoramento.
@@ -669,8 +749,85 @@ export const processosRouter = router({
         return { encontrado: false, mensagem: resultado.mensagemErro ?? "Erro desconhecido" };
       }
 
-      // Atualiza monitoramento + insere movs novas (best effort)
+      // Persiste movs no DB (mesma lógica do cron, mas como busca foi
+      // sob demanda do user marcamos lido=true — não dispara notif).
+      // Sem isso, o user pagava 1 cred toda vez que abrisse o card e o
+      // refresh perdia tudo (state in-memory).
+      const capaJson = resultado.capa ? JSON.stringify(resultado.capa) : null;
+      const partesJson = resultado.capa?.partes
+        ? JSON.stringify(resultado.capa.partes)
+        : null;
+
+      // Contadores pra log diagnóstico — sem visibilidade no que está
+      // sendo persistido, fica difícil distinguir "scraper veio vazio"
+      // de "INSERT falhou silenciosamente" quando o user reporta movs
+      // não aparecendo após refresh.
+      let inseridos = 0;
+      let dedup = 0;
+      let dataInvalida = 0;
+      let erroInsert = 0;
       try {
+        for (const mov of resultado.movimentacoes) {
+          // Valida data antes de tentar inserir — Invalid Date faz
+          // MySQL rejeitar com erro genérico que cai no catch dedup
+          // sem distinção. Pula explicitamente.
+          const dataParsed = new Date(mov.data);
+          if (Number.isNaN(dataParsed.getTime())) {
+            dataInvalida++;
+            continue;
+          }
+          const dedupHash = hashEvento([
+            "movimentacao",
+            mon.searchKey,
+            mov.data,
+            mov.texto.slice(0, 200),
+          ]);
+          try {
+            await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "movimentacao",
+              dataEvento: dataParsed,
+              fonte: "pje",
+              conteudo: mov.texto,
+              conteudoJson: JSON.stringify(mov),
+              cnjAfetado: mon.searchKey,
+              hashDedup: dedupHash,
+              lido: true,
+            });
+            inseridos++;
+          } catch (err) {
+            const errAny = err as any;
+            // Drizzle envolve mysql2 — err.message é só "Failed
+            // query: ..." (sem "Duplicate"). A verdade fica em
+            // err.cause.code === "ER_DUP_ENTRY". Antes o detector
+            // checava err.message, classificava dedup como erro real
+            // e enchia o log de warns falsos.
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (isDedup) {
+              dedup++;
+            } else {
+              erroInsert++;
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn(
+                {
+                  err: msg,
+                  causeMessage: errAny?.cause?.message,
+                  causeCode: errAny?.cause?.code,
+                  causeSqlMessage: errAny?.cause?.sqlMessage,
+                  causeSqlState: errAny?.cause?.sqlState,
+                  causeErrno: errAny?.cause?.errno,
+                  monId: mon.id,
+                  cnj: mon.searchKey,
+                  movData: mov.data,
+                },
+                "[buscarProcessoCompleto] INSERT eventoProcesso falhou (não-dedup)",
+              );
+            }
+          }
+        }
         await db
           .update(motorMonitoramentos)
           .set({
@@ -679,17 +836,29 @@ export const processosRouter = router({
               ? new Date(resultado.movimentacoes[0].data)
               : null,
             ultimaMovimentacaoTexto: resultado.movimentacoes[0]?.texto?.slice(0, 500) ?? null,
+            capaJson,
+            partesJson,
+            status: "ativo",
             ultimoErro: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
-      } catch {
-        /* best-effort */
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err: msg, monId: mon.id, cnj: mon.searchKey },
+          "[buscarProcessoCompleto] persistência falhou (UPDATE ou loop externo)",
+        );
       }
 
       // Adapta ResultadoScraper → shape JuditLawsuit-like que o
       // frontend `MonitoramentoCard` espera (steps, parties, code, etc).
       const processoAdaptado = adaptarParaJuditShape(resultado, mon.searchKey);
-      return { encontrado: true, processo: processoAdaptado };
+      const totalMovs = resultado.movimentacoes.length;
+      log.info(
+        { monId: mon.id, cnj: mon.searchKey, totalMovs, inseridos, dedup, dataInvalida, erroInsert, latenciaMs: resultado.latenciaMs },
+        "[motor-proprio] buscarProcessoCompleto",
+      );
+      return { encontrado: true, processo: processoAdaptado, totalMovs };
     }),
 
   // ─── NOVAS AÇÕES por CPF/CNPJ (Sub-sprint 2.2) ─────────────────────────

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,17 @@ import {
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", name: "Nome" };
-const STATUS_MON: Record<string, { label: string; cor: string }> = { created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" }, updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" }, updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" }, paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" } };
+// "ativo" / "pausado" / "erro" são os 3 valores do enum atual em motor_monitoramentos.
+// Legado Judit (created/updating/updated/paused) mantido pra cards antigos.
+const STATUS_MON: Record<string, { label: string; cor: string }> = {
+  ativo: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
+  erro: { label: "Erro", cor: "bg-red-100 text-red-700" },
+  pausado: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
+  created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
+  updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" },
+  updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" },
+  paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
+};
 const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ", consulta_historica: "Consulta CPF/CNPJ/Nome", consulta_sintetica: "Consulta sintetica", monitorar_processo: "Monitorar processo", monitorar_pessoa: "Monitorar pessoa/empresa", resumo_ia: "Resumo IA", anexos: "Baixar anexos" };
 
 /**
@@ -273,8 +283,24 @@ function ConsultarTab() {
 
   /** Ao clicar "Monitorar" num ProcessoCard: cria monitoramento E verifica se partes são clientes */
   const handleMonitorar = (cnj: string, processo?: any) => {
+    // Resolve credencial: usa a selecionada no dropdown se houver,
+    // senão pega a 1ª ativa do cofre. credencialId é obrigatório no
+    // backend (Zod) — sem fallback, click em "Monitorar" depois de
+    // consulta pública dava erro Zod opaco no toast.
+    const credSelecionada = credencialId ? Number(credencialId) : null;
+    const credAuto = credsDisponiveis[0]?.id ?? null;
+    const credId = credSelecionada ?? credAuto;
+
+    if (!credId) {
+      toast.error("Sem credencial OAB ativa", {
+        description: "Cadastre/valide uma credencial em Cofre antes de monitorar.",
+        duration: 8000,
+      });
+      return;
+    }
+
     // 1. Criar monitoramento
-    monitorarMut.mutate({ numeroCnj: cnj, credencialId: credencialId ? Number(credencialId) : undefined });
+    monitorarMut.mutate({ numeroCnj: cnj, credencialId: credId });
 
     // 2. Verificar se alguma parte do processo é cliente cadastrado
     if (processo && todosClientes.length > 0) {
@@ -588,19 +614,43 @@ function MonitoramentoCard({
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
   });
 
+  // Lock síncrono pra impedir double-click cobrar 2 créditos. mutation.isPending
+  // só vira true no próximo render — entre o 1º click e o re-render, um 2º click
+  // passaria pelo disabled e dispararia 2ª request. Lock baseado em ref bloqueia
+  // imediatamente.
+  const buscarLockRef = useRef(false);
   const buscarCompletoMut = (trpc.processos as any).buscarProcessoCompleto.useMutation({
     onSuccess: (data: any) => {
       if (data.encontrado && data.processo) {
         setProcessoCompleto(data.processo);
-        toast.success("Histórico completo carregado e salvo (1 crédito)");
-        // Refetch historico local pra que o dado persistido apareça na próxima abertura
+        const totalMovs = typeof data.totalMovs === "number" ? data.totalMovs : null;
+        if (totalMovs === 0) {
+          toast.success("Processo encontrado, sem movimentações no tribunal (1 crédito)", {
+            description: "O tribunal retornou 0 movimentações. O processo pode estar sem trâmite recente ou em segredo de justiça.",
+            duration: 8000,
+          });
+        } else if (totalMovs !== null) {
+          toast.success(`${totalMovs} movimentação(ões) carregada(s) e salva(s) (1 crédito)`);
+        } else {
+          toast.success("Histórico completo carregado e salvo (1 crédito)");
+        }
+        // Refetch historico local pra que o dado persistido apareça
         if (mon.id) refetchHist();
       } else {
         toast.error(data.mensagem || "Processo não encontrado");
       }
     },
     onError: (e: any) => toast.error("Erro ao buscar", { description: e.message }),
+    onSettled: () => {
+      buscarLockRef.current = false;
+    },
   });
+
+  function clickHistorico() {
+    if (buscarLockRef.current) return;
+    buscarLockRef.current = true;
+    buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id });
+  }
 
   const searchType = mon.searchType || mon.search?.search_type || "";
   const st = STATUS_MON[status] || { label: status, cor: "" };
@@ -611,15 +661,44 @@ function MonitoramentoCard({
     { enabled: aberto && !!mon.id, retry: false },
   );
 
-  // Extrai dados do processo: prioridade para busca completa, fallback para webhook local
+  // Extrai dados do processo com fallback em cascata pras steps —
+  // diferentes fontes preenchem em momentos diferentes:
+  //
+  //   - processoCompleto: setado IMEDIATAMENTE após buscar Histórico.
+  //     Tem steps populados pelo backend (adaptarParaJuditShape).
+  //   - historico.items: vem do banco após refetchHist. Pode estar
+  //     vazio se o cron ainda não rodou ou INSERT falhou silenciosamente.
+  //   - historico.capa.steps: backup adicional caso items esteja vazio
+  //     (capa adaptada inclui steps quando movs foram passadas).
+  //
+  // Prioridade final pras steps: usa o primeiro não-vazio. Garante que
+  // um caminho falho (ex: items vazio) não esconde dados que outros
+  // caminhos têm. Pré-#217 a UX usava só state — voltei a priorizá-lo
+  // e adicionei o fallback em cascata pra robustez.
   const respostas = historico?.items || [];
   const ultimaResposta = respostas.find((r: any) => r.responseType === "lawsuit");
+  const stepsFromHist = respostas
+    .filter((r: any) => r.responseType === "step")
+    .map((r: any) => r.responseData);
+  const stepsFromState = processoCompleto?.steps ?? [];
+  const stepsFromCapa = historico?.capa?.steps ?? [];
+  const stepsFinal = stepsFromHist.length > 0
+    ? stepsFromHist
+    : stepsFromState.length > 0
+      ? stepsFromState
+      : stepsFromCapa;
+
   let processoData: any = null;
-  // 1. Prioridade: processo completo buscado sob demanda (botão Histórico)
-  if (processoCompleto) {
+  if (historico?.capa) {
+    processoData = {
+      ...historico.capa,
+      parties: historico.partes ?? historico.capa.parties ?? processoCompleto?.parties ?? [],
+      steps: stepsFinal,
+    };
+  } else if (processoCompleto) {
     processoData = processoCompleto;
   } else if (ultimaResposta?.responseData) {
-    // 2. Fallback: dados do webhook (atualizações)
+    // Fallback legado (Judit): dados do webhook
     try {
       processoData = typeof ultimaResposta.responseData === "string"
         ? JSON.parse(ultimaResposta.responseData)
@@ -664,7 +743,7 @@ function MonitoramentoCard({
                   className="h-7 text-[10px] text-indigo-600"
                   title="Atualizar processo agora — consulta tribunal (1 crédito)"
                   disabled={buscarCompletoMut.isPending}
-                  onClick={() => buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id })}
+                  onClick={clickHistorico}
                 >
                   {buscarCompletoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
                   Histórico
@@ -801,6 +880,15 @@ function MonitoramentoCard({
                       ))}
                     </div>
                   </div>
+                ) : processoData ? (
+                  // Capa veio (do DB ou da consulta), mas sem movs:
+                  // tribunal retornou processo "vazio" — pode ser
+                  // segredo de justiça ou processo recém-distribuído.
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    Tribunal não retornou movimentações pra este processo.
+                    <br />
+                    <span className="text-[10px]">Pode estar em segredo de justiça ou sem trâmite recente.</span>
+                  </p>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-4">
                     Sem movimentações registradas ainda.

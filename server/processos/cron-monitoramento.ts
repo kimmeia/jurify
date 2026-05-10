@@ -48,7 +48,7 @@ function hashMovimentacoes(
   return crypto.createHash("sha256").update(concat).digest("hex");
 }
 
-function hashEvento(componentes: string[]): string {
+export function hashEvento(componentes: string[]): string {
   return crypto
     .createHash("sha256")
     .update(componentes.join("|"))
@@ -143,12 +143,27 @@ export async function pollMonitoramentosMovs(): Promise<void> {
       }
 
       const novoHash = hashMovimentacoes(resultado.movimentacoes);
-      const houveMudanca = novoHash !== mon.hashUltimasMovs;
+      const isPrimeiraExecucao = !mon.hashUltimasMovs;
+      // Capa + partes vêm de graça em todo consultarTjce. Persistir
+      // aqui evita o user pagar 1 cred no botão "Histórico" só pra ver
+      // dados que já chegaram. Auto-cura `status="ativo"` cobre o caso
+      // de monitoramento que foi marcado como "erro" (ex: sessão
+      // expirou) e voltou a funcionar — sem isso a tag fica presa.
+      const capaJson = resultado.capa ? JSON.stringify(resultado.capa) : null;
+      const partesJson = resultado.capa?.partes
+        ? JSON.stringify(resultado.capa.partes)
+        : null;
 
-      if (houveMudanca) {
-        // Detecta movs novas: tudo o que não está em eventos_processo
-        // ainda. Dedup via hashDedup com ON DUPLICATE.
-        const movsNovas: typeof resultado.movimentacoes = [];
+      if (isPrimeiraExecucao) {
+        // Baseline silencioso: na primeira execução depois do
+        // monitoramento ser criado, todas as movs já existentes do
+        // processo viriam como "novas" sem este guard — e o usuário
+        // veria 6 meses de histórico explodindo no sino.
+        //
+        // Estratégia: insere os eventos com lido=true (pra ficar
+        // disponível no histórico se quiserem consultar) e NÃO cria
+        // notif. Próximas execuções comparam contra hashUltimasMovs
+        // setado abaixo e só notificam o que aparecer depois.
         for (const mov of resultado.movimentacoes) {
           const dedup = hashEvento([
             "movimentacao",
@@ -156,7 +171,6 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             mov.data,
             mov.texto.slice(0, 200),
           ]);
-          // Tenta inserir; se já existe (UNIQUE hashDedup), ignora
           try {
             await db.insert(eventosProcesso).values({
               monitoramentoId: mon.id,
@@ -168,11 +182,108 @@ export async function pollMonitoramentosMovs(): Promise<void> {
               conteudoJson: JSON.stringify(mov),
               cnjAfetado: mon.searchKey,
               hashDedup: dedup,
+              lido: true,
+            });
+          } catch (err) {
+            // Drizzle envolve mysql2; "Duplicate" não está em
+            // err.message — só em err.cause.message. Checa code/errno
+            // pra distinguir dedup esperado de erro real.
+            const errAny = err as any;
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (!isDedup) {
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn(
+                {
+                  err: msg,
+                  causeMessage: errAny?.cause?.message,
+                  causeCode: errAny?.cause?.code,
+                  causeSqlMessage: errAny?.cause?.sqlMessage,
+                  causeSqlState: errAny?.cause?.sqlState,
+                  monId: mon.id,
+                  cnj: mon.searchKey,
+                },
+                "[motor-cron] baseline INSERT eventoProcesso falhou (não-dedup)",
+              );
+            }
+          }
+        }
+        const ultimaMov = resultado.movimentacoes[0]; // mais recente
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            hashUltimasMovs: novoHash,
+            ultimaMovimentacaoEm: ultimaMov ? new Date(ultimaMov.data) : null,
+            ultimaMovimentacaoTexto: ultimaMov?.texto.slice(0, 500) ?? null,
+            capaJson,
+            partesJson,
+            status: "ativo",
+            ultimaConsultaEm: new Date(),
+            ultimoErro: null,
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        log.info(
+          { monId: mon.id, baseline: resultado.movimentacoes.length },
+          "[motor-cron] baseline silencioso registrado",
+        );
+        continue;
+      }
+
+      const houveMudanca = novoHash !== mon.hashUltimasMovs;
+
+      if (houveMudanca) {
+        // Detecta movs novas: tudo o que não está em eventos_processo
+        // ainda. Dedup via hashDedup com ON DUPLICATE.
+        // Captura o insertId pra que a notif criada abaixo carregue
+        // FK pro evento — frontend usa pra abrir drawer de detalhe.
+        const movsNovas: Array<{
+          mov: typeof resultado.movimentacoes[number];
+          eventoId: number;
+        }> = [];
+        for (const mov of resultado.movimentacoes) {
+          const dedup = hashEvento([
+            "movimentacao",
+            mon.searchKey,
+            mov.data,
+            mov.texto.slice(0, 200),
+          ]);
+          // Tenta inserir; se já existe (UNIQUE hashDedup), ignora
+          try {
+            const [result] = await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "movimentacao",
+              dataEvento: new Date(mov.data),
+              fonte: "pje",
+              conteudo: mov.texto,
+              conteudoJson: JSON.stringify(mov),
+              cnjAfetado: mon.searchKey,
+              hashDedup: dedup,
               lido: false,
             });
-            movsNovas.push(mov);
-          } catch {
-            // Duplicate key → mov já capturada antes, ignora
+            const eventoId = (result as { insertId: number }).insertId;
+            movsNovas.push({ mov, eventoId });
+          } catch (err) {
+            const errAny = err as any;
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (!isDedup) {
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn(
+                {
+                  err: msg,
+                  causeMessage: errAny?.cause?.message,
+                  causeCode: errAny?.cause?.code,
+                  causeSqlMessage: errAny?.cause?.sqlMessage,
+                  causeSqlState: errAny?.cause?.sqlState,
+                  monId: mon.id,
+                  cnj: mon.searchKey,
+                },
+                "[motor-cron] poll INSERT eventoProcesso falhou (não-dedup)",
+              );
+            }
           }
         }
 
@@ -186,18 +297,23 @@ export async function pollMonitoramentosMovs(): Promise<void> {
               ultimaMovimentacaoEm: new Date(ultimaMov.data),
               ultimaMovimentacaoTexto: ultimaMov.texto.slice(0, 500),
               totalAtualizacoes: mon.totalAtualizacoes + movsNovas.length,
+              capaJson,
+              partesJson,
+              status: "ativo",
               ultimaConsultaEm: new Date(),
               ultimoErro: null,
             })
             .where(eq(motorMonitoramentos.id, mon.id));
 
-          // Notificação in-app
-          for (const mov of movsNovas.slice(0, 3)) {
+          // Notificação in-app — uma por mov (até 3 pra não inundar).
+          // eventoId permite frontend abrir drawer com detalhe direto.
+          for (const { mov, eventoId } of movsNovas.slice(0, 3)) {
             await db.insert(notificacoes).values({
               userId: mon.criadoPor,
               titulo: `Nova movimentação: ${mon.apelido ?? mon.searchKey}`,
               mensagem: mov.texto.slice(0, 200),
               tipo: "movimentacao",
+              eventoId,
             });
           }
 
@@ -220,15 +336,26 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             .update(motorMonitoramentos)
             .set({
               hashUltimasMovs: novoHash,
+              capaJson,
+              partesJson,
+              status: "ativo",
               ultimaConsultaEm: new Date(),
+              ultimoErro: null,
             })
             .where(eq(motorMonitoramentos.id, mon.id));
         }
       } else {
-        // Sem mudança — só atualiza ultimaConsultaEm
+        // Sem mudança — só atualiza ultimaConsultaEm + auto-cura status
+        // e refresca capa/partes (úteis caso só esses tenham mudado).
         await db
           .update(motorMonitoramentos)
-          .set({ ultimaConsultaEm: new Date(), ultimoErro: null })
+          .set({
+            capaJson,
+            partesJson,
+            status: "ativo",
+            ultimaConsultaEm: new Date(),
+            ultimoErro: null,
+          })
           .where(eq(motorMonitoramentos.id, mon.id));
       }
     } catch (err) {

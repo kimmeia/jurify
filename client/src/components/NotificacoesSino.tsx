@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import MovimentacaoDetalheDrawer from "@/components/MovimentacaoDetalheDrawer";
 import {
   Bell,
   Check,
@@ -22,23 +23,39 @@ import {
   Info,
   CreditCard,
   Loader2,
+  Siren,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
 const tipoIconMap: Record<string, React.ReactNode> = {
   movimentacao: <FileSearch className="h-4 w-4 text-blue-500" />,
+  nova_acao: <Siren className="h-4 w-4 text-red-500" />,
   sistema: <Info className="h-4 w-4 text-amber-500" />,
   plano: <CreditCard className="h-4 w-4 text-emerald-500" />,
 };
 
 const tipoLabelMap: Record<string, string> = {
   movimentacao: "Processo",
+  nova_acao: "Nova Ação",
   sistema: "Sistema",
   plano: "Plano",
 };
 
+type FiltroTipo = "todos" | "processos" | "sistema";
+
+// Mapeia o filtro UX pra lista de tipos do enum no DB. "Processos"
+// agrupa movs reais e novas ações pra ficar simples no popover; o
+// click handler decide a tab certa por tipo individual.
+const FILTRO_PRA_TIPOS: Record<FiltroTipo, ("movimentacao" | "sistema" | "plano" | "nova_acao")[] | undefined> = {
+  todos: undefined,
+  processos: ["movimentacao", "nova_acao"],
+  sistema: ["sistema", "plano"],
+};
+
 export default function NotificacoesSino() {
   const [open, setOpen] = useState(false);
+  const [filtro, setFiltro] = useState<FiltroTipo>("todos");
+  const [eventoIdAberto, setEventoIdAberto] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
@@ -48,7 +65,7 @@ export default function NotificacoesSino() {
   });
 
   const listarQuery = trpc.notificacoes.listar.useQuery(
-    { limit: 20 },
+    { limit: 50, tipos: FILTRO_PRA_TIPOS[filtro] },
     {
       enabled: open,
       refetchOnWindowFocus: false,
@@ -84,9 +101,23 @@ export default function NotificacoesSino() {
     if (!notif.lida) {
       marcarLidaMutation.mutate({ notificacaoId: notif.id });
     }
-    if (notif.tipo === "movimentacao" && notif.processoId) {
+    // Movimentação com eventoId: abre drawer de detalhe (texto completo,
+    // data real do PJe, monitoramento). Sem eventoId (notifs antigas
+    // pré-PR #214): cai no comportamento legado de redirect.
+    if (notif.tipo === "movimentacao") {
+      if (notif.eventoId) {
+        setOpen(false);
+        setEventoIdAberto(Number(notif.eventoId));
+        return;
+      }
       setOpen(false);
-      setLocation("/processos");
+      setLocation("/processos?tab=movimentacoes");
+      return;
+    }
+    if (notif.tipo === "nova_acao") {
+      setOpen(false);
+      setLocation("/processos?tab=novas-acoes");
+      return;
     }
     if (notif.tipo === "plano") {
       setOpen(false);
@@ -129,6 +160,23 @@ export default function NotificacoesSino() {
               Marcar todas
             </Button>
           )}
+        </div>
+
+        {/* Filtros por tipo: necessários quando há volume alto (ex:
+            cron de comissões cria muitas) e o tipo procurado fica
+            soterrado nos primeiros 50 do listar. */}
+        <div className="flex gap-1 px-4 pb-2">
+          {(["todos", "processos", "sistema"] as const).map((f) => (
+            <Button
+              key={f}
+              variant={filtro === f ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 text-[11px] px-2.5 capitalize"
+              onClick={() => setFiltro(f)}
+            >
+              {f}
+            </Button>
+          ))}
         </div>
         <Separator />
 
@@ -216,6 +264,11 @@ export default function NotificacoesSino() {
           )}
         </div>
       </PopoverContent>
+
+      <MovimentacaoDetalheDrawer
+        eventoId={eventoIdAberto}
+        onClose={() => setEventoIdAberto(null)}
+      />
     </Popover>
   );
 }
