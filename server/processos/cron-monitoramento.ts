@@ -48,7 +48,7 @@ function hashMovimentacoes(
   return crypto.createHash("sha256").update(concat).digest("hex");
 }
 
-function hashEvento(componentes: string[]): string {
+export function hashEvento(componentes: string[]): string {
   return crypto
     .createHash("sha256")
     .update(componentes.join("|"))
@@ -144,6 +144,15 @@ export async function pollMonitoramentosMovs(): Promise<void> {
 
       const novoHash = hashMovimentacoes(resultado.movimentacoes);
       const isPrimeiraExecucao = !mon.hashUltimasMovs;
+      // Capa + partes vêm de graça em todo consultarTjce. Persistir
+      // aqui evita o user pagar 1 cred no botão "Histórico" só pra ver
+      // dados que já chegaram. Auto-cura `status="ativo"` cobre o caso
+      // de monitoramento que foi marcado como "erro" (ex: sessão
+      // expirou) e voltou a funcionar — sem isso a tag fica presa.
+      const capaJson = resultado.capa ? JSON.stringify(resultado.capa) : null;
+      const partesJson = resultado.capa?.partes
+        ? JSON.stringify(resultado.capa.partes)
+        : null;
 
       if (isPrimeiraExecucao) {
         // Baseline silencioso: na primeira execução depois do
@@ -187,6 +196,9 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             hashUltimasMovs: novoHash,
             ultimaMovimentacaoEm: ultimaMov ? new Date(ultimaMov.data) : null,
             ultimaMovimentacaoTexto: ultimaMov?.texto.slice(0, 500) ?? null,
+            capaJson,
+            partesJson,
+            status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
           })
@@ -247,6 +259,9 @@ export async function pollMonitoramentosMovs(): Promise<void> {
               ultimaMovimentacaoEm: new Date(ultimaMov.data),
               ultimaMovimentacaoTexto: ultimaMov.texto.slice(0, 500),
               totalAtualizacoes: mon.totalAtualizacoes + movsNovas.length,
+              capaJson,
+              partesJson,
+              status: "ativo",
               ultimaConsultaEm: new Date(),
               ultimoErro: null,
             })
@@ -283,15 +298,26 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             .update(motorMonitoramentos)
             .set({
               hashUltimasMovs: novoHash,
+              capaJson,
+              partesJson,
+              status: "ativo",
               ultimaConsultaEm: new Date(),
+              ultimoErro: null,
             })
             .where(eq(motorMonitoramentos.id, mon.id));
         }
       } else {
-        // Sem mudança — só atualiza ultimaConsultaEm
+        // Sem mudança — só atualiza ultimaConsultaEm + auto-cura status
+        // e refresca capa/partes (úteis caso só esses tenham mudado).
         await db
           .update(motorMonitoramentos)
-          .set({ ultimaConsultaEm: new Date(), ultimoErro: null })
+          .set({
+            capaJson,
+            partesJson,
+            status: "ativo",
+            ultimaConsultaEm: new Date(),
+            ultimoErro: null,
+          })
           .where(eq(motorMonitoramentos.id, mon.id));
       }
     } catch (err) {
