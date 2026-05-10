@@ -101,7 +101,7 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
   });
 
   const todosPreenchidos = placeholdersManuais.every((p) =>
-    (valoresManuais[String(p.numero)] || "").trim().length > 0,
+    (valoresManuais[p.nome] || "").trim().length > 0,
   );
 
   return (
@@ -163,12 +163,12 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
                     {placeholdersVariavel.map((p) =>
                       p.tipo === "variavel" ? (
                         <Badge
-                          key={p.numero}
+                          key={p.nome}
                           variant="secondary"
                           className="text-[10px] h-5 font-mono"
                           title={p.variavel}
                         >
-                          {`{{${p.numero}}}`} → {p.variavel}
+                          {`{{${p.nome}}}`} → {p.label ?? p.variavel}
                         </Badge>
                       ) : null,
                     )}
@@ -182,16 +182,18 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
                   <p className="text-xs font-medium">Preencha os campos manuais:</p>
                   {placeholdersManuais.map((p) => {
                     if (p.tipo !== "manual") return null;
-                    const key = String(p.numero);
                     return (
-                      <div key={p.numero} className="space-y-1">
+                      <div key={p.nome} className="space-y-1">
                         <Label className="text-xs">
-                          {p.label} <span className="text-muted-foreground font-mono">({`{{${p.numero}}}`})</span>
+                          {p.label}{" "}
+                          <span className="text-muted-foreground font-mono">
+                            ({`{{${p.nome}}}`})
+                          </span>
                         </Label>
                         <Input
-                          value={valoresManuais[key] || ""}
+                          value={valoresManuais[p.nome] || ""}
                           onChange={(e) =>
-                            setValoresManuais((v) => ({ ...v, [key]: e.target.value }))
+                            setValoresManuais((v) => ({ ...v, [p.nome]: e.target.value }))
                           }
                           placeholder={p.dica || ""}
                         />

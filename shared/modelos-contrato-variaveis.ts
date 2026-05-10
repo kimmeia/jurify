@@ -195,12 +195,35 @@ export function resolverVariavel(path: string, ctx: ContextoContrato): string {
 
 // ─── Placeholder schema ────────────────────────────────────────────────────
 
+/**
+ * Placeholder de um modelo. Sintaxe evoluiu de `{{N}}` numérico pra nomes
+ * amigáveis ({{nome completo}}, {{nacionalidade}}). Campo `nome` é o
+ * identificador único (case-preserved como aparece no DOCX); `numero` é
+ * mantido opcional pra retro-compat com modelos legados antes da migração.
+ *
+ * - `variavel`: tipo automático, resolve do contexto contato/escritório/data
+ *   via `resolverVariavel(p.variavel, ctx)`.
+ * - `manual`: operador preenche no modal "Gerar contrato".
+ */
 export type Placeholder =
-  | { numero: number; tipo: "variavel"; variavel: string }
-  | { numero: number; tipo: "manual"; label: string; dica?: string };
+  | {
+      nome: string;
+      numero?: number;
+      tipo: "variavel";
+      variavel: string;
+      label?: string;
+    }
+  | {
+      nome: string;
+      numero?: number;
+      tipo: "manual";
+      label: string;
+      dica?: string;
+    };
 
 /** Detecta `{{N}}` (números) num texto bruto. Retorna lista ordenada de
- *  números únicos detectados. Ex: "{{1}} e {{3}} e {{1}}" → [1, 3]. */
+ *  números únicos detectados. Ex: "{{1}} e {{3}} e {{1}}" → [1, 3].
+ *  Mantida pra compat com testes do schema antigo. */
 export function detectarPlaceholdersNumerados(texto: string): number[] {
   const matches = texto.matchAll(/\{\{\s*(\d+)\s*\}\}/g);
   const numeros = new Set<number>();
@@ -209,4 +232,43 @@ export function detectarPlaceholdersNumerados(texto: string): number[] {
     if (Number.isFinite(n) && n > 0) numeros.add(n);
   }
   return Array.from(numeros).sort((a, b) => a - b);
+}
+
+/** Detecta TODOS os placeholders num texto bruto (nomes amigáveis +
+ *  numéricos legados). Retorna lista de tokens únicos preservando
+ *  capitalização original como aparece no DOCX. Ex:
+ *  "{{Nome Completo}} mora em {{cidade}} e tem {{idade}}" →
+ *  ["Nome Completo", "cidade", "idade"]. */
+export function detectarPlaceholders(texto: string): string[] {
+  // Pega qualquer coisa entre `{{` e `}}` sem chaves aninhadas.
+  const matches = texto.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g);
+  const tokens = new Set<string>();
+  for (const m of matches) {
+    const t = m[1].trim();
+    if (t) tokens.add(t);
+  }
+  return Array.from(tokens);
+}
+
+/** Normaliza nome de placeholder pra comparação case-insensitive,
+ *  preservando espaços (docxtemplater suporta keys com espaço). */
+export function normalizarNomePlaceholder(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+/** Tenta achar variável no catálogo pelo nome amigável. Match contra
+ *  `label` (ex: "Nome completo") OU `path` (ex: "cliente.nome") —
+ *  case-insensitive. Retorna `null` se não bater. */
+export function inferirVariavelDeNome(
+  nome: string,
+  catalogo: VariavelCatalogo[],
+): VariavelCatalogo | null {
+  const alvo = normalizarNomePlaceholder(nome);
+  return (
+    catalogo.find(
+      (v) =>
+        normalizarNomePlaceholder(v.label) === alvo ||
+        normalizarNomePlaceholder(v.path) === alvo,
+    ) ?? null
+  );
 }

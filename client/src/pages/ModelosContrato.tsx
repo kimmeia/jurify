@@ -40,6 +40,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileText,
+  Folder as FolderIcon,
   Loader2,
   Pencil,
   Plus,
@@ -58,6 +59,7 @@ interface ModeloLista {
   arquivoNome: string;
   tamanho: number | null;
   placeholders: Placeholder[];
+  pasta: string | null;
   createdAt: string | Date;
 }
 
@@ -89,10 +91,11 @@ export default function ModelosContrato() {
             Modelos de contrato
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Suba modelos .docx com placeholders <code className="text-[11px] mx-0.5 bg-muted px-1 rounded">{`{{1}}`}</code>,
-            <code className="text-[11px] mx-0.5 bg-muted px-1 rounded">{`{{2}}`}</code>, ... e configure cada um como
-            <b className="mx-1 text-foreground">variável</b> (preenche automático do cadastro do cliente)
-            ou <b className="mx-1 text-foreground">manual</b> (você preenche na hora de gerar).
+            Suba modelos .docx com placeholders nomeados como
+            <code className="text-[11px] mx-0.5 bg-muted px-1 rounded">{`{{nome completo}}`}</code>,
+            <code className="text-[11px] mx-0.5 bg-muted px-1 rounded">{`{{nacionalidade}}`}</code>.
+            O sistema reconhece variáveis do catálogo automaticamente; o resto fica como
+            <b className="mx-1 text-foreground">manual</b> pra você preencher ao gerar.
           </p>
         </div>
         {isGestor && (
@@ -127,63 +130,12 @@ export default function ModelosContrato() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
-          {(modelos as ModeloLista[]).map((m) => {
-            const totalVar = m.placeholders.filter((p) => p.tipo === "variavel").length;
-            const totalManual = m.placeholders.filter((p) => p.tipo === "manual").length;
-            return (
-              <Card key={m.id} className="hover:shadow-sm hover:border-foreground/20 transition-all">
-                <CardContent className="py-3 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-info-bg text-info-fg flex items-center justify-center flex-shrink-0">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{m.nome}</span>
-                      <Badge variant="secondary" className="text-[10px] h-5 font-normal">
-                        {m.placeholders.length} placeholder(s)
-                      </Badge>
-                      {totalVar > 0 && (
-                        <Badge className="text-[10px] h-5 border-0 bg-info-bg text-info-fg">
-                          <Variable className="h-2.5 w-2.5 mr-1" />
-                          {totalVar} var
-                        </Badge>
-                      )}
-                      {totalManual > 0 && (
-                        <Badge className="text-[10px] h-5 border-0 bg-warning-bg text-warning-fg">
-                          {totalManual} manual
-                        </Badge>
-                      )}
-                    </div>
-                    {m.descricao && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{m.descricao}</p>
-                    )}
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {m.arquivoNome}
-                      {m.tamanho ? ` · ${(m.tamanho / 1024).toFixed(0)} KB` : ""}
-                    </p>
-                  </div>
-                  {isGestor && (
-                    <div className="flex items-center gap-0.5 flex-shrink-0">
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setEditando(m)} title="Editar mapeamento">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        onClick={() => setExcluindo(m)}
-                        title="Excluir"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <ListaAgrupadaPorPasta
+          modelos={modelos as ModeloLista[]}
+          isGestor={!!isGestor}
+          onEditar={setEditando}
+          onExcluir={setExcluindo}
+        />
       )}
 
       {uploadOpen && (
@@ -240,29 +192,160 @@ export default function ModelosContrato() {
   );
 }
 
+// ─── Listagem agrupada por pasta ──────────────────────────────────────────
+
+/**
+ * Renderiza modelos agrupados por `pasta`. Modelos sem pasta (raiz)
+ * aparecem em "Sem pasta" no topo. Cada grupo é collapsible (default
+ * expandido). Path "Contratos/Honorários" mostra como breadcrumb.
+ */
+function ListaAgrupadaPorPasta({
+  modelos,
+  isGestor,
+  onEditar,
+  onExcluir,
+}: {
+  modelos: ModeloLista[];
+  isGestor: boolean;
+  onEditar: (m: ModeloLista) => void;
+  onExcluir: (m: ModeloLista) => void;
+}) {
+  const grupos = useMemo(() => {
+    const m = new Map<string, ModeloLista[]>();
+    for (const mod of modelos) {
+      const pasta = mod.pasta || "";
+      if (!m.has(pasta)) m.set(pasta, []);
+      m.get(pasta)!.push(mod);
+    }
+    // Ordena pastas alfabeticamente, mantém "" (raiz) primeiro
+    return Array.from(m.entries()).sort(([a], [b]) => {
+      if (a === "") return -1;
+      if (b === "") return 1;
+      return a.localeCompare(b);
+    });
+  }, [modelos]);
+
+  return (
+    <div className="space-y-4">
+      {grupos.map(([pasta, lista]) => (
+        <div key={pasta || "__raiz__"} className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <FolderIcon className="h-3.5 w-3.5" />
+            {pasta ? (
+              <span className="font-mono">{pasta}</span>
+            ) : (
+              <span>Sem pasta</span>
+            )}
+            <span className="font-normal normal-case">
+              · {lista.length} modelo{lista.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="grid gap-3">
+            {lista.map((m) => {
+              const totalVar = m.placeholders.filter((p) => p.tipo === "variavel").length;
+              const totalManual = m.placeholders.filter((p) => p.tipo === "manual").length;
+              return (
+                <Card
+                  key={m.id}
+                  className="hover:shadow-sm hover:border-foreground/20 transition-all"
+                >
+                  <CardContent className="py-3 flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-info-bg text-info-fg flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">{m.nome}</span>
+                        <Badge variant="secondary" className="text-[10px] h-5 font-normal">
+                          {m.placeholders.length} placeholder(s)
+                        </Badge>
+                        {totalVar > 0 && (
+                          <Badge className="text-[10px] h-5 border-0 bg-info-bg text-info-fg">
+                            <Variable className="h-2.5 w-2.5 mr-1" />
+                            {totalVar} var
+                          </Badge>
+                        )}
+                        {totalManual > 0 && (
+                          <Badge className="text-[10px] h-5 border-0 bg-warning-bg text-warning-fg">
+                            {totalManual} manual
+                          </Badge>
+                        )}
+                      </div>
+                      {m.descricao && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                          {m.descricao}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                        {m.arquivoNome}
+                        {m.tamanho ? ` · ${(m.tamanho / 1024).toFixed(0)} KB` : ""}
+                      </p>
+                    </div>
+                    {isGestor && (
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => onEditar(m)}
+                          title="Editar mapeamento e pasta"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => onExcluir(m)}
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Upload wizard ───────────────────────────────────────────────────────
 
 function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [pasta, setPasta] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [modeloId, setModeloId] = useState<number | null>(null);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
 
+  // Pastas existentes pra autocomplete (datalist)
+  const { data: pastasExistentes } = (trpc as any).modelosContrato.listarPastas.useQuery();
+
   const upload = (trpc as any).modelosContrato.upload.useMutation({
-    onSuccess: (r: { id: number; placeholdersDetectados: number[] }) => {
+    onSuccess: (r: { id: number; placeholdersDetectados: string[] }) => {
       setModeloId(r.id);
-      // Inicializa todos como manual (operador customiza no step 2).
+      // Backend já infere variável do catálogo quando possível (PR #231).
+      // Aqui só inicializamos pro user revisar/ajustar no PlaceholdersMapper —
+      // todos vão como manual, com label = nome (user troca pra variável
+      // se quiser).
       setPlaceholders(
-        r.placeholdersDetectados.map((n) => ({
-          numero: n,
+        r.placeholdersDetectados.map((nome) => ({
+          nome,
           tipo: "manual" as const,
-          label: `Campo ${n}`,
+          label: nome,
         })),
       );
       if (r.placeholdersDetectados.length === 0) {
-        toast.warning("Nenhum placeholder {{N}} encontrado — modelo só pode ser usado como anexo padrão");
+        toast.warning(
+          "Nenhum placeholder {{nome}} encontrado — modelo só pode ser usado como anexo padrão",
+        );
       }
       setStep(2);
     },
@@ -298,6 +381,7 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
     upload.mutate({
       nome: nome.trim(),
       descricao: descricao.trim() || undefined,
+      pasta: pasta.trim() || null,
       arquivoNome: arquivo.name,
       mimetype: arquivo.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       base64,
@@ -339,6 +423,24 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
               />
             </div>
             <div className="space-y-1.5">
+              <Label className="text-xs">Pasta (opcional)</Label>
+              <Input
+                value={pasta}
+                onChange={(e) => setPasta(e.target.value)}
+                placeholder="Ex: Contratos/Honorários — use / pra subpastas"
+                maxLength={255}
+                list="pastas-existentes"
+              />
+              <datalist id="pastas-existentes">
+                {(pastasExistentes as string[] | undefined)?.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              <p className="text-[10px] text-muted-foreground">
+                Organize modelos em pastas hierárquicas. Deixe em branco pra ficar na raiz.
+              </p>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-xs">Arquivo .docx *</Label>
               <div className="flex items-center gap-2">
                 <Input type="file" accept=".docx" onChange={handleFileChange} className="flex-1" />
@@ -349,9 +451,11 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
                 </p>
               )}
               <p className="text-[10px] text-muted-foreground">
-                Use placeholders numerados no estilo WhatsApp: <code className="bg-muted px-1 rounded">{`{{1}}`}</code>,
-                <code className="bg-muted px-1 mx-0.5 rounded">{`{{2}}`}</code>, etc. No próximo passo
-                você define o que cada um significa.
+                Escreva no DOCX placeholders com nome amigável:{" "}
+                <code className="bg-muted px-1 rounded">{`{{nome completo}}`}</code>,
+                <code className="bg-muted px-1 mx-0.5 rounded">{`{{nacionalidade}}`}</code>,
+                <code className="bg-muted px-1 mx-0.5 rounded">{`{{CPF}}`}</code>. O sistema reconhece
+                e mapeia automaticamente. Modelos com {`{{1}}, {{2}}`} legados continuam funcionando.
               </p>
             </div>
           </div>
@@ -383,7 +487,16 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
           )}
           {step === 2 && (
             <Button
-              onClick={() => modeloId && salvarMapping.mutate({ id: modeloId, placeholders })}
+              onClick={() =>
+                modeloId &&
+                salvarMapping.mutate({
+                  id: modeloId,
+                  placeholders,
+                  // pasta vai junto pra refletir mudanças do step 1 caso
+                  // user volte e edite; backend já gravou no upload.
+                  pasta: pasta.trim() || null,
+                })
+              }
               disabled={salvarMapping.isPending || !validarMapping(placeholders)}
             >
               {salvarMapping.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
@@ -409,7 +522,10 @@ function MappingEditorDialog({
 }) {
   const [nome, setNome] = useState(modelo.nome);
   const [descricao, setDescricao] = useState(modelo.descricao || "");
+  const [pasta, setPasta] = useState(modelo.pasta || "");
   const [placeholders, setPlaceholders] = useState<Placeholder[]>(modelo.placeholders);
+
+  const { data: pastasExistentes } = (trpc as any).modelosContrato.listarPastas.useQuery();
 
   const salvar = (trpc as any).modelosContrato.salvarMapping.useMutation({
     onSuccess: () => {
@@ -425,7 +541,7 @@ function MappingEditorDialog({
         <DialogHeader>
           <DialogTitle>Editar &ldquo;{modelo.nome}&rdquo;</DialogTitle>
           <DialogDescription>
-            Atualize o nome, descrição ou o mapeamento dos placeholders.
+            Atualize o nome, descrição, pasta ou o mapeamento dos placeholders.
           </DialogDescription>
         </DialogHeader>
 
@@ -443,6 +559,21 @@ function MappingEditorDialog({
               maxLength={500}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Pasta</Label>
+            <Input
+              value={pasta}
+              onChange={(e) => setPasta(e.target.value)}
+              placeholder="Ex: Contratos/Honorários (vazio = raiz)"
+              maxLength={255}
+              list="pastas-existentes-edit"
+            />
+            <datalist id="pastas-existentes-edit">
+              {(pastasExistentes as string[] | undefined)?.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+          </div>
           <PlaceholdersMapper placeholders={placeholders} onChange={setPlaceholders} />
         </div>
 
@@ -456,6 +587,7 @@ function MappingEditorDialog({
                 id: modelo.id,
                 nome: nome.trim(),
                 descricao: descricao.trim() || null,
+                pasta: pasta.trim() || null,
                 placeholders,
               })
             }
@@ -492,9 +624,9 @@ function PlaceholdersMapper({
     return acc;
   }, [catalogo]);
 
-  function atualizar(numero: number, patch: Partial<Placeholder>) {
+  function atualizar(nome: string, patch: Partial<Placeholder>) {
     onChange(
-      placeholders.map((p) => (p.numero === numero ? ({ ...p, ...patch } as Placeholder) : p)),
+      placeholders.map((p) => (p.nome === nome ? ({ ...p, ...patch } as Placeholder) : p)),
     );
   }
 
@@ -502,7 +634,7 @@ function PlaceholdersMapper({
     return (
       <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
         <Wand2 className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
-        Nenhum placeholder <code className="text-[11px] bg-muted px-1 rounded">{`{{N}}`}</code> encontrado no documento.
+        Nenhum placeholder <code className="text-[11px] bg-muted px-1 rounded">{`{{nome}}`}</code> encontrado no documento.
       </div>
     );
   }
@@ -512,19 +644,25 @@ function PlaceholdersMapper({
       <p className="text-xs text-muted-foreground">
         Para cada placeholder detectado, escolha se vai puxar de uma <b>variável</b> (preenche
         automático do cadastro) ou se será <b>manual</b> (você preenche na hora de gerar o contrato).
+        <br />
+        <span className="text-[10px]">
+          Dica: escreva no DOCX nomes amigáveis como <code className="font-mono">{`{{nome completo}}`}</code>,
+          <code className="font-mono">{` {{nacionalidade}}`}</code>, <code className="font-mono">{`{{CPF}}`}</code>
+          — o sistema reconhece automaticamente.
+        </span>
       </p>
       <div className="space-y-2">
         {placeholders.map((p) => (
-          <div key={p.numero} className="rounded-lg border p-3 space-y-2 bg-card">
+          <div key={p.nome} className="rounded-lg border p-3 space-y-2 bg-card">
             <div className="flex items-center gap-3 flex-wrap">
               <Badge className="font-mono text-xs h-6 px-2 bg-info-bg text-info-fg border-0">
-                {`{{${p.numero}}}`}
+                {`{{${p.nome}}}`}
               </Badge>
               <div className="inline-flex rounded-md border bg-background p-0.5">
                 <button
                   type="button"
                   onClick={() =>
-                    atualizar(p.numero, { tipo: "variavel", variavel: "" } as Partial<Placeholder>)
+                    atualizar(p.nome, { tipo: "variavel", variavel: "" } as Partial<Placeholder>)
                   }
                   className={`px-3 py-1 text-xs rounded ${
                     p.tipo === "variavel" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
@@ -535,9 +673,9 @@ function PlaceholdersMapper({
                 <button
                   type="button"
                   onClick={() =>
-                    atualizar(p.numero, {
+                    atualizar(p.nome, {
                       tipo: "manual",
-                      label: `Campo ${p.numero}`,
+                      label: p.nome,
                     } as Partial<Placeholder>)
                   }
                   className={`px-3 py-1 text-xs rounded ${
@@ -554,7 +692,7 @@ function PlaceholdersMapper({
                 <Label className="text-[10px] text-muted-foreground">Variável que será usada</Label>
                 <Select
                   value={p.variavel || ""}
-                  onValueChange={(v) => atualizar(p.numero, { variavel: v } as Partial<Placeholder>)}
+                  onValueChange={(v) => atualizar(p.nome, { variavel: v } as Partial<Placeholder>)}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="Selecione uma variável..." />
@@ -583,9 +721,9 @@ function PlaceholdersMapper({
                   <Input
                     value={p.label}
                     onChange={(e) =>
-                      atualizar(p.numero, { label: e.target.value } as Partial<Placeholder>)
+                      atualizar(p.nome, { label: e.target.value } as Partial<Placeholder>)
                     }
-                    maxLength={80}
+                    maxLength={120}
                     placeholder="Ex: Valor da causa"
                     className="h-9"
                   />
@@ -595,7 +733,7 @@ function PlaceholdersMapper({
                   <Input
                     value={p.dica || ""}
                     onChange={(e) =>
-                      atualizar(p.numero, { dica: e.target.value } as Partial<Placeholder>)
+                      atualizar(p.nome, { dica: e.target.value } as Partial<Placeholder>)
                     }
                     maxLength={120}
                     placeholder="Ex: R$ 10.000,00"

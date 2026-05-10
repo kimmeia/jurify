@@ -2163,11 +2163,18 @@ export const modelosContrato = mysqlTable("modelos_contrato", {
    *    operador preenche no modal "Gerar contrato"
    */
   placeholders: text("placeholdersModCt").notNull(),
+  /**
+   * Pasta hierárquica (separador `/`), ex: "Contratos/Honorários".
+   * NULL = raiz. MVP sem tabela `pastas` separada — pastas existem
+   * implicitamente porque têm modelos dentro.
+   */
+  pasta: varchar("pasta", { length: 255 }),
   criadoPorUserId: int("criadoPorUserIdModCt").notNull(),
   createdAt: timestamp("createdAtModCt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtModCt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
   modCtEscIdx: index("modct_esc_idx").on(t.escritorioId),
+  modCtPastaIdx: index("idx_modct_pasta").on(t.pasta),
 }));
 
 export type ModeloContrato = typeof modelosContrato.$inferSelect;
