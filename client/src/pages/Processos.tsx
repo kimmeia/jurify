@@ -661,24 +661,39 @@ function MonitoramentoCard({
     { enabled: aberto && !!mon.id, retry: false },
   );
 
-  // Extrai dados do processo. Prioridade:
-  //   1. Capa/partes persistidas em motor_monitoramentos (vêm do
-  //      cron a cada 1h ou de buscarProcessoCompleto sob demanda).
-  //      Sobrevive a refresh — antes era apenas state in-memory que
-  //      sumia, fazendo o user pagar 1 cred toda abertura.
-  //   2. State `processoCompleto` (recém-vindo de buscar agora,
-  //      antes do query refetchar) — preserva UX imediata.
-  //   3. Fallback legado: ultimaResposta com responseType=lawsuit.
+  // Extrai dados do processo com fallback em cascata pras steps —
+  // diferentes fontes preenchem em momentos diferentes:
+  //
+  //   - processoCompleto: setado IMEDIATAMENTE após buscar Histórico.
+  //     Tem steps populados pelo backend (adaptarParaJuditShape).
+  //   - historico.items: vem do banco após refetchHist. Pode estar
+  //     vazio se o cron ainda não rodou ou INSERT falhou silenciosamente.
+  //   - historico.capa.steps: backup adicional caso items esteja vazio
+  //     (capa adaptada inclui steps quando movs foram passadas).
+  //
+  // Prioridade final pras steps: usa o primeiro não-vazio. Garante que
+  // um caminho falho (ex: items vazio) não esconde dados que outros
+  // caminhos têm. Pré-#217 a UX usava só state — voltei a priorizá-lo
+  // e adicionei o fallback em cascata pra robustez.
   const respostas = historico?.items || [];
   const ultimaResposta = respostas.find((r: any) => r.responseType === "lawsuit");
+  const stepsFromHist = respostas
+    .filter((r: any) => r.responseType === "step")
+    .map((r: any) => r.responseData);
+  const stepsFromState = processoCompleto?.steps ?? [];
+  const stepsFromCapa = historico?.capa?.steps ?? [];
+  const stepsFinal = stepsFromHist.length > 0
+    ? stepsFromHist
+    : stepsFromState.length > 0
+      ? stepsFromState
+      : stepsFromCapa;
+
   let processoData: any = null;
   if (historico?.capa) {
     processoData = {
       ...historico.capa,
-      parties: historico.partes ?? historico.capa.partes ?? [],
-      steps: respostas
-        .filter((r: any) => r.responseType === "step")
-        .map((r: any) => r.responseData),
+      parties: historico.partes ?? historico.capa.parties ?? processoCompleto?.parties ?? [],
+      steps: stepsFinal,
     };
   } else if (processoCompleto) {
     processoData = processoCompleto;
