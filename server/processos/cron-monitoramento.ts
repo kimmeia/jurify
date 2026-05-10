@@ -143,6 +143,61 @@ export async function pollMonitoramentosMovs(): Promise<void> {
       }
 
       const novoHash = hashMovimentacoes(resultado.movimentacoes);
+      const isPrimeiraExecucao = !mon.hashUltimasMovs;
+
+      if (isPrimeiraExecucao) {
+        // Baseline silencioso: na primeira execução depois do
+        // monitoramento ser criado, todas as movs já existentes do
+        // processo viriam como "novas" sem este guard — e o usuário
+        // veria 6 meses de histórico explodindo no sino.
+        //
+        // Estratégia: insere os eventos com lido=true (pra ficar
+        // disponível no histórico se quiserem consultar) e NÃO cria
+        // notif. Próximas execuções comparam contra hashUltimasMovs
+        // setado abaixo e só notificam o que aparecer depois.
+        for (const mov of resultado.movimentacoes) {
+          const dedup = hashEvento([
+            "movimentacao",
+            mon.searchKey,
+            mov.data,
+            mov.texto.slice(0, 200),
+          ]);
+          try {
+            await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "movimentacao",
+              dataEvento: new Date(mov.data),
+              fonte: "pje",
+              conteudo: mov.texto,
+              conteudoJson: JSON.stringify(mov),
+              cnjAfetado: mon.searchKey,
+              hashDedup: dedup,
+              lido: true,
+            });
+          } catch {
+            // Duplicate hashDedup: evento já capturado em tentativa
+            // anterior do baseline (ex: se o cron crashar no meio).
+          }
+        }
+        const ultimaMov = resultado.movimentacoes[0]; // mais recente
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            hashUltimasMovs: novoHash,
+            ultimaMovimentacaoEm: ultimaMov ? new Date(ultimaMov.data) : null,
+            ultimaMovimentacaoTexto: ultimaMov?.texto.slice(0, 500) ?? null,
+            ultimaConsultaEm: new Date(),
+            ultimoErro: null,
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        log.info(
+          { monId: mon.id, baseline: resultado.movimentacoes.length },
+          "[motor-cron] baseline silencioso registrado",
+        );
+        continue;
+      }
+
       const houveMudanca = novoHash !== mon.hashUltimasMovs;
 
       if (houveMudanca) {
