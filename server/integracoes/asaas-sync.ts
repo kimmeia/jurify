@@ -424,7 +424,19 @@ export async function syncCobrancasEscritorio(
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
 
-  for (const vinculo of vinculos) {
+  // Throttle entre requests: o Asaas tem cota acumulada em janela longa
+  // (estoura com 429 e bloqueia 12h). Com N customers no escritório,
+  // sem delay o cron dispara N requests em poucos segundos — somado a
+  // outros escritórios + frontend, satura a cota. 200ms adiciona apenas
+  // (N × 0.2s) ao tick (100 customers = 20s extras, irrisório dentro
+  // do intervalo de 10min do cron) e dá fôlego pro Asaas processar.
+  const DELAY_ENTRE_REQUESTS_MS = 200;
+
+  for (let i = 0; i < vinculos.length; i++) {
+    const vinculo = vinculos[i];
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, DELAY_ENTRE_REQUESTS_MS));
+    }
     try {
       const s = await syncCobrancasDeCliente(
         client,
@@ -434,13 +446,33 @@ export async function syncCobrancasEscritorio(
       );
       totais = somarStats(totais, s);
     } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+
+      // 429: rate limit estourado. Continuar tentando agrava o problema
+      // (Asaas pode escalar pra 12h de bloqueio). Aborta o tick desse
+      // escritório, marca aguardando_validacao — cron
+      // validarConexoesAsaasPendentes (a cada 30min) re-testa e volta
+      // pra "conectado" quando passar.
+      if (status === 429) {
+        log.warn(
+          `[Asaas Sync] Rate limit 429 no escritório ${escritorioId} — abortando tick e marcando aguardando_validacao (vínculo ${vinculo.asaasCustomerId} foi onde estourou)`,
+        );
+        await db
+          .update(asaasConfig)
+          .set({
+            status: "aguardando_validacao",
+            ultimoTeste: new Date(),
+          })
+          .where(eq(asaasConfig.escritorioId, escritorioId));
+        return { clientes: vinculos.length, ...totais };
+      }
+
       // 403: API key sem permissão de ler esse customer. Consumir cota
       // a cada 10min sem efeito é desperdício — soft-disable. Admin
       // recebe notif e pode reativar via SQL/UI quando resolver.
       // Passa errData (err.response.data) pra captura de mensagem
       // específica do Asaas quando vier; helper faz GET /customers/{id}
       // adicional pra distinguir customer deletado vs sem permissão.
-      const status = err?.response?.status ?? err?.cause?.response?.status;
       if (status === 403) {
         const errData = err?.response?.data ?? err?.cause?.response?.data;
         await desativarVinculoPor403(
