@@ -293,46 +293,106 @@ export async function syncTodasCobrancasDoContato(
  * Retorna contadores discriminados para o caller exibir um toast preciso.
  */
 /**
- * Soft-disable de vínculo Asaas após 403. Marca inativo, grava
- * timestamp/mensagem e notifica dono+gestores. Próximas execuções
- * do cron skipam pelo filtro `ativo=true` em syncCobrancasEscritorio.
+ * Trata vínculo Asaas que retornou 403 em `GET /payments?customer=X`.
  *
- * Dedup natural: como o filtro acima exclui inativos, esta função só
- * roda quando o vínculo ainda estava ativo — então a notif sai 1 vez
- * por (vinculo × ativação).
+ * Antes só desativava cegamente. Agora faz 1 chamada adicional
+ * `GET /customers/{id}` pra distinguir 3 cenários:
+ *
+ *   - 404: customer não existe mais no Asaas → DELETE da row local
+ *     (limpa lixo silencioso, sem notif)
+ *   - 200: customer existe mas a key não pode ler /payments?customer=X
+ *     → mantém desativado + notif com detalhe (provavelmente sub-account
+ *     ou scope limitado da key)
+ *   - 403 também: key sem acesso geral ao customer → mantém desativado
+ *     + notif com mensagem do Asaas (response.data.errors[].description
+ *     quando vier)
+ *
+ * Dedup natural: filtro `ativo=true` em syncCobrancasEscritorio exclui
+ * vínculos já desativados — então só roda 1x por vínculo até reativação.
  */
 async function desativarVinculoPor403(
+  client: AsaasClient,
   escritorioId: number,
   vinculo: typeof asaasClientes.$inferSelect,
   errMensagem: string,
+  errData?: unknown,
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  // Investiga: o customer existe pra essa key?
+  type Cenario = "deletado" | "sem_permissao_cobrancas" | "acesso_negado";
+  let cenario: Cenario;
+  let detalhe: string | null = null;
+  try {
+    await client.buscarCliente(vinculo.asaasCustomerId);
+    // 200: customer existe e a key vê — 403 é específico do endpoint
+    // de cobranças (sub-account, scope limitado, etc).
+    cenario = "sem_permissao_cobrancas";
+    const data = errData as { errors?: { description?: string }[] } | undefined;
+    detalhe = data?.errors?.[0]?.description ?? null;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    if (status === 404) {
+      cenario = "deletado";
+    } else if (status === 403) {
+      cenario = "acesso_negado";
+      detalhe = err?.response?.data?.errors?.[0]?.description ?? null;
+    } else {
+      // Outro erro (rede, 5xx) — fallback conservador
+      cenario = "sem_permissao_cobrancas";
+      detalhe = err?.message ?? null;
+    }
+  }
+
+  const mensagemFinal = (detalhe ?? errMensagem).slice(0, 255);
+
+  if (cenario === "deletado") {
+    // Customer não existe mais → remove a row local. Limpeza
+    // silenciosa (sem notif) porque é correção de lixo, não erro
+    // que admin precisa tomar ação.
+    await db
+      .delete(asaasClientes)
+      .where(eq(asaasClientes.id, vinculo.id));
+    log.warn(
+      `[Asaas Sync] Vínculo ${vinculo.asaasCustomerId} REMOVIDO (404 no /customers — customer deletado no Asaas) (escritório ${escritorioId})`,
+    );
+    return;
+  }
+
+  // Sem permissão (sub-account / scope) ou acesso negado geral:
+  // mantém vínculo mas inativo, e notifica admin.
   await db
     .update(asaasClientes)
     .set({
       ativo: false,
       ultimoErro403Em: new Date(),
-      ultimoErro403Mensagem: errMensagem.slice(0, 255),
+      ultimoErro403Mensagem: mensagemFinal,
     })
     .where(eq(asaasClientes.id, vinculo.id));
 
   log.warn(
-    `[Asaas Sync] Vínculo ${vinculo.asaasCustomerId} desativado por 403 (escritório ${escritorioId})`,
+    `[Asaas Sync] Vínculo ${vinculo.asaasCustomerId} desativado: ${cenario} — ${mensagemFinal} (escritório ${escritorioId})`,
   );
 
-  // Notif in-app pra dono+gestores. Reusa o helper já existente em
-  // cron-comissoes pra não duplicar a regra de "quem recebe notif".
+  // Notif in-app pra dono+gestores. Mensagem adapta ao cenário pra
+  // o admin saber o que verificar no Asaas.
   try {
-    const { listarDestinatariosNotificacao } = await import("../_core/cron-comissoes");
+    const { listarDestinatariosNotificacao } = await import(
+      "../_core/cron-comissoes"
+    );
     const dests = await listarDestinatariosNotificacao(escritorioId);
     if (dests.length === 0) return;
+    const nome = vinculo.nome ?? vinculo.asaasCustomerId;
+    const mensagemNotif =
+      cenario === "sem_permissao_cobrancas"
+        ? `${nome}: customer existe no Asaas mas a API key não pode ler cobranças dele. Pode ser sub-account ou escopo restrito da chave. ${detalhe ? `Detalhe: ${detalhe}.` : ""} Verifique permissão em /admin/integrations e reative quando resolver.`
+        : `${nome}: API key sem acesso ao customer (403 geral). ${detalhe ? `Detalhe: ${detalhe}.` : ""} Verifique a chave em /admin/integrations.`;
     await db.insert(notificacoes).values(
       dests.map((userId) => ({
         userId,
         titulo: "Customer Asaas desativado",
-        mensagem: `${vinculo.nome ?? vinculo.asaasCustomerId} retornou 403 — API key sem permissão. Verifique a chave em /admin/integrations e reative o customer quando resolver.`,
+        mensagem: mensagemNotif,
         tipo: "sistema" as const,
       })),
     );
@@ -377,9 +437,19 @@ export async function syncCobrancasEscritorio(
       // 403: API key sem permissão de ler esse customer. Consumir cota
       // a cada 10min sem efeito é desperdício — soft-disable. Admin
       // recebe notif e pode reativar via SQL/UI quando resolver.
+      // Passa errData (err.response.data) pra captura de mensagem
+      // específica do Asaas quando vier; helper faz GET /customers/{id}
+      // adicional pra distinguir customer deletado vs sem permissão.
       const status = err?.response?.status ?? err?.cause?.response?.status;
       if (status === 403) {
-        await desativarVinculoPor403(escritorioId, vinculo, err?.message ?? "HTTP 403");
+        const errData = err?.response?.data ?? err?.cause?.response?.data;
+        await desativarVinculoPor403(
+          client,
+          escritorioId,
+          vinculo,
+          err?.message ?? "HTTP 403",
+          errData,
+        );
         continue;
       }
       log.warn(`[Asaas Sync] Erro ao sincronizar cobranças de ${vinculo.asaasCustomerId}: ${err.message}`);
