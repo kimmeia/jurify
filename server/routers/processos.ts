@@ -641,21 +641,34 @@ export const processosRouter = router({
       // que o frontend (MonitoramentoCard) leia os mesmos campos
       // (tribunal_acronym, amount, instance, parties[].name/side/...)
       // que ele já renderiza no caminho do `processoCompleto` state.
-      // Sem essa adaptação o spread {...historico.capa} traz nomes
-      // em PT (tribunal/valorCausaCentavos/partes[].nome) que o
-      // frontend não conhece, deixando o card visualmente vazio
-      // mesmo com dados no DB.
       const capaParsed = mon.capaJson ? safeParse(mon.capaJson) : null;
       const partesParsed = mon.partesJson ? safeParse(mon.partesJson) : null;
+      // Passar movs reais (extraídas dos eventos_processo) pro adapter
+      // pra que `capa.steps` também tenha dados como redundância. Se o
+      // frontend cair em algum fluxo que não monta steps via items,
+      // ainda pega do spread {...capa}.
+      const movsParaAdapter = eventos
+        .filter((e) => e.tipo === "movimentacao")
+        .map((e) => {
+          const parsed = e.conteudoJson ? safeParse(e.conteudoJson) : null;
+          if (parsed && (parsed.data || parsed.texto)) return parsed;
+          return { data: e.dataEvento, texto: e.conteudo };
+        });
       const capa = capaParsed
         ? adaptarParaJuditShape(
             {
               capa: { ...capaParsed, partes: partesParsed ?? capaParsed.partes ?? [] },
-              movimentacoes: [],
+              movimentacoes: movsParaAdapter,
+              tribunal: mon.tribunal,
             },
             mon.searchKey,
           )
         : null;
+
+      log.info(
+        { monId: mon.id, totalEventos: eventos.length, totalMovs: movsParaAdapter.length, temCapa: !!capa },
+        "[processos] historicoMonitoramento",
+      );
 
       return { items, eventos, capa, partes: capa?.parties ?? [], totalNaoLidas: naoLidas };
     }),
