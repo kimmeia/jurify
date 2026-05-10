@@ -21,7 +21,17 @@ import {
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", name: "Nome" };
-const STATUS_MON: Record<string, { label: string; cor: string }> = { created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" }, updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" }, updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" }, paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" } };
+// "ativo" / "pausado" / "erro" são os 3 valores do enum atual em motor_monitoramentos.
+// Legado Judit (created/updating/updated/paused) mantido pra cards antigos.
+const STATUS_MON: Record<string, { label: string; cor: string }> = {
+  ativo: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
+  erro: { label: "Erro", cor: "bg-red-100 text-red-700" },
+  pausado: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
+  created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
+  updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" },
+  updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" },
+  paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
+};
 const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ", consulta_historica: "Consulta CPF/CNPJ/Nome", consulta_sintetica: "Consulta sintetica", monitorar_processo: "Monitorar processo", monitorar_pessoa: "Monitorar pessoa/empresa", resumo_ia: "Resumo IA", anexos: "Baixar anexos" };
 
 /**
@@ -611,15 +621,29 @@ function MonitoramentoCard({
     { enabled: aberto && !!mon.id, retry: false },
   );
 
-  // Extrai dados do processo: prioridade para busca completa, fallback para webhook local
+  // Extrai dados do processo. Prioridade:
+  //   1. Capa/partes persistidas em motor_monitoramentos (vêm do
+  //      cron a cada 1h ou de buscarProcessoCompleto sob demanda).
+  //      Sobrevive a refresh — antes era apenas state in-memory que
+  //      sumia, fazendo o user pagar 1 cred toda abertura.
+  //   2. State `processoCompleto` (recém-vindo de buscar agora,
+  //      antes do query refetchar) — preserva UX imediata.
+  //   3. Fallback legado: ultimaResposta com responseType=lawsuit.
   const respostas = historico?.items || [];
   const ultimaResposta = respostas.find((r: any) => r.responseType === "lawsuit");
   let processoData: any = null;
-  // 1. Prioridade: processo completo buscado sob demanda (botão Histórico)
-  if (processoCompleto) {
+  if (historico?.capa) {
+    processoData = {
+      ...historico.capa,
+      parties: historico.partes ?? historico.capa.partes ?? [],
+      steps: respostas
+        .filter((r: any) => r.responseType === "step")
+        .map((r: any) => r.responseData),
+    };
+  } else if (processoCompleto) {
     processoData = processoCompleto;
   } else if (ultimaResposta?.responseData) {
-    // 2. Fallback: dados do webhook (atualizações)
+    // Fallback legado (Judit): dados do webhook
     try {
       processoData = typeof ultimaResposta.responseData === "string"
         ? JSON.parse(ultimaResposta.responseData)

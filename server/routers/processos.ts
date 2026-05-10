@@ -38,6 +38,7 @@ import {
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
 import { consultarTjce } from "../processos/adapters/pje-tjce";
+import { hashEvento } from "../processos/cron-monitoramento";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 
 const log = createLogger("processos-motor");
@@ -603,7 +604,14 @@ export const processosRouter = router({
         lido: e.lido,
       }));
       const naoLidas = eventos.filter((e) => !e.lido).length;
-      return { items, eventos, totalNaoLidas: naoLidas };
+
+      // Capa e partes vêm do monitoramento (persistidos pelo cron e
+      // pela busca sob demanda). Frontend usa pra renderizar o card
+      // sem depender de state in-memory que perde no refresh.
+      const capa = mon.capaJson ? safeParse(mon.capaJson) : null;
+      const partes = mon.partesJson ? safeParse(mon.partesJson) : null;
+
+      return { items, eventos, capa, partes, totalNaoLidas: naoLidas };
     }),
 
   // Dispara consulta direta do processo associado a um monitoramento.
@@ -669,8 +677,39 @@ export const processosRouter = router({
         return { encontrado: false, mensagem: resultado.mensagemErro ?? "Erro desconhecido" };
       }
 
-      // Atualiza monitoramento + insere movs novas (best effort)
+      // Persiste movs no DB (mesma lógica do cron, mas como busca foi
+      // sob demanda do user marcamos lido=true — não dispara notif).
+      // Sem isso, o user pagava 1 cred toda vez que abrisse o card e o
+      // refresh perdia tudo (state in-memory).
+      const capaJson = resultado.capa ? JSON.stringify(resultado.capa) : null;
+      const partesJson = resultado.capa?.partes
+        ? JSON.stringify(resultado.capa.partes)
+        : null;
       try {
+        for (const mov of resultado.movimentacoes) {
+          const dedup = hashEvento([
+            "movimentacao",
+            mon.searchKey,
+            mov.data,
+            mov.texto.slice(0, 200),
+          ]);
+          try {
+            await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "movimentacao",
+              dataEvento: new Date(mov.data),
+              fonte: "pje",
+              conteudo: mov.texto,
+              conteudoJson: JSON.stringify(mov),
+              cnjAfetado: mon.searchKey,
+              hashDedup: dedup,
+              lido: true,
+            });
+          } catch {
+            // Duplicate hashDedup → já capturado pelo cron, ignora
+          }
+        }
         await db
           .update(motorMonitoramentos)
           .set({
@@ -679,11 +718,14 @@ export const processosRouter = router({
               ? new Date(resultado.movimentacoes[0].data)
               : null,
             ultimaMovimentacaoTexto: resultado.movimentacoes[0]?.texto?.slice(0, 500) ?? null,
+            capaJson,
+            partesJson,
+            status: "ativo",
             ultimoErro: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
       } catch {
-        /* best-effort */
+        /* best-effort: se UPDATE falhar, ainda retornamos o processo */
       }
 
       // Adapta ResultadoScraper → shape JuditLawsuit-like que o

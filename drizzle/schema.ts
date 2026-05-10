@@ -1237,6 +1237,18 @@ export const motorMonitoramentos = mysqlTable("motor_monitoramentos", {
   totalNovasAcoes: int("total_novas_acoes").default(0).notNull(),
   hashUltimasMovs: varchar("hash_ultimas_movs", { length: 64 }),
   cnjsConhecidos: text("cnjs_conhecidos"),
+  /**
+   * Capa do processo serializada (classeProcesso, juiz, vara,
+   * valorCausaCentavos, dataDistribuicao, etc.). Persistida pelo cron
+   * + pela busca sob demanda — frontend lê daqui em vez de re-consultar
+   * o tribunal a cada refresh.
+   */
+  capaJson: text("capa_json"),
+  /**
+   * Partes do processo serializadas (autor, réu, advogados, polos).
+   * Mesmo padrão de capaJson.
+   */
+  partesJson: text("partes_json"),
   ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
   ultimoErro: text("ultimo_erro"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
