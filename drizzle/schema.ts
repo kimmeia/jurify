@@ -2169,12 +2169,24 @@ export const modelosContrato = mysqlTable("modelos_contrato", {
    * implicitamente porque têm modelos dentro.
    */
   pasta: varchar("pasta", { length: 255 }),
+  /**
+   * Flag que marca o modelo como "contrato para assinatura digital".
+   * Quando true, aparece no GerarContratoDialog (detalhe do cliente).
+   * Quando false, fica oculto desse fluxo (petições, pareceres,
+   * procurações que não exigem assinatura digital). Admin marca
+   * manualmente.
+   */
+  ehParaAssinatura: boolean("ehParaAssinatura").notNull().default(false),
   criadoPorUserId: int("criadoPorUserIdModCt").notNull(),
   createdAt: timestamp("createdAtModCt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtModCt").defaultNow().onUpdateNow().notNull(),
 }, (t) => ({
   modCtEscIdx: index("modct_esc_idx").on(t.escritorioId),
   modCtPastaIdx: index("idx_modct_pasta").on(t.pasta),
+  modCtEhParaAssinaturaIdx: index("idx_modct_eh_para_assinatura").on(
+    t.escritorioId,
+    t.ehParaAssinatura,
+  ),
 }));
 
 export type ModeloContrato = typeof modelosContrato.$inferSelect;

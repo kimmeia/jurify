@@ -43,12 +43,14 @@ import {
   Folder as FolderIcon,
   Loader2,
   Pencil,
+  PenLine,
   Plus,
   Trash2,
   Upload,
   Variable,
   Wand2,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import type { Placeholder } from "../../../shared/modelos-contrato-variaveis";
 
@@ -60,6 +62,7 @@ interface ModeloLista {
   tamanho: number | null;
   placeholders: Placeholder[];
   pasta: string | null;
+  ehParaAssinatura: boolean;
   createdAt: string | Date;
 }
 
@@ -256,6 +259,12 @@ function ListaAgrupadaPorPasta({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{m.nome}</span>
+                        {m.ehParaAssinatura && (
+                          <Badge className="text-[10px] h-5 border-0 bg-emerald-500/15 text-emerald-700">
+                            <PenLine className="h-2.5 w-2.5 mr-1" />
+                            Contrato
+                          </Badge>
+                        )}
                         <Badge variant="secondary" className="text-[10px] h-5 font-normal">
                           {m.placeholders.length} placeholder(s)
                         </Badge>
@@ -321,6 +330,7 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [pasta, setPasta] = useState("");
+  const [ehParaAssinatura, setEhParaAssinatura] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [modeloId, setModeloId] = useState<number | null>(null);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
@@ -382,6 +392,7 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
       nome: nome.trim(),
       descricao: descricao.trim() || undefined,
       pasta: pasta.trim() || null,
+      ehParaAssinatura,
       arquivoNome: arquivo.name,
       mimetype: arquivo.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       base64,
@@ -440,6 +451,26 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
                 Organize modelos em pastas hierárquicas. Deixe em branco pra ficar na raiz.
               </p>
             </div>
+            <div className="flex items-start gap-2 rounded-md border bg-muted/20 p-3">
+              <Checkbox
+                id="eh-para-assinatura"
+                checked={ehParaAssinatura}
+                onCheckedChange={(v) => setEhParaAssinatura(!!v)}
+              />
+              <div className="space-y-0.5">
+                <Label
+                  htmlFor="eh-para-assinatura"
+                  className="text-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <PenLine className="h-3 w-3" />
+                  Este modelo é um contrato (cliente precisa assinar)
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Quando marcado, aparece no botão &ldquo;Gerar contrato&rdquo; do detalhe do
+                  cliente. Petições, pareceres e similares ficam ocultos lá.
+                </p>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Arquivo .docx *</Label>
               <div className="flex items-center gap-2">
@@ -492,9 +523,11 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
                 salvarMapping.mutate({
                   id: modeloId,
                   placeholders,
-                  // pasta vai junto pra refletir mudanças do step 1 caso
-                  // user volte e edite; backend já gravou no upload.
+                  // pasta + ehParaAssinatura vão junto pra refletir mudanças
+                  // do step 1 caso user volte e edite; backend já gravou no
+                  // upload mas se user mudou no caminho, salva o estado novo.
                   pasta: pasta.trim() || null,
+                  ehParaAssinatura,
                 })
               }
               disabled={salvarMapping.isPending || !validarMapping(placeholders)}
@@ -523,6 +556,7 @@ function MappingEditorDialog({
   const [nome, setNome] = useState(modelo.nome);
   const [descricao, setDescricao] = useState(modelo.descricao || "");
   const [pasta, setPasta] = useState(modelo.pasta || "");
+  const [ehParaAssinatura, setEhParaAssinatura] = useState(!!modelo.ehParaAssinatura);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>(modelo.placeholders);
 
   const { data: pastasExistentes } = (trpc as any).modelosContrato.listarPastas.useQuery();
@@ -574,6 +608,26 @@ function MappingEditorDialog({
               ))}
             </datalist>
           </div>
+          <div className="flex items-start gap-2 rounded-md border bg-muted/20 p-3">
+            <Checkbox
+              id="eh-para-assinatura-edit"
+              checked={ehParaAssinatura}
+              onCheckedChange={(v) => setEhParaAssinatura(!!v)}
+            />
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="eh-para-assinatura-edit"
+                className="text-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <PenLine className="h-3 w-3" />
+                Este modelo é um contrato (cliente precisa assinar)
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Quando marcado, aparece no botão &ldquo;Gerar contrato&rdquo; do detalhe
+                do cliente.
+              </p>
+            </div>
+          </div>
           <PlaceholdersMapper placeholders={placeholders} onChange={setPlaceholders} />
         </div>
 
@@ -588,6 +642,7 @@ function MappingEditorDialog({
                 nome: nome.trim(),
                 descricao: descricao.trim() || null,
                 pasta: pasta.trim() || null,
+                ehParaAssinatura,
                 placeholders,
               })
             }
