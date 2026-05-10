@@ -203,7 +203,12 @@ export async function pollMonitoramentosMovs(): Promise<void> {
       if (houveMudanca) {
         // Detecta movs novas: tudo o que não está em eventos_processo
         // ainda. Dedup via hashDedup com ON DUPLICATE.
-        const movsNovas: typeof resultado.movimentacoes = [];
+        // Captura o insertId pra que a notif criada abaixo carregue
+        // FK pro evento — frontend usa pra abrir drawer de detalhe.
+        const movsNovas: Array<{
+          mov: typeof resultado.movimentacoes[number];
+          eventoId: number;
+        }> = [];
         for (const mov of resultado.movimentacoes) {
           const dedup = hashEvento([
             "movimentacao",
@@ -213,7 +218,7 @@ export async function pollMonitoramentosMovs(): Promise<void> {
           ]);
           // Tenta inserir; se já existe (UNIQUE hashDedup), ignora
           try {
-            await db.insert(eventosProcesso).values({
+            const [result] = await db.insert(eventosProcesso).values({
               monitoramentoId: mon.id,
               escritorioId: mon.escritorioId,
               tipo: "movimentacao",
@@ -225,7 +230,8 @@ export async function pollMonitoramentosMovs(): Promise<void> {
               hashDedup: dedup,
               lido: false,
             });
-            movsNovas.push(mov);
+            const eventoId = (result as { insertId: number }).insertId;
+            movsNovas.push({ mov, eventoId });
           } catch {
             // Duplicate key → mov já capturada antes, ignora
           }
@@ -246,13 +252,15 @@ export async function pollMonitoramentosMovs(): Promise<void> {
             })
             .where(eq(motorMonitoramentos.id, mon.id));
 
-          // Notificação in-app
-          for (const mov of movsNovas.slice(0, 3)) {
+          // Notificação in-app — uma por mov (até 3 pra não inundar).
+          // eventoId permite frontend abrir drawer com detalhe direto.
+          for (const { mov, eventoId } of movsNovas.slice(0, 3)) {
             await db.insert(notificacoes).values({
               userId: mon.criadoPor,
               titulo: `Nova movimentação: ${mon.apelido ?? mon.searchKey}`,
               mensagem: mov.texto.slice(0, 200),
               tipo: "movimentacao",
+              eventoId,
             });
           }
 

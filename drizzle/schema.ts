@@ -163,6 +163,13 @@ export const notificacoes = mysqlTable("notificacoes", {
   tipo: mysqlEnum("tipoNotif", ["movimentacao", "sistema", "plano", "nova_acao"]).default("sistema").notNull(),
   /** ID do processo relacionado (se tipo = movimentacao) */
   processoId: int("processoId"),
+  /**
+   * Se a notif veio de um evento_processo específico, referência aqui
+   * pra deep-link no drawer. Sem FK formal pra simplificar cleanup de
+   * eventos antigos. NULL pra notifs sem evento associado (sistema,
+   * plano).
+   */
+  eventoId: bigint("eventoId", { mode: "number" }),
   /** Se o utilizador já leu a notificação */
   lida: boolean("lida").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

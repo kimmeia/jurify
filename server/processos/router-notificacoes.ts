@@ -18,7 +18,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificacoes } from "../../drizzle/schema";
+import { notificacoes, eventosProcesso, motorMonitoramentos } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 const log = createLogger("processos-router-notificacoes");
@@ -208,4 +208,63 @@ export const notificacoesRouter = router({
 
     return { success: true };
   }),
+
+  /**
+   * Detalhe de uma movimentação a partir do eventoId vinculado a uma
+   * notificação. Permite ao popover abrir um drawer com texto completo
+   * + dados do monitoramento (CNJ, apelido, tribunal) sem que o usuário
+   * precise navegar até /processos e procurar a movimentação.
+   *
+   * SEGURANÇA: filtra por escritório do user — protege contra deep-link
+   * forjado com eventoId de outro escritório.
+   */
+  detalheEvento: protectedProcedure
+    .input(z.object({ eventoId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de dados indisponível" });
+
+      // JOIN com motor_monitoramentos pra trazer apelido/searchKey/tribunal.
+      // Sem o JOIN, evento bruto não tem o nome amigável do cliente.
+      const [row] = await db
+        .select({
+          id: eventosProcesso.id,
+          tipo: eventosProcesso.tipo,
+          dataEvento: eventosProcesso.dataEvento,
+          conteudo: eventosProcesso.conteudo,
+          conteudoJson: eventosProcesso.conteudoJson,
+          cnjAfetado: eventosProcesso.cnjAfetado,
+          fonte: eventosProcesso.fonte,
+          lido: eventosProcesso.lido,
+          createdAt: eventosProcesso.createdAt,
+          escritorioId: eventosProcesso.escritorioId,
+          monitoramentoId: eventosProcesso.monitoramentoId,
+          apelido: motorMonitoramentos.apelido,
+          searchKey: motorMonitoramentos.searchKey,
+          searchType: motorMonitoramentos.searchType,
+          tribunal: motorMonitoramentos.tribunal,
+        })
+        .from(eventosProcesso)
+        .leftJoin(
+          motorMonitoramentos,
+          eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId),
+        )
+        .where(eq(eventosProcesso.id, input.eventoId))
+        .limit(1);
+
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Evento não encontrado" });
+      }
+
+      // Resolve escritório do user — comparar com escritorioId do
+      // evento. Sem isso, qualquer user logado lê eventos de qualquer
+      // escritório passando o ID.
+      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc || esc.escritorio.id !== row.escritorioId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Evento não encontrado" });
+      }
+
+      return row;
+    }),
 });
