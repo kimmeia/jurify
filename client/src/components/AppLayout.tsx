@@ -203,16 +203,17 @@ function AppSidebarContent({
   ) || { data: null };
   const nomeEscritorio: string | null = meuEscritorioData?.escritorio?.nome || null;
 
-  // Permissões do usuário (sidebar dinâmica).
-  // Refetch a cada 30s + ao focar a aba garante que o funcionário vê
-  // mudanças feitas pelo dono quase em tempo real, sem reload manual.
+  // Permissões do usuário (sidebar dinâmica). Refetch a cada 5min —
+  // antes era 30s + window focus, mas permissões mudam raramente
+  // (admin altera cargo de colaborador uma vez por semana?). 30s
+  // significava ~2 req/min globalmente em todas as páginas só pra
+  // permissões — contribuía pro estouro de cota. staleTime e
+  // refetchOnWindowFocus seguem o default global (60s / false).
   const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
     undefined,
     {
       retry: false,
-      refetchInterval: 30_000,
-      refetchOnWindowFocus: true,
-      staleTime: 0,
+      refetchInterval: 5 * 60_000,
     },
   ) || { data: null };
   const canSee = (modulo: string) => {

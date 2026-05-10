@@ -34,9 +34,18 @@ function formatBRL(v: number) {
 
 export function FinanceiroBadge({ contatoId }: { contatoId: number }) {
   const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
+  // staleTime alto pra mitigar N+1 client-side: /atendimento renderiza
+  // este badge por contato listado (20+ por vez). Sem cache, qualquer
+  // re-render disparava 20 queries simultâneas. resumoContato é DB-only
+  // mas N+1 ainda sobrecarrega o servidor Jurify e o MySQL. 5min é
+  // overhead aceitável — fix definitivo (batch endpoint) é Sprint 2.
   const { data: resumo } = trpc.asaas.resumoContato.useQuery(
     { contatoId },
-    { retry: false, enabled: !!asaasStatus?.conectado && !!contatoId }
+    {
+      retry: false,
+      enabled: !!asaasStatus?.conectado && !!contatoId,
+      staleTime: 5 * 60_000,
+    }
   );
 
   // Asaas não conectado — não mostrar nada
