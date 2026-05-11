@@ -12,6 +12,7 @@
  */
 
 import axios, { type AxiosInstance, type AxiosError } from "axios";
+import { AsaasRateGuard, type AsaasRateGuardInstance } from "./asaas-rate-guard";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -246,10 +247,12 @@ function getBaseUrl(modo: "sandbox" | "producao"): string {
 export class AsaasClient {
   private api: AxiosInstance;
   public modo: "sandbox" | "producao";
+  private guard: AsaasRateGuardInstance;
 
   constructor(apiKey: string, modo?: "sandbox" | "producao") {
     this.modo = modo || detectMode(apiKey);
     const baseURL = getBaseUrl(this.modo);
+    this.guard = AsaasRateGuard.forApiKey(apiKey);
 
     this.api = axios.create({
       baseURL,
@@ -259,6 +262,43 @@ export class AsaasClient {
       },
       timeout: 15000,
     });
+
+    // Camadas 1, 2, 3, 4 do rate guard são aplicadas em cada request via
+    // interceptors. Lança RateLimitError (sem retentativa) quando uma
+    // camada bloqueia.
+    this.api.interceptors.request.use(async (config) => {
+      const method = (config.method || "get").toUpperCase();
+      const url = config.url || "";
+      await this.guard.acquire(method, url);
+      (config as any).__asaasGuardMethod = method;
+      return config;
+    });
+
+    this.api.interceptors.response.use(
+      (response) => {
+        const method = (response.config as any).__asaasGuardMethod || (response.config.method || "get").toUpperCase();
+        const url = response.config.url || "";
+        this.guard.release(method);
+        this.guard.recordResponse(url, response.headers as any);
+        return response;
+      },
+      (error: AxiosError) => {
+        const cfg = error.config as any;
+        const method = cfg?.__asaasGuardMethod || (cfg?.method || "get").toUpperCase();
+        const url = cfg?.url || "";
+        this.guard.release(method);
+
+        if (error.response) {
+          this.guard.recordResponse(url, error.response.headers as any);
+          if (error.response.status === 429) {
+            const retryAfter = error.response.headers["retry-after"];
+            const retryAfterSec = retryAfter ? Number(retryAfter) : undefined;
+            this.guard.recordRateLimitError(url, retryAfterSec);
+          }
+        }
+        return Promise.reject(error);
+      },
+    );
   }
 
   // ─── TESTE DE CONEXÃO ──────────────────────────────────────────────────────
