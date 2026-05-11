@@ -45,8 +45,11 @@ import {
   Clock,
   DollarSign,
   Loader2,
+  Pause,
   Pencil,
+  Play,
   Plus,
+  Repeat,
   RotateCcw,
   Trash2,
   Wallet,
@@ -99,6 +102,9 @@ interface DespesaListItem {
   dataPagamento: string | null;
   status: "pendente" | "parcial" | "pago" | "vencido";
   recorrencia: "nenhuma" | "semanal" | "mensal" | "anual";
+  recorrenciaAtiva?: boolean;
+  recorrenciaDeOrigemId?: number | null;
+  origem?: "manual" | "taxa_asaas" | "recorrencia";
   observacoes: string | null;
   categoriaId: number | null;
   categoriaNome: string | null;
@@ -137,6 +143,35 @@ export function DespesasTab() {
       utils.despesas.kpis.invalidate();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  // Mutations de recorrência — só fazem sentido em despesa-modelo
+  // (recorrenciaDeOrigemId === null E recorrencia !== "nenhuma").
+  const pausarRecMut = (trpc as any).despesas?.pausarRecorrencia?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Recorrência pausada");
+      utils.despesas.listar.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+  const retomarRecMut = (trpc as any).despesas?.retomarRecorrencia?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Recorrência retomada");
+      utils.despesas.listar.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+  const gerarRecAgoraMut = (trpc as any).despesas?.gerarRecorrenciasAgora?.useMutation?.({
+    onSuccess: (r: any) => {
+      toast.success(
+        r.geradas > 0
+          ? `${r.geradas} ocorrência(s) gerada(s)`
+          : "Nenhuma ocorrência pendente — já está em dia.",
+      );
+      utils.despesas.listar.invalidate();
+      utils.despesas.kpis.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
   return (
@@ -254,7 +289,9 @@ export function DespesasTab() {
                         {d.descricao}
                       </TableCell>
                       <TableCell className="text-xs">{d.categoriaNome ?? "—"}</TableCell>
-                      <TableCell className="text-xs">{RECORRENCIA_LABEL[d.recorrencia]}</TableCell>
+                      <TableCell className="text-xs">
+                        <RecorrenciaCell despesa={d} />
+                      </TableCell>
                       <TableCell className="text-xs">
                         <StatusBadge status={d.status} />
                         {d.dataPagamento && d.status === "pago" && (
@@ -292,6 +329,47 @@ export function DespesasTab() {
                           >
                             <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
                           </Button>
+                        )}
+                        {/* Ações de recorrência: só aparecem na despesa-modelo
+                            (recorrenciaDeOrigemId === null E recorrencia ≠ nenhuma).
+                            Filhas geradas não têm controle próprio — herdam da
+                            modelo. */}
+                        {d.recorrencia !== "nenhuma" && !d.recorrenciaDeOrigemId && (
+                          <>
+                            {d.recorrenciaAtiva ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-amber-600 hover:text-amber-700"
+                                onClick={() => pausarRecMut?.mutate?.({ id: d.id })}
+                                disabled={pausarRecMut?.isPending}
+                                title="Pausar geração automática"
+                              >
+                                <Pause className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-emerald-600 hover:text-emerald-700"
+                                onClick={() => retomarRecMut?.mutate?.({ id: d.id })}
+                                disabled={retomarRecMut?.isPending}
+                                title="Retomar geração automática"
+                              >
+                                <Play className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => gerarRecAgoraMut?.mutate?.({ id: d.id })}
+                              disabled={gerarRecAgoraMut?.isPending}
+                              title="Gerar próximas ocorrências agora (sem esperar cron)"
+                            >
+                              <Repeat className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
                         )}
                         <Button
                           variant="ghost"
@@ -401,6 +479,62 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <Badge variant="outline" className={cores[status] ?? ""}>
       {STATUS_LABEL[status] ?? status}
+    </Badge>
+  );
+}
+
+/**
+ * Mostra o status de recorrência da despesa. Visualizações distintas pra:
+ *  - despesa-modelo ativa (gera próximas): badge sólido + ícone
+ *  - despesa-modelo pausada (não gera mais): badge com cinza + Pause
+ *  - despesa-filha (gerada automaticamente): badge "auto"
+ *  - despesa única (sem recorrência): label "—"
+ *
+ * Tooltip explica cada estado pro usuário não-técnico.
+ */
+function RecorrenciaCell({ despesa }: { despesa: DespesaListItem }) {
+  if (despesa.recorrencia === "nenhuma") {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const label = RECORRENCIA_LABEL[despesa.recorrencia];
+  const isFilha = !!despesa.recorrenciaDeOrigemId;
+  const ativa = despesa.recorrenciaAtiva !== false;
+
+  if (isFilha) {
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-950/30 dark:border-violet-800 dark:text-violet-300"
+        title="Gerada automaticamente a partir de uma despesa recorrente"
+      >
+        <Repeat className="h-2.5 w-2.5 mr-1" />
+        {label} (auto)
+      </Badge>
+    );
+  }
+
+  if (!ativa) {
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] text-muted-foreground"
+        title="Geração automática pausada — clique no botão Play pra retomar"
+      >
+        <Pause className="h-2.5 w-2.5 mr-1" />
+        {label} (pausada)
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className="text-[10px] bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300"
+      title="Esta é a despesa-modelo. Próximas ocorrências serão geradas automaticamente."
+    >
+      <Repeat className="h-2.5 w-2.5 mr-1" />
+      {label}
     </Badge>
   );
 }

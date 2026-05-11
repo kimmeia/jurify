@@ -1858,6 +1858,18 @@ export const despesas = mysqlTable(
       .default("nenhuma")
       .notNull(),
     /**
+     * Quando `recorrencia` != 'nenhuma', flag global de pausa. Default true.
+     * Permite manter histórico de uma série recorrente mas parar de gerar
+     * próximas (ex: cancelei o plano mas quero ver parcelas antigas).
+     */
+    recorrenciaAtiva: boolean("recorrenciaAtivaDesp").default(true).notNull(),
+    /**
+     * Quando preenchido, esta despesa foi gerada pelo cron a partir de
+     * uma despesa-modelo (referência a despesas.id da modelo). NULL =
+     * modelo da série OU despesa não-recorrente.
+     */
+    recorrenciaDeOrigemId: int("recorrenciaDeOrigemIdDesp"),
+    /**
      * Origem da despesa:
      *  - 'manual': lançada pela UI pelo escritório (default)
      *  - 'taxa_asaas': gerada automaticamente pelo webhook quando uma
@@ -1891,6 +1903,15 @@ export const despesas = mysqlTable(
     uqCobOrigem: uniqueIndex("desp_cob_origem_uq").on(
       t.cobrancaOriginalId,
       t.origem,
+    ),
+    idxRecorrenciaModelo: index("desp_recorrencia_modelo_idx").on(
+      t.escritorioId,
+      t.recorrencia,
+      t.recorrenciaAtiva,
+      t.recorrenciaDeOrigemId,
+    ),
+    idxRecorrenciaOrigem: index("desp_recorrencia_origem_idx").on(
+      t.recorrenciaDeOrigemId,
     ),
   }),
 );

@@ -72,6 +72,9 @@ export const despesasRouter = router({
           dataPagamento: despesas.dataPagamento,
           status: despesas.status,
           recorrencia: despesas.recorrencia,
+          recorrenciaAtiva: despesas.recorrenciaAtiva,
+          recorrenciaDeOrigemId: despesas.recorrenciaDeOrigemId,
+          origem: despesas.origem,
           observacoes: despesas.observacoes,
           categoriaId: despesas.categoriaId,
           categoriaNome: categoriasDespesa.nome,
@@ -85,6 +88,119 @@ export const despesasRouter = router({
         .where(and(...conds))
         .orderBy(asc(despesas.vencimento))
         .limit(input?.limit ?? 200);
+    }),
+
+  /**
+   * Pausa a geração automática de futuras ocorrências de uma despesa-modelo
+   * recorrente. Filhas já geradas continuam intactas. Pode ser retomada
+   * a qualquer momento.
+   */
+  pausarRecorrencia: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(despesas)
+        .set({ recorrenciaAtiva: false })
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { success: true };
+    }),
+
+  /** Retoma geração automática de uma despesa-modelo pausada. */
+  retomarRecorrencia: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(despesas)
+        .set({ recorrenciaAtiva: true })
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { success: true };
+    }),
+
+  /**
+   * Força a geração das próximas ocorrências de UMA despesa-modelo agora.
+   * Usado pelo botão "Gerar próximas agora" da UI (skip cron de 1h).
+   * Reutiliza o mesmo helper do cron — idempotente.
+   */
+  gerarRecorrenciasAgora: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [modelo] = await db
+        .select({
+          id: despesas.id,
+          escritorioId: despesas.escritorioId,
+          categoriaId: despesas.categoriaId,
+          descricao: despesas.descricao,
+          valor: despesas.valor,
+          vencimento: despesas.vencimento,
+          recorrencia: despesas.recorrencia,
+          recorrenciaAtiva: despesas.recorrenciaAtiva,
+          recorrenciaDeOrigemId: despesas.recorrenciaDeOrigemId,
+          observacoes: despesas.observacoes,
+          criadoPorUserId: despesas.criadoPorUserId,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!modelo) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Despesa não encontrada." });
+      }
+      if (modelo.recorrencia === "nenhuma") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Esta despesa não é recorrente.",
+        });
+      }
+      if (modelo.recorrenciaDeOrigemId !== null) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Use a despesa-modelo (1ª da série) pra gerar próximas.",
+        });
+      }
+
+      const { gerarFilhasDeModelo } = await import("./despesas-recorrentes");
+      const geradas = await gerarFilhasDeModelo({
+        id: modelo.id,
+        escritorioId: modelo.escritorioId,
+        categoriaId: modelo.categoriaId,
+        descricao: modelo.descricao,
+        valor: modelo.valor,
+        vencimento: modelo.vencimento,
+        recorrencia: modelo.recorrencia as "semanal" | "mensal" | "anual",
+        observacoes: modelo.observacoes,
+        criadoPorUserId: modelo.criadoPorUserId,
+      });
+      return { success: true, geradas };
     }),
 
   criar: protectedProcedure

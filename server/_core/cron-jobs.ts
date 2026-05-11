@@ -252,6 +252,30 @@ export function iniciarJobs() {
     }
   }, 5 * 60 * 1000);
 
+  // A cada 1h: gera próximas ocorrências de despesas recorrentes
+  // (semanal/mensal/anual). Idempotente — pula vencimentos já existentes.
+  setInterval(async () => {
+    try {
+      const { gerarDespesasRecorrentes } = await import(
+        "../escritorio/despesas-recorrentes"
+      );
+      await gerarDespesasRecorrentes();
+    } catch (err: any) {
+      log.error("[Cron] gerarDespesasRecorrentes falhou:", err.message);
+    }
+  }, 60 * 60 * 1000);
+  // Roda 1x na partida (45s pra dar tempo do DB estar pronto)
+  setTimeout(async () => {
+    try {
+      const { gerarDespesasRecorrentes } = await import(
+        "../escritorio/despesas-recorrentes"
+      );
+      await gerarDespesasRecorrentes();
+    } catch (err: any) {
+      log.error("[Cron] gerarDespesasRecorrentes inicial falhou:", err.message);
+    }
+  }, 45_000);
+
   // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
   // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal
   // ao saldo (preserva sobras + pacotes pré-pagos).
