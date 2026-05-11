@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { ResponsavelAvatar } from "./kanban/responsavel-avatar";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30",
@@ -51,7 +52,13 @@ export default function Kanban() {
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
     { funilId: funilAtivo! },
-    { enabled: !!funilAtivo },
+    {
+      enabled: !!funilAtivo,
+      // Polling 15s pra refletir movimentações de outros usuários sem F5
+      // (quando atendente A move um card pro atendente B, o gestor que
+      // está olhando o quadro vê em até 15s)
+      refetchInterval: 15_000,
+    },
   );
 
   // Tags
@@ -285,6 +292,12 @@ export default function Kanban() {
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                     {card.clienteNome && (
                       <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
+                    )}
+                    {(card as any).responsavelNome && (
+                      <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                        <ResponsavelAvatar nome={(card as any).responsavelNome} tamanho="sm" />
+                        {(card as any).responsavelNome}
+                      </span>
                     )}
                     {(card as any).acaoApelido && (
                       <span className="rounded border border-blue-200 bg-blue-50 px-1 py-0 text-[9px] text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300" title="Ação vinculada">
@@ -526,6 +539,30 @@ export default function Kanban() {
                   <span className="relative flex h-2.5 w-2.5"><span className={`${cardDetalhe.prioridade === "alta" ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75`} /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" /></span>
                   <span className="text-xs font-medium">Urgente</span>
                 </label>
+
+                {/* Trocar responsável: troca quem fica com o card daqui pra
+                    frente. Atendente que não tinha esse card antes passa
+                    a ver; quem perdeu deixa de ver no próximo refresh. */}
+                <div>
+                  <Label className="text-[10px]">Responsável</Label>
+                  <Select
+                    value={(cardDetalhe as any).responsavelId ? String((cardDetalhe as any).responsavelId) : "_nenhum"}
+                    onValueChange={(v) => editarCardMut.mutate({
+                      id: cardDetalhe.id,
+                      responsavelId: v === "_nenhum" ? null : Number(v),
+                    })}
+                  >
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_nenhum">Sem responsável</SelectItem>
+                      {colaboradoresAtivos.map((c: any) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.userName ?? "—"} ({c.cargo})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Tags visuais */}

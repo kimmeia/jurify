@@ -18,10 +18,337 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2, Plus, MessageCircle, Wifi, WifiOff, Eye, EyeOff, X,
-  Bot, Plug, Shield, CheckCircle, AlertTriangle, Link2,
+  Bot, Plug, Shield, CheckCircle, AlertTriangle, Link2, Clock, Pause, Play, Square,
+  History, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import WhatsappQR from "@/components/integracoes/WhatsappQR";
+
+/**
+ * Sub-seção do AsaasDialog: controla a importação histórica de cobranças.
+ *
+ * O Asaas tem rate limit em janela de 12h. Importar cobranças passadas
+ * de uma vez (centenas de customers) estoura essa cota e bloqueia a
+ * conta por 12h. Esta UI deixa o usuário escolher o período e o cron
+ * processa 1 dia por vez respeitando o intervalo configurado.
+ *
+ * Webhook continua cobrindo eventos futuros em tempo real — esta sync
+ * é só pra preencher o passado.
+ */
+function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
+  const utils = trpc.useUtils();
+  const statusQ = (trpc as any).asaas?.statusSyncHistorico?.useQuery?.(undefined, {
+    refetchInterval: 30_000, // Atualiza a cada 30s pra ver progresso
+    retry: false,
+  });
+  const status = statusQ?.data;
+
+  const [periodo, setPeriodo] = useState<"24h" | "7d" | "30d" | "custom">("7d");
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+  const [intervaloMinutos, setIntervaloMinutos] = useState(60);
+
+  const invalidar = () => {
+    utils.asaas.statusSyncHistorico?.invalidate?.();
+  };
+
+  const iniciarMut = (trpc as any).asaas?.iniciarSyncHistorico?.useMutation?.({
+    onSuccess: (r: any) => {
+      toast.success("Importação iniciada", {
+        description: `${r.totalDias} dia(s) — estimativa: ~${r.estimativaHoras}h`,
+      });
+      invalidar();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
+  const pausarMut = (trpc as any).asaas?.pausarSyncHistorico?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Importação pausada");
+      invalidar();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const retomarMut = (trpc as any).asaas?.retomarSyncHistorico?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Importação retomada");
+      invalidar();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const cancelarMut = (trpc as any).asaas?.cancelarSyncHistorico?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Importação cancelada");
+      invalidar();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // Estado loading / sem suporte
+  if (!status) return null;
+
+  const emAndamento =
+    status.status === "agendado" || status.status === "executando";
+  const pausado = status.status === "pausado";
+  const concluido = status.status === "concluido";
+  const erro = status.status === "erro";
+  const inativo = status.status === "inativo";
+
+  const progresso =
+    status.totalDias && status.totalDias > 0
+      ? Math.min(100, Math.round((status.diasFeitos / status.totalDias) * 100))
+      : 0;
+
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <History className="h-4 w-4 text-blue-700 dark:text-blue-300" />
+        <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+          Importar histórico
+        </span>
+        {emAndamento && (
+          <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[10px] ml-auto">
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            {status.status === "agendado" ? "Agendado" : "Importando"}
+          </Badge>
+        )}
+        {pausado && (
+          <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] ml-auto">
+            <Pause className="h-3 w-3 mr-1" />
+            Pausado
+          </Badge>
+        )}
+        {concluido && (
+          <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px] ml-auto">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Concluído
+          </Badge>
+        )}
+        {erro && (
+          <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] ml-auto">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Erro
+          </Badge>
+        )}
+      </div>
+
+      {inativo && (
+        <>
+          <p className="text-xs text-blue-900/80 dark:text-blue-200/80">
+            O webhook já cobre cobranças <strong>daqui pra frente</strong> em tempo
+            real. Use isto pra trazer cobranças <strong>antigas</strong> sem
+            estourar a cota do Asaas (12h de bloqueio em rate limit). Importação
+            é feita em janelas de 1 dia por vez.
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Período</Label>
+              <Select
+                value={periodo}
+                onValueChange={(v) => setPeriodo(v as typeof periodo)}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="h-9 text-xs mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="24h">Últimas 24h</SelectItem>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="custom">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Intervalo entre janelas</Label>
+              <Select
+                value={String(intervaloMinutos)}
+                onValueChange={(v) => setIntervaloMinutos(parseInt(v))}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="h-9 text-xs mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 minutos (rápido)</SelectItem>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="60">1 hora (recomendado)</SelectItem>
+                  <SelectItem value="120">2 horas (conservador)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {periodo === "custom" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">De</Label>
+                <Input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="h-9 text-xs mt-1"
+                  disabled={!canEdit}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Até</Label>
+                <Input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="h-9 text-xs mt-1"
+                  disabled={!canEdit}
+                />
+              </div>
+            </div>
+          )}
+
+          <Button
+            size="sm"
+            className="w-full text-xs"
+            disabled={
+              !canEdit ||
+              iniciarMut?.isPending ||
+              (periodo === "custom" && (!dataInicio || !dataFim))
+            }
+            onClick={() => {
+              iniciarMut?.mutate?.({
+                periodo,
+                intervaloMinutos,
+                ...(periodo === "custom" ? { dataInicio, dataFim } : {}),
+              });
+            }}
+          >
+            {iniciarMut?.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <History className="h-3 w-3 mr-1" />
+            )}
+            Iniciar importação
+          </Button>
+        </>
+      )}
+
+      {(emAndamento || pausado || concluido || erro) && (
+        <>
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[11px] text-blue-900/80 dark:text-blue-200/80">
+              <span>
+                {status.de} a {status.ate}
+              </span>
+              <span>
+                {status.diasFeitos}/{status.totalDias} dias ({progresso}%)
+              </span>
+            </div>
+            <div className="h-2 bg-blue-200/40 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all ${
+                  concluido
+                    ? "bg-emerald-500"
+                    : erro
+                      ? "bg-red-500"
+                      : pausado
+                        ? "bg-amber-500"
+                        : "bg-blue-500"
+                }`}
+                style={{ width: `${progresso}%` }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-blue-900/80 dark:text-blue-200/80 pt-1">
+              <span>
+                Importadas: <strong>{status.cobrancasImportadas}</strong>
+              </span>
+              <span>
+                Atualizadas: <strong>{status.cobrancasAtualizadas}</strong>
+              </span>
+            </div>
+            {emAndamento && status.proximaJanelaEm && (
+              <p className="text-[10px] text-blue-700/70 dark:text-blue-300/70 flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Próxima janela:{" "}
+                {new Date(status.proximaJanelaEm).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+            )}
+            {erro && status.erroMensagem && (
+              <p className="text-[11px] text-red-700 dark:text-red-300 font-mono bg-red-50 dark:bg-red-950/30 p-1.5 rounded">
+                {status.erroMensagem}
+              </p>
+            )}
+            {pausado && status.erroMensagem && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 font-mono bg-amber-50 dark:bg-amber-950/30 p-1.5 rounded">
+                {status.erroMensagem}
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            {emAndamento && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 text-xs"
+                onClick={() => pausarMut?.mutate?.()}
+                disabled={!canEdit || pausarMut?.isPending}
+              >
+                <Pause className="h-3 w-3 mr-1" />
+                Pausar
+              </Button>
+            )}
+            {(pausado || erro) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 text-xs"
+                onClick={() => retomarMut?.mutate?.()}
+                disabled={!canEdit || retomarMut?.isPending}
+              >
+                <Play className="h-3 w-3 mr-1" />
+                Retomar
+              </Button>
+            )}
+            {(emAndamento || pausado || erro) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 text-xs text-destructive hover:text-destructive"
+                onClick={() => {
+                  if (confirm("Cancelar a importação histórica?")) {
+                    cancelarMut?.mutate?.();
+                  }
+                }}
+                disabled={!canEdit || cancelarMut?.isPending}
+              >
+                <Square className="h-3 w-3 mr-1" />
+                Cancelar
+              </Button>
+            )}
+            {concluido && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 text-xs"
+                onClick={() => cancelarMut?.mutate?.()}
+                disabled={!canEdit || cancelarMut?.isPending}
+                title="Limpa o histórico desta importação. Você pode iniciar uma nova depois."
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Nova importação
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: { open: boolean; onClose: () => void; canEdit: boolean; asaasStatus: any; onRefresh: () => void }) {
   const [apiKey, setApiKey] = useState("");
@@ -186,6 +513,8 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
                 {reconfWebhookMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wifi className="h-3 w-3 mr-1" />}
                 Reconfigurar Webhook (sync em tempo real)
               </Button>
+
+              <ImportarHistoricoSection canEdit={canEdit} />
             </div>
           ) : (
             <div className="space-y-3">

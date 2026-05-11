@@ -89,16 +89,36 @@ export function somarStats(a: SyncCobrancasStats, b: SyncCobrancasStats): SyncCo
 /**
  * Sincroniza cobranças de UM cliente vinculado.
  * Retorna contadores discriminados — permite ao caller saber o que mudou de verdade.
+ *
+ * Por padrão pega apenas os últimos 90 dias pra proteger contra estouro
+ * de rate limit do Asaas (200 req/min, bloqueia 12h). Cliente com
+ * histórico longo pode ter centenas de cobranças → puxar tudo a cada
+ * sincronização vira munição de DoS contra a própria cota. Cobranças
+ * mais antigas vêm via cron de sync histórico throttled (5min entre
+ * janelas) ou via webhook em tempo real.
+ *
+ * Passe `diasHistorico: null` pra desabilitar o limite (uso restrito ao
+ * cron histórico que já paga sua throttle).
  */
 export async function syncCobrancasDeCliente(
   client: AsaasClient,
   escritorioId: number,
   contatoId: number,
-  asaasCustomerId: string
+  asaasCustomerId: string,
+  opts?: { diasHistorico?: number | null },
 ): Promise<SyncCobrancasStats> {
   const db = await getDb();
   const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   if (!db) return zero;
+
+  const diasHistorico =
+    opts?.diasHistorico === undefined ? 90 : opts.diasHistorico;
+  let dateCreatedGe: string | undefined;
+  if (diasHistorico !== null) {
+    const dt = new Date();
+    dt.setUTCDate(dt.getUTCDate() - diasHistorico);
+    dateCreatedGe = dt.toISOString().slice(0, 10);
+  }
 
   const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   let offset = 0;
@@ -106,9 +126,26 @@ export async function syncCobrancasDeCliente(
   const idsAsaas = new Set<string>(); // Track all IDs from Asaas
 
   while (hasMore) {
-    const res = await client.listarCobrancas({ customer: asaasCustomerId, limit: 100, offset });
+    // Quando `dateCreatedGe` está setado, usa o endpoint por janela
+    // (suporta filtro de data + customer). Senão, lista tudo (modo
+    // histórico — usado pelo cron throttled, não pelo botão UI).
+    const res = dateCreatedGe
+      ? await client.listarCobrancasPorJanela({
+          dateCreatedGe,
+          customer: asaasCustomerId,
+          limit: 100,
+          offset,
+        })
+      : await client.listarCobrancas({
+          customer: asaasCustomerId,
+          limit: 100,
+          offset,
+        });
 
     for (const cob of res.data) {
+      // Defensivo: descarta cobranças de OUTROS customers caso o endpoint
+      // ignore o filtro `customer` (ex: variante por janela do Asaas).
+      if (cob.customer && cob.customer !== asaasCustomerId) continue;
       // Se deletada no Asaas, remover localmente
       if (cob.deleted) {
         const [local] = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas)
@@ -215,11 +252,19 @@ export async function syncCobrancasDeCliente(
       eq(asaasCobrancas.origem, "asaas"),
     ));
 
-  for (const local of locais) {
-    if (local.asaasPaymentId && !idsAsaas.has(local.asaasPaymentId)) {
-      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
-      stats.removidas++;
-      log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
+  // Cleanup de órfãs (apagadas no Asaas mas ainda no DB local) só é
+  // SEGURO em sync sem filtro de data — senão cobranças antigas FORA
+  // da janela seriam falsamente classificadas como órfãs e perdidas.
+  // Com `diasHistorico` setado, pulamos esse passo; cobranças apagadas
+  // no Asaas viram cob.deleted=true no próximo sync completo (cron
+  // histórico) ou via webhook.
+  if (diasHistorico === null) {
+    for (const local of locais) {
+      if (local.asaasPaymentId && !idsAsaas.has(local.asaasPaymentId)) {
+        await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
+        stats.removidas++;
+        log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
+      }
     }
   }
 
@@ -401,6 +446,153 @@ async function desativarVinculoPor403(
       `[Asaas Sync] Falha ao notificar dono+gestores sobre desativação: ${err.message}`,
     );
   }
+}
+
+/**
+ * "Refresh" das cobranças JÁ EXISTENTES localmente. NÃO importa cobranças
+ * novas do Asaas — só revisita as que estão no DB e atualiza
+ * status/dataPagamento/valorLiquido. Pra cada cobrança local, faz
+ * `GET /payments/{id}` no Asaas.
+ *
+ * Diferencia-se de `syncCobrancasDeCliente`:
+ *  - Aquele LISTA tudo do Asaas (com filtro de data) e insere/atualiza
+ *  - Este BUSCA por ID pra cada cobrança local conhecida
+ *
+ * Usado pelo botão "Sincronizar" do Financeiro: o usuário só quer um
+ * refresh rápido (mudou status de algum boleto?), não importar histórico.
+ * Pra puxar cobranças novas, usar "Importar histórico" em Configurações
+ * (cron throttled).
+ *
+ * Throttle 350ms entre requests pra não estourar 200 req/min do Asaas
+ * mesmo com 50+ cobranças locais.
+ */
+const ATUALIZAR_THROTTLE_MS = 350;
+
+export async function atualizarCobrancasLocaisDoEscritorio(
+  escritorioId: number,
+): Promise<{
+  atualizadas: number;
+  removidas: number;
+  erros: number;
+  total: number;
+  adotadas: number;
+}> {
+  const stats = { atualizadas: 0, removidas: 0, erros: 0, total: 0, adotadas: 0 };
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return stats;
+
+  const db = await getDb();
+  if (!db) return stats;
+
+  // Adoção bulk: cobranças com `contatoId IS NULL` cujo asaasCustomerId
+  // agora tem vínculo em `asaas_clientes` (resultado do `sincronizarClientes`
+  // que rodou logo antes) ficam com nome correto. Atende ao caso "depois
+  // de sincronizar, cobranças antigas ainda apareciam com '—'".
+  const vinculos = await db
+    .select({
+      asaasCustomerId: asaasClientes.asaasCustomerId,
+      contatoId: asaasClientes.contatoId,
+    })
+    .from(asaasClientes)
+    .where(eq(asaasClientes.escritorioId, escritorioId));
+
+  for (const v of vinculos) {
+    const r = await db
+      .update(asaasCobrancas)
+      .set({ contatoId: v.contatoId })
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasCustomerId, v.asaasCustomerId),
+          isNull(asaasCobrancas.contatoId),
+        ),
+      );
+    const affected =
+      (r as any)?.[0]?.affectedRows ?? (r as any)?.affectedRows ?? 0;
+    stats.adotadas += Number(affected) || 0;
+  }
+
+  // Pega TODAS as cobranças locais com asaasPaymentId (origem='asaas').
+  // Manuais e órfãs (sem paymentId) não vão ser tocadas.
+  const locais = await db
+    .select({
+      id: asaasCobrancas.id,
+      asaasPaymentId: asaasCobrancas.asaasPaymentId,
+      status: asaasCobrancas.status,
+      dataPagamento: asaasCobrancas.dataPagamento,
+      valorLiquido: asaasCobrancas.valorLiquido,
+    })
+    .from(asaasCobrancas)
+    .where(
+      and(
+        eq(asaasCobrancas.escritorioId, escritorioId),
+        eq(asaasCobrancas.origem, "asaas"),
+      ),
+    );
+
+  stats.total = locais.length;
+
+  for (let i = 0; i < locais.length; i++) {
+    const local = locais[i];
+    if (!local.asaasPaymentId) continue;
+    if (i > 0) await new Promise((r) => setTimeout(r, ATUALIZAR_THROTTLE_MS));
+
+    try {
+      const cob = await client.buscarCobranca(local.asaasPaymentId);
+
+      // 404 sob outro nome: API responde com `deleted:true` quando a
+      // cobrança foi excluída. Remove local.
+      if (cob.deleted) {
+        await db
+          .delete(asaasCobrancas)
+          .where(eq(asaasCobrancas.id, local.id));
+        stats.removidas++;
+        continue;
+      }
+
+      const novaDataPag = extrairDataPagamento(cob);
+      const novoNet = cob.netValue?.toString() ?? null;
+      const mudouStatus = local.status !== cob.status;
+      const mudouData = (local.dataPagamento ?? null) !== novaDataPag;
+      const mudouNet = (local.valorLiquido ?? null) !== novoNet;
+
+      if (mudouStatus || mudouData || mudouNet) {
+        await db
+          .update(asaasCobrancas)
+          .set({
+            status: cob.status,
+            dataPagamento: novaDataPag,
+            valorLiquido: novoNet,
+          })
+          .where(eq(asaasCobrancas.id, local.id));
+        stats.atualizadas++;
+      }
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      // 404: cobrança apagada no Asaas → remove local
+      if (status === 404) {
+        await db
+          .delete(asaasCobrancas)
+          .where(eq(asaasCobrancas.id, local.id));
+        stats.removidas++;
+        continue;
+      }
+      // 429: rate limit — para o loop, deixa o próximo refresh continuar
+      if (status === 429) {
+        log.warn(
+          `[Asaas Refresh] Rate limit 429 no escritório ${escritorioId} após ${i} de ${locais.length} — abortando, próximo refresh continua`,
+        );
+        return stats;
+      }
+      stats.erros++;
+      log.warn(
+        { err: err.message, asaasPaymentId: local.asaasPaymentId },
+        "[Asaas Refresh] Erro ao buscar cobrança — pula",
+      );
+    }
+  }
+
+  return stats;
 }
 
 export async function syncCobrancasEscritorio(

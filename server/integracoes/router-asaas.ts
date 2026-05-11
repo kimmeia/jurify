@@ -17,7 +17,7 @@ import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, contatos, users } from "../../drizzle/schema";
-import { eq, and, desc, like, or, inArray, between, gte, lte } from "drizzle-orm";
+import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -27,11 +27,16 @@ import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
   syncTodasCobrancasDoContato,
+  atualizarCobrancasLocaisDoEscritorio,
   agregarVinculosPorContato,
   type VinculoLinha,
   type CobrancaAgg,
   type ContatoMeta,
 } from "./asaas-sync";
+import {
+  garantirCategoriaDespesaTaxasAsaas,
+  garantirCategoriaCobrancaServicosAsaas,
+} from "./asaas-despesas-auto";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 
@@ -478,6 +483,16 @@ export const asaasRouter = router({
         };
       }
 
+      // Auto-criar categorias padrão. Quando o escritório conecta o Asaas
+      // pela primeira vez, criamos:
+      //  - "Taxas Asaas" (despesas) — usada pelo webhook pra registrar
+      //    automaticamente a taxa de cada cobrança paga
+      //  - "Serviços jurídicos" (cobranças) — categoria default opcional
+      //    pra cobranças vindas do passado/webhook sem categoria
+      // Idempotente: chamadas seguintes não criam duplicatas.
+      await garantirCategoriaDespesaTaxasAsaas(esc.escritorio.id);
+      await garantirCategoriaCobrancaServicosAsaas(esc.escritorio.id);
+
       // Auto-registrar webhook no Asaas
       let webhookRegistrado = false;
       let webhookErro: string | null = null;
@@ -630,7 +645,322 @@ export const asaasRouter = router({
       apiKeyIv: null,
       apiKeyTag: null,
       saldo: null,
+      // Limpa sync histórica também — não faz sentido continuar com cron
+      // tentando importar pra conta desconectada.
+      historicoSyncStatus: "inativo",
+      historicoSyncCursor: null,
+      historicoSyncErroMensagem: null,
     }).where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+
+    return { success: true };
+  }),
+
+  // ─── SINCRONIZAÇÃO HISTÓRICA EM JANELAS (anti-rate-limit) ────────────────
+
+  /**
+   * Inicia a importação histórica de cobranças do passado, processada
+   * em janelas de 1 dia pelo cron `processarSyncHistorico` a cada
+   * `intervaloMinutos`. Webhook continua cobrindo eventos futuros em
+   * tempo real — esta sync é só pra preencher o passado sem estourar
+   * cota do Asaas (rate limit 12h).
+   *
+   * Quem chama: usuário clica "Importar histórico" no dialog Asaas.
+   * Escolhe o período (24h/7d/30d/custom) e o intervalo entre janelas.
+   */
+  iniciarSyncHistorico: protectedProcedure
+    .input(
+      z.object({
+        /** Preset rápido. Em "custom", `dataInicio` e `dataFim` são obrigatórios. */
+        periodo: z.enum(["24h", "7d", "30d", "custom"]),
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        /** Cooldown entre janelas. Default 60min — conservador pra evitar
+         *  saturar a cota Asaas. Min 5min. */
+        intervaloMinutos: z.number().int().min(5).max(720).default(60),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para iniciar sincronização histórica.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cfg] = await db
+        .select()
+        .from(asaasConfig)
+        .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+        .limit(1);
+      if (!cfg || cfg.status !== "conectado") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Asaas não está conectado. Conecte antes de importar histórico.",
+        });
+      }
+      if (
+        cfg.historicoSyncStatus === "agendado" ||
+        cfg.historicoSyncStatus === "executando"
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Já existe uma importação em andamento. Aguarde ou cancele antes de iniciar nova.",
+        });
+      }
+
+      // Resolve datas absolutas a partir do preset.
+      const hoje = new Date();
+      const hojeIso = hoje.toISOString().slice(0, 10);
+      let dataInicio: string;
+      let dataFim: string;
+      if (input.periodo === "custom") {
+        if (!input.dataInicio || !input.dataFim) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Período custom exige dataInicio e dataFim.",
+          });
+        }
+        if (input.dataInicio > input.dataFim) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "dataInicio deve ser anterior ou igual a dataFim.",
+          });
+        }
+        dataInicio = input.dataInicio;
+        dataFim = input.dataFim;
+      } else {
+        const dias =
+          input.periodo === "24h" ? 1 : input.periodo === "7d" ? 7 : 30;
+        const dt = new Date(hoje);
+        dt.setUTCDate(dt.getUTCDate() - (dias - 1));
+        dataInicio = dt.toISOString().slice(0, 10);
+        dataFim = hojeIso;
+      }
+
+      // Conta dias inclusivos pra exibir progresso (UI mostra X/Y dias).
+      const { contarDiasInclusivos } = await import("./asaas-sync-historico");
+      const totalDias = contarDiasInclusivos(dataInicio, dataFim);
+      // Limita teto pra evitar pedido absurdo (ex: 10 anos). Pode subir depois.
+      const MAX_DIAS = 365 * 3;
+      if (totalDias > MAX_DIAS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Período muito longo (${totalDias} dias). Máximo permitido: ${MAX_DIAS}.`,
+        });
+      }
+
+      await db
+        .update(asaasConfig)
+        .set({
+          historicoSyncStatus: "agendado",
+          historicoSyncDe: dataInicio,
+          historicoSyncAte: dataFim,
+          historicoSyncCursor: dataFim,
+          historicoSyncTotalDias: totalDias,
+          historicoSyncDiasFeitos: 0,
+          historicoSyncCobrancasImportadas: 0,
+          historicoSyncCobrancasAtualizadas: 0,
+          historicoSyncIntervaloMinutos: input.intervaloMinutos,
+          historicoSyncIniciadoEm: new Date(),
+          historicoSyncUltimaJanelaEm: null,
+          historicoSyncConcluidoEm: null,
+          historicoSyncErroMensagem: null,
+        })
+        .where(eq(asaasConfig.id, cfg.id));
+
+      log.info(
+        {
+          escritorioId: esc.escritorio.id,
+          dataInicio,
+          dataFim,
+          totalDias,
+          intervaloMinutos: input.intervaloMinutos,
+        },
+        "[Asaas] Sync histórica agendada",
+      );
+
+      return {
+        success: true,
+        dataInicio,
+        dataFim,
+        totalDias,
+        intervaloMinutos: input.intervaloMinutos,
+        // Estimativa pro usuário: totalDias × intervaloMinutos em horas
+        estimativaHoras: Math.ceil((totalDias * input.intervaloMinutos) / 60),
+      };
+    }),
+
+  /** Retorna o estado atual da sincronização histórica. */
+  statusSyncHistorico: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db
+      .select({
+        status: asaasConfig.historicoSyncStatus,
+        de: asaasConfig.historicoSyncDe,
+        ate: asaasConfig.historicoSyncAte,
+        cursor: asaasConfig.historicoSyncCursor,
+        totalDias: asaasConfig.historicoSyncTotalDias,
+        diasFeitos: asaasConfig.historicoSyncDiasFeitos,
+        cobrancasImportadas: asaasConfig.historicoSyncCobrancasImportadas,
+        cobrancasAtualizadas: asaasConfig.historicoSyncCobrancasAtualizadas,
+        intervaloMinutos: asaasConfig.historicoSyncIntervaloMinutos,
+        iniciadoEm: asaasConfig.historicoSyncIniciadoEm,
+        ultimaJanelaEm: asaasConfig.historicoSyncUltimaJanelaEm,
+        concluidoEm: asaasConfig.historicoSyncConcluidoEm,
+        erroMensagem: asaasConfig.historicoSyncErroMensagem,
+      })
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+
+    if (!cfg) {
+      return {
+        status: "inativo" as const,
+        de: null,
+        ate: null,
+        cursor: null,
+        totalDias: null,
+        diasFeitos: 0,
+        cobrancasImportadas: 0,
+        cobrancasAtualizadas: 0,
+        intervaloMinutos: 60,
+        iniciadoEm: null,
+        ultimaJanelaEm: null,
+        concluidoEm: null,
+        erroMensagem: null,
+        proximaJanelaEm: null,
+      };
+    }
+
+    // Calcula previsão da próxima janela: ultimaJanelaEm + intervaloMinutos.
+    // Se ainda não rodou nenhuma (agendado), retorna null (próximo tick
+    // do cron pega — geralmente em < 5min).
+    let proximaJanelaEm: Date | null = null;
+    if (
+      cfg.status === "executando" &&
+      cfg.ultimaJanelaEm &&
+      cfg.intervaloMinutos > 0
+    ) {
+      proximaJanelaEm = new Date(
+        cfg.ultimaJanelaEm.getTime() + cfg.intervaloMinutos * 60_000,
+      );
+    }
+
+    return {
+      ...cfg,
+      proximaJanelaEm,
+    };
+  }),
+
+  /** Pausa uma sincronização em andamento. Cron skipa enquanto pausada. */
+  pausarSyncHistorico: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await db
+      .update(asaasConfig)
+      .set({ historicoSyncStatus: "pausado" })
+      .where(
+        and(
+          eq(asaasConfig.escritorioId, esc.escritorio.id),
+          inArray(asaasConfig.historicoSyncStatus, [
+            "agendado",
+            "executando",
+          ] as const),
+        ),
+      );
+
+    return { success: true };
+  }),
+
+  /** Retoma uma sincronização pausada (ou em erro recuperável). */
+  retomarSyncHistorico: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db
+      .select()
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+    if (!cfg) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Configuração Asaas não encontrada.",
+      });
+    }
+    if (cfg.historicoSyncStatus === "concluido") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Importação já concluída. Inicie uma nova se precisar.",
+      });
+    }
+    if (cfg.historicoSyncStatus !== "pausado" && cfg.historicoSyncStatus !== "erro") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Nada pra retomar — importação não está pausada nem em erro.",
+      });
+    }
+
+    // Reset de ultimaJanelaEm pra null faz o cron processar imediato
+    // no próximo tick (sem aguardar mais um intervaloMinutos).
+    await db
+      .update(asaasConfig)
+      .set({
+        historicoSyncStatus: "executando",
+        historicoSyncUltimaJanelaEm: null,
+        historicoSyncErroMensagem: null,
+      })
+      .where(eq(asaasConfig.id, cfg.id));
+
+    return { success: true };
+  }),
+
+  /** Cancela e zera a sincronização histórica. */
+  cancelarSyncHistorico: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await db
+      .update(asaasConfig)
+      .set({
+        historicoSyncStatus: "inativo",
+        historicoSyncDe: null,
+        historicoSyncAte: null,
+        historicoSyncCursor: null,
+        historicoSyncTotalDias: null,
+        historicoSyncDiasFeitos: 0,
+        historicoSyncCobrancasImportadas: 0,
+        historicoSyncCobrancasAtualizadas: 0,
+        historicoSyncIniciadoEm: null,
+        historicoSyncUltimaJanelaEm: null,
+        historicoSyncConcluidoEm: null,
+        historicoSyncErroMensagem: null,
+      })
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
 
     return { success: true };
   }),
@@ -644,139 +974,197 @@ export const asaasRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    let offset = 0;
-    let hasMore = true;
+    // Nova semântica (conservadora): NÃO importa em bulk todos os clientes
+    // do Asaas (escritórios com milhares de customers ficavam com CRM
+    // poluído de leads/inativos). Em vez disso:
+    //  1) Refresca dados dos vínculos JÁ EXISTENTES (GET /customers/{id})
+    //  2) Adota sob demanda: customer Asaas que tem cobrança local órfã
+    //     (contatoId NULL) ganha contato local + vínculo
+    //
+    // Pra importar TODA a base do Asaas, há fluxo separado em
+    // Configurações ("Importar histórico" pega cobranças + customers
+    // associados sob demanda) — sempre por período.
+    const THROTTLE_MS = 350;
     let vinculados = 0;
     let novos = 0;
     let removidos = 0;
-    const idsAsaas = new Set<string>(); // Rastreia todos os clientes ativos no Asaas
+    let atualizadosVinculados = 0;
 
-    while (hasMore) {
-      const page = await client.listarClientes(offset, 100);
-
-      for (const asaasCli of page.data) {
-        // Se deletado no Asaas, marcar para remoção
-        if (asaasCli.deleted) {
-          const [vinc] = await db.select({ id: asaasClientes.id, contatoId: asaasClientes.contatoId })
-            .from(asaasClientes)
-            .where(and(
-              eq(asaasClientes.escritorioId, esc.escritorio.id),
-              eq(asaasClientes.asaasCustomerId, asaasCli.id)
-            )).limit(1);
-          if (vinc) {
-            await db.delete(asaasClientes).where(eq(asaasClientes.id, vinc.id));
-            removidos++;
-            log.info(`[Asaas Sync] Cliente ${asaasCli.id} deletado localmente`);
-          }
-          continue;
-        }
-        if (!asaasCli.cpfCnpj) continue;
-
-        idsAsaas.add(asaasCli.id);
-        const cpfLimpo = asaasCli.cpfCnpj.replace(/\D/g, "");
-
-        // Verificar se já existe vínculo
-        const [jaVinculado] = await db.select().from(asaasClientes)
-          .where(and(
-            eq(asaasClientes.escritorioId, esc.escritorio.id),
-            eq(asaasClientes.asaasCustomerId, asaasCli.id)
-          )).limit(1);
-
-        if (jaVinculado) continue;
-
-        // Procurar contato por CPF/CNPJ
-        const [contato] = await db.select().from(contatos)
-          .where(and(
-            eq(contatos.escritorioId, esc.escritorio.id),
-            or(
-              eq(contatos.cpfCnpj, cpfLimpo),
-              eq(contatos.cpfCnpj, asaasCli.cpfCnpj),
-              like(contatos.cpfCnpj, `%${cpfLimpo}%`)
-            )
-          )).limit(1);
-
-        if (contato) {
-          // Vincular contato existente — ATUALIZAR dados com nome novo do Asaas.
-          // NÃO deletamos vínculos antigos: o Asaas permite duplicatas com o
-          // mesmo CPF, e o modelo suporta N customers → 1 contato CRM. Só
-          // adicionamos o vínculo novo se ainda não existir (o SELECT em
-          // `jaVinculado` acima já garante isso para o asaasCli atual).
-          await db.update(contatos).set({
-            nome: asaasCli.name,
-            cpfCnpj: cpfLimpo,
-            email: asaasCli.email || contato.email,
-            telefone: asaasCli.mobilePhone || asaasCli.phone || contato.telefone,
-          }).where(eq(contatos.id, contato.id));
-
-          await db.insert(asaasClientes).values({
-            escritorioId: esc.escritorio.id,
-            contatoId: contato.id,
-            asaasCustomerId: asaasCli.id,
-            cpfCnpj: cpfLimpo,
-            nome: asaasCli.name,
-          });
-          vinculados++;
-        } else {
-          // Criar contato novo no CRM com origem "asaas" — script de
-          // sincronização importou esse cliente direto da conta Asaas.
-          const [novoContato] = await db.insert(contatos).values({
-            escritorioId: esc.escritorio.id,
-            nome: asaasCli.name,
-            cpfCnpj: cpfLimpo,
-            email: asaasCli.email || null,
-            telefone: asaasCli.mobilePhone || asaasCli.phone || null,
-            origem: "asaas",
-          }).$returningId();
-
-          await db.insert(asaasClientes).values({
-            escritorioId: esc.escritorio.id,
-            contatoId: novoContato.id,
-            asaasCustomerId: asaasCli.id,
-            cpfCnpj: cpfLimpo,
-            nome: asaasCli.name,
-          });
-          novos++;
-        }
-      }
-
-      hasMore = page.hasMore;
-      offset += page.limit;
-    }
-
-    // Remover vínculos órfãos: clientes que existem localmente mas não retornaram do Asaas
-    // (caso o cliente tenha sido deletado e nem aparece mais como deleted=true)
-    const vinculosLocais = await db.select({ id: asaasClientes.id, asaasCustomerId: asaasClientes.asaasCustomerId })
+    // ─── Etapa 1: refresh dos vínculos existentes ─────────────────────────────
+    const vinculosLocais = await db
+      .select({
+        id: asaasClientes.id,
+        contatoId: asaasClientes.contatoId,
+        asaasCustomerId: asaasClientes.asaasCustomerId,
+      })
       .from(asaasClientes)
       .where(eq(asaasClientes.escritorioId, esc.escritorio.id));
 
-    for (const vinc of vinculosLocais) {
-      if (!idsAsaas.has(vinc.asaasCustomerId)) {
-        await db.delete(asaasClientes).where(eq(asaasClientes.id, vinc.id));
-        removidos++;
-        log.info(`[Asaas Sync] Cliente órfão ${vinc.asaasCustomerId} removido (não existe mais no Asaas)`);
+    for (let i = 0; i < vinculosLocais.length; i++) {
+      const v = vinculosLocais[i];
+      if (i > 0) await new Promise((r) => setTimeout(r, THROTTLE_MS));
+      try {
+        const cli = await client.buscarCliente(v.asaasCustomerId);
+        if (cli.deleted) {
+          await db.delete(asaasClientes).where(eq(asaasClientes.id, v.id));
+          removidos++;
+          continue;
+        }
+        if (cli.name) {
+          const cpfLimpo = cli.cpfCnpj ? cli.cpfCnpj.replace(/\D/g, "") : null;
+          await db
+            .update(contatos)
+            .set({
+              nome: cli.name,
+              ...(cpfLimpo ? { cpfCnpj: cpfLimpo } : {}),
+              email: cli.email ?? null,
+              telefone: cli.mobilePhone ?? cli.phone ?? null,
+            })
+            .where(
+              and(
+                eq(contatos.id, v.contatoId),
+                eq(contatos.escritorioId, esc.escritorio.id),
+              ),
+            );
+          atualizadosVinculados++;
+        }
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.cause?.response?.status;
+        if (status === 404) {
+          // Customer removido do Asaas → solta o vínculo (mantém contato no CRM)
+          await db.delete(asaasClientes).where(eq(asaasClientes.id, v.id));
+          removidos++;
+        } else if (status === 429) {
+          log.warn(`[Asaas Sync] Rate limit 429 após ${i} de ${vinculosLocais.length} clientes — abortando refresh`);
+          break;
+        }
+        // Outros erros: pula esse cliente, segue o próximo
       }
     }
 
-    // Após sincronizar clientes, sincronizar cobranças de todos os vinculados
-    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
+    // ─── Etapa 2: adoção sob demanda de cobranças órfãs ───────────────────────
+    // Pega customers que TÊM cobrança local sem contato vinculado. Limita
+    // ao que está no DB — não puxa nada da listagem do Asaas.
+    const orfas = await db
+      .selectDistinct({ customerId: asaasCobrancas.asaasCustomerId })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          isNull(asaasCobrancas.contatoId),
+        ),
+      );
+
+    const customersOrfaos = orfas
+      .map((o) => o.customerId)
+      .filter((c): c is string => !!c);
+
+    for (let i = 0; i < customersOrfaos.length; i++) {
+      const customerId = customersOrfaos[i];
+      if (i > 0) await new Promise((r) => setTimeout(r, THROTTLE_MS));
+
+      // Pode já ter vínculo (se Etapa 1 criou); verifica antes
+      const [jaTem] = await db
+        .select({ id: asaasClientes.id })
+        .from(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, esc.escritorio.id),
+            eq(asaasClientes.asaasCustomerId, customerId),
+          ),
+        )
+        .limit(1);
+      if (jaTem) continue;
+
+      try {
+        const cli = await client.buscarCliente(customerId);
+        if (cli.deleted || !cli.name?.trim()) continue;
+
+        const cpfLimpo = cli.cpfCnpj ? cli.cpfCnpj.replace(/\D/g, "") : null;
+
+        // Tenta achar contato existente por CPF antes de criar novo
+        let contatoIdAlvo: number | null = null;
+        if (cpfLimpo) {
+          const [contatoExistente] = await db
+            .select({ id: contatos.id })
+            .from(contatos)
+            .where(
+              and(
+                eq(contatos.escritorioId, esc.escritorio.id),
+                eq(contatos.cpfCnpj, cpfLimpo),
+              ),
+            )
+            .limit(1);
+          contatoIdAlvo = contatoExistente?.id ?? null;
+        }
+
+        if (contatoIdAlvo === null) {
+          const [novoContato] = await db
+            .insert(contatos)
+            .values({
+              escritorioId: esc.escritorio.id,
+              nome: cli.name,
+              cpfCnpj: cpfLimpo,
+              email: cli.email ?? null,
+              telefone: cli.mobilePhone ?? cli.phone ?? null,
+              origem: "asaas",
+            })
+            .$returningId();
+          contatoIdAlvo = novoContato.id;
+          novos++;
+        } else {
+          vinculados++;
+        }
+
+        await db.insert(asaasClientes).values({
+          escritorioId: esc.escritorio.id,
+          contatoId: contatoIdAlvo,
+          asaasCustomerId: customerId,
+          cpfCnpj: cpfLimpo ?? "",
+          nome: cli.name,
+        });
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.cause?.response?.status;
+        if (status === 429) {
+          log.warn(`[Asaas Sync] Rate limit 429 na adoção de órfãos — abortando`);
+          break;
+        }
+        // 404 e outros: pula esse customer
+      }
+    }
+
+    // Refresh das cobranças JÁ EXISTENTES no DB. NÃO importa cobranças
+    // novas — esse é o escopo do botão Sincronizar do Financeiro
+    // (refresh rápido sem risco de rate limit). Pra puxar histórico
+    // novo, o admin usa "Importar histórico" em Configurações (cron
+    // throttled em janelas de 1 dia).
+    //
+    // Inclui adoção bulk: cobranças com contatoId NULL cujo customer
+    // agora tem vínculo (criado pelo sync de clientes acima) ficam com
+    // nome correto. Resolve o caso "depois de sincronizar, cobranças
+    // antigas ainda apareciam com '—'".
+    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0, cobAdotadas = 0;
     try {
-      const result = await syncCobrancasEscritorio(esc.escritorio.id);
-      cobNovas = result.novas;
+      const result = await atualizarCobrancasLocaisDoEscritorio(esc.escritorio.id);
       cobAtualizadas = result.atualizadas;
       cobRemovidas = result.removidas;
+      cobAdotadas = result.adotadas;
+      // cobNovas fica 0 — sync deste botão não importa nada novo
     } catch (err: any) {
-      log.warn(`[Asaas] Erro ao sincronizar cobranças: ${err.message}`);
+      log.warn(`[Asaas] Erro ao atualizar cobranças locais: ${err.message}`);
     }
 
     return {
       vinculados,
       novos,
       removidos,
+      atualizadosVinculados,
       total: vinculados + novos,
       // Contadores granulares de cobranças (toast do frontend usa estes)
       cobNovas,
       cobAtualizadas,
       cobRemovidas,
+      cobAdotadas,
       // Mantém legado para retrocompatibilidade (soma total)
       cobrancasSincronizadas: cobNovas + cobAtualizadas + cobRemovidas,
     };
@@ -1666,13 +2054,31 @@ export const asaasRouter = router({
           conditions.push(inArray(asaasCobrancas.contatoId, visiveis));
         }
 
+        // Total pra paginação. Counts em separado evita carregar todas
+        // as linhas só pra contar.
+        const [totalRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(asaasCobrancas)
+          .where(and(...conditions));
+        const total = Number(totalRow?.count ?? 0);
+
         const items = await db.select().from(asaasCobrancas)
           .where(and(...conditions))
-          .orderBy(desc(asaasCobrancas.createdAt))
+          // Ordenação: data de recebimento desc com fallback pra vencimento.
+          // `COALESCE(dataPagamento, vencimento)` faz cobranças pagas
+          // recentes aparecerem no topo (ordem real do caixa) e pendentes
+          // se posicionarem pelo vencimento. createdAt como tiebreaker
+          // pra cobranças com mesma data.
+          .orderBy(
+            sql`COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}) DESC`,
+            desc(asaasCobrancas.createdAt),
+          )
           .limit(input?.limit ?? 50)
           .offset(input?.offset ?? 0);
 
-        // Enriquecer com nome do contato
+        // Enriquecer com nome do contato — primário do CRM. Fallback pro
+        // nome em `asaas_clientes` quando contato não existe (customer
+        // do Asaas sem CPF que ainda não virou contato local).
         const contatoIds = [...new Set(items.map((i) => i.contatoId).filter(Boolean))];
         let contatosMap: Record<number, string> = {};
         if (contatoIds.length > 0) {
@@ -1680,6 +2086,36 @@ export const asaasRouter = router({
             .from(contatos)
             .where(inArray(contatos.id, contatoIds as number[]));
           contatosMap = Object.fromEntries(contatosList.map((c) => [c.id, c.nome]));
+        }
+
+        // Fallback: cobranças sem contatoId OU com contato sem nome buscam
+        // em `asaas_clientes` pelo asaasCustomerId. É o vínculo direto com
+        // o customer do Asaas, que sempre tem nome quando o sync rodou.
+        const customerIdsSemNome = items
+          .filter((i) =>
+            !i.contatoId || !contatosMap[i.contatoId] || contatosMap[i.contatoId].trim() === "",
+          )
+          .map((i) => i.asaasCustomerId)
+          .filter((c): c is string => !!c);
+        let asaasClienteNomeMap: Record<string, string> = {};
+        if (customerIdsSemNome.length > 0) {
+          const linhas = await db
+            .select({
+              customerId: asaasClientes.asaasCustomerId,
+              nome: asaasClientes.nome,
+            })
+            .from(asaasClientes)
+            .where(
+              and(
+                eq(asaasClientes.escritorioId, esc.escritorio.id),
+                inArray(asaasClientes.asaasCustomerId, customerIdsSemNome),
+              ),
+            );
+          asaasClienteNomeMap = Object.fromEntries(
+            linhas
+              .filter((l) => l.nome && l.nome.trim())
+              .map((l) => [l.customerId, l.nome as string]),
+          );
         }
 
         // Enriquecer com ações vinculadas (apelido / tipo). 1 query por
@@ -1705,15 +2141,22 @@ export const asaasRouter = router({
           }
         }
 
-        const enriched = items.map((i) => ({
-          ...i,
-          nomeContato: i.contatoId ? contatosMap[i.contatoId] || "—" : "—",
-          acoesVinculadas: acoesPorCobranca.get(i.id) ?? [],
-        }));
+        const enriched = items.map((i) => {
+          const nomeContrato = i.contatoId ? contatosMap[i.contatoId] : null;
+          const nomeFallback = i.asaasCustomerId
+            ? asaasClienteNomeMap[i.asaasCustomerId]
+            : null;
+          return {
+            ...i,
+            nomeContato:
+              (nomeContrato && nomeContrato.trim()) ||
+              (nomeFallback && nomeFallback.trim()) ||
+              "—",
+            acoesVinculadas: acoesPorCobranca.get(i.id) ?? [],
+          };
+        });
 
-        const allItems = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas).where(and(...conditions));
-
-        return { items: enriched, total: allItems.length };
+        return { items: enriched, total };
       } catch {
         return { items: [], total: 0 };
       }
@@ -2802,5 +3245,193 @@ export const asaasRouter = router({
     } catch {
       return null;
     }
+  }),
+
+  // ─── LIMPEZA DE CONTATOS ASAAS ÓRFÃOS ─────────────────────────────────────
+  //
+  // Contexto: o `sincronizarClientes` antigo (corrigido em PR #241) fazia
+  // bulk import de TODOS os customers do Asaas, criando contatos no CRM
+  // mesmo pra leads/inativos sem cobrança. Estas duas procedures dão um
+  // caminho controlado pra limpar esses contatos órfãos depois.
+  //
+  // Critério de elegibilidade pra deletar:
+  //  - origem='asaas'
+  //  - mesmo escritório do user (multi-tenancy)
+  //  - SEM cobrança vinculada (nenhuma linha em asaas_cobrancas)
+  //  - SEM processo/ação vinculado (nenhuma linha em cliente_processos)
+  //
+  // Vínculo asaas_clientes é removido junto.
+
+  /**
+   * Preview da limpeza: conta quantos contatos seriam apagados e devolve
+   * até 20 nomes pro user revisar antes de confirmar. Não muta nada.
+   */
+  preverLimpezaContatosAsaas: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+    if (!perm.excluir) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para excluir contatos do escritório.",
+      });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const candidatos = await db
+      .select({ id: contatos.id, nome: contatos.nome, createdAt: contatos.createdAt })
+      .from(contatos)
+      .where(
+        and(
+          eq(contatos.escritorioId, esc.escritorio.id),
+          eq(contatos.origem, "asaas"),
+        ),
+      );
+
+    if (candidatos.length === 0) return { total: 0, amostra: [] };
+
+    const candidatoIds = candidatos.map((c) => c.id);
+
+    const comCobranca = await db
+      .selectDistinct({ contatoId: asaasCobrancas.contatoId })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.contatoId, candidatoIds),
+        ),
+      );
+    const setComCobranca = new Set(
+      comCobranca.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const comProcesso = await db
+      .selectDistinct({ contatoId: clienteProcessos.contatoId })
+      .from(clienteProcessos)
+      .where(
+        and(
+          eq(clienteProcessos.escritorioId, esc.escritorio.id),
+          inArray(clienteProcessos.contatoId, candidatoIds),
+        ),
+      );
+    const setComProcesso = new Set(
+      comProcesso.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const orfaos = candidatos.filter(
+      (c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id),
+    );
+
+    return {
+      total: orfaos.length,
+      amostra: orfaos.slice(0, 20).map((o) => ({
+        id: o.id,
+        nome: o.nome,
+        createdAt: o.createdAt,
+      })),
+    };
+  }),
+
+  /**
+   * Executa a limpeza. Idempotente — pode rodar várias vezes; novas
+   * execuções com `total=0` no preview são no-op.
+   *
+   * Faz batch de até 5000 contatos por chamada (proteção contra delete
+   * massivo acidental). Se houver mais, o user clica de novo.
+   */
+  executarLimpezaContatosAsaas: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+    if (!perm.excluir) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para excluir contatos do escritório.",
+      });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const candidatos = await db
+      .select({ id: contatos.id })
+      .from(contatos)
+      .where(
+        and(
+          eq(contatos.escritorioId, esc.escritorio.id),
+          eq(contatos.origem, "asaas"),
+        ),
+      );
+
+    if (candidatos.length === 0) {
+      return { deletados: 0, vinculosRemovidos: 0 };
+    }
+
+    const candidatoIds = candidatos.map((c) => c.id);
+
+    const comCobranca = await db
+      .selectDistinct({ contatoId: asaasCobrancas.contatoId })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.contatoId, candidatoIds),
+        ),
+      );
+    const setComCobranca = new Set(
+      comCobranca.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const comProcesso = await db
+      .selectDistinct({ contatoId: clienteProcessos.contatoId })
+      .from(clienteProcessos)
+      .where(
+        and(
+          eq(clienteProcessos.escritorioId, esc.escritorio.id),
+          inArray(clienteProcessos.contatoId, candidatoIds),
+        ),
+      );
+    const setComProcesso = new Set(
+      comProcesso.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const idsAlvo = candidatos
+      .filter((c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id))
+      .map((c) => c.id)
+      .slice(0, 5000);
+
+    if (idsAlvo.length === 0) {
+      return { deletados: 0, vinculosRemovidos: 0 };
+    }
+
+    // Primeiro apaga vínculos asaas_clientes (FK lógico). Depois contatos.
+    const rVinc = await db
+      .delete(asaasClientes)
+      .where(
+        and(
+          eq(asaasClientes.escritorioId, esc.escritorio.id),
+          inArray(asaasClientes.contatoId, idsAlvo),
+        ),
+      );
+    const vinculosRemovidos = Number(
+      (rVinc as any)?.[0]?.affectedRows ?? (rVinc as any)?.affectedRows ?? 0,
+    );
+
+    const rContato = await db
+      .delete(contatos)
+      .where(
+        and(
+          eq(contatos.escritorioId, esc.escritorio.id),
+          inArray(contatos.id, idsAlvo),
+        ),
+      );
+    const deletados = Number(
+      (rContato as any)?.[0]?.affectedRows ?? (rContato as any)?.affectedRows ?? 0,
+    );
+
+    log.info(
+      { escritorioId: esc.escritorio.id, deletados, vinculosRemovidos },
+      "[Asaas] Limpeza de contatos órfãos executada",
+    );
+
+    return { deletados, vinculosRemovidos };
   }),
 });
