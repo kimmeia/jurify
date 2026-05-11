@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Loader2, Plus, MessageCircle, Wifi, WifiOff, Eye, EyeOff, X,
   Bot, Plug, Shield, CheckCircle, AlertTriangle, Link2, Clock, Pause, Play, Square,
-  History, RotateCcw,
+  History, RotateCcw, Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import WhatsappQR from "@/components/integracoes/WhatsappQR";
@@ -350,6 +350,141 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
   );
 }
 
+/**
+ * Card pra importar o extrato financeiro do Asaas (`/v3/financialTransactions`)
+ * como despesas locais. Cobre PIX/TED saindo, taxas de notificação
+ * (SMS/WhatsApp/email/voz), mensalidade Asaas, antecipações, etc.
+ *
+ * Idempotente: re-rodar a mesma janela não duplica nada (UNIQUE INDEX
+ * em `despesas.asaasFinTransId`).
+ */
+function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
+  const [periodo, setPeriodo] = useState<"7d" | "30d" | "90d" | "custom">("30d");
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+
+  const extratoMut = (trpc as any).asaas?.sincronizarExtrato?.useMutation?.({
+    onSuccess: (r: any) => {
+      const novos = r.novasDespesas;
+      const dup = r.duplicadas;
+      const tiposExtras = Object.keys(r.tiposVistos || {}).filter(
+        (t) => !["PAYMENT_RECEIVED", "PAYMENT_OVERDUE_RECEIVED", "PAYMENT_REVERSAL"].includes(t),
+      );
+      toast.success(`${novos} despesa(s) importada(s)`, {
+        description: `${dup} duplicadas, ${r.ignoradas} créditos ignorados. ${
+          tiposExtras.length > 0 ? `Tipos: ${tiposExtras.slice(0, 5).join(", ")}` : ""
+        }`,
+        duration: 10000,
+      });
+    },
+    onError: (err: any) => toast.error("Erro ao sincronizar extrato", { description: err.message }),
+  }) || {};
+
+  const calcularDatas = () => {
+    if (periodo === "custom") {
+      return { desde: dataInicio, ate: dataFim };
+    }
+    const dias = periodo === "7d" ? 7 : periodo === "30d" ? 30 : 90;
+    const ate = new Date().toISOString().slice(0, 10);
+    const desdeDate = new Date();
+    desdeDate.setDate(desdeDate.getDate() - dias);
+    const desde = desdeDate.toISOString().slice(0, 10);
+    return { desde, ate };
+  };
+
+  const onSync = () => {
+    const datas = calcularDatas();
+    if (periodo === "custom" && (!datas.desde || !datas.ate)) {
+      toast.error("Informe data de início e fim");
+      return;
+    }
+    extratoMut.mutate?.(datas);
+  };
+
+  return (
+    <div className="rounded-lg border border-violet-200 bg-violet-50/40 dark:bg-violet-950/20 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Receipt className="h-4 w-4 text-violet-700 dark:text-violet-300" />
+        <span className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+          Sincronizar extrato (despesas)
+        </span>
+      </div>
+
+      <p className="text-xs text-violet-900/80 dark:text-violet-200/80">
+        Importa do extrato do Asaas todas as <strong>despesas</strong>: PIX/TED
+        saindo, taxas de notificação (SMS/WhatsApp/email/voz), mensalidade Asaas,
+        antecipações, etc. Cobranças recebidas (créditos) não viram despesa —
+        elas seguem o webhook normal. <strong>Pode rodar sem medo</strong>: já
+        importou não duplica.
+      </p>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Período</Label>
+          <Select
+            value={periodo}
+            onValueChange={(v) => setPeriodo(v as typeof periodo)}
+            disabled={!canEdit}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+              <SelectItem value="30d">Últimos 30 dias</SelectItem>
+              <SelectItem value="90d">Últimos 90 dias</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs invisible">.</Label>
+          <Button
+            size="sm"
+            className="w-full h-8 text-xs"
+            onClick={onSync}
+            disabled={!canEdit || extratoMut.isPending}
+          >
+            {extratoMut.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Receipt className="h-3 w-3 mr-1" />
+            )}
+            Sincronizar agora
+          </Button>
+        </div>
+      </div>
+
+      {periodo === "custom" && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs">Início</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              disabled={!canEdit}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Fim</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              disabled={!canEdit}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: { open: boolean; onClose: () => void; canEdit: boolean; asaasStatus: any; onRefresh: () => void }) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -515,6 +650,8 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
               </Button>
 
               <ImportarHistoricoSection canEdit={canEdit} />
+
+              <SincronizarExtratoSection canEdit={canEdit} />
             </div>
           ) : (
             <div className="space-y-3">

@@ -1939,8 +1939,12 @@ export const despesas = mysqlTable(
      *     cobrança Asaas é paga (valor = value - netValue do Asaas)
      *  - 'recorrencia': gerada automaticamente pelo cron de recorrência
      *     a partir de uma despesa-modelo
+     *  - 'extrato_asaas': importada do extrato financeiro do Asaas
+     *     (GET /v3/financialTransactions). Cobre PIX de saída, taxas de
+     *     notificação, mensalidade, antecipações, etc. Idempotência via
+     *     UNIQUE(escritorioId, asaasFinTransId).
      */
-    origem: mysqlEnum("origemDesp", ["manual", "taxa_asaas", "recorrencia"])
+    origem: mysqlEnum("origemDesp", ["manual", "taxa_asaas", "recorrencia", "extrato_asaas"])
       .default("manual")
       .notNull(),
     /**
@@ -1949,6 +1953,16 @@ export const despesas = mysqlTable(
      * que retries do webhook criem despesas duplicadas pra mesma cobrança.
      */
     cobrancaOriginalId: int("cobrancaOriginalIdDesp"),
+    /**
+     * Quando origem='extrato_asaas', ID da movimentação no Asaas
+     * (`/v3/financialTransactions`). Junto com `asaasFinTransType` (campo
+     * `type` da movimentação: PAYMENT_FEE, TRANSFER, NOTIFICATION_FEE, etc).
+     * UNIQUE(escritorioId, asaasFinTransId) impede duplicatas em retries
+     * ou re-execução manual do sync. Múltiplos NULL são tratados como
+     * distintos pelo MySQL — não conflitam com despesas manuais/legacy.
+     */
+    asaasFinTransId: varchar("asaasFinTransIdDesp", { length: 64 }),
+    asaasFinTransType: varchar("asaasFinTransTypeDesp", { length: 64 }),
     observacoes: text("observacoesDesp"),
     criadoPorUserId: int("criadoPorUserIdDesp").notNull(),
     createdAt: timestamp("createdAtDesp").defaultNow().notNull(),
@@ -1966,6 +1980,10 @@ export const despesas = mysqlTable(
     uqCobOrigem: uniqueIndex("desp_cob_origem_uq").on(
       t.cobrancaOriginalId,
       t.origem,
+    ),
+    uqAsaasFinTrans: uniqueIndex("desp_asaas_fintrans_uq").on(
+      t.escritorioId,
+      t.asaasFinTransId,
     ),
     idxRecorrenciaModelo: index("desp_recorrencia_modelo_idx").on(
       t.escritorioId,
