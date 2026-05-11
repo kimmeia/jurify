@@ -3246,4 +3246,192 @@ export const asaasRouter = router({
       return null;
     }
   }),
+
+  // ─── LIMPEZA DE CONTATOS ASAAS ÓRFÃOS ─────────────────────────────────────
+  //
+  // Contexto: o `sincronizarClientes` antigo (corrigido em PR #241) fazia
+  // bulk import de TODOS os customers do Asaas, criando contatos no CRM
+  // mesmo pra leads/inativos sem cobrança. Estas duas procedures dão um
+  // caminho controlado pra limpar esses contatos órfãos depois.
+  //
+  // Critério de elegibilidade pra deletar:
+  //  - origem='asaas'
+  //  - mesmo escritório do user (multi-tenancy)
+  //  - SEM cobrança vinculada (nenhuma linha em asaas_cobrancas)
+  //  - SEM processo/ação vinculado (nenhuma linha em cliente_processos)
+  //
+  // Vínculo asaas_clientes é removido junto.
+
+  /**
+   * Preview da limpeza: conta quantos contatos seriam apagados e devolve
+   * até 20 nomes pro user revisar antes de confirmar. Não muta nada.
+   */
+  preverLimpezaContatosAsaas: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+    if (!perm.excluir) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para excluir contatos do escritório.",
+      });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const candidatos = await db
+      .select({ id: contatos.id, nome: contatos.nome, createdAt: contatos.createdAt })
+      .from(contatos)
+      .where(
+        and(
+          eq(contatos.escritorioId, esc.escritorio.id),
+          eq(contatos.origem, "asaas"),
+        ),
+      );
+
+    if (candidatos.length === 0) return { total: 0, amostra: [] };
+
+    const candidatoIds = candidatos.map((c) => c.id);
+
+    const comCobranca = await db
+      .selectDistinct({ contatoId: asaasCobrancas.contatoId })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.contatoId, candidatoIds),
+        ),
+      );
+    const setComCobranca = new Set(
+      comCobranca.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const comProcesso = await db
+      .selectDistinct({ contatoId: clienteProcessos.contatoId })
+      .from(clienteProcessos)
+      .where(
+        and(
+          eq(clienteProcessos.escritorioId, esc.escritorio.id),
+          inArray(clienteProcessos.contatoId, candidatoIds),
+        ),
+      );
+    const setComProcesso = new Set(
+      comProcesso.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const orfaos = candidatos.filter(
+      (c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id),
+    );
+
+    return {
+      total: orfaos.length,
+      amostra: orfaos.slice(0, 20).map((o) => ({
+        id: o.id,
+        nome: o.nome,
+        createdAt: o.createdAt,
+      })),
+    };
+  }),
+
+  /**
+   * Executa a limpeza. Idempotente — pode rodar várias vezes; novas
+   * execuções com `total=0` no preview são no-op.
+   *
+   * Faz batch de até 5000 contatos por chamada (proteção contra delete
+   * massivo acidental). Se houver mais, o user clica de novo.
+   */
+  executarLimpezaContatosAsaas: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+    if (!perm.excluir) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para excluir contatos do escritório.",
+      });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const candidatos = await db
+      .select({ id: contatos.id })
+      .from(contatos)
+      .where(
+        and(
+          eq(contatos.escritorioId, esc.escritorio.id),
+          eq(contatos.origem, "asaas"),
+        ),
+      );
+
+    if (candidatos.length === 0) {
+      return { deletados: 0, vinculosRemovidos: 0 };
+    }
+
+    const candidatoIds = candidatos.map((c) => c.id);
+
+    const comCobranca = await db
+      .selectDistinct({ contatoId: asaasCobrancas.contatoId })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.contatoId, candidatoIds),
+        ),
+      );
+    const setComCobranca = new Set(
+      comCobranca.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const comProcesso = await db
+      .selectDistinct({ contatoId: clienteProcessos.contatoId })
+      .from(clienteProcessos)
+      .where(
+        and(
+          eq(clienteProcessos.escritorioId, esc.escritorio.id),
+          inArray(clienteProcessos.contatoId, candidatoIds),
+        ),
+      );
+    const setComProcesso = new Set(
+      comProcesso.map((c) => c.contatoId).filter((x): x is number => !!x),
+    );
+
+    const idsAlvo = candidatos
+      .filter((c) => !setComCobranca.has(c.id) && !setComProcesso.has(c.id))
+      .map((c) => c.id)
+      .slice(0, 5000);
+
+    if (idsAlvo.length === 0) {
+      return { deletados: 0, vinculosRemovidos: 0 };
+    }
+
+    // Primeiro apaga vínculos asaas_clientes (FK lógico). Depois contatos.
+    const rVinc = await db
+      .delete(asaasClientes)
+      .where(
+        and(
+          eq(asaasClientes.escritorioId, esc.escritorio.id),
+          inArray(asaasClientes.contatoId, idsAlvo),
+        ),
+      );
+    const vinculosRemovidos = Number(
+      (rVinc as any)?.[0]?.affectedRows ?? (rVinc as any)?.affectedRows ?? 0,
+    );
+
+    const rContato = await db
+      .delete(contatos)
+      .where(
+        and(
+          eq(contatos.escritorioId, esc.escritorio.id),
+          inArray(contatos.id, idsAlvo),
+        ),
+      );
+    const deletados = Number(
+      (rContato as any)?.[0]?.affectedRows ?? (rContato as any)?.affectedRows ?? 0,
+    );
+
+    log.info(
+      { escritorioId: esc.escritorio.id, deletados, vinculosRemovidos },
+      "[Asaas] Limpeza de contatos órfãos executada",
+    );
+
+    return { deletados, vinculosRemovidos };
+  }),
 });
