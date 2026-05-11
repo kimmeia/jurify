@@ -78,6 +78,28 @@ describe("temAcessoAtivo — cortesia OFF (comportamento legacy)", () => {
   });
 });
 
+describe("temAcessoAtivo — sub virtual (sem planId, cortesia)", () => {
+  it("sub virtual com status='active' e cortesia=true libera", () => {
+    // Cenário: cliente piloto que nunca pagou. Admin marca cortesia
+    // direto no detalhe do cliente, sistema cria uma sub virtual com
+    // planId=null + status='active' + cortesia=true. Helper deve liberar
+    // pela rota da cortesia, não pela rota do status.
+    expect(
+      temAcessoAtivo({ status: "active", cortesia: true, cortesiaExpiraEm: null }),
+    ).toBe(true);
+  });
+
+  it("sub virtual com cortesia removida fica pendurada — status='active' libera (escolha do admin)", () => {
+    // Admin removeu cortesia mas não cancelou a sub virtual. A sub
+    // sobra com status='active' e cortesia=false. Comportamento esperado:
+    // status='active' libera (não há diferença local entre virtual e real).
+    // Admin pode cancelar via cancelarAssinaturaAdmin se quiser cortar acesso.
+    expect(
+      temAcessoAtivo({ status: "active", cortesia: false, cortesiaExpiraEm: null }),
+    ).toBe(true);
+  });
+});
+
 describe("temAcessoAtivo — fronteira de expiração", () => {
   let datenowSpy: ReturnType<typeof vi.spyOn>;
 
