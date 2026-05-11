@@ -17,7 +17,7 @@ import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, contatos, users } from "../../drizzle/schema";
-import { eq, and, desc, like, or, inArray, between, gte, lte } from "drizzle-orm";
+import { eq, and, desc, like, or, inArray, between, gte, lte, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -999,7 +999,47 @@ export const asaasRouter = router({
           }
           continue;
         }
-        if (!asaasCli.cpfCnpj) continue;
+        // Customer sem CPF: ainda cria contato órfão (sem CPF) pra que
+        // cobranças importadas dele apareçam com nome na UI em vez de "—".
+        // O admin pode preencher o CPF depois e re-sincronizar pra unificar
+        // com outro contato se for o mesmo cliente.
+        if (!asaasCli.cpfCnpj) {
+          if (!asaasCli.name?.trim()) continue; // sem nome E sem CPF, pula
+          idsAsaas.add(asaasCli.id);
+
+          const [jaExiste] = await db
+            .select({ id: asaasClientes.id })
+            .from(asaasClientes)
+            .where(
+              and(
+                eq(asaasClientes.escritorioId, esc.escritorio.id),
+                eq(asaasClientes.asaasCustomerId, asaasCli.id),
+              ),
+            )
+            .limit(1);
+          if (jaExiste) continue;
+
+          const [novoContato] = await db
+            .insert(contatos)
+            .values({
+              escritorioId: esc.escritorio.id,
+              nome: asaasCli.name,
+              cpfCnpj: null,
+              email: asaasCli.email || null,
+              telefone: asaasCli.mobilePhone || asaasCli.phone || null,
+              origem: "asaas",
+            })
+            .$returningId();
+          await db.insert(asaasClientes).values({
+            escritorioId: esc.escritorio.id,
+            contatoId: novoContato.id,
+            asaasCustomerId: asaasCli.id,
+            cpfCnpj: "", // schema NOT NULL — placeholder; admin completa depois
+            nome: asaasCli.name,
+          });
+          novos++;
+          continue;
+        }
 
         idsAsaas.add(asaasCli.id);
         const cpfLimpo = asaasCli.cpfCnpj.replace(/\D/g, "");
@@ -1995,13 +2035,26 @@ export const asaasRouter = router({
           conditions.push(inArray(asaasCobrancas.contatoId, visiveis));
         }
 
+        // Total pra paginação. Counts em separado evita carregar todas
+        // as linhas só pra contar.
+        const [totalRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(asaasCobrancas)
+          .where(and(...conditions));
+        const total = Number(totalRow?.count ?? 0);
+
         const items = await db.select().from(asaasCobrancas)
           .where(and(...conditions))
-          .orderBy(desc(asaasCobrancas.createdAt))
+          // Vencimento desc primeiro (faz mais sentido pra contas-a-receber:
+          // a mais recente fica no topo). createdAt como tiebreaker pra
+          // cobranças do mesmo dia: a inserida por último fica no topo.
+          .orderBy(desc(asaasCobrancas.vencimento), desc(asaasCobrancas.createdAt))
           .limit(input?.limit ?? 50)
           .offset(input?.offset ?? 0);
 
-        // Enriquecer com nome do contato
+        // Enriquecer com nome do contato — primário do CRM. Fallback pro
+        // nome em `asaas_clientes` quando contato não existe (customer
+        // do Asaas sem CPF que ainda não virou contato local).
         const contatoIds = [...new Set(items.map((i) => i.contatoId).filter(Boolean))];
         let contatosMap: Record<number, string> = {};
         if (contatoIds.length > 0) {
@@ -2009,6 +2062,36 @@ export const asaasRouter = router({
             .from(contatos)
             .where(inArray(contatos.id, contatoIds as number[]));
           contatosMap = Object.fromEntries(contatosList.map((c) => [c.id, c.nome]));
+        }
+
+        // Fallback: cobranças sem contatoId OU com contato sem nome buscam
+        // em `asaas_clientes` pelo asaasCustomerId. É o vínculo direto com
+        // o customer do Asaas, que sempre tem nome quando o sync rodou.
+        const customerIdsSemNome = items
+          .filter((i) =>
+            !i.contatoId || !contatosMap[i.contatoId] || contatosMap[i.contatoId].trim() === "",
+          )
+          .map((i) => i.asaasCustomerId)
+          .filter((c): c is string => !!c);
+        let asaasClienteNomeMap: Record<string, string> = {};
+        if (customerIdsSemNome.length > 0) {
+          const linhas = await db
+            .select({
+              customerId: asaasClientes.asaasCustomerId,
+              nome: asaasClientes.nome,
+            })
+            .from(asaasClientes)
+            .where(
+              and(
+                eq(asaasClientes.escritorioId, esc.escritorio.id),
+                inArray(asaasClientes.asaasCustomerId, customerIdsSemNome),
+              ),
+            );
+          asaasClienteNomeMap = Object.fromEntries(
+            linhas
+              .filter((l) => l.nome && l.nome.trim())
+              .map((l) => [l.customerId, l.nome as string]),
+          );
         }
 
         // Enriquecer com ações vinculadas (apelido / tipo). 1 query por
@@ -2034,15 +2117,22 @@ export const asaasRouter = router({
           }
         }
 
-        const enriched = items.map((i) => ({
-          ...i,
-          nomeContato: i.contatoId ? contatosMap[i.contatoId] || "—" : "—",
-          acoesVinculadas: acoesPorCobranca.get(i.id) ?? [],
-        }));
+        const enriched = items.map((i) => {
+          const nomeContrato = i.contatoId ? contatosMap[i.contatoId] : null;
+          const nomeFallback = i.asaasCustomerId
+            ? asaasClienteNomeMap[i.asaasCustomerId]
+            : null;
+          return {
+            ...i,
+            nomeContato:
+              (nomeContrato && nomeContrato.trim()) ||
+              (nomeFallback && nomeFallback.trim()) ||
+              "—",
+            acoesVinculadas: acoesPorCobranca.get(i.id) ?? [],
+          };
+        });
 
-        const allItems = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas).where(and(...conditions));
-
-        return { items: enriched, total: allItems.length };
+        return { items: enriched, total };
       } catch {
         return { items: [], total: 0 };
       }

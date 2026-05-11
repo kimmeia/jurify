@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +142,8 @@ export default function Financeiro() {
   const filtraPorVencimento = filtroStatus.length > 0 && filtroStatus.every(
     (s) => s === "PENDING" || s === "OVERDUE",
   );
+  const ITENS_POR_PAGINA = 50;
+  const [paginaCob, setPaginaCob] = useState(0);
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
     trpc.asaas.listarCobrancas.useQuery(
       {
@@ -150,13 +152,25 @@ export default function Financeiro() {
         ...(filtraPorVencimento
           ? { vencimentoInicio: rangeEfetivo.inicio, vencimentoFim: rangeEfetivo.fim }
           : { pagamentoInicio: rangeEfetivo.inicio, pagamentoFim: rangeEfetivo.fim }),
-        limit: 100,
+        limit: ITENS_POR_PAGINA,
+        offset: paginaCob * ITENS_POR_PAGINA,
       },
       {
         retry: false,
         refetchInterval: REFRESH_MS,
       },
     );
+
+  // Reseta página quando filtros mudam — evita ficar numa página vazia
+  // depois de trocar status/forma.
+  useEffect(() => {
+    setPaginaCob(0);
+  }, [
+    filtroStatus.join(","),
+    filtroForma.join(","),
+    rangeEfetivo.inicio,
+    rangeEfetivo.fim,
+  ]);
   const { data: clientesVinculados, refetch: refetchClientes } =
     trpc.asaas.listarClientesVinculados.useQuery(
       { busca: busca || undefined },
@@ -892,6 +906,42 @@ export default function Financeiro() {
                   ))}
                 </TableBody>
               </Table>
+              {/* Paginação: aparece quando há mais de 1 página */}
+              {(cobrancas?.total ?? 0) > ITENS_POR_PAGINA && (
+                <div className="flex items-center justify-between px-3 py-2 border-t text-xs">
+                  <span className="text-muted-foreground tabular-nums">
+                    {paginaCob * ITENS_POR_PAGINA + 1}–
+                    {Math.min(
+                      (paginaCob + 1) * ITENS_POR_PAGINA,
+                      cobrancas?.total ?? 0,
+                    )}{" "}
+                    de {cobrancas?.total ?? 0}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setPaginaCob((p) => Math.max(0, p - 1))}
+                      disabled={paginaCob === 0 || loadCob}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setPaginaCob((p) => p + 1)}
+                      disabled={
+                        (paginaCob + 1) * ITENS_POR_PAGINA >=
+                          (cobrancas?.total ?? 0) || loadCob
+                      }
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
