@@ -124,6 +124,7 @@ export async function listarColaboradores(escritorioId: number) {
       cargo: colaboradores.cargo,
       cargoPersonalizadoId: colaboradores.cargoPersonalizadoId,
       cargoPersonalizadoNome: cargosPersonalizados.nome,
+      cargoPersonalizadoCor: cargosPersonalizados.cor,
       departamento: colaboradores.departamento,
       setorId: colaboradores.setorId,
       setorNome: setores.nome,
