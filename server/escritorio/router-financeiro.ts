@@ -346,4 +346,89 @@ export const financeiroRouter = router({
       requireGestao(esc.colaborador.cargo);
       return reconciliarCobrancasOrfas(esc.escritorio.id, input?.contatoId);
     }),
+
+  // ─── DRE (Demonstrativo de Resultado) ──────────────────────────────────────
+
+  /**
+   * Calcula DRE pra o período: receitas (cobranças pagas) - despesas (pagas
+   * total ou parcial), agrupado por categoria. Resultado e margem líquida.
+   * Permite a UI montar relatório gerencial sem fazer agregação no cliente.
+   */
+  dre: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      if (input.dataInicio > input.dataFim) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "dataInicio deve ser anterior ou igual a dataFim.",
+        });
+      }
+      const { calcularDRE } = await import("./dre");
+      return calcularDRE(esc.escritorio.id, input.dataInicio, input.dataFim);
+    }),
+
+  /**
+   * Gera CSV do DRE pra download. Retorna `{ filename, content }` —
+   * frontend cria Blob e faz download. Conteúdo já inclui BOM UTF-8
+   * pra Excel reconhecer acentos.
+   */
+  exportarDreCsv: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const { calcularDRE, gerarDRECSV } = await import("./dre");
+      const dre = await calcularDRE(
+        esc.escritorio.id,
+        input.dataInicio,
+        input.dataFim,
+      );
+      const content = gerarDRECSV(dre, esc.escritorio.nome);
+      return {
+        filename: `dre_${input.dataInicio}_${input.dataFim}.csv`,
+        content,
+        mimeType: "text/csv;charset=utf-8",
+      };
+    }),
+
+  /**
+   * Gera PDF do DRE pra download. Retorna base64 (transportável via tRPC)
+   * que o frontend decodifica em Blob. Tamanho típico: 10-30KB.
+   */
+  exportarDrePdf: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      requireGestao(esc.colaborador.cargo);
+      const { calcularDRE } = await import("./dre");
+      const { gerarDREPDF } = await import("./dre-pdf");
+      const dre = await calcularDRE(
+        esc.escritorio.id,
+        input.dataInicio,
+        input.dataFim,
+      );
+      const buffer = await gerarDREPDF(dre, esc.escritorio.nome);
+      return {
+        filename: `dre_${input.dataInicio}_${input.dataFim}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
 });
