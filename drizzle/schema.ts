@@ -941,6 +941,36 @@ export const asaasConfig = mysqlTable("asaas_config", {
   ultimoTeste: timestamp("ultimoTesteAsaas"),
   mensagemErro: varchar("mensagemErroAsaas", { length: 512 }),
   saldo: varchar("saldoAsaas", { length: 32 }),
+  /**
+   * Sincronização histórica controlada por janelas de tempo.
+   * Webhook cobre eventos futuros automaticamente; estes campos
+   * controlam a importação do passado em pedaços pequenos pra não
+   * estourar a cota do Asaas (12h de bloqueio em 429).
+   * Cron `processarSyncHistorico` consome 1 janela de 1 dia por tick,
+   * respeitando `intervaloMinutos` entre janelas.
+   */
+  historicoSyncStatus: mysqlEnum("historicoSyncStatus", [
+    "inativo",
+    "agendado",
+    "executando",
+    "pausado",
+    "concluido",
+    "erro",
+  ]).default("inativo").notNull(),
+  historicoSyncDe: varchar("historicoSyncDe", { length: 10 }),
+  historicoSyncAte: varchar("historicoSyncAte", { length: 10 }),
+  /** Próxima janela a processar (anda do mais recente pro mais antigo). */
+  historicoSyncCursor: varchar("historicoSyncCursor", { length: 10 }),
+  historicoSyncTotalDias: int("historicoSyncTotalDias"),
+  historicoSyncDiasFeitos: int("historicoSyncDiasFeitos").default(0).notNull(),
+  historicoSyncCobrancasImportadas: int("historicoSyncCobrancasImportadas").default(0).notNull(),
+  historicoSyncCobrancasAtualizadas: int("historicoSyncCobrancasAtualizadas").default(0).notNull(),
+  /** Cooldown entre janelas (default 60min). Configurável pelo user. */
+  historicoSyncIntervaloMinutos: int("historicoSyncIntervaloMinutos").default(60).notNull(),
+  historicoSyncIniciadoEm: timestamp("historicoSyncIniciadoEm"),
+  historicoSyncUltimaJanelaEm: timestamp("historicoSyncUltimaJanelaEm"),
+  historicoSyncConcluidoEm: timestamp("historicoSyncConcluidoEm"),
+  historicoSyncErroMensagem: varchar("historicoSyncErroMensagem", { length: 512 }),
   createdAt: timestamp("createdAtAsaasConfig").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAsaasConfig").defaultNow().onUpdateNow().notNull(),
 });
@@ -1827,6 +1857,35 @@ export const despesas = mysqlTable(
     recorrencia: mysqlEnum("recorrenciaDesp", ["nenhuma", "semanal", "mensal", "anual"])
       .default("nenhuma")
       .notNull(),
+    /**
+     * Quando `recorrencia` != 'nenhuma', flag global de pausa. Default true.
+     * Permite manter histórico de uma série recorrente mas parar de gerar
+     * próximas (ex: cancelei o plano mas quero ver parcelas antigas).
+     */
+    recorrenciaAtiva: boolean("recorrenciaAtivaDesp").default(true).notNull(),
+    /**
+     * Quando preenchido, esta despesa foi gerada pelo cron a partir de
+     * uma despesa-modelo (referência a despesas.id da modelo). NULL =
+     * modelo da série OU despesa não-recorrente.
+     */
+    recorrenciaDeOrigemId: int("recorrenciaDeOrigemIdDesp"),
+    /**
+     * Origem da despesa:
+     *  - 'manual': lançada pela UI pelo escritório (default)
+     *  - 'taxa_asaas': gerada automaticamente pelo webhook quando uma
+     *     cobrança Asaas é paga (valor = value - netValue do Asaas)
+     *  - 'recorrencia': gerada automaticamente pelo cron de recorrência
+     *     a partir de uma despesa-modelo
+     */
+    origem: mysqlEnum("origemDesp", ["manual", "taxa_asaas", "recorrencia"])
+      .default("manual")
+      .notNull(),
+    /**
+     * Quando origem='taxa_asaas', referencia a cobrança em asaas_cobrancas
+     * que gerou esta despesa. UNIQUE(cobrancaOriginalId, origem) impede
+     * que retries do webhook criem despesas duplicadas pra mesma cobrança.
+     */
+    cobrancaOriginalId: int("cobrancaOriginalIdDesp"),
     observacoes: text("observacoesDesp"),
     criadoPorUserId: int("criadoPorUserIdDesp").notNull(),
     createdAt: timestamp("createdAtDesp").defaultNow().notNull(),
@@ -1840,6 +1899,19 @@ export const despesas = mysqlTable(
     idxEscritorioStatus: index("desp_escr_status_idx").on(
       t.escritorioId,
       t.status,
+    ),
+    uqCobOrigem: uniqueIndex("desp_cob_origem_uq").on(
+      t.cobrancaOriginalId,
+      t.origem,
+    ),
+    idxRecorrenciaModelo: index("desp_recorrencia_modelo_idx").on(
+      t.escritorioId,
+      t.recorrencia,
+      t.recorrenciaAtiva,
+      t.recorrenciaDeOrigemId,
+    ),
+    idxRecorrenciaOrigem: index("desp_recorrencia_origem_idx").on(
+      t.recorrenciaDeOrigemId,
     ),
   }),
 );
@@ -2446,3 +2518,57 @@ export type WorkerJobLog = typeof workerJobsLog.$inferSelect;
 export type InsertWorkerJobLog = typeof workerJobsLog.$inferInsert;
 
 export type AsaasConfigCobrancaPai = typeof asaasConfigCobrancaPai.$inferSelect;
+
+/**
+ * Anexos do módulo financeiro (despesas e cobranças). Discriminador
+ * `tipoEntidade` permite N tipos sem N tabelas. Storage key aponta pro
+ * S3 (mesmo bucket do backup global, prefixo `anexos/`).
+ */
+export const financeiroAnexos = mysqlTable(
+  "financeiro_anexos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAnx").notNull(),
+    tipoEntidade: mysqlEnum("tipoEntidadeAnx", ["despesa", "cobranca"]).notNull(),
+    entidadeId: int("entidadeIdAnx").notNull(),
+    storageKey: varchar("storageKeyAnx", { length: 512 }).notNull(),
+    filename: varchar("filenameAnx", { length: 255 }).notNull(),
+    mimeType: varchar("mimeTypeAnx", { length: 100 }).notNull(),
+    tamanhoBytes: int("tamanhoBytesAnx").notNull(),
+    uploadedByUserId: int("uploadedByUserIdAnx"),
+    createdAt: timestamp("createdAtAnx").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxEntidade: index("anx_entidade_idx").on(t.escritorioId, t.tipoEntidade, t.entidadeId),
+    idxEscritorio: index("anx_escritorio_idx").on(t.escritorioId, t.createdAt),
+  }),
+);
+
+export type FinanceiroAnexo = typeof financeiroAnexos.$inferSelect;
+export type InsertFinanceiroAnexo = typeof financeiroAnexos.$inferInsert;
+
+/**
+ * Registro de transações OFX já importadas. Impede que importar 2x o mesmo
+ * extrato (acidente comum) marque a mesma despesa/cobrança como paga
+ * múltiplas vezes. UNIQUE(escritorioId, fitid) garante idempotência.
+ */
+export const ofxImportacoesFitid = mysqlTable(
+  "ofx_importacoes_fitid",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdOfx").notNull(),
+    fitid: varchar("fitidOfx", { length: 255 }).notNull(),
+    tipoEntidade: mysqlEnum("tipoEntidadeOfx", ["despesa", "cobranca"]).notNull(),
+    entidadeId: int("entidadeIdOfx").notNull(),
+    valor: decimal("valorOfx", { precision: 12, scale: 2 }).notNull(),
+    dataPagamento: varchar("dataPagamentoOfx", { length: 10 }).notNull(),
+    importadoEm: timestamp("importadoEmOfx").defaultNow().notNull(),
+    importadoPorUserId: int("importadoPorUserIdOfx"),
+  },
+  (t) => ({
+    uqEscFitid: uniqueIndex("ofx_escr_fitid_uq").on(t.escritorioId, t.fitid),
+    idxEntidade: index("ofx_entidade_idx").on(t.escritorioId, t.tipoEntidade, t.entidadeId),
+  }),
+);
+
+export type OfxImportacaoFitid = typeof ofxImportacoesFitid.$inferSelect;

@@ -2,6 +2,46 @@
  * Helpers compartilhados do módulo Financeiro.
  */
 import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc";
+
+/**
+ * Hook que retorna as permissões do usuário atual no módulo Financeiro.
+ * Bate com `exigirAcaoFinanceiro` do backend — todas as procedures de
+ * escrita verificam essa matriz. Default: tudo `true` durante o load
+ * pra evitar flicker dos botões.
+ *
+ * Dono e admin do sistema sempre veem tudo (lógica idêntica ao AppLayout).
+ */
+export function useFinanceiroPerms(): {
+  podeVer: boolean;
+  podeCriar: boolean;
+  podeEditar: boolean;
+  podeExcluir: boolean;
+} {
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchInterval: 5 * 60_000 },
+  ) || { data: null };
+
+  // Dono → tudo liberado, sem esperar carregar
+  if (minhasPerms?.cargo === "Dono") {
+    return { podeVer: true, podeCriar: true, podeEditar: true, podeExcluir: true };
+  }
+  // Loading → otimista (evita flicker de botões sumindo + reaparecendo)
+  if (!minhasPerms?.permissoes) {
+    return { podeVer: true, podeCriar: true, podeEditar: true, podeExcluir: true };
+  }
+  const p = minhasPerms.permissoes.financeiro;
+  if (!p) {
+    return { podeVer: false, podeCriar: false, podeEditar: false, podeExcluir: false };
+  }
+  return {
+    podeVer: !!(p.verTodos || p.verProprios),
+    podeCriar: !!p.criar,
+    podeEditar: !!p.editar,
+    podeExcluir: !!p.excluir,
+  };
+}
 
 export function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);

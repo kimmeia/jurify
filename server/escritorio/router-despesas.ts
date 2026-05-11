@@ -8,6 +8,7 @@ import {
   despesas,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -23,11 +24,27 @@ async function requireEscritorio(userId: number) {
   return result;
 }
 
-function requireGestao(cargo: string) {
-  if (cargo !== "dono" && cargo !== "gestor") {
+/**
+ * Substitui o antigo `requireGestao(cargo)` hardcode. Usa o sistema
+ * de permissões (`checkPermission`) pra respeitar cargos personalizados
+ * com flag `financeiro.<acao>=true`. Cargos legados dono/gestor continuam
+ * passando porque o defaultPerm dá tudo pra dono e `financeiro` é true
+ * pra gestor em ver/criar/editar (excluir só dono).
+ */
+async function exigirAcaoFinanceiro(
+  userId: number,
+  acao: "ver" | "criar" | "editar" | "excluir",
+): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", acao);
+  const ok =
+    (acao === "ver" && (perm.verTodos || perm.verProprios)) ||
+    (acao === "criar" && perm.criar) ||
+    (acao === "editar" && perm.editar) ||
+    (acao === "excluir" && perm.excluir);
+  if (!ok) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Apenas dono ou gestor pode gerenciar despesas.",
+      message: `Sem permissão para ${acao} no módulo Financeiro.`,
     });
   }
 }
@@ -47,7 +64,7 @@ export const despesasRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) return [];
 
@@ -72,6 +89,9 @@ export const despesasRouter = router({
           dataPagamento: despesas.dataPagamento,
           status: despesas.status,
           recorrencia: despesas.recorrencia,
+          recorrenciaAtiva: despesas.recorrenciaAtiva,
+          recorrenciaDeOrigemId: despesas.recorrenciaDeOrigemId,
+          origem: despesas.origem,
           observacoes: despesas.observacoes,
           categoriaId: despesas.categoriaId,
           categoriaNome: categoriasDespesa.nome,
@@ -87,6 +107,119 @@ export const despesasRouter = router({
         .limit(input?.limit ?? 200);
     }),
 
+  /**
+   * Pausa a geração automática de futuras ocorrências de uma despesa-modelo
+   * recorrente. Filhas já geradas continuam intactas. Pode ser retomada
+   * a qualquer momento.
+   */
+  pausarRecorrencia: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(despesas)
+        .set({ recorrenciaAtiva: false })
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { success: true };
+    }),
+
+  /** Retoma geração automática de uma despesa-modelo pausada. */
+  retomarRecorrencia: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(despesas)
+        .set({ recorrenciaAtiva: true })
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { success: true };
+    }),
+
+  /**
+   * Força a geração das próximas ocorrências de UMA despesa-modelo agora.
+   * Usado pelo botão "Gerar próximas agora" da UI (skip cron de 1h).
+   * Reutiliza o mesmo helper do cron — idempotente.
+   */
+  gerarRecorrenciasAgora: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [modelo] = await db
+        .select({
+          id: despesas.id,
+          escritorioId: despesas.escritorioId,
+          categoriaId: despesas.categoriaId,
+          descricao: despesas.descricao,
+          valor: despesas.valor,
+          vencimento: despesas.vencimento,
+          recorrencia: despesas.recorrencia,
+          recorrenciaAtiva: despesas.recorrenciaAtiva,
+          recorrenciaDeOrigemId: despesas.recorrenciaDeOrigemId,
+          observacoes: despesas.observacoes,
+          criadoPorUserId: despesas.criadoPorUserId,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!modelo) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Despesa não encontrada." });
+      }
+      if (modelo.recorrencia === "nenhuma") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Esta despesa não é recorrente.",
+        });
+      }
+      if (modelo.recorrenciaDeOrigemId !== null) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Use a despesa-modelo (1ª da série) pra gerar próximas.",
+        });
+      }
+
+      const { gerarFilhasDeModelo } = await import("./despesas-recorrentes");
+      const geradas = await gerarFilhasDeModelo({
+        id: modelo.id,
+        escritorioId: modelo.escritorioId,
+        categoriaId: modelo.categoriaId,
+        descricao: modelo.descricao,
+        valor: modelo.valor,
+        vencimento: modelo.vencimento,
+        recorrencia: modelo.recorrencia as "semanal" | "mensal" | "anual",
+        observacoes: modelo.observacoes,
+        criadoPorUserId: modelo.criadoPorUserId,
+      });
+      return { success: true, geradas };
+    }),
+
   criar: protectedProcedure
     .input(
       z.object({
@@ -100,7 +233,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "criar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -135,7 +268,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -180,7 +313,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -249,7 +382,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -288,7 +421,7 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db
@@ -311,9 +444,48 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "excluir");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Verifica se é despesa-modelo (tem filhas recorrentes) — se sim,
+      // cascade: deleta filhas primeiro pra não deixar órfãs apontando
+      // pra modelo inexistente. Filhas têm `recorrenciaDeOrigemId` =
+      // id da modelo.
+      const [alvo] = await db
+        .select({
+          recorrencia: despesas.recorrencia,
+          recorrenciaDeOrigemId: despesas.recorrenciaDeOrigemId,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!alvo) return { success: true, filhasRemovidas: 0 };
+
+      let filhasRemovidas = 0;
+      if (alvo.recorrencia !== "nenhuma" && alvo.recorrenciaDeOrigemId === null) {
+        // É a despesa-modelo: apaga filhas antes
+        const r = await db
+          .delete(despesas)
+          .where(
+            and(
+              eq(despesas.recorrenciaDeOrigemId, input.id),
+              eq(despesas.escritorioId, esc.escritorio.id),
+            ),
+          );
+        // Drizzle MySQL retorna [{ affectedRows }] em alguns drivers
+        const affected =
+          (r as any)?.[0]?.affectedRows ??
+          (r as any)?.affectedRows ??
+          0;
+        filhasRemovidas = Number(affected) || 0;
+      }
+
       await db
         .delete(despesas)
         .where(
@@ -322,7 +494,7 @@ export const despesasRouter = router({
             eq(despesas.escritorioId, esc.escritorio.id),
           ),
         );
-      return { success: true };
+      return { success: true, filhasRemovidas };
     }),
 
   /** Totais agregados para o card de KPIs (no período de vencimento). */
@@ -335,7 +507,7 @@ export const despesasRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) {
         return { pendente: 0, pago: 0, vencido: 0, total: 0 };

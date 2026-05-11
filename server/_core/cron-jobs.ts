@@ -12,6 +12,7 @@ import { getDb } from "../db";
 import { assinaturasDigitais, agendamentos, tarefas, colaboradores, notificacoes } from "../../drizzle/schema";
 import { eq, and, lt, sql, or, gte, lte, isNull } from "drizzle-orm";
 import { syncTodosEscritorios, validarConexoesAsaasPendentes } from "../integracoes/asaas-sync";
+import { processarSyncHistorico } from "../integracoes/asaas-sync-historico";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "./logger";
 const log = createLogger("_core-cron-jobs");
@@ -238,6 +239,42 @@ export function iniciarJobs() {
       log.error("[Cron] validarConexoesAsaasPendentes falhou:", err.message);
     }
   }, 30 * 60 * 1000);
+
+  // A cada 5 minutos: processa 1 janela de sincronização histórica por
+  // escritório elegível. Cada escritório controla seu próprio cooldown
+  // entre janelas via `historicoSyncIntervaloMinutos`. Webhook cobre
+  // eventos futuros — esta job só preenche o passado de forma controlada.
+  setInterval(async () => {
+    try {
+      await processarSyncHistorico();
+    } catch (err: any) {
+      log.error("[Cron] processarSyncHistorico falhou:", err.message);
+    }
+  }, 5 * 60 * 1000);
+
+  // A cada 1h: gera próximas ocorrências de despesas recorrentes
+  // (semanal/mensal/anual). Idempotente — pula vencimentos já existentes.
+  setInterval(async () => {
+    try {
+      const { gerarDespesasRecorrentes } = await import(
+        "../escritorio/despesas-recorrentes"
+      );
+      await gerarDespesasRecorrentes();
+    } catch (err: any) {
+      log.error("[Cron] gerarDespesasRecorrentes falhou:", err.message);
+    }
+  }, 60 * 60 * 1000);
+  // Roda 1x na partida (45s pra dar tempo do DB estar pronto)
+  setTimeout(async () => {
+    try {
+      const { gerarDespesasRecorrentes } = await import(
+        "../escritorio/despesas-recorrentes"
+      );
+      await gerarDespesasRecorrentes();
+    } catch (err: any) {
+      log.error("[Cron] gerarDespesasRecorrentes inicial falhou:", err.message);
+    }
+  }, 45_000);
 
   // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
   // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal
