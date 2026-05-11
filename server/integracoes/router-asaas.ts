@@ -27,6 +27,7 @@ import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
   syncTodasCobrancasDoContato,
+  atualizarCobrancasLocaisDoEscritorio,
   agregarVinculosPorContato,
   type VinculoLinha,
   type CobrancaAgg,
@@ -1126,15 +1127,19 @@ export const asaasRouter = router({
       }
     }
 
-    // Após sincronizar clientes, sincronizar cobranças de todos os vinculados
+    // Refresh das cobranças JÁ EXISTENTES no DB. NÃO importa cobranças
+    // novas — esse é o escopo do botão Sincronizar do Financeiro
+    // (refresh rápido sem risco de rate limit). Pra puxar histórico
+    // novo, o admin usa "Importar histórico" em Configurações (cron
+    // throttled em janelas de 1 dia).
     let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
     try {
-      const result = await syncCobrancasEscritorio(esc.escritorio.id);
-      cobNovas = result.novas;
+      const result = await atualizarCobrancasLocaisDoEscritorio(esc.escritorio.id);
       cobAtualizadas = result.atualizadas;
       cobRemovidas = result.removidas;
+      // cobNovas fica 0 — sync deste botão não importa nada novo
     } catch (err: any) {
-      log.warn(`[Asaas] Erro ao sincronizar cobranças: ${err.message}`);
+      log.warn(`[Asaas] Erro ao atualizar cobranças locais: ${err.message}`);
     }
 
     return {
