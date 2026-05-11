@@ -36,30 +36,28 @@ async function requireEscritorio(userId: number) {
   return result;
 }
 
-function requireGestao(cargo: string) {
-  if (cargo !== "dono" && cargo !== "gestor") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Apenas dono ou gestor pode gerenciar configurações financeiras.",
-    });
-  }
-}
-
 /**
- * Gate de leitura do módulo Financeiro. Respeita matriz `financeiro.ver`
- * incluindo cargos personalizados. Atendente/SDR/estagiário têm
- * `financeiro=(false, false, false, false, false)` na matriz padrão →
- * negados. Gestor/dono têm `verTodos=true` → liberados.
+ * Gate único do módulo Financeiro pra qualquer ação. Respeita a matriz
+ * de permissões (`checkPermission`) — funciona com cargos legados
+ * (dono/gestor/etc.) e cargos personalizados configurados pelo admin.
  *
- * Diferente de `requireGestao` que checa cargo legado hardcoded — esta
- * função respeita configuração customizada do admin no painel.
+ * Substituiu o antigo `requireGestao(cargo)` que era hardcode
+ * dono/gestor e ignorava cargos personalizados.
  */
-async function requireFinanceiroVer(userId: number): Promise<void> {
-  const perm = await checkPermission(userId, "financeiro", "ver");
-  if (!perm.allowed) {
+async function exigirAcaoFinanceiro(
+  userId: number,
+  acao: "ver" | "criar" | "editar" | "excluir",
+): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", acao);
+  const ok =
+    (acao === "ver" && (perm.verTodos || perm.verProprios)) ||
+    (acao === "criar" && perm.criar) ||
+    (acao === "editar" && perm.editar) ||
+    (acao === "excluir" && perm.excluir);
+  if (!ok) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Sem permissão para acessar Financeiro.",
+      message: `Sem permissão para ${acao} no módulo Financeiro.`,
     });
   }
 }
@@ -70,7 +68,7 @@ export const financeiroRouter = router({
   // ─── Categorias de cobrança ────────────────────────────────────────────────
 
   listarCategoriasCobranca: protectedProcedure.query(async ({ ctx }) => {
-    await requireFinanceiroVer(ctx.user.id);
+    await exigirAcaoFinanceiro(ctx.user.id, "ver");
     const esc = await requireEscritorio(ctx.user.id);
     await garantirCategoriasPadrao(esc.escritorio.id);
     return listarCategoriasCobranca(esc.escritorio.id);
@@ -80,7 +78,7 @@ export const financeiroRouter = router({
     .input(z.object({ nome: NOME_CAT, comissionavel: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "criar");
       const id = await criarCategoriaCobranca(
         esc.escritorio.id,
         input.nome.trim(),
@@ -100,7 +98,7 @@ export const financeiroRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const { id, ...dados } = input;
       await atualizarCategoriaCobranca(id, esc.escritorio.id, dados);
       return { success: true };
@@ -109,7 +107,7 @@ export const financeiroRouter = router({
   // ─── Categorias de despesa ─────────────────────────────────────────────────
 
   listarCategoriasDespesa: protectedProcedure.query(async ({ ctx }) => {
-    await requireFinanceiroVer(ctx.user.id);
+    await exigirAcaoFinanceiro(ctx.user.id, "ver");
     const esc = await requireEscritorio(ctx.user.id);
     await garantirCategoriasPadrao(esc.escritorio.id);
     return listarCategoriasDespesa(esc.escritorio.id);
@@ -119,7 +117,7 @@ export const financeiroRouter = router({
     .input(z.object({ nome: NOME_CAT }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "criar");
       const id = await criarCategoriaDespesa(esc.escritorio.id, input.nome.trim());
       return { id };
     }),
@@ -134,7 +132,7 @@ export const financeiroRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const { id, ...dados } = input;
       await atualizarCategoriaDespesa(id, esc.escritorio.id, dados);
       return { success: true };
@@ -143,7 +141,7 @@ export const financeiroRouter = router({
   // ─── Regra de comissão (singleton por escritório) ──────────────────────────
 
   obterRegraComissao: protectedProcedure.query(async ({ ctx }) => {
-    await requireFinanceiroVer(ctx.user.id);
+    await exigirAcaoFinanceiro(ctx.user.id, "ver");
     const esc = await requireEscritorio(ctx.user.id);
     const regra = await obterRegraComissao(esc.escritorio.id);
     const faixas = await listarFaixasComissao(esc.escritorio.id);
@@ -193,7 +191,7 @@ export const financeiroRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
 
       // Validação extra de coerência das faixas:
       if (input.modo === "faixas") {
@@ -258,7 +256,7 @@ export const financeiroRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) return [];
 
@@ -321,7 +319,7 @@ export const financeiroRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const r = await atribuirCobrancasEmMassa(
         esc.escritorio.id,
         input.cobrancaIds,
@@ -343,7 +341,7 @@ export const financeiroRouter = router({
     .input(z.object({ contatoId: z.number().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       return reconciliarCobrancasOrfas(esc.escritorio.id, input?.contatoId);
     }),
 
@@ -363,7 +361,7 @@ export const financeiroRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       if (input.dataInicio > input.dataFim) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -388,7 +386,7 @@ export const financeiroRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const { calcularDRE, gerarDRECSV } = await import("./dre");
       const dre = await calcularDRE(
         esc.escritorio.id,
@@ -416,7 +414,7 @@ export const financeiroRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const { calcularDRE } = await import("./dre");
       const { gerarDREPDF } = await import("./dre-pdf");
       const dre = await calcularDRE(

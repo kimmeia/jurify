@@ -8,6 +8,7 @@ import {
   despesas,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -23,11 +24,27 @@ async function requireEscritorio(userId: number) {
   return result;
 }
 
-function requireGestao(cargo: string) {
-  if (cargo !== "dono" && cargo !== "gestor") {
+/**
+ * Substitui o antigo `requireGestao(cargo)` hardcode. Usa o sistema
+ * de permissões (`checkPermission`) pra respeitar cargos personalizados
+ * com flag `financeiro.<acao>=true`. Cargos legados dono/gestor continuam
+ * passando porque o defaultPerm dá tudo pra dono e `financeiro` é true
+ * pra gestor em ver/criar/editar (excluir só dono).
+ */
+async function exigirAcaoFinanceiro(
+  userId: number,
+  acao: "ver" | "criar" | "editar" | "excluir",
+): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", acao);
+  const ok =
+    (acao === "ver" && (perm.verTodos || perm.verProprios)) ||
+    (acao === "criar" && perm.criar) ||
+    (acao === "editar" && perm.editar) ||
+    (acao === "excluir" && perm.excluir);
+  if (!ok) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Apenas dono ou gestor pode gerenciar despesas.",
+      message: `Sem permissão para ${acao} no módulo Financeiro.`,
     });
   }
 }
@@ -47,7 +64,7 @@ export const despesasRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) return [];
 
@@ -99,7 +116,7 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -120,7 +137,7 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -145,7 +162,7 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -216,7 +233,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "criar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -251,7 +268,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -296,7 +313,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -365,7 +382,7 @@ export const despesasRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -404,7 +421,7 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db
@@ -427,7 +444,7 @@ export const despesasRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "excluir");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db
@@ -451,7 +468,7 @@ export const despesasRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) {
         return { pendente: 0, pago: 0, vencido: 0, total: 0 };

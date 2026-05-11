@@ -25,7 +25,7 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 import {
-  formatBRL, formatBRLShort, formatMes, formatDiaCurto, formatDiaCompleto, StatusBadge, FormaBadge, CICLO_LABELS,
+  formatBRL, formatBRLShort, formatMes, formatDiaCurto, formatDiaCompleto, StatusBadge, FormaBadge, CICLO_LABELS, useFinanceiroPerms,
   exportCobrancasCSV,
 } from "./financeiro/helpers";
 import {
@@ -55,6 +55,7 @@ export default function Financeiro() {
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
+  const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Filtros multi-select. Vazio = "todos" (sem filtro).
   const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
@@ -331,14 +332,16 @@ export default function Financeiro() {
               Conectar Asaas
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={() => setNovaCobrancaOpen(true)}
-            title={!conectado ? "Asaas desconectado: você pode registrar cobrança manual (dinheiro/transferência)" : undefined}
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nova cobrança
-          </Button>
+          {perms.podeCriar && (
+            <Button
+              size="sm"
+              onClick={() => setNovaCobrancaOpen(true)}
+              title={!conectado ? "Asaas desconectado: você pode registrar cobrança manual (dinheiro/transferência)" : undefined}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nova cobrança
+            </Button>
+          )}
         </div>
       </div>
 
@@ -834,7 +837,7 @@ export default function Financeiro() {
                           {/* "Marcar paga": só pra manual + pendente/vencida.
                               Em cobranças Asaas, o status sincroniza via
                               webhook automaticamente — botão seria confuso. */}
-                          {c.origem === "manual" &&
+                          {perms.podeEditar && c.origem === "manual" &&
                             (c.status === "PENDING" || c.status === "OVERDUE") && (
                               <Button
                                 variant="ghost"
@@ -847,7 +850,7 @@ export default function Financeiro() {
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                          {c.status === "PENDING" && (
+                          {perms.podeExcluir && c.status === "PENDING" && (
                             <Button
                               variant="ghost"
                               size="sm"

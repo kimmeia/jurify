@@ -55,7 +55,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatBRL } from "./helpers";
+import { formatBRL, useFinanceiroPerms } from "./helpers";
 
 function hojeIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -119,6 +119,7 @@ export function DespesasTab() {
   const [novaAberta, setNovaAberta] = useState(false);
   const [editando, setEditando] = useState<DespesaListItem | null>(null);
   const [pagando, setPagando] = useState<DespesaListItem | null>(null);
+  const perms = useFinanceiroPerms();
 
   const status = filtroStatus === "todos" ? undefined : (filtroStatus as any);
   const lista = trpc.despesas.listar.useQuery({
@@ -209,9 +210,11 @@ export function DespesasTab() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={() => setNovaAberta(true)}>
-              <Plus className="h-4 w-4 mr-2" /> Nova despesa
-            </Button>
+            {perms.podeCriar && (
+              <Button onClick={() => setNovaAberta(true)}>
+                <Plus className="h-4 w-4 mr-2" /> Nova despesa
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -309,32 +312,34 @@ export function DespesasTab() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs flex gap-1">
-                        {d.status !== "pago" ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-emerald-600 hover:text-emerald-700"
-                            onClick={() => setPagando(d)}
-                          >
-                            <DollarSign className="h-3.5 w-3.5 mr-1" />
-                            {d.status === "parcial" ? "Pagar resto" : "Pagar"}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs text-muted-foreground"
-                            onClick={() => reabrirMut.mutate({ id: d.id })}
-                            disabled={reabrirMut.isPending}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
-                          </Button>
+                        {perms.podeEditar && (
+                          d.status !== "pago" ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-emerald-600 hover:text-emerald-700"
+                              onClick={() => setPagando(d)}
+                            >
+                              <DollarSign className="h-3.5 w-3.5 mr-1" />
+                              {d.status === "parcial" ? "Pagar resto" : "Pagar"}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-muted-foreground"
+                              onClick={() => reabrirMut.mutate({ id: d.id })}
+                              disabled={reabrirMut.isPending}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
+                            </Button>
+                          )
                         )}
                         {/* Ações de recorrência: só aparecem na despesa-modelo
                             (recorrenciaDeOrigemId === null E recorrencia ≠ nenhuma).
                             Filhas geradas não têm controle próprio — herdam da
                             modelo. */}
-                        {d.recorrencia !== "nenhuma" && !d.recorrenciaDeOrigemId && (
+                        {perms.podeEditar && d.recorrencia !== "nenhuma" && !d.recorrenciaDeOrigemId && (
                           <>
                             {d.recorrenciaAtiva ? (
                               <Button
@@ -371,15 +376,18 @@ export function DespesasTab() {
                             </Button>
                           </>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => setEditando(d)}
-                          title="Editar"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
+                        {perms.podeEditar && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => setEditando(d)}
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {perms.podeExcluir && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -394,6 +402,7 @@ export function DespesasTab() {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
