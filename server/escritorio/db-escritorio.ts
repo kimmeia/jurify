@@ -115,13 +115,19 @@ export async function listarColaboradores(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
 
+  const { setores, cargosPersonalizados } = await import("../../drizzle/schema");
   const rows = await db
     .select({
       id: colaboradores.id,
       escritorioId: colaboradores.escritorioId,
       userId: colaboradores.userId,
       cargo: colaboradores.cargo,
+      cargoPersonalizadoId: colaboradores.cargoPersonalizadoId,
+      cargoPersonalizadoNome: cargosPersonalizados.nome,
       departamento: colaboradores.departamento,
+      setorId: colaboradores.setorId,
+      setorNome: setores.nome,
+      setorCor: setores.cor,
       ativo: colaboradores.ativo,
       maxAtendimentosSimultaneos: colaboradores.maxAtendimentosSimultaneos,
       recebeLeadsAutomaticos: colaboradores.recebeLeadsAutomaticos,
@@ -131,6 +137,8 @@ export async function listarColaboradores(escritorioId: number) {
     })
     .from(colaboradores)
     .innerJoin(users, eq(colaboradores.userId, users.id))
+    .leftJoin(setores, eq(colaboradores.setorId, setores.id))
+    .leftJoin(cargosPersonalizados, eq(colaboradores.cargoPersonalizadoId, cargosPersonalizados.id))
     .where(and(
       eq(colaboradores.escritorioId, escritorioId),
       eq(colaboradores.ativo, true),
@@ -161,7 +169,12 @@ export async function atualizarColaborador(
   escritorioId: number,
   dados: {
     cargo?: CargoColaborador;
+    /** Quando informado, é a fonte da verdade. O enum `cargo` é derivado
+     *  do nome do cargo personalizado (default ou "atendente" pra custom). */
+    cargoPersonalizadoId?: number | null;
     departamento?: string;
+    /** FK pra setores. Null limpa o vínculo. */
+    setorId?: number | null;
     ativo?: boolean;
     maxAtendimentosSimultaneos?: number;
     recebeLeadsAutomaticos?: boolean;
@@ -170,9 +183,6 @@ export async function atualizarColaborador(
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
-  // Verifica se o alvo é o dono antes de aplicar qualquer mudança
-  // sensível. Sem essa guarda, um gestor malicioso poderia mandar
-  // { ativo: false } ou { cargo: "estagiario" } e tirar o dono do ar.
   const [alvo] = await db
     .select({ cargo: colaboradores.cargo })
     .from(colaboradores)
@@ -181,6 +191,9 @@ export async function atualizarColaborador(
   if (!alvo) throw new Error("Colaborador não encontrado.");
   if (alvo.cargo === "dono") {
     if (dados.cargo !== undefined && dados.cargo !== "dono") {
+      throw new Error("O cargo do dono do escritório não pode ser alterado.");
+    }
+    if (dados.cargoPersonalizadoId !== undefined) {
       throw new Error("O cargo do dono do escritório não pode ser alterado.");
     }
     if (dados.ativo === false) {
@@ -194,6 +207,58 @@ export async function atualizarColaborador(
   if (dados.ativo !== undefined) updateData.ativo = dados.ativo;
   if (dados.maxAtendimentosSimultaneos !== undefined) updateData.maxAtendimentosSimultaneos = dados.maxAtendimentosSimultaneos;
   if (dados.recebeLeadsAutomaticos !== undefined) updateData.recebeLeadsAutomaticos = dados.recebeLeadsAutomaticos;
+
+  // Setor FK: null limpa. Validar que pertence ao escritório.
+  if (dados.setorId !== undefined) {
+    if (dados.setorId === null) {
+      updateData.setorId = null;
+    } else {
+      const { setores } = await import("../../drizzle/schema");
+      const [s] = await db
+        .select({ id: setores.id })
+        .from(setores)
+        .where(and(eq(setores.id, dados.setorId), eq(setores.escritorioId, escritorioId)))
+        .limit(1);
+      if (!s) throw new Error("Setor inválido para este escritório.");
+      updateData.setorId = dados.setorId;
+    }
+  }
+
+  // CargoPersonalizadoId: null limpa. Quando informado, deriva o enum
+  // `cargo` pelo nome do cargo personalizado (segue a regra de
+  // aceitarConvite): default vira o enum correspondente; custom vira
+  // "atendente" como fallback seguro de permissão.
+  if (dados.cargoPersonalizadoId !== undefined) {
+    if (dados.cargoPersonalizadoId === null) {
+      updateData.cargoPersonalizadoId = null;
+    } else {
+      const { cargosPersonalizados } = await import("../../drizzle/schema");
+      const [cp] = await db
+        .select({ id: cargosPersonalizados.id, nome: cargosPersonalizados.nome })
+        .from(cargosPersonalizados)
+        .where(and(
+          eq(cargosPersonalizados.id, dados.cargoPersonalizadoId),
+          eq(cargosPersonalizados.escritorioId, escritorioId),
+        ))
+        .limit(1);
+      if (!cp) throw new Error("Cargo inválido para este escritório.");
+      updateData.cargoPersonalizadoId = cp.id;
+      // Deriva enum legado pelo nome do cargo.
+      const NOME_PARA_LEGADO: Record<string, CargoColaborador> = {
+        Dono: "dono",
+        Gestor: "gestor",
+        Atendente: "atendente",
+        Estagiário: "estagiario",
+        SDR: "sdr",
+      };
+      // Não permite atribuir cargo "Dono" via UI — sempre fica "atendente"
+      // se for um custom desconhecido (defesa contra escalada).
+      if (cp.nome === "Dono") {
+        throw new Error("Não é possível promover ninguém a Dono.");
+      }
+      updateData.cargo = NOME_PARA_LEGADO[cp.nome] ?? "atendente";
+    }
+  }
 
   if (Object.keys(updateData).length === 0) return;
 

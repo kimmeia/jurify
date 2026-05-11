@@ -250,7 +250,12 @@ export const configuracoesRouter = router({
     .input(z.object({
       colaboradorId: z.number(),
       cargo: z.enum(["gestor", "atendente", "estagiario", "sdr"]).optional(),
+      /** Quando informado, é a fonte da verdade do cargo. O enum `cargo`
+       *  é derivado pelo backend (default ou "atendente" pra customs). */
+      cargoPersonalizadoId: z.number().nullable().optional(),
       departamento: z.string().max(64).optional(),
+      /** Quando informado, é a fonte da verdade do setor. Null = limpa. */
+      setorId: z.number().nullable().optional(),
       ativo: z.boolean().optional(),
       maxAtendimentosSimultaneos: z.number().int().min(1).max(50).optional(),
       recebeLeadsAutomaticos: z.boolean().optional(),
@@ -707,4 +712,148 @@ export const configuracoesRouter = router({
     const { obterResumoUso } = await import("../billing/plan-limits");
     return obterResumoUso(esc.escritorio.id, ctx.user.id);
   }),
+
+  // ─── SETORES (departamentos do escritório) ─────────────────────────────
+
+  /**
+   * Lista setores do escritório com contagem de colaboradores ativos
+   * em cada um. Usado pelo dropdown do dialog de Editar Colaborador
+   * e pela seção "Setores" da tab Equipe.
+   */
+  listarSetores: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return [];
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (!db) return [];
+    const { setores, colaboradores } = await import("../../drizzle/schema");
+    const lista = await db
+      .select()
+      .from(setores)
+      .where(eq(setores.escritorioId, esc.escritorio.id))
+      .orderBy(setores.nome);
+
+    const result = [];
+    for (const s of lista) {
+      const colabs = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, esc.escritorio.id),
+          eq(colaboradores.setorId, s.id),
+          eq(colaboradores.ativo, true),
+        ));
+      result.push({
+        id: s.id,
+        nome: s.nome,
+        descricao: s.descricao || "",
+        cor: s.cor,
+        totalColaboradores: colabs.length,
+        createdAt: s.createdAt,
+      });
+    }
+    return result;
+  }),
+
+  criarSetor: protectedProcedure
+    .input(z.object({
+      nome: z.string().min(2).max(64),
+      descricao: z.string().max(255).optional(),
+      cor: z.string().max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "equipe", "editar",
+        "Sem permissão para gerenciar setores.",
+      );
+      const { getDb } = await import("../db");
+    const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      const { setores } = await import("../../drizzle/schema");
+      try {
+        const [novo] = await db.insert(setores).values({
+          escritorioId: esc.escritorio.id,
+          nome: input.nome.trim(),
+          descricao: input.descricao?.trim() || null,
+          cor: input.cor || "#6366f1",
+        }).$returningId();
+        return { id: novo?.id };
+      } catch (err: any) {
+        if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+          throw new Error("Já existe um setor com esse nome.");
+        }
+        throw err;
+      }
+    }),
+
+  atualizarSetor: protectedProcedure
+    .input(z.object({
+      setorId: z.number(),
+      nome: z.string().min(2).max(64).optional(),
+      descricao: z.string().max(255).optional().nullable(),
+      cor: z.string().max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "equipe", "editar",
+        "Sem permissão para gerenciar setores.",
+      );
+      const { getDb } = await import("../db");
+    const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      const { setores } = await import("../../drizzle/schema");
+      const dadosUpdate: Record<string, unknown> = {};
+      if (input.nome !== undefined) dadosUpdate.nome = input.nome.trim();
+      if (input.descricao !== undefined) dadosUpdate.descricao = input.descricao?.trim() || null;
+      if (input.cor !== undefined) dadosUpdate.cor = input.cor;
+      if (Object.keys(dadosUpdate).length === 0) return { success: true };
+
+      try {
+        await db.update(setores).set(dadosUpdate).where(and(
+          eq(setores.id, input.setorId),
+          eq(setores.escritorioId, esc.escritorio.id),
+        ));
+      } catch (err: any) {
+        if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+          throw new Error("Já existe um setor com esse nome.");
+        }
+        throw err;
+      }
+      return { success: true };
+    }),
+
+  excluirSetor: protectedProcedure
+    .input(z.object({ setorId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "equipe", "editar",
+        "Sem permissão para gerenciar setores.",
+      );
+      const { getDb } = await import("../db");
+    const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      const { setores, colaboradores } = await import("../../drizzle/schema");
+      // Limpa setorId dos colaboradores que apontavam pra ele (não deleta
+      // colaborador, só solta o vínculo — texto livre `departamento` continua).
+      await db.update(colaboradores)
+        .set({ setorId: null })
+        .where(and(
+          eq(colaboradores.escritorioId, esc.escritorio.id),
+          eq(colaboradores.setorId, input.setorId),
+        ));
+      await db.delete(setores).where(and(
+        eq(setores.id, input.setorId),
+        eq(setores.escritorioId, esc.escritorio.id),
+      ));
+      return { success: true };
+    }),
 });
