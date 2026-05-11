@@ -1391,6 +1391,114 @@ export const adminRouter = router({
       return { success: true, mensagem: "Assinatura cancelada" };
     }),
 
+  /**
+   * Marca uma assinatura como cortesia (acesso liberado manualmente).
+   *
+   * Casos de uso: cliente piloto sem cobrança, isenção pontual, conta
+   * de demonstração interna. Não interage com Asaas — totalmente local.
+   *
+   * Se `expiraEm` for omitido, é permanente até o admin remover.
+   * Aceita aplicar em qualquer subscription, inclusive cancelada/past_due
+   * (admin pode "reativar" via cortesia sem mexer no Asaas).
+   */
+  marcarCortesia: adminProcedure
+    .input(z.object({
+      subscriptionId: z.number(),
+      motivo: z.string().min(3).max(500),
+      expiraEm: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.id, input.subscriptionId))
+        .limit(1);
+      if (!sub) throw new Error("Assinatura não encontrada");
+
+      if (input.expiraEm != null && input.expiraEm <= Date.now()) {
+        throw new Error("Data de expiração precisa estar no futuro");
+      }
+
+      await db
+        .update(subscriptionsTable)
+        .set({
+          cortesia: true,
+          cortesiaMotivo: input.motivo,
+          cortesiaExpiraEm: input.expiraEm ?? null,
+        })
+        .where(eq(subscriptionsTable.id, input.subscriptionId));
+
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users).where(eq(users.id, sub.userId)).limit(1);
+
+      await registrarAuditoria({
+        ctx,
+        acao: "subscription.marcarCortesia",
+        alvoTipo: "subscription",
+        alvoId: input.subscriptionId,
+        alvoNome: u?.name || u?.email || undefined,
+        detalhes: {
+          motivo: input.motivo,
+          expiraEm: input.expiraEm ?? null,
+          planId: sub.planId,
+        },
+      });
+
+      return { success: true, mensagem: "Cortesia ativada" };
+    }),
+
+  /**
+   * Remove a marca de cortesia. A subscription volta a depender só do
+   * `status` (vai pra estado pré-cortesia: active/canceled/etc).
+   */
+  removerCortesia: adminProcedure
+    .input(z.object({
+      subscriptionId: z.number(),
+      motivo: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.id, input.subscriptionId))
+        .limit(1);
+      if (!sub) throw new Error("Assinatura não encontrada");
+      if (!sub.cortesia) throw new Error("Assinatura não está em cortesia");
+
+      await db
+        .update(subscriptionsTable)
+        .set({
+          cortesia: false,
+          cortesiaMotivo: null,
+          cortesiaExpiraEm: null,
+        })
+        .where(eq(subscriptionsTable.id, input.subscriptionId));
+
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users).where(eq(users.id, sub.userId)).limit(1);
+
+      await registrarAuditoria({
+        ctx,
+        acao: "subscription.removerCortesia",
+        alvoTipo: "subscription",
+        alvoId: input.subscriptionId,
+        alvoNome: u?.name || u?.email || undefined,
+        detalhes: {
+          motivo: input.motivo,
+          motivoAnterior: sub.cortesiaMotivo,
+          statusAtual: sub.status,
+        },
+      });
+
+      return { success: true, mensagem: "Cortesia removida" };
+    }),
+
   // ═══════════════════════════════════════════════════════════════════════
   // MONITORAMENTO OPERACIONAL
   // ═══════════════════════════════════════════════════════════════════════

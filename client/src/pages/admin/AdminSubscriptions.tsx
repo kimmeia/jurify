@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Search, XCircle, Loader2, TrendingDown, DollarSign, Users2 } from "lucide-react";
+import { AlertCircle, Search, XCircle, Loader2, TrendingDown, DollarSign, Users2, Gift } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 
@@ -49,12 +49,38 @@ export default function AdminSubscriptions() {
   const [statusFiltro, setStatusFiltro] = useState<string>("all");
   const [cancelarSub, setCancelarSub] = useState<any | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
+  const [cortesiaSub, setCortesiaSub] = useState<any | null>(null);
+  const [motivoCortesia, setMotivoCortesia] = useState("");
+  const [expiraEm, setExpiraEm] = useState<string>("");
+  const [removerCortesiaSub, setRemoverCortesiaSub] = useState<any | null>(null);
+  const [motivoRemocaoCortesia, setMotivoRemocaoCortesia] = useState("");
 
   const cancelarMut = trpc.admin.cancelarAssinaturaAdmin.useMutation({
     onSuccess: () => {
       toast.success("Assinatura cancelada");
       setCancelarSub(null);
       setMotivoCancelamento("");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  const marcarCortesiaMut = trpc.admin.marcarCortesia.useMutation({
+    onSuccess: () => {
+      toast.success("Cortesia ativada");
+      setCortesiaSub(null);
+      setMotivoCortesia("");
+      setExpiraEm("");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  const removerCortesiaMut = trpc.admin.removerCortesia.useMutation({
+    onSuccess: () => {
+      toast.success("Cortesia removida");
+      setRemoverCortesiaSub(null);
+      setMotivoRemocaoCortesia("");
       refetch();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
@@ -195,7 +221,27 @@ export default function AdminSubscriptions() {
                     <TableCell>{sub.planName || "—"}</TableCell>
                     <TableCell>{sub.priceAmount ? formatCurrency(sub.priceAmount) : "—"}</TableCell>
                     <TableCell>
-                      <SubscriptionStatusBadge status={sub.status} />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <SubscriptionStatusBadge status={sub.status} />
+                        {sub.cortesia && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                            title={
+                              sub.cortesiaMotivo
+                                ? `Cortesia: ${sub.cortesiaMotivo}${
+                                    sub.cortesiaExpiraEm
+                                      ? ` (expira ${new Date(sub.cortesiaExpiraEm).toLocaleDateString("pt-BR")})`
+                                      : ""
+                                  }`
+                                : "Cortesia"
+                            }
+                          >
+                            <Gift className="h-2.5 w-2.5 mr-0.5" />
+                            Cortesia
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {sub.currentPeriodEnd
@@ -206,17 +252,40 @@ export default function AdminSubscriptions() {
                       {new Date(sub.createdAt).toLocaleDateString("pt-BR")}
                     </TableCell>
                     <TableCell className="text-right">
-                      {(sub.status === "active" || sub.status === "trialing" || sub.status === "past_due") && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-destructive hover:text-destructive"
-                          onClick={() => setCancelarSub(sub)}
-                        >
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Cancelar
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {sub.cortesia ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-amber-700 hover:text-amber-800 dark:text-amber-400"
+                            onClick={() => setRemoverCortesiaSub(sub)}
+                          >
+                            <Gift className="h-3 w-3 mr-1" />
+                            Remover cortesia
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+                            onClick={() => setCortesiaSub(sub)}
+                          >
+                            <Gift className="h-3 w-3 mr-1" />
+                            Cortesia
+                          </Button>
+                        )}
+                        {(sub.status === "active" || sub.status === "trialing" || sub.status === "past_due") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-destructive hover:text-destructive"
+                            onClick={() => setCancelarSub(sub)}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Cancelar
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -266,6 +335,93 @@ export default function AdminSubscriptions() {
             >
               {cancelarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Confirmar cancelamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!cortesiaSub} onOpenChange={(o) => { if (!o) { setCortesiaSub(null); setMotivoCortesia(""); setExpiraEm(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar como cortesia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vai liberar acesso pra <strong>{cortesiaSub?.userName}</strong>
+              {" "}(plano {cortesiaSub?.planName}) sem mexer no Asaas. Útil pra
+              cliente piloto ou isenção pontual. Pode remover a qualquer momento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Motivo (auditável). Ex: 'Cliente piloto, parceria março/abril'"
+              value={motivoCortesia}
+              onChange={(e) => setMotivoCortesia(e.target.value)}
+              rows={2}
+            />
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">
+                Expira em (opcional — deixe em branco pra cortesia sem prazo)
+              </label>
+              <Input
+                type="date"
+                value={expiraEm}
+                onChange={(e) => setExpiraEm(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={motivoCortesia.trim().length < 3 || marcarCortesiaMut.isPending}
+              onClick={() => {
+                if (!cortesiaSub) return;
+                const expira = expiraEm ? new Date(expiraEm + "T23:59:59").getTime() : undefined;
+                marcarCortesiaMut.mutate({
+                  subscriptionId: cortesiaSub.id,
+                  motivo: motivoCortesia.trim(),
+                  expiraEm: expira,
+                });
+              }}
+            >
+              {marcarCortesiaMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Ativar cortesia
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!removerCortesiaSub} onOpenChange={(o) => { if (!o) { setRemoverCortesiaSub(null); setMotivoRemocaoCortesia(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover cortesia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{removerCortesiaSub?.userName}</strong> vai voltar a depender
+              do status real da assinatura (atual: <code>{removerCortesiaSub?.status}</code>).
+              Se a sub estiver canceled/past_due, o cliente perde acesso.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo da remoção (auditável)"
+            value={motivoRemocaoCortesia}
+            onChange={(e) => setMotivoRemocaoCortesia(e.target.value)}
+            rows={2}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={motivoRemocaoCortesia.trim().length < 3 || removerCortesiaMut.isPending}
+              onClick={() => {
+                if (!removerCortesiaSub) return;
+                removerCortesiaMut.mutate({
+                  subscriptionId: removerCortesiaSub.id,
+                  motivo: motivoRemocaoCortesia.trim(),
+                });
+              }}
+            >
+              {removerCortesiaMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Remover cortesia
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

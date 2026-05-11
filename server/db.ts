@@ -99,24 +99,49 @@ export async function getUserByGoogleSub(googleSub: string) {
 }
 
 /**
+ * Sub é considerada com acesso ativo quando:
+ *   - status é 'active' ou 'trialing', OU
+ *   - cortesia=true E (cortesiaExpiraEm é null OU ainda não passou)
+ *
+ * Cortesia tem prioridade sobre status — admin pode conceder acesso a um
+ * cliente cuja assinatura está canceled/past_due no Asaas, por exemplo.
+ */
+export function temAcessoAtivo(sub: Pick<
+  typeof subscriptions.$inferSelect,
+  "status" | "cortesia" | "cortesiaExpiraEm"
+>): boolean {
+  if (sub.cortesia) {
+    if (sub.cortesiaExpiraEm == null) return true;
+    return sub.cortesiaExpiraEm > Date.now();
+  }
+  return sub.status === "active" || sub.status === "trialing";
+}
+
+/**
  * Get active subscription for a user.
+ *
+ * Inclui cortesia: se o user tem uma sub marcada como cortesia e ainda
+ * dentro do prazo, ela é retornada mesmo se `status` não for 'active'.
  */
 export async function getActiveSubscription(userId: number) {
   const db = await getDb();
   if (!db) return null;
 
-  const result = await db
+  const todas = await db
     .select()
     .from(subscriptions)
-    .where(
-      and(
-        eq(subscriptions.userId, userId),
-        or(eq(subscriptions.status, "active"), eq(subscriptions.status, "trialing"))
-      )
-    )
-    .limit(1);
+    .where(eq(subscriptions.userId, userId));
 
-  return result.length > 0 ? result[0] : null;
+  // Cortesia tem prioridade — se houver, retorna ela
+  const cortesia = todas.find((s) =>
+    temAcessoAtivo({ status: s.status, cortesia: s.cortesia, cortesiaExpiraEm: s.cortesiaExpiraEm })
+    && s.cortesia,
+  );
+  if (cortesia) return cortesia;
+
+  // Senão, comportamento normal: primeira active/trialing
+  const ativa = todas.find((s) => s.status === "active" || s.status === "trialing");
+  return ativa ?? null;
 }
 
 /**
@@ -303,12 +328,16 @@ export async function getAllSubscriptionsWithUsers() {
 
   return allSubs.map((s) => ({
     id: s.id,
+    userId: s.userId,
     userName: userMap.get(s.userId) || "—",
     planName: getPlanName(s.planId),
     priceAmount: getPlanPrice(s.planId),
     status: s.status,
     currentPeriodEnd: s.currentPeriodEnd,
     cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+    cortesia: s.cortesia,
+    cortesiaMotivo: s.cortesiaMotivo,
+    cortesiaExpiraEm: s.cortesiaExpiraEm,
     createdAt: s.createdAt,
   }));
 }
