@@ -36,6 +36,7 @@ import { ComissoesTab } from "./financeiro/Comissoes";
 import { DespesasTab } from "./financeiro/Despesas";
 import { RelatoriosTab } from "./financeiro/Relatorios";
 import { OFXImportDialog } from "./financeiro/OFXImportDialog";
+import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 /** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
@@ -59,6 +60,7 @@ export default function Financeiro() {
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
   const [anexosCobrId, setAnexosCobrId] = useState<number | null>(null);
   const [ofxOpen, setOfxOpen] = useState(false);
+  const [limpezaOpen, setLimpezaOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Filtros multi-select. Vazio = "todos" (sem filtro).
@@ -362,6 +364,17 @@ export default function Financeiro() {
             >
               <FileUp className="h-4 w-4 mr-1.5" />
               Importar OFX
+            </Button>
+          )}
+          {perms.podeExcluir && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setLimpezaOpen(true)}
+              title="Remover contatos importados do Asaas que não têm cobrança nem processo vinculado"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Limpar órfãos
             </Button>
           )}
           {perms.podeCriar && (
@@ -1070,6 +1083,14 @@ export default function Financeiro() {
         onSuccess={() => {
           refetchCob();
           refetchKpis();
+        }}
+      />
+      <LimpezaContatosOrfaosDialog
+        open={limpezaOpen}
+        onOpenChange={setLimpezaOpen}
+        onSuccess={() => {
+          refetchCob();
+          refetchClientes();
         }}
       />
     </div>
