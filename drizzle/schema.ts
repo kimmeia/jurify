@@ -87,6 +87,17 @@ export const subscriptions = mysqlTable("subscriptions", {
   cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false),
   creditsUsed: int("creditsUsed").default(0).notNull(),
   creditsLimit: int("creditsLimit").default(0).notNull(),
+  /**
+   * Cortesia: acesso liberado manualmente pelo admin do Jurify (cliente
+   * piloto, isenção pontual). Quando true, `temAcessoAtivo(sub)` retorna
+   * true mesmo se `status` não for 'active' — não interage com Asaas.
+   *
+   * `cortesiaExpiraEm` NULL = não expira. Epoch ms = cortesia temporária.
+   * Concessão/remoção registradas em `auditoria_acoes`.
+   */
+  cortesia: boolean("cortesia").default(false).notNull(),
+  cortesiaMotivo: varchar("cortesiaMotivo", { length: 500 }),
+  cortesiaExpiraEm: bigint("cortesiaExpiraEm", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
