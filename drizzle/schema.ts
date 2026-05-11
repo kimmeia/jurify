@@ -2518,3 +2518,31 @@ export type WorkerJobLog = typeof workerJobsLog.$inferSelect;
 export type InsertWorkerJobLog = typeof workerJobsLog.$inferInsert;
 
 export type AsaasConfigCobrancaPai = typeof asaasConfigCobrancaPai.$inferSelect;
+
+/**
+ * Anexos do módulo financeiro (despesas e cobranças). Discriminador
+ * `tipoEntidade` permite N tipos sem N tabelas. Storage key aponta pro
+ * S3 (mesmo bucket do backup global, prefixo `anexos/`).
+ */
+export const financeiroAnexos = mysqlTable(
+  "financeiro_anexos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAnx").notNull(),
+    tipoEntidade: mysqlEnum("tipoEntidadeAnx", ["despesa", "cobranca"]).notNull(),
+    entidadeId: int("entidadeIdAnx").notNull(),
+    storageKey: varchar("storageKeyAnx", { length: 512 }).notNull(),
+    filename: varchar("filenameAnx", { length: 255 }).notNull(),
+    mimeType: varchar("mimeTypeAnx", { length: 100 }).notNull(),
+    tamanhoBytes: int("tamanhoBytesAnx").notNull(),
+    uploadedByUserId: int("uploadedByUserIdAnx"),
+    createdAt: timestamp("createdAtAnx").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxEntidade: index("anx_entidade_idx").on(t.escritorioId, t.tipoEntidade, t.entidadeId),
+    idxEscritorio: index("anx_escritorio_idx").on(t.escritorioId, t.createdAt),
+  }),
+);
+
+export type FinanceiroAnexo = typeof financeiroAnexos.$inferSelect;
+export type InsertFinanceiroAnexo = typeof financeiroAnexos.$inferInsert;

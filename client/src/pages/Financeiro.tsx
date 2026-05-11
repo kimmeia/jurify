@@ -19,6 +19,7 @@ import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight, BarChart3,
+  Paperclip,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,7 +30,7 @@ import {
   exportCobrancasCSV,
 } from "./financeiro/helpers";
 import {
-  NovaCobrancaDialog, NovoClienteDialog,
+  NovaCobrancaDialog, NovoClienteDialog, AnexosCobrancaDialog,
 } from "./financeiro/dialogs";
 import { ComissoesTab } from "./financeiro/Comissoes";
 import { DespesasTab } from "./financeiro/Despesas";
@@ -55,6 +56,7 @@ export default function Financeiro() {
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
+  const [anexosCobrId, setAnexosCobrId] = useState<number | null>(null);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Filtros multi-select. Vazio = "todos" (sem filtro).
@@ -834,6 +836,15 @@ export default function Financeiro() {
                               <Copy className="h-3.5 w-3.5" />
                             </Button>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => setAnexosCobrId(c.id)}
+                            title="Anexos (boletos, recibos, NFe)"
+                          >
+                            <Paperclip className="h-3.5 w-3.5" />
+                          </Button>
                           {/* "Marcar paga": só pra manual + pendente/vencida.
                               Em cobranças Asaas, o status sincroniza via
                               webhook automaticamente — botão seria confuso. */}
@@ -981,6 +992,11 @@ export default function Financeiro() {
         open={novoClienteOpen}
         onOpenChange={setNovoClienteOpen}
         onSuccess={refetchClientes}
+      />
+      <AnexosCobrancaDialog
+        cobrancaId={anexosCobrId}
+        open={anexosCobrId !== null}
+        onOpenChange={(o) => !o && setAnexosCobrId(null)}
       />
     </div>
   );

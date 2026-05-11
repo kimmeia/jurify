@@ -13,8 +13,45 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Plus, Loader2, Copy, CheckCircle2, Repeat, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ClienteCombobox } from "./ClienteCombobox";
+import { AnexosFinanceiro } from "./Anexos";
 
 function formatBRL(value: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value); }
+
+/**
+ * Diálogo standalone pra gerenciar anexos de uma cobrança. Aberto pelo
+ * botão paperclip na linha da tabela. Pra despesas, anexos vivem dentro
+ * do modal de edição (que já tem campos completos).
+ */
+export function AnexosCobrancaDialog({
+  cobrancaId,
+  open,
+  onOpenChange,
+}: {
+  cobrancaId: number | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Anexos da cobrança</DialogTitle>
+          <DialogDescription>
+            Boletos, recibos, NFe e prints. Até 5MB por arquivo.
+          </DialogDescription>
+        </DialogHeader>
+        {cobrancaId !== null && (
+          <AnexosFinanceiro tipoEntidade="cobranca" entidadeId={cobrancaId} />
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function NovaCobrancaDialog({
   open,

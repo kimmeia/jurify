@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBRL, useFinanceiroPerms } from "./helpers";
+import { AnexosFinanceiro } from "./Anexos";
 
 function hojeIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -716,6 +717,15 @@ function DespesaFormDialog({
               className="mt-1 text-sm"
             />
           </div>
+          {/* Anexos só aparecem após salvar (precisa ID). Em "nova despesa",
+              user salva primeiro, abre de novo e anexa. Alternativa seria
+              criar com placeholder ID -1 e anexar antes de salvar, mas isso
+              vaza arquivos sem dono se user cancelar. */}
+          {isEdit && (
+            <div className="pt-2 border-t">
+              <AnexosFinanceiro tipoEntidade="despesa" entidadeId={despesa.id} />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>

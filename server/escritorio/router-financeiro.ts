@@ -7,6 +7,8 @@ import {
   asaasCobrancas,
   categoriasCobranca,
   contatos,
+  despesas,
+  financeiroAnexos,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
@@ -428,5 +430,265 @@ export const financeiroRouter = router({
         base64: buffer.toString("base64"),
         mimeType: "application/pdf",
       };
+    }),
+
+  // ─── Anexos (boletos, recibos, NFe) ────────────────────────────────────────
+
+  /**
+   * Sobe um anexo pra S3 e cria row em `financeiro_anexos`. Aceita
+   * base64 via tRPC (limit 5MB) — suficiente pra recibos PDF, prints PNG,
+   * XML de NFe. Pra arquivos maiores, futuramente migrar pra presigned URL.
+   *
+   * Valida:
+   *  - entidade existe no escritório
+   *  - tipo MIME tá na allowlist (pdf/png/jpg/webp/xml)
+   *  - tamanho ≤ 5MB
+   *  - BACKUP_* configurado (senão erro claro pro admin)
+   */
+  anexarArquivo: protectedProcedure
+    .input(
+      z.object({
+        tipoEntidade: z.enum(["despesa", "cobranca"]),
+        entidadeId: z.number().int().positive(),
+        filename: z.string().min(1).max(255),
+        mimeType: z.string().regex(/^(application|image|text)\/[\w.+-]+$/),
+        /** Conteúdo do arquivo em base64 (sem prefixo "data:..."). */
+        conteudoBase64: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "criar");
+
+      const MIME_PERMITIDOS = new Set([
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/webp",
+        "application/xml",
+        "text/xml",
+      ]);
+      if (!MIME_PERMITIDOS.has(input.mimeType)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Tipo de arquivo não suportado (${input.mimeType}). Permitidos: PDF, PNG, JPG, WEBP, XML.`,
+        });
+      }
+
+      const buffer = Buffer.from(input.conteudoBase64, "base64");
+      const TAMANHO_MAX = 5 * 1024 * 1024;
+      if (buffer.length > TAMANHO_MAX) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Arquivo grande demais (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Limite: 5MB.`,
+        });
+      }
+
+      const { obterAnexosConfig, montarStorageKey, uploadAnexo } = await import(
+        "./anexos-storage"
+      );
+      const cfg = obterAnexosConfig();
+      if (!cfg) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Storage de anexos não configurado. Peça ao admin pra setar BACKUP_BUCKET e credenciais S3.",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Valida que a entidade-pai existe no escritório (evita anexar arquivos
+      // a despesas/cobranças de outros escritórios via input forjado)
+      if (input.tipoEntidade === "despesa") {
+        const [row] = await db
+          .select({ id: despesas.id })
+          .from(despesas)
+          .where(
+            and(
+              eq(despesas.id, input.entidadeId),
+              eq(despesas.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Despesa não encontrada.",
+          });
+        }
+      } else {
+        const [row] = await db
+          .select({ id: asaasCobrancas.id })
+          .from(asaasCobrancas)
+          .where(
+            and(
+              eq(asaasCobrancas.id, input.entidadeId),
+              eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Cobrança não encontrada.",
+          });
+        }
+      }
+
+      const storageKey = montarStorageKey(
+        esc.escritorio.id,
+        input.tipoEntidade,
+        input.entidadeId,
+        input.filename,
+      );
+
+      // Sobe primeiro pro S3 — se DB falhar depois, arquivo fica órfão
+      // (aceitável: ele não aparece em lugar nenhum, e podemos limpar
+      // periodicamente comparando S3 vs DB). Ordem inversa (DB primeiro,
+      // S3 depois) seria pior: row sem arquivo aparece quebrada na UI.
+      await uploadAnexo(cfg, storageKey, buffer, input.mimeType);
+
+      const [novo] = await db
+        .insert(financeiroAnexos)
+        .values({
+          escritorioId: esc.escritorio.id,
+          tipoEntidade: input.tipoEntidade,
+          entidadeId: input.entidadeId,
+          storageKey,
+          filename: input.filename,
+          mimeType: input.mimeType,
+          tamanhoBytes: buffer.length,
+          uploadedByUserId: ctx.user.id,
+        })
+        .$returningId();
+
+      return { id: novo.id, storageKey, tamanhoBytes: buffer.length };
+    }),
+
+  /**
+   * Lista anexos de uma entidade. Retorna metadata; NÃO inclui URL pré-
+   * assinada pra evitar gerar uma URL por linha (caro + URLs vazam no
+   * log). Pra baixar, frontend chama `obterUrlDownload(anexoId)`.
+   */
+  listarAnexos: protectedProcedure
+    .input(
+      z.object({
+        tipoEntidade: z.enum(["despesa", "cobranca"]),
+        entidadeId: z.number().int().positive(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+
+      const db = await getDb();
+      if (!db) return [];
+
+      return db
+        .select({
+          id: financeiroAnexos.id,
+          filename: financeiroAnexos.filename,
+          mimeType: financeiroAnexos.mimeType,
+          tamanhoBytes: financeiroAnexos.tamanhoBytes,
+          uploadedByUserId: financeiroAnexos.uploadedByUserId,
+          createdAt: financeiroAnexos.createdAt,
+        })
+        .from(financeiroAnexos)
+        .where(
+          and(
+            eq(financeiroAnexos.escritorioId, esc.escritorio.id),
+            eq(financeiroAnexos.tipoEntidade, input.tipoEntidade),
+            eq(financeiroAnexos.entidadeId, input.entidadeId),
+          ),
+        )
+        .orderBy(desc(financeiroAnexos.createdAt));
+    }),
+
+  /**
+   * Retorna URL assinada (5min) pra download direto do S3. Não streama
+   * pelo backend — economiza CPU/banda do servidor e usa o CDN do S3.
+   */
+  obterUrlDownloadAnexo: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [anexo] = await db
+        .select({
+          storageKey: financeiroAnexos.storageKey,
+          filename: financeiroAnexos.filename,
+        })
+        .from(financeiroAnexos)
+        .where(
+          and(
+            eq(financeiroAnexos.id, input.id),
+            eq(financeiroAnexos.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!anexo) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Anexo não encontrado." });
+      }
+
+      const { obterAnexosConfig, gerarUrlDownload } = await import("./anexos-storage");
+      const cfg = obterAnexosConfig();
+      if (!cfg) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Storage não configurado.",
+        });
+      }
+      const url = await gerarUrlDownload(cfg, anexo.storageKey);
+      return { url, filename: anexo.filename };
+    }),
+
+  excluirAnexo: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "excluir");
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [anexo] = await db
+        .select({ storageKey: financeiroAnexos.storageKey })
+        .from(financeiroAnexos)
+        .where(
+          and(
+            eq(financeiroAnexos.id, input.id),
+            eq(financeiroAnexos.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!anexo) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Anexo não encontrado." });
+      }
+
+      // Apaga DB primeiro: se S3 falhar depois, fica órfão (aceitável,
+      // limpável periodicamente). Inverso deixaria row apontando pra
+      // arquivo inexistente, pior pro usuário.
+      await db
+        .delete(financeiroAnexos)
+        .where(eq(financeiroAnexos.id, input.id));
+
+      try {
+        const { obterAnexosConfig, deleteAnexo } = await import("./anexos-storage");
+        const cfg = obterAnexosConfig();
+        if (cfg) {
+          await deleteAnexo(cfg, anexo.storageKey);
+        }
+      } catch {
+        // Best-effort: row já foi apagada, S3 limpa depois
+      }
+
+      return { success: true };
     }),
 });
