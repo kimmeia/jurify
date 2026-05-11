@@ -16,7 +16,7 @@ import {
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
-  Database, CreditCard as CreditCardIcon,
+  Database, CreditCard as CreditCardIcon, Megaphone,
 } from "lucide-react";
 import { BackupDialog } from "./configuracoes/backup-dialog";
 import Plans from "./Plans";
@@ -38,6 +38,7 @@ import {
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
 import { TagsTab } from "./configuracoes/tags-tab";
+import { OrigensLeadTab } from "./configuracoes/OrigensLeadTab";
 import { CamposClienteTab } from "./configuracoes/campos-cliente-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 import { FinanceiroTab } from "./configuracoes/financeiro-tab";
@@ -285,6 +286,7 @@ export default function Configuracoes() {
           <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
           <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
           <TabsTrigger value="tags" className="gap-1.5 text-xs"><TagIcon className="h-3.5 w-3.5" /> Tags</TabsTrigger>
+          <TabsTrigger value="origens" className="gap-1.5 text-xs"><Megaphone className="h-3.5 w-3.5" /> Origens</TabsTrigger>
           <TabsTrigger value="campos" className="gap-1.5 text-xs"><Sparkles className="h-3.5 w-3.5" /> Campos</TabsTrigger>
           <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
           <TabsTrigger value="financeiro" className="gap-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
@@ -638,6 +640,10 @@ export default function Configuracoes() {
         {/* ─── Integrações (APIs) ──────────────────────────────── */}
         <TabsContent value="integracoes" className="space-y-4">
           <IntegracaoTab canEdit={canEdit} isDono={isDono} />
+        </TabsContent>
+
+        <TabsContent value="origens" className="space-y-4">
+          <OrigensLeadTab />
         </TabsContent>
 
         <TabsContent value="permissoes" className="space-y-4">
