@@ -306,7 +306,8 @@ export const kanbanRouter = router({
       descricao: z.string().optional(),
       cnj: z.string().max(30).optional(),
       clienteId: z.number().optional(),
-      responsavelId: z.number().optional(),
+      // null = remove o responsável (card fica "sem responsável")
+      responsavelId: z.number().nullable().optional(),
       prioridade: z.enum(["alta", "media", "baixa"]).optional(),
       prazo: z.string().optional(),
       tags: z.string().max(255).optional(),

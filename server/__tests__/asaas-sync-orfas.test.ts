@@ -128,8 +128,12 @@ type PageRet = {
 
 function fakeClient(pages: PageRet[]): any {
   let i = 0;
+  const next = async () => pages[i++] ?? { data: [], hasMore: false, limit: 100, offset: 0 };
   return {
-    listarCobrancas: vi.fn(async () => pages[i++] ?? { data: [], hasMore: false, limit: 100, offset: 0 }),
+    listarCobrancas: vi.fn(next),
+    // syncCobrancasDeCliente agora usa `listarCobrancasPorJanela` por
+    // default (filtro de 90 dias). Mock devolve as mesmas páginas.
+    listarCobrancasPorJanela: vi.fn(next),
   };
 }
 

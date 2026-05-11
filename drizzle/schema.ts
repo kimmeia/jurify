@@ -544,6 +544,35 @@ export const leads = mysqlTable("leads", {
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = typeof leads.$inferInsert;
 
+/**
+ * Catálogo de origens de lead por escritório. Substitui a lista
+ * hardcoded de 5 opções (indicação, ligação, evento, presencial, outro)
+ * que vivia no frontend. Cada escritório customiza as suas (BNI, OAB,
+ * Instagram, Google Ads, etc.).
+ *
+ * UNIQUE(escritorioId, nome) impede duplicatas. Soft-delete via `ativo`
+ * preserva histórico — leads antigos com origem desativada continuam
+ * exibindo o nome correto.
+ */
+export const origensLead = mysqlTable(
+  "origens_lead",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdOrigem").notNull(),
+    nome: varchar("nomeOrigem", { length: 80 }).notNull(),
+    ordem: int("ordemOrigem").notNull().default(0),
+    ativo: boolean("ativoOrigem").notNull().default(true),
+    createdAt: timestamp("createdAtOrigem").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxEscritorio: index("origens_escritorio_idx").on(t.escritorioId, t.ativo, t.ordem),
+    uqEscritorioNome: uniqueIndex("origens_escr_nome_uq").on(t.escritorioId, t.nome),
+  }),
+);
+
+export type OrigemLead = typeof origensLead.$inferSelect;
+export type InsertOrigemLead = typeof origensLead.$inferInsert;
+
 export const atendimentoMetricasDiarias = mysqlTable("atendimento_metricas_diarias", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdMetrica").notNull(),

@@ -601,8 +601,14 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   // pra entrar no relatório comercial sem precisar passar pelo pipeline.
   const [jaFechado, setJaFechado] = useState(false);
   const [valorFechamento, setValorFechamento] = useState("");
-  const [origemFechamento, setOrigemFechamento] = useState("indicacao");
+  const [origemFechamento, setOrigemFechamento] = useState("");
   const { data: defsCampos } = (trpc as any).camposCliente.listar.useQuery(undefined, { retry: false, enabled: open });
+  // Origens de lead configuráveis por escritório (substitui lista hardcoded).
+  // Primeira chamada popula com as 5 padrão via `garantirOrigensPadrao`.
+  const { data: origensDisponiveis } = (trpc as any).origensLead?.listar?.useQuery?.(
+    undefined,
+    { retry: false, enabled: open },
+  ) || { data: [] };
 
   // Lista de colaboradores ATIVOS — usado pra escolher responsável.
   // Só dono/gestor (verTodos) consegue atribuir a outro; pra atendentes
@@ -713,11 +719,10 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
               onChange={(e) => setOrigemFechamento(e.target.value)}
               className="w-full h-8 px-2 text-sm rounded-md border bg-background"
             >
-              <option value="indicacao">Indicação</option>
-              <option value="ligacao">Ligação</option>
-              <option value="evento">Evento</option>
-              <option value="presencial">Presencial</option>
-              <option value="manual">Outro</option>
+              <option value="">Selecione...</option>
+              {(origensDisponiveis ?? []).map((o: { id: number; nome: string }) => (
+                <option key={o.id} value={o.nome}>{o.nome}</option>
+              ))}
             </select>
           </div>
         </div>
