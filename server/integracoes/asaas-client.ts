@@ -243,6 +243,37 @@ function getBaseUrl(modo: "sandbox" | "producao"): string {
     : "https://api.asaas.com/v3";
 }
 
+/**
+ * Circuit breaker GLOBAL por API key (em memória do processo).
+ * Conta requests numa janela rolante de 60s e bloqueia quando passa
+ * de `LIMITE_REQ_POR_MIN` (margem de 25% abaixo do limite real do
+ * Asaas que é 200/min e bloqueia 12h).
+ *
+ * Existe pra parar qualquer bug FUTURO que tente bulk request:
+ * mesmo que algum código novo erre e faça 1000 chamadas em loop,
+ * o breaker para na 150ª — protege a cota do Asaas.
+ *
+ * Implementação: array circular de timestamps. A cada request,
+ * remove os mais antigos que 60s e checa o tamanho.
+ */
+const LIMITE_REQ_POR_MIN = 150;
+const JANELA_MS = 60_000;
+const requestsPorApiKey = new Map<string, number[]>();
+
+function registrarRequest(apiKey: string): { permitido: boolean; usadoNoMinuto: number } {
+  const agora = Date.now();
+  let timestamps = requestsPorApiKey.get(apiKey) ?? [];
+  // Remove timestamps fora da janela
+  timestamps = timestamps.filter((t) => agora - t < JANELA_MS);
+  if (timestamps.length >= LIMITE_REQ_POR_MIN) {
+    requestsPorApiKey.set(apiKey, timestamps);
+    return { permitido: false, usadoNoMinuto: timestamps.length };
+  }
+  timestamps.push(agora);
+  requestsPorApiKey.set(apiKey, timestamps);
+  return { permitido: true, usadoNoMinuto: timestamps.length };
+}
+
 export class AsaasClient {
   private api: AxiosInstance;
   public modo: "sandbox" | "producao";
@@ -258,6 +289,26 @@ export class AsaasClient {
         "Content-Type": "application/json",
       },
       timeout: 15000,
+    });
+
+    // Interceptor: aplica circuit breaker ANTES de cada request real.
+    // Erro 429 sintético (mesma resposta que a API daria) — handlers de
+    // 429 espalhados pelo código já tratam pausar/voltar pra fila.
+    this.api.interceptors.request.use((config) => {
+      const r = registrarRequest(apiKey);
+      if (!r.permitido) {
+        // Constrói um erro Axios compatível com o handler de 429
+        const err: any = new Error(
+          `[AsaasClient circuit breaker] ${r.usadoNoMinuto} requests no último minuto — limite local ${LIMITE_REQ_POR_MIN}/min (proteção contra estourar 200/min do Asaas). Aguarde ou use o fluxo throttled de "Importar histórico".`,
+        );
+        err.code = "ASAAS_LOCAL_RATE_LIMIT";
+        err.response = {
+          status: 429,
+          data: { errors: [{ description: "Circuit breaker local — proteção contra bulk request." }] },
+        };
+        return Promise.reject(err);
+      }
+      return config;
     });
   }
 
