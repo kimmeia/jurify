@@ -16,7 +16,7 @@ import {
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
-  Database, CreditCard as CreditCardIcon, Megaphone,
+  Database, CreditCard as CreditCardIcon, Megaphone, Pencil,
 } from "lucide-react";
 import { BackupDialog } from "./configuracoes/backup-dialog";
 import Plans from "./Plans";
@@ -148,6 +148,12 @@ export default function Configuracoes() {
   const [formPerfil, setFormPerfil] = useState<Record<string, any>>({});
 
   // ─── Convite form state ───
+  const [editandoColab, setEditandoColab] = useState<any | null>(null);
+  const [editColabCargo, setEditColabCargo] = useState<string>("atendente");
+  const [editColabDepto, setEditColabDepto] = useState("");
+  const [editColabMaxAtend, setEditColabMaxAtend] = useState<number>(5);
+  const [editColabRecebeLeads, setEditColabRecebeLeads] = useState<boolean>(false);
+
   const [conviteEmail, setConviteEmail] = useState("");
   // Cargo do convite — pode ser default ("gestor"|"atendente"|"estagiario")
   // ou nome de um cargo personalizado criado em Permissões (ex: "advogados").
@@ -215,9 +221,21 @@ export default function Configuracoes() {
   });
 
   const atualizarColabMut = trpc.configuracoes.atualizarColaborador.useMutation({
-    onSuccess: () => { toast.success("Atualizado!"); refetchEquipe(); },
+    onSuccess: () => {
+      toast.success("Atualizado!");
+      setEditandoColab(null);
+      refetchEquipe();
+    },
     onError: (e) => toast.error(e.message),
   });
+
+  function abrirEditColab(c: any) {
+    setEditandoColab(c);
+    setEditColabCargo(c.cargo === "dono" ? "dono" : (c.cargo || "atendente"));
+    setEditColabDepto(c.departamento || "");
+    setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? 5);
+    setEditColabRecebeLeads(!!c.recebeLeadsAutomaticos);
+  }
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
@@ -485,6 +503,17 @@ export default function Configuracoes() {
                       <p>Max: {c.maxAtendimentosSimultaneos} atend.</p>
                       <p>{c.recebeLeadsAutomaticos ? "Recebe leads" : "Sem leads auto"}</p>
                     </div>
+                    {canEdit && c.cargo !== "dono" && c.ativo && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0"
+                        title="Editar cargo, setor e atendimento"
+                        onClick={() => abrirEditColab(c)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
                     {isDono && c.cargo !== "dono" && c.ativo && (
                       <Button variant="ghost" size="sm" className="text-destructive shrink-0" onClick={() => {
                         if (confirm(`Remover ${c.userName}?`)) removerColabMut.mutate({ colaboradorId: c.id });
@@ -673,6 +702,102 @@ export default function Configuracoes() {
       </Tabs>
 
       <BackupDialog open={backupDialogOpen} onOpenChange={setBackupDialogOpen} />
+
+      <Dialog open={!!editandoColab} onOpenChange={(o) => { if (!o) setEditandoColab(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar colaborador</DialogTitle>
+          </DialogHeader>
+          {editandoColab && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-sm font-medium">{editandoColab.userName || "Sem nome"}</p>
+                <p className="text-xs text-muted-foreground">{editandoColab.userEmail || "—"}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Cargo (função)</Label>
+                <Select
+                  value={editColabCargo}
+                  onValueChange={setEditColabCargo}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gestor">Gestor</SelectItem>
+                    <SelectItem value="atendente">Atendente</SelectItem>
+                    <SelectItem value="estagiario">Estagiário</SelectItem>
+                    <SelectItem value="sdr">SDR</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  {CARGO_DESCRICAO[editColabCargo as CargoColaborador] || ""}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Setor / departamento</Label>
+                <Input
+                  placeholder="Ex: Comercial, Cível, Trabalhista..."
+                  value={editColabDepto}
+                  onChange={(e) => setEditColabDepto(e.target.value)}
+                  maxLength={64}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Usado pra agrupar em relatórios.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Atendimentos simultâneos</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={editColabMaxAtend}
+                    onChange={(e) => setEditColabMaxAtend(parseInt(e.target.value, 10) || 1)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="block">Recebe leads auto?</Label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Switch
+                      checked={editColabRecebeLeads}
+                      onCheckedChange={setEditColabRecebeLeads}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {editColabRecebeLeads ? "Sim" : "Não"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditandoColab(null)} disabled={atualizarColabMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editandoColab) return;
+                atualizarColabMut.mutate({
+                  colaboradorId: editandoColab.id,
+                  cargo: editColabCargo as any,
+                  departamento: editColabDepto.trim() || undefined,
+                  maxAtendimentosSimultaneos: editColabMaxAtend,
+                  recebeLeadsAutomaticos: editColabRecebeLeads,
+                });
+              }}
+              disabled={atualizarColabMut.isPending}
+            >
+              {atualizarColabMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
