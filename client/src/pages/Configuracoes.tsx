@@ -149,10 +149,13 @@ export default function Configuracoes() {
 
   // ─── Convite form state ───
   const [editandoColab, setEditandoColab] = useState<any | null>(null);
-  const [editColabCargo, setEditColabCargo] = useState<string>("atendente");
-  const [editColabDepto, setEditColabDepto] = useState("");
+  const [editColabCargoPersonalizadoId, setEditColabCargoPersonalizadoId] = useState<number | null>(null);
+  const [editColabSetorId, setEditColabSetorId] = useState<number | null>(null);
   const [editColabMaxAtend, setEditColabMaxAtend] = useState<number>(5);
   const [editColabRecebeLeads, setEditColabRecebeLeads] = useState<boolean>(false);
+
+  const { data: cargosList } = trpc.permissoes.listarCargos.useQuery(undefined, { retry: false });
+  const { data: setoresList, refetch: refetchSetores } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
 
   const [conviteEmail, setConviteEmail] = useState("");
   // Cargo do convite — pode ser default ("gestor"|"atendente"|"estagiario")
@@ -229,10 +232,25 @@ export default function Configuracoes() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Setores (departamentos) — gestão CRUD
+  const [setorDialog, setSetorDialog] = useState<null | { id?: number; nome: string; descricao: string; cor: string }>(null);
+  const criarSetorMut = trpc.configuracoes.criarSetor.useMutation({
+    onSuccess: () => { toast.success("Setor criado"); setSetorDialog(null); refetchSetores(); refetchEquipe(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const atualizarSetorMut = trpc.configuracoes.atualizarSetor.useMutation({
+    onSuccess: () => { toast.success("Setor atualizado"); setSetorDialog(null); refetchSetores(); refetchEquipe(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirSetorMut = trpc.configuracoes.excluirSetor.useMutation({
+    onSuccess: () => { toast.success("Setor excluído"); refetchSetores(); refetchEquipe(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   function abrirEditColab(c: any) {
     setEditandoColab(c);
-    setEditColabCargo(c.cargo === "dono" ? "dono" : (c.cargo || "atendente"));
-    setEditColabDepto(c.departamento || "");
+    setEditColabCargoPersonalizadoId(c.cargoPersonalizadoId ?? null);
+    setEditColabSetorId(c.setorId ?? null);
     setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? 5);
     setEditColabRecebeLeads(!!c.recebeLeadsAutomaticos);
   }
@@ -497,7 +515,10 @@ export default function Configuracoes() {
                         <CargoBadge cargo={c.cargo as CargoColaborador} />
                         {!c.ativo && <Badge variant="secondary" className="text-xs">Inativo</Badge>}
                       </div>
-                      <p className="text-xs text-muted-foreground">{c.userEmail || "—"}{c.departamento ? ` · ${c.departamento}` : ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.userEmail || "—"}
+                        {(c.setorNome || c.departamento) ? ` · ${c.setorNome || c.departamento}` : ""}
+                      </p>
                     </div>
                     <div className="text-xs text-muted-foreground text-right shrink-0">
                       <p>Max: {c.maxAtendimentosSimultaneos} atend.</p>
@@ -658,6 +679,75 @@ export default function Configuracoes() {
               </CardContent>
             </Card>
           )}
+
+          {/* Setores (departamentos) */}
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="h-4 w-4" /> Setores
+              </CardTitle>
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSetorDialog({ nome: "", descricao: "", cor: "#6366f1" })}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Novo setor
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {setoresList && setoresList.length > 0 ? (
+                <div className="space-y-2">
+                  {setoresList.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                      <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: s.cor }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{s.nome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.totalColaboradores} colaborador(es)
+                          {s.descricao ? ` · ${s.descricao}` : ""}
+                        </p>
+                      </div>
+                      {canEdit && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSetorDialog({
+                              id: s.id,
+                              nome: s.nome,
+                              descricao: s.descricao || "",
+                              cor: s.cor || "#6366f1",
+                            })}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => {
+                              if (confirm(`Excluir o setor "${s.nome}"? Colaboradores ficarão sem setor.`)) {
+                                excluirSetorMut.mutate({ setorId: s.id });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-sm text-muted-foreground py-4">
+                  Nenhum setor cadastrado. Crie setores pra agrupar colaboradores em relatórios.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ─── Canais de Comunicação ──────────────────────────── */}
@@ -718,34 +808,47 @@ export default function Configuracoes() {
               <div className="space-y-2">
                 <Label>Cargo (função)</Label>
                 <Select
-                  value={editColabCargo}
-                  onValueChange={setEditColabCargo}
+                  value={editColabCargoPersonalizadoId ? String(editColabCargoPersonalizadoId) : ""}
+                  onValueChange={(v) => setEditColabCargoPersonalizadoId(v ? parseInt(v, 10) : null)}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Selecione um cargo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gestor">Gestor</SelectItem>
-                    <SelectItem value="atendente">Atendente</SelectItem>
-                    <SelectItem value="estagiario">Estagiário</SelectItem>
-                    <SelectItem value="sdr">SDR</SelectItem>
+                    {(cargosList || [])
+                      .filter((c) => c.nome !== "Dono")
+                      .map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground">
-                  {CARGO_DESCRICAO[editColabCargo as CargoColaborador] || ""}
+                  Inclui cargos personalizados criados em Permissões.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <Label>Setor / departamento</Label>
-                <Input
-                  placeholder="Ex: Comercial, Cível, Trabalhista..."
-                  value={editColabDepto}
-                  onChange={(e) => setEditColabDepto(e.target.value)}
-                  maxLength={64}
-                />
+                <Select
+                  value={editColabSetorId ? String(editColabSetorId) : "__none__"}
+                  onValueChange={(v) => setEditColabSetorId(v === "__none__" ? null : parseInt(v, 10))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sem setor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem setor</SelectItem>
+                    {(setoresList || []).map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-[10px] text-muted-foreground">
-                  Usado pra agrupar em relatórios.
+                  Gerencie setores na seção "Setores" abaixo. Usado pra relatórios.
                 </p>
               </div>
 
@@ -784,8 +887,8 @@ export default function Configuracoes() {
                 if (!editandoColab) return;
                 atualizarColabMut.mutate({
                   colaboradorId: editandoColab.id,
-                  cargo: editColabCargo as any,
-                  departamento: editColabDepto.trim() || undefined,
+                  cargoPersonalizadoId: editColabCargoPersonalizadoId,
+                  setorId: editColabSetorId,
                   maxAtendimentosSimultaneos: editColabMaxAtend,
                   recebeLeadsAutomaticos: editColabRecebeLeads,
                 });
@@ -793,6 +896,84 @@ export default function Configuracoes() {
               disabled={atualizarColabMut.isPending}
             >
               {atualizarColabMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!setorDialog} onOpenChange={(o) => { if (!o) setSetorDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{setorDialog?.id ? "Editar setor" : "Novo setor"}</DialogTitle>
+          </DialogHeader>
+          {setorDialog && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Nome *</Label>
+                <Input
+                  value={setorDialog.nome}
+                  onChange={(e) => setSetorDialog({ ...setorDialog, nome: e.target.value })}
+                  placeholder="Ex: Comercial, Jurídico, Atendimento..."
+                  maxLength={64}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Descrição (opcional)</Label>
+                <Input
+                  value={setorDialog.descricao}
+                  onChange={(e) => setSetorDialog({ ...setorDialog, descricao: e.target.value })}
+                  placeholder="O que esse setor faz?"
+                  maxLength={255}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Cor</Label>
+                <Input
+                  type="color"
+                  value={setorDialog.cor}
+                  onChange={(e) => setSetorDialog({ ...setorDialog, cor: e.target.value })}
+                  className="h-10 w-20 p-1 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSetorDialog(null)}
+              disabled={criarSetorMut.isPending || atualizarSetorMut.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!setorDialog) return;
+                const nome = setorDialog.nome.trim();
+                if (nome.length < 2) {
+                  toast.error("Nome muito curto (mín. 2 chars)");
+                  return;
+                }
+                if (setorDialog.id) {
+                  atualizarSetorMut.mutate({
+                    setorId: setorDialog.id,
+                    nome,
+                    descricao: setorDialog.descricao.trim() || null,
+                    cor: setorDialog.cor,
+                  });
+                } else {
+                  criarSetorMut.mutate({
+                    nome,
+                    descricao: setorDialog.descricao.trim() || undefined,
+                    cor: setorDialog.cor,
+                  });
+                }
+              }}
+              disabled={criarSetorMut.isPending || atualizarSetorMut.isPending}
+            >
+              {(criarSetorMut.isPending || atualizarSetorMut.isPending) && (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              )}
               Salvar
             </Button>
           </DialogFooter>

@@ -255,7 +255,13 @@ export const colaboradores = mysqlTable(
     escritorioId: int("escritorioId").notNull(), // FK → escritorios.id
     userId: int("userId").notNull(), // FK → users.id
     cargo: mysqlEnum("cargo", ["dono", "gestor", "atendente", "estagiario", "sdr"]).notNull(),
+    /** Texto livre legado. Mantido pra retrocompat com colaboradores
+     *  criados antes da tabela `setores`. Novos lançamentos usam `setorId`. */
     departamento: varchar("departamento", { length: 64 }),
+    /** FK opcional pra `setores.id`. Quando preenchido, é a fonte da
+     *  verdade do setor do colaborador. Listagens preferem `setor.nome`
+     *  por aqui e caem em `departamento` quando nulo. */
+    setorId: int("setorIdCol"),
     ativo: boolean("ativo").default(true).notNull(),
     maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),
     recebeLeadsAutomaticos: boolean("recebeLeadsAutomaticos").default(true).notNull(),
@@ -831,6 +837,34 @@ export const cargosPersonalizados = mysqlTable("cargos_personalizados", {
   createdAt: timestamp("createdAtCargo").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtCargo").defaultNow().onUpdateNow().notNull(),
 });
+
+/**
+ * Setores (departamentos) do escritório. Gerenciados como os cargos:
+ * nome único por escritório, cor e descrição opcionais. Colaborador
+ * tem `setorId` (FK opcional). Existe pra agrupamento em relatórios
+ * e seleção em dropdown consistente — substitui texto livre antigo.
+ */
+export const setores = mysqlTable(
+  "setores",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdSet").notNull(),
+    nome: varchar("nomeSet", { length: 64 }).notNull(),
+    descricao: varchar("descricaoSet", { length: 255 }),
+    cor: varchar("corSet", { length: 20 }).default("#6366f1").notNull(),
+    createdAt: timestamp("createdAtSet").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtSet").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioNome: uniqueIndex("setores_escr_nome_uq").on(
+      t.escritorioId,
+      t.nome,
+    ),
+  }),
+);
+
+export type Setor = typeof setores.$inferSelect;
+export type InsertSetor = typeof setores.$inferInsert;
 
 export type CargoPersonalizado = typeof cargosPersonalizados.$inferSelect;
 export type InsertCargoPersonalizado = typeof cargosPersonalizados.$inferInsert;
