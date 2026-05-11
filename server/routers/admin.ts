@@ -1499,6 +1499,155 @@ export const adminRouter = router({
       return { success: true, mensagem: "Cortesia removida" };
     }),
 
+  /**
+   * Marca cortesia por USER (não por subscription). Pra cliente piloto
+   * que nunca teve assinatura, cria uma subscription virtual marcada
+   * como cortesia. Pra user com sub existente, marca a sub mais recente.
+   *
+   * Sub virtual = `planId=null`, `status='active'`, `asaasSubscriptionId=null`,
+   * `cortesia=true`. `getActiveSubscription` retorna ela por causa da
+   * priorização de cortesia (helper `temAcessoAtivo`).
+   */
+  marcarCortesiaUser: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      motivo: z.string().min(3).max(500),
+      expiraEm: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      if (input.expiraEm != null && input.expiraEm <= Date.now()) {
+        throw new Error("Data de expiração precisa estar no futuro");
+      }
+
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!u) throw new Error("Usuário não encontrado");
+
+      const subsDoUser = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, input.userId))
+        .orderBy(desc(subscriptionsTable.createdAt));
+
+      const jaTemCortesia = subsDoUser.find((s) => s.cortesia);
+      if (jaTemCortesia) {
+        throw new Error("Cliente já está em cortesia. Remova antes de marcar de novo.");
+      }
+
+      let subscriptionId: number;
+      let foiCriadaVirtual = false;
+
+      if (subsDoUser.length > 0) {
+        const alvo = subsDoUser[0];
+        await db
+          .update(subscriptionsTable)
+          .set({
+            cortesia: true,
+            cortesiaMotivo: input.motivo,
+            cortesiaExpiraEm: input.expiraEm ?? null,
+          })
+          .where(eq(subscriptionsTable.id, alvo.id));
+        subscriptionId = alvo.id;
+      } else {
+        const inserido = await db
+          .insert(subscriptionsTable)
+          .values({
+            userId: input.userId,
+            planId: null,
+            status: "active",
+            cortesia: true,
+            cortesiaMotivo: input.motivo,
+            cortesiaExpiraEm: input.expiraEm ?? null,
+          })
+          .$returningId();
+        subscriptionId = inserido[0].id;
+        foiCriadaVirtual = true;
+      }
+
+      await registrarAuditoria({
+        ctx,
+        acao: "subscription.marcarCortesiaUser",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: u.name || u.email || undefined,
+        detalhes: {
+          motivo: input.motivo,
+          expiraEm: input.expiraEm ?? null,
+          subscriptionId,
+          subVirtualCriada: foiCriadaVirtual,
+        },
+      });
+
+      return {
+        success: true,
+        mensagem: foiCriadaVirtual
+          ? "Cortesia ativada (assinatura virtual criada)"
+          : "Cortesia ativada na assinatura existente",
+        subscriptionId,
+      };
+    }),
+
+  /**
+   * Remove cortesia por USER. Acha a sub com cortesia=true e desliga a
+   * flag — volta a depender do status real. Se a sub era virtual
+   * (criada só pra cortesia), o admin pode cancelá-la depois manualmente
+   * via cancelarAssinaturaAdmin.
+   */
+  removerCortesiaUser: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      motivo: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users).where(eq(users.id, input.userId)).limit(1);
+      if (!u) throw new Error("Usuário não encontrado");
+
+      const [subCortesia] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(
+          and(
+            eq(subscriptionsTable.userId, input.userId),
+            eq(subscriptionsTable.cortesia, true),
+          ),
+        )
+        .limit(1);
+
+      if (!subCortesia) throw new Error("Cliente não está em cortesia");
+
+      await db
+        .update(subscriptionsTable)
+        .set({
+          cortesia: false,
+          cortesiaMotivo: null,
+          cortesiaExpiraEm: null,
+        })
+        .where(eq(subscriptionsTable.id, subCortesia.id));
+
+      await registrarAuditoria({
+        ctx,
+        acao: "subscription.removerCortesiaUser",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        alvoNome: u.name || u.email || undefined,
+        detalhes: {
+          motivo: input.motivo,
+          motivoAnterior: subCortesia.cortesiaMotivo,
+          subscriptionId: subCortesia.id,
+          statusAtual: subCortesia.status,
+        },
+      });
+
+      return { success: true, mensagem: "Cortesia removida" };
+    }),
+
   // ═══════════════════════════════════════════════════════════════════════
   // MONITORAMENTO OPERACIONAL
   // ═══════════════════════════════════════════════════════════════════════

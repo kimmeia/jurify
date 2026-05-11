@@ -20,7 +20,7 @@ import {
 import {
   AlertCircle, Eye, Coins, ShieldCheck, User, Calculator, CreditCard, Clock,
   Loader2, Search, Lock, Unlock, LogIn, FileText, Trash2, MessageSquarePlus,
-  AlertTriangle, RotateCcw, Users as UsersIcon,
+  AlertTriangle, RotateCcw, Users as UsersIcon, Gift,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState } from "react";
@@ -130,6 +130,11 @@ function ClienteDetalheDialog({
   const [categoriaNota, setCategoriaNota] = useState<string>("geral");
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
   const [bloquearOpen, setBloquearOpen] = useState(false);
+  const [cortesiaOpen, setCortesiaOpen] = useState(false);
+  const [motivoCortesia, setMotivoCortesia] = useState("");
+  const [expiraEmCortesia, setExpiraEmCortesia] = useState("");
+  const [removerCortesiaOpen, setRemoverCortesiaOpen] = useState(false);
+  const [motivoRemocaoCortesia, setMotivoRemocaoCortesia] = useState("");
 
   const utils = trpc.useUtils();
 
@@ -224,6 +229,29 @@ function ClienteDetalheDialog({
       });
     },
     onError: (err) => toast.error("Falha ao resetar senha", { description: err.message }),
+  });
+
+  const marcarCortesiaUserMut = trpc.admin.marcarCortesiaUser.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.mensagem);
+      setCortesiaOpen(false);
+      setMotivoCortesia("");
+      setExpiraEmCortesia("");
+      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      onRefresh();
+    },
+    onError: (err) => toast.error("Falha ao ativar cortesia", { description: err.message }),
+  });
+
+  const removerCortesiaUserMut = trpc.admin.removerCortesiaUser.useMutation({
+    onSuccess: () => {
+      toast.success("Cortesia removida");
+      setRemoverCortesiaOpen(false);
+      setMotivoRemocaoCortesia("");
+      utils.admin.clienteDetalhes.invalidate({ userId: userId! });
+      onRefresh();
+    },
+    onError: (err) => toast.error("Falha ao remover cortesia", { description: err.message }),
   });
 
   const criarNotaMut = trpc.admin.criarNotaCliente.useMutation({
@@ -583,6 +611,55 @@ function ClienteDetalheDialog({
 
             {/* TAB 3: AÇÕES (impersonate, bloquear) */}
             <TabsContent value="acoes" className="space-y-3 py-3">
+              <div className={`border rounded-lg p-4 space-y-2 ${sub?.cortesia ? "border-emerald-500/40 bg-emerald-500/5" : ""}`}>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Gift className={`h-4 w-4 ${sub?.cortesia ? "text-emerald-600" : "text-emerald-700"}`} />
+                  {sub?.cortesia ? "Cortesia ativa" : "Marcar como cortesia"}
+                </div>
+                {sub?.cortesia ? (
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    {sub.cortesiaMotivo && (
+                      <p><strong>Motivo:</strong> {sub.cortesiaMotivo}</p>
+                    )}
+                    {sub.cortesiaExpiraEm ? (
+                      <p><strong>Expira em:</strong> {new Date(sub.cortesiaExpiraEm).toLocaleDateString("pt-BR")}</p>
+                    ) : (
+                      <p className="italic">Sem data de expiração.</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Libera acesso ao Jurify sem cobrança via Asaas. Útil pra cliente piloto
+                    ou isenção pontual. {!sub && (
+                      <span className="block mt-1">
+                        Cliente ainda não tem assinatura — vou criar uma virtual marcada como cortesia.
+                      </span>
+                    )}
+                  </p>
+                )}
+                {sub?.cortesia ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-amber-500/50 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10"
+                    onClick={() => setRemoverCortesiaOpen(true)}
+                  >
+                    <Gift className="h-3.5 w-3.5 mr-1.5" />
+                    Remover cortesia
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-emerald-500/50 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-500/10"
+                    onClick={() => setCortesiaOpen(true)}
+                  >
+                    <Gift className="h-3.5 w-3.5 mr-1.5" />
+                    Marcar como cortesia
+                  </Button>
+                )}
+              </div>
+
               <div className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <LogIn className="h-4 w-4 text-blue-600" />
@@ -724,6 +801,95 @@ function ClienteDetalheDialog({
             >
               {bloquearMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Bloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cortesiaOpen} onOpenChange={(o) => { if (!o) { setCortesiaOpen(false); setMotivoCortesia(""); setExpiraEmCortesia(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ativar cortesia para {user?.name || user?.email}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Libera acesso sem mexer no Asaas. {!sub && (
+                <span className="block mt-1 text-amber-700">
+                  Cliente não tem assinatura — uma será criada virtualmente, marcada como cortesia.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Motivo (auditável). Ex: 'Cliente piloto março-abril'"
+              value={motivoCortesia}
+              onChange={(e) => setMotivoCortesia(e.target.value)}
+              rows={2}
+            />
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">
+                Expira em (opcional — vazio = sem prazo)
+              </label>
+              <Input
+                type="date"
+                value={expiraEmCortesia}
+                onChange={(e) => setExpiraEmCortesia(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={motivoCortesia.trim().length < 3 || marcarCortesiaUserMut.isPending}
+              onClick={() => {
+                const expira = expiraEmCortesia
+                  ? new Date(expiraEmCortesia + "T23:59:59").getTime()
+                  : undefined;
+                marcarCortesiaUserMut.mutate({
+                  userId: userId!,
+                  motivo: motivoCortesia.trim(),
+                  expiraEm: expira,
+                });
+              }}
+            >
+              {marcarCortesiaUserMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Ativar cortesia
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={removerCortesiaOpen} onOpenChange={(o) => { if (!o) { setRemoverCortesiaOpen(false); setMotivoRemocaoCortesia(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover cortesia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{user?.name || user?.email}</strong> vai voltar a depender do
+              status real da assinatura. Se a sub for canceled/past_due, o cliente
+              perde acesso ao Jurify imediatamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo da remoção (auditável)"
+            value={motivoRemocaoCortesia}
+            onChange={(e) => setMotivoRemocaoCortesia(e.target.value)}
+            rows={2}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={motivoRemocaoCortesia.trim().length < 3 || removerCortesiaUserMut.isPending}
+              onClick={() => {
+                removerCortesiaUserMut.mutate({
+                  userId: userId!,
+                  motivo: motivoRemocaoCortesia.trim(),
+                });
+              }}
+            >
+              {removerCortesiaUserMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Remover cortesia
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
