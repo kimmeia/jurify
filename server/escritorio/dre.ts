@@ -187,10 +187,16 @@ export async function calcularDRE(
   const despesasAgg = agregar(despesasNoPeriodo);
 
   const resultadoLiquido = +(receitas.total - despesasAgg.total).toFixed(2);
-  const margemPercent =
-    receitas.total > 0
-      ? +((resultadoLiquido / receitas.total) * 100).toFixed(2)
-      : NaN;
+  // Margem: NaN se receita zero (UI mostra "—"). Cap em ±999% pra evitar
+  // valores absurdos quando receita é centavos (ex: R$ 0,01 receita +
+  // R$ 10000 despesa daria -100000000%, sem informação útil).
+  let margemPercent: number;
+  if (receitas.total <= 0) {
+    margemPercent = NaN;
+  } else {
+    const bruto = (resultadoLiquido / receitas.total) * 100;
+    margemPercent = +Math.max(-999, Math.min(999, bruto)).toFixed(2);
+  }
 
   return {
     periodo: { inicio: dataInicio, fim: dataFim },

@@ -319,4 +319,24 @@ describe("calcularDRE — agregação", () => {
     expect(dre.resultadoLiquido).toBe(-1000);
     expect(Number.isNaN(dre.margemPercent)).toBe(true);
   });
+
+  it("margem é capada em -999% pra evitar valores absurdos com receita ínfima", async () => {
+    // R$ 0,01 receita + R$ 10000 despesa → margem bruta seria -99999900%
+    selectQueueByCall.push([
+      { categoriaId: 1, categoriaNome: "Honorário simbólico", valor: "0.01" },
+    ]);
+    selectQueueByCall.push([
+      {
+        categoriaId: 10,
+        categoriaNome: "Aluguel",
+        valor: "10000.00",
+        status: "pago",
+        dataPagamento: "2026-05-10",
+        vencimento: "2026-05-05",
+      },
+    ]);
+
+    const dre = await calcularDRE(1, "2026-05-01", "2026-05-31");
+    expect(dre.margemPercent).toBe(-999);
+  });
 });

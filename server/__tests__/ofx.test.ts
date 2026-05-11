@@ -154,6 +154,51 @@ describe("parseOFX — robustez", () => {
     const txs = parseOFX(ofx);
     expect(txs[0].data).toBe("2026-06-01");
   });
+
+  it("rejeita data inexistente (30-fev)", () => {
+    const ofx = `<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20250230
+<TRNAMT>100.00
+<FITID>X2
+<MEMO>data inválida
+</STMTTRN>`;
+    const txs = parseOFX(ofx);
+    expect(txs).toHaveLength(0);
+  });
+
+  it("rejeita 31-abr (abril não tem 31)", () => {
+    const ofx = `<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20260431
+<TRNAMT>100.00
+<FITID>X3
+<MEMO>31-abr não existe
+</STMTTRN>`;
+    expect(parseOFX(ofx)).toHaveLength(0);
+  });
+
+  it("aceita 29-fev em ano bissexto", () => {
+    const ofx = `<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20240229
+<TRNAMT>100.00
+<FITID>X4
+<MEMO>bissexto
+</STMTTRN>`;
+    expect(parseOFX(ofx)[0].data).toBe("2024-02-29");
+  });
+
+  it("rejeita 29-fev em ano NÃO bissexto", () => {
+    const ofx = `<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20250229
+<TRNAMT>100.00
+<FITID>X5
+<MEMO>2025 não é bissexto
+</STMTTRN>`;
+    expect(parseOFX(ofx)).toHaveLength(0);
+  });
 });
 
 // ─── Matcher / sugestor ──────────────────────────────────────────────────────

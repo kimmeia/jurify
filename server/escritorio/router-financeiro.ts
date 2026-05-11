@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -9,6 +9,7 @@ import {
   contatos,
   despesas,
   financeiroAnexos,
+  ofxImportacoesFitid,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
@@ -545,12 +546,9 @@ export const financeiroRouter = router({
         input.filename,
       );
 
-      // Sobe primeiro pro S3 — se DB falhar depois, arquivo fica órfão
-      // (aceitável: ele não aparece em lugar nenhum, e podemos limpar
-      // periodicamente comparando S3 vs DB). Ordem inversa (DB primeiro,
-      // S3 depois) seria pior: row sem arquivo aparece quebrada na UI.
-      await uploadAnexo(cfg, storageKey, buffer, input.mimeType);
-
+      // Ordem: DB primeiro, S3 depois com rollback. Se S3 falhar, deleta
+      // a row pra UI não mostrar anexo quebrado. Se DB falhasse depois
+      // do S3, o arquivo ficaria órfão no bucket sem cleanup automático.
       const [novo] = await db
         .insert(financeiroAnexos)
         .values({
@@ -564,6 +562,20 @@ export const financeiroRouter = router({
           uploadedByUserId: ctx.user.id,
         })
         .$returningId();
+
+      try {
+        await uploadAnexo(cfg, storageKey, buffer, input.mimeType);
+      } catch (uploadErr: any) {
+        // Rollback: row sem arquivo é pior que perder o upload retry-able
+        await db
+          .delete(financeiroAnexos)
+          .where(eq(financeiroAnexos.id, novo.id))
+          .catch(() => {});
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Falha ao enviar pro storage: ${uploadErr.message ?? "erro desconhecido"}. Tente novamente.`,
+        });
+      }
 
       return { id: novo.id, storageKey, tamanhoBytes: buffer.length };
     }),
@@ -810,11 +822,37 @@ export const financeiroRouter = router({
         cobrancasFiltradas,
       );
 
+      // Idempotência: marca quais FITIDs já foram conciliados antes
+      // pra UI mostrar como "já importado" e desabilitar.
+      const fitidsImportados = await db
+        .select({ fitid: ofxImportacoesFitid.fitid })
+        .from(ofxImportacoesFitid)
+        .where(
+          and(
+            eq(ofxImportacoesFitid.escritorioId, esc.escritorio.id),
+            inArray(
+              ofxImportacoesFitid.fitid,
+              transacoes.map((t) => t.fitid),
+            ),
+          ),
+        );
+      const setImportados = new Set(fitidsImportados.map((r) => r.fitid));
+
+      const sugestoesComFlag = sugestoes.map((s) => ({
+        ...s,
+        jaImportado: setImportados.has(s.transacao.fitid),
+      }));
+
       return {
         totalTransacoes: transacoes.length,
-        comMatch: sugestoes.filter((s) => s.candidatos.length > 0).length,
-        semMatch: sugestoes.filter((s) => s.candidatos.length === 0).length,
-        sugestoes,
+        comMatch: sugestoesComFlag.filter(
+          (s) => !s.jaImportado && s.candidatos.length > 0,
+        ).length,
+        semMatch: sugestoesComFlag.filter(
+          (s) => !s.jaImportado && s.candidatos.length === 0,
+        ).length,
+        jaImportadas: setImportados.size,
+        sugestoes: sugestoesComFlag,
       };
     }),
 
@@ -829,9 +867,11 @@ export const financeiroRouter = router({
         matches: z
           .array(
             z.object({
+              fitid: z.string().min(1).max(255),
               tipo: z.enum(["despesa", "cobranca"]),
               entidadeId: z.number().int().positive(),
               dataPagamento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+              valor: z.number().positive(),
             }),
           )
           .min(1)
@@ -847,10 +887,37 @@ export const financeiroRouter = router({
 
       let despesasMarcadas = 0;
       let cobrancasMarcadas = 0;
+      let jaImportadas = 0;
       const erros: string[] = [];
 
       for (const m of input.matches) {
         try {
+          // 1) Idempotência: registra FITID. Se já existe (UNIQUE viola),
+          // pula o match sem mutar entidade-pai. Faz isso ANTES do UPDATE
+          // pra garantir que reimport não sobrescreve dataPagamento.
+          try {
+            await db.insert(ofxImportacoesFitid).values({
+              escritorioId: esc.escritorio.id,
+              fitid: m.fitid,
+              tipoEntidade: m.tipo,
+              entidadeId: m.entidadeId,
+              valor: m.valor.toFixed(2),
+              dataPagamento: m.dataPagamento,
+              importadoPorUserId: ctx.user.id,
+            });
+          } catch (insertErr: any) {
+            // Drizzle / MySQL: erro 1062 = duplicate key
+            if (
+              insertErr.code === "ER_DUP_ENTRY" ||
+              /Duplicate entry/i.test(insertErr.message ?? "")
+            ) {
+              jaImportadas++;
+              continue;
+            }
+            throw insertErr;
+          }
+
+          // 2) Aplicação do match
           if (m.tipo === "despesa") {
             const [d] = await db
               .select({ valor: despesas.valor })
@@ -881,7 +948,6 @@ export const financeiroRouter = router({
               );
             despesasMarcadas++;
           } else {
-            // Cobrança — só faz sentido marcar manual; Asaas sincroniza via webhook
             const [c] = await db
               .select({ origem: asaasCobrancas.origem })
               .from(asaasCobrancas)
@@ -913,6 +979,6 @@ export const financeiroRouter = router({
         }
       }
 
-      return { despesasMarcadas, cobrancasMarcadas, erros };
+      return { despesasMarcadas, cobrancasMarcadas, jaImportadas, erros };
     }),
 });

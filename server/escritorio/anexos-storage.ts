@@ -57,6 +57,10 @@ function montarClient(cfg: AnexosConfig): S3Client {
     region: cfg.region,
     credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
     forcePathStyle: true,
+    // 30s por request: cobre upload de 5MB em rede ~2Mbps sem travar
+    // indefinidamente em rede lenta. Retry 3x cobre flapping de rede.
+    requestHandler: { requestTimeout: 30_000 } as any,
+    maxAttempts: 3,
   });
 }
 

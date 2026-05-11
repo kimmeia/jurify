@@ -100,6 +100,11 @@ function extrairTag(bloco: string, tag: string): string | null {
 /**
  * Converte data OFX (`YYYYMMDD` ou `YYYYMMDDHHMMSS[.sss][TZ]`) → ISO
  * `YYYY-MM-DD`. Retorna null se inválida.
+ *
+ * Validação inclui dias inexistentes no mês (30-fev, 31-abr, etc.) via
+ * round-trip por Date.UTC: criamos a data e verificamos se o objeto
+ * preservou ano/mês/dia. Datas inválidas são auto-normalizadas pelo
+ * Date (`30-fev` → `02-mar`), e isso bate ano/mês/dia → detectamos.
  */
 function converterDataOFX(raw: string): string | null {
   const limpa = raw.trim();
@@ -108,9 +113,21 @@ function converterDataOFX(raw: string): string | null {
   const m = limpa.slice(4, 6);
   const d = limpa.slice(6, 8);
   if (!/^\d{4}$/.test(y) || !/^\d{2}$/.test(m) || !/^\d{2}$/.test(d)) return null;
+  const ano = parseInt(y, 10);
   const mes = parseInt(m, 10);
   const dia = parseInt(d, 10);
   if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+
+  // Round-trip pra detectar datas inválidas (30-fev, 31-abr)
+  const dt = new Date(Date.UTC(ano, mes - 1, dia));
+  if (
+    dt.getUTCFullYear() !== ano ||
+    dt.getUTCMonth() !== mes - 1 ||
+    dt.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+
   return `${y}-${m}-${d}`;
 }
 

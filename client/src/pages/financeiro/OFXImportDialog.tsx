@@ -58,6 +58,8 @@ interface SugestaoConciliacao {
     tipo: string;
   };
   candidatos: CandidatoMatch[];
+  /** Quando true, esta transação já foi conciliada antes (mesmo FITID). */
+  jaImportado?: boolean;
 }
 
 export function OFXImportDialog({
@@ -74,6 +76,7 @@ export function OFXImportDialog({
     totalTransacoes: number;
     comMatch: number;
     semMatch: number;
+    jaImportadas?: number;
     sugestoes: SugestaoConciliacao[];
   } | null>(null);
 
@@ -86,10 +89,15 @@ export function OFXImportDialog({
       setPreview(r);
       if (r) {
         // Pré-seleciona melhor candidato em cada transação com match
+        // exceto se já foi importada antes (FITID duplicado → cinza)
         const defaults: Record<string, number | null> = {};
         for (const s of r.sugestoes) {
-          defaults[s.transacao.fitid] =
-            s.candidatos.length > 0 ? s.candidatos[0].id : null;
+          if (s.jaImportado) {
+            defaults[s.transacao.fitid] = null;
+          } else {
+            defaults[s.transacao.fitid] =
+              s.candidatos.length > 0 ? s.candidatos[0].id : null;
+          }
         }
         setSelecoes(defaults);
       }
@@ -141,14 +149,17 @@ export function OFXImportDialog({
     if (!preview) return;
     const matches = preview.sugestoes
       .map((s) => {
+        if (s.jaImportado) return null;
         const id = selecoes[s.transacao.fitid];
         if (!id) return null;
         const cand = s.candidatos.find((c) => c.id === id);
         if (!cand) return null;
         return {
+          fitid: s.transacao.fitid,
           tipo: cand.tipo,
           entidadeId: cand.id,
           dataPagamento: s.transacao.data,
+          valor: Math.abs(s.transacao.valor),
         };
       })
       .filter((m): m is NonNullable<typeof m> => m !== null);
@@ -206,7 +217,7 @@ export function OFXImportDialog({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="rounded border bg-card p-3">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   Transações
@@ -229,6 +240,14 @@ export function OFXImportDialog({
                   {preview.semMatch}
                 </p>
               </div>
+              <div className="rounded border bg-muted/40 p-3">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Já importadas
+                </p>
+                <p className="text-xl font-semibold text-muted-foreground">
+                  {preview.jaImportadas ?? 0}
+                </p>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto rounded border">
@@ -247,7 +266,10 @@ export function OFXImportDialog({
                     const ehEntrada = s.transacao.valor > 0;
                     const selecionado = selecoes[s.transacao.fitid];
                     return (
-                      <TableRow key={s.transacao.fitid}>
+                      <TableRow
+                        key={s.transacao.fitid}
+                        className={s.jaImportado ? "opacity-50" : ""}
+                      >
                         <TableCell className="px-2">
                           {ehEntrada ? (
                             <ArrowDownCircle className="h-4 w-4 text-emerald-600" />
@@ -267,7 +289,11 @@ export function OFXImportDialog({
                           {formatBRL(s.transacao.valor)}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {s.candidatos.length === 0 ? (
+                          {s.jaImportado ? (
+                            <span className="text-muted-foreground italic flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" /> Já importada
+                            </span>
+                          ) : s.candidatos.length === 0 ? (
                             <span className="text-amber-700 dark:text-amber-400 italic flex items-center gap-1">
                               <AlertCircle className="h-3 w-3" /> Sem match
                             </span>

@@ -447,6 +447,45 @@ export const despesasRouter = router({
       await exigirAcaoFinanceiro(ctx.user.id, "excluir");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Verifica se é despesa-modelo (tem filhas recorrentes) — se sim,
+      // cascade: deleta filhas primeiro pra não deixar órfãs apontando
+      // pra modelo inexistente. Filhas têm `recorrenciaDeOrigemId` =
+      // id da modelo.
+      const [alvo] = await db
+        .select({
+          recorrencia: despesas.recorrencia,
+          recorrenciaDeOrigemId: despesas.recorrenciaDeOrigemId,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.id, input.id),
+            eq(despesas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!alvo) return { success: true, filhasRemovidas: 0 };
+
+      let filhasRemovidas = 0;
+      if (alvo.recorrencia !== "nenhuma" && alvo.recorrenciaDeOrigemId === null) {
+        // É a despesa-modelo: apaga filhas antes
+        const r = await db
+          .delete(despesas)
+          .where(
+            and(
+              eq(despesas.recorrenciaDeOrigemId, input.id),
+              eq(despesas.escritorioId, esc.escritorio.id),
+            ),
+          );
+        // Drizzle MySQL retorna [{ affectedRows }] em alguns drivers
+        const affected =
+          (r as any)?.[0]?.affectedRows ??
+          (r as any)?.affectedRows ??
+          0;
+        filhasRemovidas = Number(affected) || 0;
+      }
+
       await db
         .delete(despesas)
         .where(
@@ -455,7 +494,7 @@ export const despesasRouter = router({
             eq(despesas.escritorioId, esc.escritorio.id),
           ),
         );
-      return { success: true };
+      return { success: true, filhasRemovidas };
     }),
 
   /** Totais agregados para o card de KPIs (no período de vencimento). */

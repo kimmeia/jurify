@@ -2546,3 +2546,29 @@ export const financeiroAnexos = mysqlTable(
 
 export type FinanceiroAnexo = typeof financeiroAnexos.$inferSelect;
 export type InsertFinanceiroAnexo = typeof financeiroAnexos.$inferInsert;
+
+/**
+ * Registro de transações OFX já importadas. Impede que importar 2x o mesmo
+ * extrato (acidente comum) marque a mesma despesa/cobrança como paga
+ * múltiplas vezes. UNIQUE(escritorioId, fitid) garante idempotência.
+ */
+export const ofxImportacoesFitid = mysqlTable(
+  "ofx_importacoes_fitid",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdOfx").notNull(),
+    fitid: varchar("fitidOfx", { length: 255 }).notNull(),
+    tipoEntidade: mysqlEnum("tipoEntidadeOfx", ["despesa", "cobranca"]).notNull(),
+    entidadeId: int("entidadeIdOfx").notNull(),
+    valor: decimal("valorOfx", { precision: 12, scale: 2 }).notNull(),
+    dataPagamento: varchar("dataPagamentoOfx", { length: 10 }).notNull(),
+    importadoEm: timestamp("importadoEmOfx").defaultNow().notNull(),
+    importadoPorUserId: int("importadoPorUserIdOfx"),
+  },
+  (t) => ({
+    uqEscFitid: uniqueIndex("ofx_escr_fitid_uq").on(t.escritorioId, t.fitid),
+    idxEntidade: index("ofx_entidade_idx").on(t.escritorioId, t.tipoEntidade, t.entidadeId),
+  }),
+);
+
+export type OfxImportacaoFitid = typeof ofxImportacoesFitid.$inferSelect;
