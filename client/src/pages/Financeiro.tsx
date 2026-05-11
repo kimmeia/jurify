@@ -332,7 +332,7 @@ export default function Financeiro() {
               size="sm"
               onClick={() => syncMut.mutate()}
               disabled={syncMut.isPending}
-              title="Atualiza clientes e cobranças dos últimos 90 dias. Webhook cobre tempo real; pra histórico antigo use 'Importar histórico' em Configurações."
+              title="Atualiza status/pagamento das cobranças que já estão no sistema. Pra puxar cobranças novas do Asaas, use 'Importar histórico' em Configurações."
             >
               {syncMut.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />

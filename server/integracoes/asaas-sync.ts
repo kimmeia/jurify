@@ -448,6 +448,119 @@ async function desativarVinculoPor403(
   }
 }
 
+/**
+ * "Refresh" das cobranças JÁ EXISTENTES localmente. NÃO importa cobranças
+ * novas do Asaas — só revisita as que estão no DB e atualiza
+ * status/dataPagamento/valorLiquido. Pra cada cobrança local, faz
+ * `GET /payments/{id}` no Asaas.
+ *
+ * Diferencia-se de `syncCobrancasDeCliente`:
+ *  - Aquele LISTA tudo do Asaas (com filtro de data) e insere/atualiza
+ *  - Este BUSCA por ID pra cada cobrança local conhecida
+ *
+ * Usado pelo botão "Sincronizar" do Financeiro: o usuário só quer um
+ * refresh rápido (mudou status de algum boleto?), não importar histórico.
+ * Pra puxar cobranças novas, usar "Importar histórico" em Configurações
+ * (cron throttled).
+ *
+ * Throttle 350ms entre requests pra não estourar 200 req/min do Asaas
+ * mesmo com 50+ cobranças locais.
+ */
+const ATUALIZAR_THROTTLE_MS = 350;
+
+export async function atualizarCobrancasLocaisDoEscritorio(
+  escritorioId: number,
+): Promise<{ atualizadas: number; removidas: number; erros: number; total: number }> {
+  const stats = { atualizadas: 0, removidas: 0, erros: 0, total: 0 };
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return stats;
+
+  const db = await getDb();
+  if (!db) return stats;
+
+  // Pega TODAS as cobranças locais com asaasPaymentId (origem='asaas').
+  // Manuais e órfãs (sem paymentId) não vão ser tocadas.
+  const locais = await db
+    .select({
+      id: asaasCobrancas.id,
+      asaasPaymentId: asaasCobrancas.asaasPaymentId,
+      status: asaasCobrancas.status,
+      dataPagamento: asaasCobrancas.dataPagamento,
+      valorLiquido: asaasCobrancas.valorLiquido,
+    })
+    .from(asaasCobrancas)
+    .where(
+      and(
+        eq(asaasCobrancas.escritorioId, escritorioId),
+        eq(asaasCobrancas.origem, "asaas"),
+      ),
+    );
+
+  stats.total = locais.length;
+
+  for (let i = 0; i < locais.length; i++) {
+    const local = locais[i];
+    if (!local.asaasPaymentId) continue;
+    if (i > 0) await new Promise((r) => setTimeout(r, ATUALIZAR_THROTTLE_MS));
+
+    try {
+      const cob = await client.buscarCobranca(local.asaasPaymentId);
+
+      // 404 sob outro nome: API responde com `deleted:true` quando a
+      // cobrança foi excluída. Remove local.
+      if (cob.deleted) {
+        await db
+          .delete(asaasCobrancas)
+          .where(eq(asaasCobrancas.id, local.id));
+        stats.removidas++;
+        continue;
+      }
+
+      const novaDataPag = extrairDataPagamento(cob);
+      const novoNet = cob.netValue?.toString() ?? null;
+      const mudouStatus = local.status !== cob.status;
+      const mudouData = (local.dataPagamento ?? null) !== novaDataPag;
+      const mudouNet = (local.valorLiquido ?? null) !== novoNet;
+
+      if (mudouStatus || mudouData || mudouNet) {
+        await db
+          .update(asaasCobrancas)
+          .set({
+            status: cob.status,
+            dataPagamento: novaDataPag,
+            valorLiquido: novoNet,
+          })
+          .where(eq(asaasCobrancas.id, local.id));
+        stats.atualizadas++;
+      }
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      // 404: cobrança apagada no Asaas → remove local
+      if (status === 404) {
+        await db
+          .delete(asaasCobrancas)
+          .where(eq(asaasCobrancas.id, local.id));
+        stats.removidas++;
+        continue;
+      }
+      // 429: rate limit — para o loop, deixa o próximo refresh continuar
+      if (status === 429) {
+        log.warn(
+          `[Asaas Refresh] Rate limit 429 no escritório ${escritorioId} após ${i} de ${locais.length} — abortando, próximo refresh continua`,
+        );
+        return stats;
+      }
+      stats.erros++;
+      log.warn(
+        { err: err.message, asaasPaymentId: local.asaasPaymentId },
+        "[Asaas Refresh] Erro ao buscar cobrança — pula",
+      );
+    }
+  }
+
+  return stats;
+}
+
 export async function syncCobrancasEscritorio(
   escritorioId: number,
 ): Promise<{ clientes: number } & SyncCobrancasStats> {
