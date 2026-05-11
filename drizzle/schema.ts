@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, uniqueIndex, primaryKey } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -1220,6 +1220,29 @@ export const asaasWebhookEventos = mysqlTable(
 
 export type AsaasWebhookEvento = typeof asaasWebhookEventos.$inferSelect;
 export type InsertAsaasWebhookEvento = typeof asaasWebhookEventos.$inferInsert;
+
+/**
+ * Estado persistente do rate guard do Asaas. 1 row por API key
+ * (identificada por hash sha256 dos primeiros 64 chars). A key em si NÃO
+ * é armazenada. Restaurado no boot do AsaasClient pra que restart/deploy
+ * não zere a cota de 12h da API key.
+ *
+ * Atualizado a cada ~50 requests (não em todas, pra reduzir carga no DB).
+ * Ver `server/integracoes/asaas-rate-guard.ts`.
+ */
+export const asaasRateState = mysqlTable("asaas_rate_state", {
+  apiKeyHash: varchar("apiKeyHashRate", { length: 64 }).notNull().primaryKey(),
+  /** Início da janela 12h atual, em ms desde epoch. */
+  quotaWindowStart: bigint("quotaWindowStartRate", { mode: "number" }).notNull(),
+  quotaCount: int("quotaCountRate").notNull().default(0),
+  /** { "/payments": { remaining: 12, resetAt: 1730000000000 }, ... } */
+  lastEndpointLimits: json("lastEndpointLimitsRate").notNull(),
+  createdAt: timestamp("createdAtRate").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtRate").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AsaasRateState = typeof asaasRateState.$inferSelect;
+export type InsertAsaasRateState = typeof asaasRateState.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TEMPLATES DE MENSAGEM — Respostas rapidas por escritorio
