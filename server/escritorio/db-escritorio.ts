@@ -129,6 +129,8 @@ export async function listarColaboradores(escritorioId: number) {
       setorId: colaboradores.setorId,
       setorNome: setores.nome,
       setorCor: setores.cor,
+      setorTipo: setores.tipo,
+      metaMensal: colaboradores.metaMensal,
       ativo: colaboradores.ativo,
       maxAtendimentosSimultaneos: colaboradores.maxAtendimentosSimultaneos,
       recebeLeadsAutomaticos: colaboradores.recebeLeadsAutomaticos,
@@ -176,6 +178,8 @@ export async function atualizarColaborador(
     departamento?: string;
     /** FK pra setores. Null limpa o vínculo. */
     setorId?: number | null;
+    /** Meta mensal R$. Null limpa. */
+    metaMensal?: number | null;
     ativo?: boolean;
     maxAtendimentosSimultaneos?: number;
     recebeLeadsAutomaticos?: boolean;
@@ -208,6 +212,9 @@ export async function atualizarColaborador(
   if (dados.ativo !== undefined) updateData.ativo = dados.ativo;
   if (dados.maxAtendimentosSimultaneos !== undefined) updateData.maxAtendimentosSimultaneos = dados.maxAtendimentosSimultaneos;
   if (dados.recebeLeadsAutomaticos !== undefined) updateData.recebeLeadsAutomaticos = dados.recebeLeadsAutomaticos;
+  if (dados.metaMensal !== undefined) {
+    updateData.metaMensal = dados.metaMensal === null ? null : dados.metaMensal.toFixed(2);
+  }
 
   // Setor FK: null limpa. Validar que pertence ao escritório.
   if (dados.setorId !== undefined) {

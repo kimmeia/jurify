@@ -262,6 +262,12 @@ export const colaboradores = mysqlTable(
      *  verdade do setor do colaborador. Listagens preferem `setor.nome`
      *  por aqui e caem em `departamento` quando nulo. */
     setorId: int("setorIdCol"),
+    /**
+     * Meta de faturamento mensal em R$. Aplicável a atendentes do setor
+     * tipo='comercial' — dashboard mostra barra de progresso (atingido /
+     * meta) no período selecionado. Null = sem meta configurada.
+     */
+    metaMensal: decimal("metaMensalCol", { precision: 12, scale: 2 }),
     ativo: boolean("ativo").default(true).notNull(),
     maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),
     recebeLeadsAutomaticos: boolean("recebeLeadsAutomaticos").default(true).notNull(),
@@ -852,6 +858,18 @@ export const setores = mysqlTable(
     nome: varchar("nomeSet", { length: 64 }).notNull(),
     descricao: varchar("descricaoSet", { length: 255 }),
     cor: varchar("corSet", { length: 20 }).default("#6366f1").notNull(),
+    /**
+     * Categoriza o setor pra os dashboards de Relatórios. Determina em quais
+     * sub-abas os colaboradores aparecem no filtro:
+     *  - comercial: dashboard de fechamento (faturado, ticket, conversão, meta)
+     *  - operacional: dashboard de produção (tarefas, throughput, atrasos)
+     *  - suporte / financeiro / outro: por enquanto só aparecem na aba
+     *    Atendimento (sem dashboard dedicado). Setores 'outro' não entram
+     *    em filtros automáticos.
+     */
+    tipo: mysqlEnum("tipoSet", ["comercial", "operacional", "suporte", "financeiro", "outro"])
+      .default("outro")
+      .notNull(),
     createdAt: timestamp("createdAtSet").defaultNow().notNull(),
     updatedAt: timestamp("updatedAtSet").defaultNow().onUpdateNow().notNull(),
   },
