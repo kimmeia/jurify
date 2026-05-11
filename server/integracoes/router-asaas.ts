@@ -17,7 +17,7 @@ import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, contatos, users } from "../../drizzle/schema";
-import { eq, and, desc, like, or, inArray, between, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -974,156 +974,162 @@ export const asaasRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    let offset = 0;
-    let hasMore = true;
+    // Nova semântica (conservadora): NÃO importa em bulk todos os clientes
+    // do Asaas (escritórios com milhares de customers ficavam com CRM
+    // poluído de leads/inativos). Em vez disso:
+    //  1) Refresca dados dos vínculos JÁ EXISTENTES (GET /customers/{id})
+    //  2) Adota sob demanda: customer Asaas que tem cobrança local órfã
+    //     (contatoId NULL) ganha contato local + vínculo
+    //
+    // Pra importar TODA a base do Asaas, há fluxo separado em
+    // Configurações ("Importar histórico" pega cobranças + customers
+    // associados sob demanda) — sempre por período.
+    const THROTTLE_MS = 350;
     let vinculados = 0;
     let novos = 0;
     let removidos = 0;
-    const idsAsaas = new Set<string>(); // Rastreia todos os clientes ativos no Asaas
+    let atualizadosVinculados = 0;
 
-    while (hasMore) {
-      const page = await client.listarClientes(offset, 100);
+    // ─── Etapa 1: refresh dos vínculos existentes ─────────────────────────────
+    const vinculosLocais = await db
+      .select({
+        id: asaasClientes.id,
+        contatoId: asaasClientes.contatoId,
+        asaasCustomerId: asaasClientes.asaasCustomerId,
+      })
+      .from(asaasClientes)
+      .where(eq(asaasClientes.escritorioId, esc.escritorio.id));
 
-      for (const asaasCli of page.data) {
-        // Se deletado no Asaas, marcar para remoção
-        if (asaasCli.deleted) {
-          const [vinc] = await db.select({ id: asaasClientes.id, contatoId: asaasClientes.contatoId })
-            .from(asaasClientes)
-            .where(and(
-              eq(asaasClientes.escritorioId, esc.escritorio.id),
-              eq(asaasClientes.asaasCustomerId, asaasCli.id)
-            )).limit(1);
-          if (vinc) {
-            await db.delete(asaasClientes).where(eq(asaasClientes.id, vinc.id));
-            removidos++;
-            log.info(`[Asaas Sync] Cliente ${asaasCli.id} deletado localmente`);
-          }
+    for (let i = 0; i < vinculosLocais.length; i++) {
+      const v = vinculosLocais[i];
+      if (i > 0) await new Promise((r) => setTimeout(r, THROTTLE_MS));
+      try {
+        const cli = await client.buscarCliente(v.asaasCustomerId);
+        if (cli.deleted) {
+          await db.delete(asaasClientes).where(eq(asaasClientes.id, v.id));
+          removidos++;
           continue;
         }
-        // Customer sem CPF: ainda cria contato órfão (sem CPF) pra que
-        // cobranças importadas dele apareçam com nome na UI em vez de "—".
-        // O admin pode preencher o CPF depois e re-sincronizar pra unificar
-        // com outro contato se for o mesmo cliente.
-        if (!asaasCli.cpfCnpj) {
-          if (!asaasCli.name?.trim()) continue; // sem nome E sem CPF, pula
-          idsAsaas.add(asaasCli.id);
-
-          const [jaExiste] = await db
-            .select({ id: asaasClientes.id })
-            .from(asaasClientes)
+        if (cli.name) {
+          const cpfLimpo = cli.cpfCnpj ? cli.cpfCnpj.replace(/\D/g, "") : null;
+          await db
+            .update(contatos)
+            .set({
+              nome: cli.name,
+              ...(cpfLimpo ? { cpfCnpj: cpfLimpo } : {}),
+              email: cli.email ?? null,
+              telefone: cli.mobilePhone ?? cli.phone ?? null,
+            })
             .where(
               and(
-                eq(asaasClientes.escritorioId, esc.escritorio.id),
-                eq(asaasClientes.asaasCustomerId, asaasCli.id),
+                eq(contatos.id, v.contatoId),
+                eq(contatos.escritorioId, esc.escritorio.id),
+              ),
+            );
+          atualizadosVinculados++;
+        }
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.cause?.response?.status;
+        if (status === 404) {
+          // Customer removido do Asaas → solta o vínculo (mantém contato no CRM)
+          await db.delete(asaasClientes).where(eq(asaasClientes.id, v.id));
+          removidos++;
+        } else if (status === 429) {
+          log.warn(`[Asaas Sync] Rate limit 429 após ${i} de ${vinculosLocais.length} clientes — abortando refresh`);
+          break;
+        }
+        // Outros erros: pula esse cliente, segue o próximo
+      }
+    }
+
+    // ─── Etapa 2: adoção sob demanda de cobranças órfãs ───────────────────────
+    // Pega customers que TÊM cobrança local sem contato vinculado. Limita
+    // ao que está no DB — não puxa nada da listagem do Asaas.
+    const orfas = await db
+      .selectDistinct({ customerId: asaasCobrancas.asaasCustomerId })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          isNull(asaasCobrancas.contatoId),
+        ),
+      );
+
+    const customersOrfaos = orfas
+      .map((o) => o.customerId)
+      .filter((c): c is string => !!c);
+
+    for (let i = 0; i < customersOrfaos.length; i++) {
+      const customerId = customersOrfaos[i];
+      if (i > 0) await new Promise((r) => setTimeout(r, THROTTLE_MS));
+
+      // Pode já ter vínculo (se Etapa 1 criou); verifica antes
+      const [jaTem] = await db
+        .select({ id: asaasClientes.id })
+        .from(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, esc.escritorio.id),
+            eq(asaasClientes.asaasCustomerId, customerId),
+          ),
+        )
+        .limit(1);
+      if (jaTem) continue;
+
+      try {
+        const cli = await client.buscarCliente(customerId);
+        if (cli.deleted || !cli.name?.trim()) continue;
+
+        const cpfLimpo = cli.cpfCnpj ? cli.cpfCnpj.replace(/\D/g, "") : null;
+
+        // Tenta achar contato existente por CPF antes de criar novo
+        let contatoIdAlvo: number | null = null;
+        if (cpfLimpo) {
+          const [contatoExistente] = await db
+            .select({ id: contatos.id })
+            .from(contatos)
+            .where(
+              and(
+                eq(contatos.escritorioId, esc.escritorio.id),
+                eq(contatos.cpfCnpj, cpfLimpo),
               ),
             )
             .limit(1);
-          if (jaExiste) continue;
+          contatoIdAlvo = contatoExistente?.id ?? null;
+        }
 
+        if (contatoIdAlvo === null) {
           const [novoContato] = await db
             .insert(contatos)
             .values({
               escritorioId: esc.escritorio.id,
-              nome: asaasCli.name,
-              cpfCnpj: null,
-              email: asaasCli.email || null,
-              telefone: asaasCli.mobilePhone || asaasCli.phone || null,
+              nome: cli.name,
+              cpfCnpj: cpfLimpo,
+              email: cli.email ?? null,
+              telefone: cli.mobilePhone ?? cli.phone ?? null,
               origem: "asaas",
             })
             .$returningId();
-          await db.insert(asaasClientes).values({
-            escritorioId: esc.escritorio.id,
-            contatoId: novoContato.id,
-            asaasCustomerId: asaasCli.id,
-            cpfCnpj: "", // schema NOT NULL — placeholder; admin completa depois
-            nome: asaasCli.name,
-          });
+          contatoIdAlvo = novoContato.id;
           novos++;
-          continue;
-        }
-
-        idsAsaas.add(asaasCli.id);
-        const cpfLimpo = asaasCli.cpfCnpj.replace(/\D/g, "");
-
-        // Verificar se já existe vínculo
-        const [jaVinculado] = await db.select().from(asaasClientes)
-          .where(and(
-            eq(asaasClientes.escritorioId, esc.escritorio.id),
-            eq(asaasClientes.asaasCustomerId, asaasCli.id)
-          )).limit(1);
-
-        if (jaVinculado) continue;
-
-        // Procurar contato por CPF/CNPJ
-        const [contato] = await db.select().from(contatos)
-          .where(and(
-            eq(contatos.escritorioId, esc.escritorio.id),
-            or(
-              eq(contatos.cpfCnpj, cpfLimpo),
-              eq(contatos.cpfCnpj, asaasCli.cpfCnpj),
-              like(contatos.cpfCnpj, `%${cpfLimpo}%`)
-            )
-          )).limit(1);
-
-        if (contato) {
-          // Vincular contato existente — ATUALIZAR dados com nome novo do Asaas.
-          // NÃO deletamos vínculos antigos: o Asaas permite duplicatas com o
-          // mesmo CPF, e o modelo suporta N customers → 1 contato CRM. Só
-          // adicionamos o vínculo novo se ainda não existir (o SELECT em
-          // `jaVinculado` acima já garante isso para o asaasCli atual).
-          await db.update(contatos).set({
-            nome: asaasCli.name,
-            cpfCnpj: cpfLimpo,
-            email: asaasCli.email || contato.email,
-            telefone: asaasCli.mobilePhone || asaasCli.phone || contato.telefone,
-          }).where(eq(contatos.id, contato.id));
-
-          await db.insert(asaasClientes).values({
-            escritorioId: esc.escritorio.id,
-            contatoId: contato.id,
-            asaasCustomerId: asaasCli.id,
-            cpfCnpj: cpfLimpo,
-            nome: asaasCli.name,
-          });
-          vinculados++;
         } else {
-          // Criar contato novo no CRM com origem "asaas" — script de
-          // sincronização importou esse cliente direto da conta Asaas.
-          const [novoContato] = await db.insert(contatos).values({
-            escritorioId: esc.escritorio.id,
-            nome: asaasCli.name,
-            cpfCnpj: cpfLimpo,
-            email: asaasCli.email || null,
-            telefone: asaasCli.mobilePhone || asaasCli.phone || null,
-            origem: "asaas",
-          }).$returningId();
-
-          await db.insert(asaasClientes).values({
-            escritorioId: esc.escritorio.id,
-            contatoId: novoContato.id,
-            asaasCustomerId: asaasCli.id,
-            cpfCnpj: cpfLimpo,
-            nome: asaasCli.name,
-          });
-          novos++;
+          vinculados++;
         }
-      }
 
-      hasMore = page.hasMore;
-      offset += page.limit;
-    }
-
-    // Remover vínculos órfãos: clientes que existem localmente mas não retornaram do Asaas
-    // (caso o cliente tenha sido deletado e nem aparece mais como deleted=true)
-    const vinculosLocais = await db.select({ id: asaasClientes.id, asaasCustomerId: asaasClientes.asaasCustomerId })
-      .from(asaasClientes)
-      .where(eq(asaasClientes.escritorioId, esc.escritorio.id));
-
-    for (const vinc of vinculosLocais) {
-      if (!idsAsaas.has(vinc.asaasCustomerId)) {
-        await db.delete(asaasClientes).where(eq(asaasClientes.id, vinc.id));
-        removidos++;
-        log.info(`[Asaas Sync] Cliente órfão ${vinc.asaasCustomerId} removido (não existe mais no Asaas)`);
+        await db.insert(asaasClientes).values({
+          escritorioId: esc.escritorio.id,
+          contatoId: contatoIdAlvo,
+          asaasCustomerId: customerId,
+          cpfCnpj: cpfLimpo ?? "",
+          nome: cli.name,
+        });
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.cause?.response?.status;
+        if (status === 429) {
+          log.warn(`[Asaas Sync] Rate limit 429 na adoção de órfãos — abortando`);
+          break;
+        }
+        // 404 e outros: pula esse customer
       }
     }
 
@@ -1152,6 +1158,7 @@ export const asaasRouter = router({
       vinculados,
       novos,
       removidos,
+      atualizadosVinculados,
       total: vinculados + novos,
       // Contadores granulares de cobranças (toast do frontend usa estes)
       cobNovas,
