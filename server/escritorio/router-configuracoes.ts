@@ -112,6 +112,26 @@ export const configuracoesRouter = router({
       ? JSON.parse(escritorio.diasFuncionamento as string)
       : ["seg", "ter", "qua", "qui", "sex"];
 
+    // Cargo personalizado: nome + cor pra renderizar badge correto (sem
+    // isso o badge cai no enum legado e mostra "Atendente" pra cargos
+    // customizados que viraram esse fallback de permissão mínima).
+    let cargoPersonalizadoNome: string | null = null;
+    let cargoPersonalizadoCor: string | null = null;
+    if (colaborador.cargoPersonalizadoId) {
+      const { getDb } = await import("../db");
+      const { cargosPersonalizados } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (db) {
+        const [cp] = await db
+          .select({ nome: cargosPersonalizados.nome, cor: cargosPersonalizados.cor })
+          .from(cargosPersonalizados)
+          .where(eq(cargosPersonalizados.id, colaborador.cargoPersonalizadoId))
+          .limit(1);
+        cargoPersonalizadoNome = cp?.nome ?? null;
+        cargoPersonalizadoCor = cp?.cor ?? null;
+      }
+    }
+
     return {
       escritorio: {
         ...escritorio,
@@ -120,6 +140,9 @@ export const configuracoesRouter = router({
       colaborador: {
         id: colaborador.id,
         cargo: colaborador.cargo as CargoColaborador,
+        cargoPersonalizadoId: colaborador.cargoPersonalizadoId,
+        cargoPersonalizadoNome,
+        cargoPersonalizadoCor,
         departamento: colaborador.departamento,
         ativo: colaborador.ativo,
       },

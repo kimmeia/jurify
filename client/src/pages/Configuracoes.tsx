@@ -62,7 +62,21 @@ const CARGOS_CONVITE: { value: "gestor" | "atendente" | "estagiario" | "sdr"; la
   { value: "estagiario", label: "Estagiário" },
 ];
 
-function CargoBadge({ cargo }: { cargo: CargoColaborador }) {
+/**
+ * Badge do cargo. Prioriza o cargo personalizado (nome + cor escolhida em
+ * Permissões) quando o colaborador tem `cargoPersonalizadoNome` definido —
+ * caso contrário cai no enum legado (`cargo`) com cores padronizadas. Sem
+ * isso, cargos customizados apareciam com fallback "atendente" do enum.
+ */
+function CargoBadge({
+  cargo,
+  nomePersonalizado,
+  cor,
+}: {
+  cargo: CargoColaborador;
+  nomePersonalizado?: string | null;
+  cor?: string | null;
+}) {
   const colors: Record<CargoColaborador, string> = {
     dono: "bg-purple-100 text-purple-700 border-purple-200",
     gestor: "bg-blue-100 text-blue-700 border-blue-200",
@@ -70,6 +84,24 @@ function CargoBadge({ cargo }: { cargo: CargoColaborador }) {
     estagiario: "bg-amber-100 text-amber-700 border-amber-200",
     sdr: "bg-orange-100 text-orange-700 border-orange-200",
   };
+
+  if (nomePersonalizado) {
+    const cssVar = cor || "#6366f1";
+    return (
+      <Badge
+        variant="outline"
+        className="text-xs"
+        style={{
+          color: cssVar,
+          borderColor: cssVar,
+          backgroundColor: `${cssVar}15`,
+        }}
+      >
+        {nomePersonalizado}
+      </Badge>
+    );
+  }
+
   return <Badge variant="outline" className={`text-xs ${colors[cargo]}`}>{CARGO_LABELS[cargo]}</Badge>;
 }
 
@@ -313,7 +345,11 @@ export default function Configuracoes() {
           <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
           <p className="text-sm text-muted-foreground">{escritorio.nome} · {PLANO_LABELS[escritorio.planoAtendimento as keyof typeof PLANO_LABELS]}</p>
         </div>
-        <CargoBadge cargo={colaborador.cargo as CargoColaborador} />
+        <CargoBadge
+          cargo={colaborador.cargo as CargoColaborador}
+          nomePersonalizado={(colaborador as any).cargoPersonalizadoNome}
+          cor={(colaborador as any).cargoPersonalizadoCor}
+        />
       </div>
 
       <Tabs value={tabAtiva} onValueChange={setTabAtiva}>
@@ -512,7 +548,11 @@ export default function Configuracoes() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{c.userName || "Sem nome"}</p>
-                        <CargoBadge cargo={c.cargo as CargoColaborador} />
+                        <CargoBadge
+                          cargo={c.cargo as CargoColaborador}
+                          nomePersonalizado={(c as any).cargoPersonalizadoNome}
+                          cor={(c as any).cargoPersonalizadoCor}
+                        />
                         {!c.ativo && <Badge variant="secondary" className="text-xs">Inativo</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground">
