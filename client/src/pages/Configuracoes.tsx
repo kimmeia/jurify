@@ -185,6 +185,7 @@ export default function Configuracoes() {
   const [editColabSetorId, setEditColabSetorId] = useState<number | null>(null);
   const [editColabMaxAtend, setEditColabMaxAtend] = useState<number>(5);
   const [editColabRecebeLeads, setEditColabRecebeLeads] = useState<boolean>(false);
+  const [editColabMetaMensal, setEditColabMetaMensal] = useState<string>("");
 
   const { data: cargosList } = trpc.permissoes.listarCargos.useQuery(undefined, { retry: false });
   const { data: setoresList, refetch: refetchSetores } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
@@ -265,7 +266,13 @@ export default function Configuracoes() {
   });
 
   // Setores (departamentos) — gestão CRUD
-  const [setorDialog, setSetorDialog] = useState<null | { id?: number; nome: string; descricao: string; cor: string }>(null);
+  const [setorDialog, setSetorDialog] = useState<null | {
+    id?: number;
+    nome: string;
+    descricao: string;
+    cor: string;
+    tipo: "comercial" | "operacional" | "suporte" | "financeiro" | "outro";
+  }>(null);
   const criarSetorMut = trpc.configuracoes.criarSetor.useMutation({
     onSuccess: () => { toast.success("Setor criado"); setSetorDialog(null); refetchSetores(); refetchEquipe(); },
     onError: (e) => toast.error(e.message),
@@ -285,6 +292,7 @@ export default function Configuracoes() {
     setEditColabSetorId(c.setorId ?? null);
     setEditColabMaxAtend(c.maxAtendimentosSimultaneos ?? 5);
     setEditColabRecebeLeads(!!c.recebeLeadsAutomaticos);
+    setEditColabMetaMensal(c.metaMensal != null ? String(c.metaMensal) : "");
   }
 
   if (isLoading) {
@@ -730,7 +738,7 @@ export default function Configuracoes() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setSetorDialog({ nome: "", descricao: "", cor: "#6366f1" })}
+                  onClick={() => setSetorDialog({ nome: "", descricao: "", cor: "#6366f1", tipo: "outro" })}
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   Novo setor
@@ -744,7 +752,14 @@ export default function Configuracoes() {
                     <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg border">
                       <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: s.cor }} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{s.nome}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium">{s.nome}</p>
+                          {(s as any).tipo && (s as any).tipo !== "outro" && (
+                            <Badge variant="outline" className="text-[9px] uppercase">
+                              {(s as any).tipo}
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {s.totalColaboradores} colaborador(es)
                           {s.descricao ? ` · ${s.descricao}` : ""}
@@ -760,6 +775,7 @@ export default function Configuracoes() {
                               nome: s.nome,
                               descricao: s.descricao || "",
                               cor: s.cor || "#6366f1",
+                              tipo: (s as any).tipo || "outro",
                             })}
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -916,6 +932,28 @@ export default function Configuracoes() {
                   </div>
                 </div>
               </div>
+
+              {(() => {
+                const setorSelecionado = (setoresList || []).find((s) => s.id === editColabSetorId);
+                const ehComercial = (setorSelecionado as any)?.tipo === "comercial";
+                if (!ehComercial) return null;
+                return (
+                  <div className="space-y-2">
+                    <Label>Meta mensal de faturamento (R$)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="Ex: 30000"
+                      value={editColabMetaMensal}
+                      onChange={(e) => setEditColabMetaMensal(e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Aparece no dashboard Comercial (barra de progresso). Vazio = sem meta.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           )}
           <DialogFooter>
@@ -925,12 +963,16 @@ export default function Configuracoes() {
             <Button
               onClick={() => {
                 if (!editandoColab) return;
+                const metaParsed = editColabMetaMensal.trim() === ""
+                  ? null
+                  : parseFloat(editColabMetaMensal.replace(",", "."));
                 atualizarColabMut.mutate({
                   colaboradorId: editandoColab.id,
                   cargoPersonalizadoId: editColabCargoPersonalizadoId,
                   setorId: editColabSetorId,
                   maxAtendimentosSimultaneos: editColabMaxAtend,
                   recebeLeadsAutomaticos: editColabRecebeLeads,
+                  metaMensal: metaParsed != null && Number.isFinite(metaParsed) ? metaParsed : null,
                 });
               }}
               disabled={atualizarColabMut.isPending}
@@ -968,6 +1010,27 @@ export default function Configuracoes() {
                 />
               </div>
               <div className="space-y-1.5">
+                <Label>Tipo</Label>
+                <Select
+                  value={setorDialog.tipo}
+                  onValueChange={(v) => setSetorDialog({ ...setorDialog, tipo: v as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="comercial">Comercial (vendas/fechamento)</SelectItem>
+                    <SelectItem value="operacional">Operacional (produção/tarefas)</SelectItem>
+                    <SelectItem value="suporte">Suporte</SelectItem>
+                    <SelectItem value="financeiro">Financeiro</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Determina em quais dashboards de Relatórios o setor aparece (Comercial, Produção).
+                </p>
+              </div>
+              <div className="space-y-1.5">
                 <Label>Cor</Label>
                 <Input
                   type="color"
@@ -1000,12 +1063,14 @@ export default function Configuracoes() {
                     nome,
                     descricao: setorDialog.descricao.trim() || null,
                     cor: setorDialog.cor,
+                    tipo: setorDialog.tipo,
                   });
                 } else {
                   criarSetorMut.mutate({
                     nome,
                     descricao: setorDialog.descricao.trim() || undefined,
                     cor: setorDialog.cor,
+                    tipo: setorDialog.tipo,
                   });
                 }
               }}
