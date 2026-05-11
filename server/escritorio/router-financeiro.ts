@@ -691,4 +691,228 @@ export const financeiroRouter = router({
 
       return { success: true };
     }),
+
+  // ─── Conciliação bancária (OFX) ────────────────────────────────────────────
+
+  /**
+   * Parseia conteúdo OFX e sugere matches com despesas/cobranças
+   * pendentes no escritório. NÃO marca nada como pago — só retorna
+   * preview pra UI confirmar.
+   *
+   * Aceita conteúdo cru do .OFX (texto). Frontend converte File→string
+   * antes de chamar.
+   */
+  importarOFXPreview: protectedProcedure
+    .input(
+      z.object({
+        /** Conteúdo do arquivo .OFX (texto). Limite 2MB descomprimido. */
+        conteudo: z.string().min(1).max(2 * 1024 * 1024),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+
+      const { parseOFX, sugerirConciliacao } = await import("./ofx");
+      const transacoes = parseOFX(input.conteudo);
+
+      if (transacoes.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Nenhuma transação encontrada no arquivo OFX. Confira se baixou o extrato no formato OFX (não OFC ou CSV).",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Pool de candidatos: despesas pendentes/parciais + cobranças
+      // pendentes/vencidas. Filtra por escritório.
+      const dataMin = transacoes.reduce(
+        (acc, t) => (t.data < acc ? t.data : acc),
+        transacoes[0].data,
+      );
+      const dataMax = transacoes.reduce(
+        (acc, t) => (t.data > acc ? t.data : acc),
+        transacoes[0].data,
+      );
+      // Janela ±10 dias pra cobrir tolerância de 5 dias mais buffer
+      const ampliarData = (iso: string, deltaDias: number): string => {
+        const dt = new Date(Date.UTC(
+          parseInt(iso.slice(0, 4), 10),
+          parseInt(iso.slice(5, 7), 10) - 1,
+          parseInt(iso.slice(8, 10), 10),
+        ));
+        dt.setUTCDate(dt.getUTCDate() + deltaDias);
+        return dt.toISOString().slice(0, 10);
+      };
+      const venciMin = ampliarData(dataMin, -10);
+      const venciMax = ampliarData(dataMax, 10);
+
+      const despesasRows = await db
+        .select({
+          id: despesas.id,
+          descricao: despesas.descricao,
+          valor: despesas.valor,
+          vencimento: despesas.vencimento,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.escritorioId, esc.escritorio.id),
+            or(eq(despesas.status, "pendente"), eq(despesas.status, "parcial")),
+            // between via SQL pra evitar comparar string mês>dia em datas
+            // (datas ISO comparam-se lexicograficamente sem problemas)
+          ),
+        );
+
+      const cobrancasRows = await db
+        .select({
+          id: asaasCobrancas.id,
+          descricao: asaasCobrancas.descricao,
+          valor: asaasCobrancas.valor,
+          vencimento: asaasCobrancas.vencimento,
+        })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            or(
+              eq(asaasCobrancas.status, "PENDING"),
+              eq(asaasCobrancas.status, "OVERDUE"),
+            ),
+          ),
+        );
+
+      // Filtra em JS pelo intervalo ampliado de datas — evita complicar
+      // o WHERE com SQL between dependente do dialeto
+      const despesasFiltradas = despesasRows
+        .filter((d) => d.vencimento >= venciMin && d.vencimento <= venciMax)
+        .map((d) => ({
+          id: d.id,
+          descricao: d.descricao,
+          valor: parseFloat(d.valor),
+          vencimento: d.vencimento,
+        }));
+      const cobrancasFiltradas = cobrancasRows
+        .filter((c) => c.vencimento >= venciMin && c.vencimento <= venciMax)
+        .map((c) => ({
+          id: c.id,
+          descricao: c.descricao ?? "",
+          valor: parseFloat(c.valor),
+          vencimento: c.vencimento,
+        }));
+
+      const sugestoes = sugerirConciliacao(
+        transacoes,
+        despesasFiltradas,
+        cobrancasFiltradas,
+      );
+
+      return {
+        totalTransacoes: transacoes.length,
+        comMatch: sugestoes.filter((s) => s.candidatos.length > 0).length,
+        semMatch: sugestoes.filter((s) => s.candidatos.length === 0).length,
+        sugestoes,
+      };
+    }),
+
+  /**
+   * Aplica matches confirmados pelo usuário. Marca despesas como pagas
+   * (pagamento total) e cobranças manuais como recebidas. Para cobranças
+   * Asaas, mostra warning — webhook deveria ter sincronizado já.
+   */
+  confirmarConciliacaoOFX: protectedProcedure
+    .input(
+      z.object({
+        matches: z
+          .array(
+            z.object({
+              tipo: z.enum(["despesa", "cobranca"]),
+              entidadeId: z.number().int().positive(),
+              dataPagamento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+            }),
+          )
+          .min(1)
+          .max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      let despesasMarcadas = 0;
+      let cobrancasMarcadas = 0;
+      const erros: string[] = [];
+
+      for (const m of input.matches) {
+        try {
+          if (m.tipo === "despesa") {
+            const [d] = await db
+              .select({ valor: despesas.valor })
+              .from(despesas)
+              .where(
+                and(
+                  eq(despesas.id, m.entidadeId),
+                  eq(despesas.escritorioId, esc.escritorio.id),
+                ),
+              )
+              .limit(1);
+            if (!d) {
+              erros.push(`Despesa #${m.entidadeId} não encontrada`);
+              continue;
+            }
+            await db
+              .update(despesas)
+              .set({
+                status: "pago",
+                dataPagamento: m.dataPagamento,
+                valorPago: d.valor,
+              })
+              .where(
+                and(
+                  eq(despesas.id, m.entidadeId),
+                  eq(despesas.escritorioId, esc.escritorio.id),
+                ),
+              );
+            despesasMarcadas++;
+          } else {
+            // Cobrança — só faz sentido marcar manual; Asaas sincroniza via webhook
+            const [c] = await db
+              .select({ origem: asaasCobrancas.origem })
+              .from(asaasCobrancas)
+              .where(
+                and(
+                  eq(asaasCobrancas.id, m.entidadeId),
+                  eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+                ),
+              )
+              .limit(1);
+            if (!c) {
+              erros.push(`Cobrança #${m.entidadeId} não encontrada`);
+              continue;
+            }
+            if (c.origem !== "manual") {
+              erros.push(
+                `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
+              );
+              continue;
+            }
+            await db
+              .update(asaasCobrancas)
+              .set({ status: "RECEIVED", dataPagamento: m.dataPagamento })
+              .where(eq(asaasCobrancas.id, m.entidadeId));
+            cobrancasMarcadas++;
+          }
+        } catch (err: any) {
+          erros.push(`${m.tipo} #${m.entidadeId}: ${err.message}`);
+        }
+      }
+
+      return { despesasMarcadas, cobrancasMarcadas, erros };
+    }),
 });

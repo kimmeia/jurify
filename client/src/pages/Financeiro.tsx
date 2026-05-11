@@ -19,7 +19,7 @@ import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight, BarChart3,
-  Paperclip,
+  Paperclip, FileUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,6 +35,7 @@ import {
 import { ComissoesTab } from "./financeiro/Comissoes";
 import { DespesasTab } from "./financeiro/Despesas";
 import { RelatoriosTab } from "./financeiro/Relatorios";
+import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 /** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
@@ -57,6 +58,7 @@ export default function Financeiro() {
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
   const [anexosCobrId, setAnexosCobrId] = useState<number | null>(null);
+  const [ofxOpen, setOfxOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Filtros multi-select. Vazio = "todos" (sem filtro).
@@ -332,6 +334,17 @@ export default function Financeiro() {
             >
               <Settings className="h-3.5 w-3.5 mr-1.5" />
               Conectar Asaas
+            </Button>
+          )}
+          {perms.podeEditar && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setOfxOpen(true)}
+              title="Conciliar extrato bancário (OFX): marcar pagas as despesas/cobranças que o banco confirmou"
+            >
+              <FileUp className="h-4 w-4 mr-1.5" />
+              Importar OFX
             </Button>
           )}
           {perms.podeCriar && (
@@ -997,6 +1010,14 @@ export default function Financeiro() {
         cobrancaId={anexosCobrId}
         open={anexosCobrId !== null}
         onOpenChange={(o) => !o && setAnexosCobrId(null)}
+      />
+      <OFXImportDialog
+        open={ofxOpen}
+        onOpenChange={setOfxOpen}
+        onSuccess={() => {
+          refetchCob();
+          refetchKpis();
+        }}
       />
     </div>
   );
