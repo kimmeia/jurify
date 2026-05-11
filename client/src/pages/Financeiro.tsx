@@ -185,6 +185,7 @@ export default function Financeiro() {
       if (data.removidos > 0) p.push(`${data.removidos} cliente(s) removido(s)`);
       if (data.cobNovas > 0) p.push(`${data.cobNovas} cobrança(s) nova(s)`);
       if (data.cobAtualizadas > 0) p.push(`${data.cobAtualizadas} cobrança(s) com status alterado`);
+      if (data.cobAdotadas > 0) p.push(`${data.cobAdotadas} cobrança(s) com nome corrigido`);
       if (data.cobRemovidas > 0) p.push(`${data.cobRemovidas} cobrança(s) removida(s)`);
 
       if (p.length === 0) {
