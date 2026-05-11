@@ -279,6 +279,10 @@ export const configuracoesRouter = router({
       departamento: z.string().max(64).optional(),
       /** Quando informado, é a fonte da verdade do setor. Null = limpa. */
       setorId: z.number().nullable().optional(),
+      /** Meta mensal de faturamento (R$). Aplicável a atendentes do
+       *  setor comercial — dashboard Comercial usa pra barra de progresso.
+       *  Null = sem meta. */
+      metaMensal: z.number().nonnegative().nullable().optional(),
       ativo: z.boolean().optional(),
       maxAtendimentosSimultaneos: z.number().int().min(1).max(50).optional(),
       recebeLeadsAutomaticos: z.boolean().optional(),
@@ -771,6 +775,7 @@ export const configuracoesRouter = router({
         nome: s.nome,
         descricao: s.descricao || "",
         cor: s.cor,
+        tipo: s.tipo,
         totalColaboradores: colabs.length,
         createdAt: s.createdAt,
       });
@@ -783,6 +788,7 @@ export const configuracoesRouter = router({
       nome: z.string().min(2).max(64),
       descricao: z.string().max(255).optional(),
       cor: z.string().max(20).optional(),
+      tipo: z.enum(["comercial", "operacional", "suporte", "financeiro", "outro"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -802,6 +808,7 @@ export const configuracoesRouter = router({
           nome: input.nome.trim(),
           descricao: input.descricao?.trim() || null,
           cor: input.cor || "#6366f1",
+          tipo: input.tipo || "outro",
         }).$returningId();
         return { id: novo?.id };
       } catch (err: any) {
@@ -818,6 +825,7 @@ export const configuracoesRouter = router({
       nome: z.string().min(2).max(64).optional(),
       descricao: z.string().max(255).optional().nullable(),
       cor: z.string().max(20).optional(),
+      tipo: z.enum(["comercial", "operacional", "suporte", "financeiro", "outro"]).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -835,6 +843,7 @@ export const configuracoesRouter = router({
       if (input.nome !== undefined) dadosUpdate.nome = input.nome.trim();
       if (input.descricao !== undefined) dadosUpdate.descricao = input.descricao?.trim() || null;
       if (input.cor !== undefined) dadosUpdate.cor = input.cor;
+      if (input.tipo !== undefined) dadosUpdate.tipo = input.tipo;
       if (Object.keys(dadosUpdate).length === 0) return { success: true };
 
       try {
