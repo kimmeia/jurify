@@ -35,6 +35,7 @@ import {
 } from "../../drizzle/schema";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient } from "./asaas-client";
+import { adotarCobrancasOrfas } from "./asaas-adocao-orfas";
 import { extrairDataPagamento } from "./asaas-sync";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 import { createLogger } from "../_core/logger";
@@ -373,6 +374,33 @@ export async function processarSyncHistorico(): Promise<void> {
           },
           "[asaas-sync-historico] janela processada",
         );
+
+        // Ao concluir o sync, adota cobranças órfãs (customer Asaas
+        // existente mas sem vínculo local → cobrança fica sem nome no
+        // Financeiro). Roda 1 vez no fim, não a cada janela. Falha
+        // gracefully se rate limit bater — sobras ficam pra próxima
+        // rodada ou pro clique manual de "Sincronizar Clientes".
+        if (concluiu) {
+          try {
+            const r = await adotarCobrancasOrfas(cfg.escritorioId, client);
+            log.info(
+              {
+                escritorioId: cfg.escritorioId,
+                novosContatos: r.novosContatos,
+                vinculadosExistentes: r.vinculadosExistentes,
+                customersFalhados: r.customersFalhados,
+                parcial: r.parcial,
+                restantesEstimado: r.restantesEstimado,
+              },
+              "[asaas-sync-historico] adoção de órfãs após sync",
+            );
+          } catch (err: any) {
+            log.warn(
+              { escritorioId: cfg.escritorioId, err: err?.message },
+              "[asaas-sync-historico] adoção falhou — admin pode rodar Sincronizar Clientes manualmente",
+            );
+          }
+        }
       } else if (resultado.tipo === "rate_limit") {
         // 429 — pausa pro usuário decidir. NÃO marca erro porque é
         // condição transitória (cota libera em 12h).
