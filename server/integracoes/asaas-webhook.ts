@@ -22,12 +22,13 @@
 
 import type { Express, Request, Response } from "express";
 import { getDb } from "../db";
-import { asaasConfig, asaasCobrancas, asaasClientes, asaasConfigCobrancaPai, contatos } from "../../drizzle/schema";
+import { asaasConfig, asaasCobrancas, asaasClientes, asaasConfigCobrancaPai, contatos, escritorios } from "../../drizzle/schema";
 import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 import { extrairDataPagamento } from "./asaas-sync";
+import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
 const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
@@ -226,6 +227,50 @@ export function registerAsaasWebhook(app: Express) {
               });
             } catch (err: any) {
               log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
+            }
+
+            // Despesa automática de taxa Asaas (valor - netValue).
+            // Idempotência: além do `primeiraVez` acima, o helper usa
+            // UNIQUE INDEX (cobrancaOriginalId, origem) como defesa final.
+            // Falha aqui é não-fatal: cobrança principal já foi gravada.
+            try {
+              const taxaPositiva =
+                typeof payment.netValue === "number" &&
+                typeof payment.value === "number" &&
+                payment.value > payment.netValue;
+              if (taxaPositiva) {
+                const [cobLocal] = await db
+                  .select({ id: asaasCobrancas.id })
+                  .from(asaasCobrancas)
+                  .where(and(
+                    eq(asaasCobrancas.escritorioId, escritorioId),
+                    eq(asaasCobrancas.asaasPaymentId, payment.id),
+                  ))
+                  .limit(1);
+                const [esc] = await db
+                  .select({ ownerId: escritorios.ownerId })
+                  .from(escritorios)
+                  .where(eq(escritorios.id, escritorioId))
+                  .limit(1);
+                if (cobLocal && esc) {
+                  await gerarDespesaTaxaAsaas({
+                    escritorioId,
+                    cobrancaOriginalId: cobLocal.id,
+                    valor: payment.value,
+                    valorLiquido: payment.netValue,
+                    dataPagamento:
+                      extrairDataPagamento(payment) ??
+                      new Date().toISOString().slice(0, 10),
+                    descricaoCobranca: payment.description ?? null,
+                    criadoPorUserId: esc.ownerId,
+                  });
+                }
+              }
+            } catch (err: any) {
+              log.warn(
+                { err: err.message, paymentId: payment.id },
+                "[Asaas Webhook] gerarDespesaTaxaAsaas falhou (não bloqueia)",
+              );
             }
           }
         }

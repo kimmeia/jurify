@@ -423,6 +423,39 @@ export class AsaasClient {
     return res.data;
   }
 
+  /**
+   * Lista cobranças filtradas por janela de data. Usado pelo cron de
+   * sincronização histórica em janelas curtas — pega só o que foi
+   * criado num intervalo específico, paginado. Filtros suportados:
+   *  - `dateCreatedGe`/`dateCreatedLe`: data de criação no Asaas
+   *  - `paymentDateGe`/`paymentDateLe`: data do pagamento (status=RECEIVED)
+   *  - `dueDateGe`/`dueDateLe`: data de vencimento
+   * Datas em formato ISO YYYY-MM-DD. A API Asaas espera os parâmetros
+   * com colchetes (ex: `dateCreated[ge]`), montados aqui em `params` raw.
+   */
+  async listarCobrancasPorJanela(params: {
+    dateCreatedGe?: string;
+    dateCreatedLe?: string;
+    paymentDateGe?: string;
+    paymentDateLe?: string;
+    dueDateGe?: string;
+    dueDateLe?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<AsaasListResponse<AsaasPayment>> {
+    const raw: Record<string, string | number> = {};
+    if (params.dateCreatedGe) raw["dateCreated[ge]"] = params.dateCreatedGe;
+    if (params.dateCreatedLe) raw["dateCreated[le]"] = params.dateCreatedLe;
+    if (params.paymentDateGe) raw["paymentDate[ge]"] = params.paymentDateGe;
+    if (params.paymentDateLe) raw["paymentDate[le]"] = params.paymentDateLe;
+    if (params.dueDateGe) raw["dueDate[ge]"] = params.dueDateGe;
+    if (params.dueDateLe) raw["dueDate[le]"] = params.dueDateLe;
+    if (typeof params.offset === "number") raw["offset"] = params.offset;
+    raw["limit"] = params.limit ?? 100;
+    const res = await this.api.get("/payments", { params: raw });
+    return res.data;
+  }
+
   async buscarCobranca(id: string): Promise<AsaasPayment> {
     const res = await this.api.get(`/payments/${id}`);
     return res.data;

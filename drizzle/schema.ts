@@ -941,6 +941,36 @@ export const asaasConfig = mysqlTable("asaas_config", {
   ultimoTeste: timestamp("ultimoTesteAsaas"),
   mensagemErro: varchar("mensagemErroAsaas", { length: 512 }),
   saldo: varchar("saldoAsaas", { length: 32 }),
+  /**
+   * Sincronização histórica controlada por janelas de tempo.
+   * Webhook cobre eventos futuros automaticamente; estes campos
+   * controlam a importação do passado em pedaços pequenos pra não
+   * estourar a cota do Asaas (12h de bloqueio em 429).
+   * Cron `processarSyncHistorico` consome 1 janela de 1 dia por tick,
+   * respeitando `intervaloMinutos` entre janelas.
+   */
+  historicoSyncStatus: mysqlEnum("historicoSyncStatus", [
+    "inativo",
+    "agendado",
+    "executando",
+    "pausado",
+    "concluido",
+    "erro",
+  ]).default("inativo").notNull(),
+  historicoSyncDe: varchar("historicoSyncDe", { length: 10 }),
+  historicoSyncAte: varchar("historicoSyncAte", { length: 10 }),
+  /** Próxima janela a processar (anda do mais recente pro mais antigo). */
+  historicoSyncCursor: varchar("historicoSyncCursor", { length: 10 }),
+  historicoSyncTotalDias: int("historicoSyncTotalDias"),
+  historicoSyncDiasFeitos: int("historicoSyncDiasFeitos").default(0).notNull(),
+  historicoSyncCobrancasImportadas: int("historicoSyncCobrancasImportadas").default(0).notNull(),
+  historicoSyncCobrancasAtualizadas: int("historicoSyncCobrancasAtualizadas").default(0).notNull(),
+  /** Cooldown entre janelas (default 60min). Configurável pelo user. */
+  historicoSyncIntervaloMinutos: int("historicoSyncIntervaloMinutos").default(60).notNull(),
+  historicoSyncIniciadoEm: timestamp("historicoSyncIniciadoEm"),
+  historicoSyncUltimaJanelaEm: timestamp("historicoSyncUltimaJanelaEm"),
+  historicoSyncConcluidoEm: timestamp("historicoSyncConcluidoEm"),
+  historicoSyncErroMensagem: varchar("historicoSyncErroMensagem", { length: 512 }),
   createdAt: timestamp("createdAtAsaasConfig").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAsaasConfig").defaultNow().onUpdateNow().notNull(),
 });
@@ -1827,6 +1857,23 @@ export const despesas = mysqlTable(
     recorrencia: mysqlEnum("recorrenciaDesp", ["nenhuma", "semanal", "mensal", "anual"])
       .default("nenhuma")
       .notNull(),
+    /**
+     * Origem da despesa:
+     *  - 'manual': lançada pela UI pelo escritório (default)
+     *  - 'taxa_asaas': gerada automaticamente pelo webhook quando uma
+     *     cobrança Asaas é paga (valor = value - netValue do Asaas)
+     *  - 'recorrencia': gerada automaticamente pelo cron de recorrência
+     *     a partir de uma despesa-modelo
+     */
+    origem: mysqlEnum("origemDesp", ["manual", "taxa_asaas", "recorrencia"])
+      .default("manual")
+      .notNull(),
+    /**
+     * Quando origem='taxa_asaas', referencia a cobrança em asaas_cobrancas
+     * que gerou esta despesa. UNIQUE(cobrancaOriginalId, origem) impede
+     * que retries do webhook criem despesas duplicadas pra mesma cobrança.
+     */
+    cobrancaOriginalId: int("cobrancaOriginalIdDesp"),
     observacoes: text("observacoesDesp"),
     criadoPorUserId: int("criadoPorUserIdDesp").notNull(),
     createdAt: timestamp("createdAtDesp").defaultNow().notNull(),
@@ -1840,6 +1887,10 @@ export const despesas = mysqlTable(
     idxEscritorioStatus: index("desp_escr_status_idx").on(
       t.escritorioId,
       t.status,
+    ),
+    uqCobOrigem: uniqueIndex("desp_cob_origem_uq").on(
+      t.cobrancaOriginalId,
+      t.origem,
     ),
   }),
 );

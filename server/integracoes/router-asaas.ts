@@ -32,6 +32,10 @@ import {
   type CobrancaAgg,
   type ContatoMeta,
 } from "./asaas-sync";
+import {
+  garantirCategoriaDespesaTaxasAsaas,
+  garantirCategoriaCobrancaServicosAsaas,
+} from "./asaas-despesas-auto";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 
@@ -478,6 +482,16 @@ export const asaasRouter = router({
         };
       }
 
+      // Auto-criar categorias padrão. Quando o escritório conecta o Asaas
+      // pela primeira vez, criamos:
+      //  - "Taxas Asaas" (despesas) — usada pelo webhook pra registrar
+      //    automaticamente a taxa de cada cobrança paga
+      //  - "Serviços jurídicos" (cobranças) — categoria default opcional
+      //    pra cobranças vindas do passado/webhook sem categoria
+      // Idempotente: chamadas seguintes não criam duplicatas.
+      await garantirCategoriaDespesaTaxasAsaas(esc.escritorio.id);
+      await garantirCategoriaCobrancaServicosAsaas(esc.escritorio.id);
+
       // Auto-registrar webhook no Asaas
       let webhookRegistrado = false;
       let webhookErro: string | null = null;
@@ -630,7 +644,322 @@ export const asaasRouter = router({
       apiKeyIv: null,
       apiKeyTag: null,
       saldo: null,
+      // Limpa sync histórica também — não faz sentido continuar com cron
+      // tentando importar pra conta desconectada.
+      historicoSyncStatus: "inativo",
+      historicoSyncCursor: null,
+      historicoSyncErroMensagem: null,
     }).where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+
+    return { success: true };
+  }),
+
+  // ─── SINCRONIZAÇÃO HISTÓRICA EM JANELAS (anti-rate-limit) ────────────────
+
+  /**
+   * Inicia a importação histórica de cobranças do passado, processada
+   * em janelas de 1 dia pelo cron `processarSyncHistorico` a cada
+   * `intervaloMinutos`. Webhook continua cobrindo eventos futuros em
+   * tempo real — esta sync é só pra preencher o passado sem estourar
+   * cota do Asaas (rate limit 12h).
+   *
+   * Quem chama: usuário clica "Importar histórico" no dialog Asaas.
+   * Escolhe o período (24h/7d/30d/custom) e o intervalo entre janelas.
+   */
+  iniciarSyncHistorico: protectedProcedure
+    .input(
+      z.object({
+        /** Preset rápido. Em "custom", `dataInicio` e `dataFim` são obrigatórios. */
+        periodo: z.enum(["24h", "7d", "30d", "custom"]),
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        /** Cooldown entre janelas. Default 60min — conservador pra evitar
+         *  saturar a cota Asaas. Min 5min. */
+        intervaloMinutos: z.number().int().min(5).max(720).default(60),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para iniciar sincronização histórica.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cfg] = await db
+        .select()
+        .from(asaasConfig)
+        .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+        .limit(1);
+      if (!cfg || cfg.status !== "conectado") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Asaas não está conectado. Conecte antes de importar histórico.",
+        });
+      }
+      if (
+        cfg.historicoSyncStatus === "agendado" ||
+        cfg.historicoSyncStatus === "executando"
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Já existe uma importação em andamento. Aguarde ou cancele antes de iniciar nova.",
+        });
+      }
+
+      // Resolve datas absolutas a partir do preset.
+      const hoje = new Date();
+      const hojeIso = hoje.toISOString().slice(0, 10);
+      let dataInicio: string;
+      let dataFim: string;
+      if (input.periodo === "custom") {
+        if (!input.dataInicio || !input.dataFim) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Período custom exige dataInicio e dataFim.",
+          });
+        }
+        if (input.dataInicio > input.dataFim) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "dataInicio deve ser anterior ou igual a dataFim.",
+          });
+        }
+        dataInicio = input.dataInicio;
+        dataFim = input.dataFim;
+      } else {
+        const dias =
+          input.periodo === "24h" ? 1 : input.periodo === "7d" ? 7 : 30;
+        const dt = new Date(hoje);
+        dt.setUTCDate(dt.getUTCDate() - (dias - 1));
+        dataInicio = dt.toISOString().slice(0, 10);
+        dataFim = hojeIso;
+      }
+
+      // Conta dias inclusivos pra exibir progresso (UI mostra X/Y dias).
+      const { contarDiasInclusivos } = await import("./asaas-sync-historico");
+      const totalDias = contarDiasInclusivos(dataInicio, dataFim);
+      // Limita teto pra evitar pedido absurdo (ex: 10 anos). Pode subir depois.
+      const MAX_DIAS = 365 * 3;
+      if (totalDias > MAX_DIAS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Período muito longo (${totalDias} dias). Máximo permitido: ${MAX_DIAS}.`,
+        });
+      }
+
+      await db
+        .update(asaasConfig)
+        .set({
+          historicoSyncStatus: "agendado",
+          historicoSyncDe: dataInicio,
+          historicoSyncAte: dataFim,
+          historicoSyncCursor: dataFim,
+          historicoSyncTotalDias: totalDias,
+          historicoSyncDiasFeitos: 0,
+          historicoSyncCobrancasImportadas: 0,
+          historicoSyncCobrancasAtualizadas: 0,
+          historicoSyncIntervaloMinutos: input.intervaloMinutos,
+          historicoSyncIniciadoEm: new Date(),
+          historicoSyncUltimaJanelaEm: null,
+          historicoSyncConcluidoEm: null,
+          historicoSyncErroMensagem: null,
+        })
+        .where(eq(asaasConfig.id, cfg.id));
+
+      log.info(
+        {
+          escritorioId: esc.escritorio.id,
+          dataInicio,
+          dataFim,
+          totalDias,
+          intervaloMinutos: input.intervaloMinutos,
+        },
+        "[Asaas] Sync histórica agendada",
+      );
+
+      return {
+        success: true,
+        dataInicio,
+        dataFim,
+        totalDias,
+        intervaloMinutos: input.intervaloMinutos,
+        // Estimativa pro usuário: totalDias × intervaloMinutos em horas
+        estimativaHoras: Math.ceil((totalDias * input.intervaloMinutos) / 60),
+      };
+    }),
+
+  /** Retorna o estado atual da sincronização histórica. */
+  statusSyncHistorico: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db
+      .select({
+        status: asaasConfig.historicoSyncStatus,
+        de: asaasConfig.historicoSyncDe,
+        ate: asaasConfig.historicoSyncAte,
+        cursor: asaasConfig.historicoSyncCursor,
+        totalDias: asaasConfig.historicoSyncTotalDias,
+        diasFeitos: asaasConfig.historicoSyncDiasFeitos,
+        cobrancasImportadas: asaasConfig.historicoSyncCobrancasImportadas,
+        cobrancasAtualizadas: asaasConfig.historicoSyncCobrancasAtualizadas,
+        intervaloMinutos: asaasConfig.historicoSyncIntervaloMinutos,
+        iniciadoEm: asaasConfig.historicoSyncIniciadoEm,
+        ultimaJanelaEm: asaasConfig.historicoSyncUltimaJanelaEm,
+        concluidoEm: asaasConfig.historicoSyncConcluidoEm,
+        erroMensagem: asaasConfig.historicoSyncErroMensagem,
+      })
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+
+    if (!cfg) {
+      return {
+        status: "inativo" as const,
+        de: null,
+        ate: null,
+        cursor: null,
+        totalDias: null,
+        diasFeitos: 0,
+        cobrancasImportadas: 0,
+        cobrancasAtualizadas: 0,
+        intervaloMinutos: 60,
+        iniciadoEm: null,
+        ultimaJanelaEm: null,
+        concluidoEm: null,
+        erroMensagem: null,
+        proximaJanelaEm: null,
+      };
+    }
+
+    // Calcula previsão da próxima janela: ultimaJanelaEm + intervaloMinutos.
+    // Se ainda não rodou nenhuma (agendado), retorna null (próximo tick
+    // do cron pega — geralmente em < 5min).
+    let proximaJanelaEm: Date | null = null;
+    if (
+      cfg.status === "executando" &&
+      cfg.ultimaJanelaEm &&
+      cfg.intervaloMinutos > 0
+    ) {
+      proximaJanelaEm = new Date(
+        cfg.ultimaJanelaEm.getTime() + cfg.intervaloMinutos * 60_000,
+      );
+    }
+
+    return {
+      ...cfg,
+      proximaJanelaEm,
+    };
+  }),
+
+  /** Pausa uma sincronização em andamento. Cron skipa enquanto pausada. */
+  pausarSyncHistorico: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await db
+      .update(asaasConfig)
+      .set({ historicoSyncStatus: "pausado" })
+      .where(
+        and(
+          eq(asaasConfig.escritorioId, esc.escritorio.id),
+          inArray(asaasConfig.historicoSyncStatus, [
+            "agendado",
+            "executando",
+          ] as const),
+        ),
+      );
+
+    return { success: true };
+  }),
+
+  /** Retoma uma sincronização pausada (ou em erro recuperável). */
+  retomarSyncHistorico: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [cfg] = await db
+      .select()
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+    if (!cfg) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Configuração Asaas não encontrada.",
+      });
+    }
+    if (cfg.historicoSyncStatus === "concluido") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Importação já concluída. Inicie uma nova se precisar.",
+      });
+    }
+    if (cfg.historicoSyncStatus !== "pausado" && cfg.historicoSyncStatus !== "erro") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Nada pra retomar — importação não está pausada nem em erro.",
+      });
+    }
+
+    // Reset de ultimaJanelaEm pra null faz o cron processar imediato
+    // no próximo tick (sem aguardar mais um intervaloMinutos).
+    await db
+      .update(asaasConfig)
+      .set({
+        historicoSyncStatus: "executando",
+        historicoSyncUltimaJanelaEm: null,
+        historicoSyncErroMensagem: null,
+      })
+      .where(eq(asaasConfig.id, cfg.id));
+
+    return { success: true };
+  }),
+
+  /** Cancela e zera a sincronização histórica. */
+  cancelarSyncHistorico: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await db
+      .update(asaasConfig)
+      .set({
+        historicoSyncStatus: "inativo",
+        historicoSyncDe: null,
+        historicoSyncAte: null,
+        historicoSyncCursor: null,
+        historicoSyncTotalDias: null,
+        historicoSyncDiasFeitos: 0,
+        historicoSyncCobrancasImportadas: 0,
+        historicoSyncCobrancasAtualizadas: 0,
+        historicoSyncIniciadoEm: null,
+        historicoSyncUltimaJanelaEm: null,
+        historicoSyncConcluidoEm: null,
+        historicoSyncErroMensagem: null,
+      })
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
 
     return { success: true };
   }),
