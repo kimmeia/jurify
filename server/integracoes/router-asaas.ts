@@ -22,6 +22,7 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
+import { adotarCobrancasOrfas } from "./asaas-adocao-orfas";
 import { calcularParcelas } from "./parcelamento-local";
 import {
   syncCobrancasDeCliente,
@@ -1043,95 +1044,12 @@ export const asaasRouter = router({
     }
 
     // ─── Etapa 2: adoção sob demanda de cobranças órfãs ───────────────────────
-    // Pega customers que TÊM cobrança local sem contato vinculado. Limita
-    // ao que está no DB — não puxa nada da listagem do Asaas.
-    const orfas = await db
-      .selectDistinct({ customerId: asaasCobrancas.asaasCustomerId })
-      .from(asaasCobrancas)
-      .where(
-        and(
-          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-          isNull(asaasCobrancas.contatoId),
-        ),
-      );
-
-    const customersOrfaos = orfas
-      .map((o) => o.customerId)
-      .filter((c): c is string => !!c);
-
-    for (let i = 0; i < customersOrfaos.length; i++) {
-      const customerId = customersOrfaos[i];
-      if (i > 0) await new Promise((r) => setTimeout(r, THROTTLE_MS));
-
-      // Pode já ter vínculo (se Etapa 1 criou); verifica antes
-      const [jaTem] = await db
-        .select({ id: asaasClientes.id })
-        .from(asaasClientes)
-        .where(
-          and(
-            eq(asaasClientes.escritorioId, esc.escritorio.id),
-            eq(asaasClientes.asaasCustomerId, customerId),
-          ),
-        )
-        .limit(1);
-      if (jaTem) continue;
-
-      try {
-        const cli = await client.buscarCliente(customerId);
-        if (cli.deleted || !cli.name?.trim()) continue;
-
-        const cpfLimpo = cli.cpfCnpj ? cli.cpfCnpj.replace(/\D/g, "") : null;
-
-        // Tenta achar contato existente por CPF antes de criar novo
-        let contatoIdAlvo: number | null = null;
-        if (cpfLimpo) {
-          const [contatoExistente] = await db
-            .select({ id: contatos.id })
-            .from(contatos)
-            .where(
-              and(
-                eq(contatos.escritorioId, esc.escritorio.id),
-                eq(contatos.cpfCnpj, cpfLimpo),
-              ),
-            )
-            .limit(1);
-          contatoIdAlvo = contatoExistente?.id ?? null;
-        }
-
-        if (contatoIdAlvo === null) {
-          const [novoContato] = await db
-            .insert(contatos)
-            .values({
-              escritorioId: esc.escritorio.id,
-              nome: cli.name,
-              cpfCnpj: cpfLimpo,
-              email: cli.email ?? null,
-              telefone: cli.mobilePhone ?? cli.phone ?? null,
-              origem: "asaas",
-            })
-            .$returningId();
-          contatoIdAlvo = novoContato.id;
-          novos++;
-        } else {
-          vinculados++;
-        }
-
-        await db.insert(asaasClientes).values({
-          escritorioId: esc.escritorio.id,
-          contatoId: contatoIdAlvo,
-          asaasCustomerId: customerId,
-          cpfCnpj: cpfLimpo ?? "",
-          nome: cli.name,
-        });
-      } catch (err: any) {
-        const status = err?.response?.status ?? err?.cause?.response?.status;
-        if (status === 429) {
-          log.warn(`[Asaas Sync] Rate limit 429 na adoção de órfãos — abortando`);
-          break;
-        }
-        // 404 e outros: pula esse customer
-      }
-    }
+    // Pega customers que TÊM cobrança local sem contato vinculado, busca
+    // no Asaas e cria/vincula contato no CRM. Lógica em helper compartilhado
+    // com o cron de sync histórico (asaas-adocao-orfas.ts).
+    const resultadoAdocao = await adotarCobrancasOrfas(esc.escritorio.id, client);
+    novos += resultadoAdocao.novosContatos;
+    vinculados += resultadoAdocao.vinculadosExistentes;
 
     // Refresh das cobranças JÁ EXISTENTES no DB. NÃO importa cobranças
     // novas — esse é o escopo do botão Sincronizar do Financeiro
