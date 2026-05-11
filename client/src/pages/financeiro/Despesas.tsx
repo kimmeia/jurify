@@ -105,7 +105,7 @@ interface DespesaListItem {
   recorrencia: "nenhuma" | "semanal" | "mensal" | "anual";
   recorrenciaAtiva?: boolean;
   recorrenciaDeOrigemId?: number | null;
-  origem?: "manual" | "taxa_asaas" | "recorrencia";
+  origem?: "manual" | "taxa_asaas" | "recorrencia" | "extrato_asaas";
   observacoes: string | null;
   categoriaId: number | null;
   categoriaNome: string | null;
