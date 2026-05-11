@@ -131,6 +131,8 @@ export default function Financeiro() {
   // aba Comissões). PENDING/OVERDUE não têm dataPagamento — são
   // incluídas separadamente quando o user marca esses status no
   // multi-select (filtramos por vencimento como fallback nesse caso).
+  // listarCobrancas inclui cobranças manuais + Asaas — funciona mesmo
+  // sem Asaas conectado (mostra só as manuais).
   const filtraPorVencimento = filtroStatus.length > 0 && filtroStatus.every(
     (s) => s === "PENDING" || s === "OVERDUE",
   );
@@ -146,7 +148,6 @@ export default function Financeiro() {
       },
       {
         retry: false,
-        enabled: statusAsaas?.conectado,
         refetchInterval: REFRESH_MS,
       },
     );
@@ -188,6 +189,18 @@ export default function Financeiro() {
       utils.asaas.kpis.invalidate();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  // Marca cobrança manual como recebida. Disponível só em cobranças
+  // origem='manual' com status PENDING/OVERDUE — Asaas sincroniza
+  // automaticamente via webhook nas origens 'asaas'.
+  const marcarPagaMut = trpc.asaas.marcarCobrancaPaga.useMutation({
+    onSuccess: () => {
+      toast.success("Cobrança marcada como paga");
+      utils.asaas.listarCobrancas.invalidate();
+      utils.asaas.kpis.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
   const cancelarSubMut = trpc.asaas.cancelarAssinatura.useMutation({
@@ -320,8 +333,7 @@ export default function Financeiro() {
           <Button
             size="sm"
             onClick={() => setNovaCobrancaOpen(true)}
-            disabled={!conectado}
-            title={!conectado ? "Conecte o Asaas pra criar cobranças online (cobrança manual chega na PR seguinte)" : undefined}
+            title={!conectado ? "Asaas desconectado: você pode registrar cobrança manual (dinheiro/transferência)" : undefined}
           >
             <Plus className="h-4 w-4 mr-1.5" />
             Nova cobrança
@@ -360,11 +372,29 @@ export default function Financeiro() {
         </div>
 
         {/* ─── Aba: Cobranças ─── */}
+        {/* A aba mostra cobranças manuais + Asaas sempre. Quando o Asaas
+            está desconectado, escondemos o gráfico de fluxo de caixa
+            (depende de KPIs Asaas) e o card de saldo, mas a tabela de
+            cobranças continua acessível — útil pra escritórios que
+            ainda registram só manualmente. */}
         <TabsContent value="cobrancas" className="mt-4 space-y-4">
-          {!conectado ? (
-            <AsaasDisconnectedCta titulo="Cobranças online" descricao="Pix, boleto e cartão via Asaas." />
-          ) : (
-            <div className="space-y-4">
+          <div className="space-y-4">
+          {!conectado && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <b>Asaas desconectado.</b> Você está vendo apenas cobranças manuais.
+              Pra criar cobranças online (Pix, boleto, cartão) e ver KPIs/fluxo de
+              caixa,{" "}
+              <button
+                className="underline font-medium"
+                onClick={() => (window.location.href = "/configuracoes")}
+              >
+                conecte o Asaas
+              </button>
+              .
+            </div>
+          )}
+          {conectado && (
+            <>
           {/* Hero: Fluxo de caixa (gráfico grande) — específico da
               aba Cobranças, antes era no topo geral mas faz mais sentido
               agrupado com a tabela de cobranças. */}
@@ -600,7 +630,8 @@ export default function Financeiro() {
               color="blue"
             />
           </div>
-
+            </>
+          )}
 
           {/* Barra de filtros */}
           <div className="flex items-center gap-3 flex-wrap">
@@ -795,6 +826,22 @@ export default function Financeiro() {
                               <Copy className="h-3.5 w-3.5" />
                             </Button>
                           )}
+                          {/* "Marcar paga": só pra manual + pendente/vencida.
+                              Em cobranças Asaas, o status sincroniza via
+                              webhook automaticamente — botão seria confuso. */}
+                          {c.origem === "manual" &&
+                            (c.status === "PENDING" || c.status === "OVERDUE") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-emerald-600"
+                                onClick={() => marcarPagaMut.mutate({ id: c.id })}
+                                disabled={marcarPagaMut.isPending}
+                                title="Marcar como paga (hoje)"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           {c.status === "PENDING" && (
                             <Button
                               variant="ghost"
@@ -820,12 +867,13 @@ export default function Financeiro() {
               <p className="text-sm text-muted-foreground">
                 {busca || filtroStatus.length > 0 || filtroForma.length > 0
                   ? "Nenhuma cobrança corresponde aos filtros."
-                  : "Nenhuma cobrança ainda."}
+                  : conectado
+                    ? "Nenhuma cobrança ainda."
+                    : "Nenhuma cobrança manual ainda. Clique em 'Nova cobrança' pra registrar."}
               </p>
             </div>
           )}
-            </div>
-          )}
+          </div>
         </TabsContent>
 
         {/* ─── Aba: Clientes ─── */}
@@ -911,6 +959,7 @@ export default function Financeiro() {
       <NovaCobrancaDialog
         open={novaCobrancaOpen}
         onOpenChange={setNovaCobrancaOpen}
+        asaasConectado={conectado}
         onSuccess={() => {
           refetchCob();
           refetchKpis();

@@ -22,6 +22,7 @@ export function NovaCobrancaDialog({
   onSuccess,
   contatoIdInicial,
   esconderCliente,
+  asaasConectado = true,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -31,8 +32,16 @@ export function NovaCobrancaDialog({
   contatoIdInicial?: number | string;
   /** Quando true, esconde o seletor de cliente (cliente fixo). */
   esconderCliente?: boolean;
+  /**
+   * Quando false, esconde modos Asaas-dependentes (avulsa/parcelada/recorrente)
+   * e força o modo "manual". Útil pra escritórios sem Asaas conectado que
+   * ainda precisam registrar entradas em dinheiro/transferência. Default true.
+   */
+  asaasConectado?: boolean;
 }) {
-  const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente" | "manual">("avulsa");
+  const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente" | "manual">(
+    asaasConectado ? "avulsa" : "manual",
+  );
   const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : ""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
   // Modo manual: campos extras
   const [jaPaga, setJaPaga] = useState(false);
@@ -147,13 +156,21 @@ export function NovaCobrancaDialog({
           </div>
         ) : (
           <><div className="space-y-3 py-1">
-            <div className="grid grid-cols-4 gap-2">
-              <Button variant={modo === "avulsa" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("avulsa")}>Avulsa</Button>
-              <Button variant={modo === "parcelada" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("parcelada")}>Parcelada</Button>
-              <Button variant={modo === "recorrente" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("recorrente")}><Repeat className="h-3 w-3 mr-1" />Recorrente</Button>
-              <Button variant={modo === "manual" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("manual")} title="Cobrança lançada à mão (sem Asaas) — cliente pagou em dinheiro/cartão presencial">Manual</Button>
-            </div>
-            {modo === "manual" && (
+            {asaasConectado ? (
+              <div className="grid grid-cols-4 gap-2">
+                <Button variant={modo === "avulsa" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("avulsa")}>Avulsa</Button>
+                <Button variant={modo === "parcelada" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("parcelada")}>Parcelada</Button>
+                <Button variant={modo === "recorrente" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("recorrente")}><Repeat className="h-3 w-3 mr-1" />Recorrente</Button>
+                <Button variant={modo === "manual" ? "default" : "outline"} size="sm" className="text-xs" onClick={() => setModo("manual")} title="Cobrança lançada à mão (sem Asaas) — cliente pagou em dinheiro/cartão presencial">Manual</Button>
+              </div>
+            ) : (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-2 text-[11px] text-amber-900 dark:text-amber-200">
+                <b>Asaas desconectado.</b> Apenas cobranças manuais (dinheiro, transferência,
+                cartão presencial) podem ser registradas. Pra criar cobranças online (Pix,
+                boleto, cartão), conecte o Asaas em Configurações.
+              </div>
+            )}
+            {modo === "manual" && asaasConectado && (
               <div className="rounded-md border bg-muted/30 p-2 text-[11px] text-muted-foreground">
                 <b>Cobrança manual</b>: lançada sem passar pelo Asaas. Use quando o cliente
                 paga presencialmente (dinheiro, cartão na maquininha, transferência) ou
@@ -310,10 +327,17 @@ export function NovaCobrancaDialog({
                 cada uma com método diferente (PIX, boleto, cartão).
               </div>
             )}
-            {/* Validação preventiva: vencimento não pode ser data passada */}
-            {vencimento && vencimento < new Date().toISOString().slice(0, 10) && (
+            {/* Validação preventiva: vencimento não pode ser data passada,
+                EXCETO em modo manual+jaPaga (registro retroativo de pagamento
+                que já aconteceu). */}
+            {vencimento && vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga) && (
               <div className="rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
                 ⚠️ Vencimento não pode ser uma data passada. Escolha uma data futura.
+                {modo === "manual" && (
+                  <span className="block mt-0.5 text-amber-700 dark:text-amber-300">
+                    Pra registrar pagamento retroativo, marque "Já recebida" acima.
+                  </span>
+                )}
               </div>
             )}
             <div><Label className="text-xs">Descricao</Label><Input placeholder="Honorarios" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1" /></div>
