@@ -19,6 +19,7 @@ import { getDb } from "../db";
 import {
   conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
+  colaboradores,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
@@ -28,6 +29,73 @@ const log = createLogger("relatorios");
 const PeriodoInput = z
   .object({ dias: z.number().min(1).max(365).optional() })
   .optional();
+
+/** Input do relatório Atendimento — preset OU range custom + setor + atendente.
+ *  Sem nenhum input: mês vigente. Com setor: filtra colaboradores do setor.
+ *  Com atendente: filtra conversas de um colaborador (e valida que pertence
+ *  ao setor escolhido se ambos forem passados). */
+const AtendimentoInput = z
+  .object({
+    dias: z.number().min(1).max(365).optional(),
+    dataInicio: z.string().optional(), // YYYY-MM-DD
+    dataFim: z.string().optional(),    // YYYY-MM-DD
+    setorId: z.number().int().positive().optional(),
+    atendenteId: z.number().int().positive().optional(),
+  })
+  .optional();
+
+/** Mês vigente como range default — primeiro do mês até agora. */
+function mesVigente(): { dataInicio: Date; dataFim: Date } {
+  const agora = new Date();
+  const ini = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
+  return { dataInicio: ini, dataFim: agora };
+}
+
+/** Resolve a lista de colaboradorIds que satisfaz os filtros opcionais
+ *  setorId + atendenteId, respeitando permissão (soProprios trava no
+ *  próprio colaborador). Retorna null quando o filtro resultaria em
+ *  "todos do escritório" (sem WHERE adicional). */
+async function resolverColaboradorIds(args: {
+  db: any;
+  escritorioId: number;
+  setorId?: number;
+  atendenteId?: number;
+  soProprios: boolean;
+  proprioColabId: number;
+}): Promise<number[] | null> {
+  const { db, escritorioId, setorId, atendenteId, soProprios, proprioColabId } = args;
+
+  if (soProprios) return [proprioColabId];
+
+  if (atendenteId) {
+    if (setorId) {
+      const [c] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, escritorioId),
+          eq(colaboradores.id, atendenteId),
+          eq(colaboradores.setorId, setorId),
+        ))
+        .limit(1);
+      return c ? [atendenteId] : [-1];
+    }
+    return [atendenteId];
+  }
+
+  if (setorId) {
+    const rows = await db
+      .select({ id: colaboradores.id })
+      .from(colaboradores)
+      .where(and(
+        eq(colaboradores.escritorioId, escritorioId),
+        eq(colaboradores.setorId, setorId),
+      ));
+    return rows.length ? rows.map((r: any) => r.id) : [-1];
+  }
+
+  return null;
+}
 
 /** Input do relatório Comercial — aceita preset de dias OU range
  *  customizado (dataInicio/dataFim) + filtro opcional por atendente.
@@ -60,16 +128,30 @@ function desdeDias(dias: number): Date {
 const ORIGENS_LEAD = ["whatsapp", "instagram", "facebook", "manual"] as const;
 
 export const relatoriosRouter = router({
-  /** Atendimento — conversas e mensagens.
-   *  Respeita verProprios: filtra conversas por responsavelId. */
-  atendimento: protectedProcedure.input(PeriodoInput).query(async ({ ctx, input }) => {
+  /** Atendimento — conversas e mensagens, filtradas por período + setor +
+   *  atendente. Default sem filtros = mês vigente do escritório inteiro.
+   *  Respeita verProprios (trava no próprio colaborador). */
+  atendimento: protectedProcedure.input(AtendimentoInput).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
     const db = await getDb();
     if (!db) return null;
     const eid = esc.escritorio.id;
-    const dias = input?.dias || 30;
-    const desde = desdeDias(dias);
+
+    // Range: range custom > preset dias > mês vigente
+    let dataInicio: Date;
+    let dataFim: Date;
+    if (input?.dataInicio && input?.dataFim) {
+      dataInicio = new Date(`${input.dataInicio}T00:00:00`);
+      dataFim = new Date(`${input.dataFim}T23:59:59`);
+    } else if (input?.dias) {
+      dataInicio = desdeDias(input.dias);
+      dataFim = new Date();
+    } else {
+      const m = mesVigente();
+      dataInicio = m.dataInicio;
+      dataFim = m.dataFim;
+    }
 
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
     if (!perm.allowed) {
@@ -80,36 +162,49 @@ export const relatoriosRouter = router({
     }
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
-    const filtroResp = soProprios ? [eq(conversas.atendenteId, colabId)] : [];
 
-    log.info({
-      proc: "atendimento",
-      userId: ctx.user.id,
-      colabId,
+    const colaboradorIds = await resolverColaboradorIds({
+      db,
       escritorioId: eid,
-      cargo: esc.colaborador.cargo,
-      perm: { verTodos: perm.verTodos, verProprios: perm.verProprios, allowed: perm.allowed },
+      setorId: input?.setorId,
+      atendenteId: input?.atendenteId,
       soProprios,
-      dias,
-    }, "[relatorios] diagnóstico atendimento");
+      proprioColabId: colabId,
+    });
+
+    const filtroResp = colaboradorIds
+      ? [inArray(conversas.atendenteId, colaboradorIds)]
+      : [];
+
+    const baseConv = and(
+      eq(conversas.escritorioId, eid),
+      gte(conversas.createdAt, dataInicio),
+      lte(conversas.createdAt, dataFim),
+      ...filtroResp,
+    );
 
     const statusRows = await db
       .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
       .from(conversas)
-      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde), ...filtroResp))
+      .where(baseConv)
       .groupBy(conversas.status);
 
     const msgRows = await db
       .select({ direcao: mensagens.direcao, total: sql<number>`COUNT(*)` })
       .from(mensagens)
       .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-      .where(and(eq(conversas.escritorioId, eid), gte(mensagens.createdAt, desde), ...filtroResp))
+      .where(and(
+        eq(conversas.escritorioId, eid),
+        gte(mensagens.createdAt, dataInicio),
+        lte(mensagens.createdAt, dataFim),
+        ...filtroResp,
+      ))
       .groupBy(mensagens.direcao);
 
     const convsPorDia = await db
       .select({ dia: sql<string>`DATE(createdAtConv)`, total: sql<number>`COUNT(*)` })
       .from(conversas)
-      .where(and(eq(conversas.escritorioId, eid), gte(conversas.createdAt, desde), ...filtroResp))
+      .where(baseConv)
       .groupBy(sql`DATE(createdAtConv)`)
       .orderBy(sql`DATE(createdAtConv)`);
 
@@ -117,7 +212,12 @@ export const relatoriosRouter = router({
       .select({ dia: sql<string>`DATE(createdAtMsg)`, total: sql<number>`COUNT(*)` })
       .from(mensagens)
       .innerJoin(conversas, eq(mensagens.conversaId, conversas.id))
-      .where(and(eq(conversas.escritorioId, eid), gte(mensagens.createdAt, desde), ...filtroResp))
+      .where(and(
+        eq(conversas.escritorioId, eid),
+        gte(mensagens.createdAt, dataInicio),
+        lte(mensagens.createdAt, dataFim),
+        ...filtroResp,
+      ))
       .groupBy(sql`DATE(createdAtMsg)`)
       .orderBy(sql`DATE(createdAtMsg)`);
 
@@ -128,14 +228,21 @@ export const relatoriosRouter = router({
     for (const r of msgRows) msgsDirecao[r.direcao as string] = Number(r.total);
 
     return {
-      periodo: dias,
+      periodo: {
+        dataInicio: dataInicio.toISOString().slice(0, 10),
+        dataFim: dataFim.toISOString().slice(0, 10),
+      },
+      filtros: {
+        setorId: input?.setorId ?? null,
+        atendenteId: input?.atendenteId ?? null,
+      },
       conversasPorStatus,
       totalConversas: Object.values(conversasPorStatus).reduce((a, b) => a + b, 0),
       mensagensEnviadas: msgsDirecao["saida"] || 0,
       mensagensRecebidas: msgsDirecao["entrada"] || 0,
       totalMensagens: (msgsDirecao["saida"] || 0) + (msgsDirecao["entrada"] || 0),
-      conversasPorDia: convsPorDia.map((r) => ({ dia: String(r.dia), total: Number(r.total) })),
-      mensagensPorDia: msgsPorDia.map((r) => ({ dia: String(r.dia), total: Number(r.total) })),
+      conversasPorDia: convsPorDia.map((r: any) => ({ dia: String(r.dia), total: Number(r.total) })),
+      mensagensPorDia: msgsPorDia.map((r: any) => ({ dia: String(r.dia), total: Number(r.total) })),
     };
   }),
 

@@ -224,14 +224,145 @@ export default function Relatorios() {
 
 // ───────────────────── aba: Atendimento ─────────────────────
 
+/** Range default = mês vigente. */
+function rangeMesVigente(): { inicio: string; fim: string } {
+  const hoje = new Date();
+  const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  return {
+    inicio: ini.toISOString().slice(0, 10),
+    fim: hoje.toISOString().slice(0, 10),
+  };
+}
+
 function AbaAtendimento({ dias }: { dias: number }) {
+  // Filtros locais sobrepõem o dias global. Default = mês vigente.
+  const [setorId, setSetorId] = useState<number | null>(null);
+  const [atendenteId, setAtendenteId] = useState<number | null>(null);
+  const [{ inicio, fim }, setRange] = useState(rangeMesVigente);
+
+  const { data: setoresList } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
+  const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
+    { modulo: "relatorios" },
+    { retry: false },
+  );
+
+  // Atendentes filtrados pelo setor (se selecionado). Quando troca setor,
+  // limpa o atendente pra evitar combinação inválida.
+  const atendentesFiltrados = ((colabsList?.colaboradores || []) as any[]).filter((c) => {
+    if (setorId == null) return true;
+    return c.setorId === setorId;
+  });
+
   const { data, isLoading } = trpc.relatorios.atendimento.useQuery(
-    { dias },
+    {
+      dataInicio: inicio,
+      dataFim: fim,
+      setorId: setorId ?? undefined,
+      atendenteId: atendenteId ?? undefined,
+    },
     { refetchInterval: 60_000 },
   );
-  if (isLoading) return <LoadingBlock />;
-  if (!data) return <Empty />;
 
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Setor</Label>
+              <Select
+                value={setorId == null ? "__all__" : String(setorId)}
+                onValueChange={(v) => {
+                  const novo = v === "__all__" ? null : parseInt(v, 10);
+                  setSetorId(novo);
+                  // Se o atendente atual não pertence ao setor novo, limpa
+                  if (novo != null && atendenteId != null) {
+                    const aindaValido = ((colabsList?.colaboradores || []) as any[])
+                      .some((c) => c.id === atendenteId && c.setorId === novo);
+                    if (!aindaValido) setAtendenteId(null);
+                  }
+                }}
+              >
+                <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os setores</SelectItem>
+                  {(setoresList || []).map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Atendente</Label>
+              <Select
+                value={atendenteId == null ? "__all__" : String(atendenteId)}
+                onValueChange={(v) => setAtendenteId(v === "__all__" ? null : parseInt(v, 10))}
+              >
+                <SelectTrigger className="text-xs h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos os atendentes</SelectItem>
+                  {atendentesFiltrados.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.userName || c.userEmail || `#${c.id}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">De</Label>
+              <Input
+                type="date"
+                className="text-xs h-9"
+                value={inicio}
+                onChange={(e) => setRange((r) => ({ ...r, inicio: e.target.value }))}
+                max={fim}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Até</Label>
+              <Input
+                type="date"
+                className="text-xs h-9"
+                value={fim}
+                onChange={(e) => setRange((r) => ({ ...r, fim: e.target.value }))}
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">
+              Padrão: mês vigente. Filtros sobrepõem o período global do topo.
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => {
+                setSetorId(null);
+                setAtendenteId(null);
+                setRange(rangeMesVigente());
+              }}
+            >
+              Limpar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <LoadingBlock />
+      ) : !data ? (
+        <Empty />
+      ) : (
+        <AbaAtendimentoConteudo data={data} dias={dias} />
+      )}
+    </div>
+  );
+}
+
+function AbaAtendimentoConteudo({ data, dias: _dias }: { data: any; dias: number }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
