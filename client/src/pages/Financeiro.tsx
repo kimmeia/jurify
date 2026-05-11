@@ -180,8 +180,9 @@ export default function Financeiro() {
   const syncMut = trpc.asaas.sincronizarClientes.useMutation({
     onSuccess: (data: any) => {
       const p: string[] = [];
-      if (data.novos > 0) p.push(`${data.novos} cliente(s) novo(s)`);
-      if (data.vinculados > 0) p.push(`${data.vinculados} cliente(s) vinculado(s)`);
+      if (data.atualizadosVinculados > 0) p.push(`${data.atualizadosVinculados} cliente(s) com dados atualizados`);
+      if (data.novos > 0) p.push(`${data.novos} cliente(s) novo(s) adotado(s)`);
+      if (data.vinculados > 0) p.push(`${data.vinculados} cliente(s) vinculado(s) a contato existente`);
       if (data.removidos > 0) p.push(`${data.removidos} cliente(s) removido(s)`);
       if (data.cobNovas > 0) p.push(`${data.cobNovas} cobrança(s) nova(s)`);
       if (data.cobAtualizadas > 0) p.push(`${data.cobAtualizadas} cobrança(s) com status alterado`);
