@@ -224,6 +224,44 @@ export interface AsaasTesteResult {
   modo?: "sandbox" | "producao";
 }
 
+/**
+ * Item do extrato financeiro Asaas (`GET /v3/financialTransactions`).
+ *
+ * `value` é POSITIVO pra crédito (cobrança recebida, estorno) e NEGATIVO
+ * pra débito (taxa de cobrança, transferência saindo, notificação, etc).
+ * `balance` é o saldo da conta APÓS aplicar essa movimentação — útil pra
+ * reconciliar.
+ *
+ * `type` é um discriminador que mapeia o que aconteceu. Tipos conhecidos
+ * (lista pode variar — código trata novos tipos como categoria genérica):
+ *  - PAYMENT_RECEIVED / PAYMENT_OVERDUE_RECEIVED — crédito da cobrança
+ *  - PAYMENT_FEE — taxa cobrada por cobrança recebida
+ *  - PAYMENT_REVERSAL — estorno
+ *  - TRANSFER — transferência PIX/TED saindo
+ *  - TRANSFER_FEE / TRANSFER_REVERSAL_FEE — taxa por transferência
+ *  - REFUND_REQUEST_FEE — taxa de pedido de estorno
+ *  - ASAAS_CARD_RECHARGE / ASAAS_CARD_BALANCE_REFUND — operações cartão Asaas
+ *  - ASAAS_CARD_TRANSACTION / ASAAS_CARD_TRANSACTION_FEE — débito cartão Asaas
+ *  - NOTIFICATION_FEE — cobrança por notificação (SMS/WhatsApp/voz/e-mail)
+ *  - ANTICIPATION_FEE — taxa de antecipação
+ *  - CONTRACTUAL_EFFECT_SETTLEMENT_DEBIT / _CREDIT — efeitos contratuais
+ *  - BACEN_JUDICIAL_LOCK / _UNLOCK — bloqueio judicial
+ *  - PROMOTIONAL_CODE_CREDIT — bônus promocional
+ *  - CUSTOMER_INTERNAL_TRANSFER — entre contas Asaas
+ *  - (qualquer outro que o Asaas introduzir no futuro)
+ */
+export interface AsaasFinancialTransaction {
+  object: string;
+  id: string;
+  value: number;
+  balance: number;
+  type: string;
+  date: string;
+  description: string | null;
+  payment?: string | null;
+  transfer?: string | null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLIENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -641,6 +679,33 @@ export class AsaasClient {
 
   async obterSaldo(): Promise<AsaasBalance> {
     const res = await this.api.get("/finance/balance");
+    return res.data;
+  }
+
+  // ─── EXTRATO FINANCEIRO ───────────────────────────────────────────────────
+
+  /**
+   * Lista movimentações da conta Asaas (extrato completo: cobranças
+   * recebidas, taxas, transferências PIX/TED, notificações, mensalidade,
+   * antecipações, etc).
+   *
+   * Datas em formato ISO YYYY-MM-DD. Limite máximo do Asaas é 100 itens
+   * por página. Pra cobrir vários meses, paginar via `offset`.
+   */
+  async listarMovimentacoes(params: {
+    startDate?: string;
+    finishDate?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<AsaasListResponse<AsaasFinancialTransaction>> {
+    const res = await this.api.get("/financialTransactions", {
+      params: {
+        ...(params.startDate ? { startDate: params.startDate } : {}),
+        ...(params.finishDate ? { finishDate: params.finishDate } : {}),
+        offset: params.offset ?? 0,
+        limit: params.limit ?? 100,
+      },
+    });
     return res.data;
   }
 

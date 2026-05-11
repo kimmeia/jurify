@@ -1089,6 +1089,58 @@ export const asaasRouter = router({
   }),
 
   /**
+   * Importa o extrato financeiro do Asaas como despesas locais.
+   *
+   * Cobre TUDO o que `/v3/financialTransactions` retorna como débito:
+   * PIX/TED saindo, taxas de notificação (SMS/WhatsApp/voz/email),
+   * mensalidade Asaas, antecipações, etc. Cada movimentação vira uma
+   * despesa categorizada (Notificações Asaas, Transferências PIX/TED,
+   * etc). Tipos novos do Asaas caem em "Outras movimentações Asaas".
+   *
+   * Idempotente: UNIQUE INDEX (escritorioId, asaasFinTransId) impede
+   * duplicação em re-execução. Sem `desde`/`ate`, usa últimos 30 dias.
+   */
+  sincronizarExtrato: protectedProcedure
+    .input(z.object({
+      desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para sincronizar extrato Asaas.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const client = await requireAsaasClient(esc.escritorio.id);
+
+      const ate = input.ate ?? new Date().toISOString().slice(0, 10);
+      const desde = input.desde ?? (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d.toISOString().slice(0, 10);
+      })();
+
+      const { sincronizarExtratoAsaas } = await import("./asaas-extrato");
+      const resultado = await sincronizarExtratoAsaas(
+        esc.escritorio.id,
+        client,
+        {
+          startDate: desde,
+          finishDate: ate,
+          criadoPorUserId: esc.escritorio.ownerId,
+        },
+      );
+
+      return {
+        ...resultado,
+        periodo: { desde, ate },
+      };
+    }),
+
+  /**
    * Vincula um contato do CRM a um cliente do Asaas em até 3 passos:
    *   1. Busca no Asaas por CPF/CNPJ → se achar, vincula direto
    *      (Asaas é fonte de verdade, atualiza nome/email/telefone do CRM).
