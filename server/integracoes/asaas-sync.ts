@@ -470,13 +470,47 @@ const ATUALIZAR_THROTTLE_MS = 350;
 
 export async function atualizarCobrancasLocaisDoEscritorio(
   escritorioId: number,
-): Promise<{ atualizadas: number; removidas: number; erros: number; total: number }> {
-  const stats = { atualizadas: 0, removidas: 0, erros: 0, total: 0 };
+): Promise<{
+  atualizadas: number;
+  removidas: number;
+  erros: number;
+  total: number;
+  adotadas: number;
+}> {
+  const stats = { atualizadas: 0, removidas: 0, erros: 0, total: 0, adotadas: 0 };
   const client = await getAsaasClientForEscritorio(escritorioId);
   if (!client) return stats;
 
   const db = await getDb();
   if (!db) return stats;
+
+  // Adoção bulk: cobranças com `contatoId IS NULL` cujo asaasCustomerId
+  // agora tem vínculo em `asaas_clientes` (resultado do `sincronizarClientes`
+  // que rodou logo antes) ficam com nome correto. Atende ao caso "depois
+  // de sincronizar, cobranças antigas ainda apareciam com '—'".
+  const vinculos = await db
+    .select({
+      asaasCustomerId: asaasClientes.asaasCustomerId,
+      contatoId: asaasClientes.contatoId,
+    })
+    .from(asaasClientes)
+    .where(eq(asaasClientes.escritorioId, escritorioId));
+
+  for (const v of vinculos) {
+    const r = await db
+      .update(asaasCobrancas)
+      .set({ contatoId: v.contatoId })
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasCustomerId, v.asaasCustomerId),
+          isNull(asaasCobrancas.contatoId),
+        ),
+      );
+    const affected =
+      (r as any)?.[0]?.affectedRows ?? (r as any)?.affectedRows ?? 0;
+    stats.adotadas += Number(affected) || 0;
+  }
 
   // Pega TODAS as cobranças locais com asaasPaymentId (origem='asaas').
   // Manuais e órfãs (sem paymentId) não vão ser tocadas.

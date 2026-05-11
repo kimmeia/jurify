@@ -1132,11 +1132,17 @@ export const asaasRouter = router({
     // (refresh rápido sem risco de rate limit). Pra puxar histórico
     // novo, o admin usa "Importar histórico" em Configurações (cron
     // throttled em janelas de 1 dia).
-    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
+    //
+    // Inclui adoção bulk: cobranças com contatoId NULL cujo customer
+    // agora tem vínculo (criado pelo sync de clientes acima) ficam com
+    // nome correto. Resolve o caso "depois de sincronizar, cobranças
+    // antigas ainda apareciam com '—'".
+    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0, cobAdotadas = 0;
     try {
       const result = await atualizarCobrancasLocaisDoEscritorio(esc.escritorio.id);
       cobAtualizadas = result.atualizadas;
       cobRemovidas = result.removidas;
+      cobAdotadas = result.adotadas;
       // cobNovas fica 0 — sync deste botão não importa nada novo
     } catch (err: any) {
       log.warn(`[Asaas] Erro ao atualizar cobranças locais: ${err.message}`);
@@ -1151,6 +1157,7 @@ export const asaasRouter = router({
       cobNovas,
       cobAtualizadas,
       cobRemovidas,
+      cobAdotadas,
       // Mantém legado para retrocompatibilidade (soma total)
       cobrancasSincronizadas: cobNovas + cobAtualizadas + cobRemovidas,
     };
