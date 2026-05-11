@@ -2045,10 +2045,15 @@ export const asaasRouter = router({
 
         const items = await db.select().from(asaasCobrancas)
           .where(and(...conditions))
-          // Vencimento desc primeiro (faz mais sentido pra contas-a-receber:
-          // a mais recente fica no topo). createdAt como tiebreaker pra
-          // cobranças do mesmo dia: a inserida por último fica no topo.
-          .orderBy(desc(asaasCobrancas.vencimento), desc(asaasCobrancas.createdAt))
+          // Ordenação: data de recebimento desc com fallback pra vencimento.
+          // `COALESCE(dataPagamento, vencimento)` faz cobranças pagas
+          // recentes aparecerem no topo (ordem real do caixa) e pendentes
+          // se posicionarem pelo vencimento. createdAt como tiebreaker
+          // pra cobranças com mesma data.
+          .orderBy(
+            sql`COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}) DESC`,
+            desc(asaasCobrancas.createdAt),
+          )
           .limit(input?.limit ?? 50)
           .offset(input?.offset ?? 0);
 

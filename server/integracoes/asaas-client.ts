@@ -440,6 +440,8 @@ export class AsaasClient {
     paymentDateLe?: string;
     dueDateGe?: string;
     dueDateLe?: string;
+    /** Quando preenchido, restringe à conta do customer específico. */
+    customer?: string;
     offset?: number;
     limit?: number;
   }): Promise<AsaasListResponse<AsaasPayment>> {
@@ -450,6 +452,7 @@ export class AsaasClient {
     if (params.paymentDateLe) raw["paymentDate[le]"] = params.paymentDateLe;
     if (params.dueDateGe) raw["dueDate[ge]"] = params.dueDateGe;
     if (params.dueDateLe) raw["dueDate[le]"] = params.dueDateLe;
+    if (params.customer) raw["customer"] = params.customer;
     if (typeof params.offset === "number") raw["offset"] = params.offset;
     raw["limit"] = params.limit ?? 100;
     const res = await this.api.get("/payments", { params: raw });
