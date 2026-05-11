@@ -265,28 +265,31 @@ export class AsaasClient {
 
     // Camadas 1, 2, 3, 4 do rate guard são aplicadas em cada request via
     // interceptors. Lança RateLimitError (sem retentativa) quando uma
-    // camada bloqueia.
+    // camada bloqueia. `__asaasGuardHeld` só é setado APÓS acquire bem
+    // sucedido — sinal pro interceptor de response saber se deve liberar
+    // (evita decrementar inflight que nunca foi incrementado quando
+    // Camada 1/2/4 abortou antes da Camada 3).
     this.api.interceptors.request.use(async (config) => {
       const method = (config.method || "get").toUpperCase();
       const url = config.url || "";
       await this.guard.acquire(method, url);
-      (config as any).__asaasGuardMethod = method;
+      (config as any).__asaasGuardHeld = method;
       return config;
     });
 
     this.api.interceptors.response.use(
       (response) => {
-        const method = (response.config as any).__asaasGuardMethod || (response.config.method || "get").toUpperCase();
+        const held = (response.config as any).__asaasGuardHeld;
         const url = response.config.url || "";
-        this.guard.release(method);
+        if (held) this.guard.release(held);
         this.guard.recordResponse(url, response.headers as any);
         return response;
       },
       (error: AxiosError) => {
         const cfg = error.config as any;
-        const method = cfg?.__asaasGuardMethod || (cfg?.method || "get").toUpperCase();
+        const held = cfg?.__asaasGuardHeld;
         const url = cfg?.url || "";
-        this.guard.release(method);
+        if (held) this.guard.release(held);
 
         if (error.response) {
           this.guard.recordResponse(url, error.response.headers as any);

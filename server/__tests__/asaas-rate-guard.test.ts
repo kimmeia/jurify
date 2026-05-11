@@ -23,6 +23,10 @@ describe("AsaasRateGuard — Camada 1 (headers do Asaas)", () => {
     AsaasRateGuard.__resetParaTestes();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("bloqueia próxima request quando RateLimit-Remaining <= 10", async () => {
     const guard = AsaasRateGuard.forApiKey(API_KEY);
     await guard.acquire("GET", "/payments");
@@ -235,5 +239,26 @@ describe("AsaasRateGuard — release com erro não vaza concorrência", () => {
     guard.release("GET");
     guard.release("GET"); // duplo release não deve corromper estado
     expect(guard.snapshot().inflight).toBe(0);
+  });
+
+  it("acquire que lança Camada 1 NÃO incrementa inflight (release prévio é seguro)", async () => {
+    // Regressão: bug original tinha o error interceptor do axios chamando
+    // release("get") por fallback mesmo quando acquire falhou antes de
+    // chegar na Camada 3, decrementando inflight que nunca foi incrementado.
+    // O guard isolado deve garantir que inflight nunca fica negativo.
+    const guard = AsaasRateGuard.forApiKey(API_KEY);
+    await guard.acquire("GET", "/customers");
+    expect(guard.snapshot().inflight).toBe(1);
+
+    // Camada 1 bloqueia o próximo
+    guard.recordResponse("/customers", {
+      "ratelimit-remaining": "0",
+      "ratelimit-reset": "60",
+    });
+    await expect(guard.acquire("GET", "/customers")).rejects.toBeInstanceOf(
+      RateLimitError,
+    );
+    // Inflight não muda — o acquire bloqueado nunca chegou a Camada 3
+    expect(guard.snapshot().inflight).toBe(1);
   });
 });
