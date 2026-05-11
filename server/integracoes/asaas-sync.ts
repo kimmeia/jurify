@@ -89,16 +89,36 @@ export function somarStats(a: SyncCobrancasStats, b: SyncCobrancasStats): SyncCo
 /**
  * Sincroniza cobranças de UM cliente vinculado.
  * Retorna contadores discriminados — permite ao caller saber o que mudou de verdade.
+ *
+ * Por padrão pega apenas os últimos 90 dias pra proteger contra estouro
+ * de rate limit do Asaas (200 req/min, bloqueia 12h). Cliente com
+ * histórico longo pode ter centenas de cobranças → puxar tudo a cada
+ * sincronização vira munição de DoS contra a própria cota. Cobranças
+ * mais antigas vêm via cron de sync histórico throttled (5min entre
+ * janelas) ou via webhook em tempo real.
+ *
+ * Passe `diasHistorico: null` pra desabilitar o limite (uso restrito ao
+ * cron histórico que já paga sua throttle).
  */
 export async function syncCobrancasDeCliente(
   client: AsaasClient,
   escritorioId: number,
   contatoId: number,
-  asaasCustomerId: string
+  asaasCustomerId: string,
+  opts?: { diasHistorico?: number | null },
 ): Promise<SyncCobrancasStats> {
   const db = await getDb();
   const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   if (!db) return zero;
+
+  const diasHistorico =
+    opts?.diasHistorico === undefined ? 90 : opts.diasHistorico;
+  let dateCreatedGe: string | undefined;
+  if (diasHistorico !== null) {
+    const dt = new Date();
+    dt.setUTCDate(dt.getUTCDate() - diasHistorico);
+    dateCreatedGe = dt.toISOString().slice(0, 10);
+  }
 
   const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   let offset = 0;
@@ -106,9 +126,26 @@ export async function syncCobrancasDeCliente(
   const idsAsaas = new Set<string>(); // Track all IDs from Asaas
 
   while (hasMore) {
-    const res = await client.listarCobrancas({ customer: asaasCustomerId, limit: 100, offset });
+    // Quando `dateCreatedGe` está setado, usa o endpoint por janela
+    // (suporta filtro de data + customer). Senão, lista tudo (modo
+    // histórico — usado pelo cron throttled, não pelo botão UI).
+    const res = dateCreatedGe
+      ? await client.listarCobrancasPorJanela({
+          dateCreatedGe,
+          customer: asaasCustomerId,
+          limit: 100,
+          offset,
+        })
+      : await client.listarCobrancas({
+          customer: asaasCustomerId,
+          limit: 100,
+          offset,
+        });
 
     for (const cob of res.data) {
+      // Defensivo: descarta cobranças de OUTROS customers caso o endpoint
+      // ignore o filtro `customer` (ex: variante por janela do Asaas).
+      if (cob.customer && cob.customer !== asaasCustomerId) continue;
       // Se deletada no Asaas, remover localmente
       if (cob.deleted) {
         const [local] = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas)
@@ -215,11 +252,19 @@ export async function syncCobrancasDeCliente(
       eq(asaasCobrancas.origem, "asaas"),
     ));
 
-  for (const local of locais) {
-    if (local.asaasPaymentId && !idsAsaas.has(local.asaasPaymentId)) {
-      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
-      stats.removidas++;
-      log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
+  // Cleanup de órfãs (apagadas no Asaas mas ainda no DB local) só é
+  // SEGURO em sync sem filtro de data — senão cobranças antigas FORA
+  // da janela seriam falsamente classificadas como órfãs e perdidas.
+  // Com `diasHistorico` setado, pulamos esse passo; cobranças apagadas
+  // no Asaas viram cob.deleted=true no próximo sync completo (cron
+  // histórico) ou via webhook.
+  if (diasHistorico === null) {
+    for (const local of locais) {
+      if (local.asaasPaymentId && !idsAsaas.has(local.asaasPaymentId)) {
+        await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
+        stats.removidas++;
+        log.info(`[Asaas Sync] Cobrança órfã ${local.asaasPaymentId} removida (não existe mais no Asaas)`);
+      }
     }
   }
 
