@@ -86,8 +86,15 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
     return c?.userName || c?.userEmail || `Colaborador #${cliente.responsavelId}`;
   })();
 
+  const utils = trpc.useUtils();
   const mut = trpc.clientes.atualizar.useMutation({
     onSuccess: (data: any) => {
+      // Invalida TODOS os caches relacionados independente do input
+      // (paginação, busca, etc) — `refetch` simples só atualizava
+      // a key exata, deixando lista/detalhe stale com nome antigo.
+      utils.clientes.listar.invalidate();
+      utils.clientes.detalhe.invalidate({ id: cliente.id });
+      utils.clientes.listarLeads.invalidate({ contatoId: cliente.id });
       const reconc = data?.reconciliadas ?? 0;
       if (reconc > 0) {
         toast.success("Atualizado!", {
