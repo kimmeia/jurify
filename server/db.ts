@@ -145,6 +145,62 @@ export async function getActiveSubscription(userId: number) {
 }
 
 /**
+ * Núcleo testável: dado um lookup de sub e um lookup de owner do escritório,
+ * decide se herda do dono. Lógica pura — sem acessar `getDb` direto, o que
+ * permite testar com mocks simples (sem precisar mockar o builder drizzle).
+ */
+export async function resolveSubscriptionComHeranca(
+  userId: number,
+  getSubscription: (uid: number) => Promise<any>,
+  getEscritorioOwnerByColaborador: (uid: number) => Promise<number | null>,
+) {
+  const propria = await getSubscription(userId);
+  if (propria) return propria;
+
+  const ownerId = await getEscritorioOwnerByColaborador(userId);
+  if (ownerId == null || ownerId === userId) return null;
+
+  return getSubscription(ownerId);
+}
+
+/**
+ * Resolve a sub ativa do user OU, se ele for colaborador, herda a sub do
+ * DONO do escritório. Cortesia/plano do dono libera todos os colaboradores
+ * — alinhado ao modelo de uso (créditos e limites já são por escritório).
+ *
+ * Ordem de resolução:
+ *  1. Sub própria do user (cortesia primeiro, depois active/trialing)
+ *  2. Se user é colaborador de algum escritório, busca sub do dono desse
+ *     escritório usando a mesma lógica
+ *
+ * Retorna null se nem o user nem o dono têm sub ativa.
+ *
+ * Guarda contra loop: se ownerId == userId (caso patológico), não recursa.
+ */
+export async function getActiveSubscriptionComHeranca(userId: number) {
+  return resolveSubscriptionComHeranca(
+    userId,
+    (uid) => getActiveSubscription(uid),
+    async (uid) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [colab] = await db
+        .select({ escritorioId: colaboradores.escritorioId })
+        .from(colaboradores)
+        .where(eq(colaboradores.userId, uid))
+        .limit(1);
+      if (!colab) return null;
+      const [esc] = await db
+        .select({ ownerId: escritorios.ownerId })
+        .from(escritorios)
+        .where(eq(escritorios.id, colab.escritorioId))
+        .limit(1);
+      return esc?.ownerId ?? null;
+    },
+  );
+}
+
+/**
  * Get all subscriptions for a user.
  */
 export async function getUserSubscriptions(userId: number) {

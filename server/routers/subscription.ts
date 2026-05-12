@@ -16,7 +16,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
-import { getActiveSubscription, getUserSubscriptions, getDb } from "../db";
+import { getActiveSubscription, getActiveSubscriptionComHeranca, getUserSubscriptions, getDb } from "../db";
 import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-billing-client";
 import { getPlansResolved, getPlanByIdResolved } from "../billing/products-resolver";
 import { subscriptions as subscriptionsTable, users } from "../../drizzle/schema";
@@ -159,9 +159,14 @@ async function garantirAsaasCustomer(
 }
 
 export const subscriptionRouter = router({
-  /** Get current user's active subscription */
+  /** Get current user's active subscription.
+   *
+   * Herda do dono do escritório quando o user é colaborador sem sub
+   * própria — cortesia/plano liberado no dono libera todos os
+   * colaboradores (alinhado a créditos e limites, que já são por
+   * escritório). */
   current: protectedProcedure.query(async ({ ctx }) => {
-    return getActiveSubscription(ctx.user.id);
+    return getActiveSubscriptionComHeranca(ctx.user.id);
   }),
 
   /** Get all subscriptions for current user */
