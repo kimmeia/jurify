@@ -414,8 +414,14 @@ export class AsaasClient {
     let offset = 0;
     const limit = 100;
     let hasMore = true;
+    // Cap defensivo: se a API começar a retornar hasMore=true indefinidamente
+    // (bug do lado deles ou loop em base inconsistente), abortamos depois de
+    // 10 páginas. 10×100 = 1000 customers com o mesmo CPF é cenário impossível
+    // na prática (já são duplicatas demais).
+    const MAX_PAGINAS = 10;
+    let paginas = 0;
 
-    while (hasMore) {
+    while (hasMore && paginas < MAX_PAGINAS) {
       const res = await this.api.get<AsaasListResponse<AsaasCustomer>>("/customers", {
         params: { cpfCnpj: cpfLimpo, offset, limit },
       });
@@ -426,7 +432,13 @@ export class AsaasClient {
         if (cpfRemoto === cpfLimpo) resultados.push(c);
       }
       hasMore = res.data.hasMore;
-      offset += res.data.limit;
+      // Avança pelo número de itens REALMENTE recebidos, não pelo `limit`
+      // pedido. Quando a API retorna menos do que o cap (página final ou
+      // backend inconsistente), incrementar pelo `limit` pula registros.
+      const recebidos = res.data.data.length;
+      if (recebidos === 0) break;
+      offset += recebidos;
+      paginas++;
     }
 
     return resultados;

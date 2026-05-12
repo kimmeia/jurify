@@ -289,12 +289,20 @@ export async function syncCobrancasDeCliente(
  * contato do CRM. Um contato pode ter múltiplos vínculos (duplicatas do
  * Asaas com mesmo CPF) — aqui iteramos sobre todos para consolidar o
  * histórico financeiro num lugar só.
+ *
+ * `historicoCompleto`: usado pelo PRIMEIRO sync após vincular um contato.
+ * Por padrão `syncCobrancasDeCliente` pega só os últimos 90 dias (proteção
+ * de rate limit). Mas no momento do vínculo o operador espera ver TODO o
+ * histórico de cobranças do cliente no Asaas, não apenas trimestre. Quando
+ * true, propaga `diasHistorico: null` pra puxar tudo. Cobranças mais antigas
+ * que isso voltariam só por cron histórico (rodando uma vez por dia) — UX
+ * ruim ("vincula mas não puxa cobranças").
  */
 export async function syncTodasCobrancasDoContato(
   client: AsaasClient,
   escritorioId: number,
   contatoId: number,
-  opts?: { apenasCriarAtualizar?: boolean },
+  opts?: { apenasCriarAtualizar?: boolean; historicoCompleto?: boolean },
 ): Promise<SyncCobrancasStats> {
   const db = await getDb();
   const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
@@ -333,6 +341,7 @@ export async function syncTodasCobrancasDoContato(
     try {
       const s = await syncCobrancasDeCliente(client, escritorioId, contatoId, v.asaasCustomerId, {
         apenasCriarAtualizar: opts?.apenasCriarAtualizar,
+        diasHistorico: opts?.historicoCompleto ? null : undefined,
       });
       totais = somarStats(totais, s);
     } catch (err: any) {

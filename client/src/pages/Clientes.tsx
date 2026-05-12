@@ -40,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
+import { FinanceiroBadge, FinanceiroPopover, VincularAsaasBlock } from "@/components/FinanceiroBadge";
 import { GerarContratoDialog } from "@/components/GerarContratoDialog";
 import {
   EditarForm, AnotacoesTab, ArquivosTab, AssinaturasTab, TarefasClienteTab,
@@ -1835,8 +1835,9 @@ function ClienteDetalhe({
           <KanbanClienteTab contatoId={id} />
         </TabsContent>
 
-        {/* Aba 4: Financeiro — cobranças do Asaas vinculadas + badge no topo */}
+        {/* Aba 4: Financeiro — bloco de vínculo + cobranças do Asaas + badge */}
         <TabsContent value="financeiro" className="mt-4 space-y-4">
+          <VincularAsaasBlock contatoId={id} cpfCnpj={cliente.cpfCnpj} />
           <FinanceiroBadge contatoId={id} />
           <FinanceiroClienteTab contatoId={id} />
         </TabsContent>
