@@ -283,3 +283,76 @@ describe("syncTodasCobrancasDoContato — adoção bulk de órfãs pré-iteraç�
     expect(anyUpdate).toBeUndefined();
   });
 });
+
+describe("apenasCriarAtualizar — botão UI nunca deleta cobranças", () => {
+  it("ignora cob.deleted=true do Asaas quando flag=true (não chama db.delete)", async () => {
+    // 1) Cobrança vem do Asaas marcada como deletada
+    const client = fakeClient([
+      {
+        data: [payment({ id: "pay_DEL", customer: "cus_X", deleted: true })],
+        hasMore: false,
+        limit: 100,
+        offset: 0,
+      },
+    ]);
+    // SELECT do final do sync (lista de locais) → vazia
+    selectQueue.push([]);
+
+    await syncCobrancasDeCliente(client as any, 1, 42, "cus_X", {
+      apenasCriarAtualizar: true,
+    });
+
+    const deletes = captured.filter(
+      (c) => c.op === "delete" && c.table.startsWith("asaas_cob"),
+    );
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("comportamento default mantido: cob.deleted=true sem flag → SELECT + db.delete", async () => {
+    // SELECT do `if (cob.deleted)` retorna 1 row → vira db.delete
+    selectQueue.push([{ id: 99 }]);
+    // SELECT do final (lista de locais)
+    selectQueue.push([]);
+
+    const client = fakeClient([
+      {
+        data: [payment({ id: "pay_DEL", customer: "cus_X", deleted: true })],
+        hasMore: false,
+        limit: 100,
+        offset: 0,
+      },
+    ]);
+
+    await syncCobrancasDeCliente(client as any, 1, 42, "cus_X");
+
+    const deletes = captured.filter(
+      (c) => c.op === "delete" && c.table.startsWith("asaas_cob"),
+    );
+    expect(deletes).toHaveLength(1);
+  });
+
+  it("flag propaga de syncTodasCobrancasDoContato pra syncCobrancasDeCliente", async () => {
+    // 1) Vínculos do contato → 1 customer
+    selectQueue.push([{ asaasCustomerId: "cus_X" }]);
+    // 2) SELECT do final do sync de cus_X (lista de locais) → vazia
+    selectQueue.push([]);
+
+    const client = fakeClient([
+      {
+        data: [payment({ id: "pay_DEL", customer: "cus_X", deleted: true })],
+        hasMore: false,
+        limit: 100,
+        offset: 0,
+      },
+    ]);
+
+    await syncTodasCobrancasDoContato(client as any, 1, 42, {
+      apenasCriarAtualizar: true,
+    });
+
+    const deletes = captured.filter(
+      (c) => c.op === "delete" && c.table.startsWith("asaas_cob"),
+    );
+    expect(deletes).toHaveLength(0);
+  });
+});

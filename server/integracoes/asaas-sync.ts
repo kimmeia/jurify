@@ -105,7 +105,17 @@ export async function syncCobrancasDeCliente(
   escritorioId: number,
   contatoId: number,
   asaasCustomerId: string,
-  opts?: { diasHistorico?: number | null },
+  opts?: {
+    diasHistorico?: number | null;
+    /**
+     * Quando true, o sync NUNCA chama `db.delete(asaasCobrancas)`:
+     * ignora `cob.deleted=true` do Asaas e pula o cleanup de órfãs.
+     * Pensado pro botão UI "Sincronizar" do popover Financeiro do
+     * cliente — operador esperava só leitura/criação, não deleção.
+     * Cron de cleanup usa default (false) pra continuar limpando lixo.
+     */
+    apenasCriarAtualizar?: boolean;
+  },
 ): Promise<SyncCobrancasStats> {
   const db = await getDb();
   const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
@@ -113,6 +123,7 @@ export async function syncCobrancasDeCliente(
 
   const diasHistorico =
     opts?.diasHistorico === undefined ? 90 : opts.diasHistorico;
+  const apenasCriarAtualizar = opts?.apenasCriarAtualizar ?? false;
   let dateCreatedGe: string | undefined;
   if (diasHistorico !== null) {
     const dt = new Date();
@@ -146,8 +157,10 @@ export async function syncCobrancasDeCliente(
       // Defensivo: descarta cobranças de OUTROS customers caso o endpoint
       // ignore o filtro `customer` (ex: variante por janela do Asaas).
       if (cob.customer && cob.customer !== asaasCustomerId) continue;
-      // Se deletada no Asaas, remover localmente
+      // Se deletada no Asaas, remover localmente (a menos que o caller
+      // tenha pedido modo "apenas criar/atualizar").
       if (cob.deleted) {
+        if (apenasCriarAtualizar) continue;
         const [local] = await db.select({ id: asaasCobrancas.id }).from(asaasCobrancas)
           .where(eq(asaasCobrancas.asaasPaymentId, cob.id)).limit(1);
         if (local) {
@@ -257,8 +270,8 @@ export async function syncCobrancasDeCliente(
   // da janela seriam falsamente classificadas como órfãs e perdidas.
   // Com `diasHistorico` setado, pulamos esse passo; cobranças apagadas
   // no Asaas viram cob.deleted=true no próximo sync completo (cron
-  // histórico) ou via webhook.
-  if (diasHistorico === null) {
+  // histórico) ou via webhook. Também pula quando `apenasCriarAtualizar`.
+  if (diasHistorico === null && !apenasCriarAtualizar) {
     for (const local of locais) {
       if (local.asaasPaymentId && !idsAsaas.has(local.asaasPaymentId)) {
         await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, local.id));
@@ -281,6 +294,7 @@ export async function syncTodasCobrancasDoContato(
   client: AsaasClient,
   escritorioId: number,
   contatoId: number,
+  opts?: { apenasCriarAtualizar?: boolean },
 ): Promise<SyncCobrancasStats> {
   const db = await getDb();
   const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
@@ -317,7 +331,9 @@ export async function syncTodasCobrancasDoContato(
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   for (const v of vinculos) {
     try {
-      const s = await syncCobrancasDeCliente(client, escritorioId, contatoId, v.asaasCustomerId);
+      const s = await syncCobrancasDeCliente(client, escritorioId, contatoId, v.asaasCustomerId, {
+        apenasCriarAtualizar: opts?.apenasCriarAtualizar,
+      });
       totais = somarStats(totais, s);
     } catch (err: any) {
       log.warn(
