@@ -22,6 +22,7 @@ import {
   type QualificacaoEndereco,
 } from "@/components/CamposQualificacaoEndereco";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { NovaCobrancaDialog } from "@/pages/financeiro/dialogs";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
@@ -631,6 +632,13 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     { contatoId: number; valor: number | null } | null
   >(null);
 
+  // Dialog de duplicata: aberto quando backend rejeita criação por CPF já em
+  // uso (TRPCError CONFLICT). Mostra nome do cliente existente + botão pra
+  // abrir a ficha dele direto.
+  const [duplicataAlerta, setDuplicataAlerta] = useState<
+    { clienteId: number; nome: string } | null
+  >(null);
+
   const resetCadastro = () => {
     setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId("");
     setDocPendente(false); setDocObs(""); setCamposExtras({});
@@ -653,7 +661,21 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         setCobrancaPosCadastro({ contatoId, valor });
       }
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      // Backend embute ID do cliente existente na mensagem quando rejeita
+      // duplicata: "...para "X" [ID:42]". Extrai pra oferecer link.
+      const match = /^(.+?)\s*\[ID:(\d+)\]\s*$/.exec(e.message || "");
+      if (match && e.data?.code === "CONFLICT") {
+        const [, mensagem, idStr] = match;
+        const nomeMatch = /"(.+)"/.exec(mensagem);
+        setDuplicataAlerta({
+          clienteId: parseInt(idStr, 10),
+          nome: nomeMatch ? nomeMatch[1] : "cliente existente",
+        });
+        return;
+      }
+      toast.error(e.message);
+    },
   });
 
   const validar = () => {
@@ -848,6 +870,35 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     asaasConectado={!!statusAsaas?.conectado}
     valorInicial={cobrancaPosCadastro?.valor ?? undefined}
   />
+  {/* Duplicata de CPF/CNPJ: oferece abrir ficha do cliente existente. */}
+  <AlertDialog open={duplicataAlerta != null}>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>CPF/CNPJ já cadastrado</AlertDialogTitle>
+        <AlertDialogDescription>
+          Já existe um cliente com este CPF/CNPJ no escritório:
+          <span className="block mt-2 font-medium text-foreground">
+            {duplicataAlerta?.nome}
+          </span>
+          Pra evitar duplicatas, abra a ficha do cliente existente em vez de criar um novo.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel onClick={() => setDuplicataAlerta(null)}>
+          Voltar e ajustar CPF
+        </AlertDialogCancel>
+        <AlertDialogAction
+          onClick={() => {
+            // Volta pra lista de clientes e seleciona o existente.
+            // Usa URL pra que a página de Clientes leia ?abrir=ID e abra a ficha.
+            window.location.href = `/clientes?id=${duplicataAlerta?.clienteId}`;
+          }}
+        >
+          Abrir cliente existente
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
   </>);
 }
 
