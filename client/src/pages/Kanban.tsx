@@ -22,6 +22,7 @@ import {
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { ResponsavelAvatar } from "./kanban/responsavel-avatar";
+import { LancarCobrancaCardModal, type LancarCobrancaCardCtx } from "./kanban/lancar-cobranca-modal";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30",
@@ -42,7 +43,7 @@ export default function Kanban() {
   const [novoCardOpen, setNovoCardOpen] = useState<number | null>(null); // colunaId
   const [novaColunaOpen, setNovaColunaOpen] = useState(false);
   const [novaColunaNome, setNovaColunaNome] = useState("");
-  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "" });
+  const [cardForm, setCardForm] = useState({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "", valorEstimado: "" });
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
 
@@ -97,7 +98,7 @@ export default function Kanban() {
     onSuccess: () => refetchFunil(),
   });
   const criarCardMut = (trpc as any).kanban.criarCard.useMutation({
-    onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "" }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
+    onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "", valorEstimado: "" }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
   const deletarCardMut = (trpc as any).kanban.deletarCard.useMutation({
@@ -107,6 +108,23 @@ export default function Kanban() {
   const moverCardMut = (trpc as any).kanban.moverCard.useMutation({
     onSuccess: () => refetchFunil(),
   });
+
+  // ─── Modal "Lançar cobrança" ao mover card pra coluna Ganho ─────────────
+  // Heurística da coluna "Ganho": nome contém "ganho" ou "concluí" (case
+  // insensitive). User não precisa configurar nada — basta nomear a coluna
+  // final como "Concluído", "Ganho", "Fechado/Ganho" etc.
+  const [modalCobranca, setModalCobranca] = useState<LancarCobrancaCardCtx | null>(null);
+  const { data: statusAsaas } = (trpc as any).asaas?.status?.useQuery?.(undefined, { retry: false }) || { data: null };
+  const { data: minhasPermsKanban } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined, { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeCriarCobranca = !!(minhasPermsKanban?.permissoes?.financeiro?.criar);
+
+  const ehColunaGanho = (nome: string | undefined) => {
+    if (!nome) return false;
+    const n = nome.toLowerCase();
+    return n.includes("ganho") || n.includes("concluí") || n.includes("conclui");
+  };
 
   // Busca clientes pra vincular ao card
   const { data: clientesBusca } = (trpc as any).clientes?.listar?.useQuery?.(
@@ -127,10 +145,40 @@ export default function Kanban() {
   const [dragCardId, setDragCardId] = useState<number | null>(null);
 
   const handleDrop = (colunaDestinoId: number) => {
-    if (dragCardId && colunaDestinoId) {
-      moverCardMut.mutate({ cardId: dragCardId, colunaDestinoId });
-      setDragCardId(null);
-    }
+    if (!dragCardId || !colunaDestinoId) return;
+    const cardIdLocal = dragCardId;
+    setDragCardId(null);
+
+    moverCardMut.mutate(
+      { cardId: cardIdLocal, colunaDestinoId },
+      {
+        onSuccess: () => {
+          // Localiza coluna destino + card pra decidir se abre modal
+          const colDest = colunas.find((c: any) => c.id === colunaDestinoId);
+          if (!ehColunaGanho(colDest?.nome)) return;
+          if (!podeCriarCobranca) return;
+
+          let cardAlvo: any = null;
+          for (const c of colunas) {
+            const found = (c.cards || []).find((k: any) => k.id === cardIdLocal);
+            if (found) { cardAlvo = found; break; }
+          }
+          if (!cardAlvo) return;
+          // Já tem cobrança vinculada (Asaas ou manual): não reabre modal
+          if (cardAlvo.asaasPaymentId) return;
+
+          setModalCobranca({
+            cardId: cardAlvo.id,
+            cardTitulo: cardAlvo.titulo,
+            clienteId: cardAlvo.clienteId ?? null,
+            clienteNome: cardAlvo.clienteNome ?? null,
+            processoId: cardAlvo.processoId ?? null,
+            valorEstimado: cardAlvo.valorEstimado != null ? parseFloat(cardAlvo.valorEstimado) : null,
+            asaasConectado: !!statusAsaas?.conectado,
+          });
+        },
+      },
+    );
   };
 
   // ─── SELETOR DE FUNIL ──────────────────────────────────────────────────
@@ -437,6 +485,21 @@ export default function Kanban() {
               </div>
             </label>
 
+            <div>
+              <Label className="text-xs">Valor estimado (R$, opcional)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={cardForm.valorEstimado}
+                onChange={(e) => setCardForm({ ...cardForm, valorEstimado: e.target.value })}
+                placeholder="Ex: 3500,00"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Quando mover pra coluna "Concluído/Ganho", o sistema oferece lançar cobrança com este valor.
+              </p>
+            </div>
+
             <div><Label className="text-xs">Descrição</Label><Textarea value={cardForm.descricao} onChange={(e) => setCardForm({ ...cardForm, descricao: e.target.value })} rows={2} placeholder="Detalhes do caso..." /></div>
           </div>
           <DialogFooter>
@@ -451,6 +514,7 @@ export default function Kanban() {
               cnj: cardForm.cnj || undefined,
               clienteId: clienteSelecionado?.id,
               responsavelId: cardForm.responsavelId ? Number(cardForm.responsavelId) : undefined,
+              valorEstimado: cardForm.valorEstimado ? parseFloat(cardForm.valorEstimado) : undefined,
             })} disabled={!cardForm.titulo || criarCardMut.isPending}>
               {criarCardMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Criar
             </Button>
@@ -511,6 +575,19 @@ export default function Kanban() {
                 <p className="text-[10px] font-semibold text-muted-foreground">EDITAR</p>
                 <div><Label className="text-[10px]">Título</Label><Input defaultValue={cardDetalhe.titulo} onBlur={(e) => { if (e.target.value !== cardDetalhe.titulo) editarCardMut.mutate({ id: cardDetalhe.id, titulo: e.target.value }); }} /></div>
                 <div><Label className="text-[10px]">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value || undefined })} /></div>
+                <div>
+                  <Label className="text-[10px]">Valor estimado (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    defaultValue={cardDetalhe.valorEstimado != null ? cardDetalhe.valorEstimado : ""}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      editarCardMut.mutate({ id: cardDetalhe.id, valorEstimado: v ? parseFloat(v) : null });
+                    }}
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? new Date(cardDetalhe.prazo).toISOString().split("T")[0] : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || undefined })} /></div>
                   <div>
@@ -628,6 +705,14 @@ export default function Kanban() {
           </div>
         </div>
       )}
+
+      {/* Modal pós-Ganho: oferece lançar cobrança ao mover card pra coluna final */}
+      <LancarCobrancaCardModal
+        open={modalCobranca != null}
+        onOpenChange={(o) => { if (!o) setModalCobranca(null); }}
+        ctx={modalCobranca}
+        onConcluido={() => { setModalCobranca(null); refetchFunil(); }}
+      />
     </div>
   );
 }
