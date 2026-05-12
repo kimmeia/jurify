@@ -34,6 +34,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { parseValorBR } from "@shared/valor-br";
+
+function formatBRL(v: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
 
 export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: () => void }) {
   const [nome, setNome] = useState(cliente.nome || "");
@@ -81,8 +86,15 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
     return c?.userName || c?.userEmail || `Colaborador #${cliente.responsavelId}`;
   })();
 
+  const utils = trpc.useUtils();
   const mut = trpc.clientes.atualizar.useMutation({
     onSuccess: (data: any) => {
+      // Invalida TODOS os caches relacionados independente do input
+      // (paginação, busca, etc) — `refetch` simples só atualizava
+      // a key exata, deixando lista/detalhe stale com nome antigo.
+      utils.clientes.listar.invalidate();
+      utils.clientes.detalhe.invalidate({ id: cliente.id });
+      utils.clientes.listarLeads.invalidate({ contatoId: cliente.id });
       const reconc = data?.reconciliadas ?? 0;
       if (reconc > 0) {
         toast.success("Atualizado!", {
@@ -1181,7 +1193,9 @@ export function RegistrarFechamentoDialog({
               <ul className="text-[10px] text-emerald-700/90 dark:text-emerald-300/90 space-y-0.5">
                 {fechamentosExistentes.slice(0, 5).map((f, i) => (
                   <li key={i}>
-                    {f.valorEstimado ? `R$ ${f.valorEstimado}` : "(sem valor)"}{" "}
+                    {f.valorEstimado
+                      ? formatBRL(parseValorBR(f.valorEstimado))
+                      : "(sem valor)"}{" "}
                     em {fmtData(f.createdAt)}
                   </li>
                 ))}

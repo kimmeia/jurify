@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
 import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
+import { parseValorBR } from "@shared/valor-br";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -993,7 +994,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
   const [activeId, setActiveId] = useState<number | null>(null);
   const mut = trpc.crm.atualizarLead.useMutation({ onSuccess: () => { toast.success("Lead movido!"); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
   const excluirMut = trpc.crm.excluirLead.useMutation({ onSuccess: () => { toast.success("Lead excluído!"); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
-  const total = leads.filter((l: any) => !l.etapaFunil.startsWith("fechado")).reduce((s: number, l: any) => s + (parseFloat(l.valorEstimado || "0") || 0), 0);
+  const total = leads.filter((l: any) => !l.etapaFunil.startsWith("fechado")).reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
   const al = activeId ? leads.find((l: any) => l.id === activeId) : null;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
 
@@ -1006,7 +1007,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
   return (<div className="space-y-3">
     <div className="flex items-center gap-3"><p className="text-sm font-semibold">{leads.length} leads</p>{total > 0 && <><Separator orientation="vertical" className="h-4" /><p className="text-sm font-semibold text-violet-600">{formatBRL(total)} em pipeline</p></>}<div className="flex-1" /><Button size="sm" onClick={onAddLead}><Plus className="h-4 w-4 mr-1" /> Novo Lead</Button></div>
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e: DragStartEvent) => setActiveId(Number(e.active.id))} onDragEnd={(e: DragEndEvent) => { setActiveId(null); if (!e.over) return; const oid = String(e.over.id); if (ETAPAS.includes(oid as EtapaFunil)) { const ld = leads.find((l: any) => l.id === Number(e.active.id)); if (ld && ld.etapaFunil !== oid) mut.mutate({ id: ld.id, etapaFunil: oid as EtapaFunil }); } }}>
-      <div className="overflow-x-auto -mx-2 px-2 pb-4"><div className="flex gap-3" style={{ minWidth: 1000 }}>{ETAPAS.map((etapa) => { const items = leads.filter((l: any) => l.etapaFunil === etapa); const val = items.reduce((s: number, l: any) => s + (parseFloat(l.valorEstimado || "0") || 0), 0); const st = EST[etapa]; return (<KCol key={etapa} etapa={etapa} st={st} count={items.length} val={val}><SortableContext items={items.map((l: any) => l.id)} strategy={verticalListSortingStrategy}>{!items.length && <div className="flex items-center justify-center h-24"><p className="text-[10px] text-muted-foreground/50">Arraste leads aqui</p></div>}{items.map((l: any) => <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} />)}</SortableContext></KCol>); })}</div></div>
+      <div className="overflow-x-auto -mx-2 px-2 pb-4"><div className="flex gap-3" style={{ minWidth: 1000 }}>{ETAPAS.map((etapa) => { const items = leads.filter((l: any) => l.etapaFunil === etapa); const val = items.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0); const st = EST[etapa]; return (<KCol key={etapa} etapa={etapa} st={st} count={items.length} val={val}><SortableContext items={items.map((l: any) => l.id)} strategy={verticalListSortingStrategy}>{!items.length && <div className="flex items-center justify-center h-24"><p className="text-[10px] text-muted-foreground/50">Arraste leads aqui</p></div>}{items.map((l: any) => <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} />)}</SortableContext></KCol>); })}</div></div>
       <DragOverlay>{al ? <KOver lead={al} /> : null}</DragOverlay>
     </DndContext>
   </div>);
@@ -1017,7 +1018,7 @@ function KCol({ etapa, st, count, val, children }: { etapa: EtapaFunil; st: any;
 }
 function KCard({ lead, onWA, onDelete, onGoToConversa }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
-  const v = parseFloat(lead.valorEstimado || "0") || 0;
+  const v = parseValorBR(lead.valorEstimado);
   return (<div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }} {...attributes} {...listeners} className="rounded-lg bg-background border shadow-sm hover:shadow-md transition-all p-3 space-y-2 cursor-grab active:cursor-grabbing">
     <div><p className="text-xs font-semibold truncate">{lead.contatoNome}</p>{lead.contatoTelefone && <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5"><Phone className="h-2.5 w-2.5" /> {lead.contatoTelefone}</p>}</div>
     {(v > 0 || (lead.probabilidade && lead.probabilidade !== 50)) && <div className="flex items-center gap-2">{v > 0 && <span className="text-xs font-bold text-emerald-600 flex items-center gap-0.5"><DollarSign className="h-3 w-3" />{formatBRL(v)}</span>}{lead.probabilidade && lead.probabilidade !== 50 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Percent className="h-2.5 w-2.5" />{lead.probabilidade}%</span>}</div>}
@@ -1031,7 +1032,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa }: { lead: any; onWA?: (p:
     </div>
   </div>);
 }
-function KOver({ lead }: { lead: any }) { const v = parseFloat(lead.valorEstimado || "0") || 0; return (<div className="rounded-lg bg-background border-2 border-primary shadow-xl p-3 space-y-2 w-[170px] rotate-2"><p className="text-xs font-semibold truncate">{lead.contatoNome}</p>{v > 0 && <span className="text-xs font-bold text-emerald-600">{formatBRL(v)}</span>}</div>); }
+function KOver({ lead }: { lead: any }) { const v = parseValorBR(lead.valorEstimado); return (<div className="rounded-lg bg-background border-2 border-primary shadow-xl p-3 space-y-2 w-[170px] rotate-2"><p className="text-xs font-semibold truncate">{lead.contatoNome}</p>{v > 0 && <span className="text-xs font-bold text-emerald-600">{formatBRL(v)}</span>}</div>); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dashboard de Métricas do Atendimento
