@@ -22,6 +22,7 @@ import {
   type QualificacaoEndereco,
 } from "@/components/CamposQualificacaoEndereco";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { NovaCobrancaDialog } from "@/pages/financeiro/dialogs";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
   Clock, StickyNote, CheckSquare, Check, Calendar, Download, Folder,
@@ -619,7 +620,41 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   ) || { data: null };
   const colaboradores: any[] = equipeData?.colaboradores || [];
 
-  const criar = trpc.clientes.criar.useMutation({ onSuccess: () => { toast.success("Cadastrado!"); onOpenChange(false); setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId(""); setDocPendente(false); setDocObs(""); setCamposExtras({}); setQualif({ ...QUALIFICACAO_ENDERECO_VAZIO }); setErros({}); onSuccess(); }, onError: (e: any) => toast.error(e.message) });
+  // Status Asaas pra saber se mostra Avulsa/Parcelada/Recorrente ou só Manual
+  // no dialog de cobrança disparado pelo fluxo "já fechou contrato".
+  const { data: statusAsaas } = (trpc as any).asaas?.status?.useQuery?.(undefined, { retry: false, enabled: open }) || { data: null };
+
+  // Quando o operador marca "já fechou contrato", após criar o cliente abrimos
+  // o NovaCobrancaDialog pra lançar a cobrança real (avulsa Asaas / parcelamento
+  // / manual). Mantém o fluxo guiado: 1 ação do user fecha cliente + cobrança.
+  const [cobrancaPosCadastro, setCobrancaPosCadastro] = useState<
+    { contatoId: number; valor: number | null } | null
+  >(null);
+
+  const resetCadastro = () => {
+    setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId("");
+    setDocPendente(false); setDocObs(""); setCamposExtras({});
+    setQualif({ ...QUALIFICACAO_ENDERECO_VAZIO }); setErros({});
+    setJaFechado(false); setValorFechamento(""); setOrigemFechamento("");
+  };
+
+  const criar = trpc.clientes.criar.useMutation({
+    onSuccess: (data: any) => {
+      toast.success("Cadastrado!");
+      const contatoId = data?.id;
+      const eraFechado = jaFechado;
+      const valor = valorFechamento ? parseFloat(valorFechamento) : null;
+      resetCadastro();
+      onOpenChange(false);
+      onSuccess();
+      // Encadeia abertura da cobrança SE o cliente foi marcado como já fechado
+      // e há contatoId válido. Sem isso, mantém comportamento antigo.
+      if (eraFechado && contatoId) {
+        setCobrancaPosCadastro({ contatoId, valor });
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const validar = () => {
     const e: Record<string, string> = {};
@@ -651,7 +686,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     if (d.length <= 2) return d; if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
   };
 
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
+  return (<><Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
     <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-red-400" : ""} />{erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}</div>
     <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
     <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-red-400" : ""} />{erros.cpf && <p className="text-[10px] text-red-500">{erros.cpf}</p>}</div>
@@ -800,7 +835,20 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       valorFechamento: jaFechado && valorFechamento ? valorFechamento : undefined,
       origemFechamento: jaFechado ? origemFechamento : undefined,
     });
-  }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent></Dialog>);
+  }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent>
+  </Dialog>
+  {/* Aberto APÓS criar cliente quando "já fechou contrato" estava marcado.
+      Fica fora do Dialog principal pra não ser desmontado quando ele fecha. */}
+  <NovaCobrancaDialog
+    open={cobrancaPosCadastro != null}
+    onOpenChange={(o) => { if (!o) setCobrancaPosCadastro(null); }}
+    onSuccess={() => {/* refetch da listagem cabe ao caller via onSuccess do NovoClienteDialog */}}
+    contatoIdInicial={cobrancaPosCadastro?.contatoId}
+    esconderCliente={true}
+    asaasConectado={!!statusAsaas?.conectado}
+    valorInicial={cobrancaPosCadastro?.valor ?? undefined}
+  />
+  </>);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
