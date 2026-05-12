@@ -2317,10 +2317,16 @@ export const asaasRouter = router({
       }
 
       // ── Passo 2: sync de cobranças de TODOS os vínculos ─────────────
+      // Modo "apenas criar/atualizar": o botão UI nunca deve deletar
+      // cobranças locais, mesmo que o Asaas marque `cob.deleted=true`.
+      // Cleanup de cobrança apagada no Asaas é responsabilidade do cron,
+      // não desse fluxo manual.
       let stats = { novas: 0, atualizadas: 0, removidas: 0 };
       let erroSync: string | null = erroReconciliacao;
       try {
-        stats = await syncTodasCobrancasDoContato(client, esc.escritorio.id, input.contatoId);
+        stats = await syncTodasCobrancasDoContato(client, esc.escritorio.id, input.contatoId, {
+          apenasCriarAtualizar: true,
+        });
       } catch (err: any) {
         erroSync = err?.message || "Erro desconhecido ao sincronizar cobranças";
       }
