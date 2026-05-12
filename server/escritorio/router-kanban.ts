@@ -229,6 +229,7 @@ export const kanbanRouter = router({
       prioridade: z.enum(["alta", "media", "baixa"]).optional(),
       prazo: z.string().optional(),
       tags: z.string().max(255).optional(),
+      valorEstimado: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "kanban", "criar");
@@ -283,6 +284,7 @@ export const kanbanRouter = router({
         prioridade: (input.prioridade as any) || "media",
         prazo,
         tags: tagsCard,
+        valorEstimado: input.valorEstimado != null ? input.valorEstimado.toFixed(2) : null,
         ordem,
       });
       const cardId = (r as { insertId: number }).insertId;
@@ -311,6 +313,7 @@ export const kanbanRouter = router({
       prioridade: z.enum(["alta", "media", "baixa"]).optional(),
       prazo: z.string().optional(),
       tags: z.string().max(255).optional(),
+      valorEstimado: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "kanban", "editar");
@@ -355,6 +358,9 @@ export const kanbanRouter = router({
       }
       if (update.clienteId !== undefined) setData.clienteId = update.clienteId;
       if (update.responsavelId !== undefined) setData.responsavelId = update.responsavelId;
+      if (update.valorEstimado !== undefined) {
+        setData.valorEstimado = update.valorEstimado != null ? update.valorEstimado.toFixed(2) : null;
+      }
 
       // Detecta mudança de responsável ANTES do update, para notificar o novo
       // responsável depois. Só faz a query extra se a mutação está alterando
@@ -441,6 +447,43 @@ export const kanbanRouter = router({
           movidoPorId: perm.colaboradorId,
         });
       }
+
+      return { success: true };
+    }),
+
+  /**
+   * Vincula uma cobrança Asaas (ou paymentId manual) ao card.
+   * Usado pelo modal pós-Ganho: quando o user lança cobrança a partir do
+   * card, o paymentId resultante é gravado aqui pra evitar que o modal
+   * apareça de novo numa próxima movimentação.
+   */
+  vincularCobranca: protectedProcedure
+    .input(z.object({
+      cardId: z.number(),
+      asaasPaymentId: z.string().min(1).max(64),
+      valorEstimado: z.number().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar cards." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoCard(db, input.cardId, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios cards." });
+      }
+
+      const setData: { asaasPaymentId: string; valorEstimado?: string | null } = {
+        asaasPaymentId: input.asaasPaymentId,
+      };
+      if (input.valorEstimado !== undefined) {
+        setData.valorEstimado = input.valorEstimado != null ? input.valorEstimado.toFixed(2) : null;
+      }
+
+      await db.update(kanbanCards)
+        .set(setData)
+        .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId)));
 
       return { success: true };
     }),

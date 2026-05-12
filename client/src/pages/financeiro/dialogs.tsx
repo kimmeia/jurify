@@ -53,17 +53,39 @@ export function AnexosCobrancaDialog({
   );
 }
 
+/**
+ * Info da cobrança recém-criada. Repassada via `onCobrancaCriada` pra que o
+ * caller possa amarrar a cobrança a outra entidade (ex: card de Kanban).
+ *
+ * `paymentId` é a chave string identificadora:
+ *   - avulsa Asaas  → `pay_xxxx` (ID Asaas)
+ *   - parcelamento  → `parc:${parcelamentoLocalId}` (prefixo)
+ *   - manual        → `local:${cobrancaIdLocal}` (prefixo)
+ *   - recorrente    → null (assinatura recorrente não tem cobrança única)
+ */
+export type CobrancaCriadaInfo = {
+  tipo: "avulsa" | "parcelada" | "manual" | "recorrente";
+  paymentId: string | null;
+  valor: number;
+};
+
 export function NovaCobrancaDialog({
   open,
   onOpenChange,
   onSuccess,
+  onCobrancaCriada,
   contatoIdInicial,
   esconderCliente,
   asaasConectado = true,
+  valorInicial,
+  processoIdsIniciais,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSuccess: () => void;
+  /** Detalhes pós-criação. Usado por callers que precisam do paymentId
+   *  (ex: vincular cobrança a card de Kanban). */
+  onCobrancaCriada?: (info: CobrancaCriadaInfo) => void;
   /** Se preenchido, o dialog abre já com este cliente selecionado.
    *  Útil pra invocar a partir do popover/ficha do cliente. */
   contatoIdInicial?: number | string;
@@ -75,11 +97,17 @@ export function NovaCobrancaDialog({
    * ainda precisam registrar entradas em dinheiro/transferência. Default true.
    */
   asaasConectado?: boolean;
+  /** Valor pré-preenchido (vem do valorEstimado do card no fluxo Kanban). */
+  valorInicial?: number | null;
+  /** Ações pré-selecionadas (vem do processoId do card no fluxo Kanban). */
+  processoIdsIniciais?: number[];
 }) {
   const [modo, setModo] = useState<"avulsa" | "parcelada" | "recorrente" | "manual">(
     asaasConectado ? "avulsa" : "manual",
   );
-  const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : ""); const [valor, setValor] = useState(""); const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
+  const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : "");
+  const [valor, setValor] = useState(valorInicial != null ? String(valorInicial) : "");
+  const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
   // Modo manual: campos extras
   const [jaPaga, setJaPaga] = useState(false);
   const [dataPagamento, setDataPagamento] = useState("");
@@ -93,7 +121,7 @@ export function NovaCobrancaDialog({
   // pagamento é recebido, o SmartFlow `pagamento_recebido` dispara UMA
   // VEZ por ação, com o contexto da ação. Cobertura do "pacote": cobro
   // R$ 3000 e abro 3 ações.
-  const [acoesIds, setAcoesIds] = useState<number[]>([]);
+  const [acoesIds, setAcoesIds] = useState<number[]>(processoIdsIniciais || []);
 
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const { data: categoriasList = [] } = trpc.financeiro.listarCategoriasCobranca.useQuery();
@@ -108,12 +136,47 @@ export function NovaCobrancaDialog({
     { enabled: contatoIdNum > 0 },
   );
 
-  const criarAvulsaMut = trpc.asaas.criarCobranca.useMutation({ onSuccess: (data) => { setResultado(data.cobranca); toast.success("Cobranca criada"); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
-  const criarParcelaMut = trpc.asaas.criarParcelamento.useMutation({ onSuccess: () => { toast.success("Parcelamento criado"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
-  const criarAssinaturaMut = trpc.asaas.criarAssinatura.useMutation({ onSuccess: () => { toast.success("Assinatura criada"); resetForm(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }) });
-  const criarManualMut = (trpc as any).asaas.criarCobrancaManual.useMutation({
+  const criarAvulsaMut = trpc.asaas.criarCobranca.useMutation({
+    onSuccess: (data) => {
+      setResultado(data.cobranca);
+      toast.success("Cobranca criada");
+      onCobrancaCriada?.({ tipo: "avulsa", paymentId: data.cobranca?.id || null, valor: parseFloat(valor) || 0 });
+      onSuccess();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }),
+  });
+  const criarParcelaMut = trpc.asaas.criarParcelamento.useMutation({
+    onSuccess: (data: any) => {
+      toast.success("Parcelamento criado");
+      onCobrancaCriada?.({
+        tipo: "parcelada",
+        paymentId: data?.parcelamentoLocalId ? `parc:${data.parcelamentoLocalId}` : null,
+        valor: parseFloat(valor) || 0,
+      });
+      resetForm();
+      onOpenChange(false);
+      onSuccess();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }),
+  });
+  const criarAssinaturaMut = trpc.asaas.criarAssinatura.useMutation({
     onSuccess: () => {
+      toast.success("Assinatura criada");
+      onCobrancaCriada?.({ tipo: "recorrente", paymentId: null, valor: parseFloat(valor) || 0 });
+      resetForm();
+      onOpenChange(false);
+      onSuccess();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message, duration: 8000 }),
+  });
+  const criarManualMut = (trpc as any).asaas.criarCobrancaManual.useMutation({
+    onSuccess: (data: any) => {
       toast.success("Cobrança manual registrada");
+      onCobrancaCriada?.({
+        tipo: "manual",
+        paymentId: data?.cobrancaId ? `local:${data.cobrancaId}` : null,
+        valor: parseFloat(valor) || 0,
+      });
       resetForm();
       onOpenChange(false);
       onSuccess();
