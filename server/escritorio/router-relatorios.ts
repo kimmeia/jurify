@@ -577,7 +577,7 @@ export const relatoriosRouter = router({
       const [agg] = await db
         .select({
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          contratos: sql<number>`COUNT(*)`,
+          contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
         .where(and(
@@ -596,7 +596,7 @@ export const relatoriosRouter = router({
       const [aggAnt] = await db
         .select({
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          contratos: sql<number>`COUNT(*)`,
+          contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
         .where(and(
@@ -630,11 +630,53 @@ export const relatoriosRouter = router({
       const comissaoTotal = Number(comissoesRows[0]?.total || 0);
 
       // ── Ranking por atendente ─────────────────────────────────────────────
+      // 4 dimensões medidas por atendente:
+      //  1) valorFechado: soma valorEstimado dos leads movidos pra
+      //     fechado_ganho no período (pipeline). Fonte mais ampla — inclui
+      //     pagamentos manuais ou cobranças fora do Asaas.
+      //  2) contratosFechados: count desses leads.
+      //  3) faturado: soma valor das cobranças pagas (caixa real).
+      //  4) contratosPagos: count DISTINCT de contratos pagos
+      //     (agrupa parcelas de um mesmo parcelamentoLocalId como 1 só).
+      //
+      // Taxa de conversão = contratosPagos / contratosFechados.
+      // Quando contratosFechados=0 mas tem cobrança paga avulsa: conversão NaN — tratamos como null no front.
+
+      // 1+2: leads ganhos
+      const leadsGanhosRows = await db
+        .select({
+          responsavelId: leads.responsavelId,
+          valorFechado: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)`,
+          contratosFechados: sql<number>`COUNT(*)`,
+        })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          inArray(leads.responsavelId, idsAtendentes),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+        ))
+        .groupBy(leads.responsavelId);
+
+      const mapaLeads = new Map<number, { valorFechado: number; contratosFechados: number }>();
+      for (const r of leadsGanhosRows) {
+        if (r.responsavelId == null) continue;
+        mapaLeads.set(Number(r.responsavelId), {
+          valorFechado: Number(r.valorFechado || 0),
+          contratosFechados: Number(r.contratosFechados || 0),
+        });
+      }
+
+      // 3+4: cobranças pagas (faturado + contagem com DISTINCT por parent)
       const porAtendenteRows = await db
         .select({
           atendenteId: asaasCobrancas.atendenteId,
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          contratos: sql<number>`COUNT(*)`,
+          cobrancas: sql<number>`COUNT(*)`,
+          // 1 contrato = 1 parcelamento (todas as parcelas) OU 1 cobrança avulsa.
+          // COALESCE pra não confundir distintos com NULLs.
+          contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
         .where(and(
@@ -646,12 +688,17 @@ export const relatoriosRouter = router({
         ))
         .groupBy(asaasCobrancas.atendenteId);
 
-      const mapaPorAtendente = new Map<number, { faturado: number; contratos: number }>();
+      const mapaPorAtendente = new Map<number, {
+        faturado: number;
+        cobrancas: number;
+        contratosPagos: number;
+      }>();
       for (const r of porAtendenteRows) {
         if (r.atendenteId == null) continue;
         mapaPorAtendente.set(Number(r.atendenteId), {
           faturado: Number(r.totalFaturado || 0),
-          contratos: Number(r.contratos || 0),
+          cobrancas: Number(r.cobrancas || 0),
+          contratosPagos: Number(r.contratosPagos || 0),
         });
       }
 
@@ -659,20 +706,31 @@ export const relatoriosRouter = router({
       // pra dar visibilidade de quem não vendeu. Ordenado por faturado desc.
       const ranking = rankingAtendentes
         .map((c) => {
-          const dados = mapaPorAtendente.get(c.id) ?? { faturado: 0, contratos: 0 };
+          const pagos = mapaPorAtendente.get(c.id) ?? { faturado: 0, cobrancas: 0, contratosPagos: 0 };
+          const leadsDados = mapaLeads.get(c.id) ?? { valorFechado: 0, contratosFechados: 0 };
           const meta = c.metaMensal != null ? Number(c.metaMensal) : null;
           const progressoMeta = meta && meta > 0
-            ? +((dados.faturado / meta) * 100).toFixed(1)
+            ? +((pagos.faturado / meta) * 100).toFixed(1)
+            : null;
+          const conversao = leadsDados.contratosFechados > 0
+            ? +((pagos.contratosPagos / leadsDados.contratosFechados) * 100).toFixed(1)
             : null;
           return {
             atendenteId: c.id,
             nome: c.userName || c.userEmail || `#${c.id}`,
             setorNome: c.setorNome,
-            faturado: dados.faturado,
-            contratos: dados.contratos,
-            ticketMedio: dados.contratos > 0
-              ? +(dados.faturado / dados.contratos).toFixed(2)
+            // Pipeline (leads fechados)
+            valorFechado: leadsDados.valorFechado,
+            contratosFechados: leadsDados.contratosFechados,
+            // Caixa (cobranças pagas)
+            faturado: pagos.faturado,
+            contratosPagos: pagos.contratosPagos,
+            // Tickets
+            ticketMedio: pagos.contratosPagos > 0
+              ? +(pagos.faturado / pagos.contratosPagos).toFixed(2)
               : 0,
+            // Conversão pipeline → caixa
+            conversao,
             meta,
             progressoMeta,
           };

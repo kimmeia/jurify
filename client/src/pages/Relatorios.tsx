@@ -7,7 +7,7 @@
  * Todas as abas respeitam o filtro de período selecionado no topo.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -465,8 +465,10 @@ function VariacaoBadge({ pct }: { pct: number }) {
 
 function DashboardComercial() {
   // Filtros locais: setor (default = primeiro tipo='comercial'),
-  // atendente, período (default mês vigente)
-  const [setorSel, setSetorSel] = useState<string>("__auto__");
+  // atendente, período (default mês vigente).
+  // Valor inicial do setor é resolvido pelo useEffect quando setoresList chega
+  // (evita "auto" sintético que duplicava o setor no dropdown).
+  const [setorSel, setSetorSel] = useState<string>("");
   const [atendenteSel, setAtendenteSel] = useState<string>("__all__");
   const [{ inicio, fim }, setRange] = useState(rangeMesVigente);
 
@@ -476,20 +478,25 @@ function DashboardComercial() {
     { retry: false },
   );
 
-  // Setores tipo='comercial' (pra default + dropdown se >1)
+  // Setores tipo='comercial'
   const setoresComerciais = ((setoresList || []) as any[]).filter((s) => s.tipo === "comercial");
-  const setorIdAuto = setoresComerciais[0]?.id;
-  const setorIdEfetivo = setorSel === "__auto__"
-    ? setorIdAuto
-    : setorSel === "__all_comercial__"
-      ? undefined
-      : parseInt(setorSel, 10);
 
-  // Atendentes filtrados pelo setor escolhido. Quando setor=todos comerciais,
+  // Default: primeiro setor comercial. Roda só uma vez quando setoresList chega.
+  useEffect(() => {
+    if (setorSel === "" && setoresComerciais.length > 0) {
+      setSetorSel(setoresComerciais.length > 1 ? "__all__" : String(setoresComerciais[0].id));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setoresList]);
+
+  const setorIdEfetivo = setorSel === "__all__" || setorSel === ""
+    ? undefined
+    : parseInt(setorSel, 10);
+
+  // Atendentes filtrados pelo setor escolhido. Quando setor="__all__",
   // pega atendentes de todos os setores comerciais.
   const atendentesComerciais = ((colabsList?.colaboradores || []) as any[]).filter((c) => {
     if (setorIdEfetivo != null) return c.setorId === setorIdEfetivo;
-    // todos comerciais: qualquer atendente que está num setor comercial
     const idsComerciais = new Set(setoresComerciais.map((s) => s.id));
     return c.setorId != null && idsComerciais.has(c.setorId);
   });
@@ -530,14 +537,11 @@ function DashboardComercial() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Setor comercial</Label>
-              <Select value={setorSel} onValueChange={(v) => { setSetorSel(v); setAtendenteSel("__all__"); }}>
+              <Select value={setorSel || (setoresComerciais[0]?.id ? String(setoresComerciais[0].id) : "__all__")} onValueChange={(v) => { setSetorSel(v); setAtendenteSel("__all__"); }}>
                 <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__auto__">
-                    {setoresComerciais.length === 1 ? setoresComerciais[0].nome : "Primeiro comercial"}
-                  </SelectItem>
                   {setoresComerciais.length > 1 && (
-                    <SelectItem value="__all_comercial__">Todos os comerciais</SelectItem>
+                    <SelectItem value="__all__">Todos os comerciais</SelectItem>
                   )}
                   {setoresComerciais.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>{s.nome}</SelectItem>
@@ -582,26 +586,32 @@ function DashboardComercial() {
               <CardContent className="pt-4 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
-                  Faturado
+                  Recebido
                 </div>
                 <p className="text-2xl font-bold text-emerald-600">{formatBRL(data.kpis.faturado)}</p>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-muted-foreground">vs anterior</span>
                   <VariacaoBadge pct={data.kpis.variacaoFaturado} />
                 </div>
+                <p className="text-[10px] text-muted-foreground italic">
+                  cobranças pagas no período
+                </p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 space-y-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
-                  Contratos
+                  Contratos pagos
                 </div>
                 <p className="text-2xl font-bold">{data.kpis.contratos}</p>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-muted-foreground">vs anterior</span>
                   <VariacaoBadge pct={data.kpis.variacaoContratos} />
                 </div>
+                <p className="text-[10px] text-muted-foreground italic">
+                  parcelas do mesmo contrato contam como 1
+                </p>
               </CardContent>
             </Card>
             <Card>
@@ -611,7 +621,9 @@ function DashboardComercial() {
                   Ticket médio
                 </div>
                 <p className="text-2xl font-bold">{formatBRL(data.kpis.ticketMedio)}</p>
-                <span className="text-[10px] text-muted-foreground">por contrato</span>
+                <p className="text-[10px] text-muted-foreground italic">
+                  recebido ÷ contratos pagos
+                </p>
               </CardContent>
             </Card>
             <Card>
@@ -621,7 +633,9 @@ function DashboardComercial() {
                   Comissão
                 </div>
                 <p className="text-2xl font-bold text-amber-600">{formatBRL(data.kpis.comissao)}</p>
-                <span className="text-[10px] text-muted-foreground">fechamentos no período</span>
+                <p className="text-[10px] text-muted-foreground italic">
+                  fechamentos no período
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -655,13 +669,31 @@ function DashboardComercial() {
                               <p className="text-[10px] text-muted-foreground">{r.setorNome}</p>
                             )}
                           </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-sm font-bold text-emerald-600">{formatBRL(r.faturado)}</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-2">
+                            <p className="text-[10px] text-muted-foreground">Fechado (pipeline)</p>
+                            <p className="text-sm font-bold text-blue-700">{formatBRL(r.valorFechado || 0)}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              {r.contratos} contrato(s) · ticket {formatBRL(r.ticketMedio)}
+                              {r.contratosFechados || 0} contrato(s)
+                            </p>
+                          </div>
+                          <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
+                            <p className="text-[10px] text-muted-foreground">Recebido (caixa)</p>
+                            <p className="text-sm font-bold text-emerald-700">{formatBRL(r.faturado)}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {r.contratosPagos || 0} pago(s)
+                              {r.conversao != null && (
+                                <span className="ml-1">· conv. {r.conversao.toFixed(0)}%</span>
+                              )}
                             </p>
                           </div>
                         </div>
+
+                        <p className="text-[10px] text-muted-foreground text-right">
+                          Ticket médio: {formatBRL(r.ticketMedio)}
+                        </p>
                         {r.meta != null && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[10px]">
