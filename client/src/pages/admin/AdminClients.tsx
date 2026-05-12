@@ -810,12 +810,25 @@ function ClienteDetalheDialog({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ativar cortesia para {user?.name || user?.email}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Libera acesso sem mexer no Asaas. {!sub && (
-                <span className="block mt-1 text-amber-700">
-                  Cliente não tem assinatura — uma será criada virtualmente, marcada como cortesia.
-                </span>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Libera acesso sem mexer no Asaas.</p>
+                {!sub && (
+                  <p className="text-amber-700">
+                    Cliente não tem assinatura — uma será criada virtualmente, marcada como cortesia.
+                  </p>
+                )}
+                {data?.isDonoEscritorio && (data?.colabsCount ?? 0) > 1 && (
+                  <p className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-800 p-2 text-xs">
+                    <b>Afeta o escritório inteiro:</b> este user é o dono. Cortesia aqui libera acesso pra todos os <b>{data.colabsCount} colaboradores</b> do escritório.
+                  </p>
+                )}
+                {!data?.isDonoEscritorio && data?.donoDoEscritorio && (
+                  <p className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-amber-800 p-2 text-xs">
+                    <b>Cortesia individual:</b> este user é colaborador. Vai liberar acesso só pra ele. Pra liberar o escritório todo, ative a cortesia no dono <b>{data.donoDoEscritorio.name || data.donoDoEscritorio.email}</b>.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3">

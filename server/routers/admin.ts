@@ -245,7 +245,46 @@ export const adminRouter = router({
       const calculos = await getCalculosRecentes(input.userId, 10);
       const stats = await getEstatisticasUso(input.userId);
 
-      return { user: user[0], credits, creditsSource, escritorioId, subscription, calculos, stats };
+      // Contexto de escritório pro painel admin avisar o operador antes
+      // de marcar cortesia: cortesia no dono libera todos os colabs (via
+      // herança em `getActiveSubscriptionComHeranca`); cortesia direto no
+      // colaborador é individual e geralmente não é o que se quer.
+      let isDonoEscritorio = false;
+      let colabsCount = 0;
+      let donoDoEscritorio: { id: number; name: string | null; email: string | null } | null = null;
+      if (escritorioId) {
+        const [escritInfo] = await db.select({ ownerId: escritorios.ownerId })
+          .from(escritorios).where(eq(escritorios.id, escritorioId)).limit(1);
+        if (escritInfo) {
+          isDonoEscritorio = escritInfo.ownerId === input.userId;
+          if (isDonoEscritorio) {
+            // Conta TODOS os colaboradores (incluindo o dono) — a UI exibe
+            // "afeta N colaboradores" e fica claro pro admin.
+            const colabs = await db.select({ id: colaboradores.id })
+              .from(colaboradores).where(eq(colaboradores.escritorioId, escritorioId));
+            colabsCount = colabs.length;
+          } else {
+            // User é colaborador (não dono) — fornece info do dono pra UI
+            // sugerir "libere no dono pra cobrir todo escritório".
+            const [dono] = await db.select({ id: users.id, name: users.name, email: users.email })
+              .from(users).where(eq(users.id, escritInfo.ownerId)).limit(1);
+            if (dono) donoDoEscritorio = dono;
+          }
+        }
+      }
+
+      return {
+        user: user[0],
+        credits,
+        creditsSource,
+        escritorioId,
+        subscription,
+        calculos,
+        stats,
+        isDonoEscritorio,
+        colabsCount,
+        donoDoEscritorio,
+      };
     }),
 
   /** Conceder créditos manualmente a um cliente.
