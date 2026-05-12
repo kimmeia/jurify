@@ -1767,6 +1767,15 @@ function ClienteDetalhe({
           <FileText className="h-4 w-4 mr-1 text-info" />
           Gerar contrato
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setFechamentoOpen(true)}
+          title="Marca conversão (fechado_ganho) — usa quando esqueceu de marcar 'já fechou' no cadastro ou quando o cliente fechou outro contrato"
+        >
+          <CheckCircle2 className="h-4 w-4 mr-1 text-emerald-600" />
+          Registrar fechamento
+        </Button>
         {cliente.cpfCnpj && (
           <MonitorarJuditButton
             cpfCnpj={cliente.cpfCnpj}
@@ -1873,22 +1882,10 @@ function ClienteDetalhe({
           {/* Leads */}
           <Card>
             <CardContent className="pt-4 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-violet-500" />
-                  Negociações (Leads)
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setFechamentoOpen(true)}
-                  title="Marca conversão (fechado_ganho) sem passar pelo pipeline — usa quando esqueceu de marcar 'já fechou' no cadastro ou quando o cliente fechou outro contrato"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                  Registrar fechamento
-                </Button>
-              </div>
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-violet-500" />
+                Negociações (Leads)
+              </p>
               {!(leadsData || []).length ? (
                 <p className="text-xs text-muted-foreground py-2">Nenhum lead.</p>
               ) : (
