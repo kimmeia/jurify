@@ -945,6 +945,53 @@ export const kanbanRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Lista os cards do Kanban vinculados a um cliente específico. Usado pela
+   * aba "Vínculo Kanban" no perfil do cliente — mostra de relance em quais
+   * funis/colunas o cliente está sendo trabalhado.
+   *
+   * Permission: kanban.ver. Sem verTodos, mostra só cards do próprio
+   * responsável (mesma lógica de obterFunil).
+   */
+  listarCardsPorCliente: protectedProcedure
+    .input(z.object({ clienteId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "ver");
+      if (!perm.allowed) return { cards: [] };
+      const db = await getDb();
+      if (!db) return { cards: [] };
+
+      const conditions: any[] = [
+        eq(kanbanCards.escritorioId, perm.escritorioId),
+        eq(kanbanCards.clienteId, input.clienteId),
+      ];
+      if (!perm.verTodos && perm.verProprios) {
+        conditions.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
+      }
+
+      const rows = await db
+        .select({
+          id: kanbanCards.id,
+          titulo: kanbanCards.titulo,
+          prioridade: kanbanCards.prioridade,
+          prazo: kanbanCards.prazo,
+          atrasado: kanbanCards.atrasado,
+          createdAt: kanbanCards.createdAt,
+          colunaId: kanbanCards.colunaId,
+          colunaNome: kanbanColunas.nome,
+          colunaCor: kanbanColunas.cor,
+          funilId: kanbanFunis.id,
+          funilNome: kanbanFunis.nome,
+        })
+        .from(kanbanCards)
+        .leftJoin(kanbanColunas, eq(kanbanColunas.id, kanbanCards.colunaId))
+        .leftJoin(kanbanFunis, eq(kanbanFunis.id, kanbanColunas.funilId))
+        .where(and(...conditions))
+        .orderBy(desc(kanbanCards.createdAt));
+
+      return { cards: rows };
+    }),
+
   /** Reordena colunas via drag-and-drop. Recebe array de IDs na ordem nova. */
   reordenarColunas: protectedProcedure
     .input(z.object({ funilId: z.number(), idsOrdenados: z.array(z.number()) }))
