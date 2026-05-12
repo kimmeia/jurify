@@ -6,8 +6,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanTags, contatos, colaboradores, clienteProcessos } from "../../drizzle/schema";
-import { eq, and, desc, asc, or, like } from "drizzle-orm";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
+import { eq, and, desc, asc, or, like, gte, lte, lt, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
 
@@ -153,7 +153,18 @@ export const kanbanRouter = router({
 
   /** Busca todas as colunas + cards de um funil */
   obterFunil: protectedProcedure
-    .input(z.object({ funilId: z.number() }))
+    .input(z.object({
+      funilId: z.number(),
+      // ─── Filtros opcionais — todos AND ─────────────────────────────────
+      responsavelId: z.number().int().positive().optional(),
+      prioridade: z.enum(["baixa", "media", "alta"]).optional(),
+      tag: z.string().max(64).optional(),
+      // Filtros de prazo: "vencidos" / "hoje" / "7dias" / "sem_prazo"
+      prazoFiltro: z.enum(["vencidos", "hoje", "7dias", "sem_prazo"]).optional(),
+      // Filtros de data de criação (range YYYY-MM-DD)
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }))
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "kanban", "ver");
       if (!perm.allowed) return { funil: null, colunas: [] };
@@ -170,10 +181,25 @@ export const kanbanRouter = router({
         .orderBy(asc(kanbanColunas.ordem));
 
       const filtrarProprios = !perm.verTodos && perm.verProprios;
+
+      // Pré-calcula bounds de prazo (uma vez, não dentro do loop).
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      const fimHoje = new Date(hoje); fimHoje.setHours(23, 59, 59, 999);
+      const fim7 = new Date(hoje); fim7.setDate(fim7.getDate() + 7); fim7.setHours(23, 59, 59, 999);
+
       const result = [];
       for (const col of colunas) {
         const cardConditions: any[] = [eq(kanbanCards.colunaId, col.id)];
         if (filtrarProprios) cardConditions.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
+        if (input.responsavelId) cardConditions.push(eq(kanbanCards.responsavelId, input.responsavelId));
+        if (input.prioridade) cardConditions.push(eq(kanbanCards.prioridade, input.prioridade));
+        if (input.dataInicio) cardConditions.push(gte(kanbanCards.createdAt, new Date(`${input.dataInicio}T00:00:00`)));
+        if (input.dataFim) cardConditions.push(lte(kanbanCards.createdAt, new Date(`${input.dataFim}T23:59:59`)));
+        if (input.prazoFiltro === "vencidos") cardConditions.push(and(sql`${kanbanCards.prazo} IS NOT NULL`, lt(kanbanCards.prazo, hoje)));
+        else if (input.prazoFiltro === "hoje") cardConditions.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fimHoje)));
+        else if (input.prazoFiltro === "7dias") cardConditions.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fim7)));
+        else if (input.prazoFiltro === "sem_prazo") cardConditions.push(sql`${kanbanCards.prazo} IS NULL`);
+
         const cards = await db.select().from(kanbanCards)
           .where(and(...cardConditions))
           .orderBy(asc(kanbanCards.ordem));
@@ -212,7 +238,17 @@ export const kanbanRouter = router({
           cardsEnriquecidos.push({ ...card, tags: tagsResolvidas, clienteNome, responsavelNome, acaoApelido });
         }
 
-        result.push({ ...col, cards: cardsEnriquecidos });
+        // Filtro por tag aplicado APÓS o enrich (tags vêm do cliente quando
+        // card tem clienteId). Compara case-insensitive em qualquer item da
+        // lista CSV de tags.
+        const cardsFiltrados = input.tag
+          ? cardsEnriquecidos.filter((c) => {
+              const lista = (c.tags || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+              return lista.includes(input.tag!.toLowerCase());
+            })
+          : cardsEnriquecidos;
+
+        result.push({ ...col, cards: cardsFiltrados });
       }
 
       return { funil, colunas: result };
@@ -434,8 +470,22 @@ export const kanbanRouter = router({
         .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId))).limit(1);
       if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
 
+      // Quando o frontend não passa ordem (drop simples sobre a coluna,
+      // sem definir posição), coloca no FIM da fila — calcula maior ordem
+      // atual da coluna destino + 1. Antes ia pra 0 e aparecia no topo.
+      let ordemFinal = input.ordem;
+      if (ordemFinal == null) {
+        const [maior] = await db
+          .select({ ordem: kanbanCards.ordem })
+          .from(kanbanCards)
+          .where(eq(kanbanCards.colunaId, input.colunaDestinoId))
+          .orderBy(desc(kanbanCards.ordem))
+          .limit(1);
+        ordemFinal = (maior?.ordem ?? 0) + 1;
+      }
+
       await db.update(kanbanCards)
-        .set({ colunaId: input.colunaDestinoId, ordem: input.ordem ?? 0 })
+        .set({ colunaId: input.colunaDestinoId, ordem: ordemFinal })
         .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId)));
 
       // Registrar movimentação (pra métricas de tempo por etapa)
@@ -795,20 +845,131 @@ export const kanbanRouter = router({
       // Substitui tags do card original pelas resolvidas (fonte da verdade)
       (card as any).tags = tagsResolvidas;
 
-      // Histórico de movimentações
+      // Histórico de movimentações + nomes de colunas + nome do user que moveu
       const movs = await db.select().from(kanbanMovimentacoes)
         .where(eq(kanbanMovimentacoes.cardId, input.id))
         .orderBy(desc(kanbanMovimentacoes.createdAt))
-        .limit(20);
+        .limit(50);
 
-      // Enriquecer movimentações com nomes de colunas
       const movsEnriquecidos = [];
       for (const m of movs) {
         const [orig] = await db.select({ nome: kanbanColunas.nome }).from(kanbanColunas).where(eq(kanbanColunas.id, m.colunaOrigemId)).limit(1);
         const [dest] = await db.select({ nome: kanbanColunas.nome }).from(kanbanColunas).where(eq(kanbanColunas.id, m.colunaDestinoId)).limit(1);
-        movsEnriquecidos.push({ ...m, colunaOrigemNome: orig?.nome, colunaDestinoNome: dest?.nome });
+        let movidoPorNome: string | null = null;
+        if (m.movidoPorId) {
+          const [linha] = await db
+            .select({ name: users.name, email: users.email })
+            .from(colaboradores)
+            .leftJoin(users, eq(users.id, colaboradores.userId))
+            .where(eq(colaboradores.id, m.movidoPorId))
+            .limit(1);
+          movidoPorNome = linha?.name || linha?.email || null;
+        }
+        movsEnriquecidos.push({
+          ...m,
+          colunaOrigemNome: orig?.nome,
+          colunaDestinoNome: dest?.nome,
+          movidoPorNome,
+        });
       }
 
-      return { ...card, clienteNome, clienteCpfCnpj, movimentacoes: movsEnriquecidos };
+      // Comentários do card + nome do autor (via users table)
+      const comentariosRows = await db
+        .select({
+          id: kanbanComentarios.id,
+          texto: kanbanComentarios.texto,
+          createdAt: kanbanComentarios.createdAt,
+          autorId: kanbanComentarios.autorId,
+          autorNome: users.name,
+          autorEmail: users.email,
+        })
+        .from(kanbanComentarios)
+        .leftJoin(colaboradores, eq(colaboradores.id, kanbanComentarios.autorId))
+        .leftJoin(users, eq(users.id, colaboradores.userId))
+        .where(eq(kanbanComentarios.cardId, input.id))
+        .orderBy(desc(kanbanComentarios.createdAt));
+
+      return {
+        ...card,
+        clienteNome,
+        clienteCpfCnpj,
+        movimentacoes: movsEnriquecidos,
+        comentarios: comentariosRows.map((c) => ({
+          id: c.id,
+          texto: c.texto,
+          createdAt: c.createdAt,
+          autorId: c.autorId,
+          autorNome: c.autorNome || c.autorEmail || "Usuário",
+        })),
+      };
+    }),
+
+  /** Adiciona comentário no card. Autor = colaborador do user logado. */
+  adicionarComentario: protectedProcedure
+    .input(z.object({ cardId: z.number(), texto: z.string().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "ver");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Confirma que o card pertence ao escritório do user (evita comentar
+      // em cards de outros escritórios via ID adivinhado).
+      const [card] = await db.select({ id: kanbanCards.id }).from(kanbanCards)
+        .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!card) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      await db.insert(kanbanComentarios).values({
+        cardId: input.cardId,
+        autorId: perm.colaboradorId,
+        texto: input.texto.trim(),
+      });
+      return { success: true };
+    }),
+
+  /** Remove comentário (só autor pode). */
+  removerComentario: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "ver");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [com] = await db.select().from(kanbanComentarios).where(eq(kanbanComentarios.id, input.id)).limit(1);
+      if (!com) throw new TRPCError({ code: "NOT_FOUND" });
+      // Autor pode sempre apagar; gestor/dono também (verTodos).
+      if (com.autorId !== perm.colaboradorId && !perm.verTodos) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só o autor (ou gestor) pode apagar." });
+      }
+      await db.delete(kanbanComentarios).where(eq(kanbanComentarios.id, input.id));
+      return { success: true };
+    }),
+
+  /** Reordena colunas via drag-and-drop. Recebe array de IDs na ordem nova. */
+  reordenarColunas: protectedProcedure
+    .input(z.object({ funilId: z.number(), idsOrdenados: z.array(z.number()) }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Valida que todas as colunas pertencem ao funil do escritório.
+      const colunas = await db.select({ id: kanbanColunas.id, funilId: kanbanColunas.funilId })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanFunis.id, kanbanColunas.funilId))
+        .where(and(eq(kanbanFunis.id, input.funilId), eq(kanbanFunis.escritorioId, perm.escritorioId)));
+      const idsValidos = new Set(colunas.map((c) => c.id));
+      for (const id of input.idsOrdenados) {
+        if (!idsValidos.has(id)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Coluna inválida." });
+        }
+      }
+      // Atualiza ordem em sequência (1, 2, 3...).
+      for (let i = 0; i < input.idsOrdenados.length; i++) {
+        await db.update(kanbanColunas)
+          .set({ ordem: i + 1 })
+          .where(eq(kanbanColunas.id, input.idsOrdenados[i]));
+      }
+      return { success: true };
     }),
 });

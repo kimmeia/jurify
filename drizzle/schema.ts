@@ -1823,6 +1823,15 @@ export const kanbanMovimentacoes = mysqlTable("kanban_movimentacoes", {
   createdAt: timestamp("createdAtKMov").defaultNow().notNull(),
 });
 
+/** Comentários nos cards do Kanban (autor != responsável do card) */
+export const kanbanComentarios = mysqlTable("kanban_comentarios", {
+  id: int("id").autoincrement().primaryKey(),
+  cardId: int("cardIdKCom").notNull(),
+  autorId: int("autorIdKCom").notNull(),
+  texto: text("textoKCom").notNull(),
+  createdAt: timestamp("createdAtKCom").defaultNow().notNull(),
+});
+
 /** Tags padronizadas do escritório com cores */
 export const kanbanTags = mysqlTable("kanban_tags", {
   id: int("id").autoincrement().primaryKey(),

@@ -23,6 +23,8 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { ResponsavelAvatar } from "./kanban/responsavel-avatar";
 import { LancarCobrancaCardModal, type LancarCobrancaCardCtx } from "./kanban/lancar-cobranca-modal";
+import { ComentariosSection } from "./kanban/comentarios-section";
+import { FiltrosBar, type FiltrosKanban, FILTROS_VAZIOS } from "./kanban/filtros-bar";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30",
@@ -51,8 +53,9 @@ export default function Kanban() {
   const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c: any) => c.ativo);
 
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
+  const [filtros, setFiltros] = useState<FiltrosKanban>(FILTROS_VAZIOS);
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
-    { funilId: funilAtivo! },
+    { funilId: funilAtivo!, ...filtros },
     {
       enabled: !!funilAtivo,
       // Polling 15s pra refletir movimentações de outros usuários sem F5
@@ -141,8 +144,33 @@ export default function Kanban() {
   const listaFunis = funis || [];
   const colunas = funilData?.colunas || [];
 
-  // Drag state simples
+  // Drag state — cards e colunas usam estados separados pra não interferir.
   const [dragCardId, setDragCardId] = useState<number | null>(null);
+  const [dragColunaId, setDragColunaId] = useState<number | null>(null);
+
+  const reordenarColunasMut = (trpc as any).kanban.reordenarColunas.useMutation({
+    onSuccess: () => refetchFunil(),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleColunaDropOnTarget = (alvoColunaId: number) => {
+    if (!dragColunaId || dragColunaId === alvoColunaId) {
+      setDragColunaId(null);
+      return;
+    }
+    const idsAtuais: number[] = colunas.map((c: any) => c.id);
+    const idxFonte = idsAtuais.indexOf(dragColunaId);
+    const idxAlvo = idsAtuais.indexOf(alvoColunaId);
+    if (idxFonte === -1 || idxAlvo === -1) {
+      setDragColunaId(null);
+      return;
+    }
+    const novaOrdem = [...idsAtuais];
+    novaOrdem.splice(idxFonte, 1);
+    novaOrdem.splice(idxAlvo, 0, dragColunaId);
+    setDragColunaId(null);
+    reordenarColunasMut.mutate({ funilId: funilAtivo, idsOrdenados: novaOrdem });
+  };
 
   const handleDrop = (colunaDestinoId: number) => {
     if (!dragCardId || !colunaDestinoId) return;
@@ -267,17 +295,30 @@ export default function Kanban() {
         </Button>
       </div>
 
+      <FiltrosBar filtros={filtros} setFiltros={setFiltros} />
+
       {/* Colunas */}
       <div className="flex gap-4 overflow-x-auto pb-4 px-2" style={{ minHeight: "70vh" }}>
         {colunas.map((col: any) => (
           <div
             key={col.id}
-            className="flex-shrink-0 w-72 bg-muted/30 rounded-xl p-3 space-y-2"
+            className={`flex-shrink-0 w-72 bg-muted/30 rounded-xl p-3 space-y-2 ${dragColunaId === col.id ? "opacity-50" : ""}`}
             onDragOver={(e) => e.preventDefault()}
-            onDrop={() => handleDrop(col.id)}
+            onDrop={() => {
+              // Drop entre tipos: se está arrastando coluna, reordena;
+              // senão, é drop de card → move card pra cá.
+              if (dragColunaId) handleColunaDropOnTarget(col.id);
+              else handleDrop(col.id);
+            }}
           >
-            {/* Header coluna */}
-            <div className="flex items-center justify-between mb-2">
+            {/* Header coluna — draggable pra reordenar colunas */}
+            <div
+              className="flex items-center justify-between mb-2 cursor-move"
+              draggable
+              onDragStart={() => setDragColunaId(col.id)}
+              onDragEnd={() => setDragColunaId(null)}
+              title="Arraste pra reordenar coluna"
+            >
               <div className="flex items-center gap-2">
                 <div className="h-2.5 w-2.5 rounded-full" style={{ background: col.cor || "#6b7280" }} />
                 <input
@@ -682,7 +723,10 @@ export default function Kanban() {
                 )}
               </div>
 
-              {/* Histórico de movimentações */}
+              {/* Comentários — autor distinto do responsável do card */}
+              <ComentariosSection cardId={cardDetalhe.id} comentarios={cardDetalhe.comentarios || []} onChange={refetchDetalhe} />
+
+              {/* Histórico de movimentações com autor */}
               {cardDetalhe.movimentacoes?.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground mb-2">HISTÓRICO</p>
@@ -691,6 +735,9 @@ export default function Kanban() {
                       <div key={m.id} className="flex items-center gap-2 text-xs text-muted-foreground">
                         <ArrowRight className="h-3 w-3 shrink-0" />
                         <span>{m.colunaOrigemNome} → {m.colunaDestinoNome}</span>
+                        {m.movidoPorNome && (
+                          <span className="text-[10px] italic">por {m.movidoPorNome}</span>
+                        )}
                         <span className="text-[9px] ml-auto">{new Date(m.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
                     ))}
