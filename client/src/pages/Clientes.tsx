@@ -1641,6 +1641,89 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
   );
 }
 
+// ─── Atendente do Lead (trocar inline) ──────────────────────────────────────
+// Resolve casos onde o lead foi gravado com responsavelId errado (ex: cliente
+// cadastrado sem responsável → lead fica com o operador logado, não com quem
+// fechou a venda). Sem isso, relatório comercial do atendente real fica zerado.
+function LeadAtendenteInline({
+  leadId,
+  responsavelAtualId,
+  responsavelAtualNome,
+  onUpdated,
+}: {
+  leadId: number;
+  responsavelAtualId: number | null;
+  responsavelAtualNome: string | null;
+  onUpdated: () => void;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState<string>(
+    responsavelAtualId ? String(responsavelAtualId) : "",
+  );
+  const { data: equipeData } = (trpc as any).configuracoes?.listarColaboradores?.useQuery?.(
+    undefined,
+    { retry: false, enabled: editando },
+  ) || { data: null };
+  const colabs: any[] = equipeData?.colaboradores || [];
+
+  const mut = (trpc as any).crm.atualizarLead.useMutation({
+    onSuccess: () => {
+      toast.success("Atendente do lead atualizado");
+      setEditando(false);
+      onUpdated();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao atualizar atendente"),
+  });
+
+  if (!editando) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditando(true)}
+        className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+        title="Trocar atendente responsável"
+      >
+        {responsavelAtualNome ? `por ${responsavelAtualNome}` : "sem atendente — atribuir"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        className="text-[10px] border rounded px-1 py-0.5 bg-background"
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        disabled={mut.isPending}
+      >
+        <option value="">— selecione —</option>
+        {colabs.map((c: any) => (
+          <option key={c.id} value={String(c.id)}>
+            {c.userName || c.userEmail || `Colaborador #${c.id}`}
+          </option>
+        ))}
+      </select>
+      <Button
+        size="sm"
+        className="h-6 px-2 text-[10px]"
+        disabled={mut.isPending || !valor}
+        onClick={() => mut.mutate({ id: leadId, responsavelId: Number(valor) })}
+      >
+        Salvar
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 px-2 text-[10px]"
+        disabled={mut.isPending}
+        onClick={() => { setEditando(false); setValor(responsavelAtualId ? String(responsavelAtualId) : ""); }}
+      >
+        Cancelar
+      </Button>
+    </div>
+  );
+}
+
 // ─── Detalhe do Cliente ─────────────────────────────────────────────────────
 
 function ClienteDetalhe({
@@ -1661,7 +1744,7 @@ function ClienteDetalhe({
   const { data: anotacoes, refetch: rN } = trpc.clientes.listarAnotacoes.useQuery({ contatoId: id });
   const { data: arquivos, refetch: rA } = trpc.clientes.listarArquivos.useQuery({ contatoId: id });
   const { data: convsData } = trpc.clientes.listarConversas.useQuery({ contatoId: id });
-  const { data: leadsData } = trpc.clientes.listarLeads.useQuery({ contatoId: id });
+  const { data: leadsData, refetch: refetchLeads } = trpc.clientes.listarLeads.useQuery({ contatoId: id });
   const fechamentosExistentes = ((leadsData as any[]) || [])
     .filter((l) => l.etapaFunil === "fechado_ganho")
     .map((l) => ({
@@ -1897,16 +1980,22 @@ function ClienteDetalhe({
                       className="flex items-center gap-3 px-3 py-2 rounded-lg border"
                     >
                       <TrendingUp className="h-4 w-4 text-violet-500 shrink-0" />
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm">{l.etapaFunil}</p>
+                        <LeadAtendenteInline
+                          leadId={l.id}
+                          responsavelAtualId={l.responsavelId ?? null}
+                          responsavelAtualNome={l.responsavelNome ?? null}
+                          onUpdated={() => refetchLeads()}
+                        />
                       </div>
                       {l.valorEstimado && (
-                        <span className="text-sm font-medium text-emerald-600">
+                        <span className="text-sm font-medium text-emerald-600 whitespace-nowrap">
                           <DollarSign className="h-3 w-3 inline mr-0.5" />
                           {fmtMoeda(parseValorBR(l.valorEstimado))}
                         </span>
                       )}
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {timeAgo(l.createdAt)}
                       </span>
                     </div>
@@ -1943,6 +2032,7 @@ function ClienteDetalhe({
         open={fechamentoOpen}
         onOpenChange={setFechamentoOpen}
         contatoId={id}
+        responsavelClienteId={cliente?.responsavelId ?? null}
         fechamentosExistentes={fechamentosExistentes}
         onSuccess={() => {
           utilsTrpc.clientes.listarLeads.invalidate({ contatoId: id });

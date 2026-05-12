@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
-import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads } from "../../drizzle/schema";
+import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, sql, inArray, isNull } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
@@ -204,6 +204,14 @@ export const clientesRouter = router({
         contatoId: z.number(),
         valorFechamento: z.string().max(20).optional(),
         origemFechamento: z.string().max(128).optional(),
+        /**
+         * Atendente que fechou. Default = responsavelId do contato (ou o
+         * colaborador logado se o contato não tem responsável). O dialog
+         * "Registrar fechamento" passa essa escolha explicitamente — sem
+         * isso, leads ficavam atribuídos a quem cadastrou o cliente (não
+         * a quem vendeu), distorcendo o relatório comercial.
+         */
+        responsavelId: z.number().int().positive().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -231,10 +239,25 @@ export const clientesRouter = router({
         throw new Error("Sem permissão para registrar fechamento neste cliente.");
       }
 
+      // Valida que o responsavelId informado pertence ao escritório.
+      // Sem isso, operador malicioso poderia atribuir conversão a colaborador
+      // de outro escritório (vazamento de dados em relatórios cruzados).
+      if (input.responsavelId) {
+        const [colab] = await db
+          .select({ id: colaboradores.id })
+          .from(colaboradores)
+          .where(and(
+            eq(colaboradores.id, input.responsavelId),
+            eq(colaboradores.escritorioId, perm.escritorioId),
+          ))
+          .limit(1);
+        if (!colab) throw new Error("Atendente inválido ou não pertence ao escritório.");
+      }
+
       const leadId = await criarLead({
         escritorioId: perm.escritorioId,
         contatoId: input.contatoId,
-        responsavelId: contato.responsavelId ?? perm.colaboradorId,
+        responsavelId: input.responsavelId ?? contato.responsavelId ?? perm.colaboradorId,
         etapaFunil: "fechado_ganho",
         valorEstimado: input.valorFechamento || undefined,
         origemLead: input.origemFechamento || "manual",
@@ -338,6 +361,7 @@ export const clientesRouter = router({
       // Cobranças com atendente já atribuído (manual ou via cascata) são
       // preservadas — a função reconciliarCobrancasOrfas só toca em órfãs.
       let reconciliadas = 0;
+      let leadsReatribuidos = 0;
       if (responsavelMudou && responsavelAlvo !== null && responsavelAlvo !== undefined) {
         try {
           const r = await reconciliarCobrancasOrfas(perm.escritorioId, id);
@@ -346,8 +370,26 @@ export const clientesRouter = router({
           // Não derruba o update do contato se a reconciliação falhar.
           // O usuário ainda pode disparar manualmente em "Atribuir cobranças".
         }
+        // Mesma lógica para leads sem responsável: cliente cadastrado sem
+        // atendente → leads herdados ficaram com responsavelId NULL (fluxo
+        // de "Registrar fechamento" antes do fix). Definir responsável no
+        // cliente agora propaga pros leads NULL — não toca em leads que já
+        // têm responsável (evita sobrescrever fechamento de outro atendente).
+        try {
+          const r = await db
+            .update(leads)
+            .set({ responsavelId: responsavelAlvo })
+            .where(and(
+              eq(leads.contatoId, id),
+              eq(leads.escritorioId, perm.escritorioId),
+              isNull(leads.responsavelId),
+            ));
+          leadsReatribuidos = Number((r as { affectedRows?: number }).affectedRows ?? 0);
+        } catch {
+          /* não-fatal */
+        }
       }
-      return { success: true, reconciliadas };
+      return { success: true, reconciliadas, leadsReatribuidos };
     }),
 
   excluir: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
@@ -661,8 +703,28 @@ export const clientesRouter = router({
 
   listarLeads: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
-    const rows = await db.select().from(leads).where(and(eq(leads.contatoId, input.contatoId), eq(leads.escritorioId, esc.escritorio.id))).orderBy(desc(leads.createdAt));
-    return rows.map(r => ({ id: r.id, etapaFunil: r.etapaFunil, valorEstimado: r.valorEstimado, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "" }));
+    const rows = await db
+      .select({
+        id: leads.id,
+        etapaFunil: leads.etapaFunil,
+        valorEstimado: leads.valorEstimado,
+        createdAt: leads.createdAt,
+        responsavelId: leads.responsavelId,
+        responsavelNome: users.name,
+      })
+      .from(leads)
+      .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
+      .leftJoin(users, eq(colaboradores.userId, users.id))
+      .where(and(eq(leads.contatoId, input.contatoId), eq(leads.escritorioId, esc.escritorio.id)))
+      .orderBy(desc(leads.createdAt));
+    return rows.map(r => ({
+      id: r.id,
+      etapaFunil: r.etapaFunil,
+      valorEstimado: r.valorEstimado,
+      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+      responsavelId: r.responsavelId,
+      responsavelNome: r.responsavelNome,
+    }));
   }),
 
   estatisticas: protectedProcedure.query(async ({ ctx }) => {
