@@ -120,11 +120,40 @@ export async function verificarLimite(
 
   if (!esc) return { permitido: false, atual: 0, maximo: 0, mensagem: "Escritório não encontrado", planId: "free" };
 
-  // Buscar subscription ativa do dono
-  const [sub] = await db.select({ planId: subscriptions.planId, status: subscriptions.status })
+  // Buscar subscription ativa do dono. Inclui cortesia (status pode ser
+  // 'canceled' mas `cortesia=true` libera acesso sem limite).
+  const [sub] = await db.select({
+    planId: subscriptions.planId,
+    status: subscriptions.status,
+    cortesia: subscriptions.cortesia,
+    cortesiaExpiraEm: subscriptions.cortesiaExpiraEm,
+  })
     .from(subscriptions)
-    .where(and(eq(subscriptions.userId, esc.ownerId), eq(subscriptions.status, "active")))
+    .where(and(
+      eq(subscriptions.userId, esc.ownerId),
+      or(
+        eq(subscriptions.status, "active"),
+        eq(subscriptions.cortesia, true),
+      ),
+    ))
     .limit(1);
+
+  // CORTESIA: libera sem limite (alinha com painel admin que mostra
+  // "Cortesia ativa"). Antes a query filtrava só `status='active'`,
+  // ignorando cortesia → caía no plano "free" com maxClientes=10.
+  // Convenção: `maximo: -1` é "ilimitado" (Infinity vira null em JSON).
+  if (sub?.cortesia) {
+    const expirou = sub.cortesiaExpiraEm != null && sub.cortesiaExpiraEm < Date.now();
+    if (!expirou) {
+      return {
+        permitido: true,
+        atual: 0,
+        maximo: -1,
+        mensagem: "Cortesia ativa — sem limite",
+        planId: sub.planId || "cortesia",
+      };
+    }
+  }
 
   const planId = sub?.planId || "free";
   const limites = getLimites(planId);
