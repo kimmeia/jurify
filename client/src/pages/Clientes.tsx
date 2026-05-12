@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
-  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw,
+  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -739,6 +739,143 @@ function fmtData(iso: string | null | undefined): string {
   } catch {
     return iso;
   }
+}
+
+function KanbanClienteTab({ contatoId }: { contatoId: number }) {
+  const [, setLocation] = useLocation();
+  const [criarOpen, setCriarOpen] = useState(false);
+  const [funilSelecionado, setFunilSelecionado] = useState<string>("");
+  const [colunaSelecionada, setColunaSelecionada] = useState<string>("");
+  const [titulo, setTitulo] = useState("");
+
+  const { data, refetch } = (trpc as any).kanban.listarCardsPorCliente.useQuery({ clienteId: contatoId });
+  const { data: funis } = (trpc as any).kanban.listarFunis.useQuery();
+  const { data: funilDetalhe } = (trpc as any).kanban.obterFunil.useQuery(
+    { funilId: funilSelecionado ? Number(funilSelecionado) : undefined },
+    { enabled: !!funilSelecionado },
+  );
+
+  const criarMut = (trpc as any).kanban.criarCard.useMutation({
+    onSuccess: () => {
+      toast.success("Card criado");
+      setCriarOpen(false);
+      setTitulo("");
+      setColunaSelecionada("");
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const cards: any[] = data?.cards || [];
+  const colunas: any[] = funilDetalhe?.colunas || [];
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <div>
+          <CardTitle className="text-base">Cards do Kanban</CardTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {cards.length === 0 ? "Nenhum card vinculado" : `${cards.length} card(s) vinculado(s)`}
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setCriarOpen(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Criar card manual
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {cards.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            Este cliente ainda não está em nenhum funil do Kanban.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {cards.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-2 border rounded-lg p-2.5 hover:bg-accent/30 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="h-2 w-2 rounded-full shrink-0" style={{ background: c.colunaCor || "#6b7280" }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.titulo}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {c.funilNome} · {c.colunaNome}
+                      {c.prazo && ` · prazo ${new Date(c.prazo).toLocaleDateString("pt-BR")}`}
+                      {c.atrasado && <span className="ml-1 text-red-600 font-medium">(atrasado)</span>}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setLocation(`/kanban?card=${c.id}&funil=${c.funilId}`)}
+                  title="Abrir no Kanban"
+                >
+                  Abrir
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Dialog: criar card manual */}
+        <Dialog open={criarOpen} onOpenChange={setCriarOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Criar card no Kanban</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Funil</Label>
+                <Select value={funilSelecionado} onValueChange={(v) => { setFunilSelecionado(v); setColunaSelecionada(""); }}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Escolha o funil" /></SelectTrigger>
+                  <SelectContent>
+                    {(funis || []).map((f: any) => (
+                      <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Coluna</Label>
+                <Select value={colunaSelecionada} onValueChange={setColunaSelecionada} disabled={!funilSelecionado}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder={funilSelecionado ? "Escolha a coluna" : "Escolha um funil primeiro"} /></SelectTrigger>
+                  <SelectContent>
+                    {colunas.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Título do card</Label>
+                <Input
+                  value={titulo}
+                  onChange={(e) => setTitulo(e.target.value)}
+                  placeholder="ex: Contrato pendente"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCriarOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={() => criarMut.mutate({
+                  colunaId: Number(colunaSelecionada),
+                  titulo: titulo.trim(),
+                  clienteId: contatoId,
+                })}
+                disabled={criarMut.isPending || !colunaSelecionada || !titulo.trim()}
+              >
+                {criarMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                Criar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
 }
 
 function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
@@ -1465,7 +1602,6 @@ function ClienteDetalhe({
                 <User className="h-3 w-3" /> {cliente.cpfCnpj}
               </span>
             )}
-            <FinanceiroBadge contatoId={id} />
           </div>
         </div>
         {cliente.telefone && (
@@ -1506,14 +1642,17 @@ function ClienteDetalhe({
         </Button>
       </div>
 
-      {/* 5 abas consolidadas */}
+      {/* 6 abas consolidadas */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5 h-9">
+        <TabsList className="grid w-full grid-cols-6 h-9">
           <TabsTrigger value="visao-geral" className="text-xs gap-1">
             <User className="h-3 w-3" /> Visão Geral
           </TabsTrigger>
           <TabsTrigger value="processos" className="text-xs gap-1">
             <Scale className="h-3 w-3" /> Processos
+          </TabsTrigger>
+          <TabsTrigger value="kanban" className="text-xs gap-1">
+            <Trello className="h-3 w-3" /> Kanban
           </TabsTrigger>
           <TabsTrigger value="financeiro" className="text-xs gap-1">
             <DollarSign className="h-3 w-3" /> Financeiro
@@ -1537,8 +1676,14 @@ function ClienteDetalhe({
           <ProcessosClienteTab contatoId={id} />
         </TabsContent>
 
-        {/* Aba 3: Financeiro — cobranças do Asaas vinculadas */}
+        {/* Aba 3: Kanban — cards onde este cliente está sendo trabalhado */}
+        <TabsContent value="kanban" className="mt-4 space-y-4">
+          <KanbanClienteTab contatoId={id} />
+        </TabsContent>
+
+        {/* Aba 4: Financeiro — cobranças do Asaas vinculadas + badge no topo */}
         <TabsContent value="financeiro" className="mt-4 space-y-4">
+          <FinanceiroBadge contatoId={id} />
           <FinanceiroClienteTab contatoId={id} />
         </TabsContent>
 
