@@ -412,13 +412,17 @@ export const asaasRouter = router({
       const client = new AsaasClient(input.apiKey);
       const teste = await client.testarConexao();
 
-      // Detecção de rate limit (429) — Asaas tem janela de 12h.
-      // Em vez de falhar, salvamos a key com status="aguardando_validacao".
-      // Cron `validarConexoesAsaasPendentes` retenta quando liberar.
+      // Detecção de rate limit. Cobre 2 caminhos:
+      //  - HTTP 429 do Asaas (servidor remoto rejeitou)
+      //  - "rate_limit:" emitido pelo guard local (cota 12h/janela 60s
+      //    bloqueou antes da request sair) — não desconectar nesse caso,
+      //    user precisa só aguardar a janela liberar.
+      // Em ambos: salvamos a key com status="aguardando_validacao" e o
+      // cron `validarConexoesAsaasPendentes` retenta quando liberar.
+      const haystack = `${teste.mensagem} ${teste.detalhes ?? ""}`;
       const isRateLimit =
         !teste.ok &&
-        (/HTTP 429/i.test(teste.mensagem) ||
-          /cota.*requisi[çc][õo]es|rate.?limit/i.test(teste.detalhes ?? ""));
+        (/HTTP 429|rate.?limit|cota.*(?:requisi[çc][õo]es|12h|pr[óo]xima)/i.test(haystack));
 
       // 401 = chave inválida. NÃO salva — falha imediato.
       if (!teste.ok && !isRateLimit) {
@@ -587,10 +591,10 @@ export const asaasRouter = router({
     const client = new AsaasClient(apiKey);
     const teste = await client.testarConexao();
 
+    const haystack = `${teste.mensagem} ${teste.detalhes ?? ""}`;
     const isRateLimit =
       !teste.ok &&
-      (/HTTP 429/i.test(teste.mensagem) ||
-        /cota.*requisi[çc][õo]es|rate.?limit/i.test(teste.detalhes ?? ""));
+      /HTTP 429|rate.?limit|cota.*(?:requisi[çc][õo]es|12h|pr[óo]xima)/i.test(haystack);
 
     if (teste.ok) {
       await db.update(asaasConfig).set({
