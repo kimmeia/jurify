@@ -1176,11 +1176,13 @@ function ProcessoCard({
   expandido,
   onToggle,
   onDesvincular,
+  onAdicionarCnj,
 }: {
   processo: any;
   expandido: boolean;
   onToggle: () => void;
   onDesvincular: () => void;
+  onAdicionarCnj?: () => void;
 }) {
   const p = processo;
   const tipo = p.tipo || "litigioso";
@@ -1239,11 +1241,29 @@ function ProcessoCard({
                   <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
                 </Badge>
               )}
+              {/* Judicial sem CNJ ainda — aguardando protocolo */}
+              {!p.numeroCnj && (p.tipo === "litigioso" || !p.tipo) && (
+                <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[9px]">
+                  Aguardando CNJ
+                </Badge>
+              )}
             </div>
             {/* Apelido só aparece como subtítulo se há CNJ (senão já é o título). */}
             {p.apelido && p.numeroCnj && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
             {p.tribunal && <p className="text-[10px] text-muted-foreground">{p.tribunal}</p>}
           </div>
+          {/* Adicionar CNJ depois do protocolo (só pra judicial sem CNJ) */}
+          {!p.numeroCnj && (p.tipo === "litigioso" || !p.tipo) && onAdicionarCnj && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[10px] px-2"
+              title="Adicionar CNJ após protocolo"
+              onClick={(e) => { e.stopPropagation(); onAdicionarCnj(); }}
+            >
+              + CNJ
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -1327,7 +1347,14 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
   const [novoCnj, setNovoCnj] = useState("");
   const [novoApelido, setNovoApelido] = useState("");
   const [novoPolo, setNovoPolo] = useState<string>("");
-  const [novoTipo, setNovoTipo] = useState<"extrajudicial" | "litigioso">("litigioso");
+  // 3 modos de cadastro:
+  //  - "judicial"            → tipo=litigioso + CNJ obrigatório
+  //  - "judicial_aguardando" → tipo=litigioso + CNJ vazio (a obter depois)
+  //  - "extrajudicial"       → tipo=extrajudicial + sem CNJ
+  const [novoModo, setNovoModo] = useState<"judicial" | "judicial_aguardando" | "extrajudicial">("judicial");
+  // Dialog pra adicionar CNJ depois do protocolo (processo já existente).
+  const [adicionarCnjOpen, setAdicionarCnjOpen] = useState<{ id: number; apelido: string | null } | null>(null);
+  const [cnjAdicionado, setCnjAdicionado] = useState("");
   const [novoMonitorar, setNovoMonitorar] = useState(false);
   const [expandidos, setExpandidos] = useState<Set<number>>(new Set());
 
@@ -1366,10 +1393,13 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       setNovoCnj("");
       setNovoApelido("");
       setNovoPolo("");
-      setNovoTipo("litigioso");
+      setNovoModo("judicial");
       setNovoMonitorar(false);
       refetch();
     },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+  const atualizarProcessoMut = (trpc as any).clienteProcessos.atualizar.useMutation({
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
   const desvincularMut = (trpc as any).clienteProcessos.desvincular.useMutation({
@@ -1412,6 +1442,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               processo={p}
               expandido={expandidos.has(p.id)}
               onToggle={() => toggleExpandido(p.id)}
+              onAdicionarCnj={() => setAdicionarCnjOpen({ id: p.id, apelido: p.apelido })}
               onDesvincular={() => {
                 if (confirm("Desvincular este processo do cliente?")) desvincularMut.mutate({ id: p.id });
               }}
@@ -1431,19 +1462,26 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {/* Tipo primeiro — controla se CNJ é obrigatório */}
+            {/* Modo escolhido primeiro — controla os campos seguintes */}
             <div>
               <Label>Tipo de processo</Label>
-              <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as any)}>
+              <Select value={novoModo} onValueChange={(v) => setNovoModo(v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="litigioso">Judicial (litigioso) — com CNJ</SelectItem>
+                  <SelectItem value="judicial">Judicial — já tenho o CNJ</SelectItem>
+                  <SelectItem value="judicial_aguardando">Judicial — aguardando protocolo (CNJ a obter)</SelectItem>
                   <SelectItem value="extrajudicial">Extrajudicial (contrato, consultoria, administrativo)</SelectItem>
                 </SelectContent>
               </Select>
+              {novoModo === "judicial_aguardando" && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Use quando o cliente te contratou pra ajuizar mas o processo ainda não foi protocolado.
+                  Depois do protocolo, você adiciona o CNJ direto no card do processo.
+                </p>
+              )}
             </div>
 
-            {novoTipo === "litigioso" ? (
+            {novoModo === "judicial" ? (
               <div>
                 <Label>Número CNJ *</Label>
                 <Input
@@ -1453,7 +1491,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                   className="font-mono"
                 />
               </div>
-            ) : (
+            ) : novoModo === "extrajudicial" ? (
               <div>
                 <Label>Número de referência (opcional)</Label>
                 <Input
@@ -1466,20 +1504,20 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                   Caso seu processo tenha algum número identificador (não-CNJ), pode incluir aqui.
                 </p>
               </div>
-            )}
+            ) : null /* judicial_aguardando: sem campo de CNJ — será preenchido depois */}
 
             <div>
               <Label>
-                {novoTipo === "extrajudicial" ? "Descrição *" : "Descrição (opcional)"}
+                {novoModo === "judicial" ? "Descrição (opcional)" : "Descrição *"}
               </Label>
               <Input
-                placeholder="Ex: Divórcio, Contrato consultoria, Defesa administrativa..."
+                placeholder="Ex: Divórcio, Ação cobrança, Contrato consultoria..."
                 value={novoApelido}
                 onChange={(e) => setNovoApelido(e.target.value)}
               />
-              {novoTipo === "extrajudicial" && (
+              {novoModo !== "judicial" && (
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Sem CNJ, a descrição é o que identifica esse processo nas listas.
+                  Sem CNJ, a descrição é o que identifica esse processo nas listas e cobranças vinculadas.
                 </p>
               )}
             </div>
@@ -1496,7 +1534,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               </Select>
             </div>
 
-            {novoTipo === "litigioso" && (
+            {novoModo === "judicial" && (
               <label className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50">
                 <input
                   type="checkbox"
@@ -1518,27 +1556,82 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
               onClick={() => {
-                // Sem CNJ: tipo já é "extrajudicial" no backend; envia undefined
-                // pra que o Zod aceite. Com CNJ: validamos comprimento mínimo no front.
+                // judicial_aguardando: tipo='litigioso' + CNJ vazio. Backend
+                // mantém o tipo escolhido (não força extrajudicial). Vai pra
+                // lista como "aguardando CNJ"; user adiciona depois.
                 const enviarCnj = novoCnj.trim().length >= 15 ? novoCnj.trim() : undefined;
+                const tipoFinal: "extrajudicial" | "litigioso" =
+                  novoModo === "extrajudicial" ? "extrajudicial" : "litigioso";
                 vincularMut.mutate({
                   contatoId,
                   numeroCnj: enviarCnj,
                   apelido: novoApelido || undefined,
                   polo: novoPolo || undefined,
-                  tipo: novoTipo,
-                  monitorar: novoTipo === "litigioso" ? novoMonitorar : false,
+                  tipo: tipoFinal,
+                  monitorar: novoModo === "judicial" ? novoMonitorar : false,
                 });
               }}
               disabled={
                 vincularMut.isPending ||
-                (novoTipo === "litigioso"
+                (novoModo === "judicial"
                   ? !novoCnj.trim() || novoCnj.trim().length < 15
                   : !novoApelido.trim())
               }
             >
               {vincularMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog pra adicionar CNJ depois do protocolo. */}
+      <Dialog
+        open={adicionarCnjOpen != null}
+        onOpenChange={(o) => { if (!o) { setAdicionarCnjOpen(null); setCnjAdicionado(""); } }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar CNJ ao processo</DialogTitle>
+            <DialogDescription>
+              {adicionarCnjOpen?.apelido
+                ? `Processo "${adicionarCnjOpen.apelido}" — informe o CNJ recebido após o protocolo.`
+                : "Informe o CNJ recebido após o protocolo."}
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label>Número CNJ *</Label>
+            <Input
+              placeholder="0000000-00.0000.0.00.0000"
+              value={cnjAdicionado}
+              onChange={(e) => setCnjAdicionado(e.target.value)}
+              className="font-mono mt-1"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAdicionarCnjOpen(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!adicionarCnjOpen) return;
+                atualizarProcessoMut.mutate(
+                  { id: adicionarCnjOpen.id, numeroCnj: cnjAdicionado.trim() },
+                  {
+                    onSuccess: () => {
+                      toast.success("CNJ adicionado!");
+                      setAdicionarCnjOpen(null);
+                      setCnjAdicionado("");
+                      refetch();
+                    },
+                  },
+                );
+              }}
+              disabled={
+                atualizarProcessoMut.isPending ||
+                cnjAdicionado.trim().length < 15
+              }
+            >
+              {atualizarProcessoMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
