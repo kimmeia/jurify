@@ -4,7 +4,7 @@
  * Dialog: NovoClienteDialog.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -632,12 +632,30 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     { contatoId: number; valor: number | null } | null
   >(null);
 
-  // Dialog de duplicata: aberto quando backend rejeita criação por CPF já em
-  // uso (TRPCError CONFLICT). Mostra nome do cliente existente + botão pra
-  // abrir a ficha dele direto.
+  // Dialog de duplicata: aberto quando CPF já cadastrado é detectado
+  // (em tempo real, ao terminar de digitar, ou via TRPCError CONFLICT no
+  // submit). Mostra nome do cliente existente + botão pra abrir a ficha.
   const [duplicataAlerta, setDuplicataAlerta] = useState<
     { clienteId: number; nome: string } | null
   >(null);
+
+  // Verifica em tempo real se o CPF/CNPJ já está em uso. Só dispara quando
+  // o usuário terminou de digitar (CPF=11 dígitos ou CNPJ=14). A própria
+  // procedure ignora chamadas com tamanho parcial.
+  const [cpfDebounced, setCpfDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setCpfDebounced(cpf), 400);
+    return () => clearTimeout(t);
+  }, [cpf]);
+  const { data: cpfExistente } = (trpc as any).clientes.verificarCpf.useQuery(
+    { cpfCnpj: cpfDebounced },
+    { enabled: cpfDebounced.replace(/\D/g, "").length === 11 || cpfDebounced.replace(/\D/g, "").length === 14, retry: false },
+  );
+  useEffect(() => {
+    if (cpfExistente && open) {
+      setDuplicataAlerta({ clienteId: cpfExistente.id, nome: cpfExistente.nome });
+    }
+  }, [cpfExistente, open]);
 
   const resetCadastro = () => {
     setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId("");
