@@ -334,16 +334,43 @@ async function finalizarVinculacao(
   }
 
   try {
-    const r = await syncTodasCobrancasDoContato(client, escritorioId, contatoId);
+    // historicoCompleto: primeiro sync deve trazer TODAS as cobranças do
+    // cliente no Asaas, não só as dos últimos 90 dias. Caso contrário o
+    // operador acabou de vincular e vê "Nenhuma cobrança" pra clientes
+    // com histórico antigo — UX quebrada que motivou esse fix.
+    const r = await syncTodasCobrancasDoContato(client, escritorioId, contatoId, {
+      historicoCompleto: true,
+    });
+    // Sync OK — limpa erro anterior (caso fosse retry).
+    await db
+      .update(asaasClientes)
+      .set({ ultimoErroSync: null, ultimoErroSyncEm: null })
+      .where(and(
+        eq(asaasClientes.contatoId, contatoId),
+        eq(asaasClientes.escritorioId, escritorioId),
+      ));
     return { cobrancasSincronizadas: r.novas + r.atualizadas, erroSync: null };
   } catch (err: any) {
     log.warn(
       { err: err.message, contatoId, asaasCustomerId: asaasCli.id },
       "Sync de cobranças após vincular falhou (não bloqueia o vínculo)",
     );
+    const mensagem = (err?.message || "Erro desconhecido ao sincronizar cobranças").slice(0, 500);
+    // Persiste no DB pra UI mostrar banner com retry e admin investigar.
+    try {
+      await db
+        .update(asaasClientes)
+        .set({ ultimoErroSync: mensagem, ultimoErroSyncEm: new Date() })
+        .where(and(
+          eq(asaasClientes.contatoId, contatoId),
+          eq(asaasClientes.escritorioId, escritorioId),
+        ));
+    } catch {
+      /* DB write best-effort — não bloqueia o retorno do vínculo */
+    }
     return {
       cobrancasSincronizadas: 0,
-      erroSync: err?.message || "Erro desconhecido ao sincronizar cobranças",
+      erroSync: mensagem,
     };
   }
 }
@@ -2149,12 +2176,22 @@ export const asaasRouter = router({
       if (!db) return null;
 
       try {
-        // Verificar se contato está vinculado
-        const [vinculo] = await db.select().from(asaasClientes)
-          .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)))
-          .limit(1);
+        // Verificar se contato está vinculado (TODOS os vínculos — pode
+        // haver duplicatas com mesmo CPF; pegamos status agregado).
+        const vinculos = await db.select().from(asaasClientes)
+          .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)));
 
-        if (!vinculo) return { vinculado: false, pendente: 0, vencido: 0, pago: 0, cobrancas: [] };
+        if (vinculos.length === 0) {
+          return {
+            vinculado: false,
+            pendente: 0,
+            vencido: 0,
+            pago: 0,
+            cobrancas: [],
+            sincronizadoEm: null,
+            ultimoErroSync: null,
+          };
+        }
 
         // Buscar cobranças locais
         const cobrancas = await db.select().from(asaasCobrancas)
@@ -2170,13 +2207,30 @@ export const asaasRouter = router({
           else if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) pago += val;
         }
 
+        // Estado do sync: pega o vínculo primário, ou o primeiro se não
+        // houver primário marcado. Erro mais recente entre todos os
+        // vínculos é o que a UI deve mostrar.
+        const primario = vinculos.find((v) => v.primario) ?? vinculos[0];
+        const erros = vinculos
+          .filter((v) => v.ultimoErroSync)
+          .sort((a, b) => {
+            const ta = a.ultimoErroSyncEm?.getTime() ?? 0;
+            const tb = b.ultimoErroSyncEm?.getTime() ?? 0;
+            return tb - ta;
+          });
+        const erroMaisRecente = erros[0] ?? null;
+
         return {
           vinculado: true,
-          asaasCustomerId: vinculo.asaasCustomerId,
+          asaasCustomerId: primario.asaasCustomerId,
+          totalVinculos: vinculos.length,
           pendente,
           vencido,
           pago,
           cobrancas,
+          sincronizadoEm: primario.sincronizadoEm?.toISOString() ?? null,
+          ultimoErroSync: erroMaisRecente?.ultimoErroSync ?? null,
+          ultimoErroSyncEm: erroMaisRecente?.ultimoErroSyncEm?.toISOString() ?? null,
         };
       } catch {
         return null;
@@ -2321,14 +2375,38 @@ export const asaasRouter = router({
       // cobranças locais, mesmo que o Asaas marque `cob.deleted=true`.
       // Cleanup de cobrança apagada no Asaas é responsabilidade do cron,
       // não desse fluxo manual.
+      //
+      // historicoCompleto: o botão "Sincronizar" da UI também merece o
+      // histórico completo. O cap de 90 dias só faz sentido pra cron
+      // periódico (que recebe o histórico via webhook em tempo real). No
+      // clique manual o operador quer reconciliar TUDO.
       let stats = { novas: 0, atualizadas: 0, removidas: 0 };
       let erroSync: string | null = erroReconciliacao;
       try {
         stats = await syncTodasCobrancasDoContato(client, esc.escritorio.id, input.contatoId, {
           apenasCriarAtualizar: true,
+          historicoCompleto: true,
         });
       } catch (err: any) {
         erroSync = err?.message || "Erro desconhecido ao sincronizar cobranças";
+      }
+
+      // Persiste estado do sync nos vínculos: limpa erro quando OK; salva
+      // mensagem quando falhou. UI mostra banner com retry pelo campo.
+      try {
+        const mensagem = erroSync ? erroSync.slice(0, 500) : null;
+        await db
+          .update(asaasClientes)
+          .set({
+            ultimoErroSync: mensagem,
+            ultimoErroSyncEm: mensagem ? new Date() : null,
+          })
+          .where(and(
+            eq(asaasClientes.contatoId, input.contatoId),
+            eq(asaasClientes.escritorioId, esc.escritorio.id),
+          ));
+      } catch {
+        /* best-effort */
       }
 
       return {
