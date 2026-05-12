@@ -12,7 +12,7 @@
  */
 
 import axios, { type AxiosInstance, type AxiosError } from "axios";
-import { AsaasRateGuard, type AsaasRateGuardInstance } from "./asaas-rate-guard";
+import { AsaasRateGuard, type AsaasRateGuardInstance, RateLimitError } from "./asaas-rate-guard";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -354,6 +354,17 @@ export class AsaasClient {
         modo: this.modo,
       };
     } catch (err) {
+      // RateLimitError vem do rate guard local (cota 12h, janela 60s, etc).
+      // NÃO é erro do Asaas — não desconectar. Mensagem padronizada pra
+      // que o router classifique como rate limit e mantenha a key salva
+      // em `aguardando_validacao` (regex do router checa "rate_limit").
+      if (err instanceof RateLimitError) {
+        return {
+          ok: false,
+          mensagem: "rate_limit: guard local bloqueou (cota próxima do limite)",
+          detalhes: err.message,
+        };
+      }
       const axErr = err as AxiosError<any>;
       if (axErr.response) {
         const status = axErr.response.status;

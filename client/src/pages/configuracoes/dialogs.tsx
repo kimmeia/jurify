@@ -656,11 +656,29 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
           ) : (
             <div className="space-y-3">
               {erroConexao && asaasStatus?.mensagemErro && (
-                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3">
+                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 space-y-2">
                   <p className="text-xs font-semibold text-red-900 dark:text-red-200">Última tentativa falhou</p>
-                  <p className="text-xs text-red-800 dark:text-red-200 mt-1">
+                  <p className="text-xs text-red-800 dark:text-red-200">
                     {asaasStatus.mensagemErro}
                   </p>
+                  {asaasStatus?.apiKeyPreview && (
+                    <>
+                      <p className="text-[10px] text-red-700 dark:text-red-300">
+                        Chave já salva ({asaasStatus.apiKeyPreview}). Você não precisa colá-la
+                        de novo — clique abaixo pra tentar reconectar.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => validarAgoraMut.mutate?.()}
+                        disabled={validarAgoraMut.isPending}
+                      >
+                        {validarAgoraMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Plug className="h-3 w-3 mr-1" />}
+                        Tentar reconectar com chave salva
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
               <div>
