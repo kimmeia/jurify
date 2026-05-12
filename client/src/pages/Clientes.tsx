@@ -44,7 +44,7 @@ import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge
 import { GerarContratoDialog } from "@/components/GerarContratoDialog";
 import {
   EditarForm, AnotacoesTab, ArquivosTab, AssinaturasTab, TarefasClienteTab,
-  NovoClienteDialog,
+  NovoClienteDialog, RegistrarFechamentoDialog,
 } from "./clientes/detail-tabs";
 import { useLocation } from "wouter";
 
@@ -1347,11 +1347,19 @@ function ClienteDetalhe({
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState("visao-geral");
   const [gerarContratoOpen, setGerarContratoOpen] = useState(false);
+  const [fechamentoOpen, setFechamentoOpen] = useState(false);
+  const utilsTrpc = trpc.useUtils();
   const { data: cliente, refetch } = trpc.clientes.detalhe.useQuery({ id });
   const { data: anotacoes, refetch: rN } = trpc.clientes.listarAnotacoes.useQuery({ contatoId: id });
   const { data: arquivos, refetch: rA } = trpc.clientes.listarArquivos.useQuery({ contatoId: id });
   const { data: convsData } = trpc.clientes.listarConversas.useQuery({ contatoId: id });
   const { data: leadsData } = trpc.clientes.listarLeads.useQuery({ contatoId: id });
+  const fechamentosExistentes = ((leadsData as any[]) || [])
+    .filter((l) => l.etapaFunil === "fechado_ganho")
+    .map((l) => ({
+      valorEstimado: l.valorEstimado ?? null,
+      createdAt: l.createdAt ?? "",
+    }));
   const { data: assinaturas, refetch: rAs } =
     (trpc as any).assinaturas.listarPorCliente.useQuery({ contatoId: id });
   const excluirMut = trpc.clientes.excluir.useMutation({
@@ -1549,10 +1557,22 @@ function ClienteDetalhe({
           {/* Leads */}
           <Card>
             <CardContent className="pt-4 space-y-2">
-              <p className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-violet-500" />
-                Negociações (Leads)
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-violet-500" />
+                  Negociações (Leads)
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setFechamentoOpen(true)}
+                  title="Marca conversão (fechado_ganho) sem passar pelo pipeline — usa quando esqueceu de marcar 'já fechou' no cadastro ou quando o cliente fechou outro contrato"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                  Registrar fechamento
+                </Button>
+              </div>
               {!(leadsData || []).length ? (
                 <p className="text-xs text-muted-foreground py-2">Nenhum lead.</p>
               ) : (
@@ -1603,6 +1623,17 @@ function ClienteDetalhe({
         contatoNome={cliente.nome}
         open={gerarContratoOpen}
         onOpenChange={setGerarContratoOpen}
+      />
+
+      <RegistrarFechamentoDialog
+        open={fechamentoOpen}
+        onOpenChange={setFechamentoOpen}
+        contatoId={id}
+        fechamentosExistentes={fechamentosExistentes}
+        onSuccess={() => {
+          utilsTrpc.clientes.listarLeads.invalidate({ contatoId: id });
+          utilsTrpc.clientes.detalhe.invalidate({ id });
+        }}
       />
     </div>
   );

@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
   Clock, StickyNote, CheckSquare, Check, Calendar, Download, Folder,
-  ChevronRight, MoreVertical, FolderPlus, Pencil, ArrowLeft,
+  ChevronRight, MoreVertical, FolderPlus, Pencil, ArrowLeft, CheckCircle2,
 } from "lucide-react";
 import JSZip from "jszip";
 import {
@@ -984,4 +984,146 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
       ))}</div>
     )}
   </CardContent></Card>);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Registrar fechamento retroativo
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Permite marcar "cliente fechou contrato" depois do cadastro — espelha o
+ * checkbox do NovoClienteDialog. Cria um lead `fechado_ganho` na meta
+ * comercial sem exigir excluir+recadastrar o cliente.
+ *
+ * Suporta múltiplos fechamentos pro mesmo cliente (cliente real pode
+ * fechar várias ações). A lista de fechamentos existentes aparece como
+ * lembrete pra evitar duplo-clique acidental, sem bloquear.
+ */
+export function RegistrarFechamentoDialog({
+  open,
+  onOpenChange,
+  contatoId,
+  fechamentosExistentes,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  contatoId: number;
+  fechamentosExistentes: { valorEstimado: string | null; createdAt: string }[];
+  onSuccess: () => void;
+}) {
+  const [valor, setValor] = useState("");
+  const [origem, setOrigem] = useState("");
+  const { data: origensDisponiveis } = (trpc as any).origensLead?.listar?.useQuery?.(
+    undefined,
+    { retry: false, enabled: open },
+  ) || { data: [] };
+
+  const mut = (trpc as any).clientes.registrarFechamento.useMutation({
+    onSuccess: () => {
+      toast.success("Fechamento registrado!", {
+        description: "Conversão adicionada ao Relatório Comercial.",
+      });
+      setValor("");
+      setOrigem("");
+      onOpenChange(false);
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao registrar."),
+  });
+
+  const fmtData = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString("pt-BR");
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            Registrar fechamento
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-xs text-muted-foreground">
+            Marca uma conversão pra este cliente no Relatório Comercial.
+            Use quando o contrato fechou fora do pipeline (indicação,
+            ligação, evento) ou quando esqueceu de marcar no cadastro.
+          </p>
+
+          {fechamentosExistentes.length > 0 && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 p-2.5 space-y-1">
+              <p className="text-[11px] font-medium text-emerald-800 dark:text-emerald-200">
+                Já registrados: {fechamentosExistentes.length} fechamento(s)
+              </p>
+              <ul className="text-[10px] text-emerald-700/90 dark:text-emerald-300/90 space-y-0.5">
+                {fechamentosExistentes.slice(0, 5).map((f, i) => (
+                  <li key={i}>
+                    {f.valorEstimado ? `R$ ${f.valorEstimado}` : "(sem valor)"}{" "}
+                    em {fmtData(f.createdAt)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Valor do contrato (R$)</Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Origem</Label>
+            <select
+              value={origem}
+              onChange={(e) => setOrigem(e.target.value)}
+              className="w-full h-9 px-2 text-sm rounded-md border bg-background"
+            >
+              <option value="">Selecione...</option>
+              {(origensDisponiveis ?? []).map(
+                (o: { id: number; nome: string }) => (
+                  <option key={o.id} value={o.nome}>
+                    {o.nome}
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={mut.isPending}
+            onClick={() =>
+              mut.mutate({
+                contatoId,
+                valorFechamento: valor.trim() || undefined,
+                origemFechamento: origem || undefined,
+              })
+            }
+          >
+            {mut.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 mr-1" />
+            )}
+            Registrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
