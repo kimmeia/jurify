@@ -34,6 +34,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { parseValorBR } from "@shared/valor-br";
+
+function formatBRL(v: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
 
 export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: () => void }) {
   const [nome, setNome] = useState(cliente.nome || "");
@@ -1181,7 +1186,9 @@ export function RegistrarFechamentoDialog({
               <ul className="text-[10px] text-emerald-700/90 dark:text-emerald-300/90 space-y-0.5">
                 {fechamentosExistentes.slice(0, 5).map((f, i) => (
                   <li key={i}>
-                    {f.valorEstimado ? `R$ ${f.valorEstimado}` : "(sem valor)"}{" "}
+                    {f.valorEstimado
+                      ? formatBRL(parseValorBR(f.valorEstimado))
+                      : "(sem valor)"}{" "}
                     em {fmtData(f.createdAt)}
                   </li>
                 ))}
