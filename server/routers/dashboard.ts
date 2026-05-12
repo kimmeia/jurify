@@ -27,6 +27,7 @@ import {
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
+import { parseValorBR } from "../../shared/valor-br";
 
 const log = createLogger("dashboard-router");
 
@@ -219,7 +220,7 @@ export const dashboardRouter = router({
 
       let valorPipeline = 0;
       for (const l of leadsAbertos) {
-        valorPipeline += parseFloat((l.valorEstimado as string | null) || "0") || 0;
+        valorPipeline += parseValorBR(l.valorEstimado as string | null);
       }
 
       // ─── Financeiro ─────────────────────────────────────────

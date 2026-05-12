@@ -7,6 +7,7 @@ import { eq, and, desc, asc, or, sql, gte, lte, like } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { normalizarValorBR } from "../../shared/valor-br";
 
 /**
  * Busca contato existente por telefone normalizado (exato).
@@ -592,7 +593,10 @@ export async function criarLead(dados: {
     contatoId: dados.contatoId,
     conversaId: dados.conversaId ?? null,
     responsavelId: dados.responsavelId ?? null,
-    valorEstimado: dados.valorEstimado || null,
+    // Normaliza pra formato US ("3000.00") antes de gravar — senão o
+    // `CAST(... AS DECIMAL)` em relatórios pega "3.000" digitado pelo
+    // operador como 3.00 e distorce os números.
+    valorEstimado: normalizarValorBR(dados.valorEstimado),
     origemLead: dados.origemLead || null,
     etapaFunil: dados.etapaFunil || "novo",
   });
@@ -637,7 +641,9 @@ export async function atualizarLead(id: number, escritorioId: number, dados: Rec
   if (!db) throw new Error("Database indisponível");
   const updateData: Record<string, unknown> = {};
   if (dados.etapaFunil !== undefined) updateData.etapaFunil = dados.etapaFunil;
-  if (dados.valorEstimado !== undefined) updateData.valorEstimado = dados.valorEstimado || null;
+  if (dados.valorEstimado !== undefined) {
+    updateData.valorEstimado = normalizarValorBR(dados.valorEstimado);
+  }
   if (dados.responsavelId !== undefined) updateData.responsavelId = dados.responsavelId;
   if (dados.probabilidade !== undefined) updateData.probabilidade = dados.probabilidade;
   if (dados.motivoPerda !== undefined) updateData.motivoPerda = dados.motivoPerda || null;

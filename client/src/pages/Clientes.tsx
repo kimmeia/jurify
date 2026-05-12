@@ -46,6 +46,7 @@ import {
   EditarForm, AnotacoesTab, ArquivosTab, AssinaturasTab, TarefasClienteTab,
   NovoClienteDialog, RegistrarFechamentoDialog,
 } from "./clientes/detail-tabs";
+import { parseValorBR } from "@shared/valor-br";
 import { useLocation } from "wouter";
 
 /**
@@ -1589,7 +1590,7 @@ function ClienteDetalhe({
                       {l.valorEstimado && (
                         <span className="text-sm font-medium text-emerald-600">
                           <DollarSign className="h-3 w-3 inline mr-0.5" />
-                          {l.valorEstimado}
+                          {fmtMoeda(parseValorBR(l.valorEstimado))}
                         </span>
                       )}
                       <span className="text-[10px] text-muted-foreground">

@@ -32,6 +32,7 @@ import {
   AlertTriangle, ExternalLink, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
+import { parseValorBR } from "@shared/valor-br";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -995,7 +996,7 @@ function EditarLeadInline({
             </Badge>
             {lead.valorEstimado && (
               <span className="font-bold text-emerald-600">
-                {formatBRL(parseFloat(lead.valorEstimado))}
+                {formatBRL(parseValorBR(lead.valorEstimado))}
               </span>
             )}
           </div>
