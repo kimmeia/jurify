@@ -68,6 +68,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatBRL } from "./helpers";
+import {
+  FiltrosAtribuir,
+  filtrosParaInput,
+  useFiltrosAtribuir,
+} from "./FiltrosAtribuir";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -883,13 +888,12 @@ function CelulaComissao({
 
 function AtribuirSection() {
   const utils = trpc.useUtils();
-  const [apenasSemAtribuicao, setApenasSemAtribuicao] = useState(true);
-  const [apenasSemDecisaoComissao, setApenasSemDecisaoComissao] = useState(false);
+  const { filtros, setFiltros, resetar } = useFiltrosAtribuir();
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [dialogAberto, setDialogAberto] = useState(false);
 
   const { data, isLoading } = trpc.financeiro.listarCobrancasParaAtribuicao.useQuery(
-    { apenasSemAtribuicao, apenasSemDecisaoComissao, limit: 200 },
+    filtrosParaInput(filtros),
   );
 
   // Mutation pra alterar override individual de uma cobrança — usa a
@@ -924,7 +928,9 @@ function AtribuirSection() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
-  const linhas = data ?? [];
+  const linhas = data?.rows ?? [];
+  const totalEncontrado = data?.totalEncontrado ?? 0;
+  const truncado = totalEncontrado > linhas.length;
   const todasSelecionadas =
     linhas.length > 0 && linhas.every((l) => selecionadas.has(l.id));
 
@@ -946,22 +952,22 @@ function AtribuirSection() {
   return (
     <div className="space-y-3">
       <Card>
-        <CardContent className="pt-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={apenasSemAtribuicao}
-                onCheckedChange={(v) => setApenasSemAtribuicao(Boolean(v))}
-              />
-              Sem atendente/categoria
-            </label>
-            <label className="flex items-center gap-2 text-sm" title="Cobranças sem categoria E sem decisão manual de comissionável — típico em PIX direto pro Asaas">
-              <Checkbox
-                checked={apenasSemDecisaoComissao}
-                onCheckedChange={(v) => setApenasSemDecisaoComissao(Boolean(v))}
-              />
-              Sem decisão de comissão
-            </label>
+        <CardContent className="pt-5 space-y-3">
+          <FiltrosAtribuir
+            filtros={filtros}
+            setFiltros={setFiltros}
+            resetar={resetar}
+            atendentes={atendentes}
+            categorias={categoriasAtivas}
+          />
+          <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+            <div className="text-xs text-muted-foreground">
+              {isLoading
+                ? "Carregando…"
+                : truncado
+                ? `Mostrando ${linhas.length} de ${totalEncontrado}. Refine os filtros para ver os demais.`
+                : `${totalEncontrado} cobrança(s)`}
+            </div>
             <div className="flex-1" />
             <Button
               variant="outline"
@@ -995,9 +1001,9 @@ function AtribuirSection() {
       ) : linhas.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            {apenasSemAtribuicao
+            {filtros.apenasSemAtribuicao
               ? "Nenhuma cobrança sem atribuição. Tudo organizado!"
-              : "Nenhuma cobrança encontrada."}
+              : "Nenhuma cobrança encontrada com os filtros atuais."}
           </CardContent>
         </Card>
       ) : (

@@ -185,6 +185,63 @@ export const clientesRouter = router({
       return { id: contatoId };
     }),
 
+  /**
+   * Registra um fechamento retroativo no cliente — cria um novo lead com
+   * `etapaFunil="fechado_ganho"`. Espelha o que o checkbox "Cliente já
+   * fechou contrato" do `NovoClienteDialog` faz quando o cadastro é feito
+   * com a flag marcada, mas como ação avulsa pra cobrir o caso "esqueci
+   * de marcar" ou "cliente fechou um segundo contrato".
+   *
+   * Cada chamada cria um lead novo — propositalmente sem checagem de
+   * duplicação. Um cliente pode legitimamente fechar N contratos e cada
+   * fechamento deve contar separadamente na meta comercial. A UI exibe a
+   * contagem de fechamentos já registrados pra evitar duplo-clique
+   * acidental sem bloquear o fluxo.
+   */
+  registrarFechamento: protectedProcedure
+    .input(
+      z.object({
+        contatoId: z.number(),
+        valorFechamento: z.string().max(20).optional(),
+        origemFechamento: z.string().max(128).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      const [contato] = await db
+        .select({ id: contatos.id, responsavelId: contatos.responsavelId })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.id, input.contatoId),
+            eq(contatos.escritorioId, perm.escritorioId),
+          ),
+        )
+        .limit(1);
+      if (!contato) throw new Error("Cliente não encontrado.");
+      if (
+        !perm.verTodos &&
+        perm.verProprios &&
+        contato.responsavelId !== perm.colaboradorId
+      ) {
+        throw new Error("Sem permissão para registrar fechamento neste cliente.");
+      }
+
+      const leadId = await criarLead({
+        escritorioId: perm.escritorioId,
+        contatoId: input.contatoId,
+        responsavelId: contato.responsavelId ?? perm.colaboradorId,
+        etapaFunil: "fechado_ganho",
+        valorEstimado: input.valorFechamento || undefined,
+        origemLead: input.origemFechamento || "manual",
+      });
+      return { leadId };
+    }),
+
   atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
