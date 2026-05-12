@@ -2208,15 +2208,22 @@ export const asaasRouter = router({
           eq(asaasClientes.escritorioId, esc.escritorio.id),
         ));
 
-      if (vinculosExistentes.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Contato não vinculado ao Asaas" });
-      }
-
       // ── Passo 1: reconciliação por CPF ──────────────────────────────
+      // Roda SEMPRE — mesmo quando o contato não tem vínculo prévio. Antes
+      // havia early-return aqui, o que impedia clientes cadastrados manualmente
+      // (que ainda não passaram pelo fluxo Asaas) de descobrir cobranças
+      // existentes pelo CPF.
+      //
+      // Quando reconciliação cria o PRIMEIRO vínculo do contato, marca como
+      // primário (assim a próxima cobrança nova já usa esse customer).
+      //
       // Best-effort: se o CPF estiver vazio ou a busca no Asaas falhar,
       // prossegue com os vínculos atuais (não aborta o sync).
       let customersAdicionados = 0;
       let erroReconciliacao: string | null = null;
+      // Sinaliza pro frontend a causa exata quando nada foi sincronizado
+      // (pra mostrar mensagem útil ao operador).
+      let motivoVazio: "sem_cpf" | "cpf_nao_existe_asaas" | "cpf_em_outro_contato" | null = null;
 
       const [contato] = await db.select({ cpfCnpj: contatos.cpfCnpj }).from(contatos)
         .where(and(
@@ -2229,6 +2236,9 @@ export const asaasRouter = router({
       if (cpfLimpo) {
         try {
           const todosDoCpf = await client.buscarTodosClientesPorCpfCnpj(cpfLimpo);
+          if (todosDoCpf.length === 0 && vinculosExistentes.length === 0) {
+            motivoVazio = "cpf_nao_existe_asaas";
+          }
           const idsJaVinculados = new Set(vinculosExistentes.map((v) => v.asaasCustomerId));
           const candidatos = todosDoCpf.filter((c) => !idsJaVinculados.has(c.id));
 
@@ -2240,15 +2250,30 @@ export const asaasRouter = router({
             );
             const novos = candidatos.filter((c) => disponiveisIds.has(c.id));
 
+            // Se TODOS os candidatos retornados pelo Asaas já estão linkados
+            // a outro contato no Jurify (e este contato não tem vínculo
+            // próprio), avisa o user — provável duplicata de cliente.
+            if (novos.length === 0 && vinculosExistentes.length === 0) {
+              motivoVazio = "cpf_em_outro_contato";
+            }
+
+            // Decide qual deles vira primário: se o contato ainda não tem
+            // nenhum vínculo, o primeiro novo vira primário. Senão, mantém
+            // o primário atual (novos entram como secundários, só pra
+            // sincronizar histórico).
+            let jaTemPrimario = vinculosExistentes.some((v) => v.primario);
+
             for (const cli of novos) {
+              const ehEsteOPrimario = !jaTemPrimario;
               await db.insert(asaasClientes).values({
                 escritorioId: esc.escritorio.id,
                 contatoId: input.contatoId,
                 asaasCustomerId: cli.id,
                 cpfCnpj: (cli.cpfCnpj || cpfLimpo).replace(/\D/g, ""),
                 nome: cli.name,
-                primario: false,
+                primario: ehEsteOPrimario,
               });
+              if (ehEsteOPrimario) jaTemPrimario = true;
               customersAdicionados++;
             }
           }
@@ -2259,6 +2284,9 @@ export const asaasRouter = router({
             "Reconciliação por CPF falhou — prosseguindo com vínculos atuais",
           );
         }
+      } else if (vinculosExistentes.length === 0) {
+        // Sem CPF E sem vínculo: não tem nem o que sincronizar.
+        motivoVazio = "sem_cpf";
       }
 
       // ── Passo 2: sync de cobranças de TODOS os vínculos ─────────────
@@ -2277,6 +2305,7 @@ export const asaasRouter = router({
         removidas: stats.removidas,
         total: stats.novas + stats.atualizadas + stats.removidas,
         erroSync,
+        motivoVazio,
       };
     }),
 

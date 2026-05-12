@@ -212,7 +212,26 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
       if (data.erroSync) {
         toast.warning("Sincronizado com falhas", { description: data.erroSync });
       } else if (partes.length === 0 && total === 0) {
-        toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
+        // Mensagens específicas por motivo (procedure retorna motivoVazio
+        // quando rodou mas não encontrou nada). Ajuda o operador a entender
+        // se falta CPF, se Asaas não tem o cliente, ou se há duplicata.
+        const mensagens: Record<string, { titulo: string; desc: string }> = {
+          sem_cpf: {
+            titulo: "CPF não cadastrado",
+            desc: "Cadastre o CPF/CNPJ do cliente pra buscar cobranças no Asaas.",
+          },
+          cpf_nao_existe_asaas: {
+            titulo: "Cliente não existe no Asaas",
+            desc: "Nenhum cadastro encontrado no Asaas com este CPF/CNPJ.",
+          },
+          cpf_em_outro_contato: {
+            titulo: "CPF já vinculado a outro cliente",
+            desc: "Este CPF está em uso por outro contato no Jurify. Verifique duplicatas em Clientes.",
+          },
+        };
+        const m = data.motivoVazio ? mensagens[data.motivoVazio] : null;
+        if (m) toast.warning(m.titulo, { description: m.desc, duration: 8000 });
+        else toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
       } else {
         toast.success("Sincronizado", { description: partes.join(" · ") });
       }

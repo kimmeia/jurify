@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
@@ -93,6 +94,34 @@ export const clientesRouter = router({
       if (input.cpfCnpj) { const v = validarCpfCnpj(input.cpfCnpj); if (!v.valido) throw new Error(`${v.tipo === "cpf" ? "CPF" : v.tipo === "cnpj" ? "CNPJ" : "CPF/CNPJ"} inválido.`); }
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido. Use formato (XX) XXXXX-XXXX.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
+
+      // Unicidade de CPF/CNPJ no escritório: compara só dígitos (REPLACE
+      // remove pontos/traços/barras pra casar com cadastros antigos que têm
+      // formatação variada). Bloqueia criação com mensagem útil — operador
+      // recebe id+nome do cliente existente pra clicar e abrir a ficha.
+      if (input.cpfCnpj) {
+        const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
+        if (cpfLimpo) {
+          const existente = await db.execute(sql`
+            SELECT id, nome FROM contatos
+            WHERE escritorioId = ${perm.escritorioId}
+              AND REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') = ${cpfLimpo}
+            LIMIT 1
+          `);
+          const rows = (existente as any)[0] as Array<{ id: number; nome: string }>;
+          if (rows && rows.length > 0) {
+            // ID embutido na mensagem (formato `[ID:n]`) pra que o frontend
+            // extraia e ofereça link pra abrir a ficha do cliente existente.
+            // Workaround: TRPCError.cause não vem por default no shape do
+            // erro no client; usar mensagem é robusto.
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `CPF/CNPJ já cadastrado para "${rows[0].nome}" [ID:${rows[0].id}]`,
+            });
+          }
+        }
+      }
+
       // Atendentes/estagiários só conseguem criar contato como próprio responsável.
       // Dono/Gestor (verTodos) pode atribuir a qualquer colaborador via input.responsavelId.
       const respId = perm.verTodos
@@ -136,6 +165,28 @@ export const clientesRouter = router({
       if (input.cpfCnpj) { const v = validarCpfCnpj(input.cpfCnpj); if (!v.valido) throw new Error("CPF/CNPJ inválido."); }
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
+
+      // Unicidade de CPF/CNPJ: se o operador trocou pra um CPF de outro
+      // cliente, bloqueia. Permite manter o mesmo (não compara contra si).
+      if (input.cpfCnpj) {
+        const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
+        if (cpfLimpo) {
+          const existente = await db.execute(sql`
+            SELECT id, nome FROM contatos
+            WHERE escritorioId = ${perm.escritorioId}
+              AND id <> ${input.id}
+              AND REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') = ${cpfLimpo}
+            LIMIT 1
+          `);
+          const rows = (existente as any)[0] as Array<{ id: number; nome: string }>;
+          if (rows && rows.length > 0) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `CPF/CNPJ já cadastrado para "${rows[0].nome}" [ID:${rows[0].id}]`,
+            });
+          }
+        }
+      }
 
       // Se o telefone mudou, preserva o antigo em telefonesAnteriores
       // para que o handler do WhatsApp ainda reconheça mensagens do número
@@ -555,5 +606,67 @@ export const clientesRouter = router({
       comEmail: Number((ce as { count: number } | undefined)?.count || 0),
       aguardandoDocumentacao: Number((docs as { count: number } | undefined)?.count || 0),
     };
+  }),
+
+  /**
+   * Auditoria read-only: lista clientes que compartilham o mesmo CPF/CNPJ
+   * dentro do escritório. Permite operador identificar duplicatas antigas
+   * (criadas antes da validação de unicidade) e tratar caso a caso pela UI
+   * normal (editar/excluir). Não deleta nada.
+   *
+   * Permission: clientes.ver com verTodos (gestores/dono). Mostrar
+   * duplicatas é uma operação de saneamento de base — não cabe a atendentes
+   * comuns.
+   */
+  duplicatasCpf: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed || !perm.verTodos) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Apenas dono/gestor pode listar duplicatas.",
+      });
+    }
+    const db = await getDb();
+    if (!db) return { grupos: [] };
+
+    // Agrupa por CPF normalizado e mantém só grupos com 2+ ocorrências.
+    const dups = await db.execute(sql`
+      SELECT
+        REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') AS cpfLimpo,
+        COUNT(*) AS qtd
+      FROM contatos
+      WHERE escritorioId = ${perm.escritorioId}
+        AND cpfCnpj IS NOT NULL
+        AND cpfCnpj <> ''
+      GROUP BY cpfLimpo
+      HAVING qtd > 1
+      ORDER BY qtd DESC
+    `);
+    const gruposBrutos = (dups as any)[0] as Array<{ cpfLimpo: string; qtd: number }>;
+    if (!gruposBrutos || gruposBrutos.length === 0) return { grupos: [] };
+
+    // Pra cada grupo, busca todos os clientes do grupo (id, nome, dataCriação).
+    const grupos = [];
+    for (const g of gruposBrutos) {
+      const linhas = await db.execute(sql`
+        SELECT id, nome, cpfCnpj, createdAt
+        FROM contatos
+        WHERE escritorioId = ${perm.escritorioId}
+          AND REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') = ${g.cpfLimpo}
+        ORDER BY createdAt ASC
+      `);
+      const clientes = (linhas as any)[0] as Array<{ id: number; nome: string; cpfCnpj: string; createdAt: Date }>;
+      grupos.push({
+        cpfLimpo: g.cpfLimpo,
+        qtd: Number(g.qtd),
+        clientes: clientes.map((c) => ({
+          id: c.id,
+          nome: c.nome,
+          cpfCnpj: c.cpfCnpj,
+          createdAt: c.createdAt,
+        })),
+      });
+    }
+    return { grupos };
   }),
 });
