@@ -1100,6 +1100,13 @@ export const asaasClientes = mysqlTable("asaas_clientes", {
   ativo: boolean("ativo").notNull().default(true),
   ultimoErro403Em: timestamp("ultimoErro403Em"),
   ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
+  /**
+   * Mensagem da última falha de sync de cobranças. NULL = sem erro (último
+   * sync OK). Setado por `finalizarVinculacao` e pelo botão de sincronizar
+   * manual. UI exibe banner amarelo com "Tentar de novo" quando preenchido.
+   */
+  ultimoErroSync: varchar("ultimoErroSync", { length: 500 }),
+  ultimoErroSyncEm: timestamp("ultimoErroSyncEm"),
 });
 
 export type AsaasCliente = typeof asaasClientes.$inferSelect;

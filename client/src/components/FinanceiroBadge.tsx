@@ -7,6 +7,7 @@
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -18,7 +19,7 @@ import {
 import { Label } from "@/components/ui/label";
 import {
   DollarSign, AlertTriangle, CheckCircle2, Loader2, Plus, Link, Copy, ExternalLink,
-  QrCode,
+  QrCode, RefreshCw, Link2Off, Search,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -515,5 +516,268 @@ function DecisaoVinculoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCO: VINCULAR AO ASAAS (renderizado dentro da aba Financeiro do Cliente)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Bloco de status financeiro do cliente, com CTA explícito de vinculação.
+ *
+ * Versão visível (não escondida em popover) do fluxo de `FinanceiroPopover`:
+ * mostra um card claro com 3 estados — Asaas desconectado, cliente não
+ * vinculado, cliente vinculado. Reusa as mesmas mutations do tRPC para que
+ * o comportamento (busca por CPF → telefone → criar) seja idêntico.
+ *
+ * Inclui banner de erro de sync (`ultimoErroSync`) com botão "Tentar de
+ * novo" — exposição em primeiro plano da observabilidade que antes vivia
+ * só num toast efêmero.
+ */
+export function VincularAsaasBlock({
+  contatoId,
+  cpfCnpj,
+}: {
+  contatoId: number;
+  cpfCnpj: string | null;
+}) {
+  const utils = trpc.useUtils();
+  const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
+  const { data: resumo, isLoading: resumoLoading } = trpc.asaas.resumoContato.useQuery(
+    { contatoId },
+    { retry: false, enabled: !!asaasStatus?.conectado && !!contatoId }
+  );
+  const [candidatos, setCandidatos] = useState<CandidatoAsaas[] | null>(null);
+
+  const invalidarAposVincular = () => {
+    utils.asaas.resumoContato.invalidate({ contatoId });
+    utils.asaas.listarCobrancas.invalidate();
+    utils.clientes.detalhe.invalidate({ id: contatoId });
+    utils.clientes.listar.invalidate();
+  };
+
+  const tratarSucesso = (data: any) => {
+    if (data?.status === "precisa_decidir") {
+      setCandidatos(data.candidatos || []);
+      return;
+    }
+    const titulo = data?.jaExistia
+      ? "Cliente já estava no Asaas — vinculado"
+      : data?.novoClienteCriado
+      ? "Novo cliente criado no Asaas"
+      : "Vinculado ao Asaas";
+
+    if (data?.erroSync) {
+      toast.warning(titulo, {
+        description: `Vínculo OK, mas o sync de cobranças falhou: ${data.erroSync}. Use "Sincronizar" para tentar novamente.`,
+      });
+    } else if (!data?.cobrancasSincronizadas) {
+      toast.success(titulo, { description: "Nenhuma cobrança existente no Asaas." });
+    } else {
+      toast.success(titulo, {
+        description: `${data.cobrancasSincronizadas} cobrança(s) importada(s).`,
+      });
+    }
+    invalidarAposVincular();
+  };
+
+  const vincularMut = trpc.asaas.vincularContato.useMutation({
+    onSuccess: tratarSucesso,
+    onError: (err) => toast.error("Falha ao vincular", { description: err.message }),
+  });
+
+  const confirmarMut = trpc.asaas.confirmarVinculacao.useMutation({
+    onSuccess: (data) => {
+      setCandidatos(null);
+      tratarSucesso(data);
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  const syncMut = trpc.asaas.syncCobrancasContato.useMutation({
+    onSuccess: (data: any) => {
+      const total = (data.novas ?? 0) + (data.atualizadas ?? 0);
+      if (data.erroSync) {
+        toast.warning("Sincronizado com falha", { description: data.erroSync });
+      } else if (total === 0) {
+        toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
+      } else {
+        toast.success("Sincronizado", {
+          description: `${total} cobrança(s) atualizada(s).`,
+        });
+      }
+      invalidarAposVincular();
+    },
+    onError: (err) => toast.error("Erro ao sincronizar", { description: err.message }),
+  });
+
+  // Asaas não conectado: orienta a conectar em Configurações em vez de
+  // mostrar botão que sempre falhará.
+  if (!asaasStatus?.conectado) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="py-4 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">Asaas não conectado</p>
+            <p className="text-xs text-muted-foreground">
+              Conecte sua conta Asaas em Configurações para vincular este cliente e importar cobranças automaticamente.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => (window.location.href = "/configuracoes?tab=integracoes")}>
+            Configurar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // CPF/CNPJ é pré-requisito. Sem ele a busca no Asaas não tem chave.
+  const cpfDigits = (cpfCnpj || "").replace(/\D/g, "");
+  if (!cpfDigits || (cpfDigits.length !== 11 && cpfDigits.length !== 14)) {
+    return (
+      <Card className="border-amber-200 bg-amber-50/40">
+        <CardContent className="py-4 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <AlertTriangle className="h-4 w-4 text-amber-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">CPF/CNPJ não cadastrado</p>
+            <p className="text-xs text-muted-foreground">
+              Cadastre o CPF/CNPJ deste cliente na aba "Visão Geral" para que possamos buscá-lo no Asaas e importar as cobranças.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Vínculo em curso ou loading.
+  if (resumoLoading) {
+    return (
+      <Card>
+        <CardContent className="py-6 text-center">
+          <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Não vinculado: CTA principal.
+  if (!resumo?.vinculado) {
+    return (
+      <>
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <Search className="h-4 w-4 text-blue-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Vincular este cliente ao Asaas</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Vamos buscar no Asaas pelo CPF/CNPJ deste cliente. Se já existir cadastro, importaremos nome,
+                  telefone e todas as cobranças automaticamente. Caso contrário, criaremos um novo cadastro.
+                </p>
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              size="sm"
+              onClick={() => vincularMut.mutate({ contatoId })}
+              disabled={vincularMut.isPending}
+            >
+              {vincularMut.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Link className="h-4 w-4 mr-2" />
+              )}
+              Buscar e vincular ao Asaas
+            </Button>
+          </CardContent>
+        </Card>
+
+        <DecisaoVinculoDialog
+          open={candidatos !== null}
+          candidatos={candidatos || []}
+          isSubmitting={confirmarMut.isPending}
+          onCancel={() => setCandidatos(null)}
+          onCriarNovo={() => confirmarMut.mutate({ contatoId, acao: "criar_novo" })}
+          onVincularExistente={(asaasCustomerId) =>
+            confirmarMut.mutate({ contatoId, acao: "vincular_existente", asaasCustomerId })
+          }
+        />
+      </>
+    );
+  }
+
+  // Vinculado: mostra resumo + ações + banner de erro de sync (se houver).
+  const temErroSync = !!resumo.ultimoErroSync;
+  const sincronizadoEm = resumo.sincronizadoEm
+    ? new Date(resumo.sincronizadoEm).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  return (
+    <Card>
+      <CardContent className="py-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Vinculado ao Asaas</p>
+              <p className="text-xs text-muted-foreground truncate">
+                ID: <span className="font-mono">{resumo.asaasCustomerId}</span>
+                {(resumo.totalVinculos ?? 1) > 1
+                  ? ` (+${(resumo.totalVinculos ?? 1) - 1} duplicata${(resumo.totalVinculos ?? 1) > 2 ? "s" : ""})`
+                  : ""}
+                {sincronizadoEm ? ` · sincronizado ${sincronizadoEm}` : ""}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => syncMut.mutate({ contatoId })}
+            disabled={syncMut.isPending}
+          >
+            {syncMut.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Sincronizar
+          </Button>
+        </div>
+
+        {temErroSync && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-amber-900">Última sincronização falhou</p>
+              <p className="text-[11px] text-amber-800 break-words">{resumo.ultimoErroSync}</p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs shrink-0"
+              onClick={() => syncMut.mutate({ contatoId })}
+              disabled={syncMut.isPending}
+            >
+              Tentar de novo
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
