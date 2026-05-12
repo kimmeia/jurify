@@ -106,21 +106,29 @@ export const clienteProcessosRouter = router({
       return result;
     }),
 
-  /** Vincula um processo a um cliente */
+  /** Vincula um processo a um cliente. CNJ é opcional pra suportar casos
+   *  não-judiciais (contratos, consultoria, processos administrativos,
+   *  extrajudiciais). Quando CNJ vier vazio, `apelido` passa a ser
+   *  obrigatório — é o que identifica o processo na UI. */
   vincular: protectedProcedure
     .input(z.object({
       contatoId: z.number(),
-      numeroCnj: z.string().min(15).max(30),
+      numeroCnj: z.string().min(15).max(30).optional(),
       apelido: z.string().max(255).optional(),
       polo: z.enum(["ativo", "passivo", "interessado"]).optional(),
       tipo: z.enum(["extrajudicial", "litigioso"]).optional(),
-      // monitorar: aceito por compatibilidade com clientes que ainda enviam,
-      // mas vínculo NÃO cria monitoramento — UI redireciona pra /processos
-      // pra que user escolha credencial e confirme cobrança. Manter aqui
-      // só pra Zod não rejeitar requests legados.
       monitorar: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const cnj = input.numeroCnj?.trim() || null;
+      const apelido = input.apelido?.trim() || null;
+      if (!cnj && !apelido) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Informe o número do CNJ ou um apelido pra identificar o processo.",
+        });
+      }
+
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
@@ -134,30 +142,34 @@ export const clienteProcessosRouter = router({
         .limit(1);
       if (!contato) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
 
-      // Verificar duplicata
-      const [existente] = await db
-        .select({ id: clienteProcessos.id })
-        .from(clienteProcessos)
-        .where(
-          and(
-            eq(clienteProcessos.contatoId, input.contatoId),
-            eq(clienteProcessos.numeroCnj, input.numeroCnj),
-            eq(clienteProcessos.escritorioId, esc.escritorio.id),
-          ),
-        )
-        .limit(1);
-      if (existente) throw new TRPCError({ code: "CONFLICT", message: "Este processo já está vinculado a este cliente." });
+      // Verificar duplicata — só quando há CNJ (processo sem CNJ não pode
+      // ser deduplicado por número; quem cadastra controla manualmente).
+      if (cnj) {
+        const [existente] = await db
+          .select({ id: clienteProcessos.id })
+          .from(clienteProcessos)
+          .where(
+            and(
+              eq(clienteProcessos.contatoId, input.contatoId),
+              eq(clienteProcessos.numeroCnj, cnj),
+              eq(clienteProcessos.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
+        if (existente) throw new TRPCError({ code: "CONFLICT", message: "Este processo já está vinculado a este cliente." });
+      }
 
-      // Monitoramento removido (08/05/2026 — Judit). Cron próprio
-      // entra na Sprint 2; vínculo cria registro sem monitoramento ainda.
+      // Sem CNJ → força tipo='extrajudicial' (não é processo judicial real).
+      // Com CNJ → respeita o que veio (default 'litigioso').
+      const tipoFinal = cnj ? (input.tipo || "litigioso") : "extrajudicial";
 
       const [result] = await db.insert(clienteProcessos).values({
         escritorioId: esc.escritorio.id,
         contatoId: input.contatoId,
-        numeroCnj: input.numeroCnj,
-        apelido: input.apelido || null,
+        numeroCnj: cnj,
+        apelido,
         polo: (input.polo as any) || null,
-        tipo: (input.tipo as any) || "litigioso",
+        tipo: tipoFinal as any,
         criadoPor: ctx.user.id,
       });
 

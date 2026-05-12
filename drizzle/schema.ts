@@ -783,7 +783,7 @@ export const clienteProcessos = mysqlTable("cliente_processos", {
   escritorioId: int("escritorioIdCliProc").notNull(),
   contatoId: int("contatoIdCliProc").notNull(),
   /** Número CNJ do processo */
-  numeroCnj: varchar("numeroCnjCliProc", { length: 30 }).notNull(),
+  numeroCnj: varchar("numeroCnjCliProc", { length: 30 }),
   /** Apelido/descrição livre (ex: "Divórcio", "Trabalhista") */
   apelido: varchar("apelidoCliProc", { length: 255 }),
   /** Tribunal identificado */

@@ -307,7 +307,8 @@ export const customer360Router = router({
 
         type ProcessoNoCard = {
           id: number;
-          numeroCnj: string;
+          // null em processos extrajudiciais (contratos, consultoria etc).
+          numeroCnj: string | null;
           classe: string | null;
           tribunal: string | null;
           ultimaMovimentacao: string | null;
