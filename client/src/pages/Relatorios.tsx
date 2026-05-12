@@ -704,12 +704,6 @@ function DashboardComercial() {
                           <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
                             <p className="text-[10px] text-muted-foreground">Recebido (caixa)</p>
                             <p className="text-sm font-bold text-emerald-700">{formatBRL(r.faturado)}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {r.contratosPagos || 0} pago(s)
-                              {r.conversao != null && (
-                                <span className="ml-1">· conv. {r.conversao.toFixed(0)}%</span>
-                              )}
-                            </p>
                           </div>
                         </div>
 

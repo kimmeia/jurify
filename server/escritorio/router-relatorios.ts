@@ -19,10 +19,12 @@ import { getDb } from "../db";
 import {
   conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
-  colaboradores, setores, asaasCobrancas, comissoesFechadas, users,
+  colaboradores, setores, asaasCobrancas, categoriasCobranca,
+  comissoesFechadas, users,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
+import { buildFiltroComissaoSQL } from "./router-financeiro";
 
 const log = createLogger("relatorios");
 
@@ -574,18 +576,44 @@ export const relatoriosRouter = router({
       const dataInicioAnteriorStr = dataInicioAnterior.toISOString().slice(0, 10);
       const dataFimAnteriorStr = dataFimAnterior.toISOString().slice(0, 10);
 
+      // Subquery: contatos com lead fechado_ganho no período corrente / anterior.
+      // O ranking comercial só conta cobranças cujo cliente fechou DENTRO do
+      // mesmo período da análise — clientes antigos que pagam agora ficam fora
+      // da meta corrente.
+      const contatosFechadosAtual = db
+        .select({ id: leads.contatoId })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+        ));
+      const contatosFechadosAnt = db
+        .select({ id: leads.contatoId })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          gte(leads.createdAt, dataInicioAnterior),
+          lte(leads.createdAt, dataFimAnterior),
+        ));
+
       const [agg] = await db
         .select({
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
           contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
+        .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
           inArray(asaasCobrancas.status, STATUS_PAGO),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
+          buildFiltroComissaoSQL(["sim"])!,
+          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
         ));
 
       const totalFaturado = Number(agg?.totalFaturado || 0);
@@ -599,12 +627,15 @@ export const relatoriosRouter = router({
           contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
+        .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
           inArray(asaasCobrancas.status, STATUS_PAGO),
           gte(asaasCobrancas.dataPagamento, dataInicioAnteriorStr),
           lte(asaasCobrancas.dataPagamento, dataFimAnteriorStr),
+          buildFiltroComissaoSQL(["sim"])!,
+          inArray(asaasCobrancas.contatoId, contatosFechadosAnt),
         ));
       const faturadoAnterior = Number(aggAnt?.totalFaturado || 0);
       const contratosAnterior = Number(aggAnt?.contratos || 0);
@@ -668,23 +699,31 @@ export const relatoriosRouter = router({
         });
       }
 
-      // 3+4: cobranças pagas (faturado + contagem com DISTINCT por parent)
+      // 3+4: cobranças pagas (faturado + contagem com DISTINCT por parent).
+      // Filtros aplicados pra refletir a META comercial real:
+      //   - status pago (RECEIVED/CONFIRMED/RECEIVED_IN_CASH)
+      //   - comissionável efetivo (override=true OR override NULL + cat=true)
+      //   - cliente da cobrança tem lead fechado_ganho no MESMO período
       const porAtendenteRows = await db
         .select({
           atendenteId: asaasCobrancas.atendenteId,
           totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
           cobrancas: sql<number>`COUNT(*)`,
           // 1 contrato = 1 parcelamento (todas as parcelas) OU 1 cobrança avulsa.
-          // COALESCE pra não confundir distintos com NULLs.
+          // COALESCE pra não confundir distintos com NULLs. Usado pra
+          // computar ticketMedio internamente — não vai pro payload final.
           contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
+        .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
           inArray(asaasCobrancas.status, STATUS_PAGO),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
+          buildFiltroComissaoSQL(["sim"])!,
+          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
         ))
         .groupBy(asaasCobrancas.atendenteId);
 
@@ -712,9 +751,6 @@ export const relatoriosRouter = router({
           const progressoMeta = meta && meta > 0
             ? +((pagos.faturado / meta) * 100).toFixed(1)
             : null;
-          const conversao = leadsDados.contratosFechados > 0
-            ? +((pagos.contratosPagos / leadsDados.contratosFechados) * 100).toFixed(1)
-            : null;
           return {
             atendenteId: c.id,
             nome: c.userName || c.userEmail || `#${c.id}`,
@@ -722,15 +758,13 @@ export const relatoriosRouter = router({
             // Pipeline (leads fechados)
             valorFechado: leadsDados.valorFechado,
             contratosFechados: leadsDados.contratosFechados,
-            // Caixa (cobranças pagas)
+            // Caixa (cobranças comissionáveis de clientes fechados no período)
             faturado: pagos.faturado,
-            contratosPagos: pagos.contratosPagos,
-            // Tickets
+            // ticketMedio = faturado / contratosPagos, calculado aqui pra UI
+            // não precisar do contratosPagos no payload.
             ticketMedio: pagos.contratosPagos > 0
               ? +(pagos.faturado / pagos.contratosPagos).toFixed(2)
               : 0,
-            // Conversão pipeline → caixa
-            conversao,
             meta,
             progressoMeta,
           };
@@ -738,6 +772,8 @@ export const relatoriosRouter = router({
         .sort((a, b) => b.faturado - a.faturado);
 
       // ── Cobranças por dia (linha do tempo) ────────────────────────────────
+      // Mesmo filtro do KPI agregado pra manter consistência entre o
+      // gráfico e o total "Faturado" mostrado no topo.
       const porDiaRows = await db
         .select({
           dia: sql<string>`DATE(${asaasCobrancas.dataPagamento})`,
@@ -745,12 +781,15 @@ export const relatoriosRouter = router({
           contratos: sql<number>`COUNT(*)`,
         })
         .from(asaasCobrancas)
+        .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
           inArray(asaasCobrancas.status, STATUS_PAGO),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
+          buildFiltroComissaoSQL(["sim"])!,
+          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
         ))
         .groupBy(sql`DATE(${asaasCobrancas.dataPagamento})`)
         .orderBy(sql`DATE(${asaasCobrancas.dataPagamento})`);
