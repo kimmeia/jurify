@@ -13,11 +13,25 @@ import {
   Landmark, Briefcase, ShieldCheck, Headphones, Settings,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { moduloOcultoNoMenu } from "@/config/visibility";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve destino quando módulo pode estar oculto. Mantém o card visível
+ * (a métrica vem do backend e pode ser útil mesmo com a aba escondida),
+ * mas direciona o clique pra uma rota acessível em vez de quebrar.
+ */
+function rotaSegura(rotaOriginal: string, fallback: string): string {
+  if (rotaOriginal.startsWith("/atendimento") && moduloOcultoNoMenu("atendimento")) return fallback;
+  if (rotaOriginal.startsWith("/calculos") && moduloOcultoNoMenu("calculos")) return fallback;
+  if (rotaOriginal.startsWith("/smartflow") && moduloOcultoNoMenu("smartflow")) return fallback;
+  if (rotaOriginal.startsWith("/agentes-ia") && moduloOcultoNoMenu("agentesIa")) return fallback;
+  return rotaOriginal;
+}
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -144,7 +158,7 @@ export default function Dashboard() {
                 icon={MessageCircle}
                 color="amber"
                 label={`${r.crm.conversasAguardando} conversa(s) aguardando`}
-                onClick={() => nav("/atendimento")}
+                onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
               />
             )}
             {r.financeiro.vencido > 0 && (
@@ -284,7 +298,7 @@ export default function Dashboard() {
                   value={r.crm.conversasAguardando}
                   label="Aguardando"
                   color="text-blue-600"
-                  onClick={() => nav("/atendimento")}
+                  onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
                 />
                 <SubMetric
                   value={r.processos.movimentacoesNaoLidas}
@@ -318,13 +332,13 @@ export default function Dashboard() {
                   value={r.pipeline.leadsAbertos}
                   label="Leads"
                   color="text-violet-600"
-                  onClick={() => nav("/atendimento")}
+                  onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
                 />
                 <SubMetric
                   value={formatBRLShort(r.pipeline.valorPipeline)}
                   label="Potencial"
                   color="text-emerald-600"
-                  onClick={() => nav("/atendimento")}
+                  onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
                   isString
                 />
                 <SubMetric
@@ -388,15 +402,15 @@ export default function Dashboard() {
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
-                  { icon: Scale, label: "Processos", path: "/processos", color: "text-indigo-600" },
-                  { icon: CalendarDays, label: "Agenda", path: "/agenda", color: "text-orange-600" },
-                  { icon: Headphones, label: "Atendimento", path: "/atendimento", color: "text-sky-600" },
-                  { icon: DollarSign, label: "Financeiro", path: "/financeiro", color: "text-emerald-600" },
-                  { icon: Landmark, label: "Bancário", path: "/calculos/bancario", color: "text-blue-600" },
-                  { icon: Briefcase, label: "Trabalhista", path: "/calculos/trabalhista", color: "text-amber-600" },
-                  { icon: ShieldCheck, label: "Previdenciário", path: "/calculos/previdenciario", color: "text-rose-600" },
-                  { icon: Settings, label: "Configurações", path: "/configuracoes", color: "text-gray-600" },
-                ].map((m) => (
+                  { icon: Scale, label: "Processos", path: "/processos", color: "text-indigo-600", slug: "processos" },
+                  { icon: CalendarDays, label: "Agenda", path: "/agenda", color: "text-orange-600", slug: "agenda" },
+                  { icon: Headphones, label: "Atendimento", path: "/atendimento", color: "text-sky-600", slug: "atendimento" },
+                  { icon: DollarSign, label: "Financeiro", path: "/financeiro", color: "text-emerald-600", slug: "financeiro" },
+                  { icon: Landmark, label: "Bancário", path: "/calculos/bancario", color: "text-blue-600", slug: "calculos" },
+                  { icon: Briefcase, label: "Trabalhista", path: "/calculos/trabalhista", color: "text-amber-600", slug: "calculos" },
+                  { icon: ShieldCheck, label: "Previdenciário", path: "/calculos/previdenciario", color: "text-rose-600", slug: "calculos" },
+                  { icon: Settings, label: "Configurações", path: "/configuracoes", color: "text-gray-600", slug: "configuracoes" },
+                ].filter((m) => !moduloOcultoNoMenu(m.slug)).map((m) => (
                   <Button
                     key={m.path}
                     variant="outline"
