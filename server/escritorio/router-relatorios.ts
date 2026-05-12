@@ -19,7 +19,7 @@ import { getDb } from "../db";
 import {
   conversas, mensagens, leads, contatos, calculosHistorico,
   kanbanCards, kanbanColunas, kanbanMovimentacoes,
-  colaboradores,
+  colaboradores, setores, asaasCobrancas, comissoesFechadas, users,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
@@ -416,6 +416,318 @@ export const relatoriosRouter = router({
       })),
     };
   }),
+
+  /**
+   * Comercial — Dashboard estilo Looker. Voltado pra times de fechamento
+   * (setor tipo='comercial'). Retorna:
+   *  - KPIs: faturado, contratos, ticket médio, comissão (atual + período anterior + variação %)
+   *  - Ranking de atendentes (qualquer atendente em setor comercial; entra
+   *    no ranking mesmo com 0 vendas)
+   *  - Meta vs realizado por atendente
+   *  - Cobranças por dia (linha do tempo)
+   *
+   * Filtros aceitos:
+   *  - dataInicio / dataFim (default mês vigente)
+   *  - setorId — força um setor específico (default: 1º setor tipo='comercial')
+   *  - atendenteId — filtra um colaborador específico (valida que pertence
+   *    a um setor tipo='comercial')
+   *
+   * Permissão: verProprios trava o usuário nele mesmo. verTodos vê o ranking
+   * completo.
+   */
+  comercialDashboard: protectedProcedure
+    .input(
+      z
+        .object({
+          dataInicio: z.string().optional(),
+          dataFim: z.string().optional(),
+          setorId: z.number().int().positive().optional(),
+          atendenteId: z.number().int().positive().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const eid = esc.escritorio.id;
+
+      // Permissão
+      const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+      if (!perm.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para acessar relatórios.",
+        });
+      }
+      const soProprios = !perm.verTodos && perm.verProprios;
+      const colabId = esc.colaborador.id;
+
+      // ── Range: dataInicio/dataFim sobrepõe; default = mês vigente ─────────
+      let dataInicio: Date;
+      let dataFim: Date;
+      if (input?.dataInicio && input?.dataFim) {
+        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
+        dataFim = new Date(`${input.dataFim}T23:59:59`);
+      } else {
+        const m = mesVigente();
+        dataInicio = m.dataInicio;
+        dataFim = m.dataFim;
+      }
+
+      // Período anterior: mesmo nº de dias, deslocado pra trás
+      const duracaoMs = dataFim.getTime() - dataInicio.getTime();
+      const dataFimAnterior = new Date(dataInicio.getTime() - 1);
+      const dataInicioAnterior = new Date(dataFimAnterior.getTime() - duracaoMs);
+
+      // ── Atendentes elegíveis (do setor escolhido ou tipo='comercial') ─────
+      // Se setorId vier, usa esse setor. Senão, pega TODOS os colaboradores
+      // ativos cujo setor é tipo='comercial' (qualquer setor comercial).
+      let atendentesComerciais: Array<{
+        id: number;
+        userName: string | null;
+        userEmail: string | null;
+        metaMensal: string | null;
+        setorId: number | null;
+        setorNome: string | null;
+      }> = [];
+
+      const colabsBase = db
+        .select({
+          id: colaboradores.id,
+          userName: users.name,
+          userEmail: users.email,
+          metaMensal: colaboradores.metaMensal,
+          setorId: colaboradores.setorId,
+          setorNome: setores.nome,
+        })
+        .from(colaboradores)
+        .innerJoin(users, eq(colaboradores.userId, users.id))
+        .leftJoin(setores, eq(colaboradores.setorId, setores.id));
+
+      if (input?.setorId) {
+        atendentesComerciais = await colabsBase.where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.ativo, true),
+          eq(colaboradores.setorId, input.setorId),
+        ));
+      } else {
+        atendentesComerciais = await colabsBase.where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.ativo, true),
+          eq(setores.tipo, "comercial"),
+        ));
+      }
+
+      // soProprios trava no próprio colaborador. atendenteId filtra se
+      // verTodos. Se atendenteId não pertence ao setor comercial filtrado,
+      // ignora (segurança).
+      let idsAtendentes = atendentesComerciais.map((c) => c.id);
+      if (soProprios) {
+        idsAtendentes = idsAtendentes.includes(colabId) ? [colabId] : [];
+      } else if (input?.atendenteId) {
+        idsAtendentes = idsAtendentes.includes(input.atendenteId)
+          ? [input.atendenteId]
+          : [];
+      }
+
+      // Filtra a lista de atendentes do ranking se atendenteId/soProprios
+      const rankingAtendentes = atendentesComerciais.filter((c) =>
+        idsAtendentes.includes(c.id),
+      );
+
+      if (idsAtendentes.length === 0) {
+        return {
+          periodo: {
+            dataInicio: dataInicio.toISOString().slice(0, 10),
+            dataFim: dataFim.toISOString().slice(0, 10),
+          },
+          periodoAnterior: {
+            dataInicio: dataInicioAnterior.toISOString().slice(0, 10),
+            dataFim: dataFimAnterior.toISOString().slice(0, 10),
+          },
+          kpis: {
+            faturado: 0,
+            faturadoPeriodoAnterior: 0,
+            variacaoFaturado: 0,
+            contratos: 0,
+            contratosPeriodoAnterior: 0,
+            variacaoContratos: 0,
+            ticketMedio: 0,
+            comissao: 0,
+          },
+          ranking: [],
+          cobrancasPorDia: [],
+          filtros: {
+            setorId: input?.setorId ?? null,
+            atendenteId: input?.atendenteId ?? null,
+          },
+        };
+      }
+
+      const STATUS_PAGO = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+
+      // ── KPIs período atual ────────────────────────────────────────────────
+      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
+      const dataFimStr = dataFim.toISOString().slice(0, 10);
+      const dataInicioAnteriorStr = dataInicioAnterior.toISOString().slice(0, 10);
+      const dataFimAnteriorStr = dataFimAnterior.toISOString().slice(0, 10);
+
+      const [agg] = await db
+        .select({
+          totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
+          contratos: sql<number>`COUNT(*)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, eid),
+          inArray(asaasCobrancas.atendenteId, idsAtendentes),
+          inArray(asaasCobrancas.status, STATUS_PAGO),
+          gte(asaasCobrancas.dataPagamento, dataInicioStr),
+          lte(asaasCobrancas.dataPagamento, dataFimStr),
+        ));
+
+      const totalFaturado = Number(agg?.totalFaturado || 0);
+      const contratos = Number(agg?.contratos || 0);
+      const ticketMedio = contratos > 0 ? +(totalFaturado / contratos).toFixed(2) : 0;
+
+      // ── KPIs período anterior ─────────────────────────────────────────────
+      const [aggAnt] = await db
+        .select({
+          totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
+          contratos: sql<number>`COUNT(*)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, eid),
+          inArray(asaasCobrancas.atendenteId, idsAtendentes),
+          inArray(asaasCobrancas.status, STATUS_PAGO),
+          gte(asaasCobrancas.dataPagamento, dataInicioAnteriorStr),
+          lte(asaasCobrancas.dataPagamento, dataFimAnteriorStr),
+        ));
+      const faturadoAnterior = Number(aggAnt?.totalFaturado || 0);
+      const contratosAnterior = Number(aggAnt?.contratos || 0);
+      const variacaoFaturado = faturadoAnterior > 0
+        ? +(((totalFaturado - faturadoAnterior) / faturadoAnterior) * 100).toFixed(1)
+        : totalFaturado > 0 ? 100 : 0;
+      const variacaoContratos = contratosAnterior > 0
+        ? +(((contratos - contratosAnterior) / contratosAnterior) * 100).toFixed(1)
+        : contratos > 0 ? 100 : 0;
+
+      // ── Comissão a receber (fechamentos no período) ───────────────────────
+      const comissoesRows = await db
+        .select({
+          total: sql<number>`COALESCE(SUM(CAST(${comissoesFechadas.totalComissao} AS DECIMAL(14,2))), 0)`,
+        })
+        .from(comissoesFechadas)
+        .where(and(
+          eq(comissoesFechadas.escritorioId, eid),
+          inArray(comissoesFechadas.atendenteId, idsAtendentes),
+          gte(comissoesFechadas.periodoInicio, dataInicioStr),
+          lte(comissoesFechadas.periodoFim, dataFimStr),
+        ));
+      const comissaoTotal = Number(comissoesRows[0]?.total || 0);
+
+      // ── Ranking por atendente ─────────────────────────────────────────────
+      const porAtendenteRows = await db
+        .select({
+          atendenteId: asaasCobrancas.atendenteId,
+          totalFaturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
+          contratos: sql<number>`COUNT(*)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, eid),
+          inArray(asaasCobrancas.atendenteId, idsAtendentes),
+          inArray(asaasCobrancas.status, STATUS_PAGO),
+          gte(asaasCobrancas.dataPagamento, dataInicioStr),
+          lte(asaasCobrancas.dataPagamento, dataFimStr),
+        ))
+        .groupBy(asaasCobrancas.atendenteId);
+
+      const mapaPorAtendente = new Map<number, { faturado: number; contratos: number }>();
+      for (const r of porAtendenteRows) {
+        if (r.atendenteId == null) continue;
+        mapaPorAtendente.set(Number(r.atendenteId), {
+          faturado: Number(r.totalFaturado || 0),
+          contratos: Number(r.contratos || 0),
+        });
+      }
+
+      // Atendentes do setor sempre aparecem no ranking (mesmo com 0 vendas)
+      // pra dar visibilidade de quem não vendeu. Ordenado por faturado desc.
+      const ranking = rankingAtendentes
+        .map((c) => {
+          const dados = mapaPorAtendente.get(c.id) ?? { faturado: 0, contratos: 0 };
+          const meta = c.metaMensal != null ? Number(c.metaMensal) : null;
+          const progressoMeta = meta && meta > 0
+            ? +((dados.faturado / meta) * 100).toFixed(1)
+            : null;
+          return {
+            atendenteId: c.id,
+            nome: c.userName || c.userEmail || `#${c.id}`,
+            setorNome: c.setorNome,
+            faturado: dados.faturado,
+            contratos: dados.contratos,
+            ticketMedio: dados.contratos > 0
+              ? +(dados.faturado / dados.contratos).toFixed(2)
+              : 0,
+            meta,
+            progressoMeta,
+          };
+        })
+        .sort((a, b) => b.faturado - a.faturado);
+
+      // ── Cobranças por dia (linha do tempo) ────────────────────────────────
+      const porDiaRows = await db
+        .select({
+          dia: sql<string>`DATE(${asaasCobrancas.dataPagamento})`,
+          faturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
+          contratos: sql<number>`COUNT(*)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, eid),
+          inArray(asaasCobrancas.atendenteId, idsAtendentes),
+          inArray(asaasCobrancas.status, STATUS_PAGO),
+          gte(asaasCobrancas.dataPagamento, dataInicioStr),
+          lte(asaasCobrancas.dataPagamento, dataFimStr),
+        ))
+        .groupBy(sql`DATE(${asaasCobrancas.dataPagamento})`)
+        .orderBy(sql`DATE(${asaasCobrancas.dataPagamento})`);
+
+      return {
+        periodo: {
+          dataInicio: dataInicioStr,
+          dataFim: dataFimStr,
+        },
+        periodoAnterior: {
+          dataInicio: dataInicioAnteriorStr,
+          dataFim: dataFimAnteriorStr,
+        },
+        kpis: {
+          faturado: totalFaturado,
+          faturadoPeriodoAnterior: faturadoAnterior,
+          variacaoFaturado,
+          contratos,
+          contratosPeriodoAnterior: contratosAnterior,
+          variacaoContratos,
+          ticketMedio,
+          comissao: comissaoTotal,
+        },
+        ranking,
+        cobrancasPorDia: porDiaRows.map((r) => ({
+          dia: String(r.dia),
+          faturado: Number(r.faturado || 0),
+          contratos: Number(r.contratos || 0),
+        })),
+        filtros: {
+          setorId: input?.setorId ?? null,
+          atendenteId: input?.atendenteId ?? null,
+        },
+      };
+    }),
 
   /** Produção — Kanban, cards, atrasados, movimentações.
    *  Aceita filtro opcional por `funilId` (ou todos os funis do escritório).
