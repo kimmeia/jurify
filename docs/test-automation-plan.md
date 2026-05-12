@@ -19,9 +19,10 @@ Bugs que escapam de testes de unidade/integração porque exigem:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Camada 3: Explorador agêntico (Claude API + Playwright)     │
-│  → 1×/dia em staging, modo descoberta                        │
-│  → "Loga como dono, navega 30 min, reporta tudo estranho"    │
+│  Camada 3: Crawler determinístico (Playwright, sem LLM)      │
+│  → 1×/dia em staging OU sob demanda                          │
+│  → Reusa lib/playwright-helpers.ts do motor próprio          │
+│  → Estratégias: Route Walker + Form Filler (fase 1)          │
 └──────────────────────────────────────────────────────────────┘
                             ▲ reusa
 ┌──────────────────────────────────────────────────────────────┐
@@ -47,11 +48,13 @@ Por que três e não uma? Cada uma acha tipo diferente de bug:
 |---|---|---|---|
 | Golden paths | Regressão em fluxos conhecidos | Baixo (1-2 min/run) | Alto |
 | Fuzz tRPC | IDOR, cross-tenant, data integrity | Médio (5-10 min/run) | Alto (com seed) |
-| Explorador agêntico | Bugs nunca pensados, UX ruim, dead-ends | Alto ($1-2/sessão) | Baixo |
+| Crawler determinístico | 5xx, console errors, validação ausente, a11y, dead links | Zero recorrente | Alto |
+
+**Decisão**: a versão anterior do plano propunha um explorador agêntico (Claude API dirigindo Playwright). Foi rejeitada em favor do **crawler determinístico no estilo motor próprio** (`scripts/spike-motor-proprio/`). Trade-off aceito: perdemos detecção subjetiva de UX confusa (que seria melhor capturada em revisão humana ou usability test), mas ganhamos custo zero, 100% reproducibilidade, CI sem chave de API, e mesma filosofia que o time já domina.
 
 ## 3. Fase 1 — Fundação (Semana 1)
 
-Tudo que segue depende disso. Sem fundação, golden paths viram flaky e explorador trava em "como faço login?".
+Tudo que segue depende disso. Sem fundação, golden paths viram flaky e crawler trava em "como faço login?".
 
 ### 3.1 Banco de testes isolado
 
@@ -204,97 +207,120 @@ Procedures alvo:
 - # de shrinks até input mínimo que reproduz bug
 - Procedures sem cobertura fuzz (gap analysis)
 
-## 6. Fase 4 — Explorador agêntico (Semanas 4-5)
+## 6. Fase 4 — Crawler determinístico (Semanas 4-5)
 
-Aqui mora a magia: um agente Claude dirige Playwright "no escuro", explora o app como um humano novo, reporta tudo que estranha.
+Playwright puro no estilo `scripts/spike-motor-proprio/`. Sem LLM no loop. Mesma filosofia já provada nos scrapers de tribunais: retry com backoff, screenshot em erro, Sentry com tags estruturadas, output JSON + stats.
 
-### 6.1 Arquitetura
+### 6.1 Filosofia (replicada do motor próprio)
+
+| Padrão do motor próprio | Onde aplicar no crawler |
+|---|---|
+| `getBrowser()` singleton + `novoContext()` por sessão | Cada estratégia roda em context novo, browser compartilhado |
+| `comRetry(fn, { tentativas, baseMs })` | Toda ação flaky-prone (click, fill, navigate) |
+| `capturarScreenshot(page, prefixo)` em erro | `scripts/test-crawler/samples/screenshots/` com naming ISO |
+| Categorias de erro tipadas (`CategoriaErro`) | Adicionar: `console_error`, `network_5xx`, `dead_link`, `validation_missing`, `accessibility_violation` |
+| Sentry tags `spike: "motor-proprio"` | Trocar pra `crawler: "qa-explorer"` + tag de estratégia |
+| `withSpan("trt2.consultar_cnj")` | `withSpan("crawler.route_walk")`, etc. |
+| Output `samples/poc-N-{ts}.json` + stats | Output `samples/run-{ts}.json` + `run-{ts}-stats.json` |
+| Delays educados (`waitForTimeout(800)`) | Manter — evita race condition em React/Wouter |
+
+### 6.2 Escopo inicial — 2 estratégias
+
+**Decisão**: começamos com A+B. Estratégias C (Action Chains) e D (Visual Regression) ficam pra Fase 2, revisitada após Semana 8 baseado em ROI.
+
+#### Estratégia A — Route Walker (descoberta de superfície)
+
+Objetivo: visitar todas as rotas do client, validar que carregam sem erro.
+
+- **Input**: lista de rotas extraída de `client/src/pages/` (hardcoded inicialmente, AST scan depois)
+- **Pra cada rota**:
+  - Loga como dono do escritório de teste (helper de Camada 1)
+  - Navega
+  - Anexa listeners: `page.on('console')`, `'pageerror'`, `'requestfailed'`, `'response')` — coletam erros JS, 5xx, network failures
+  - Espera `networkidle` com timeout 15s
+  - Captura screenshot baseline
+  - Roda `@axe-core/playwright` → coleta violations WCAG
+  - Reporta findings
+- **Acha**: páginas que crashan no load, 5xx em endpoints chamados no mount, console errors, regressão de acessibilidade
+- **Custo de execução**: ~30 rotas × 3s = 90s
+
+#### Estratégia B — Form Filler (validação de inputs)
+
+Objetivo: pra cada formulário do app, preencher com dados plausíveis e adversariais, validar comportamento.
+
+- **Detecção**: `page.locator('form')` → enumera inputs (name, type, placeholder, aria-label, required)
+- **Gerador de dados** em `crawler/lib/data-generators.ts`:
+  - `name=cpf` → CPF válido + 5 CPFs inválidos
+  - `name=email` → email plausível + emails inválidos (sem @, com unicode, > 320 chars)
+  - `type=date` → datas válidas + 9999-12-31, 1900-01-01, ano negativo
+  - `type=number` → valores em escala + -1, 0, MAX_SAFE_INTEGER, NaN
+  - `name=*nome*` → nomes Faker-style + emoji + zalgo + 10k chars
+  - `name=*senha*` → senha forte + senhas fracas + caracteres especiais
+- **Por form**:
+  - Tenta caminho feliz: preenche válido, submete, espera toast/redirect
+  - Testa cada campo isoladamente com dado adversarial, valida erro inline (não 5xx)
+- **Acha**: validação ausente, 500 em submit, mensagem genérica "Erro" sem campo, máscara que aceita unicode
+
+### 6.3 Saída estruturada
+
+Cada execução produz (espelhando o que motor próprio já gera):
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Loop principal (TypeScript, roda em staging)            │
-│                                                         │
-│   while (orçamento_não_esgotou):                        │
-│     state   = capturar(page)  ← screenshot + DOM + URL  │
-│     prompt  = montar_contexto(state, histórico)         │
-│     ação    = claude.messages.create(prompt)            │
-│                → "click selector X" | "fill Y com Z"    │
-│                | "voltar" | "reportar bug: ..."         │
-│     executar(page, ação)                                │
-│     se ação == REPORT: salvar e continuar               │
-└─────────────────────────────────────────────────────────┘
+scripts/test-crawler/samples/
+├── run-{ts}.json              # Findings detalhados
+├── run-{ts}-stats.json        # Agregado por estratégia + categoria
+├── run-{ts}-summary.md        # Markdown legível pra revisão humana
+└── screenshots/
+    ├── route-walk-{rota}-{ts}.png
+    └── form-{form-id}-{ts}.png
 ```
 
-### 6.2 Prompt do agente (esqueleto)
+Estrutura JSON:
 
-```
-Você é um QA testando o Jurify (SaaS jurídico). Você está logado como
-{cargo} no escritório de teste. Seu objetivo: explorar todas as
-funcionalidades, executar fluxos reais (cadastrar cliente, criar
-processo, gerar cobrança...) e REPORTAR qualquer coisa que pareça bug
-ou UX confusa.
-
-Tela atual: {url}
-DOM simplificado: {dom_summarized}
-Screenshot: {image}
-Histórico (últimas 10 ações): {history}
-
-Critérios de "bug ou UX ruim":
-- Erro 500 / network error
-- Erro JS no console
-- Loading que não termina em 5s
-- Validação confusa (mensagem genérica, sem indicar campo)
-- Botão habilitado em estado inválido
-- Dado errado na tela (ex: "R$ NaN", data "Invalid Date")
-- Página em branco
-- Texto truncado, overflow, layout quebrado
-
-Decida UMA ação:
-1. CLICK <selector>
-2. FILL <selector> <valor>
-3. NAVIGATE <path>
-4. WAIT <ms>
-5. REPORT <severidade: low|med|high|critical> <descrição>
-6. STOP <razão>
+```jsonc
+{
+  "runId": "20260512-...",
+  "estrategia": "route_walker" | "form_filler",
+  "ok": false,
+  "findings": [
+    {
+      "severidade": "high",
+      "categoria": "network_5xx",
+      "rota": "/clientes/123",
+      "screenshotPath": "samples/screenshots/route-walk-...",
+      "detalhes": "GET /api/trpc/clientes.buscar respondeu 500"
+    }
+  ],
+  "latenciaMs": 87340,
+  "finalizadoEm": "2026-05-12T..."
+}
 ```
 
-### 6.3 Estratégias de exploração
+### 6.4 Integração com Sentry
 
-3 modos rodando em paralelo (cada um em escritório próprio):
+Mesma filosofia do `lib/sentry-spike.ts`:
 
-- **Modo "primeiro dia"**: agente loga como dono recém-criado, simula onboarding completo, anota tudo que parece confuso.
-- **Modo "rotina"**: agente loga como atendente, simula um dia de trabalho — chega cliente, cadastra, faz cobrança, responde mensagem.
-- **Modo "destrutivo"**: agente tenta explicitamente quebrar coisas — input bizarro, navegação rápida, F5 no meio de submit, voltar/avançar do browser.
+```ts
+initSpikeSentry({ pocId: "crawler", workerName: "qa-crawler" });
+// Tags: crawler: "qa-explorer", crawler_estrategia: "form_filler", crawler_run: "{ts}"
+```
 
-### 6.4 Custo estimado
+Cada finding `severity >= high` vai como `captureSpikeError` com extras (rota, screenshot, categoria).
 
-Por sessão (~30 min de exploração, ~80 ações):
+### 6.5 Triagem
 
-| Item | Volume | Custo |
-|---|---|---|
-| Input (screenshot + DOM + history) | ~5k tokens × 80 | ~400k tokens |
-| Output (decisão de ação) | ~300 tokens × 80 | ~24k tokens |
-| **Modelo: Sonnet 4.6** ($3 in / $15 out) | | **~$1.50 / sessão** |
-| **Com prompt caching** (system prompt + matriz) | | **~$0.80 / sessão** |
-| 10 sessões/dia × 30 dias | | **~$240/mês** |
+- Findings `critical|high` → criar issue automática no GitHub via `mcp__github__issue_write` com screenshot anexado
+- `med|low` → board manual (revisão semanal)
+- Falsos positivos → adicionar pattern ao código do crawler (ex: "rota /relatorios pode demorar > 5s, não conta como bug")
 
-Pra Opus 4.7 ($15/$75): ~$8/sessão → $2400/mês — desnecessário pra QA, Sonnet basta.
+### 6.6 Fase 2 (pós-validação)
 
-**Caching obrigatório**: system prompt + descrição da matriz de permissões + glossário de UI são fixos → cache hit em 90% das chamadas.
+Se A+B mostrarem ROI bom (achar ≥ 3 bugs reais em 30 dias), implementar:
 
-### 6.5 Saídas
+- **Estratégia C — Action Chains**: sequências declarativas de ações com invariants entre telas (cadastrar cliente → criar cobrança → conferir DRE soma)
+- **Estratégia D — Visual Regression + Perf**: screenshot diff por rota, baseline em `main`, alarme em degradação P95 > 30%
 
-Cada sessão produz:
-
-- `reports/<runId>/findings.json`: lista de REPORTs com severidade, screenshot, URL, DOM snapshot, ação que disparou.
-- `reports/<runId>/trace.html`: Playwright trace viewer (já é nativo).
-- `reports/<runId>/summary.md`: agente escreve resumo no fim ("explorei X, achei Y bugs, observei Z").
-
-### 6.6 Triagem
-
-- Bugs `critical|high` → criar issue automática no GitHub via `mcp__github__issue_write`.
-- `med|low` → ficam em board manual (planilha ou Linear).
-- Falsos positivos → adicionar pattern ao prompt do agente como "isso não é bug".
+Detalhes ficam congelados nesta seção até reavaliação após Semana 8.
 
 ## 7. Integração CI
 
@@ -306,27 +332,29 @@ Cada sessão produz:
 │   ├── pnpm test:e2e:golden (NOVO - golden paths Playwright)
 │   └── pnpm test:fuzz (NOVO - fast-check tRPC)
 │
-└── on: schedule (1×/dia, 03:00 UTC)
-    └── pnpm test:explore (NOVO - explorador agêntico em staging)
-        └── posta resumo em #qa-automation no Slack
+└── on: schedule (1×/dia, 03:00 UTC) + on: workflow_dispatch
+    └── pnpm test:crawler (NOVO - crawler determinístico em staging)
+        └── findings ≥ high viram GitHub issues automáticas
 ```
+
+Sem chave de API: roda no CI padrão sem secret adicional. Disparo manual via `workflow_dispatch` quando quiser rodar sob demanda.
 
 ## 8. Métricas de sucesso (90 dias)
 
 - Camada 1+2: > 20 fluxos cobertos, < 1% flake, < 10 min de suíte.
-- Camada 3: 0 IDOR não detectado em audit independente, fuzz acha pelo menos 5 bugs reais.
-- Camada 4: explorador acha em média 2-3 bugs novos por semana nos primeiros 30 dias (curva decrescente é sinal de saúde).
-- Bugs achados → corrigidos → regressão adicionada à camada 1.
+- Camada 3 (Fuzz): 0 IDOR não detectado em audit independente, fast-check acha pelo menos 5 bugs reais.
+- Camada 4 (Crawler): cada run reporta < 5 findings novos após estabilização (curva decrescente é sinal de saúde do app). Acha bug intencional injetado em < 2 min.
+- Bugs achados → corrigidos → regressão adicionada à Camada 2.
 
 ## 9. Riscos & mitigações
 
 | Risco | Mitigação |
 |---|---|
 | Testes flaky degradam confiança | Quarentena imediata + investigar root cause, nunca `it.skip` "temporário" |
-| Custo do explorador escalar fora de controle | Hard budget cap por dia ($10), kill switch em env var, alarme Sentry se passar |
 | Staging não isola → testes poluem dados reais | Camada 1.1 obrigatória antes de qualquer outra coisa |
-| Explorador acha "bug" que é feature → ruído | Loop de feedback: humano marca como falso positivo, agente aprende via examples no prompt |
-| Vazamento de senhas/tokens em logs/screenshots | Sanitização obrigatória no `expectNoConsoleErrors`, screenshots censuram inputs `type=password` |
+| Crawler reporta ruído (rota intencionalmente lenta, validação opcional) | Patterns de exceção codados explicitamente; revisão semanal das categorias mais frequentes |
+| Vazamento de senhas/tokens em logs/screenshots | Sanitização obrigatória no `expectNoConsoleErrors`, screenshots borram inputs `type=password` e regex CPF/CNPJ/email |
+| Crawler quebra com mudança de UI (selector mudou) | Reusa `comRetry` do motor próprio (3 tentativas, backoff); failures viram findings categoria `selector_obsoleto` pra atualização explícita |
 
 ## 10. Cronograma
 
@@ -335,15 +363,18 @@ Cada sessão produz:
 | 1 | Fundação (DB isolation + seed + helpers) | `seedAndLogin('dono')` funciona em CI |
 | 2 | Golden paths P0 (testes 1-10) | Roda no CI verde, < 10 min |
 | 3 | Golden paths P1 + fuzz tRPC | Cobertura de 20 procedures críticas |
-| 4 | Explorador v1 (modo "primeiro dia") | 1 sessão completa, achados reais |
-| 5 | Explorador v2 (modo "rotina" + "destrutivo") | 3 modos em paralelo, custo < $10/dia |
-| 6 | Triagem + CI scheduled + dashboard | Issues automáticas no GitHub, dashboard com trend |
+| 4 | Crawler Estratégia A (Route Walker) | Roda 1× em staging, gera report JSON, Sentry recebe tags |
+| 5 | Crawler Estratégia B (Form Filler) | Detecta 1 bug intencional injetado (validação ausente) |
+| 6 | CI scheduled + GitHub issues automáticas | Issues criadas via `mcp__github__issue_write` pra findings ≥ high |
 
 ## 11. Decisões pendentes (preciso de input)
 
-1. **Banco de teste**: schema-por-run ou escritório-por-run? (Recomendo escritório-por-run pra começar — menos invasivo.)
-2. **Ambiente do explorador**: staging atual ou criar `RAILWAY_ENVIRONMENT=qa` dedicado? (Recomendo dedicado pra não contaminar staging com dados loucos.)
-3. **Modelo do explorador**: Sonnet 4.6 ($240/mês) ou começar com Haiku 4.5 ($30/mês) e subir se quality ruim? (Recomendo Sonnet — Haiku tende a perder contexto em ações complexas.)
-4. **Onde reportar bugs**: GitHub issues, Linear, ou planilha? (Recomendo GitHub issues — já temos `mcp__github__issue_write`, dá pra automatizar.)
-5. **Quem é o "owner" da suíte**: cada PR roda golden+fuzz obrigatoriamente, ou opt-in via label? (Recomendo obrigatório — vira regressão de verdade.)
-6. **Sanitização de PII em screenshots**: borrar CPF/CNPJ/email no screenshot antes de salvar? (Recomendo sim — screenshots vão pro CI artifact storage.)
+| # | Decisão | Recomendação |
+|---|---|---|
+| 1 | Isolamento DB | Escritório-por-run (não invasivo, cascade delete) |
+| 2 | Ambiente do crawler | `RAILWAY_ENVIRONMENT=qa` dedicado (evita poluir staging) |
+| 3 | ~~Modelo LLM~~ | **Sem objeto — crawler é determinístico** |
+| 4 | Onde reportar bugs | GitHub issues via `mcp__github__issue_write` (severidade ≥ high) |
+| 5 | CI obrigatório/opt-in | Camadas 1, 2 e Fuzz: obrigatório em todo PR. Crawler: scheduled (diário) + sob demanda via `workflow_dispatch` |
+| 6 | Sanitização PII | Sim — borrar valores de inputs `type=password` + campos com regex CPF/CNPJ/email antes de salvar screenshot |
+| 7 | Profundidade do crawler | **Confirmado**: começar com A+B. Estratégias C+D ficam pra Fase 2 (revisitar após Semana 8) |
