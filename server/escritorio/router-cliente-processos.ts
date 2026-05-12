@@ -159,9 +159,13 @@ export const clienteProcessosRouter = router({
         if (existente) throw new TRPCError({ code: "CONFLICT", message: "Este processo já está vinculado a este cliente." });
       }
 
-      // Sem CNJ → força tipo='extrajudicial' (não é processo judicial real).
-      // Com CNJ → respeita o que veio (default 'litigioso').
-      const tipoFinal = cnj ? (input.tipo || "litigioso") : "extrajudicial";
+      // Respeita o tipo escolhido pelo user. Casos possíveis:
+      //  - tipo=litigioso + cnj=valor → processo judicial confirmado
+      //  - tipo=litigioso + cnj=null  → judicial aguardando protocolo
+      //    (contrato pra ajuizar; CNJ entra via `atualizarCnj` quando vier)
+      //  - tipo=extrajudicial         → consultoria/contrato/administrativo
+      // Default quando tipo não veio: extrajudicial se sem CNJ, litigioso se com.
+      const tipoFinal = input.tipo || (cnj ? "litigioso" : "extrajudicial");
 
       const [result] = await db.insert(clienteProcessos).values({
         escritorioId: esc.escritorio.id,
@@ -206,6 +210,9 @@ export const clienteProcessosRouter = router({
       apelido: z.string().max(255).optional(),
       polo: z.enum(["ativo", "passivo", "interessado"]).optional(),
       tipo: z.enum(["extrajudicial", "litigioso"]).optional(),
+      // Permite preencher o CNJ depois do protocolo — caso "judicial
+      // aguardando protocolo" onde o processo nasce sem CNJ.
+      numeroCnj: z.string().min(15).max(30).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -217,6 +224,38 @@ export const clienteProcessosRouter = router({
       if (input.apelido !== undefined) update.apelido = input.apelido;
       if (input.polo !== undefined) update.polo = input.polo;
       if (input.tipo !== undefined) update.tipo = input.tipo;
+      if (input.numeroCnj !== undefined) {
+        const cnj = input.numeroCnj.trim();
+        if (cnj) {
+          // Dedup: garante que o CNJ não está em outro processo do mesmo cliente.
+          const [proc] = await db
+            .select({ contatoId: clienteProcessos.contatoId })
+            .from(clienteProcessos)
+            .where(and(
+              eq(clienteProcessos.id, input.id),
+              eq(clienteProcessos.escritorioId, esc.escritorio.id),
+            ))
+            .limit(1);
+          if (proc) {
+            const [dup] = await db
+              .select({ id: clienteProcessos.id })
+              .from(clienteProcessos)
+              .where(and(
+                eq(clienteProcessos.contatoId, proc.contatoId),
+                eq(clienteProcessos.numeroCnj, cnj),
+                eq(clienteProcessos.escritorioId, esc.escritorio.id),
+              ))
+              .limit(1);
+            if (dup && dup.id !== input.id) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Este CNJ já está vinculado a outro processo deste cliente.",
+              });
+            }
+          }
+          update.numeroCnj = cnj;
+        }
+      }
 
       if (Object.keys(update).length > 0) {
         await db.update(clienteProcessos)
