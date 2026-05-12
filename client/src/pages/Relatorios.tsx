@@ -16,6 +16,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -471,6 +472,19 @@ function DashboardComercial() {
   const [setorSel, setSetorSel] = useState<string>("");
   const [atendenteSel, setAtendenteSel] = useState<string>("__all__");
   const [{ inicio, fim }, setRange] = useState(rangeMesVigente);
+  // Drill-down: card clicado abre Sheet lateral com clientes do atendente
+  const [atendenteDrillDown, setAtendenteDrillDown] = useState<{ id: number; nome: string } | null>(null);
+
+  // Query do drill-down — só dispara quando algum atendente for selecionado.
+  // Usa o mesmo período do dashboard (inicio/fim).
+  const { data: detalheAtendente, isLoading: loadingDetalhe } = (trpc as any).relatorios.detalheAtendenteComercial.useQuery(
+    {
+      atendenteId: atendenteDrillDown?.id,
+      dataInicio: inicio,
+      dataFim: fim,
+    },
+    { enabled: atendenteDrillDown != null, retry: false },
+  );
 
   const { data: setoresList } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
   const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
@@ -658,7 +672,15 @@ function DashboardComercial() {
                   {data.ranking.map((r: any, idx: number) => {
                     const medalha = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
                     return (
-                      <div key={r.atendenteId} className="border rounded-lg p-3 space-y-2">
+                      <div
+                        key={r.atendenteId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setAtendenteDrillDown({ id: r.atendenteId, nome: r.nome })}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setAtendenteDrillDown({ id: r.atendenteId, nome: r.nome }); }}
+                        className="border rounded-lg p-3 space-y-2 cursor-pointer hover:border-primary hover:bg-accent/30 transition-colors"
+                        title="Clique pra ver os clientes deste atendente"
+                      >
                         <div className="flex items-center gap-2">
                           <span className="text-base w-6 text-center">
                             {medalha || <span className="text-xs text-muted-foreground">#{idx + 1}</span>}
@@ -743,6 +765,83 @@ function DashboardComercial() {
           )}
         </>
       )}
+
+      {/* Drill-down: clientes fechados/pagos pelo atendente no período */}
+      <Sheet open={atendenteDrillDown != null} onOpenChange={(o) => { if (!o) setAtendenteDrillDown(null); }}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>{atendenteDrillDown?.nome || "Atendente"}</SheetTitle>
+            <SheetDescription>
+              Clientes fechados e pagamentos no período selecionado.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-3">
+            {loadingDetalhe && (
+              <p className="text-xs text-muted-foreground">Carregando...</p>
+            )}
+
+            {!loadingDetalhe && detalheAtendente && detalheAtendente.itens?.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Nenhum cliente fechado ou pagamento registrado neste período.
+              </p>
+            )}
+
+            {!loadingDetalhe && detalheAtendente && detalheAtendente.itens?.length > 0 && (
+              <>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-2">
+                    <p className="text-[10px] text-muted-foreground">Total fechado</p>
+                    <p className="text-sm font-bold text-blue-700">{formatBRL(detalheAtendente.totalFechado || 0)}</p>
+                  </div>
+                  <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
+                    <p className="text-[10px] text-muted-foreground">Total recebido</p>
+                    <p className="text-sm font-bold text-emerald-700">{formatBRL(detalheAtendente.totalRecebido || 0)}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {detalheAtendente.itens.map((it: any) => {
+                    const statusInfo: Record<string, { label: string; cor: string }> = {
+                      pago: { label: "Pago integral", cor: "bg-emerald-100 text-emerald-700" },
+                      parcial: { label: "Parcial", cor: "bg-amber-100 text-amber-700" },
+                      aguardando: { label: "Aguardando", cor: "bg-gray-100 text-gray-700" },
+                      so_pago: { label: "Pago s/ lead", cor: "bg-blue-100 text-blue-700" },
+                    };
+                    const s = statusInfo[it.status] || statusInfo.aguardando;
+                    return (
+                      <div key={it.contatoId} className="border rounded-lg p-3 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium truncate" title={it.nome}>{it.nome}</p>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap ${s.cor}`}>
+                            {s.label}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 text-xs">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">Fechado</p>
+                            <p className="font-medium text-blue-700">{formatBRL(it.valorFechado)}</p>
+                            {it.contratosFechados > 0 && (
+                              <p className="text-[10px] text-muted-foreground">{it.contratosFechados} contrato(s)</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">Recebido</p>
+                            <p className="font-medium text-emerald-700">{formatBRL(it.valorRecebido)}</p>
+                            {it.contratosPagos > 0 && (
+                              <p className="text-[10px] text-muted-foreground">{it.contratosPagos} pago(s)</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

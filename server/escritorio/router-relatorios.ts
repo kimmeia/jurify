@@ -787,6 +787,166 @@ export const relatoriosRouter = router({
       };
     }),
 
+  /**
+   * Detalhamento por atendente do dashboard Comercial — drill-down do ranking.
+   *
+   * Pra cada cliente fechado/pago pelo atendente no período:
+   *   - `valorFechado`: soma `leads.valorEstimado` (etapaFunil=fechado_ganho)
+   *   - `contratosFechados`: count desses leads
+   *   - `valorRecebido`: soma cobranças pagas
+   *   - `contratosPagos`: count DISTINCT(COALESCE(parcelamentoLocalId, id))
+   *
+   * Combina por contatoId (cliente pode ter sido fechado mas ainda não pagou,
+   * ou pago sem ter lead — caso de cobrança avulsa direta). Ordenado por
+   * valor fechado desc; clientes sem fechado mas com pagamento vão no fim.
+   */
+  detalheAtendenteComercial: protectedProcedure
+    .input(z.object({
+      atendenteId: z.number().int().positive(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const eid = esc.escritorio.id;
+
+      const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar relatórios." });
+      }
+      // verProprios: só pode ver o detalhe do próprio atendente
+      if (!perm.verTodos && perm.verProprios && input.atendenteId !== esc.colaborador.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode ver o próprio detalhamento." });
+      }
+
+      // Range: default = mês vigente
+      let dataInicio: Date;
+      let dataFim: Date;
+      if (input.dataInicio && input.dataFim) {
+        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
+        dataFim = new Date(`${input.dataFim}T23:59:59`);
+      } else {
+        const m = mesVigente();
+        dataInicio = m.dataInicio;
+        dataFim = m.dataFim;
+      }
+      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
+      const dataFimStr = dataFim.toISOString().slice(0, 10);
+      const STATUS_PAGO_LOCAL = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+
+      // ── Leads fechado_ganho do atendente, agrupados por contatoId ──────────
+      const leadsRows = await db
+        .select({
+          contatoId: leads.contatoId,
+          valorFechado: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)`,
+          contratosFechados: sql<number>`COUNT(*)`,
+        })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.responsavelId, input.atendenteId),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+        ))
+        .groupBy(leads.contatoId);
+
+      // ── Cobranças pagas do atendente, agrupadas por contatoId ──────────────
+      const cobrancasRows = await db
+        .select({
+          contatoId: asaasCobrancas.contatoId,
+          valorRecebido: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
+          contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, eid),
+          eq(asaasCobrancas.atendenteId, input.atendenteId),
+          inArray(asaasCobrancas.status, STATUS_PAGO_LOCAL),
+          gte(asaasCobrancas.dataPagamento, dataInicioStr),
+          lte(asaasCobrancas.dataPagamento, dataFimStr),
+        ))
+        .groupBy(asaasCobrancas.contatoId);
+
+      // ── Combinar por contatoId ─────────────────────────────────────────────
+      type Linha = {
+        contatoId: number;
+        valorFechado: number;
+        contratosFechados: number;
+        valorRecebido: number;
+        contratosPagos: number;
+      };
+      const mapaPorContato = new Map<number, Linha>();
+      for (const r of leadsRows) {
+        if (r.contatoId == null) continue;
+        mapaPorContato.set(Number(r.contatoId), {
+          contatoId: Number(r.contatoId),
+          valorFechado: Number(r.valorFechado || 0),
+          contratosFechados: Number(r.contratosFechados || 0),
+          valorRecebido: 0,
+          contratosPagos: 0,
+        });
+      }
+      for (const r of cobrancasRows) {
+        if (r.contatoId == null) continue;
+        const id = Number(r.contatoId);
+        const atual = mapaPorContato.get(id);
+        if (atual) {
+          atual.valorRecebido = Number(r.valorRecebido || 0);
+          atual.contratosPagos = Number(r.contratosPagos || 0);
+        } else {
+          mapaPorContato.set(id, {
+            contatoId: id,
+            valorFechado: 0,
+            contratosFechados: 0,
+            valorRecebido: Number(r.valorRecebido || 0),
+            contratosPagos: Number(r.contratosPagos || 0),
+          });
+        }
+      }
+
+      const idsContatos = Array.from(mapaPorContato.keys());
+      if (idsContatos.length === 0) {
+        return { itens: [], totalFechado: 0, totalRecebido: 0 };
+      }
+
+      // ── Nomes dos contatos ────────────────────────────────────────────────
+      const contatosRows = await db
+        .select({ id: contatos.id, nome: contatos.nome })
+        .from(contatos)
+        .where(and(eq(contatos.escritorioId, eid), inArray(contatos.id, idsContatos)));
+      const mapaNome = new Map<number, string>();
+      for (const c of contatosRows) mapaNome.set(c.id, c.nome);
+
+      // ── Monta resposta ────────────────────────────────────────────────────
+      let totalFechado = 0;
+      let totalRecebido = 0;
+      const itens = Array.from(mapaPorContato.values()).map((l) => {
+        totalFechado += l.valorFechado;
+        totalRecebido += l.valorRecebido;
+        // Status: pago / parcial / aguardando / só_pago (sem lead)
+        let status: "pago" | "parcial" | "aguardando" | "so_pago";
+        if (l.valorFechado === 0 && l.valorRecebido > 0) status = "so_pago";
+        else if (l.valorRecebido === 0) status = "aguardando";
+        else if (l.valorRecebido + 0.01 >= l.valorFechado) status = "pago";
+        else status = "parcial";
+        return { ...l, nome: mapaNome.get(l.contatoId) || `Cliente #${l.contatoId}`, status };
+      });
+
+      itens.sort((a, b) => {
+        // Fechados primeiro (desc por valor); depois "só pagos" no fim
+        if ((a.valorFechado > 0) !== (b.valorFechado > 0)) {
+          return a.valorFechado > 0 ? -1 : 1;
+        }
+        return b.valorFechado - a.valorFechado || b.valorRecebido - a.valorRecebido;
+      });
+
+      return { itens, totalFechado, totalRecebido };
+    }),
+
   /** Produção — Kanban, cards, atrasados, movimentações.
    *  Aceita filtro opcional por `funilId` (ou todos os funis do escritório).
    */
