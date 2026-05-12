@@ -847,10 +847,10 @@ export async function validarConexoesAsaasPendentes(): Promise<void> {
     const client = new AsaasClient(apiKey);
     const teste = await client.testarConexao();
 
+    const haystack = `${teste.mensagem} ${teste.detalhes ?? ""}`;
     const isRateLimit =
       !teste.ok &&
-      (/HTTP 429/i.test(teste.mensagem) ||
-        /cota.*requisi[çc][õo]es|rate.?limit/i.test(teste.detalhes ?? ""));
+      /HTTP 429|rate.?limit|cota.*(?:requisi[çc][õo]es|12h|pr[óo]xima)/i.test(haystack);
 
     if (teste.ok) {
       await db.update(asaasConfig).set({
