@@ -488,7 +488,8 @@ export async function dispararPagamentoRecebido(
       apelido: string | null;
       tipo: string | null;
       classe: string | null;
-      numeroCnj: string;
+      // null em processos extrajudiciais (contratos, consultoria, administrativos).
+      numeroCnj: string | null;
       // schema usa decimal — drizzle entrega como number | null
       valorCausa: number | null;
       polo: string | null;
@@ -571,10 +572,10 @@ export async function dispararPagamentoRecebido(
         // Dados da ação no contexto — disponíveis nos templates do
         // SmartFlow como {{acaoApelido}}, {{acaoTipo}}, etc.
         acaoId: acao.id,
-        acaoApelido: acao.apelido || acao.numeroCnj,
+        acaoApelido: acao.apelido || acao.numeroCnj || undefined,
         acaoTipo: acao.tipo || "",
         acaoClasse: acao.classe || "",
-        acaoNumeroCnj: acao.numeroCnj,
+        acaoNumeroCnj: acao.numeroCnj || undefined,
         acaoValorCausa: acao.valorCausa != null ? String(acao.valorCausa) : "",
         acaoPolo: acao.polo || "",
         // Específico desta ação (vs. do cliente)

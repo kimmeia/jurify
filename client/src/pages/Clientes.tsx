@@ -1221,7 +1221,11 @@ function ProcessoCard({
           </button>
           <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-mono font-medium">{p.numeroCnj}</p>
+              {p.numeroCnj ? (
+                <p className="text-sm font-mono font-medium">{p.numeroCnj}</p>
+              ) : (
+                <p className="text-sm font-medium">{p.apelido || `Processo #${p.id}`}</p>
+              )}
               <Badge variant="outline" className={`text-[9px] ${tipoMeta.cor}`}>
                 {tipoMeta.label}
               </Badge>
@@ -1236,7 +1240,8 @@ function ProcessoCard({
                 </Badge>
               )}
             </div>
-            {p.apelido && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
+            {/* Apelido só aparece como subtítulo se há CNJ (senão já é o título). */}
+            {p.apelido && p.numeroCnj && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
             {p.tribunal && <p className="text-[10px] text-muted-foreground">{p.tribunal}</p>}
           </div>
           <Button
@@ -1421,78 +1426,116 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
           <DialogHeader>
             <DialogTitle>Vincular processo</DialogTitle>
             <DialogDescription>
-              Informe o número CNJ do processo para vincular a este cliente.
+              Vincule um processo judicial (com CNJ) ou um caso extrajudicial
+              (contrato, consultoria, processo administrativo).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {/* Tipo primeiro — controla se CNJ é obrigatório */}
             <div>
-              <Label>Número CNJ *</Label>
-              <Input
-                placeholder="0000000-00.0000.0.00.0000"
-                value={novoCnj}
-                onChange={(e) => setNovoCnj(e.target.value)}
-                className="font-mono"
-              />
+              <Label>Tipo de processo</Label>
+              <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="litigioso">Judicial (litigioso) — com CNJ</SelectItem>
+                  <SelectItem value="extrajudicial">Extrajudicial (contrato, consultoria, administrativo)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {novoTipo === "litigioso" ? (
+              <div>
+                <Label>Número CNJ *</Label>
+                <Input
+                  placeholder="0000000-00.0000.0.00.0000"
+                  value={novoCnj}
+                  onChange={(e) => setNovoCnj(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            ) : (
+              <div>
+                <Label>Número de referência (opcional)</Label>
+                <Input
+                  placeholder="Ex: protocolo administrativo, número do contrato..."
+                  value={novoCnj}
+                  onChange={(e) => setNovoCnj(e.target.value)}
+                  className="font-mono"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Caso seu processo tenha algum número identificador (não-CNJ), pode incluir aqui.
+                </p>
+              </div>
+            )}
+
             <div>
-              <Label>Descrição (opcional)</Label>
+              <Label>
+                {novoTipo === "extrajudicial" ? "Descrição *" : "Descrição (opcional)"}
+              </Label>
               <Input
-                placeholder="Ex: Divórcio, Trabalhista, Indenização..."
+                placeholder="Ex: Divórcio, Contrato consultoria, Defesa administrativa..."
                 value={novoApelido}
                 onChange={(e) => setNovoApelido(e.target.value)}
               />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Polo do cliente</Label>
-                <Select value={novoPolo} onValueChange={setNovoPolo}>
-                  <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Polo Ativo (autor)</SelectItem>
-                    <SelectItem value="passivo">Polo Passivo (réu)</SelectItem>
-                    <SelectItem value="interessado">Interessado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={novoTipo} onValueChange={(v) => setNovoTipo(v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="litigioso">Litigioso</SelectItem>
-                    <SelectItem value="extrajudicial">Extrajudicial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <label className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50">
-              <input
-                type="checkbox"
-                checked={novoMonitorar}
-                onChange={(e) => setNovoMonitorar(e.target.checked)}
-                className="accent-primary"
-              />
-              <div>
-                <p className="text-xs font-medium">Quero monitorar este processo</p>
-                <p className="text-[10px] text-muted-foreground">
-                  Após vincular, abriremos a tela de monitoramento (módulo Processos) com este CNJ
-                  pré-preenchido pra você escolher a credencial e confirmar (5 créditos/mês).
+              {novoTipo === "extrajudicial" && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Sem CNJ, a descrição é o que identifica esse processo nas listas.
                 </p>
-              </div>
-            </label>
+              )}
+            </div>
+
+            <div>
+              <Label>Polo do cliente</Label>
+              <Select value={novoPolo} onValueChange={setNovoPolo}>
+                <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativo">Polo Ativo (autor)</SelectItem>
+                  <SelectItem value="passivo">Polo Passivo (réu)</SelectItem>
+                  <SelectItem value="interessado">Interessado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {novoTipo === "litigioso" && (
+              <label className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50">
+                <input
+                  type="checkbox"
+                  checked={novoMonitorar}
+                  onChange={(e) => setNovoMonitorar(e.target.checked)}
+                  className="accent-primary"
+                />
+                <div>
+                  <p className="text-xs font-medium">Quero monitorar este processo</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Após vincular, abriremos a tela de monitoramento (módulo Processos) com este CNJ
+                    pré-preenchido pra você escolher a credencial e confirmar (5 créditos/mês).
+                  </p>
+                </div>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() => vincularMut.mutate({
-                contatoId,
-                numeroCnj: novoCnj.trim(),
-                apelido: novoApelido || undefined,
-                polo: novoPolo || undefined,
-                tipo: novoTipo,
-                monitorar: novoMonitorar,
-              })}
-              disabled={!novoCnj.trim() || novoCnj.trim().length < 15 || vincularMut.isPending}
+              onClick={() => {
+                // Sem CNJ: tipo já é "extrajudicial" no backend; envia undefined
+                // pra que o Zod aceite. Com CNJ: validamos comprimento mínimo no front.
+                const enviarCnj = novoCnj.trim().length >= 15 ? novoCnj.trim() : undefined;
+                vincularMut.mutate({
+                  contatoId,
+                  numeroCnj: enviarCnj,
+                  apelido: novoApelido || undefined,
+                  polo: novoPolo || undefined,
+                  tipo: novoTipo,
+                  monitorar: novoTipo === "litigioso" ? novoMonitorar : false,
+                });
+              }}
+              disabled={
+                vincularMut.isPending ||
+                (novoTipo === "litigioso"
+                  ? !novoCnj.trim() || novoCnj.trim().length < 15
+                  : !novoApelido.trim())
+              }
             >
               {vincularMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Vincular
