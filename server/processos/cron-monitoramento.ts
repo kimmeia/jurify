@@ -574,7 +574,65 @@ export async function pollMonitoramentosNovasAcoes(): Promise<void> {
       const cnjsConhecidos: string[] = mon.cnjsConhecidos
         ? (JSON.parse(mon.cnjsConhecidos) as string[])
         : [];
+      // Análogo a hashUltimasMovs em pollMonitoramentosMovs:451 — o
+      // monitoramento entra com cnjsConhecidos="[]" (criarMonitoramento
+      // NovasAcoes), então CNJs pré-existentes do CPF/CNPJ apareceriam
+      // todos como "novos" sem este guard. Versão anterior do código
+      // tinha o ramo de baseline dentro do else de cnjsNovos.length>0,
+      // que era inalcançável (cnjsConhecidos=[] ⇒ cnjsNovos=resultado.cnjs).
+      const isPrimeiraExecucao = cnjsConhecidos.length === 0;
       const cnjsNovos = resultado.cnjs.filter((c) => !cnjsConhecidos.includes(c));
+
+      if (isPrimeiraExecucao) {
+        for (const cnj of resultado.cnjs) {
+          const dedup = hashEvento(["nova_acao", String(mon.id), cnj]);
+          try {
+            await db.insert(eventosProcesso).values({
+              monitoramentoId: mon.id,
+              escritorioId: mon.escritorioId,
+              tipo: "nova_acao",
+              dataEvento: new Date(),
+              fonte: "pje",
+              conteudo: `Baseline: ${cnj} contra ${mon.apelido ?? mon.searchKey}`,
+              conteudoJson: JSON.stringify({
+                cnj,
+                baseline: true,
+                searchKey: mon.searchKey,
+                searchType: mon.searchType,
+                tribunal: mon.tribunal,
+              }),
+              cnjAfetado: cnj,
+              hashDedup: dedup,
+              lido: true,
+            });
+          } catch (err) {
+            const errAny = err as any;
+            const isDedup =
+              errAny?.cause?.code === "ER_DUP_ENTRY" ||
+              errAny?.cause?.errno === 1062;
+            if (!isDedup) {
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn(
+                { err: msg, monId: mon.id, cnj },
+                "[motor-cron] baseline novas_acoes INSERT falhou (não-dedup)",
+              );
+            }
+          }
+        }
+        await db
+          .update(motorMonitoramentos)
+          .set({
+            cnjsConhecidos: JSON.stringify(resultado.cnjs),
+            ultimaConsultaEm: new Date(),
+            ultimoErro: null,
+          })
+          .where(eq(motorMonitoramentos.id, mon.id));
+        log.info(
+          { monId: mon.id, baseline: resultado.cnjs.length },
+          "[motor-cron] baseline silencioso de novas ações registrado",
+        );
+        continue;
+      }
 
       if (cnjsNovos.length > 0) {
         for (const cnj of cnjsNovos) {
@@ -641,22 +699,10 @@ export async function pollMonitoramentosNovasAcoes(): Promise<void> {
 
         detectadas += cnjsNovos.length;
       } else {
-        // Primeira execução: armazena baseline de CNJs sem disparar notif
-        if (cnjsConhecidos.length === 0 && resultado.cnjs.length > 0) {
-          await db
-            .update(motorMonitoramentos)
-            .set({
-              cnjsConhecidos: JSON.stringify(resultado.cnjs),
-              ultimaConsultaEm: new Date(),
-              ultimoErro: null,
-            })
-            .where(eq(motorMonitoramentos.id, mon.id));
-        } else {
-          await db
-            .update(motorMonitoramentos)
-            .set({ ultimaConsultaEm: new Date(), ultimoErro: null })
-            .where(eq(motorMonitoramentos.id, mon.id));
-        }
+        await db
+          .update(motorMonitoramentos)
+          .set({ ultimaConsultaEm: new Date(), ultimoErro: null })
+          .where(eq(motorMonitoramentos.id, mon.id));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
