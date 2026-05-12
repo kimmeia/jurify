@@ -208,7 +208,8 @@ export default function Relatorios() {
         <TabsContent value="atendimento" className="mt-4">
           <AbaAtendimento dias={diasNum} />
         </TabsContent>
-        <TabsContent value="comercial" className="mt-4">
+        <TabsContent value="comercial" className="mt-4 space-y-6">
+          <DashboardComercial />
           <AbaComercial dias={diasNum} />
         </TabsContent>
         <TabsContent value="producao" className="mt-4">
@@ -442,6 +443,280 @@ function AbaAtendimentoConteudo({ data, dias: _dias }: { data: any; dias: number
  *    (whatsapp, instagram, facebook, manual). Asaas é cobrança de
  *    cliente já existente — não é lead novo.
  */
+// ───────────────────── Dashboard Comercial (estilo Looker) ─────────────────────
+
+function VariacaoBadge({ pct }: { pct: number }) {
+  if (pct === 0) {
+    return (
+      <span className="inline-flex items-center text-[10px] text-muted-foreground">
+        sem mudança
+      </span>
+    );
+  }
+  const up = pct > 0;
+  const cor = up ? "text-emerald-600" : "text-red-600";
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${cor}`}>
+      {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+      {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
+function DashboardComercial() {
+  // Filtros locais: setor (default = primeiro tipo='comercial'),
+  // atendente, período (default mês vigente)
+  const [setorSel, setSetorSel] = useState<string>("__auto__");
+  const [atendenteSel, setAtendenteSel] = useState<string>("__all__");
+  const [{ inicio, fim }, setRange] = useState(rangeMesVigente);
+
+  const { data: setoresList } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
+  const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
+    { modulo: "relatorios" },
+    { retry: false },
+  );
+
+  // Setores tipo='comercial' (pra default + dropdown se >1)
+  const setoresComerciais = ((setoresList || []) as any[]).filter((s) => s.tipo === "comercial");
+  const setorIdAuto = setoresComerciais[0]?.id;
+  const setorIdEfetivo = setorSel === "__auto__"
+    ? setorIdAuto
+    : setorSel === "__all_comercial__"
+      ? undefined
+      : parseInt(setorSel, 10);
+
+  // Atendentes filtrados pelo setor escolhido. Quando setor=todos comerciais,
+  // pega atendentes de todos os setores comerciais.
+  const atendentesComerciais = ((colabsList?.colaboradores || []) as any[]).filter((c) => {
+    if (setorIdEfetivo != null) return c.setorId === setorIdEfetivo;
+    // todos comerciais: qualquer atendente que está num setor comercial
+    const idsComerciais = new Set(setoresComerciais.map((s) => s.id));
+    return c.setorId != null && idsComerciais.has(c.setorId);
+  });
+
+  const atendenteIdEfetivo = atendenteSel === "__all__" ? undefined : parseInt(atendenteSel, 10);
+
+  const { data, isLoading } = (trpc as any).relatorios?.comercialDashboard?.useQuery?.(
+    {
+      dataInicio: inicio,
+      dataFim: fim,
+      setorId: setorIdEfetivo,
+      atendenteId: atendenteIdEfetivo,
+    },
+    { refetchInterval: 60_000, retry: false },
+  ) ?? { data: undefined, isLoading: false };
+
+  // Sem setor comercial configurado: convida o admin a configurar.
+  if (setoresComerciais.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center space-y-2">
+          <Target className="h-8 w-8 text-muted-foreground mx-auto" />
+          <p className="text-sm font-medium">Nenhum setor do tipo Comercial</p>
+          <p className="text-xs text-muted-foreground">
+            Configure em <strong>Configurações → Equipe → Setores</strong> qual setor
+            é "Comercial" pra ver o dashboard de fechamento.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Setor comercial</Label>
+              <Select value={setorSel} onValueChange={(v) => { setSetorSel(v); setAtendenteSel("__all__"); }}>
+                <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">
+                    {setoresComerciais.length === 1 ? setoresComerciais[0].nome : "Primeiro comercial"}
+                  </SelectItem>
+                  {setoresComerciais.length > 1 && (
+                    <SelectItem value="__all_comercial__">Todos os comerciais</SelectItem>
+                  )}
+                  {setoresComerciais.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Atendente</Label>
+              <Select value={atendenteSel} onValueChange={setAtendenteSel}>
+                <SelectTrigger className="text-xs h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos</SelectItem>
+                  {atendentesComerciais.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.userName || c.userEmail || `#${c.id}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">De</Label>
+              <Input type="date" className="text-xs h-9" value={inicio}
+                onChange={(e) => setRange((r) => ({ ...r, inicio: e.target.value }))} max={fim} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Até</Label>
+              <Input type="date" className="text-xs h-9" value={fim}
+                onChange={(e) => setRange((r) => ({ ...r, fim: e.target.value }))}
+                max={new Date().toISOString().slice(0, 10)} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading || !data ? (
+        <LoadingBlock />
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card>
+              <CardContent className="pt-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                  Faturado
+                </div>
+                <p className="text-2xl font-bold text-emerald-600">{formatBRL(data.kpis.faturado)}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">vs anterior</span>
+                  <VariacaoBadge pct={data.kpis.variacaoFaturado} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
+                  Contratos
+                </div>
+                <p className="text-2xl font-bold">{data.kpis.contratos}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">vs anterior</span>
+                  <VariacaoBadge pct={data.kpis.variacaoContratos} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Activity className="h-3.5 w-3.5 text-violet-500" />
+                  Ticket médio
+                </div>
+                <p className="text-2xl font-bold">{formatBRL(data.kpis.ticketMedio)}</p>
+                <span className="text-[10px] text-muted-foreground">por contrato</span>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Percent className="h-3.5 w-3.5 text-amber-500" />
+                  Comissão
+                </div>
+                <p className="text-2xl font-bold text-amber-600">{formatBRL(data.kpis.comissao)}</p>
+                <span className="text-[10px] text-muted-foreground">fechamentos no período</span>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Ranking */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Target className="h-4 w-4 text-amber-500" />
+                Ranking de atendentes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.ranking.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Sem atendentes no setor comercial selecionado.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {data.ranking.map((r: any, idx: number) => {
+                    const medalha = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+                    return (
+                      <div key={r.atendenteId} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base w-6 text-center">
+                            {medalha || <span className="text-xs text-muted-foreground">#{idx + 1}</span>}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{r.nome}</p>
+                            {r.setorNome && (
+                              <p className="text-[10px] text-muted-foreground">{r.setorNome}</p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-emerald-600">{formatBRL(r.faturado)}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {r.contratos} contrato(s) · ticket {formatBRL(r.ticketMedio)}
+                            </p>
+                          </div>
+                        </div>
+                        {r.meta != null && (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-muted-foreground">
+                                Meta: {formatBRL(r.meta)}
+                              </span>
+                              <span className="font-medium">
+                                {(r.progressoMeta ?? 0).toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  (r.progressoMeta ?? 0) >= 100 ? "bg-emerald-500" :
+                                  (r.progressoMeta ?? 0) >= 70 ? "bg-blue-500" :
+                                  (r.progressoMeta ?? 0) >= 40 ? "bg-amber-500" : "bg-red-500"
+                                }`}
+                                style={{ width: `${Math.min(100, r.progressoMeta ?? 0)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Cobranças por dia */}
+          {data.cobrancasPorDia.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Faturado por dia</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BarsMini
+                  dados={data.cobrancasPorDia.map((d: any) => ({
+                    label: d.dia.slice(5),
+                    value: d.faturado,
+                  }))}
+                  cor="bg-emerald-500/80"
+                />
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ───────────────────── aba: Comercial (legado: leads/funil) ─────────────────────
+
 function AbaComercial({ dias }: { dias: number }) {
   // Atendente (string p/ Select shadcn — "todos" = sem filtro)
   const [responsavelSel, setResponsavelSel] = useState<string>("todos");
