@@ -307,6 +307,29 @@ export default function Clientes() {
   const [showNovo, setShowNovo] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
 
+  // Botão "Duplicatas (PDF)" — gera relatório de clientes com mesmo CPF/CNPJ.
+  // Só dono/gestor consegue (procedure faz gate). Atendente vê erro toast.
+  const exportarDuplicatasMut = (trpc as any).clientes.exportarDuplicatasPdf.useMutation({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
+      const bin = atob(r.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: r.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = r.filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+      }, 0);
+      toast.success("Relatório de duplicatas baixado");
+    },
+    onError: (err: any) => toast.error("Não foi possível gerar relatório", { description: err.message }),
+  });
+
   useEffect(() => {
     const t = setTimeout(() => {
       setBuscaDebounced(busca);
@@ -409,9 +432,20 @@ export default function Clientes() {
             Cadastro, histórico e documentos
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowNovo(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Novo Cliente
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => exportarDuplicatasMut.mutate()}
+            disabled={exportarDuplicatasMut.isPending}
+            title="Baixa um PDF com clientes que compartilham o mesmo CPF/CNPJ"
+          >
+            {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
+          </Button>
+          <Button size="sm" onClick={() => setShowNovo(true)}>
+            <Plus className="h-4 w-4 mr-1.5" /> Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Stats — só na lista; no detalhe os 5 cards do cliente já bastam */}

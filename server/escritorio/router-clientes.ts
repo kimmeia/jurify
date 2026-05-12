@@ -37,6 +37,45 @@ function sanitizarCamposPersonalizados(
   return Object.keys(out).length > 0 ? JSON.stringify(out) : null;
 }
 
+/**
+ * Busca cliente com mesmo CPF/CNPJ (comparando só dígitos) dentro do
+ * escritório. Retorna o primeiro match (ou null). Quando `excludeId` é
+ * passado, ignora aquele cliente — útil em `atualizar` pra não comparar
+ * contra si mesmo.
+ *
+ * Implementação: lê contatos com cpfCnpj não-nulo e filtra no JS. SQL com
+ * REPLACE encadeado é mais eficiente mas estava quebrando em prod (driver
+ * mysql2 + parameterized template), e o caso comum (escritório com até
+ * milhares de clientes) não justifica a complexidade.
+ */
+async function buscarClienteDuplicadoCpf(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  cpfCnpj: string,
+  excludeId?: number,
+): Promise<{ id: number; nome: string } | null> {
+  const cpfLimpo = cpfCnpj.replace(/\D/g, "");
+  if (!cpfLimpo) return null;
+
+  const candidatos = await db
+    .select({ id: contatos.id, nome: contatos.nome, cpfCnpj: contatos.cpfCnpj })
+    .from(contatos)
+    .where(and(
+      eq(contatos.escritorioId, escritorioId),
+      sql`${contatos.cpfCnpj} IS NOT NULL`,
+      sql`${contatos.cpfCnpj} <> ''`,
+    ));
+
+  for (const c of candidatos) {
+    if (excludeId != null && c.id === excludeId) continue;
+    if (!c.cpfCnpj) continue;
+    if (c.cpfCnpj.replace(/\D/g, "") === cpfLimpo) {
+      return { id: c.id, nome: c.nome };
+    }
+  }
+  return null;
+}
+
 export const clientesRouter = router({
   listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional(), aguardandoDocumentacao: z.boolean().optional() }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
@@ -95,30 +134,19 @@ export const clientesRouter = router({
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido. Use formato (XX) XXXXX-XXXX.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
 
-      // Unicidade de CPF/CNPJ no escritório: compara só dígitos (REPLACE
-      // remove pontos/traços/barras pra casar com cadastros antigos que têm
-      // formatação variada). Bloqueia criação com mensagem útil — operador
-      // recebe id+nome do cliente existente pra clicar e abrir a ficha.
+      // Unicidade de CPF/CNPJ no escritório (compara só dígitos pra casar
+      // com cadastros antigos com formatação variada). Operador recebe
+      // nome+ID do cliente existente pra clicar e abrir a ficha.
       if (input.cpfCnpj) {
-        const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
-        if (cpfLimpo) {
-          const existente = await db.execute(sql`
-            SELECT id, nome FROM contatos
-            WHERE escritorioId = ${perm.escritorioId}
-              AND REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') = ${cpfLimpo}
-            LIMIT 1
-          `);
-          const rows = (existente as any)[0] as Array<{ id: number; nome: string }>;
-          if (rows && rows.length > 0) {
-            // ID embutido na mensagem (formato `[ID:n]`) pra que o frontend
-            // extraia e ofereça link pra abrir a ficha do cliente existente.
-            // Workaround: TRPCError.cause não vem por default no shape do
-            // erro no client; usar mensagem é robusto.
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: `CPF/CNPJ já cadastrado para "${rows[0].nome}" [ID:${rows[0].id}]`,
-            });
-          }
+        const dup = await buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj);
+        if (dup) {
+          // ID embutido na mensagem `[ID:n]` pra o frontend extrair via regex
+          // e oferecer link "Abrir cliente existente" (TRPCError.cause não
+          // chega no shape default do erro no client).
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `CPF/CNPJ já cadastrado para "${dup.nome}" [ID:${dup.id}]`,
+          });
         }
       }
 
@@ -167,24 +195,14 @@ export const clientesRouter = router({
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
 
       // Unicidade de CPF/CNPJ: se o operador trocou pra um CPF de outro
-      // cliente, bloqueia. Permite manter o mesmo (não compara contra si).
+      // cliente, bloqueia. excludeId evita comparar contra si mesmo.
       if (input.cpfCnpj) {
-        const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
-        if (cpfLimpo) {
-          const existente = await db.execute(sql`
-            SELECT id, nome FROM contatos
-            WHERE escritorioId = ${perm.escritorioId}
-              AND id <> ${input.id}
-              AND REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') = ${cpfLimpo}
-            LIMIT 1
-          `);
-          const rows = (existente as any)[0] as Array<{ id: number; nome: string }>;
-          if (rows && rows.length > 0) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: `CPF/CNPJ já cadastrado para "${rows[0].nome}" [ID:${rows[0].id}]`,
-            });
-          }
+        const dup = await buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj, input.id);
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `CPF/CNPJ já cadastrado para "${dup.nome}" [ID:${dup.id}]`,
+          });
         }
       }
 
@@ -629,44 +647,117 @@ export const clientesRouter = router({
     const db = await getDb();
     if (!db) return { grupos: [] };
 
-    // Agrupa por CPF normalizado e mantém só grupos com 2+ ocorrências.
-    const dups = await db.execute(sql`
-      SELECT
-        REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') AS cpfLimpo,
-        COUNT(*) AS qtd
-      FROM contatos
-      WHERE escritorioId = ${perm.escritorioId}
-        AND cpfCnpj IS NOT NULL
-        AND cpfCnpj <> ''
-      GROUP BY cpfLimpo
-      HAVING qtd > 1
-      ORDER BY qtd DESC
-    `);
-    const gruposBrutos = (dups as any)[0] as Array<{ cpfLimpo: string; qtd: number }>;
-    if (!gruposBrutos || gruposBrutos.length === 0) return { grupos: [] };
+    // Lê todos com CPF e agrupa no JS por CPF normalizado. Mais simples
+    // e portátil que SQL com REPLACE encadeado.
+    const todos = await db
+      .select({ id: contatos.id, nome: contatos.nome, cpfCnpj: contatos.cpfCnpj, createdAt: contatos.createdAt })
+      .from(contatos)
+      .where(and(
+        eq(contatos.escritorioId, perm.escritorioId),
+        sql`${contatos.cpfCnpj} IS NOT NULL`,
+        sql`${contatos.cpfCnpj} <> ''`,
+      ));
 
-    // Pra cada grupo, busca todos os clientes do grupo (id, nome, dataCriação).
-    const grupos = [];
-    for (const g of gruposBrutos) {
-      const linhas = await db.execute(sql`
-        SELECT id, nome, cpfCnpj, createdAt
-        FROM contatos
-        WHERE escritorioId = ${perm.escritorioId}
-          AND REPLACE(REPLACE(REPLACE(REPLACE(cpfCnpj, '.', ''), '-', ''), '/', ''), ' ', '') = ${g.cpfLimpo}
-        ORDER BY createdAt ASC
-      `);
-      const clientes = (linhas as any)[0] as Array<{ id: number; nome: string; cpfCnpj: string; createdAt: Date }>;
-      grupos.push({
-        cpfLimpo: g.cpfLimpo,
-        qtd: Number(g.qtd),
-        clientes: clientes.map((c) => ({
-          id: c.id,
-          nome: c.nome,
-          cpfCnpj: c.cpfCnpj,
-          createdAt: c.createdAt,
-        })),
-      });
+    const porCpf = new Map<string, Array<{ id: number; nome: string; cpfCnpj: string; createdAt: Date }>>();
+    for (const c of todos) {
+      if (!c.cpfCnpj) continue;
+      const limpo = c.cpfCnpj.replace(/\D/g, "");
+      if (!limpo) continue;
+      const grupo = porCpf.get(limpo) || [];
+      grupo.push({ id: c.id, nome: c.nome, cpfCnpj: c.cpfCnpj, createdAt: c.createdAt as Date });
+      porCpf.set(limpo, grupo);
     }
+
+    const grupos = Array.from(porCpf.entries())
+      .filter(([, lista]) => lista.length > 1)
+      .map(([cpfLimpo, lista]) => ({
+        cpfLimpo,
+        qtd: lista.length,
+        clientes: lista
+          .slice()
+          .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0)),
+      }))
+      .sort((a, b) => b.qtd - a.qtd);
+
     return { grupos };
   }),
+
+  /**
+   * Verifica em tempo real se um CPF/CNPJ já está cadastrado. Usado pelo
+   * frontend ao sair do campo CPF no dialog de novo cliente: se já existe,
+   * dialog mostra "CPF já cadastrado" antes do submit.
+   *
+   * Devolve `null` quando livre; quando ocupado, retorna `{id, nome}` do
+   * cliente existente.
+   */
+  /**
+   * Gera PDF com lista de duplicatas de CPF/CNPJ. Retorna base64 pro client
+   * baixar via blob — mesmo padrão do `financeiro.exportarDrePdf`. Permission:
+   * dono/gestor (verTodos), igual à listagem.
+   */
+  exportarDuplicatasPdf: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed || !perm.verTodos) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Apenas dono/gestor pode exportar relatório de duplicatas.",
+      });
+    }
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) throw new Error("Escritório não encontrado");
+
+    const todos = await db
+      .select({ id: contatos.id, nome: contatos.nome, cpfCnpj: contatos.cpfCnpj, createdAt: contatos.createdAt })
+      .from(contatos)
+      .where(and(
+        eq(contatos.escritorioId, perm.escritorioId),
+        sql`${contatos.cpfCnpj} IS NOT NULL`,
+        sql`${contatos.cpfCnpj} <> ''`,
+      ));
+
+    const porCpf = new Map<string, Array<{ id: number; nome: string; cpfCnpj: string; createdAt: Date | null }>>();
+    for (const c of todos) {
+      if (!c.cpfCnpj) continue;
+      const limpo = c.cpfCnpj.replace(/\D/g, "");
+      if (!limpo) continue;
+      const grupo = porCpf.get(limpo) || [];
+      grupo.push({ id: c.id, nome: c.nome, cpfCnpj: c.cpfCnpj, createdAt: c.createdAt as Date | null });
+      porCpf.set(limpo, grupo);
+    }
+    const grupos = Array.from(porCpf.entries())
+      .filter(([, lista]) => lista.length > 1)
+      .map(([cpfLimpo, lista]) => ({
+        cpfLimpo,
+        qtd: lista.length,
+        clientes: lista.slice().sort((a, b) => (a.createdAt?.getTime?.() ?? 0) - (b.createdAt?.getTime?.() ?? 0)),
+      }))
+      .sort((a, b) => b.qtd - a.qtd);
+
+    const { gerarDuplicatasPDF } = await import("./duplicatas-pdf");
+    const buffer = await gerarDuplicatasPDF(grupos, esc.escritorio.nome);
+    return {
+      filename: `duplicatas_${new Date().toISOString().slice(0, 10)}.pdf`,
+      base64: buffer.toString("base64"),
+      mimeType: "application/pdf",
+    };
+  }),
+
+  verificarCpf: protectedProcedure
+    .input(z.object({
+      cpfCnpj: z.string(),
+      excluirId: z.number().int().positive().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+      if (!perm.allowed) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const cpfLimpo = input.cpfCnpj.replace(/\D/g, "");
+      // Só verifica CPF (11) ou CNPJ (14) completos — evita ruído digitando.
+      if (cpfLimpo.length !== 11 && cpfLimpo.length !== 14) return null;
+      return buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj, input.excluirId);
+    }),
 });
