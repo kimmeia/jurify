@@ -30,11 +30,16 @@ export const MODULOS_BETA = new Set<string>([
  * Módulos escondidos do menu lateral até liberação caso a caso.
  * Rotas continuam funcionando — quem digitar a URL direto entra.
  *
- * Vazio agora: todos os 5 módulos (atendimento, agenda, processos,
- * agentesIa, smartflow) foram reativados no menu, com badge Beta.
+ * Snapshot atual: foco em Clientes, Kanban, Financeiro, Processos e
+ * Agenda. Cálculos / SmartFlow / Agentes IA / Roadmap / Atendimento
+ * ocultos pra reduzir ruído visual. Reativar é só remover daqui.
  */
 export const MODULOS_OCULTOS_NO_MENU = new Set<string>([
-  // todos liberados
+  "calculos",
+  "smartflow",
+  "agentesIa",
+  "roadmap",
+  "atendimento",
 ]);
 
 /** Helper conveniente. */

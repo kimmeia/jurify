@@ -366,7 +366,7 @@ function AppSidebarContent({
               </SidebarMenuItem>}
 
               {/* Cálculos (collapsible) */}
-              {canSee("calculos") && <Collapsible open={calculosOpen} onOpenChange={setCalculosOpen}>
+              {canSee("calculos") && !moduloOcultoNoMenu("calculos") && <Collapsible open={calculosOpen} onOpenChange={setCalculosOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
@@ -562,7 +562,7 @@ function AppSidebarContent({
 
               {/* Roadmap — todos os usuários logados podem ver e votar.
                   Sem canSee() porque não está no sistema de permissões. */}
-              <SidebarMenuItem>
+              {!moduloOcultoNoMenu("roadmap") && <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location === "/roadmap"}
                   onClick={() => navigateOrBlock("/roadmap")}
@@ -572,7 +572,7 @@ function AppSidebarContent({
                   <Lightbulb className={`h-4 w-4 ${location === "/roadmap" ? "text-primary" : ""}`} />
                   <span>Roadmap</span>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem>}
 
               {/* Meu Plano migrou pra aba dentro de /configuracoes
                   (visível apenas pro Dono do escritório / admin). Aqui
