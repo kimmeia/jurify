@@ -96,10 +96,12 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
       utils.clientes.detalhe.invalidate({ id: cliente.id });
       utils.clientes.listarLeads.invalidate({ contatoId: cliente.id });
       const reconc = data?.reconciliadas ?? 0;
-      if (reconc > 0) {
-        toast.success("Atualizado!", {
-          description: `${reconc} cobrança(s) deste cliente foram atribuídas ao atendente.`,
-        });
+      const leadsRe = data?.leadsReatribuidos ?? 0;
+      const partes: string[] = [];
+      if (reconc > 0) partes.push(`${reconc} cobrança(s) atribuídas ao atendente`);
+      if (leadsRe > 0) partes.push(`${leadsRe} lead(s) sem atendente também atribuídos`);
+      if (partes.length > 0) {
+        toast.success("Atualizado!", { description: partes.join(". ") + "." });
       } else {
         toast.success("Atualizado!");
       }
@@ -1132,21 +1134,39 @@ export function RegistrarFechamentoDialog({
   open,
   onOpenChange,
   contatoId,
+  responsavelClienteId,
   fechamentosExistentes,
   onSuccess,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   contatoId: number;
+  /** Responsável atual do cliente — vira default do select. Pode ser null. */
+  responsavelClienteId?: number | null;
   fechamentosExistentes: { valorEstimado: string | null; createdAt: string }[];
   onSuccess: () => void;
 }) {
   const [valor, setValor] = useState("");
   const [origem, setOrigem] = useState("");
+  const [responsavelId, setResponsavelId] = useState<string>(
+    responsavelClienteId ? String(responsavelClienteId) : "",
+  );
   const { data: origensDisponiveis } = (trpc as any).origensLead?.listar?.useQuery?.(
     undefined,
     { retry: false, enabled: open },
   ) || { data: [] };
+  const { data: equipeData } = (trpc as any).configuracoes?.listarColaboradores?.useQuery?.(
+    undefined,
+    { retry: false, enabled: open },
+  ) || { data: null };
+  const colabs: any[] = equipeData?.colaboradores || [];
+
+  // Reset do select quando reabre o dialog ou o cliente muda de responsável.
+  useEffect(() => {
+    if (open) {
+      setResponsavelId(responsavelClienteId ? String(responsavelClienteId) : "");
+    }
+  }, [open, responsavelClienteId]);
 
   const mut = (trpc as any).clientes.registrarFechamento.useMutation({
     onSuccess: () => {
@@ -1231,18 +1251,37 @@ export function RegistrarFechamentoDialog({
               )}
             </select>
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Atendente que fechou *</Label>
+            <select
+              value={responsavelId}
+              onChange={(e) => setResponsavelId(e.target.value)}
+              className="w-full h-9 px-2 text-sm rounded-md border bg-background"
+            >
+              <option value="">Selecione o atendente responsável...</option>
+              {colabs.map((c: any) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.userName || c.userEmail || `Colaborador #${c.id}`}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-muted-foreground">
+              Quem fez o fechamento vai aparecer no Relatório Comercial.
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button
-            disabled={mut.isPending}
+            disabled={mut.isPending || !responsavelId}
             onClick={() =>
               mut.mutate({
                 contatoId,
                 valorFechamento: valor.trim() || undefined,
                 origemFechamento: origem || undefined,
+                responsavelId: responsavelId ? Number(responsavelId) : undefined,
               })
             }
           >
