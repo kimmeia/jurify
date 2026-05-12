@@ -6,6 +6,90 @@ Tudo está citado por `arquivo:linha` direto da árvore atual do repo.
 
 ---
 
+## 🎯 BUG CONFIRMADO — origem do falso-positivo
+
+**Sintoma reportado:** CNJs reais (que existiam de fato) foram entregues como "novas ações" quando na verdade eram processos antigos pré-existentes ao monitoramento.
+
+**Causa raiz:** `pollMonitoramentosNovasAcoes` (`server/processos/cron-monitoramento.ts:491-660`) **não tem baseline silencioso funcional**. O ramo que deveria armazenar o baseline na primeira execução está em condição lógica inalcançável.
+
+**Sequência do bug:**
+
+1. `criarMonitoramentoNovasAcoes` (`server/routers/processos.ts:960-973`) cria o monitoramento com `cnjsConhecidos: "[]"`.
+2. Cron parseia em `cron-monitoramento.ts:574-576` → `cnjsConhecidos = []`.
+3. `cnjsNovos = resultado.cnjs.filter(c => !cnjsConhecidos.includes(c))` (`:577`) — como `cnjsConhecidos` está vazio, **100% dos CNJs retornados pelo scraper viram "novos"**.
+4. Entra no `if (cnjsNovos.length > 0)` (`:579`): INSERT em `eventos_processo` com `lido=false`, soma em `totalNovasAcoes`, INSERT em `notificacoes`, push SSE.
+5. O ramo "Primeira execução: armazena baseline de CNJs sem disparar notif" (`:644-659`) está dentro do `else` de `cnjsNovos.length > 0` e checa `cnjsConhecidos.length === 0 && resultado.cnjs.length > 0`. Essa condição **nunca é alcançada**: quando `cnjsConhecidos=[]`, `cnjsNovos === resultado.cnjs`; pra `cnjsNovos.length === 0` é preciso `resultado.cnjs.length === 0`; logo `resultado.cnjs.length > 0` é falso por construção. **Código morto.**
+
+**Comparar com o fluxo correto:** `pollMonitoramentosMovs` (`cron-monitoramento.ts:146,157-231`) tem flag explícita `isPrimeiraExecucao = !mon.hashUltimasMovs` e insere baseline com `lido=true` **sem notificar**. O fluxo de `novas_acoes` esqueceu essa flag.
+
+**Reprodução determinística:**
+- Cadastrar cofre TJCE válido.
+- Criar monitoramento de novas ações de um CPF que já tenha processos no PJe-TJCE.
+- Aguardar o primeiro tick do cron (ou usar `atualizarNovasAcoesAgora`).
+- Sino mostra "N nova(s) ação(ões) detectada(s)" e aba "Novas ações" lista todos como `NOVO`.
+
+**Fix proposto (mínimo invasivo):**
+
+Editar `server/processos/cron-monitoramento.ts:573-660` para introduzir flag `isPrimeiraExecucao` análoga à de movimentações:
+
+```ts
+const cnjsConhecidos: string[] = mon.cnjsConhecidos
+  ? (JSON.parse(mon.cnjsConhecidos) as string[])
+  : [];
+const isPrimeiraExecucao = cnjsConhecidos.length === 0;
+const cnjsNovos = resultado.cnjs.filter((c) => !cnjsConhecidos.includes(c));
+
+if (isPrimeiraExecucao) {
+  // Baseline silencioso: registra CNJs existentes como lido=true,
+  // sem notificar (são processos pré-existentes ao monitoramento).
+  for (const cnj of resultado.cnjs) {
+    const dedup = hashEvento(["nova_acao", String(mon.id), cnj]);
+    try {
+      await db.insert(eventosProcesso).values({
+        monitoramentoId: mon.id,
+        escritorioId: mon.escritorioId,
+        tipoEvento: "nova_acao",
+        dataEvento: new Date(),
+        fonteEvento: "pje",
+        conteudo: `Baseline: ${cnj}`,
+        conteudoJson: JSON.stringify({ cnj, baseline: true, /* ... */ }),
+        cnjAfetado: cnj,
+        hashDedup: dedup,
+        lido: true,
+      });
+    } catch { /* dup ignored */ }
+  }
+  await db.update(motorMonitoramentos).set({
+    cnjsConhecidos: JSON.stringify(resultado.cnjs),
+    ultimaConsultaEm: new Date(),
+    ultimoErro: null,
+  }).where(eq(motorMonitoramentos.id, mon.id));
+  log.info({ monId: mon.id, baseline: resultado.cnjs.length }, "[motor-cron] baseline silencioso de novas ações");
+  continue;
+}
+
+if (cnjsNovos.length > 0) {
+  // ... fluxo de notificação atual permanece
+}
+```
+
+**Cleanup operacional necessário (após o fix):**
+Eventos `nova_acao` com `lido=false` criados ANTES do fix são falso-positivos persistidos. Recomendo uma migration de "cura":
+
+```sql
+UPDATE eventos_processo
+SET lido = true
+WHERE tipo_evento = 'nova_acao'
+  AND lido = false
+  AND created_at < NOW();  -- todos os pré-fix
+```
+
+Acompanhado de zerar `motor_monitoramentos.total_novas_acoes` proporcionalmente, ou então confiar no contador derivar de `eventos_processo` (já é o caso na UI via `listarNovasAcoes`).
+
+**Teste de regressão obrigatório:** mock de `consultarTjcePorCpf` retornando 3 CNJs reais; criar monitoramento com `cnjsConhecidos="[]"`; rodar `pollMonitoramentosNovasAcoes`; **expect**: 0 notificações criadas, 0 eventos com `lido=false`, 3 eventos com `lido=true`, `cnjsConhecidos` populado.
+
+---
+
 ## 1. Visão geral
 
 ```
@@ -396,15 +480,19 @@ INSERT com captura de errno `1062` (`ER_DUP_ENTRY`) é o sinal de dedup OK. Quan
 
 ---
 
-## 9. Hipóteses sobre o FP recente (ordem decrescente de probabilidade)
+## 9. Hipóteses sobre o FP recente — descartadas após confirmação
 
-1. **FP-1 + FP-2 combinados** — uma re-renderização do PJe alterou whitespace dentro dos primeiros 200 chars de uma movimentação **enquanto** um cron-run sobreposto inseriu o evento "novo" com hash distinto. Notif disparou pelo run paralelo. **Mais provável.**
-2. **FP-4** — scraper devolveu CNJ inválido (fantasma) em `consultarPorCpf`. Notif foi criada (sem `validarCnj`) e o sino mostrou "1 nova ação"; a tab filtrou e ficou vazia. **Sintoma típico**: o usuário vê badge mas, ao abrir, não há item correspondente.
-3. **FP-10** — mudança de layout do PJe levou movs ao caso 5 do parser (data com `00:00:00`), gerando hashes novos para mov pré-existentes. **Avalanche** num único run.
-4. **FP-5 + FP-9** — usuário deletou e recriou monitoramento; eventos órfãos retornaram via `historicoMonitoramento`; novas ações vieram com `hash` distinto por causa do `mon.id` em FP-7.
-5. **FP-8** — badge `Bell` (UI) com keyword muito genérica. **Não é falso-positivo lógico**, é UX confusa — mas costuma ser reportado como FP pelo usuário.
+Após confirmação do usuário ("CNJs existiram mas retornaram processos antigos como sendo atuais"), **a causa raiz é o BUG CONFIRMADO no topo deste documento**: baseline silencioso de `novas_acoes` em ramo inalcançável.
 
-Sem mais contexto sobre o evento concreto (que CNJ, que usuário, qual notificação), as 5 hipóteses ficam empatadas no topo. **Recomendação imediata**: instrumentar telemetria (próxima seção) pra cobrir todas elas.
+As hipóteses anteriores ficam registradas como riscos remanescentes (não foram a causa deste incidente, mas continuam sendo riscos):
+
+1. ~~**FP-1 + FP-2 combinados**~~ — re-render do PJe + cron paralelo. **Não foi a causa**: aplicar-se-ia a `pollMonitoramentosMovs`, não `pollMonitoramentosNovasAcoes`.
+2. ~~**FP-4**~~ — CNJ fantasma. **Não foi a causa**: o usuário confirmou que os CNJs eram reais.
+3. ~~**FP-10**~~ — mudança de layout do PJe. **Não foi a causa**: aplicar-se-ia a movs, não a novas ações.
+4. ~~**FP-5 + FP-9**~~ — delete + recriar. Coincidiria com o sintoma se o user tivesse recriado o monitoramento — mas o bug confirmado é mais simples e bate até na primeira criação.
+5. **FP-8** (UI keyword) — segue como risco UX.
+
+Os 21 riscos da §8 permanecem válidos como prevenção. **O bug confirmado é independente deles** e tem fix isolado descrito no topo.
 
 ---
 
