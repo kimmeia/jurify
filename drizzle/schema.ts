@@ -1783,6 +1783,12 @@ export const kanbanCards = mysqlTable("kanban_cards", {
   /** ID do pagamento Asaas que originou o card (evita duplicata) */
   asaasPaymentId: varchar("asaasPaymentIdKCard", { length: 64 }),
   /**
+   * Valor estimado do negócio (preenchido na criação ou após mover pra
+   * "Ganho"). Usado pelo modal pós-Ganho como sugestão de valor pra cobrança.
+   * Sincroniza com cobrança real se gerada via fluxo do Kanban.
+   */
+  valorEstimado: decimal("valorEstimadoKCard", { precision: 14, scale: 2 }),
+  /**
    * ID da ação (cliente_processos.id) que esse card representa.
    *
    * Quando o SmartFlow cria card com `processoId` no contexto (multi-ação),
