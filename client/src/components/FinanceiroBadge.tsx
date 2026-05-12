@@ -230,8 +230,21 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
           },
         };
         const m = data.motivoVazio ? mensagens[data.motivoVazio] : null;
-        if (m) toast.warning(m.titulo, { description: m.desc, duration: 8000 });
-        else toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
+        if (data.motivoVazio === "cpf_em_outro_contato") {
+          // Oferece ação no toast: confirma migração (re-chama com forcarMigracao=true).
+          toast.warning(m!.titulo, {
+            description: m!.desc,
+            duration: 12000,
+            action: {
+              label: "Mover pra cá",
+              onClick: () => syncMut.mutate({ contatoId, forcarMigracao: true }),
+            },
+          });
+        } else if (m) {
+          toast.warning(m.titulo, { description: m.desc, duration: 8000 });
+        } else {
+          toast.success("Tudo em dia", { description: "Nenhuma mudança encontrada." });
+        }
       } else {
         toast.success("Sincronizado", { description: partes.join(" · ") });
       }

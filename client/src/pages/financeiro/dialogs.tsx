@@ -3,7 +3,7 @@
  * Extraídos de Financeiro.tsx para manter a página principal focada em dados/visualização.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,6 +107,17 @@ export function NovaCobrancaDialog({
   );
   const [contatoId, setContatoId] = useState(contatoIdInicial ? String(contatoIdInicial) : "");
   const [valor, setValor] = useState(valorInicial != null ? String(valorInicial) : "");
+
+  // Quando o dialog é aberto com contatoIdInicial diferente (ex: usuário cadastra
+  // novo cliente "já fechado" → encadeia abertura desta dialog), o useState inicial
+  // não atualiza. Sincroniza explicitamente ao abrir, senão o botão Criar fica
+  // disabled por contatoId vazio.
+  useEffect(() => {
+    if (open) {
+      if (contatoIdInicial) setContatoId(String(contatoIdInicial));
+      if (valorInicial != null) setValor(String(valorInicial));
+    }
+  }, [open, contatoIdInicial, valorInicial]);
   const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
   // Modo manual: campos extras
   const [jaPaga, setJaPaga] = useState(false);

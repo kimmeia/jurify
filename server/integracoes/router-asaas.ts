@@ -2195,7 +2195,16 @@ export const asaasRouter = router({
    * clique no frontend ("Sincronizar") cobre os dois fluxos.
    */
   syncCobrancasContato: protectedProcedure
-    .input(z.object({ contatoId: z.number() }))
+    .input(z.object({
+      contatoId: z.number(),
+      /**
+       * Quando true, ignora o filtro de customers já linkados a outro
+       * contato Jurify — migra o customer Asaas pra ESTE contato. Operador
+       * confirma na UI (toast oferece o botão "Mover pra cá") quando o
+       * primeiro sync detecta `motivoVazio="cpf_em_outro_contato"`.
+       */
+      forcarMigracao: z.boolean().default(false),
+    }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
@@ -2243,18 +2252,32 @@ export const asaasRouter = router({
           const candidatos = todosDoCpf.filter((c) => !idsJaVinculados.has(c.id));
 
           if (candidatos.length > 0) {
-            const disponiveisIds = await filtrarCustomersDisponiveis(
-              db,
-              esc.escritorio.id,
-              candidatos.map((c) => c.id),
-            );
-            const novos = candidatos.filter((c) => disponiveisIds.has(c.id));
+            let novos: typeof candidatos;
 
-            // Se TODOS os candidatos retornados pelo Asaas já estão linkados
-            // a outro contato no Jurify (e este contato não tem vínculo
-            // próprio), avisa o user — provável duplicata de cliente.
-            if (novos.length === 0 && vinculosExistentes.length === 0) {
-              motivoVazio = "cpf_em_outro_contato";
+            if (input.forcarMigracao) {
+              // Modo migração: ignora filtro, vai usar TODOS os candidatos.
+              // Antes de inserir, remove vínculos antigos desses customers
+              // (estavam em outros contatos no Jurify). Cobranças órfãs serão
+              // re-adotadas pelo loop de adopção em syncTodasCobrancasDoContato.
+              await db.delete(asaasClientes).where(and(
+                eq(asaasClientes.escritorioId, esc.escritorio.id),
+                inArray(asaasClientes.asaasCustomerId, candidatos.map((c) => c.id)),
+              ));
+              novos = candidatos;
+            } else {
+              const disponiveisIds = await filtrarCustomersDisponiveis(
+                db,
+                esc.escritorio.id,
+                candidatos.map((c) => c.id),
+              );
+              novos = candidatos.filter((c) => disponiveisIds.has(c.id));
+
+              // Se TODOS os candidatos retornados pelo Asaas já estão linkados
+              // a outro contato no Jurify (e este contato não tem vínculo
+              // próprio), avisa o user pra confirmar migração.
+              if (novos.length === 0 && vinculosExistentes.length === 0) {
+                motivoVazio = "cpf_em_outro_contato";
+              }
             }
 
             // Decide qual deles vira primário: se o contato ainda não tem
