@@ -1,6 +1,19 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -66,6 +79,60 @@ async function exigirAcaoFinanceiro(
 }
 
 const NOME_CAT = z.string().min(1).max(80);
+
+export type FiltroComissaoValor = "sim" | "nao" | "indef";
+
+/**
+ * Decide o estado efetivo de comissão (sim/não/indef) combinando o
+ * override manual + a flag da categoria. Espelha em JS a regra que o
+ * SQL aplica em `buildFiltroComissaoSQL` — facilita testar a semântica
+ * sem precisar de banco.
+ */
+export function decidirEstadoComissao(
+  override: boolean | null,
+  categoriaComissionavel: boolean | null,
+): FiltroComissaoValor {
+  if (override === true) return "sim";
+  if (override === false) return "nao";
+  if (categoriaComissionavel === true) return "sim";
+  if (categoriaComissionavel === false) return "nao";
+  return "indef";
+}
+
+/**
+ * Monta a condição SQL pra filtrar cobranças pelo estado efetivo de
+ * comissão. Vazio → undefined (sem filtro). Múltiplos estados → união
+ * (OR). Requer JOIN com `categorias_cobranca` (pra resolver herança).
+ */
+export function buildFiltroComissaoSQL(estados: FiltroComissaoValor[]) {
+  if (estados.length === 0) return undefined;
+  const partes = estados.map((e) => {
+    if (e === "sim") {
+      return or(
+        eq(asaasCobrancas.comissionavelOverride, true),
+        and(
+          isNull(asaasCobrancas.comissionavelOverride),
+          eq(categoriasCobranca.comissionavel, true),
+        )!,
+      )!;
+    }
+    if (e === "nao") {
+      return or(
+        eq(asaasCobrancas.comissionavelOverride, false),
+        and(
+          isNull(asaasCobrancas.comissionavelOverride),
+          isNotNull(asaasCobrancas.categoriaId),
+          eq(categoriasCobranca.comissionavel, false),
+        )!,
+      )!;
+    }
+    return and(
+      isNull(asaasCobrancas.comissionavelOverride),
+      isNull(asaasCobrancas.categoriaId),
+    )!;
+  });
+  return partes.length === 1 ? partes[0] : or(...partes)!;
+}
 
 export const financeiroRouter = router({
   // ─── Categorias de cobrança ────────────────────────────────────────────────
@@ -239,20 +306,57 @@ export const financeiroRouter = router({
   // ─── Cobranças sincronizadas: atribuição em massa + reconciliação ──────────
 
   /**
-   * Lista cobranças do escritório para a tela de atribuição. Suporta filtro
-   * `apenasSemAtribuicao` que limita o resultado às cobranças sem atendente
-   * OU sem categoria — o caso típico após sync do Asaas.
+   * Lista cobranças do escritório para a tela de atribuição.
+   *
+   * Filtros suportados (todos opcionais — combinados com AND):
+   *  - apenasSemAtribuicao: sem atendente OU sem categoria
+   *  - apenasSemDecisaoComissao: sem override E sem categoria
+   *  - q: busca textual em descrição OU nome do contato
+   *  - criadoDe/criadoAte: range em `createdAt`
+   *  - recebidoDe/recebidoAte: range em `dataPagamento`
+   *  - atendenteIds / incluirSemAtendente: IN (ids) OR IS NULL
+   *  - categoriaIds / incluirSemCategoria: IN (ids) OR IS NULL
+   *  - statuses: IN (...)
+   *  - formasPagamento: IN (...)
+   *  - valorMin/valorMax: cast pra DECIMAL e compara
+   *  - comissao: estados "sim"/"nao"/"indef" (resolve override + categoria)
+   *
+   * Retorna `{ rows, totalEncontrado }` — `totalEncontrado` é a contagem
+   * ANTES do limit, pra UI mostrar "Mostrando 200 de 347".
    */
   listarCobrancasParaAtribuicao: protectedProcedure
     .input(
       z
         .object({
           apenasSemAtribuicao: z.boolean().default(false),
-          /** Mostra apenas cobranças cujo estado de comissão está
-           *  indefinido — sem categoria E sem `comissionavelOverride`.
-           *  Cenário típico: PIX direto pro Asaas que cria cobrança
-           *  via webhook sem categoria atribuída. */
           apenasSemDecisaoComissao: z.boolean().default(false),
+          q: z.string().trim().max(120).optional(),
+          criadoDe: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          criadoAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          recebidoDe: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          recebidoAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          atendenteIds: z.array(z.number().int()).max(100).optional(),
+          incluirSemAtendente: z.boolean().default(false),
+          categoriaIds: z.array(z.number().int()).max(100).optional(),
+          incluirSemCategoria: z.boolean().default(false),
+          statuses: z.array(z.string().max(64)).max(20).optional(),
+          formasPagamento: z
+            .array(
+              z.enum([
+                "BOLETO",
+                "CREDIT_CARD",
+                "PIX",
+                "UNDEFINED",
+                "DINHEIRO",
+                "TRANSFERENCIA",
+                "OUTRO",
+              ]),
+            )
+            .max(10)
+            .optional(),
+          valorMin: z.number().nonnegative().optional(),
+          valorMax: z.number().nonnegative().optional(),
+          comissao: z.array(z.enum(["sim", "nao", "indef"])).max(3).optional(),
           limit: z.number().min(1).max(500).default(200),
         })
         .optional(),
@@ -261,9 +365,10 @@ export const financeiroRouter = router({
       const esc = await requireEscritorio(ctx.user.id);
       await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
-      if (!db) return [];
+      if (!db) return { rows: [], totalEncontrado: 0 };
 
       const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
+
       if (input?.apenasSemAtribuicao) {
         conds.push(
           or(
@@ -273,42 +378,128 @@ export const financeiroRouter = router({
         );
       }
       if (input?.apenasSemDecisaoComissao) {
-        // "Sem decisão" = sem override AND sem categoria. Se tem
-        // categoria (mesmo não-comissionável), foi uma decisão tomada.
         conds.push(isNull(asaasCobrancas.comissionavelOverride));
         conds.push(isNull(asaasCobrancas.categoriaId));
       }
 
-      return db
-        .select({
-          id: asaasCobrancas.id,
-          asaasPaymentId: asaasCobrancas.asaasPaymentId,
-          contatoId: asaasCobrancas.contatoId,
-          contatoNome: contatos.nome,
-          valor: asaasCobrancas.valor,
-          status: asaasCobrancas.status,
-          dataPagamento: asaasCobrancas.dataPagamento,
-          vencimento: asaasCobrancas.vencimento,
-          descricao: asaasCobrancas.descricao,
-          atendenteId: asaasCobrancas.atendenteId,
-          categoriaId: asaasCobrancas.categoriaId,
-          categoriaNome: categoriasCobranca.nome,
-          // Flag herdada da categoria — usada pelo UI pra resolver o
-          // estado "Sim/Não/Indefinido" da coluna Comissão na tabela
-          // Atribuir. Quando comissionavelOverride é null, usamos esta;
-          // se ambas null → "Indefinido" (precisa decisão).
-          categoriaComissionavel: categoriasCobranca.comissionavel,
-          comissionavelOverride: asaasCobrancas.comissionavelOverride,
-        })
-        .from(asaasCobrancas)
-        .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
-        .leftJoin(
-          categoriasCobranca,
-          eq(categoriasCobranca.id, asaasCobrancas.categoriaId),
-        )
-        .where(and(...conds))
-        .orderBy(desc(asaasCobrancas.createdAt))
-        .limit(input?.limit ?? 200);
+      if (input?.q && input.q.length > 0) {
+        const pat = `%${input.q.replace(/[%_]/g, (m) => "\\" + m)}%`;
+        conds.push(
+          or(
+            like(asaasCobrancas.descricao, pat),
+            like(contatos.nome, pat),
+          )!,
+        );
+      }
+
+      if (input?.criadoDe) {
+        conds.push(gte(asaasCobrancas.createdAt, new Date(input.criadoDe)));
+      }
+      if (input?.criadoAte) {
+        const ate = new Date(input.criadoAte);
+        ate.setUTCHours(23, 59, 59, 999);
+        conds.push(lte(asaasCobrancas.createdAt, ate));
+      }
+
+      if (input?.recebidoDe) {
+        conds.push(gte(asaasCobrancas.dataPagamento, input.recebidoDe));
+      }
+      if (input?.recebidoAte) {
+        conds.push(lte(asaasCobrancas.dataPagamento, input.recebidoAte));
+      }
+
+      const atendIds = input?.atendenteIds ?? [];
+      const incSemAt = !!input?.incluirSemAtendente;
+      if (atendIds.length > 0 || incSemAt) {
+        const partes = [];
+        if (atendIds.length > 0) {
+          partes.push(inArray(asaasCobrancas.atendenteId, atendIds));
+        }
+        if (incSemAt) partes.push(isNull(asaasCobrancas.atendenteId));
+        conds.push(partes.length === 1 ? partes[0]! : or(...partes)!);
+      }
+
+      const catIds = input?.categoriaIds ?? [];
+      const incSemCat = !!input?.incluirSemCategoria;
+      if (catIds.length > 0 || incSemCat) {
+        const partes = [];
+        if (catIds.length > 0) {
+          partes.push(inArray(asaasCobrancas.categoriaId, catIds));
+        }
+        if (incSemCat) partes.push(isNull(asaasCobrancas.categoriaId));
+        conds.push(partes.length === 1 ? partes[0]! : or(...partes)!);
+      }
+
+      if (input?.statuses && input.statuses.length > 0) {
+        conds.push(inArray(asaasCobrancas.status, input.statuses));
+      }
+      if (input?.formasPagamento && input.formasPagamento.length > 0) {
+        conds.push(
+          inArray(asaasCobrancas.formaPagamento, input.formasPagamento),
+        );
+      }
+
+      if (input?.valorMin !== undefined) {
+        conds.push(
+          sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2)) >= ${input.valorMin}`,
+        );
+      }
+      if (input?.valorMax !== undefined) {
+        conds.push(
+          sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2)) <= ${input.valorMax}`,
+        );
+      }
+
+      const comissaoCond = buildFiltroComissaoSQL(input?.comissao ?? []);
+      if (comissaoCond) conds.push(comissaoCond);
+
+      const where = and(...conds);
+
+      const [rows, totalRes] = await Promise.all([
+        db
+          .select({
+            id: asaasCobrancas.id,
+            asaasPaymentId: asaasCobrancas.asaasPaymentId,
+            contatoId: asaasCobrancas.contatoId,
+            contatoNome: contatos.nome,
+            valor: asaasCobrancas.valor,
+            status: asaasCobrancas.status,
+            dataPagamento: asaasCobrancas.dataPagamento,
+            vencimento: asaasCobrancas.vencimento,
+            descricao: asaasCobrancas.descricao,
+            formaPagamento: asaasCobrancas.formaPagamento,
+            atendenteId: asaasCobrancas.atendenteId,
+            categoriaId: asaasCobrancas.categoriaId,
+            categoriaNome: categoriasCobranca.nome,
+            // Flag herdada da categoria — usada pelo UI pra resolver o
+            // estado "Sim/Não/Indefinido" da coluna Comissão na tabela
+            // Atribuir. Quando comissionavelOverride é null, usamos esta;
+            // se ambas null → "Indefinido" (precisa decisão).
+            categoriaComissionavel: categoriasCobranca.comissionavel,
+            comissionavelOverride: asaasCobrancas.comissionavelOverride,
+          })
+          .from(asaasCobrancas)
+          .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
+          .leftJoin(
+            categoriasCobranca,
+            eq(categoriasCobranca.id, asaasCobrancas.categoriaId),
+          )
+          .where(where)
+          .orderBy(desc(asaasCobrancas.createdAt))
+          .limit(input?.limit ?? 200),
+        db
+          .select({ total: sql<number>`COUNT(*)` })
+          .from(asaasCobrancas)
+          .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
+          .leftJoin(
+            categoriasCobranca,
+            eq(categoriasCobranca.id, asaasCobrancas.categoriaId),
+          )
+          .where(where),
+      ]);
+
+      const totalEncontrado = Number(totalRes[0]?.total ?? 0);
+      return { rows, totalEncontrado };
     }),
 
   atribuirCobrancasEmMassa: protectedProcedure
