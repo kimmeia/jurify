@@ -470,16 +470,26 @@ function PreviewPdfComCampos({
             />
             {pageSizePt &&
               camposDaPagina.map((c) => {
-                // Mede o canvas direto (não o container) — o div externo
-                // pode ter dimensões diferentes por causa de
-                // border/padding/inline-block fallback. Canvas é fonte
-                // única de verdade pro mapeamento px↔pt.
+                // Mede o canvas + offset relativo ao container. O overlay
+                // é absolute em relação ao container, então qualquer
+                // diferença entre onde o canvas começa e onde o container
+                // começa precisa ser compensada — senão a caixa fica
+                // deslocada ("alguns cm acima da linha").
                 const canvas = containerRef.current?.querySelector(
                   "canvas.react-pdf__Page__canvas",
                 ) as HTMLCanvasElement | null;
-                const rect = canvas?.getBoundingClientRect();
-                const renderW = rect?.width ?? 600;
-                const renderH = rect?.height ?? 800;
+                const containerRect = containerRef.current?.getBoundingClientRect();
+                const canvasRect = canvas?.getBoundingClientRect();
+                const renderW = canvasRect?.width ?? 600;
+                const renderH = canvasRect?.height ?? 800;
+                const offsetX =
+                  canvasRect && containerRect
+                    ? canvasRect.left - containerRect.left
+                    : 0;
+                const offsetY =
+                  canvasRect && containerRect
+                    ? canvasRect.top - containerRect.top
+                    : 0;
                 const scaleX = renderW / pageSizePt.w;
                 const scaleY = renderH / pageSizePt.h;
                 // Backend devolve em PDF bottom-left → converte pra top-left
@@ -490,8 +500,8 @@ function PreviewPdfComCampos({
                     key={c.id}
                     className={`absolute border-2 ${TIPO_COR[c.tipo]} flex items-center justify-center text-[10px] font-medium pointer-events-none`}
                     style={{
-                      left: c.x * scaleX,
-                      top: yTop * scaleY,
+                      left: c.x * scaleX + offsetX,
+                      top: yTop * scaleY + offsetY,
                       width: c.largura * scaleX,
                       height: c.altura * scaleY,
                     }}
