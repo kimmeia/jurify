@@ -87,6 +87,54 @@ describe("calcularVencimentoComissao", () => {
   it("rejeita formato inválido", () => {
     expect(() => calcularVencimentoComissao("inválido")).toThrow();
   });
+
+  // ─── Dia configurável (passo 13 do fix de bugs financeiros) ────────────────
+
+  it("dia configurado=10: vence dia 10 do mês seguinte", () => {
+    expect(calcularVencimentoComissao("2026-03-31", 10)).toBe("2026-04-10");
+  });
+
+  it("dia configurado=25: vence dia 25", () => {
+    expect(calcularVencimentoComissao("2026-03-31", 25)).toBe("2026-04-25");
+  });
+
+  it("dia configurado=1: vence dia 1 do mês seguinte (primeiro dia)", () => {
+    expect(calcularVencimentoComissao("2026-03-31", 1)).toBe("2026-04-01");
+  });
+
+  it("dia 31 em mês com 30 dias (abril): clamp pra 30", () => {
+    expect(calcularVencimentoComissao("2026-03-31", 31)).toBe("2026-04-30");
+  });
+
+  it("dia 31 em fevereiro não-bissexto: clamp pra 28", () => {
+    expect(calcularVencimentoComissao("2025-01-31", 31)).toBe("2025-02-28");
+  });
+
+  it("dia 31 em fevereiro bissexto: clamp pra 29", () => {
+    expect(calcularVencimentoComissao("2024-01-31", 31)).toBe("2024-02-29");
+  });
+
+  it("dia 30 em fevereiro: também clamp pra 28/29 (cobertura redundante)", () => {
+    expect(calcularVencimentoComissao("2025-01-31", 30)).toBe("2025-02-28");
+    expect(calcularVencimentoComissao("2024-01-31", 30)).toBe("2024-02-29");
+  });
+
+  it("dia 5 default preservado quando não passa o argumento", () => {
+    // Garante compat retroativa — chamadas antigas sem o dia continuam
+    // funcionando como antes.
+    expect(calcularVencimentoComissao("2026-03-31")).toBe("2026-04-05");
+  });
+
+  it("rejeita dia fora de 1-31", () => {
+    expect(() => calcularVencimentoComissao("2026-03-31", 0)).toThrow();
+    expect(() => calcularVencimentoComissao("2026-03-31", 32)).toThrow();
+    expect(() => calcularVencimentoComissao("2026-03-31", -1)).toThrow();
+  });
+
+  it("rejeita dia não-inteiro", () => {
+    expect(() => calcularVencimentoComissao("2026-03-31", 5.5)).toThrow();
+    expect(() => calcularVencimentoComissao("2026-03-31", NaN)).toThrow();
+  });
 });
 
 describe("garantirCategoriaComissoes", () => {

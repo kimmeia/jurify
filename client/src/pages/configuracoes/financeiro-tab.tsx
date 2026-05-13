@@ -62,6 +62,7 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
   const [aliquota, setAliquota] = useState("");
   const [valorMinimo, setValorMinimo] = useState("");
   const [baseFaixa, setBaseFaixa] = useState<BaseFaixa>("comissionavel");
+  const [diaVencimento, setDiaVencimento] = useState("5");
   const [faixas, setFaixas] = useState<FaixaUI[]>([]);
 
   useEffect(() => {
@@ -70,6 +71,7 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
       setAliquota(String(regra.aliquotaPercent ?? "0"));
       setValorMinimo(String(regra.valorMinimoCobranca ?? "0"));
       setBaseFaixa((regra.baseFaixa ?? "comissionavel") as BaseFaixa);
+      setDiaVencimento(String((regra as any).diaVencimentoDespesa ?? 5));
       setFaixas(
         (regra.faixas ?? []).map((f) => ({
           limiteAteText: f.limiteAte === null ? "" : String(f.limiteAte),
@@ -102,12 +104,19 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
   function salvar() {
     const aliq = parseFloat(aliquota.replace(",", "."));
     const min = parseFloat(valorMinimo.replace(",", "."));
+    const dia = parseInt(diaVencimento, 10);
     if (isNaN(aliq) || aliq < 0 || aliq > 100) {
       toast.error("Alíquota inválida", { description: "Use um valor entre 0 e 100." });
       return;
     }
     if (isNaN(min) || min < 0) {
       toast.error("Valor mínimo inválido");
+      return;
+    }
+    if (!Number.isInteger(dia) || dia < 1 || dia > 31) {
+      toast.error("Dia de vencimento inválido", {
+        description: "Use um dia do mês entre 1 e 31.",
+      });
       return;
     }
 
@@ -164,6 +173,7 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
       aliquotaPercent: aliq,
       valorMinimoCobranca: min,
       baseFaixa,
+      diaVencimentoDespesa: dia,
       faixas: faixasParsed,
     });
   }
@@ -220,6 +230,27 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
                   Cobranças abaixo deste valor nunca contam, em qualquer modo.
                 </p>
               </div>
+            </div>
+
+            {/* Dia de vencimento da despesa de comissão */}
+            <div className="space-y-1.5 max-w-xs">
+              <Label className="text-xs">
+                Dia de vencimento da despesa (1-31)
+              </Label>
+              <Input
+                type="number"
+                min="1"
+                max="31"
+                step="1"
+                disabled={!canEdit}
+                value={diaVencimento}
+                onChange={(e) => setDiaVencimento(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Após fechar comissão, a despesa automática de pagamento vence
+                neste dia do mês seguinte. Se o mês não tem o dia escolhido
+                (ex: 31 em fevereiro), usa o último dia disponível.
+              </p>
             </div>
 
             {/* Modo flat: 1 alíquota */}

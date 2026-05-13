@@ -99,6 +99,10 @@ export interface RegraComissaoCarregada {
   modo: "flat" | "faixas";
   baseFaixa: "bruto" | "comissionavel";
   faixas: FaixaComissao[];
+  /** Dia do mês seguinte em que a despesa de comissão vence (1-31).
+   *  Default 5 quando regra não configurada. Clamp pra último dia do
+   *  mês acontece em `calcularVencimentoComissao`. */
+  diaVencimentoDespesa: number;
 }
 
 /**
@@ -115,6 +119,7 @@ export async function carregarRegraComissao(
   const valorMinimo = regraRow ? Number(regraRow.valorMinimoCobranca) : 0;
   const modo = regraRow?.modo ?? "flat";
   const baseFaixa = regraRow?.baseFaixa ?? "comissionavel";
+  const diaVencimentoDespesa = regraRow?.diaVencimentoDespesa ?? 5;
 
   const faixasRows = modo === "faixas" ? await listarFaixasComissao(escritorioId) : [];
   const faixas: FaixaComissao[] = faixasRows.map((f) => ({
@@ -122,7 +127,7 @@ export async function carregarRegraComissao(
     aliquotaPercent: Number(f.aliquotaPercent),
   }));
 
-  return { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas };
+  return { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas, diaVencimentoDespesa };
 }
 
 /** Simula comissão detalhada de um atendente em um período. Lê regra
@@ -229,7 +234,7 @@ export async function simularComissao(
   };
 
   return {
-    regra: { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas },
+    regra: { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas, diaVencimentoDespesa: regra.diaVencimentoDespesa },
     aliquotaAplicada: resultado.aliquotaAplicada,
     faixaAplicada: resultado.faixaAplicada ?? null,
     comissionaveis: resultado.comissionaveis.map((c) => enriquecer(c.id)),
@@ -520,7 +525,12 @@ export async function fecharComissao(
   if (sim.totais.valorComissao > 0) {
     try {
       const categoriaId = await garantirCategoriaComissoes(params.escritorioId);
-      const vencimento = calcularVencimentoComissao(params.periodoFim);
+      // sim.regra é a estrutura usada pelo cálculo, traz diaVencimentoDespesa
+      // direto da config (default 5 quando não setado).
+      const vencimento = calcularVencimentoComissao(
+        params.periodoFim,
+        sim.regra.diaVencimentoDespesa,
+      );
       // Nome do atendente pra descrição amigável da despesa.
       // Tolerante a falha: se não achar, usa fallback "atendente #id".
       let nomeAtendente = `Atendente #${params.atendenteId}`;
@@ -594,16 +604,36 @@ export function formatarDataBR(iso: string): string {
 }
 
 /** Calcula data de vencimento da despesa de comissão a partir do
- *  fim do período fechado: dia 5 do mês seguinte. Exemplos:
- *  "2026-03-31" → "2026-04-05"; "2026-12-31" → "2027-01-05". */
-export function calcularVencimentoComissao(periodoFim: string): string {
+ *  fim do período fechado e do dia configurado pelo escritório.
+ *
+ *  `dia` (default 5) é o dia do mês seguinte. Quando o dia escolhido
+ *  não existe no mês seguinte (ex: dia 31 e o próximo mês tem 30),
+ *  aplica clamp pro último dia disponível.
+ *
+ *  Exemplos:
+ *    ("2026-03-31", 5)  → "2026-04-05"
+ *    ("2026-12-31", 5)  → "2027-01-05" (virada de ano)
+ *    ("2026-03-31", 31) → "2026-04-30" (abril não tem 31, clamp)
+ *    ("2026-01-31", 31) → "2026-02-28" (fev não-bissexto)
+ *    ("2024-01-31", 31) → "2024-02-29" (fev bissexto)
+ */
+export function calcularVencimentoComissao(
+  periodoFim: string,
+  dia: number = 5,
+): string {
   const [ano, mes] = periodoFim.split("-").map(Number);
   if (!ano || !mes || Number.isNaN(ano) || Number.isNaN(mes)) {
     throw new Error(`periodoFim inválido: ${periodoFim}`);
   }
+  if (!Number.isInteger(dia) || dia < 1 || dia > 31) {
+    throw new Error(`dia inválido (esperado 1-31): ${dia}`);
+  }
   const proxAno = mes === 12 ? ano + 1 : ano;
   const proxMes = mes === 12 ? 1 : mes + 1;
-  return `${proxAno}-${String(proxMes).padStart(2, "0")}-05`;
+  // Último dia do mês seguinte = dia 0 do mês após o seguinte.
+  const ultimoDia = new Date(Date.UTC(proxAno, proxMes, 0)).getUTCDate();
+  const diaEfetivo = Math.min(dia, ultimoDia);
+  return `${proxAno}-${String(proxMes).padStart(2, "0")}-${String(diaEfetivo).padStart(2, "0")}`;
 }
 
 // ─── Helpers de período ─────────────────────────────────────────────────────

@@ -223,6 +223,7 @@ export const financeiroRouter = router({
         modo: "flat" as const,
         baseFaixa: "comissionavel" as const,
         valorMinimoCobranca: "0.00",
+        diaVencimentoDespesa: 5,
         faixas: [] as Array<{ limiteAte: string | null; aliquotaPercent: string }>,
       };
     }
@@ -231,6 +232,7 @@ export const financeiroRouter = router({
       modo: regra.modo,
       baseFaixa: regra.baseFaixa,
       valorMinimoCobranca: regra.valorMinimoCobranca,
+      diaVencimentoDespesa: regra.diaVencimentoDespesa,
       faixas: faixas.map((f) => ({
         limiteAte: f.limiteAte,
         aliquotaPercent: f.aliquotaPercent,
@@ -245,6 +247,12 @@ export const financeiroRouter = router({
         aliquotaPercent: z.number().min(0).max(100),
         valorMinimoCobranca: z.number().min(0),
         baseFaixa: z.enum(["bruto", "comissionavel"]).default("comissionavel"),
+        /**
+         * Dia do mês seguinte em que a despesa de comissão vence. 1-31.
+         * Clamp pra último dia do mês acontece em `calcularVencimentoComissao`.
+         * Default 5 preserva comportamento anterior ao campo virar configurável.
+         */
+        diaVencimentoDespesa: z.number().int().min(1).max(31).default(5),
         /**
          * Tabela de faixas. Última faixa pode ter `limiteAte: null` para
          * representar "sem teto". Vazia quando modo='flat'.
@@ -300,6 +308,7 @@ export const financeiroRouter = router({
         valorMinimoCobranca: input.valorMinimoCobranca,
         baseFaixa: input.baseFaixa,
         faixas: input.faixas,
+        diaVencimentoDespesa: input.diaVencimentoDespesa,
       });
       return { success: true };
     }),

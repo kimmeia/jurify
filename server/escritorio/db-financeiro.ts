@@ -154,21 +154,27 @@ export async function salvarRegraComissao(
     valorMinimoCobranca: number;
     baseFaixa: "bruto" | "comissionavel";
     faixas: FaixaInput[];
+    /** Dia do mês seguinte em que a despesa de comissão vence (1-31).
+     *  Default 5 quando omitido — preserva comportamento histórico. */
+    diaVencimentoDespesa?: number;
   },
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
+  const diaVencimento = dados.diaVencimentoDespesa ?? 5;
+
   await db.transaction(async (tx) => {
     await tx.execute(
       sql`INSERT INTO regra_comissao
-          (escritorioIdRegraCom, aliquotaPercentRegraCom, modoRegraCom, baseFaixaRegraCom, valorMinimoCobRegraCom)
-          VALUES (${escritorioId}, ${dados.aliquotaPercent}, ${dados.modo}, ${dados.baseFaixa}, ${dados.valorMinimoCobranca})
+          (escritorioIdRegraCom, aliquotaPercentRegraCom, modoRegraCom, baseFaixaRegraCom, valorMinimoCobRegraCom, diaVencimentoDespesaRegraCom)
+          VALUES (${escritorioId}, ${dados.aliquotaPercent}, ${dados.modo}, ${dados.baseFaixa}, ${dados.valorMinimoCobranca}, ${diaVencimento})
           ON DUPLICATE KEY UPDATE
             aliquotaPercentRegraCom = VALUES(aliquotaPercentRegraCom),
             modoRegraCom = VALUES(modoRegraCom),
             baseFaixaRegraCom = VALUES(baseFaixaRegraCom),
-            valorMinimoCobRegraCom = VALUES(valorMinimoCobRegraCom)`,
+            valorMinimoCobRegraCom = VALUES(valorMinimoCobRegraCom),
+            diaVencimentoDespesaRegraCom = VALUES(diaVencimentoDespesaRegraCom)`,
     );
 
     // Substitui o conjunto de faixas. Se modo='flat' o usuário pode ainda enviar
