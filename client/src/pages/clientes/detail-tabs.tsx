@@ -683,7 +683,10 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       toast.success("Cadastrado!");
       const contatoId = data?.id;
       const eraFechado = jaFechado;
-      const valor = valorFechamento ? parseFloat(valorFechamento) : null;
+      // parseValorBR aceita "5.000,00" (BR) ou "5000.00" (US). parseFloat
+      // truncava em ponto-milhar: "5.000,00" → 5, corrompendo o valor da
+      // cobrança encadeada após cadastro com flag "já fechou contrato".
+      const valor = valorFechamento ? parseValorBR(valorFechamento) || null : null;
       resetCadastro();
       onOpenChange(false);
       onSuccess();
