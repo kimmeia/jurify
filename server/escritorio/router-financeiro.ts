@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import {
   and,
   asc,
+  between,
   desc,
   eq,
   gte,
@@ -963,6 +964,11 @@ export const financeiroRouter = router({
       const venciMin = ampliarData(dataMin, -10);
       const venciMax = ampliarData(dataMax, 10);
 
+      // Filtra por vencimento direto no SQL (between sobre string ISO
+      // YYYY-MM-DD comparada lexicograficamente — bate com comparação
+      // de data). Antes carregávamos todas as despesas/cobranças
+      // pendentes do escritório e filtrávamos em JS — não escala em
+      // escritórios com muito histórico.
       const despesasRows = await db
         .select({
           id: despesas.id,
@@ -975,8 +981,7 @@ export const financeiroRouter = router({
           and(
             eq(despesas.escritorioId, esc.escritorio.id),
             or(eq(despesas.status, "pendente"), eq(despesas.status, "parcial")),
-            // between via SQL pra evitar comparar string mês>dia em datas
-            // (datas ISO comparam-se lexicograficamente sem problemas)
+            between(despesas.vencimento, venciMin, venciMax),
           ),
         );
 
@@ -995,27 +1000,24 @@ export const financeiroRouter = router({
               eq(asaasCobrancas.status, "PENDING"),
               eq(asaasCobrancas.status, "OVERDUE"),
             ),
+            between(asaasCobrancas.vencimento, venciMin, venciMax),
           ),
         );
 
-      // Filtra em JS pelo intervalo ampliado de datas — evita complicar
-      // o WHERE com SQL between dependente do dialeto
-      const despesasFiltradas = despesasRows
-        .filter((d) => d.vencimento >= venciMin && d.vencimento <= venciMax)
-        .map((d) => ({
-          id: d.id,
-          descricao: d.descricao,
-          valor: parseFloat(d.valor),
-          vencimento: d.vencimento,
-        }));
-      const cobrancasFiltradas = cobrancasRows
-        .filter((c) => c.vencimento >= venciMin && c.vencimento <= venciMax)
-        .map((c) => ({
-          id: c.id,
-          descricao: c.descricao ?? "",
-          valor: parseFloat(c.valor),
-          vencimento: c.vencimento,
-        }));
+      // Filtro de vencimento já aplicado no WHERE — aqui só normaliza
+      // os tipos pro shape esperado por `sugerirConciliacao`.
+      const despesasFiltradas = despesasRows.map((d) => ({
+        id: d.id,
+        descricao: d.descricao,
+        valor: parseFloat(d.valor),
+        vencimento: d.vencimento,
+      }));
+      const cobrancasFiltradas = cobrancasRows.map((c) => ({
+        id: c.id,
+        descricao: c.descricao ?? "",
+        valor: parseFloat(c.valor),
+        vencimento: c.vencimento,
+      }));
 
       const sugestoes = sugerirConciliacao(
         transacoes,

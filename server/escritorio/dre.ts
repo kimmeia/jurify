@@ -104,7 +104,12 @@ export async function calcularDRE(
   // Lançamentos com `valorPago > 0` no período. Usa dataPagamento quando
   // 'pago' (data exata do pagamento total) ou vencimento quando 'parcial'
   // (não tem data total — usa vencimento como aproximação).
-  const rowsDespesa = await db
+  //
+  // Filtro de período via CASE WHEN direto no WHERE: evita carregar TODAS
+  // as despesas pagas/parciais do escritório (anos de histórico) só pra
+  // filtrar em JS. Em escritórios grandes essa era O(n) tanto em memória
+  // quanto em tráfego de rede DB→app.
+  const despesasNoPeriodo = await db
     .select({
       categoriaId: despesas.categoriaId,
       categoriaNome: categoriasDespesa.nome,
@@ -122,16 +127,9 @@ export async function calcularDRE(
       and(
         eq(despesas.escritorioId, escritorioId),
         inArray(despesas.status, ["pago", "parcial"] as const),
+        sql`(CASE WHEN ${despesas.status} = 'pago' THEN ${despesas.dataPagamento} ELSE ${despesas.vencimento} END) BETWEEN ${dataInicio} AND ${dataFim}`,
       ),
     );
-
-  // Filtra despesas dentro do período em código (a data efetiva muda por
-  // status). Mantém SQL simples e evita CASE/COALESCE no WHERE.
-  const despesasNoPeriodo = rowsDespesa.filter((d) => {
-    const dataEfetiva = d.status === "pago" ? d.dataPagamento : d.vencimento;
-    if (!dataEfetiva) return false;
-    return dataEfetiva >= dataInicio && dataEfetiva <= dataFim;
-  });
 
   // ─── AGREGAÇÃO POR CATEGORIA ──────────────────────────────────────────────
   const agregar = (
