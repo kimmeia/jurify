@@ -106,7 +106,19 @@ describe("clientes.salvarArquivo — validação de URL", () => {
     ).rejects.toThrow();
   });
 
-  it("rejeita strings que não são URL", async () => {
+  it("rejeita protocol-relative URL (//evil.com)", async () => {
+    // Browser interpreta "//evil.com" como "https://evil.com" — vetor de
+    // XSS se renderizado em <a href>. z.string().refine bloqueia.
+    const caller = appRouter.createCaller(fakeCtx());
+    await expect(
+      caller.clientes.salvarArquivo({
+        contatoId: 50, nome: "x.pdf",
+        url: "//evil.com/x.pdf",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejeita strings que não são URL nem caminho", async () => {
     const caller = appRouter.createCaller(fakeCtx());
     await expect(
       caller.clientes.salvarArquivo({
@@ -116,7 +128,20 @@ describe("clientes.salvarArquivo — validação de URL", () => {
     ).rejects.toThrow();
   });
 
-  it("aceita https:// (caso comum: blob storage)", async () => {
+  it("aceita caminho relativo /uploads/... (output do upload.enviar)", async () => {
+    // Esse é o caso COMUM em produção: upload.enviar devolve
+    // `/uploads/escritorio_${id}/${arquivo}`, frontend repassa pra
+    // salvarArquivo sem prefixar com host. O fix original rejeitava esse
+    // caso (regressão); este teste protege contra reincidência.
+    const caller = appRouter.createCaller(fakeCtx());
+    const result = await caller.clientes.salvarArquivo({
+      contatoId: 50, nome: "doc.pdf",
+      url: "/uploads/escritorio_1/123_doc.pdf",
+    });
+    expect(result.id).toBe(1);
+  });
+
+  it("aceita https:// (storage externo / legacy)", async () => {
     const caller = appRouter.createCaller(fakeCtx());
     const result = await caller.clientes.salvarArquivo({
       contatoId: 50, nome: "doc.pdf",
@@ -125,7 +150,7 @@ describe("clientes.salvarArquivo — validação de URL", () => {
     expect(result.id).toBe(1);
   });
 
-  it("aceita http:// (legacy / dev local)", async () => {
+  it("aceita http:// (dev local)", async () => {
     const caller = appRouter.createCaller(fakeCtx());
     const result = await caller.clientes.salvarArquivo({
       contatoId: 50, nome: "doc.pdf",
