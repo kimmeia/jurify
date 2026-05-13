@@ -220,10 +220,13 @@ export default function AssinarDocumento({ token }: { token: string }) {
 
         {/* PDF preview com caixas posicionais (Fase 1+).
             Só aparece quando temCamposPosicionais — caso contrário,
-            a UX legada (botão "Abrir documento" + form) é mantida. */}
+            a UX legada (botão "Abrir documento" + form) é mantida.
+            Usa endpoint dedicado /api/assinatura/pdf/token/:token em
+            vez do path estático /uploads/...: passa pelo auth via token,
+            seta CORP cross-origin no header, e loga se PDF sumiu. */}
         {temCamposPosicionais && (
           <PreviewPdfComCampos
-            documentoUrl={doc.documentoUrl}
+            documentoUrl={`/api/assinatura/pdf/token/${token}`}
             campos={campos as any[]}
           />
         )}
