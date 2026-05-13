@@ -29,7 +29,7 @@ import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
-  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello,
+  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1878,6 +1878,168 @@ function LeadAtendenteInline({
   );
 }
 
+// ─── Editar Lead (valor / etapa / excluir) ──────────────────────────────────
+// Cobre o caso "errei o valor do lançamento" + "esse lead nem deveria existir".
+// Backend: crm.atualizarLead (já existia) + crm.excluirLead.
+// Etapas do funil são as mesmas do schema (drizzle enum) — labels traduzidas
+// pra português aqui pra UX.
+const LEAD_ETAPAS = [
+  { value: "novo", label: "Novo" },
+  { value: "qualificado", label: "Qualificado" },
+  { value: "proposta", label: "Proposta" },
+  { value: "negociacao", label: "Negociação" },
+  { value: "fechado_ganho", label: "Fechado (ganho)" },
+  { value: "fechado_perdido", label: "Fechado (perdido)" },
+] as const;
+
+function EditarLeadDialog({
+  lead,
+  open,
+  onOpenChange,
+  onUpdated,
+}: {
+  lead: { id: number; etapaFunil: string; valorEstimado: string | null };
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onUpdated: () => void;
+}) {
+  // Estado local — só inicializa quando o dialog abre (key dispara remount).
+  const [etapa, setEtapa] = useState(lead.etapaFunil);
+  const [valor, setValor] = useState(lead.valorEstimado || "");
+  const [confirmExcluir, setConfirmExcluir] = useState(false);
+
+  const atualizarMut = (trpc as any).crm.atualizarLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead atualizado");
+      onOpenChange(false);
+      onUpdated();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao atualizar"),
+  });
+  const excluirMut = (trpc as any).crm.excluirLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead excluído");
+      setConfirmExcluir(false);
+      onOpenChange(false);
+      onUpdated();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao excluir"),
+  });
+
+  const valorNormalizado = valor.trim() ? parseValorBR(valor) : null;
+  const valorMudou = (lead.valorEstimado || "") !== valor;
+  const etapaMudou = lead.etapaFunil !== etapa;
+  const algoMudou = valorMudou || etapaMudou;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar negociação</DialogTitle>
+            <DialogDescription>
+              Ajuste valor ou etapa. Para fechamentos retroativos que não
+              deveriam existir, use Excluir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Etapa do funil</Label>
+              <select
+                value={etapa}
+                onChange={(e) => setEtapa(e.target.value)}
+                className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                disabled={atualizarMut.isPending}
+              >
+                {LEAD_ETAPAS.map((e) => (
+                  <option key={e.value} value={e.value}>{e.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Valor (R$)</Label>
+              <Input
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                placeholder="0,00"
+                disabled={atualizarMut.isPending}
+              />
+              {valor.trim() && valorNormalizado != null && (
+                <p className="text-[10px] text-muted-foreground">
+                  Será gravado como{" "}
+                  <span className="font-mono">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(valorNormalizado)}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 sm:mr-auto"
+              onClick={() => setConfirmExcluir(true)}
+              disabled={atualizarMut.isPending || excluirMut.isPending}
+            >
+              <Trash2 className="h-4 w-4 mr-1" /> Excluir
+            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={atualizarMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                // Normaliza valor BR antes de enviar pro backend (que armazena
+                // como string formato US "1500.00" pra somar via CAST DECIMAL).
+                const valorParaSalvar =
+                  valor.trim() === ""
+                    ? undefined // backend ignora quando undefined; pra "limpar" valor seria preciso flag separada
+                    : valorNormalizado != null
+                      ? valorNormalizado.toFixed(2)
+                      : undefined;
+                atualizarMut.mutate({
+                  id: lead.id,
+                  etapaFunil: etapaMudou ? etapa : undefined,
+                  valorEstimado: valorMudou ? valorParaSalvar : undefined,
+                });
+              }}
+              disabled={!algoMudou || atualizarMut.isPending}
+            >
+              {atualizarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmExcluir} onOpenChange={setConfirmExcluir}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta negociação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lead será apagado permanentemente. Se o lead estava em
+              <strong> fechado_ganho</strong>, a conversão some do Relatório
+              Comercial. Use quando o lançamento foi um engano.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => excluirMut.mutate({ id: lead.id })}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 // ─── Detalhe do Cliente ─────────────────────────────────────────────────────
 
 function ClienteDetalhe({
@@ -1916,6 +2078,10 @@ function ClienteDetalhe({
     onError: (e: any) => toast.error(e.message),
   });
   const [excluirConfirmAlvo, setExcluirConfirmAlvo] = useState(false);
+  // Editor de lead na aba Histórico — abre quando user clica no lápis do card.
+  // null = fechado. Quando o lead muda (mutation), o key={alvo.id} no Dialog
+  // garante remount com valores frescos.
+  const [editarLeadAlvo, setEditarLeadAlvo] = useState<any | null>(null);
 
   // Permissões pra esconder botão de excluir quando o user não pode.
   // Sem isso, atendente vê o botão e backend rejeita — UX/backend mismatch.
@@ -2174,11 +2340,13 @@ function ClienteDetalhe({
                   {(leadsData || []).map((l: any) => (
                     <div
                       key={l.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg border"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg border group"
                     >
                       <TrendingUp className="h-4 w-4 text-violet-500 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm">{l.etapaFunil}</p>
+                        <p className="text-sm">
+                          {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
+                        </p>
                         <LeadAtendenteInline
                           leadId={l.id}
                           responsavelAtualId={l.responsavelId ?? null}
@@ -2195,6 +2363,15 @@ function ClienteDetalhe({
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {timeAgo(l.createdAt)}
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Editar negociação"
+                        onClick={() => setEditarLeadAlvo(l)}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -2224,6 +2401,20 @@ function ClienteDetalhe({
         open={gerarContratoOpen}
         onOpenChange={setGerarContratoOpen}
       />
+
+      {editarLeadAlvo && (
+        <EditarLeadDialog
+          key={editarLeadAlvo.id}
+          lead={editarLeadAlvo}
+          open={!!editarLeadAlvo}
+          onOpenChange={(o) => { if (!o) setEditarLeadAlvo(null); }}
+          onUpdated={() => {
+            refetchLeads();
+            // detalhe.totalLeads no header também pode mudar (após excluir)
+            utilsTrpc.clientes.detalhe.invalidate({ id });
+          }}
+        />
+      )}
 
       <RegistrarFechamentoDialog
         open={fechamentoOpen}
