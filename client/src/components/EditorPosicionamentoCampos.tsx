@@ -26,17 +26,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-// Worker do pdfjs servido via CDN unpkg, usando a versão que o react-pdf
-// bundla internamente (pdfjs.version). Por que CDN em vez de import local?
+// Worker do pdfjs servido localmente via Vite `?url`. Importante: o
+// pdfjs-dist no package.json DEVE ser EXATAMENTE a mesma versão que o
+// react-pdf bundla internamente (5.4.296 em react-pdf 10.4.1), sem
+// caret/range. Versões diferentes causam o erro:
+//   "The API version X does not match the Worker version Y"
+// ou variantes mais sutis ("sendWithPromise null").
 //
-// Tentativa anterior: `import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url"`
-// pegava a versão do `pdfjs-dist` declarado no package.json (5.7.284),
-// mas o react-pdf 10.x bundla internamente o pdfjs 5.4.296. Resultado:
-// "The API version 5.4.296 does not match the Worker version 5.7.284".
-//
-// Usar pdfjs.version garante que worker e API são SEMPRE a mesma versão,
-// independente de como o package.json estiver pinned. unpkg é mirror
-// estável de npm registry (mesma origem da pdfjs-dist no npm install).
+// Por que não CDN unpkg? Funcionava no localhost mas em prod por algum
+// motivo o worker carregava em estado parcial — Page tentava render
+// antes de transport pronto e estourava sendWithPromise null. Worker
+// local servido pelo próprio Vite no mesmo origem é mais previsível.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -52,7 +53,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
 
@@ -394,6 +395,11 @@ export function EditorPosicionamentoCampos({
           <Card className="bg-white shadow-md">
             <CardContent className="p-0 relative">
               <Document
+                // key={pdfUrl} força remount limpo se a URL mudar
+                // (evita race condition entre <Page> tentando renderizar
+                // com transport antigo já destruído — sintoma:
+                // "Cannot read properties of null (reading 'sendWithPromise')").
+                key={pdfUrl}
                 file={pdfUrl}
                 // withCredentials força XHR a mandar cookies de sessão.
                 // Sem isso, /api/assinatura/pdf/:id (que exige auth) retornava

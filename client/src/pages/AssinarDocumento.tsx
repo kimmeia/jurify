@@ -9,10 +9,10 @@ import SignaturePad from "signature_pad";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-// Worker do pdfjs servido via CDN unpkg, usando a versão que o react-pdf
-// bundla internamente (pdfjs.version). Garante API e worker em sync —
-// versões mismatched causam "The API version X does not match the
-// Worker version Y" e PDF nunca carrega.
+// Worker do pdfjs servido localmente via Vite `?url`. Atrelado à mesma
+// versão de pdfjs-dist (5.4.296) que o react-pdf bundla — alinhar via
+// package.json é crítico, caret/range causa mismatch.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
 const TIPO_ICONE: Record<CampoTipo, any> = {
@@ -428,6 +428,8 @@ function PreviewPdfComCampos({
       </CardHeader>
       <CardContent className="bg-muted/20 flex justify-center pt-2">
         <Document
+          // key={documentoUrl} força remount limpo se a URL mudar
+          key={documentoUrl}
           file={documentoUrl}
           // withCredentials: cookies/credenciais opcionais. O endpoint
           // /api/assinatura/pdf/token/:token usa token na URL (não cookie),

@@ -87,7 +87,7 @@
     "otplib": "^12.0.1",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "5.4.296",
     "pdfkit": "^0.17.2",
     "pino": "^10.3.1",
     "pizzip": "^3.2.0",
