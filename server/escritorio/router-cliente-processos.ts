@@ -120,6 +120,9 @@ export const clienteProcessosRouter = router({
       monitorar: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para vincular processos." });
+
       const cnj = input.numeroCnj?.trim() || null;
       const apelido = input.apelido?.trim() || null;
       if (!cnj && !apelido) {
@@ -129,18 +132,16 @@ export const clienteProcessosRouter = router({
         });
       }
 
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Verificar que o contato pertence ao escritório
-      const [contato] = await db
-        .select({ id: contatos.id })
-        .from(contatos)
-        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorio.id)))
-        .limit(1);
-      if (!contato) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
+      // Verificar que o contato pertence ao escritório E que o colaborador
+      // pode acessar este cliente (verProprios bloqueia anexar processo a
+      // cliente alheio).
+      const ok = await podeVerCliente(
+        db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos,
+      );
+      if (!ok) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
 
       // Verificar duplicata — só quando há CNJ (processo sem CNJ não pode
       // ser deduplicado por número; quem cadastra controla manualmente).
@@ -152,7 +153,7 @@ export const clienteProcessosRouter = router({
             and(
               eq(clienteProcessos.contatoId, input.contatoId),
               eq(clienteProcessos.numeroCnj, cnj),
-              eq(clienteProcessos.escritorioId, esc.escritorio.id),
+              eq(clienteProcessos.escritorioId, perm.escritorioId),
             ),
           )
           .limit(1);
@@ -168,7 +169,7 @@ export const clienteProcessosRouter = router({
       const tipoFinal = input.tipo || (cnj ? "litigioso" : "extrajudicial");
 
       const [result] = await db.insert(clienteProcessos).values({
-        escritorioId: esc.escritorio.id,
+        escritorioId: perm.escritorioId,
         contatoId: input.contatoId,
         numeroCnj: cnj,
         apelido,
@@ -188,15 +189,31 @@ export const clienteProcessosRouter = router({
   desvincular: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // verProprios: confere que o processo aponta pra cliente do colaborador.
+      const [proc] = await db
+        .select({ contatoId: clienteProcessos.contatoId })
+        .from(clienteProcessos)
+        .where(and(
+          eq(clienteProcessos.id, input.id),
+          eq(clienteProcessos.escritorioId, perm.escritorioId),
+        ))
+        .limit(1);
+      if (!proc) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const ok = await podeVerCliente(
+        db, proc.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos,
+      );
+      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
 
       await db.delete(clienteProcessos).where(
         and(
           eq(clienteProcessos.id, input.id),
-          eq(clienteProcessos.escritorioId, esc.escritorio.id),
+          eq(clienteProcessos.escritorioId, perm.escritorioId),
         ),
       );
 
@@ -215,10 +232,25 @@ export const clienteProcessosRouter = router({
       numeroCnj: z.string().min(15).max(30).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Pega o processo + valida que o contato é acessível pro colaborador.
+      const [proc] = await db
+        .select({ contatoId: clienteProcessos.contatoId })
+        .from(clienteProcessos)
+        .where(and(
+          eq(clienteProcessos.id, input.id),
+          eq(clienteProcessos.escritorioId, perm.escritorioId),
+        ))
+        .limit(1);
+      if (!proc) throw new TRPCError({ code: "NOT_FOUND" });
+      const ok = await podeVerCliente(
+        db, proc.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos,
+      );
+      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
 
       const update: Record<string, any> = {};
       if (input.apelido !== undefined) update.apelido = input.apelido;
@@ -228,30 +260,20 @@ export const clienteProcessosRouter = router({
         const cnj = input.numeroCnj.trim();
         if (cnj) {
           // Dedup: garante que o CNJ não está em outro processo do mesmo cliente.
-          const [proc] = await db
-            .select({ contatoId: clienteProcessos.contatoId })
+          const [dup] = await db
+            .select({ id: clienteProcessos.id })
             .from(clienteProcessos)
             .where(and(
-              eq(clienteProcessos.id, input.id),
-              eq(clienteProcessos.escritorioId, esc.escritorio.id),
+              eq(clienteProcessos.contatoId, proc.contatoId),
+              eq(clienteProcessos.numeroCnj, cnj),
+              eq(clienteProcessos.escritorioId, perm.escritorioId),
             ))
             .limit(1);
-          if (proc) {
-            const [dup] = await db
-              .select({ id: clienteProcessos.id })
-              .from(clienteProcessos)
-              .where(and(
-                eq(clienteProcessos.contatoId, proc.contatoId),
-                eq(clienteProcessos.numeroCnj, cnj),
-                eq(clienteProcessos.escritorioId, esc.escritorio.id),
-              ))
-              .limit(1);
-            if (dup && dup.id !== input.id) {
-              throw new TRPCError({
-                code: "CONFLICT",
-                message: "Este CNJ já está vinculado a outro processo deste cliente.",
-              });
-            }
+          if (dup && dup.id !== input.id) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Este CNJ já está vinculado a outro processo deste cliente.",
+            });
           }
           update.numeroCnj = cnj;
         }
@@ -260,7 +282,7 @@ export const clienteProcessosRouter = router({
       if (Object.keys(update).length > 0) {
         await db.update(clienteProcessos)
           .set(update)
-          .where(and(eq(clienteProcessos.id, input.id), eq(clienteProcessos.escritorioId, esc.escritorio.id)));
+          .where(and(eq(clienteProcessos.id, input.id), eq(clienteProcessos.escritorioId, perm.escritorioId)));
       }
 
       return { success: true };
@@ -272,19 +294,23 @@ export const clienteProcessosRouter = router({
   listarAnotacoes: protectedProcedure
     .input(z.object({ processoId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
+      const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+      if (!perm.allowed) return [];
       const db = await getDb();
       if (!db) return [];
 
       const { clienteProcessoAnotacoes, users } = await import("../../drizzle/schema");
-      // Garante que o processo pertence ao escritório do usuário
+      // Garante que o processo pertence ao escritório + verProprios via cliente
       const [proc] = await db
-        .select({ id: clienteProcessos.id })
+        .select({ contatoId: clienteProcessos.contatoId })
         .from(clienteProcessos)
-        .where(and(eq(clienteProcessos.id, input.processoId), eq(clienteProcessos.escritorioId, esc.escritorio.id)))
+        .where(and(eq(clienteProcessos.id, input.processoId), eq(clienteProcessos.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!proc) return [];
+      const ok = await podeVerCliente(
+        db, proc.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos,
+      );
+      if (!ok) return [];
 
       const anots = await db
         .select({
@@ -313,19 +339,23 @@ export const clienteProcessosRouter = router({
       conteudo: z.string().min(1).max(2000),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const { clienteProcessoAnotacoes } = await import("../../drizzle/schema");
-      // Confirma que o processo é do escritório
+      // Confirma que o processo é do escritório + verProprios via cliente
       const [proc] = await db
-        .select({ id: clienteProcessos.id })
+        .select({ contatoId: clienteProcessos.contatoId })
         .from(clienteProcessos)
-        .where(and(eq(clienteProcessos.id, input.processoId), eq(clienteProcessos.escritorioId, esc.escritorio.id)))
+        .where(and(eq(clienteProcessos.id, input.processoId), eq(clienteProcessos.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!proc) throw new TRPCError({ code: "NOT_FOUND" });
+      const ok = await podeVerCliente(
+        db, proc.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos,
+      );
+      if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
 
       const [r] = await db.insert(clienteProcessoAnotacoes).values({
         processoId: input.processoId,
