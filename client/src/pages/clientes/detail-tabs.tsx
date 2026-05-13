@@ -684,6 +684,9 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   // o usuário terminou de digitar (CPF=11 dígitos ou CNPJ=14). A própria
   // procedure ignora chamadas com tamanho parcial.
   const [cpfDebounced, setCpfDebounced] = useState("");
+  // Memo do último CPF reconhecido pelo operador — evita reabrir o alert
+  // de duplicata depois que o user já fechou e voltou pra editar o CPF.
+  const [cpfDuplicataAck, setCpfDuplicataAck] = useState<string | null>(null);
   useEffect(() => {
     const t = setTimeout(() => setCpfDebounced(cpf), 400);
     return () => clearTimeout(t);
@@ -693,16 +696,26 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     { enabled: cpfDebounced.replace(/\D/g, "").length === 11 || cpfDebounced.replace(/\D/g, "").length === 14, retry: false },
   );
   useEffect(() => {
-    if (cpfExistente && open) {
+    if (cpfExistente && open && cpfDebounced !== cpfDuplicataAck) {
       setDuplicataAlerta({ clienteId: cpfExistente.id, nome: cpfExistente.nome });
     }
-  }, [cpfExistente, open]);
+  }, [cpfExistente, open, cpfDebounced, cpfDuplicataAck]);
+
+  const fecharDuplicataAlerta = () => {
+    // Lembra do CPF reconhecido pra não reabrir o alert se o user mantiver
+    // o mesmo CPF (caso ele escolha "voltar e ajustar" mas não muda nada).
+    if (cpfDebounced) setCpfDuplicataAck(cpfDebounced);
+    setDuplicataAlerta(null);
+  };
 
   const resetCadastro = () => {
     setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId("");
     setDocPendente(false); setDocObs(""); setCamposExtras({});
     setQualif({ ...QUALIFICACAO_ENDERECO_VAZIO }); setErros({});
     setJaFechado(false); setValorFechamento(""); setOrigemFechamento("");
+    // Sem isso, query cacheada de verificarCpf reabriria o alert no
+    // próximo "Novo cliente".
+    setCpfDebounced(""); setCpfDuplicataAck(null);
   };
 
   const criar = trpc.clientes.criar.useMutation({
@@ -933,7 +946,10 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     valorInicial={cobrancaPosCadastro?.valor ?? undefined}
   />
   {/* Duplicata de CPF/CNPJ: oferece abrir ficha do cliente existente. */}
-  <AlertDialog open={duplicataAlerta != null}>
+  <AlertDialog
+    open={duplicataAlerta != null}
+    onOpenChange={(o) => { if (!o) fecharDuplicataAlerta(); }}
+  >
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>CPF/CNPJ já cadastrado</AlertDialogTitle>
@@ -946,7 +962,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel onClick={() => setDuplicataAlerta(null)}>
+        <AlertDialogCancel onClick={fecharDuplicataAlerta}>
           Voltar e ajustar CPF
         </AlertDialogCancel>
         <AlertDialogAction
