@@ -339,6 +339,13 @@ export default function Clientes() {
     return () => clearTimeout(t);
   }, [busca]);
 
+  // Limpa seleção quando o conjunto visível muda — segmento, busca ou
+  // página. Sem isso, IDs selecionados em "VIP" ficavam no Set ao trocar
+  // pra "Inativos" → bulk action exportava mix ou nada (IDs invisíveis).
+  useEffect(() => {
+    setSelecionados(new Set());
+  }, [segmento, buscaDebounced, pagina]);
+
   const { data: stats } = trpc.clientes.estatisticas.useQuery();
   const { data, refetch } = trpc.clientes.listar.useQuery({
     busca: buscaDebounced || undefined,
