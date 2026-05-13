@@ -331,15 +331,24 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
 
   const handleFiles = async (files: FileList | File[]) => {
     setUploading(true);
-    for (const file of Array.from(files)) {
-      if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} é muito grande (max 10MB)`); continue; }
-      try {
-        const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(new Error("Erro ao ler arquivo")); r.readAsDataURL(file); });
-        const result = await uploadMut.mutateAsync({ nome: file.name, tipo: file.type, base64, tamanho: file.size });
-        await salvar.mutateAsync({ contatoId, pastaId: pastaAtualId, nome: result.nome || file.name, tipo: result.tipo, tamanho: result.tamanho, url: result.url });
-      } catch (e: any) { toast.error(e.message || `Erro ao enviar ${file.name}`); }
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} é muito grande (max 10MB)`); continue; }
+        try {
+          const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(new Error("Erro ao ler arquivo")); r.readAsDataURL(file); });
+          const result = await uploadMut.mutateAsync({ nome: file.name, tipo: file.type, base64, tamanho: file.size });
+          await salvar.mutateAsync({ contatoId, pastaId: pastaAtualId, nome: result.nome || file.name, tipo: result.tipo, tamanho: result.tamanho, url: result.url });
+        } catch (e: any) { toast.error(e.message || `Erro ao enviar ${file.name}`); }
+      }
+    } finally {
+      // try/finally garante que uploading volta a false mesmo se algum
+      // erro fora do try interno escapar (ex: FileReader rejeitando antes
+      // do try). Sem isso, UI travava com spinner permanente.
+      setUploading(false);
+      // Invalida ao fim do lote (em vez de uma vez por arquivo) — uma
+      // refetch ao fim cobre todos os uploads bem-sucedidos.
+      invalidar();
     }
-    setUploading(false);
   };
 
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); };
@@ -388,10 +397,15 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
       }
       const blob = await zip.generateAsync({ type: "blob" });
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
+      const urlBlob = URL.createObjectURL(blob);
+      link.href = urlBlob;
       link.download = `${nomePasta}.zip`;
       link.click();
-      URL.revokeObjectURL(link.href);
+      // link.click() dispara download assíncrono; revogar a URL agora
+      // racing pode abortar download em Safari/Firefox. setTimeout afasta
+      // a revogação pro próximo tick — browser tem tempo de iniciar o
+      // GET interno do blob. 60s é folga conservadora.
+      setTimeout(() => URL.revokeObjectURL(urlBlob), 60_000);
       if (falhas > 0) toast.warning(`ZIP baixado com ${falhas} falha(s)`, { description: `${sucessos}/${sucessos + falhas} arquivos.` });
       else toast.success("ZIP baixado", { description: `${sucessos} arquivo(s).` });
     } catch (e: any) {
