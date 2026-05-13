@@ -389,6 +389,14 @@ export function EditorPosicionamentoCampos({
             <CardContent className="p-0 relative">
               <Document
                 file={pdfUrl}
+                // withCredentials força XHR a mandar cookies de sessão.
+                // Sem isso, /api/assinatura/pdf/:id (que exige auth) retornava
+                // 401 pro pdfjs e a tela mostrava "Falha ao carregar o PDF".
+                // Em react-pdf 10+, opções de transporte vão em `options`,
+                // não em `file`. Cast necessário porque a tipagem do
+                // pdfjs-dist 5.x não expõe withCredentials no top level
+                // (mas aceita em runtime).
+                options={{ withCredentials: true } as any}
                 onLoadSuccess={({ numPages }) => setTotalPaginas(numPages)}
                 onLoadError={(err) => {
                   // eslint-disable-next-line no-console
