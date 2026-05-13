@@ -261,7 +261,10 @@ function exportClientesCSV(clientes: any[]) {
   link.href = url;
   link.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
-  URL.revokeObjectURL(url);
+  // Revogar s\u00edncronamente ap\u00f3s click() race com o download em Safari/Firefox
+  // (mesmo padr\u00e3o do baixarPastaZip e do exportarDuplicatasPdf). setTimeout
+  // afasta a revoga\u00e7\u00e3o pro pr\u00f3ximo tick.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // ─── Segmentação (chips) ─────────────────────────────────────────────────────
