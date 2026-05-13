@@ -164,6 +164,18 @@ export function EditorPosicionamentoCampos({
 
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
+  // CRÍTICO: options do <Document> precisa ser referência ESTÁVEL.
+  // Sem useMemo, cada render cria um objeto novo → react-pdf detecta como
+  // "mudou", destrói o Document, recria → Page renderiza com transport
+  // destruído → "Cannot read properties of null (reading 'sendWithPromise')".
+  //
+  // Mesmo motivo se aplica a `file` quando é objeto — string é OK porque
+  // primitivos são comparados por valor.
+  const pdfOptions = useMemo(
+    () => ({ withCredentials: true } as any),
+    [],
+  );
+
   function handleClickPagina(e: React.MouseEvent) {
     if (!tipoAdicionando || !pageContainerRef.current || !pageSizePt) return;
     const rect = pageContainerRef.current.getBoundingClientRect();
@@ -401,14 +413,8 @@ export function EditorPosicionamentoCampos({
                 // "Cannot read properties of null (reading 'sendWithPromise')").
                 key={pdfUrl}
                 file={pdfUrl}
-                // withCredentials força XHR a mandar cookies de sessão.
-                // Sem isso, /api/assinatura/pdf/:id (que exige auth) retornava
-                // 401 pro pdfjs e a tela mostrava "Falha ao carregar o PDF".
-                // Em react-pdf 10+, opções de transporte vão em `options`,
-                // não em `file`. Cast necessário porque a tipagem do
-                // pdfjs-dist 5.x não expõe withCredentials no top level
-                // (mas aceita em runtime).
-                options={{ withCredentials: true } as any}
+                // options memoizado — ver pdfOptions acima
+                options={pdfOptions}
                 onLoadSuccess={({ numPages }) => setTotalPaginas(numPages)}
                 onLoadError={(err) => {
                   // eslint-disable-next-line no-console
