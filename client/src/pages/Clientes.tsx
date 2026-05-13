@@ -320,10 +320,15 @@ export default function Clientes() {
   });
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
-    // Se veio com ?id=X na URL, abre direto no detalhe
+    // Se veio com ?id=X na URL, abre direto no detalhe.
+    // Guard contra NaN: ?id=abc → Number("abc") = NaN. Sem o guard, a
+    // query clientes.detalhe disparava com id: NaN e fazia round-trip
+    // desnecessário no servidor (que rejeita por zod).
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id");
-    return idParam ? Number(idParam) : null;
+    if (!idParam) return null;
+    const n = Number(idParam);
+    return Number.isInteger(n) && n > 0 ? n : null;
   });
   const [showNovo, setShowNovo] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
@@ -365,6 +370,19 @@ export default function Clientes() {
   useEffect(() => {
     setSelecionados(new Set());
   }, [segmento, buscaDebounced, pagina]);
+
+  // Sincroniza URL com selId/segmento — sem isso, F5 / back do browser
+  // perde o estado (volta sempre pra lista geral). replaceState não
+  // empilha entradas no histórico (back ainda volta pra página anterior
+  // ao Clientes, não entre seleções internas).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selId) params.set("id", String(selId));
+    if (segmento === "aguardando_docs") params.set("aguardandoDocs", "1");
+    const search = params.toString();
+    const url = `${window.location.pathname}${search ? "?" + search : ""}`;
+    window.history.replaceState({}, "", url);
+  }, [selId, segmento]);
 
   const { data: stats } = trpc.clientes.estatisticas.useQuery();
   const { data, refetch } = trpc.clientes.listar.useQuery({
