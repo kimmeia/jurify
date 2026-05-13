@@ -260,7 +260,10 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
 
 export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: number; anotacoes: any[]; onRefresh: () => void }) {
   const [titulo, setTitulo] = useState(""); const [conteudo, setConteudo] = useState("");
-  const criar = trpc.clientes.criarAnotacao.useMutation({ onSuccess: () => { setTitulo(""); setConteudo(""); onRefresh(); toast.success("Salvo!"); } });
+  const criar = trpc.clientes.criarAnotacao.useMutation({
+    onSuccess: () => { setTitulo(""); setConteudo(""); onRefresh(); toast.success("Salvo!"); },
+    onError: (e) => toast.error(e.message),
+  });
   const excluir = trpc.clientes.excluirAnotacao.useMutation({
     onSuccess: () => { onRefresh(); },
     onError: (e) => toast.error(e.message),
@@ -310,8 +313,12 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const uploadMut = (trpc as any).upload.enviar.useMutation();
   const salvar = trpc.clientes.salvarArquivo.useMutation({
     onSuccess: () => { setUrl(""); setNome(""); invalidar(); toast.success("Salvo!"); },
+    onError: (e) => toast.error(e.message),
   });
-  const excluirArq = trpc.clientes.excluirArquivo.useMutation({ onSuccess: () => invalidar() });
+  const excluirArq = trpc.clientes.excluirArquivo.useMutation({
+    onSuccess: () => { invalidar(); toast.success("Arquivo removido"); },
+    onError: (e) => toast.error(e.message),
+  });
   const moverArq = trpc.clientes.moverArquivo.useMutation({
     onSuccess: () => { invalidar(); toast.success("Arquivo movido"); },
     onError: (e) => toast.error("Erro ao mover", { description: e.message }),
@@ -358,10 +365,23 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const formatSize = (bytes: number) => { if (!bytes) return ""; if (bytes < 1024) return `${bytes}B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`; return `${(bytes / 1024 / 1024).toFixed(1)}MB`; };
   const isImage = (tipo: string) => tipo?.startsWith("image/");
 
+  // Ao navegar entre pastas, reseta states de formulário que não fazem
+  // sentido fora do contexto onde foram abertos. Sem isso, abrir
+  // "Renomear pasta X", navegar pra outra, voltar — o input de renomeação
+  // ainda estaria flutuando.
+  const resetEstadosLocais = () => {
+    setCriandoPasta(false);
+    setNovaPastaNome("");
+    setRenomeando(null);
+    setUrl("");
+    setNome("");
+  };
   const entrarNaPasta = (id: number, nomePasta: string) => {
+    resetEstadosLocais();
     setBreadcrumb([...breadcrumb, { id, nome: nomePasta }]);
   };
   const navegarPara = (index: number) => {
+    resetEstadosLocais();
     setBreadcrumb(breadcrumb.slice(0, index + 1));
   };
 
@@ -1014,8 +1034,14 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     onSuccess: (res: any) => { setShowNovo(false); setTitulo(""); setDescricao(""); setDocUrl(""); onRefresh(); toast.success("Documento criado! Copie o link para enviar."); setLinkCopiado(window.location.origin + res.linkAssinatura); },
     onError: (e: any) => toast.error(e.message),
   });
-  const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({ onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); } });
-  const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({ onSuccess: () => { onRefresh(); toast.success("Cancelado."); } });
+  const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Cancelado."); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const excluirMut = (trpc as any).assinaturas.excluir.useMutation({
     onSuccess: () => { onRefresh(); toast.success("Documento excluído"); },
     onError: (e: any) => toast.error(e.message),
@@ -1047,11 +1073,25 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   };
 
   const enviarWhatsApp = (token: string) => {
-    const link = `${window.location.origin}/assinar/${token}`;
+    // Pré-condições: telefone preenchido (formatado ou não) e a assinatura
+    // ainda existe na lista local (id resolvível). Sem isso, abriríamos
+    // "wa.me/?text=..." (URL quebrada) e mandaríamos `enviarMut({id: undefined})`
+    // que falha silenciosamente.
     const tel = (cliente.telefone || "").replace(/\D/g, "");
-    const msg = encodeURIComponent(`Olá ${cliente.nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
+    if (!tel) {
+      toast.error("Cliente sem telefone cadastrado.");
+      return;
+    }
+    const assin = assinaturas.find((a: any) => a.tokenAssinatura === token);
+    if (!assin?.id) {
+      toast.error("Documento não encontrado. Recarregue a lista.");
+      return;
+    }
+    const nome = cliente.nome || "tudo bem";
+    const link = `${window.location.origin}/assinar/${token}`;
+    const msg = encodeURIComponent(`Olá ${nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
     window.open(`https://wa.me/${tel}?text=${msg}`, "_blank");
-    enviarMut.mutate({ id: assinaturas.find((a: any) => a.tokenAssinatura === token)?.id });
+    enviarMut.mutate({ id: assin.id });
   };
 
   return (
@@ -1160,10 +1200,17 @@ const ST_LBL: Record<string, string> = { pendente: "Pendente", em_andamento: "Em
 export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
   const [titulo, setTitulo] = useState(""); const [showNova, setShowNova] = useState(false);
   const [prioridade, setPrioridade] = useState("normal"); const [dataVenc, setDataVenc] = useState("");
+  const [excluirTarefaAlvo, setExcluirTarefaAlvo] = useState<{ id: number; titulo: string } | null>(null);
   const { data: tarefas, refetch } = (trpc as any).tarefas.listar.useQuery({ contatoId });
   const criar = (trpc as any).tarefas.criar.useMutation({ onSuccess: () => { refetch(); setTitulo(""); setShowNova(false); toast.success("Tarefa criada!"); }, onError: (e: any) => toast.error(e.message) });
-  const atualizar = (trpc as any).tarefas.atualizar.useMutation({ onSuccess: () => refetch() });
-  const excluir = (trpc as any).tarefas.excluir.useMutation({ onSuccess: () => refetch() });
+  const atualizar = (trpc as any).tarefas.atualizar.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const excluir = (trpc as any).tarefas.excluir.useMutation({
+    onSuccess: () => { refetch(); toast.success("Tarefa removida"); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const lista = tarefas || [];
 
@@ -1202,10 +1249,37 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
             {t.dataVencimento && <p className={`text-[9px] flex items-center gap-0.5 ${t.vencida ? "text-red-500" : "text-muted-foreground"}`}><Calendar className="h-2 w-2" />{new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</p>}
           </div>
           <Badge className={`text-[8px] px-1 py-0 ${ST_COR[t.status] || ""}`}>{ST_LBL[t.status]}</Badge>
-          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => excluir.mutate({ id: t.id })}><Trash2 className="h-2.5 w-2.5" /></Button>
+          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => setExcluirTarefaAlvo({ id: t.id, titulo: t.titulo })}><Trash2 className="h-2.5 w-2.5" /></Button>
         </div>
       ))}</div>
     )}
+
+    <AlertDialog open={!!excluirTarefaAlvo} onOpenChange={(o) => !o && setExcluirTarefaAlvo(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+          <AlertDialogDescription>
+            <strong>{excluirTarefaAlvo?.titulo}</strong> será removida.
+            O botão fica em hover-revealed (opacity-0 group-hover:opacity-100) —
+            confirmação evita click acidental no mobile/touch.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 hover:bg-red-700"
+            onClick={() => {
+              if (excluirTarefaAlvo) {
+                excluir.mutate({ id: excluirTarefaAlvo.id });
+                setExcluirTarefaAlvo(null);
+              }
+            }}
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </CardContent></Card>);
 }
 

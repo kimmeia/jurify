@@ -33,21 +33,39 @@ function formatBRL(v: number) {
 // BADGE INLINE (para o header da conversa)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function FinanceiroBadge({ contatoId }: { contatoId: number }) {
+/** Shape compartilhado entre resumoContato (singular) e resumoPorContatos (batch). */
+type ResumoBadge = {
+  vinculado: boolean;
+  pendente: number;
+  vencido: number;
+  pago: number;
+};
+
+export function FinanceiroBadge({
+  contatoId,
+  resumoPreCarregado,
+}: {
+  contatoId: number;
+  /**
+   * Resumo já carregado em batch pelo caller (otimização N+1). Quando
+   * presente, este componente NÃO faz query — usa direto. Pass `null`
+   * pra dizer "ainda carregando" (badge não aparece). `undefined` faz
+   * fallback pro fetch individual (modo legado, compat).
+   */
+  resumoPreCarregado?: ResumoBadge | null;
+}) {
   const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
-  // staleTime alto pra mitigar N+1 client-side: /atendimento renderiza
-  // este badge por contato listado (20+ por vez). Sem cache, qualquer
-  // re-render disparava 20 queries simultâneas. resumoContato é DB-only
-  // mas N+1 ainda sobrecarrega o servidor Jurify e o MySQL. 5min é
-  // overhead aceitável — fix definitivo (batch endpoint) é Sprint 2.
-  const { data: resumo } = trpc.asaas.resumoContato.useQuery(
+  // Quando resumoPreCarregado é fornecido (mesmo null), pula o fetch.
+  const usarBatch = resumoPreCarregado !== undefined;
+  const { data: resumoFetched } = trpc.asaas.resumoContato.useQuery(
     { contatoId },
     {
       retry: false,
-      enabled: !!asaasStatus?.conectado && !!contatoId,
+      enabled: !usarBatch && !!asaasStatus?.conectado && !!contatoId,
       staleTime: 5 * 60_000,
     }
   );
+  const resumo: ResumoBadge | null | undefined = usarBatch ? resumoPreCarregado : resumoFetched;
 
   // Asaas não conectado — não mostrar nada
   if (!asaasStatus?.conectado) return null;

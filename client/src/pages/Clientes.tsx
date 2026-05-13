@@ -221,6 +221,18 @@ function initials(n: string) {
   return n.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
+/**
+ * Valida formato CNJ (compacto ou formatado). Aceita:
+ *  - 20 dígitos seguidos: "12345678920248060001"
+ *  - Formato canônico: "1234567-89.2024.8.06.0001"
+ * Sem checagem de DV — backend faz isso. Aqui só barra entrada óbvia
+ * (ex: "aaaaaaaaaaaaaaa") antes de mandar pro servidor.
+ */
+function cnjFormatoValido(cnj: string): boolean {
+  const compacto = cnj.replace(/\D/g, "");
+  return compacto.length === 20;
+}
+
 function timeAgo(d: string) {
   if (!d) return "";
   const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
@@ -249,7 +261,10 @@ function exportClientesCSV(clientes: any[]) {
   link.href = url;
   link.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
-  URL.revokeObjectURL(url);
+  // Revogar s\u00edncronamente ap\u00f3s click() race com o download em Safari/Firefox
+  // (mesmo padr\u00e3o do baixarPastaZip e do exportarDuplicatasPdf). setTimeout
+  // afasta a revoga\u00e7\u00e3o pro pr\u00f3ximo tick.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // ─── Segmentação (chips) ─────────────────────────────────────────────────────
@@ -276,8 +291,16 @@ function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
     return clientes.filter((c) => new Date(c.createdAt).getTime() >= seteDias);
   }
   if (seg === "inativo") {
+    // "Inativo" = sem conversa nos últimos 30d. updatedAt era a referência
+    // antiga mas webhooks (sync Asaas, tags) tocam a coluna, deixando o
+    // filtro sempre vazio. ultimaConversaAt vem do backend (MAX por contato);
+    // quando null (nunca conversou), usa createdAt — cliente cadastrado há
+    // 30+d sem interação também é inativo.
     const trintaDias = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return clientes.filter((c) => new Date(c.updatedAt || c.createdAt).getTime() < trintaDias);
+    return clientes.filter((c) => {
+      const ref = c.ultimaConversaAt || c.createdAt;
+      return new Date(ref).getTime() < trintaDias;
+    });
   }
   if (seg === "vip") {
     return clientes.filter((c) => (c.tags || "").toLowerCase().includes("vip"));
@@ -300,10 +323,15 @@ export default function Clientes() {
   });
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
-    // Se veio com ?id=X na URL, abre direto no detalhe
+    // Se veio com ?id=X na URL, abre direto no detalhe.
+    // Guard contra NaN: ?id=abc → Number("abc") = NaN. Sem o guard, a
+    // query clientes.detalhe disparava com id: NaN e fazia round-trip
+    // desnecessário no servidor (que rejeita por zod).
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id");
-    return idParam ? Number(idParam) : null;
+    if (!idParam) return null;
+    const n = Number(idParam);
+    return Number.isInteger(n) && n > 0 ? n : null;
   });
   const [showNovo, setShowNovo] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
@@ -346,6 +374,19 @@ export default function Clientes() {
     setSelecionados(new Set());
   }, [segmento, buscaDebounced, pagina]);
 
+  // Sincroniza URL com selId/segmento — sem isso, F5 / back do browser
+  // perde o estado (volta sempre pra lista geral). replaceState não
+  // empilha entradas no histórico (back ainda volta pra página anterior
+  // ao Clientes, não entre seleções internas).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selId) params.set("id", String(selId));
+    if (segmento === "aguardando_docs") params.set("aguardandoDocs", "1");
+    const search = params.toString();
+    const url = `${window.location.pathname}${search ? "?" + search : ""}`;
+    window.history.replaceState({}, "", url);
+  }, [selId, segmento]);
+
   const { data: stats } = trpc.clientes.estatisticas.useQuery();
   const { data, refetch } = trpc.clientes.listar.useQuery({
     busca: buscaDebounced || undefined,
@@ -381,6 +422,24 @@ export default function Clientes() {
   }, [data, segmento]);
 
   const totalPaginas = (data as any)?.totalPaginas || 1;
+
+  // Batch financeiro: 1 query pra todos os contatos visíveis em vez de
+  // N queries (uma por FinanceiroBadge no loop). asaas.resumoPorContatos
+  // devolve Record<contatoId, ResumoBadge>; o badge pega resumo[id] como
+  // resumoPreCarregado e pula o fetch individual.
+  const idsVisiveis = useMemo(
+    () => clientesFiltrados.map((c: any) => c.id),
+    [clientesFiltrados],
+  );
+  const { data: asaasStatusList } = (trpc as any).asaas?.status?.useQuery?.(undefined, { retry: false }) || { data: null };
+  const { data: resumoFinanceiroBatch } = (trpc as any).asaas?.resumoPorContatos?.useQuery?.(
+    { contatoIds: idsVisiveis },
+    {
+      enabled: !!asaasStatusList?.conectado && idsVisiveis.length > 0,
+      retry: false,
+      staleTime: 5 * 60_000,
+    },
+  ) || { data: null };
 
   const toggleSelecionado = (id: number) => {
     setSelecionados((prev) => {
@@ -623,7 +682,10 @@ export default function Clientes() {
                         </div>
                       </div>
                       <div className="w-32 text-right">
-                        <FinanceiroBadge contatoId={c.id} />
+                        <FinanceiroBadge
+                          contatoId={c.id}
+                          resumoPreCarregado={resumoFinanceiroBatch?.[c.id] ?? null}
+                        />
                       </div>
                       <Badge variant="outline" className="text-[10px] shrink-0 w-16 justify-center">
                         {c.origem}
@@ -827,7 +889,16 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
         )}
 
         {/* Dialog: criar card manual */}
-        <Dialog open={criarOpen} onOpenChange={setCriarOpen}>
+        <Dialog open={criarOpen} onOpenChange={(o) => {
+          setCriarOpen(o);
+          if (!o) {
+            // Reset form ao fechar — sem isso, reabrir mostrava
+            // titulo/funil/coluna da tentativa anterior.
+            setTitulo("");
+            setFunilSelecionado("");
+            setColunaSelecionada("");
+          }
+        }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Criar card no Kanban</DialogTitle>
@@ -1399,6 +1470,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     });
   }
 
+  const utilsTrpc = trpc.useUtils();
   const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
   const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
     onSuccess: (_r: any, vars: any) => {
@@ -1428,6 +1500,9 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       setNovoModo("judicial");
       setNovoMonitorar(false);
       refetch();
+      // Invalida o detalhe do cliente — ele exibe contagem de processos
+      // no header. Sem isso, o número ficava stale até F5.
+      utilsTrpc.clientes.detalhe.invalidate({ id: contatoId });
     },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
@@ -1435,7 +1510,12 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
   const desvincularMut = (trpc as any).clienteProcessos.desvincular.useMutation({
-    onSuccess: () => { toast.success("Processo desvinculado"); refetch(); },
+    onSuccess: () => {
+      toast.success("Processo desvinculado");
+      refetch();
+      // Mesma invalidação do vincular — contagem no header refresca.
+      utilsTrpc.clientes.detalhe.invalidate({ id: contatoId });
+    },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
   const [desvincularAlvo, setDesvincularAlvo] = useState<{ id: number; apelido: string | null; numeroCnj: string | null } | null>(null);
@@ -1483,7 +1563,20 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       )}
 
       {/* Dialog vincular processo */}
-      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      <Dialog open={novoOpen} onOpenChange={(o) => {
+        setNovoOpen(o);
+        if (!o) {
+          // Reset form ao fechar (Cancel, Esc, click-outside). Sem isso,
+          // reabrir o dialog mostrava o CNJ/apelido/polo da tentativa
+          // anterior — fluxo "ah me enganei, vou cadastrar outro" virava
+          // bagunça.
+          setNovoCnj("");
+          setNovoApelido("");
+          setNovoPolo("");
+          setNovoModo("judicial");
+          setNovoMonitorar(false);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Vincular processo</DialogTitle>
@@ -1590,7 +1683,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 // judicial_aguardando: tipo='litigioso' + CNJ vazio. Backend
                 // mantém o tipo escolhido (não força extrajudicial). Vai pra
                 // lista como "aguardando CNJ"; user adiciona depois.
-                const enviarCnj = novoCnj.trim().length >= 15 ? novoCnj.trim() : undefined;
+                const enviarCnj = cnjFormatoValido(novoCnj) ? novoCnj.trim() : undefined;
                 const tipoFinal: "extrajudicial" | "litigioso" =
                   novoModo === "extrajudicial" ? "extrajudicial" : "litigioso";
                 vincularMut.mutate({
@@ -1605,7 +1698,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               disabled={
                 vincularMut.isPending ||
                 (novoModo === "judicial"
-                  ? !novoCnj.trim() || novoCnj.trim().length < 15
+                  ? !cnjFormatoValido(novoCnj)
                   : !novoApelido.trim())
               }
             >
@@ -1658,7 +1751,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               }}
               disabled={
                 atualizarProcessoMut.isPending ||
-                cnjAdicionado.trim().length < 15
+                !cnjFormatoValido(cnjAdicionado)
               }
             >
               {atualizarProcessoMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -1928,7 +2021,7 @@ function ClienteDetalhe({
         {cliente.cpfCnpj && (
           <MonitorarJuditButton
             cpfCnpj={cliente.cpfCnpj}
-            nome={cliente.nome}
+            nome={cliente.nome || cliente.cpfCnpj}
           />
         )}
         <FinanceiroPopover contatoId={id} />
