@@ -423,6 +423,24 @@ export default function Clientes() {
 
   const totalPaginas = (data as any)?.totalPaginas || 1;
 
+  // Batch financeiro: 1 query pra todos os contatos visíveis em vez de
+  // N queries (uma por FinanceiroBadge no loop). asaas.resumoPorContatos
+  // devolve Record<contatoId, ResumoBadge>; o badge pega resumo[id] como
+  // resumoPreCarregado e pula o fetch individual.
+  const idsVisiveis = useMemo(
+    () => clientesFiltrados.map((c: any) => c.id),
+    [clientesFiltrados],
+  );
+  const { data: asaasStatusList } = (trpc as any).asaas?.status?.useQuery?.(undefined, { retry: false }) || { data: null };
+  const { data: resumoFinanceiroBatch } = (trpc as any).asaas?.resumoPorContatos?.useQuery?.(
+    { contatoIds: idsVisiveis },
+    {
+      enabled: !!asaasStatusList?.conectado && idsVisiveis.length > 0,
+      retry: false,
+      staleTime: 5 * 60_000,
+    },
+  ) || { data: null };
+
   const toggleSelecionado = (id: number) => {
     setSelecionados((prev) => {
       const next = new Set(prev);
@@ -664,7 +682,10 @@ export default function Clientes() {
                         </div>
                       </div>
                       <div className="w-32 text-right">
-                        <FinanceiroBadge contatoId={c.id} />
+                        <FinanceiroBadge
+                          contatoId={c.id}
+                          resumoPreCarregado={resumoFinanceiroBatch?.[c.id] ?? null}
+                        />
                       </div>
                       <Badge variant="outline" className="text-[10px] shrink-0 w-16 justify-center">
                         {c.origem}
