@@ -5,7 +5,7 @@
  *     15 min e fecha automaticamente conforme `comissoes_agenda`)
  *
  * A função NÃO valida permissão — o caller é responsável (no router já
- * há `requireGestao`; no cron é o sistema).
+ * há `exigirAcaoFinanceiro`/`checkPermission`; no cron é o sistema).
  */
 
 import { getDb } from "../db";
