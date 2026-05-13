@@ -147,13 +147,16 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
           : r.linkAssinatura;
       // Invalida lista do cliente independente do fluxo escolhido.
       utils.assinaturas?.listarPorCliente?.invalidate?.({ contatoId });
-      if (modoPosicional && r.documentoUrl) {
+      if (modoPosicional) {
         // Fluxo NOVO (Fase 1): abre editor de posicionamento.
-        // r.documentoUrl é o path local "/uploads/assinaturas/escritorio_X/Y.pdf"
+        // Usa endpoint dedicado /api/assinatura/pdf/:id em vez do path
+        // estático /uploads/... — passa pelo auth de sessão, evita o
+        // Cross-Origin-Resource-Policy do helmet, e loga se o PDF
+        // sumiu do disco.
         setEditorState({
           assinaturaId: r.assinaturaId,
           token: r.token,
-          documentoUrl: r.documentoUrl,
+          documentoUrl: `/api/assinatura/pdf/${r.assinaturaId}`,
           linkFinal: fullUrl,
         });
       } else {

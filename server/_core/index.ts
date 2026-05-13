@@ -7,6 +7,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerAsaasBillingWebhook } from "../billing/asaas-billing-webhook";
 import { registerPDFExportRoute } from "../calculos/export-pdf-route";
 import { registerAgenteChatPDFRoute } from "../integracoes/agente-chat-pdf-route";
+import { registerAssinaturaPdfRoute } from "../escritorio/assinatura-pdf-route";
 import { registerCalcomWebhook } from "../integracoes/calcom-webhook";
 import { registerAsaasWebhook } from "../integracoes/asaas-webhook";
 import { appRouter } from "../routers";
@@ -145,6 +146,8 @@ async function startServer() {
   registerPDFExportRoute(app);
   // PDF export — chat interno de agentes IA
   registerAgenteChatPDFRoute(app);
+  // PDF preview/serve pra fluxo de assinatura (com auth + logs)
+  registerAssinaturaPdfRoute(app);
   // Cal.com webhook
   registerCalcomWebhook(app);
   // Asaas webhook (escritório → seus clientes)
