@@ -2068,6 +2068,14 @@ export const despesas = mysqlTable(
     idxRecorrenciaOrigem: index("desp_recorrencia_origem_idx").on(
       t.recorrenciaDeOrigemId,
     ),
+    // Bloqueia race em `gerarFilhasDeModelo` (escritorio/despesas-recorrentes):
+    // cron de 1h + botão "Gerar agora" da UI podem ler o mesmo estado e
+    // tentar INSERT da mesma filha. UNIQUE faz o 2º INSERT falhar com
+    // ER_DUP_ENTRY — o try/catch existente absorve.
+    uqRecorrenciaModeloVenc: uniqueIndex("desp_recorrencia_modelo_venc_uq").on(
+      t.recorrenciaDeOrigemId,
+      t.vencimento,
+    ),
   }),
 );
 
