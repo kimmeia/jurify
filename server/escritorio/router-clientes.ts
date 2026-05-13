@@ -563,8 +563,9 @@ export const clientesRouter = router({
     if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
     const db = await getDb();
     if (!db) throw new Error("Database indisponível");
-    // Lookup do arquivo pra checar verProprios via contato dono
-    const [arq] = await db.select({ contatoId: clienteArquivos.contatoId })
+    // Lookup do arquivo: precisa do contatoId pra verProprios E do url pra
+    // limpar o blob do disco depois de apagar a row (evita arquivo órfão).
+    const [arq] = await db.select({ contatoId: clienteArquivos.contatoId, url: clienteArquivos.url })
       .from(clienteArquivos)
       .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)))
       .limit(1);
@@ -572,6 +573,11 @@ export const clientesRouter = router({
     const ok = await podeVerCliente(db, arq.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
     if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
     await db.delete(clienteArquivos).where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)));
+    // Cleanup do blob no disco. Não-fatal: ENOENT/erro de I/O só loga
+    // (DB já confirmou a deleção). URLs externas/legacy são ignoradas
+    // silenciosamente pelo helper.
+    const { apagarArquivoDoDisco } = await import("../upload/upload-route");
+    await apagarArquivoDoDisco(arq.url, perm.escritorioId);
     return { success: true };
   }),
   moverArquivo: protectedProcedure.input(z.object({
@@ -756,6 +762,17 @@ export const clientesRouter = router({
       fronteira = novos;
     }
 
+    // Coleta URLs dos arquivos ANTES de deletar — necessário pra limpar
+    // os blobs do disco depois (sem isso, ficariam órfãos consumindo
+    // espaço indefinidamente).
+    const arquivosAfetados = await db
+      .select({ url: clienteArquivos.url })
+      .from(clienteArquivos)
+      .where(and(
+        eq(clienteArquivos.escritorioId, perm.escritorioId),
+        inArray(clienteArquivos.pastaId, todosIds),
+      ));
+
     // Exclusão definitiva: primeiro arquivos de todas, depois as pastas.
     let arquivosExcluidos = 0;
     const delArq = await db.delete(clienteArquivos)
@@ -770,6 +787,14 @@ export const clientesRouter = router({
         eq(clientePastas.escritorioId, perm.escritorioId),
         inArray(clientePastas.id, todosIds),
       ));
+
+    // Cleanup dos blobs no disco. Não-fatal: erros não revertem o delete
+    // do DB (operação já confirmada). Em paralelo pra cascade de pasta
+    // com 50+ arquivos não travar a resposta.
+    const { apagarArquivoDoDisco } = await import("../upload/upload-route");
+    await Promise.allSettled(
+      arquivosAfetados.map((a) => apagarArquivoDoDisco(a.url, perm.escritorioId)),
+    );
 
     return { success: true, pastasExcluidas: todosIds.length, arquivosExcluidos };
   }),

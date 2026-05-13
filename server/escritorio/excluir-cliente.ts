@@ -164,6 +164,24 @@ export async function excluirClienteEmCascata(
   //
   // Step 1 (Asaas API) NÃO entra na transação — chamadas externas longas
   // segurariam transação aberta + impossível rollback de ação remota.
+
+  // Coleta URLs dos arquivos do cliente ANTES da transação. Precisamos
+  // delas pra apagar os blobs do disco após o commit (sem isso, arquivos
+  // físicos ficariam órfãos consumindo espaço indefinidamente).
+  let urlsArquivos: string[] = [];
+  try {
+    const arqs = await db
+      .select({ url: clienteArquivos.url })
+      .from(clienteArquivos)
+      .where(and(
+        eq(clienteArquivos.escritorioId, escritorioId),
+        eq(clienteArquivos.contatoId, contatoId),
+      ));
+    urlsArquivos = arqs.map((a) => a.url).filter(Boolean);
+  } catch {
+    /* não-fatal — apenas perde a oportunidade de limpar blobs */
+  }
+
   try {
     await db.transaction(async (tx) => {
       // ─── 2. Cobranças locais ─────────────────────────────────────────
@@ -256,6 +274,20 @@ export async function excluirClienteEmCascata(
     });
     resultado.success = true;
     log.info({ contatoId, resultado }, "Exclusão em cascata concluída");
+
+    // Cleanup dos blobs no disco — só roda APÓS o commit da transação.
+    // Erros aqui não revertem a deleção (DB já confirmou). Promise.allSettled
+    // pra rodar em paralelo + não falhar cedo num arquivo problemático.
+    if (urlsArquivos.length > 0) {
+      try {
+        const { apagarArquivoDoDisco } = await import("../upload/upload-route");
+        await Promise.allSettled(
+          urlsArquivos.map((url) => apagarArquivoDoDisco(url, escritorioId)),
+        );
+      } catch (err: any) {
+        log.warn({ err: err.message }, "Falha no cleanup de blobs (não-fatal)");
+      }
+    }
   } catch (err: any) {
     log.error({ err: err.message, contatoId, escritorioId }, "Cascade local rolled back");
     throw new Error(
