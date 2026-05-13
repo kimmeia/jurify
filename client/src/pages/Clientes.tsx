@@ -1209,6 +1209,7 @@ function ProcessoCard({
     onSuccess: () => refetchAnotacoes(),
     onError: (e: any) => toast.error(e.message),
   });
+  const [excluirAnotAlvo, setExcluirAnotAlvo] = useState<number | null>(null);
 
   return (
     <Card className="hover:shadow-sm transition-all">
@@ -1314,9 +1315,7 @@ function ProcessoCard({
                       <p className="text-xs whitespace-pre-wrap flex-1">{a.conteudo}</p>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm("Excluir esta anotação?")) excluirAnot.mutate({ id: a.id });
-                        }}
+                        onClick={() => setExcluirAnotAlvo(a.id)}
                         className="text-[10px] text-muted-foreground hover:text-destructive"
                       >
                         ×
@@ -1339,6 +1338,31 @@ function ProcessoCard({
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={excluirAnotAlvo != null} onOpenChange={(o) => !o && setExcluirAnotAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir anotação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta anotação será removida permanentemente. Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (excluirAnotAlvo != null) {
+                  excluirAnot.mutate({ id: excluirAnotAlvo });
+                  setExcluirAnotAlvo(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -1407,6 +1431,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     onSuccess: () => { toast.success("Processo desvinculado"); refetch(); },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
+  const [desvincularAlvo, setDesvincularAlvo] = useState<{ id: number; apelido: string | null; numeroCnj: string | null } | null>(null);
 
   const lista = processos || [];
 
@@ -1444,9 +1469,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               expandido={expandidos.has(p.id)}
               onToggle={() => toggleExpandido(p.id)}
               onAdicionarCnj={() => setAdicionarCnjOpen({ id: p.id, apelido: p.apelido })}
-              onDesvincular={() => {
-                if (confirm("Desvincular este processo do cliente?")) desvincularMut.mutate({ id: p.id });
-              }}
+              onDesvincular={() => setDesvincularAlvo({ id: p.id, apelido: p.apelido, numeroCnj: p.numeroCnj })}
             />
           ))}
         </div>
@@ -1637,6 +1660,33 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!desvincularAlvo} onOpenChange={(o) => !o && setDesvincularAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular processo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove o vínculo de <strong>{desvincularAlvo?.apelido || desvincularAlvo?.numeroCnj || "este processo"}</strong> com o cliente.
+              Anotações no processo também serão perdidas. Cobranças vinculadas permanecem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (desvincularAlvo) {
+                  desvincularMut.mutate({ id: desvincularAlvo.id });
+                  setDesvincularAlvo(null);
+                }
+              }}
+              disabled={desvincularMut.isPending}
+            >
+              {desvincularMut.isPending ? "Desvinculando..." : "Desvincular"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1761,6 +1811,15 @@ function ClienteDetalhe({
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const [excluirConfirmAlvo, setExcluirConfirmAlvo] = useState(false);
+
+  // Permissões pra esconder botão de excluir quando o user não pode.
+  // Sem isso, atendente vê o botão e backend rejeita — UX/backend mismatch.
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeExcluirCliente = !!(minhasPerms?.permissoes?.clientes?.excluir);
 
   if (!cliente) {
     return (
@@ -1866,18 +1925,43 @@ function ClienteDetalhe({
           />
         )}
         <FinanceiroPopover contatoId={id} />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive"
-          onClick={() => {
-            if (confirm("Excluir cliente e dados associados?"))
-              excluirMut.mutate({ id });
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        {podeExcluirCliente && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
+            onClick={() => setExcluirConfirmAlvo(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
+
+      <AlertDialog open={excluirConfirmAlvo} onOpenChange={setExcluirConfirmAlvo}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove <strong>{cliente.nome}</strong> e todos os dados vinculados:
+              conversas, leads, tarefas, anotações, arquivos, assinaturas e cobranças Asaas.
+              Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                excluirMut.mutate({ id });
+                setExcluirConfirmAlvo(false);
+              }}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 6 abas consolidadas */}
       <Tabs value={tab} onValueChange={setTab}>

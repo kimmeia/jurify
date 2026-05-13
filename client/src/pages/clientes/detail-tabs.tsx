@@ -293,6 +293,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const [criandoPasta, setCriandoPasta] = useState(false);
   const [renomeando, setRenomeando] = useState<{ id: number; nome: string } | null>(null);
   const [zipEmProgresso, setZipEmProgresso] = useState<number | null>(null);
+  const [excluirPastaAlvo, setExcluirPastaAlvo] = useState<{ id: number; nome: string } | null>(null);
 
   const { data: pastas = [] } = trpc.clientes.listarPastas.useQuery({ contatoId, parentId: pastaAtualId });
   const { data: arquivos = [] } = trpc.clientes.listarArquivos.useQuery({ contatoId, pastaId: pastaAtualId });
@@ -536,11 +537,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => {
-                            if (confirm(`Excluir a pasta "${p.nome}" e tudo dentro dela (incluindo subpastas)?\n\nEsta ação é definitiva e não pode ser desfeita.`)) {
-                              excluirPastaMut.mutate({ id: p.id });
-                            }
-                          }}
+                          onClick={() => setExcluirPastaAlvo({ id: p.id, nome: p.nome })}
                         >
                           <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
                         </DropdownMenuItem>
@@ -603,6 +600,33 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <p className="text-sm text-muted-foreground text-center py-4">Nenhuma pasta ou arquivo aqui.</p>
         )}
       </CardContent>
+
+      <AlertDialog open={!!excluirPastaAlvo} onOpenChange={(o) => !o && setExcluirPastaAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir pasta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A pasta <strong>{excluirPastaAlvo?.nome}</strong> e tudo dentro dela (incluindo subpastas e arquivos)
+              será removida permanentemente. Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (excluirPastaAlvo) {
+                  excluirPastaMut.mutate({ id: excluirPastaAlvo.id });
+                  setExcluirPastaAlvo(null);
+                }
+              }}
+              disabled={excluirPastaMut.isPending}
+            >
+              {excluirPastaMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -954,6 +978,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   const [docUrl, setDocUrl] = useState("");
   const [diasExp, setDiasExp] = useState(30);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  const [excluirAssinAlvo, setExcluirAssinAlvo] = useState<{ id: number; titulo: string } | null>(null);
 
   const criarMut = (trpc as any).assinaturas.criar.useMutation({
     onSuccess: (res: any) => { setShowNovo(false); setTitulo(""); setDescricao(""); setDocUrl(""); onRefresh(); toast.success("Documento criado! Copie o link para enviar."); setLinkCopiado(window.location.origin + res.linkAssinatura); },
@@ -961,7 +986,10 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   });
   const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({ onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); } });
   const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({ onSuccess: () => { onRefresh(); toast.success("Cancelado."); } });
-  const excluirMut = (trpc as any).assinaturas.excluir.useMutation({ onSuccess: () => { onRefresh(); } });
+  const excluirMut = (trpc as any).assinaturas.excluir.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Documento excluído"); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const copiarLink = (token: string) => {
     const link = `${window.location.origin}/assinar/${token}`;
@@ -1053,13 +1081,41 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
                   {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
                 </>)}
-                {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => { if (confirm("Excluir?")) excluirMut.mutate({ id: a.id }); }}><Trash2 className="h-3 w-3" /></Button>}
+                {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setExcluirAssinAlvo({ id: a.id, titulo: a.titulo || "Documento sem título" })}><Trash2 className="h-3 w-3" /></Button>}
               </div>
             </div>
           ))}
         </div>
       )}
-    </CardContent></Card>
+    </CardContent>
+
+    <AlertDialog open={!!excluirAssinAlvo} onOpenChange={(o) => !o && setExcluirAssinAlvo(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir documento de assinatura?</AlertDialogTitle>
+          <AlertDialogDescription>
+            <strong>{excluirAssinAlvo?.titulo}</strong> será removido permanentemente.
+            Se já tiver sido enviado ao cliente, o link parará de funcionar.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 hover:bg-red-700"
+            onClick={() => {
+              if (excluirAssinAlvo) {
+                excluirMut.mutate({ id: excluirAssinAlvo.id });
+                setExcluirAssinAlvo(null);
+              }
+            }}
+            disabled={excluirMut.isPending}
+          >
+            {excluirMut.isPending ? "Excluindo..." : "Excluir"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </Card>
   );
 }
 
