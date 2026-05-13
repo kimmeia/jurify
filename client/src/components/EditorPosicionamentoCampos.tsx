@@ -26,6 +26,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+// Importa o worker do pdfjs como asset com URL final do bundle.
+// Vite resolve `?url` em build time pra um caminho /assets/X.mjs estável.
+// Padrão `new URL(..., import.meta.url)` funciona em dev mas falha em
+// produção minificada (era a causa do "Falha ao carregar o PDF").
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -41,11 +46,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// Worker do pdfjs servido junto com o bundle (Vite resolve via URL).
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
 
@@ -389,6 +390,14 @@ export function EditorPosicionamentoCampos({
               <Document
                 file={pdfUrl}
                 onLoadSuccess={({ numPages }) => setTotalPaginas(numPages)}
+                onLoadError={(err) => {
+                  // eslint-disable-next-line no-console
+                  console.error("[EditorPosicionamentoCampos] Falha ao carregar PDF", {
+                    pdfUrl,
+                    error: err?.message,
+                    name: err?.name,
+                  });
+                }}
                 loading={
                   <div className="p-12 text-center text-sm text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
@@ -396,8 +405,16 @@ export function EditorPosicionamentoCampos({
                   </div>
                 }
                 error={
-                  <div className="p-12 text-center text-sm text-red-600">
-                    Falha ao carregar o PDF. Verifique se o arquivo existe.
+                  <div className="p-12 text-center text-sm text-red-600 max-w-md">
+                    <p className="font-medium mb-2">Falha ao carregar o PDF.</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      URL tentada: <code className="break-all">{pdfUrl}</code>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Tente clicar em <strong>Cancelar</strong> e usar o modo legado
+                      (sem posicionamento) — assinatura cairá na última página.
+                      Detalhe técnico no console do navegador (F12).
+                    </p>
                   </div>
                 }
               >

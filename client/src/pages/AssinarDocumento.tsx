@@ -9,6 +9,10 @@ import SignaturePad from "signature_pad";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+// Worker do pdfjs via Vite `?url` — resolve estável no build de
+// produção. O padrão antigo (new URL + import.meta.url) funciona em dev
+// mas quebra após minificação.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,10 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
 const TIPO_ICONE: Record<CampoTipo, any> = {
