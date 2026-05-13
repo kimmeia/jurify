@@ -608,7 +608,10 @@ function MonitoramentoCard({
       setResumoIA(data.resumo);
       // O resumo IA agora retorna o processo completo junto
       if (data.processo) setProcessoCompleto(data.processo);
-      const fonteLabel = data.fonte === "judit_ia" ? " — Judit IA" : data.fonte === "ia" ? " — análise IA" : "";
+      // fonte === "judit_ia" é label legado retornado pelo backend
+      // (estágios antigos da pipeline). Mostra como "análise IA" igual
+      // ao caso "ia" — usuário só precisa saber que veio de IA.
+      const fonteLabel = data.fonte === "judit_ia" || data.fonte === "ia" ? " — análise IA" : "";
       toast.success(`Resumo gerado (1 crédito)${fonteLabel}`);
     },
     onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
@@ -956,7 +959,7 @@ function MonitorarTab() {
   const reativarMut = trpc.processos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
   const deletarMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
-      if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}` });
+      if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha ao avisar o motor: ${r.juditErro}` });
       else toast.success("Monitoramento removido");
       refetch();
     },
@@ -1323,7 +1326,7 @@ function NovasAcoesTab() {
   const deletarMonMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: (r: any) => {
       if (r?.juditErro) {
-        toast.warning("Removido localmente", { description: `Falha na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.` });
+        toast.warning("Removido localmente", { description: `Falha ao avisar o motor: ${r.juditErro}. A cobrança mensal foi interrompida.` });
       } else {
         toast.success("Monitoramento removido", { description: "A cobrança mensal foi interrompida." });
       }

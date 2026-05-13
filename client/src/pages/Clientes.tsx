@@ -50,11 +50,15 @@ import { parseValorBR } from "@shared/valor-br";
 import { useLocation } from "wouter";
 
 /**
- * Botão "Monitorar na Judit" — cria/remove um monitoramento de NOVAS AÇÕES
- * pro CPF/CNPJ do cliente. É TOGGLE: se já estiver monitorando, clicar
- * remove o monitoramento (e interrompe a cobrança mensal recorrente).
+ * Botão "Monitorar processos" — cria/remove um monitoramento de NOVAS
+ * AÇÕES pro CPF/CNPJ do cliente. É TOGGLE: se já estiver monitorando,
+ * clicar remove o monitoramento (e interrompe a cobrança mensal
+ * recorrente). O motor de busca é próprio (scrapers PJe TJCE / ESAJ
+ * TJCE via credenciais do cofre) — a nomenclatura "Judit" antiga foi
+ * removida da UI mas alguns nomes técnicos no schema (statusJudit,
+ * juditErro) permanecem por compatibilidade com dados históricos.
  */
-function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
+function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
   const clean = cpfCnpj.replace(/\D/g, "");
   const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
   const [, setLocation] = useLocation();
@@ -93,7 +97,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
     onSuccess: (r: any) => {
       if (r?.juditErro) {
         toast.warning("Monitoramento removido localmente", {
-          description: `Mas falhou na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.`,
+          description: `Mas falhou ao avisar o motor: ${r.juditErro}. A cobrança mensal foi interrompida.`,
         });
       } else {
         toast.success(`Monitoramento de ${nome} removido`, {
@@ -2019,7 +2023,7 @@ function ClienteDetalhe({
           Registrar fechamento
         </Button>
         {cliente.cpfCnpj && (
-          <MonitorarJuditButton
+          <MonitorarProcessosButton
             cpfCnpj={cliente.cpfCnpj}
             nome={cliente.nome || cliente.cpfCnpj}
           />
