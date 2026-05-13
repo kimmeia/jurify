@@ -1948,7 +1948,7 @@ function ClienteDetalhe({
         {cliente.cpfCnpj && (
           <MonitorarJuditButton
             cpfCnpj={cliente.cpfCnpj}
-            nome={cliente.nome}
+            nome={cliente.nome || cliente.cpfCnpj}
           />
         )}
         <FinanceiroPopover contatoId={id} />

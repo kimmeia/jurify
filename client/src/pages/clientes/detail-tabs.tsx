@@ -1047,11 +1047,25 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   };
 
   const enviarWhatsApp = (token: string) => {
-    const link = `${window.location.origin}/assinar/${token}`;
+    // Pré-condições: telefone preenchido (formatado ou não) e a assinatura
+    // ainda existe na lista local (id resolvível). Sem isso, abriríamos
+    // "wa.me/?text=..." (URL quebrada) e mandaríamos `enviarMut({id: undefined})`
+    // que falha silenciosamente.
     const tel = (cliente.telefone || "").replace(/\D/g, "");
-    const msg = encodeURIComponent(`Olá ${cliente.nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
+    if (!tel) {
+      toast.error("Cliente sem telefone cadastrado.");
+      return;
+    }
+    const assin = assinaturas.find((a: any) => a.tokenAssinatura === token);
+    if (!assin?.id) {
+      toast.error("Documento não encontrado. Recarregue a lista.");
+      return;
+    }
+    const nome = cliente.nome || "tudo bem";
+    const link = `${window.location.origin}/assinar/${token}`;
+    const msg = encodeURIComponent(`Olá ${nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
     window.open(`https://wa.me/${tel}?text=${msg}`, "_blank");
-    enviarMut.mutate({ id: assinaturas.find((a: any) => a.tokenAssinatura === token)?.id });
+    enviarMut.mutate({ id: assin.id });
   };
 
   return (
