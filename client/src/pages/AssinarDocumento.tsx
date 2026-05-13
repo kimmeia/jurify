@@ -470,7 +470,14 @@ function PreviewPdfComCampos({
             />
             {pageSizePt &&
               camposDaPagina.map((c) => {
-                const rect = containerRef.current?.getBoundingClientRect();
+                // Mede o canvas direto (não o container) — o div externo
+                // pode ter dimensões diferentes por causa de
+                // border/padding/inline-block fallback. Canvas é fonte
+                // única de verdade pro mapeamento px↔pt.
+                const canvas = containerRef.current?.querySelector(
+                  "canvas.react-pdf__Page__canvas",
+                ) as HTMLCanvasElement | null;
+                const rect = canvas?.getBoundingClientRect();
                 const renderW = rect?.width ?? 600;
                 const renderH = rect?.height ?? 800;
                 const scaleX = renderW / pageSizePt.w;
