@@ -221,6 +221,18 @@ function initials(n: string) {
   return n.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
+/**
+ * Valida formato CNJ (compacto ou formatado). Aceita:
+ *  - 20 dígitos seguidos: "12345678920248060001"
+ *  - Formato canônico: "1234567-89.2024.8.06.0001"
+ * Sem checagem de DV — backend faz isso. Aqui só barra entrada óbvia
+ * (ex: "aaaaaaaaaaaaaaa") antes de mandar pro servidor.
+ */
+function cnjFormatoValido(cnj: string): boolean {
+  const compacto = cnj.replace(/\D/g, "");
+  return compacto.length === 20;
+}
+
 function timeAgo(d: string) {
   if (!d) return "";
   const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
@@ -1590,7 +1602,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 // judicial_aguardando: tipo='litigioso' + CNJ vazio. Backend
                 // mantém o tipo escolhido (não força extrajudicial). Vai pra
                 // lista como "aguardando CNJ"; user adiciona depois.
-                const enviarCnj = novoCnj.trim().length >= 15 ? novoCnj.trim() : undefined;
+                const enviarCnj = cnjFormatoValido(novoCnj) ? novoCnj.trim() : undefined;
                 const tipoFinal: "extrajudicial" | "litigioso" =
                   novoModo === "extrajudicial" ? "extrajudicial" : "litigioso";
                 vincularMut.mutate({
@@ -1605,7 +1617,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               disabled={
                 vincularMut.isPending ||
                 (novoModo === "judicial"
-                  ? !novoCnj.trim() || novoCnj.trim().length < 15
+                  ? !cnjFormatoValido(novoCnj)
                   : !novoApelido.trim())
               }
             >
@@ -1658,7 +1670,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               }}
               disabled={
                 atualizarProcessoMut.isPending ||
-                cnjAdicionado.trim().length < 15
+                !cnjFormatoValido(cnjAdicionado)
               }
             >
               {atualizarProcessoMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
