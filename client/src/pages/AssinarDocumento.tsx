@@ -460,7 +460,7 @@ function PreviewPdfComCampos({
             </div>
           }
         >
-          <div ref={containerRef} className="relative shadow-md bg-white">
+          <div ref={containerRef} className="relative inline-block shadow-md bg-white">
             <Page
               pageNumber={paginaAtual}
               width={600}
