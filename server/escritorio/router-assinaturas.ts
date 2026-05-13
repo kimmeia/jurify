@@ -11,8 +11,8 @@ import fs from "fs";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { assinaturasDigitais, contatos } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { assinaturasDigitais, assinaturaCampos, contatos } from "../../drizzle/schema";
+import { eq, and, desc, sql, asc } from "drizzle-orm";
 import crypto from "crypto";
 import { estamparAssinatura } from "./pdf-stamp-assinatura";
 import { createLogger } from "../_core/logger";
@@ -147,10 +147,152 @@ export const assinaturasRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
+      // Cascade: campos posicionais são órfãos sem a assinatura mãe.
+      try {
+        await db.delete(assinaturaCampos).where(eq(assinaturaCampos.assinaturaId, input.id));
+      } catch {
+        /* tabela pode não existir em deploys antigos — não bloqueia */
+      }
       await db.delete(assinaturasDigitais)
         .where(and(eq(assinaturasDigitais.id, input.id), eq(assinaturasDigitais.escritorioId, esc.escritorio.id)));
 
       return { success: true };
+    }),
+
+  /**
+   * Salva (substitui) a configuração de campos posicionais de uma
+   * assinatura. Apaga campos antigos e insere os novos numa transação.
+   * Usado pelo editor visual ANTES de enviar o link pro cliente.
+   *
+   * Permitido só enquanto a assinatura ainda não foi assinada (status
+   * pendente/enviado/visualizado) — depois disso, mudar a posição
+   * invalidaria o PDF já carimbado.
+   *
+   * Coords em pontos PDF (origem bottom-left). Frontend faz a conversão
+   * de top-left antes de chamar.
+   */
+  salvarCampos: protectedProcedure
+    .input(z.object({
+      assinaturaId: z.number(),
+      campos: z.array(z.object({
+        tipo: z.enum(["ASSINATURA", "DATA", "NOME", "CPF"]),
+        pagina: z.number().int().min(1),
+        x: z.number(),
+        y: z.number(),
+        largura: z.number().positive(),
+        altura: z.number().positive(),
+        obrigatorio: z.boolean().default(true),
+        signatarioIndex: z.number().int().min(0).default(0),
+      })).max(50),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      const [assinatura] = await db.select().from(assinaturasDigitais)
+        .where(and(
+          eq(assinaturasDigitais.id, input.assinaturaId),
+          eq(assinaturasDigitais.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!assinatura) throw new Error("Assinatura não encontrada ou pertence a outro escritório.");
+      if (assinatura.status === "assinado" || assinatura.status === "expirado" || assinatura.status === "recusado") {
+        throw new Error(`Não é possível alterar campos de uma assinatura ${assinatura.status}.`);
+      }
+
+      // Substitui inteiro: delete + insert. Mais simples que diff em sub-50 rows.
+      await db.transaction(async (tx) => {
+        await tx.delete(assinaturaCampos).where(eq(assinaturaCampos.assinaturaId, input.assinaturaId));
+        if (input.campos.length > 0) {
+          await tx.insert(assinaturaCampos).values(
+            input.campos.map((c) => ({
+              assinaturaId: input.assinaturaId,
+              tipo: c.tipo,
+              pagina: c.pagina,
+              x: c.x,
+              y: c.y,
+              largura: c.largura,
+              altura: c.altura,
+              obrigatorio: c.obrigatorio,
+              signatarioIndex: c.signatarioIndex,
+            })),
+          );
+        }
+      });
+
+      return { success: true, total: input.campos.length };
+    }),
+
+  /**
+   * Lê campos posicionais de uma assinatura (lado operador).
+   * Reabrir o editor pra ajustar = listar + persistir de novo via salvarCampos.
+   */
+  listarCampos: protectedProcedure
+    .input(z.object({ assinaturaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return [];
+      const db = await getDb();
+      if (!db) return [];
+
+      // Confere que a assinatura é do escritório (evita read cross-tenant)
+      const [a] = await db.select({ id: assinaturasDigitais.id })
+        .from(assinaturasDigitais)
+        .where(and(
+          eq(assinaturasDigitais.id, input.assinaturaId),
+          eq(assinaturasDigitais.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!a) return [];
+
+      try {
+        return await db.select().from(assinaturaCampos)
+          .where(eq(assinaturaCampos.assinaturaId, input.assinaturaId))
+          .orderBy(asc(assinaturaCampos.pagina), asc(assinaturaCampos.id));
+      } catch {
+        /* tabela pode não existir em deploys antigos */
+        return [];
+      }
+    }),
+
+  /**
+   * Lista campos pra o cliente preencher (rota pública via token).
+   * Devolve só o necessário pra renderizar caixas amarelas: id, tipo,
+   * página, coords. NÃO devolve valorPreenchido (cliente só vê o seu
+   * input atual no client-side state).
+   */
+  listarCamposPorToken: publicProcedure
+    .input(z.object({ token: z.string().min(10) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const [doc] = await db.select({ id: assinaturasDigitais.id })
+        .from(assinaturasDigitais)
+        .where(eq(assinaturasDigitais.tokenAssinatura, input.token))
+        .limit(1);
+      if (!doc) return [];
+
+      try {
+        const campos = await db.select({
+          id: assinaturaCampos.id,
+          tipo: assinaturaCampos.tipo,
+          pagina: assinaturaCampos.pagina,
+          x: assinaturaCampos.x,
+          y: assinaturaCampos.y,
+          largura: assinaturaCampos.largura,
+          altura: assinaturaCampos.altura,
+          obrigatorio: assinaturaCampos.obrigatorio,
+          signatarioIndex: assinaturaCampos.signatarioIndex,
+        }).from(assinaturaCampos)
+          .where(eq(assinaturaCampos.assinaturaId, doc.id))
+          .orderBy(asc(assinaturaCampos.pagina), asc(assinaturaCampos.id));
+        return campos;
+      } catch {
+        return [];
+      }
     }),
 
   /** Estatísticas de assinaturas do escritório */
