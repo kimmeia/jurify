@@ -2000,24 +2000,29 @@ function ClienteDetalhe({
               quando a prop muda; sem o key, salvar com cliente B persistiria
               nome/CPF/qualificação do cliente A (corrupção silenciosa). */}
           <EditarForm key={cliente.id} cliente={cliente} onSuccess={() => { refetch(); onUpdate(); }} />
-          <TarefasClienteTab contatoId={id} />
+          <TarefasClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 2: Processos */}
         <TabsContent value="processos" className="mt-4 space-y-4">
-          <ProcessosClienteTab contatoId={id} />
+          <ProcessosClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 3: Kanban — cards onde este cliente está sendo trabalhado */}
         <TabsContent value="kanban" className="mt-4 space-y-4">
-          <KanbanClienteTab contatoId={id} />
+          {/* key={id} força remount ao trocar de cliente — o form interno
+              (titulo, funilSelecionado, etc) é inicializado com useState
+              e não se reseta quando contatoId muda. Sem o key, criar card
+              do cliente A → fechar dialog sem submeter → trocar pra B →
+              abrir dialog atribuiria os campos do A ao card do B. */}
+          <KanbanClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 4: Financeiro — bloco de vínculo + cobranças do Asaas + badge */}
         <TabsContent value="financeiro" className="mt-4 space-y-4">
-          <VincularAsaasBlock contatoId={id} cpfCnpj={cliente.cpfCnpj} />
+          <VincularAsaasBlock key={id} contatoId={id} cpfCnpj={cliente.cpfCnpj} />
           <FinanceiroBadge contatoId={id} />
-          <FinanceiroClienteTab contatoId={id} />
+          <FinanceiroClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 3: Histórico (conversas + leads + notas + timeline) */}
