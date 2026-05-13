@@ -40,6 +40,16 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   AlertCircle,
   CheckCircle2,
   Clock,
@@ -120,6 +130,9 @@ export function DespesasTab() {
   const [novaAberta, setNovaAberta] = useState(false);
   const [editando, setEditando] = useState<DespesaListItem | null>(null);
   const [pagando, setPagando] = useState<DespesaListItem | null>(null);
+  const [despesaParaExcluir, setDespesaParaExcluir] = useState<DespesaListItem | null>(
+    null,
+  );
   const perms = useFinanceiroPerms();
 
   const status = filtroStatus === "todos" ? undefined : (filtroStatus as any);
@@ -393,11 +406,7 @@ export function DespesasTab() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            if (confirm("Excluir esta despesa?")) {
-                              excluirMut.mutate({ id: d.id });
-                            }
-                          }}
+                          onClick={() => setDespesaParaExcluir(d)}
                           disabled={excluirMut.isPending}
                           title="Excluir"
                         >
@@ -447,6 +456,50 @@ export function DespesasTab() {
           }}
         />
       )}
+
+      <AlertDialog
+        open={despesaParaExcluir !== null}
+        onOpenChange={(o) => !o && setDespesaParaExcluir(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir despesa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {despesaParaExcluir?.recorrencia !== "nenhuma" &&
+              !despesaParaExcluir?.recorrenciaDeOrigemId ? (
+                <>
+                  <strong>{despesaParaExcluir?.descricao}</strong> é uma despesa
+                  recorrente (modelo). Todas as filhas geradas
+                  automaticamente também serão removidas. Esta ação não pode
+                  ser desfeita.
+                </>
+              ) : (
+                <>
+                  <strong>{despesaParaExcluir?.descricao}</strong> será
+                  excluída permanentemente. Esta ação não pode ser desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!despesaParaExcluir) return;
+                excluirMut.mutate({ id: despesaParaExcluir.id });
+                setDespesaParaExcluir(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
