@@ -409,6 +409,31 @@ export const assinaturasRouter = router({
       // 2. Lê PDF original e estampa
       const assinadoAt = new Date();
       let documentoAssinadoUrl: string | null = null;
+
+      // Carrega campos posicionais (Fase 1+). Sem campos = fluxo legado.
+      // try/catch defensivo: tabela pode não existir em deploys antigos
+      // durante a janela de migração.
+      let camposPosicionais: Array<{
+        tipo: "ASSINATURA" | "DATA" | "NOME" | "CPF";
+        pagina: number; x: number; y: number; largura: number; altura: number;
+      }> = [];
+      try {
+        const rows = await db.select({
+          tipo: assinaturaCampos.tipo,
+          pagina: assinaturaCampos.pagina,
+          x: assinaturaCampos.x,
+          y: assinaturaCampos.y,
+          largura: assinaturaCampos.largura,
+          altura: assinaturaCampos.altura,
+        }).from(assinaturaCampos).where(eq(assinaturaCampos.assinaturaId, doc.id));
+        camposPosicionais = rows.map((r) => ({
+          tipo: r.tipo as "ASSINATURA" | "DATA" | "NOME" | "CPF",
+          pagina: r.pagina, x: r.x, y: r.y, largura: r.largura, altura: r.altura,
+        }));
+      } catch {
+        /* tabela inexistente em deploy antigo — segue fluxo legado */
+      }
+
       try {
         const docPath = path.resolve("." + doc.documentoUrl);
         if (!fs.existsSync(docPath)) {
@@ -422,6 +447,7 @@ export const assinaturasRouter = router({
           cpf: input.cpf,
           ip: input.ip,
           assinadoAt,
+          campos: camposPosicionais.length > 0 ? camposPosicionais : undefined,
         });
         const pdfFilename = `assinado_${doc.id}_${Date.now()}.pdf`;
         fs.writeFileSync(path.join(sigDir, pdfFilename), pdfAssinado);
