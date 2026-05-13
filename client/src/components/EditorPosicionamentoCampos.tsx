@@ -493,12 +493,26 @@ export function EditorPosicionamentoCampos({
                     camposDaPagina.map((c) => {
                       const info = TIPOS_INFO[c.tipo];
                       const Icone = info.icone;
-                      // Mede o canvas direto (não o container) — descalibragem
-                      // entre eles era a causa do desvio de "alguns cm" no
-                      // PDF final reportado.
-                      const rect = obterCanvasRect();
-                      const renderW = rect?.width ?? 700;
-                      const renderH = rect?.height ?? 990;
+                      // Mede o canvas direto + offset RELATIVO ao container.
+                      // Sem offset, o overlay (absolute em relação ao
+                      // container) ficava deslocado quando o canvas não
+                      // começava exatamente no canto top-left do container —
+                      // causa do desvio "alguns cm acima" reportado pelo user.
+                      const canvas = pageContainerRef.current?.querySelector(
+                        "canvas.react-pdf__Page__canvas",
+                      ) as HTMLCanvasElement | null;
+                      const containerRect = pageContainerRef.current?.getBoundingClientRect();
+                      const canvasRect = canvas?.getBoundingClientRect();
+                      const renderW = canvasRect?.width ?? 700;
+                      const renderH = canvasRect?.height ?? 990;
+                      const offsetX =
+                        canvasRect && containerRect
+                          ? canvasRect.left - containerRect.left
+                          : 0;
+                      const offsetY =
+                        canvasRect && containerRect
+                          ? canvasRect.top - containerRect.top
+                          : 0;
                       const scaleX = renderW / pageSizePt.w;
                       const scaleY = renderH / pageSizePt.h;
                       return (
@@ -506,8 +520,8 @@ export function EditorPosicionamentoCampos({
                           key={c.id}
                           className={`absolute border-2 ${info.cor} flex items-center justify-center text-[10px] font-medium cursor-move group select-none`}
                           style={{
-                            left: c.xPdf * scaleX,
-                            top: c.yPdfTop * scaleY,
+                            left: c.xPdf * scaleX + offsetX,
+                            top: c.yPdfTop * scaleY + offsetY,
                             width: c.largura * scaleX,
                             height: c.altura * scaleY,
                           }}
