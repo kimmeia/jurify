@@ -514,7 +514,20 @@ export const clientesRouter = router({
     nome: z.string().max(255),
     tipo: z.string().max(255).optional(),
     tamanho: z.number().optional(),
-    url: z.string(),
+    // z.string().url() aceita javascript:, data:, file: — todos perigosos
+    // numa tag <a href>. Refine pra exigir http/https (URLs do blob storage
+    // sempre são https) e bloquear vetores de XSS no link do arquivo.
+    url: z.string().url().refine(
+      (u) => {
+        try {
+          const protocol = new URL(u).protocol;
+          return protocol === "http:" || protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "URL deve usar http ou https." },
+    ),
   })).mutation(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "editar");
     if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
