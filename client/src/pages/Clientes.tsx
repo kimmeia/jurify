@@ -1449,6 +1449,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     });
   }
 
+  const utilsTrpc = trpc.useUtils();
   const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
   const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
     onSuccess: (_r: any, vars: any) => {
@@ -1478,6 +1479,9 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       setNovoModo("judicial");
       setNovoMonitorar(false);
       refetch();
+      // Invalida o detalhe do cliente — ele exibe contagem de processos
+      // no header. Sem isso, o número ficava stale até F5.
+      utilsTrpc.clientes.detalhe.invalidate({ id: contatoId });
     },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
@@ -1485,7 +1489,12 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
   const desvincularMut = (trpc as any).clienteProcessos.desvincular.useMutation({
-    onSuccess: () => { toast.success("Processo desvinculado"); refetch(); },
+    onSuccess: () => {
+      toast.success("Processo desvinculado");
+      refetch();
+      // Mesma invalidação do vincular — contagem no header refresca.
+      utilsTrpc.clientes.detalhe.invalidate({ id: contatoId });
+    },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
   const [desvincularAlvo, setDesvincularAlvo] = useState<{ id: number; apelido: string | null; numeroCnj: string | null } | null>(null);
