@@ -135,8 +135,14 @@ export interface FaixaInput {
 /**
  * Salva regra completa: cabeçalho (modo, base, alíquota flat, mínimo) + faixas.
  * Substitui completamente as faixas antigas (delete + insert) — operação simples
- * dado que cada escritório tem ≤ ~10 faixas. Não usa transação porque o motor
- * (`mysql2`) não expõe uma; pra workload tão pequeno o risco é aceitável.
+ * dado que cada escritório tem ≤ ~10 faixas.
+ *
+ * Envolve TODAS as escritas numa transação MySQL (BEGIN/COMMIT/ROLLBACK) pra
+ * evitar estado intermediário: se o INSERT das novas faixas falhar depois do
+ * DELETE, o rollback restaura as antigas. Sem isso, o escritório ficava com
+ * `modo='faixas'` e zero faixas → `calcularComissao` cai no fallback flat com
+ * alíquota 0% → toda comissão futura silenciosamente vai pra R$ 0,00 até
+ * alguém perceber.
  */
 export async function salvarRegraComissao(
   escritorioId: number,
@@ -151,33 +157,35 @@ export async function salvarRegraComissao(
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
-  await db.execute(
-    sql`INSERT INTO regra_comissao
-        (escritorioIdRegraCom, aliquotaPercentRegraCom, modoRegraCom, baseFaixaRegraCom, valorMinimoCobRegraCom)
-        VALUES (${escritorioId}, ${dados.aliquotaPercent}, ${dados.modo}, ${dados.baseFaixa}, ${dados.valorMinimoCobranca})
-        ON DUPLICATE KEY UPDATE
-          aliquotaPercentRegraCom = VALUES(aliquotaPercentRegraCom),
-          modoRegraCom = VALUES(modoRegraCom),
-          baseFaixaRegraCom = VALUES(baseFaixaRegraCom),
-          valorMinimoCobRegraCom = VALUES(valorMinimoCobRegraCom)`,
-  );
-
-  // Substitui o conjunto de faixas. Se modo='flat', o usuário pode ainda enviar
-  // faixas (preserva-as caso volte a 'faixas' depois) — mas se vier vazio, limpa.
-  await db
-    .delete(regraComissaoFaixas)
-    .where(eq(regraComissaoFaixas.escritorioId, escritorioId));
-
-  if (dados.faixas.length > 0) {
-    await db.insert(regraComissaoFaixas).values(
-      dados.faixas.map((f, i) => ({
-        escritorioId,
-        ordem: i,
-        limiteAte: f.limiteAte === null ? null : f.limiteAte.toFixed(2),
-        aliquotaPercent: f.aliquotaPercent.toFixed(2),
-      })),
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`INSERT INTO regra_comissao
+          (escritorioIdRegraCom, aliquotaPercentRegraCom, modoRegraCom, baseFaixaRegraCom, valorMinimoCobRegraCom)
+          VALUES (${escritorioId}, ${dados.aliquotaPercent}, ${dados.modo}, ${dados.baseFaixa}, ${dados.valorMinimoCobranca})
+          ON DUPLICATE KEY UPDATE
+            aliquotaPercentRegraCom = VALUES(aliquotaPercentRegraCom),
+            modoRegraCom = VALUES(modoRegraCom),
+            baseFaixaRegraCom = VALUES(baseFaixaRegraCom),
+            valorMinimoCobRegraCom = VALUES(valorMinimoCobRegraCom)`,
     );
-  }
+
+    // Substitui o conjunto de faixas. Se modo='flat' o usuário pode ainda enviar
+    // faixas (preserva-as caso volte a 'faixas' depois) — mas se vier vazio, limpa.
+    await tx
+      .delete(regraComissaoFaixas)
+      .where(eq(regraComissaoFaixas.escritorioId, escritorioId));
+
+    if (dados.faixas.length > 0) {
+      await tx.insert(regraComissaoFaixas).values(
+        dados.faixas.map((f, i) => ({
+          escritorioId,
+          ordem: i,
+          limiteAte: f.limiteAte === null ? null : f.limiteAte.toFixed(2),
+          aliquotaPercent: f.aliquotaPercent.toFixed(2),
+        })),
+      );
+    }
+  });
 }
 
 // ─── Cascata de atribuição de atendente em cobranças sincronizadas ───────────
