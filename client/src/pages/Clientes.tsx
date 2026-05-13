@@ -868,7 +868,16 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
         )}
 
         {/* Dialog: criar card manual */}
-        <Dialog open={criarOpen} onOpenChange={setCriarOpen}>
+        <Dialog open={criarOpen} onOpenChange={(o) => {
+          setCriarOpen(o);
+          if (!o) {
+            // Reset form ao fechar — sem isso, reabrir mostrava
+            // titulo/funil/coluna da tentativa anterior.
+            setTitulo("");
+            setFunilSelecionado("");
+            setColunaSelecionada("");
+          }
+        }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Criar card no Kanban</DialogTitle>
@@ -1524,7 +1533,20 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       )}
 
       {/* Dialog vincular processo */}
-      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      <Dialog open={novoOpen} onOpenChange={(o) => {
+        setNovoOpen(o);
+        if (!o) {
+          // Reset form ao fechar (Cancel, Esc, click-outside). Sem isso,
+          // reabrir o dialog mostrava o CNJ/apelido/polo da tentativa
+          // anterior — fluxo "ah me enganei, vou cadastrar outro" virava
+          // bagunça.
+          setNovoCnj("");
+          setNovoApelido("");
+          setNovoPolo("");
+          setNovoModo("judicial");
+          setNovoMonitorar(false);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Vincular processo</DialogTitle>
