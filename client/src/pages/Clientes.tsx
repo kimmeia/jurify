@@ -288,8 +288,16 @@ function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
     return clientes.filter((c) => new Date(c.createdAt).getTime() >= seteDias);
   }
   if (seg === "inativo") {
+    // "Inativo" = sem conversa nos últimos 30d. updatedAt era a referência
+    // antiga mas webhooks (sync Asaas, tags) tocam a coluna, deixando o
+    // filtro sempre vazio. ultimaConversaAt vem do backend (MAX por contato);
+    // quando null (nunca conversou), usa createdAt — cliente cadastrado há
+    // 30+d sem interação também é inativo.
     const trintaDias = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return clientes.filter((c) => new Date(c.updatedAt || c.createdAt).getTime() < trintaDias);
+    return clientes.filter((c) => {
+      const ref = c.ultimaConversaAt || c.createdAt;
+      return new Date(ref).getTime() < trintaDias;
+    });
   }
   if (seg === "vip") {
     return clientes.filter((c) => (c.tags || "").toLowerCase().includes("vip"));

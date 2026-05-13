@@ -116,7 +116,42 @@ export const clientesRouter = router({
     if (input?.aguardandoDocumentacao) { where = and(where, eq(contatos.documentacaoPendente, true)); }
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
-    return { clientes: rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" })), total: Number((cnt as { count: number } | undefined)?.count || 0), pagina: input?.pagina || 1, limite, totalPaginas: Math.ceil(Number((cnt as { count: number } | undefined)?.count || 0) / limite) };
+
+    // Última interação humana por cliente — derivada de conversas. O frontend
+    // usa pro segmento "Inativos (30d+)". contatos.updatedAt sozinho não
+    // serve porque webhooks (sync Asaas, tags automáticas) tocam a coluna —
+    // filtro ficava sempre vazio em produção.
+    const ids = rows.map((r) => r.id);
+    const dateMap = new Map<number, string>();
+    if (ids.length > 0) {
+      const ultimaConversa = await db
+        .select({
+          contatoId: conversas.contatoId,
+          maxData: sql<Date | null>`MAX(${conversas.ultimaMensagemAt})`,
+        })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, perm.escritorioId),
+          inArray(conversas.contatoId, ids),
+        ))
+        .groupBy(conversas.contatoId);
+      for (const r of ultimaConversa) {
+        if (r.maxData) dateMap.set(r.contatoId, (r.maxData as Date).toISOString());
+      }
+    }
+
+    return {
+      clientes: rows.map((r) => ({
+        ...r,
+        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+        updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+        ultimaConversaAt: dateMap.get(r.id) ?? null,
+      })),
+      total: Number((cnt as { count: number } | undefined)?.count || 0),
+      pagina: input?.pagina || 1,
+      limite,
+      totalPaginas: Math.ceil(Number((cnt as { count: number } | undefined)?.count || 0) / limite),
+    };
   }),
 
   detalhe: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
