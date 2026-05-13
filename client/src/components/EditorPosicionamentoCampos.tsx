@@ -164,6 +164,22 @@ export function EditorPosicionamentoCampos({
 
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Retorna o rect do CANVAS do react-pdf (não do container).
+   *
+   * Por que medir pelo canvas? O container externo pode ter padding,
+   * border, ou simplesmente tamanho diferente do canvas (block-level
+   * ocupando largura toda do pai). O canvas tem o tamanho real do PDF
+   * renderizado. Medir pelo container introduz offsets que descalibram
+   * a conversão px↔pt e a posição final fica deslocada.
+   */
+  function obterCanvasRect(): DOMRect | null {
+    const canvas = pageContainerRef.current?.querySelector(
+      "canvas.react-pdf__Page__canvas",
+    ) as HTMLCanvasElement | null;
+    return canvas ? canvas.getBoundingClientRect() : null;
+  }
+
   // CRÍTICO: options do <Document> precisa ser referência ESTÁVEL.
   // Sem useMemo, cada render cria um objeto novo → react-pdf detecta como
   // "mudou", destrói o Document, recria → Page renderiza com transport
@@ -177,8 +193,14 @@ export function EditorPosicionamentoCampos({
   );
 
   function handleClickPagina(e: React.MouseEvent) {
-    if (!tipoAdicionando || !pageContainerRef.current || !pageSizePt) return;
-    const rect = pageContainerRef.current.getBoundingClientRect();
+    if (!tipoAdicionando || !pageSizePt) return;
+    const rect = obterCanvasRect();
+    if (!rect) return;
+    // Click fora do canvas (no overlay vazio à direita/abaixo) → ignora.
+    if (
+      e.clientX < rect.left || e.clientX > rect.right ||
+      e.clientY < rect.top || e.clientY > rect.bottom
+    ) return;
     const xRender = e.clientX - rect.left;
     const yRender = e.clientY - rect.top;
     const scaleX = pageSizePt.w / rect.width;
@@ -204,8 +226,8 @@ export function EditorPosicionamentoCampos({
 
   function handleMouseDownCaixa(e: React.MouseEvent, id: string) {
     e.stopPropagation();
-    if (!pageContainerRef.current) return;
-    const rect = pageContainerRef.current.getBoundingClientRect();
+    const rect = obterCanvasRect();
+    if (!rect) return;
     const xRender = e.clientX - rect.left;
     const yRender = e.clientY - rect.top;
     const campo = campos.find((c) => c.id === id);
@@ -222,8 +244,8 @@ export function EditorPosicionamentoCampos({
   useEffect(() => {
     if (!draggando) return;
     const onMove = (e: MouseEvent) => {
-      if (!pageContainerRef.current || !pageSizePt) return;
-      const rect = pageContainerRef.current.getBoundingClientRect();
+      const rect = obterCanvasRect();
+      if (!rect || !pageSizePt) return;
       const xRender = e.clientX - rect.left;
       const yRender = e.clientY - rect.top;
       const scaleX = pageSizePt.w / rect.width;
@@ -446,7 +468,13 @@ export function EditorPosicionamentoCampos({
               >
                 <div
                   ref={pageContainerRef}
-                  className={`relative ${tipoAdicionando ? "cursor-crosshair" : "cursor-default"}`}
+                  // inline-block: faz o div ter o tamanho EXATO do <Page>
+                  // (700px de largura, altura auto pelo aspect ratio).
+                  // Sem isso, o div ficaria block-level (100% do pai),
+                  // e getBoundingClientRect().width retornaria um valor
+                  // maior que o canvas real → scaleX errado → posição
+                  // final no PDF deslocada.
+                  className={`relative inline-block ${tipoAdicionando ? "cursor-crosshair" : "cursor-default"}`}
                   onClick={handleClickPagina}
                 >
                   <Page
@@ -465,7 +493,10 @@ export function EditorPosicionamentoCampos({
                     camposDaPagina.map((c) => {
                       const info = TIPOS_INFO[c.tipo];
                       const Icone = info.icone;
-                      const rect = pageContainerRef.current?.getBoundingClientRect();
+                      // Mede o canvas direto (não o container) — descalibragem
+                      // entre eles era a causa do desvio de "alguns cm" no
+                      // PDF final reportado.
+                      const rect = obterCanvasRect();
                       const renderW = rect?.width ?? 700;
                       const renderH = rect?.height ?? 990;
                       const scaleX = renderW / pageSizePt.w;
