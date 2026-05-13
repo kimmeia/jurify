@@ -27,6 +27,7 @@ import {
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import {
+  aplicarConciliacaoOFXMatch,
   atribuirCobrancasEmMassa,
   atualizarCategoriaCobranca,
   atualizarCategoriaDespesa,
@@ -1083,87 +1084,26 @@ export const financeiroRouter = router({
 
       for (const m of input.matches) {
         try {
-          // 1) Idempotência: registra FITID. Se já existe (UNIQUE viola),
-          // pula o match sem mutar entidade-pai. Faz isso ANTES do UPDATE
-          // pra garantir que reimport não sobrescreve dataPagamento.
-          try {
-            await db.insert(ofxImportacoesFitid).values({
-              escritorioId: esc.escritorio.id,
-              fitid: m.fitid,
-              tipoEntidade: m.tipo,
-              entidadeId: m.entidadeId,
-              valor: m.valor.toFixed(2),
-              dataPagamento: m.dataPagamento,
-              importadoPorUserId: ctx.user.id,
-            });
-          } catch (insertErr: any) {
-            // Drizzle / MySQL: erro 1062 = duplicate key
-            if (
-              insertErr.code === "ER_DUP_ENTRY" ||
-              /Duplicate entry/i.test(insertErr.message ?? "")
-            ) {
-              jaImportadas++;
-              continue;
-            }
-            throw insertErr;
-          }
-
-          // 2) Aplicação do match
-          if (m.tipo === "despesa") {
-            const [d] = await db
-              .select({ valor: despesas.valor })
-              .from(despesas)
-              .where(
-                and(
-                  eq(despesas.id, m.entidadeId),
-                  eq(despesas.escritorioId, esc.escritorio.id),
-                ),
-              )
-              .limit(1);
-            if (!d) {
-              erros.push(`Despesa #${m.entidadeId} não encontrada`);
-              continue;
-            }
-            await db
-              .update(despesas)
-              .set({
-                status: "pago",
-                dataPagamento: m.dataPagamento,
-                valorPago: d.valor,
-              })
-              .where(
-                and(
-                  eq(despesas.id, m.entidadeId),
-                  eq(despesas.escritorioId, esc.escritorio.id),
-                ),
-              );
-            despesasMarcadas++;
-          } else {
-            const [c] = await db
-              .select({ origem: asaasCobrancas.origem })
-              .from(asaasCobrancas)
-              .where(
-                and(
-                  eq(asaasCobrancas.id, m.entidadeId),
-                  eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-                ),
-              )
-              .limit(1);
-            if (!c) {
-              erros.push(`Cobrança #${m.entidadeId} não encontrada`);
-              continue;
-            }
-            if (c.origem !== "manual") {
-              erros.push(
-                `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
-              );
-              continue;
-            }
-            await db
-              .update(asaasCobrancas)
-              .set({ status: "RECEIVED", dataPagamento: m.dataPagamento })
-              .where(eq(asaasCobrancas.id, m.entidadeId));
-            cobrancasMarcadas++;
+          const r = await aplicarConciliacaoOFXMatch({
+            escritorioId: esc.escritorio.id,
+            importadoPorUserId: ctx.user.id,
+            fitid: m.fitid,
+            tipo: m.tipo,
+            entidadeId: m.entidadeId,
+            valor: m.valor,
+            dataPagamento: m.dataPagamento,
+          });
+          if (r.status === "aplicado_despesa") despesasMarcadas++;
+          else if (r.status === "aplicado_cobranca") cobrancasMarcadas++;
+          else if (r.status === "ja_importada") jaImportadas++;
+          else if (r.status === "entidade_nao_encontrada") {
+            erros.push(
+              `${r.tipo === "despesa" ? "Despesa" : "Cobrança"} #${m.entidadeId} não encontrada`,
+            );
+          } else if (r.status === "cobranca_asaas_pulada") {
+            erros.push(
+              `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
+            );
           }
         } catch (err: any) {
           erros.push(`${m.tipo} #${m.entidadeId}: ${err.message}`);

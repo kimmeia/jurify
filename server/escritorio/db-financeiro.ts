@@ -11,6 +11,8 @@ import {
   categoriasDespesa,
   colaboradores,
   contatos,
+  despesas,
+  ofxImportacoesFitid,
   regraComissao,
   regraComissaoFaixas,
 } from "../../drizzle/schema";
@@ -406,5 +408,135 @@ export async function garantirCategoriasPadrao(escritorioId: number) {
     await db.insert(categoriasDespesa).values(
       aCriarDespesa.map((nome) => ({ escritorioId, nome })),
     );
+  }
+}
+
+// ─── Conciliação OFX: aplica um match individual ─────────────────────────────
+
+export type ResultadoConciliacaoOFXMatch =
+  | { status: "aplicado_despesa" }
+  | { status: "aplicado_cobranca" }
+  | { status: "ja_importada" }
+  | { status: "entidade_nao_encontrada"; tipo: "despesa" | "cobranca" }
+  | { status: "cobranca_asaas_pulada" };
+
+/**
+ * Aplica UM match confirmado da conciliação OFX. Valida a entidade-pai
+ * (despesa ou cobrança) ANTES de qualquer escrita; só grava o FITID
+ * dentro de uma transação que também atualiza a entidade.
+ *
+ * Garantias:
+ *  - Se a entidade não existe ou é cobrança Asaas (pulada), o FITID NÃO
+ *    é gravado — reimport pode tentar de novo sem cair como "já importado".
+ *  - Se o INSERT do FITID conflita com UNIQUE (FITID já importado antes),
+ *    retorna `ja_importada` SEM mutar a entidade.
+ *  - Se o INSERT sucede mas o UPDATE falha, o driver faz ROLLBACK
+ *    automático: nenhum estado intermediário sobrevive.
+ *
+ * Por que o helper foi extraído da procedure tRPC: a lógica de
+ * "validar → gravar FITID → atualizar entidade" precisa rodar em
+ * transação e ser testável isoladamente. Inline na procedure ficava
+ * impossível cobrir os 5 estados com testes diretos.
+ */
+export async function aplicarConciliacaoOFXMatch(params: {
+  escritorioId: number;
+  importadoPorUserId: number;
+  fitid: string;
+  tipo: "despesa" | "cobranca";
+  entidadeId: number;
+  valor: number;
+  dataPagamento: string;
+}): Promise<ResultadoConciliacaoOFXMatch> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  if (params.tipo === "despesa") {
+    const [d] = await db
+      .select({ valor: despesas.valor })
+      .from(despesas)
+      .where(
+        and(
+          eq(despesas.id, params.entidadeId),
+          eq(despesas.escritorioId, params.escritorioId),
+        ),
+      )
+      .limit(1);
+    if (!d) return { status: "entidade_nao_encontrada", tipo: "despesa" };
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(ofxImportacoesFitid).values({
+          escritorioId: params.escritorioId,
+          fitid: params.fitid,
+          tipoEntidade: "despesa",
+          entidadeId: params.entidadeId,
+          valor: params.valor.toFixed(2),
+          dataPagamento: params.dataPagamento,
+          importadoPorUserId: params.importadoPorUserId,
+        });
+        await tx
+          .update(despesas)
+          .set({
+            status: "pago",
+            dataPagamento: params.dataPagamento,
+            valorPago: d.valor,
+          })
+          .where(
+            and(
+              eq(despesas.id, params.entidadeId),
+              eq(despesas.escritorioId, params.escritorioId),
+            ),
+          );
+      });
+      return { status: "aplicado_despesa" };
+    } catch (txErr: any) {
+      if (
+        txErr.code === "ER_DUP_ENTRY" ||
+        /Duplicate entry/i.test(txErr.message ?? "")
+      ) {
+        return { status: "ja_importada" };
+      }
+      throw txErr;
+    }
+  }
+
+  const [c] = await db
+    .select({ origem: asaasCobrancas.origem })
+    .from(asaasCobrancas)
+    .where(
+      and(
+        eq(asaasCobrancas.id, params.entidadeId),
+        eq(asaasCobrancas.escritorioId, params.escritorioId),
+      ),
+    )
+    .limit(1);
+  if (!c) return { status: "entidade_nao_encontrada", tipo: "cobranca" };
+  if (c.origem !== "manual") return { status: "cobranca_asaas_pulada" };
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(ofxImportacoesFitid).values({
+        escritorioId: params.escritorioId,
+        fitid: params.fitid,
+        tipoEntidade: "cobranca",
+        entidadeId: params.entidadeId,
+        valor: params.valor.toFixed(2),
+        dataPagamento: params.dataPagamento,
+        importadoPorUserId: params.importadoPorUserId,
+      });
+      await tx
+        .update(asaasCobrancas)
+        .set({ status: "RECEIVED", dataPagamento: params.dataPagamento })
+        .where(eq(asaasCobrancas.id, params.entidadeId));
+    });
+    return { status: "aplicado_cobranca" };
+  } catch (txErr: any) {
+    if (
+      txErr.code === "ER_DUP_ENTRY" ||
+      /Duplicate entry/i.test(txErr.message ?? "")
+    ) {
+      return { status: "ja_importada" };
+    }
+    throw txErr;
   }
 }
