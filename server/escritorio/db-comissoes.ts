@@ -86,18 +86,30 @@ async function carregarMapaCobrancasJaFechadas(
   return m;
 }
 
-/** Simula comissão detalhada de um atendente em um período. Lê regra
- *  vigente, faixas (se modo=faixas) e cobranças com JOIN em categoria.
- *  Retorna estrutura usada por UI e por `fecharComissao`. */
-export async function simularComissao(
-  escritorioId: number,
-  atendenteId: number,
-  periodoInicio: string,
-  periodoFim: string,
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database indisponível");
+/**
+ * Regra de comissão carregada e normalizada (number, não decimal-string),
+ * com faixas opcionais já mapeadas. Estrutura que `simularComissao`
+ * consome internamente — extraída pra permitir cache externo (cron
+ * mensal com N atendentes do mesmo escritório carrega 1x e passa N
+ * vezes, em vez de 2 queries × N atendentes idênticas).
+ */
+export interface RegraComissaoCarregada {
+  aliquotaPercent: number;
+  valorMinimo: number;
+  modo: "flat" | "faixas";
+  baseFaixa: "bruto" | "comissionavel";
+  faixas: FaixaComissao[];
+}
 
+/**
+ * Carrega regra + faixas pra um escritório, normaliza tipos e devolve
+ * a estrutura usada pelo cálculo de comissão. Defaults conservadores
+ * quando o escritório ainda não configurou regra: aliquota=0, mínimo=0,
+ * modo='flat' (resulta em comissão R$ 0, força operador a configurar).
+ */
+export async function carregarRegraComissao(
+  escritorioId: number,
+): Promise<RegraComissaoCarregada> {
   const regraRow = await obterRegraComissao(escritorioId);
   const aliquotaPercent = regraRow ? Number(regraRow.aliquotaPercent) : 0;
   const valorMinimo = regraRow ? Number(regraRow.valorMinimoCobranca) : 0;
@@ -109,6 +121,30 @@ export async function simularComissao(
     limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
     aliquotaPercent: Number(f.aliquotaPercent),
   }));
+
+  return { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas };
+}
+
+/** Simula comissão detalhada de um atendente em um período. Lê regra
+ *  vigente, faixas (se modo=faixas) e cobranças com JOIN em categoria.
+ *  Retorna estrutura usada por UI e por `fecharComissao`.
+ *
+ *  Pode receber `regraCarregada` pré-carregada — caller que invoca em
+ *  loop (cron mensal por atendente do mesmo escritório) economiza N×2
+ *  queries idênticas. UI manual (uma chamada por clique) ignora o
+ *  parâmetro e a função carrega normalmente. */
+export async function simularComissao(
+  escritorioId: number,
+  atendenteId: number,
+  periodoInicio: string,
+  periodoFim: string,
+  regraCarregada?: RegraComissaoCarregada,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  const regra = regraCarregada ?? (await carregarRegraComissao(escritorioId));
+  const { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas } = regra;
 
   // Cobranças que já entraram em algum fechamento (de qualquer atendente)
   // — são excluídas pra impedir comissão duplicada. O vínculo "fechei
@@ -357,6 +393,10 @@ export interface FecharComissaoParams {
   origem?: "manual" | "automatico";
   agendaId?: number | null;
   observacoes?: string | null;
+  /** Regra pré-carregada. Caller que invoca em loop (cron mensal por
+   *  atendente do mesmo escritório) pode passar pra evitar reler a
+   *  regra do DB em cada iteração. UI manual omite. */
+  regraCarregada?: RegraComissaoCarregada;
   /**
    * Quando `false` (default), bloqueia criação se já existe fechamento pro
    * mesmo `(escritorioId, atendenteId, periodoInicio, periodoFim)` —
@@ -427,6 +467,7 @@ export async function fecharComissao(
     params.atendenteId,
     params.periodoInicio,
     params.periodoFim,
+    params.regraCarregada,
   );
 
   const [novo] = await db
