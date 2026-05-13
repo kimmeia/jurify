@@ -403,9 +403,20 @@ export const clientesRouter = router({
   }),
 
   listarAnotacoes: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
-    const rows = await db.select().from(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.contatoId), eq(clienteAnotacoes.escritorioId, esc.escritorio.id))).orderBy(desc(clienteAnotacoes.createdAt));
-    return rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" }));
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db.select().from(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.contatoId), eq(clienteAnotacoes.escritorioId, perm.escritorioId))).orderBy(desc(clienteAnotacoes.createdAt));
+    // podeExcluir embutido por linha: autor pode apagar a própria;
+    // dono/gestor (verTodos) pode apagar qualquer uma. Frontend usa
+    // pra esconder o botão de lixeira quando o user não pode.
+    return rows.map(r => ({
+      ...r,
+      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+      updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+      podeExcluir: perm.verTodos || r.criadoPor === perm.colaboradorId,
+    }));
   }),
   criarAnotacao: protectedProcedure.input(z.object({ contatoId: z.number(), titulo: z.string().max(255).optional(), conteudo: z.string().min(1) })).mutation(async ({ ctx, input }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
@@ -413,8 +424,34 @@ export const clientesRouter = router({
     return { id: (r as { insertId: number }).insertId };
   }),
   excluirAnotacao: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
-    await db.delete(clienteAnotacoes).where(and(eq(clienteAnotacoes.id, input.id), eq(clienteAnotacoes.escritorioId, esc.escritorio.id)));
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+
+    // Carrega a anotação para verificar autoria. criadoPor é o
+    // colaborador.id de quem criou (vide criarAnotacao).
+    const [anot] = await db
+      .select({ criadoPor: clienteAnotacoes.criadoPor })
+      .from(clienteAnotacoes)
+      .where(and(
+        eq(clienteAnotacoes.id, input.id),
+        eq(clienteAnotacoes.escritorioId, perm.escritorioId),
+      ))
+      .limit(1);
+    if (!anot) throw new TRPCError({ code: "NOT_FOUND" });
+
+    // Regra: autor pode excluir a própria; dono/gestor (verTodos) pode
+    // excluir qualquer uma. Atendente comum não apaga anotação alheia.
+    const ehAutor = anot.criadoPor === perm.colaboradorId;
+    if (!ehAutor && !perm.verTodos) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Você só pode excluir anotações que você criou.",
+      });
+    }
+
+    await db.delete(clienteAnotacoes).where(and(eq(clienteAnotacoes.id, input.id), eq(clienteAnotacoes.escritorioId, perm.escritorioId)));
     return { success: true };
   }),
 
