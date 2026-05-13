@@ -26,11 +26,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-// Importa o worker do pdfjs como asset com URL final do bundle.
-// Vite resolve `?url` em build time pra um caminho /assets/X.mjs estável.
-// Padrão `new URL(..., import.meta.url)` funciona em dev mas falha em
-// produção minificada (era a causa do "Falha ao carregar o PDF").
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// Worker do pdfjs servido via CDN unpkg, usando a versão que o react-pdf
+// bundla internamente (pdfjs.version). Por que CDN em vez de import local?
+//
+// Tentativa anterior: `import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url"`
+// pegava a versão do `pdfjs-dist` declarado no package.json (5.7.284),
+// mas o react-pdf 10.x bundla internamente o pdfjs 5.4.296. Resultado:
+// "The API version 5.4.296 does not match the Worker version 5.7.284".
+//
+// Usar pdfjs.version garante que worker e API são SEMPRE a mesma versão,
+// independente de como o package.json estiver pinned. unpkg é mirror
+// estável de npm registry (mesma origem da pdfjs-dist no npm install).
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -46,7 +52,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
 
