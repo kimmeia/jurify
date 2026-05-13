@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -931,6 +931,35 @@ export const assinaturasDigitais = mysqlTable("assinaturas_digitais", {
   createdAt: timestamp("createdAtAssinatura").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAssinatura").defaultNow().onUpdateNow().notNull(),
 });
+
+/**
+ * Campos posicionais de assinatura — onde, em qual página e que tipo de
+ * campo o cliente preenche no PDF. Sem registros = fluxo legado (carimbo
+ * central na última página + página de certificação).
+ *
+ * Coordenadas em pontos PDF, origem (0,0) no canto INFERIOR ESQUERDO da
+ * página (convenção pdf-lib). Frontend converte de top-left antes de salvar.
+ */
+export const assinaturaCampos = mysqlTable("assinatura_campos", {
+  id: int("id").autoincrement().primaryKey(),
+  assinaturaId: int("assinaturaId").notNull(),
+  /** Pra Fase 2 (múltiplos signatários). Hoje sempre 0. */
+  signatarioIndex: int("signatarioIndex").default(0).notNull(),
+  tipo: mysqlEnum("tipo", ["ASSINATURA", "DATA", "NOME", "CPF"]).notNull(),
+  pagina: int("pagina").notNull(),
+  x: double("x").notNull(),
+  y: double("y").notNull(),
+  largura: double("largura").notNull(),
+  altura: double("altura").notNull(),
+  obrigatorio: boolean("obrigatorio").default(true).notNull(),
+  /** Vazio até cliente preencher. Texto pra DATA/NOME/CPF, path do PNG pra ASSINATURA. */
+  valorPreenchido: text("valorPreenchido"),
+  createdAt: timestamp("createdAtCampo").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtCampo").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AssinaturaCampo = typeof assinaturaCampos.$inferSelect;
+export type InsertAssinaturaCampo = typeof assinaturaCampos.$inferInsert;
 
 export type AssinaturaDigital = typeof assinaturasDigitais.$inferSelect;
 export type InsertAssinaturaDigital = typeof assinaturasDigitais.$inferInsert;
