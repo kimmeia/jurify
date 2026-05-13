@@ -15,6 +15,7 @@ import { getDb } from "../db";
 import { camposPersonalizadosCliente, contatos } from "../../drizzle/schema";
 import { eq, and, asc, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { checkPermission } from "./check-permission";
 
 const TIPOS_VALIDOS = ["texto", "numero", "data", "textarea", "select", "boolean"] as const;
 
@@ -51,15 +52,21 @@ const inputEditar = z.object({
 });
 
 export const camposClienteRouter = router({
+  /**
+   * listar é consumido tanto pela Configurações (admin) quanto pelo formulário
+   * de cadastro/edição de cliente (qualquer colaborador com clientes.ver).
+   * Por isso o gate é `clientes.ver`, não `configuracoes.editar` — senão o
+   * atendente edita um cliente e os campos personalizados sumiriam.
+   */
   listar: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return [];
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
     const db = await getDb();
     if (!db) return [];
     const rows = await db
       .select()
       .from(camposPersonalizadosCliente)
-      .where(eq(camposPersonalizadosCliente.escritorioId, esc.escritorio.id))
+      .where(eq(camposPersonalizadosCliente.escritorioId, perm.escritorioId))
       .orderBy(asc(camposPersonalizadosCliente.ordem), asc(camposPersonalizadosCliente.id));
     // Parse opcoes (JSON string → array)
     return rows.map((r) => ({
@@ -69,6 +76,12 @@ export const camposClienteRouter = router({
   }),
 
   criar: protectedProcedure.input(inputCriar).mutation(async ({ ctx, input }) => {
+    // Mutações afetam o schema de cadastro de TODOS os clientes do escritório
+    // — operação administrativa. Exige `configuracoes.editar` (dono/gestor).
+    const perm = await checkPermission(ctx.user.id, "configuracoes", "editar");
+    if (!perm.allowed) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas dono/gestor pode gerenciar campos personalizados." });
+    }
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -105,6 +118,10 @@ export const camposClienteRouter = router({
   }),
 
   editar: protectedProcedure.input(inputEditar).mutation(async ({ ctx, input }) => {
+    const perm = await checkPermission(ctx.user.id, "configuracoes", "editar");
+    if (!perm.allowed) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas dono/gestor pode gerenciar campos personalizados." });
+    }
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -208,6 +225,10 @@ export const camposClienteRouter = router({
 
   /** Exclui o campo + remove o valor correspondente do JSON de todos contatos. */
   excluir: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    const perm = await checkPermission(ctx.user.id, "configuracoes", "editar");
+    if (!perm.allowed) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas dono/gestor pode gerenciar campos personalizados." });
+    }
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
     const db = await getDb();
@@ -263,6 +284,10 @@ export const camposClienteRouter = router({
   reordenar: protectedProcedure
     .input(z.object({ ids: z.array(z.number()).min(1) }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "configuracoes", "editar");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas dono/gestor pode gerenciar campos personalizados." });
+      }
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
