@@ -4,7 +4,7 @@
  * URL: /assinar/:token
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import SignaturePad from "signature_pad";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -385,6 +385,13 @@ function PreviewPdfComCampos({
   const [pageSizePt, setPageSizePt] = useState<{ w: number; h: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Memoiza options pra Document não recriar transport a cada render
+  // (causa "sendWithPromise null" no Page).
+  const pdfOptions = useMemo(
+    () => ({ withCredentials: true } as any),
+    [],
+  );
+
   const camposDaPagina = campos.filter((c) => c.pagina === paginaAtual);
   const paginasComCampos = Array.from(new Set(campos.map((c) => c.pagina))).sort((a, b) => a - b);
 
@@ -431,10 +438,7 @@ function PreviewPdfComCampos({
           // key={documentoUrl} força remount limpo se a URL mudar
           key={documentoUrl}
           file={documentoUrl}
-          // withCredentials: cookies/credenciais opcionais. O endpoint
-          // /api/assinatura/pdf/token/:token usa token na URL (não cookie),
-          // mas mantemos por consistência com o editor do operador.
-          options={{ withCredentials: true } as any}
+          options={pdfOptions}
           onLoadSuccess={({ numPages }) => setTotalPaginas(numPages)}
           onLoadError={(err) => {
             // eslint-disable-next-line no-console
