@@ -514,11 +514,19 @@ export const clientesRouter = router({
     nome: z.string().max(255),
     tipo: z.string().max(255).optional(),
     tamanho: z.number().optional(),
-    // z.string().url() aceita javascript:, data:, file: — todos perigosos
-    // numa tag <a href>. Refine pra exigir http/https (URLs do blob storage
-    // sempre são https) e bloquear vetores de XSS no link do arquivo.
-    url: z.string().url().refine(
+    // URL precisa ser uma das duas:
+    //  - caminho local "/uploads/..." (devolvido por upload.enviar — caso
+    //    comum, 99% das chamadas)
+    //  - URL absoluta http/https (legacy, integração externa)
+    //
+    // Bloqueia vetores de XSS quando renderizado em <a href>:
+    //  - javascript:, data:, file:, blob: → throw via z.string()/URL parse
+    //  - "//evil.com/x" → protocol-relative, browser resolveria como https
+    //    pro domínio externo. Pega o caso explicitamente.
+    url: z.string().refine(
       (u) => {
+        if (u.startsWith("//")) return false;
+        if (u.startsWith("/")) return true; // caminho local
         try {
           const protocol = new URL(u).protocol;
           return protocol === "http:" || protocol === "https:";
@@ -526,7 +534,7 @@ export const clientesRouter = router({
           return false;
         }
       },
-      { message: "URL deve usar http ou https." },
+      { message: "URL inválida. Use caminho interno (/uploads/...) ou http/https." },
     ),
   })).mutation(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "editar");
