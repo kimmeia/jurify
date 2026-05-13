@@ -260,7 +260,10 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
 
 export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: number; anotacoes: any[]; onRefresh: () => void }) {
   const [titulo, setTitulo] = useState(""); const [conteudo, setConteudo] = useState("");
-  const criar = trpc.clientes.criarAnotacao.useMutation({ onSuccess: () => { setTitulo(""); setConteudo(""); onRefresh(); toast.success("Salvo!"); } });
+  const criar = trpc.clientes.criarAnotacao.useMutation({
+    onSuccess: () => { setTitulo(""); setConteudo(""); onRefresh(); toast.success("Salvo!"); },
+    onError: (e) => toast.error(e.message),
+  });
   const excluir = trpc.clientes.excluirAnotacao.useMutation({
     onSuccess: () => { onRefresh(); },
     onError: (e) => toast.error(e.message),
@@ -310,8 +313,12 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const uploadMut = (trpc as any).upload.enviar.useMutation();
   const salvar = trpc.clientes.salvarArquivo.useMutation({
     onSuccess: () => { setUrl(""); setNome(""); invalidar(); toast.success("Salvo!"); },
+    onError: (e) => toast.error(e.message),
   });
-  const excluirArq = trpc.clientes.excluirArquivo.useMutation({ onSuccess: () => invalidar() });
+  const excluirArq = trpc.clientes.excluirArquivo.useMutation({
+    onSuccess: () => { invalidar(); toast.success("Arquivo removido"); },
+    onError: (e) => toast.error(e.message),
+  });
   const moverArq = trpc.clientes.moverArquivo.useMutation({
     onSuccess: () => { invalidar(); toast.success("Arquivo movido"); },
     onError: (e) => toast.error("Erro ao mover", { description: e.message }),
@@ -1027,8 +1034,14 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     onSuccess: (res: any) => { setShowNovo(false); setTitulo(""); setDescricao(""); setDocUrl(""); onRefresh(); toast.success("Documento criado! Copie o link para enviar."); setLinkCopiado(window.location.origin + res.linkAssinatura); },
     onError: (e: any) => toast.error(e.message),
   });
-  const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({ onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); } });
-  const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({ onSuccess: () => { onRefresh(); toast.success("Cancelado."); } });
+  const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Cancelado."); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const excluirMut = (trpc as any).assinaturas.excluir.useMutation({
     onSuccess: () => { onRefresh(); toast.success("Documento excluído"); },
     onError: (e: any) => toast.error(e.message),
@@ -1190,7 +1203,10 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
   const [excluirTarefaAlvo, setExcluirTarefaAlvo] = useState<{ id: number; titulo: string } | null>(null);
   const { data: tarefas, refetch } = (trpc as any).tarefas.listar.useQuery({ contatoId });
   const criar = (trpc as any).tarefas.criar.useMutation({ onSuccess: () => { refetch(); setTitulo(""); setShowNova(false); toast.success("Tarefa criada!"); }, onError: (e: any) => toast.error(e.message) });
-  const atualizar = (trpc as any).tarefas.atualizar.useMutation({ onSuccess: () => refetch() });
+  const atualizar = (trpc as any).tarefas.atualizar.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
   const excluir = (trpc as any).tarefas.excluir.useMutation({
     onSuccess: () => { refetch(); toast.success("Tarefa removida"); },
     onError: (e: any) => toast.error(e.message),
