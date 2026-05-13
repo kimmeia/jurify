@@ -429,7 +429,19 @@ function PreviewPdfComCampos({
       <CardContent className="bg-muted/20 flex justify-center pt-2">
         <Document
           file={documentoUrl}
+          // withCredentials: cookies/credenciais opcionais. O endpoint
+          // /api/assinatura/pdf/token/:token usa token na URL (não cookie),
+          // mas mantemos por consistência com o editor do operador.
+          options={{ withCredentials: true } as any}
           onLoadSuccess={({ numPages }) => setTotalPaginas(numPages)}
+          onLoadError={(err) => {
+            // eslint-disable-next-line no-console
+            console.error("[PreviewPdfComCampos] Falha ao carregar PDF", {
+              documentoUrl,
+              error: err?.message,
+              name: err?.name,
+            });
+          }}
           loading={
             <div className="p-12 text-center text-sm text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
