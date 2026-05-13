@@ -227,6 +227,42 @@ export default function Financeiro() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  // Bulk cancel via endpoint dedicado. Serializa as chamadas ao Asaas
+  // no backend pra respeitar rate limit (antes o frontend disparava N
+  // mutations em paralelo, podendo bloquear a API key por 12h).
+  const excluirCobBulkMut = (trpc as any).asaas?.excluirCobrancasEmMassa?.useMutation?.({
+    onSuccess: (r: {
+      excluidasAsaas: number;
+      excluidasManual: number;
+      ignoradas: number;
+      erros: Array<{ id: number; mensagem: string }>;
+      abortadoPorRateLimit: boolean;
+    }) => {
+      const total = r.excluidasAsaas + r.excluidasManual;
+      if (r.abortadoPorRateLimit) {
+        toast.warning(
+          `${total} cancelada(s) — lote pausado por rate limit. Tente o restante em alguns minutos.`,
+        );
+      } else if (r.erros.length > 0) {
+        toast.warning(
+          `${total} cancelada(s), ${r.erros.length} com erro` +
+            (r.ignoradas > 0 ? `, ${r.ignoradas} ignorada(s)` : ""),
+          { description: r.erros.slice(0, 3).map((e) => e.mensagem).join(" · ") },
+        );
+      } else {
+        toast.success(
+          `${total} cobrança(s) cancelada(s)` +
+            (r.ignoradas > 0 ? ` · ${r.ignoradas} ignorada(s)` : ""),
+        );
+      }
+      setSelecionadas(new Set());
+      utils.asaas.listarCobrancas.invalidate();
+      utils.asaas.kpis.invalidate();
+    },
+    onError: (err: any) =>
+      toast.error("Erro", { description: err.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+
   // Marca cobrança manual como recebida. Disponível só em cobranças
   // origem='manual' com status PENDING/OVERDUE — Asaas sincroniza
   // automaticamente via webhook nas origens 'asaas'.
@@ -299,10 +335,8 @@ export default function Financeiro() {
   };
 
   const confirmarBulkCancel = () => {
-    for (const c of cobrancasBulkSelecionadas) {
-      excluirCobMut.mutate({ id: c.id });
-    }
-    setSelecionadas(new Set());
+    const ids = cobrancasBulkSelecionadas.map((c: any) => Number(c.id));
+    excluirCobBulkMut.mutate({ ids });
     setConfirmBulkCancel(false);
   };
 
@@ -1123,23 +1157,23 @@ export default function Financeiro() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               As cobranças pendentes selecionadas serão canceladas no Asaas e
-              no sistema. Cobranças já pagas ou estornadas não são afetadas.
-              Esta ação não pode ser desfeita.
+              no sistema, uma de cada vez. Cobranças já pagas ou estornadas
+              não são afetadas. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={excluirCobMut.isPending}>
+            <AlertDialogCancel disabled={excluirCobBulkMut.isPending}>
               Manter
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={excluirCobMut.isPending}
+              disabled={excluirCobBulkMut.isPending}
               onClick={(e) => {
                 e.preventDefault();
                 confirmarBulkCancel();
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Cancelar cobranças
+              {excluirCobBulkMut.isPending ? "Cancelando..." : "Cancelar cobranças"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
