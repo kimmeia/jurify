@@ -20,7 +20,7 @@ import {
   despesas,
   users,
 } from "../../drizzle/schema";
-import { and, asc, between, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, between, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   criarCategoriaDespesa,
   listarFaixasComissao,
@@ -116,20 +116,29 @@ export async function simularComissao(
   // atendente A; mesmo que o cliente seja transferido pro B depois, as
   // parcelas continuam apontando pro A (atendenteId não muda na cobrança)
   // e ficam bloqueadas após o 1º fechamento.
-  const jaFechadasMap = await carregarMapaCobrancasJaFechadas(escritorioId);
-  const idsJaFechadas = Array.from(jaFechadasMap.keys());
-
+  //
+  // Implementado como NOT EXISTS no SQL em vez de carregar todos os IDs
+  // pra memória + `NOT IN (...)`. Em escritórios com 2+ anos de histórico
+  // (50 atendentes × 200 cob/mês × 24 meses = 240k IDs), o NOT IN ficava
+  // O(n) só no parsing do SQL. NOT EXISTS usa índice e escala flat.
+  // Filtra por `foiComissionavelItem=TRUE` pra ser consistente com o
+  // helper `carregarMapaCobrancasJaFechadas` (itens marcados não-com.
+  // num fechamento antigo podem re-entrar — semântica preservada).
   const condicoes = [
     eq(asaasCobrancas.escritorioId, escritorioId),
     eq(asaasCobrancas.atendenteId, atendenteId),
     isNotNull(asaasCobrancas.dataPagamento),
     between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
     inArray(asaasCobrancas.status, STATUS_PAGOS),
+    sql`NOT EXISTS (
+      SELECT 1 FROM ${comissoesFechadasItens}
+      INNER JOIN ${comissoesFechadas}
+        ON ${comissoesFechadas.id} = ${comissoesFechadasItens.comissaoFechadaId}
+      WHERE ${comissoesFechadasItens.asaasCobrancaId} = ${asaasCobrancas.id}
+        AND ${comissoesFechadas.escritorioId} = ${escritorioId}
+        AND ${comissoesFechadasItens.foiComissionavel} = TRUE
+    )`,
   ];
-  // notInArray vazio gera SQL inválido (NOT IN ()) — só adiciona se houver
-  if (idsJaFechadas.length > 0) {
-    condicoes.push(notInArray(asaasCobrancas.id, idsJaFechadas));
-  }
 
   const linhas = await db
     .select({
