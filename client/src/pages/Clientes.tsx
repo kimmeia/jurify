@@ -1904,7 +1904,11 @@ function ClienteDetalhe({
 
         {/* Aba 1: Visão Geral (dados + tarefas) */}
         <TabsContent value="visao-geral" className="mt-4 space-y-4">
-          <EditarForm cliente={cliente} onSuccess={() => { refetch(); onUpdate(); }} />
+          {/* key={cliente.id} força remount ao trocar de cliente — os useState
+              do EditarForm são inicializados via `cliente.X` e não re-sincronizam
+              quando a prop muda; sem o key, salvar com cliente B persistiria
+              nome/CPF/qualificação do cliente A (corrupção silenciosa). */}
+          <EditarForm key={cliente.id} cliente={cliente} onSuccess={() => { refetch(); onUpdate(); }} />
           <TarefasClienteTab contatoId={id} />
         </TabsContent>
 
