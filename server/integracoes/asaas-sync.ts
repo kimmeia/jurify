@@ -125,6 +125,47 @@ export function deduplicarVinculosPorCustomer<T extends {
 }
 
 /**
+ * Insert idempotente em `asaas_clientes` que sobrevive à UNIQUE
+ * `(escritorioId, asaasCustomerId)` (migration 0104).
+ *
+ * Quando duas requests (ex: webhook CUSTOMER_CREATED concorrente + clique
+ * de "Sincronizar" na UI) tentam inserir o mesmo customer, a UNIQUE faz
+ * o 2º falhar com ER_DUP_ENTRY. Antes dessa proteção, isso virava 500 no
+ * webhook ou TRPCError feio na UI. Agora capturamos:
+ *
+ *   - Vínculo já existe → atualiza só `sincronizadoEm` (preserva
+ *     `contatoId`/`primario` do existente, pra não orfanar cobranças
+ *     daquele customer apontando pro contatoId antigo).
+ *   - Outro erro → propaga (não engole bugs reais).
+ *
+ * Retorna `true` se inseriu de fato, `false` se vínculo já existia.
+ */
+export async function inserirVinculoAsaasIdempotente(
+  values: typeof asaasClientes.$inferInsert,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    await db.insert(asaasClientes).values(values);
+    return true;
+  } catch (err: any) {
+    if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+      // Race benigna: vínculo já existe. Bump sincronizadoEm pra
+      // refletir "vi esse customer agora", sem mexer em contatoId/primario.
+      await db
+        .update(asaasClientes)
+        .set({ sincronizadoEm: new Date() })
+        .where(and(
+          eq(asaasClientes.escritorioId, values.escritorioId),
+          eq(asaasClientes.asaasCustomerId, values.asaasCustomerId),
+        ));
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
  * Sincroniza cobranças de UM cliente vinculado.
  * Retorna contadores discriminados — permite ao caller saber o que mudou de verdade.
  *

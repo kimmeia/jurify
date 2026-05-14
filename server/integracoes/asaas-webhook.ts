@@ -27,7 +27,7 @@ import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
-import { extrairDataPagamento } from "./asaas-sync";
+import { extrairDataPagamento, inserirVinculoAsaasIdempotente } from "./asaas-sync";
 import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
 import { dataHojeBR } from "../../shared/escritorio-types";
 const log = createLogger("integracoes-asaas-webhook");
@@ -370,7 +370,7 @@ export function registerAsaasWebhook(app: Express) {
               contatoId = novo.id;
             }
 
-            await db.insert(asaasClientes).values({
+            await inserirVinculoAsaasIdempotente({
               escritorioId,
               contatoId,
               asaasCustomerId: customer.id,

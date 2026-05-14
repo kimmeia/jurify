@@ -30,6 +30,7 @@ import {
   syncCobrancasEscritorio,
   syncTodasCobrancasDoContato,
   agregarVinculosPorContato,
+  inserirVinculoAsaasIdempotente,
   type VinculoLinha,
   type CobrancaAgg,
   type ContatoMeta,
@@ -313,7 +314,7 @@ async function finalizarVinculacao(
     eq(contatos.escritorioId, escritorioId),
   ));
 
-  await db.insert(asaasClientes).values({
+  await inserirVinculoAsaasIdempotente({
     escritorioId,
     contatoId,
     asaasCustomerId: asaasCli.id,
@@ -324,7 +325,7 @@ async function finalizarVinculacao(
 
   for (const sec of secundarios) {
     if (sec.id === asaasCli.id) continue;
-    await db.insert(asaasClientes).values({
+    await inserirVinculoAsaasIdempotente({
       escritorioId,
       contatoId,
       asaasCustomerId: sec.id,
@@ -1579,7 +1580,7 @@ export const asaasRouter = router({
 
       let customersAdicionados = 0;
       for (const cli of novos) {
-        await db.insert(asaasClientes).values({
+        await inserirVinculoAsaasIdempotente({
           escritorioId: esc.escritorio.id,
           contatoId: input.contatoId,
           asaasCustomerId: cli.id,
@@ -2423,7 +2424,7 @@ export const asaasRouter = router({
 
             for (const cli of novos) {
               const ehEsteOPrimario = !jaTemPrimario;
-              await db.insert(asaasClientes).values({
+              await inserirVinculoAsaasIdempotente({
                 escritorioId: esc.escritorio.id,
                 contatoId: input.contatoId,
                 asaasCustomerId: cli.id,
@@ -2926,7 +2927,7 @@ export const asaasRouter = router({
         .limit(1);
 
       if (!jaVinculado) {
-        await db.insert(asaasClientes).values({
+        await inserirVinculoAsaasIdempotente({
           escritorioId: esc.escritorio.id,
           contatoId,
           asaasCustomerId: asaasCli.id,
