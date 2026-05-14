@@ -667,6 +667,52 @@ export class AsaasClient {
     return res.data;
   }
 
+  /**
+   * Versão paginada de `listarCobrancas` — itera até hasMore=false,
+   * agregando todas as páginas. Útil pra KPIs admin (MRR, faturamento)
+   * que precisam de visão completa, não só da primeira página.
+   *
+   * Hard cap em `maxPaginas` (default 100 × 100 itens = 10k) pra
+   * evitar runaway loop se a API responder com paginação corrompida.
+   * O rate guard do AsaasClient cobre cada request individualmente.
+   */
+  async listarTodasCobrancasPaginado(
+    params?: Parameters<AsaasClient["listarCobrancas"]>[0],
+    maxPaginas: number = 100,
+  ): Promise<AsaasPayment[]> {
+    const todas: AsaasPayment[] = [];
+    let offset = 0;
+    const limit = 100;
+    for (let p = 0; p < maxPaginas; p++) {
+      const res = await this.listarCobrancas({ ...params, offset, limit });
+      todas.push(...res.data);
+      if (!res.hasMore || res.data.length === 0) break;
+      offset += res.limit ?? limit;
+    }
+    return todas;
+  }
+
+  /**
+   * Versão paginada de `listarAssinaturas` — mesma motivação que
+   * `listarTodasCobrancasPaginado`: KPIs admin (MRR de planos ativos)
+   * precisam contar TODAS as assinaturas, não só as 100 mais recentes.
+   */
+  async listarTodasAssinaturasPaginado(
+    params?: Parameters<AsaasClient["listarAssinaturas"]>[0],
+    maxPaginas: number = 100,
+  ): Promise<AsaasSubscription[]> {
+    const todas: AsaasSubscription[] = [];
+    let offset = 0;
+    const limit = 100;
+    for (let p = 0; p < maxPaginas; p++) {
+      const res = await this.listarAssinaturas({ ...params, offset, limit });
+      todas.push(...res.data);
+      if (!res.hasMore || res.data.length === 0) break;
+      offset += res.limit ?? limit;
+    }
+    return todas;
+  }
+
   async cancelarAssinatura(id: string): Promise<void> {
     await this.api.delete(`/subscriptions/${id}`);
   }
