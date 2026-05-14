@@ -29,7 +29,6 @@ import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
   syncTodasCobrancasDoContato,
-  atualizarCobrancasLocaisDoEscritorio,
   agregarVinculosPorContato,
   type VinculoLinha,
   type CobrancaAgg,
@@ -1093,13 +1092,25 @@ export const asaasRouter = router({
     // agora tem vínculo (criado pelo sync de clientes acima) ficam com
     // nome correto. Resolve o caso "depois de sincronizar, cobranças
     // antigas ainda apareciam com '—'".
-    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0, cobAdotadas = 0;
+    // Refresh das cobranças via listagem paginada por janela curta
+    // (24h por padrão). Substituiu o pattern antigo de
+    // `atualizarCobrancasLocaisDoEscritorio` que fazia GET individual
+    // por cobrança local — em escritório com 500 cobranças vinha gerando
+    // 500 requests sequenciais ao Asaas (~3min de rajada).
+    //
+    // Agora usa `syncCobrancasEscritorio` com diasHistorico=1: pra cada
+    // vínculo, 1 request paginado (≤2 páginas no típico). 50 vínculos =
+    // ~50 requests em vez de 500. Webhook em tempo real cobre o resto
+    // dos eventos; este botão é só "catch-up" das últimas 24h.
+    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
+    const cobAdotadas = 0;
     try {
-      const result = await atualizarCobrancasLocaisDoEscritorio(esc.escritorio.id);
+      const result = await syncCobrancasEscritorio(esc.escritorio.id, {
+        diasHistorico: 1,
+      });
+      cobNovas = result.novas;
       cobAtualizadas = result.atualizadas;
       cobRemovidas = result.removidas;
-      cobAdotadas = result.adotadas;
-      // cobNovas fica 0 — sync deste botão não importa nada novo
     } catch (err: any) {
       log.warn(`[Asaas] Erro ao atualizar cobranças locais: ${err.message}`);
     }
