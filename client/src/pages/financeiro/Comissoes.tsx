@@ -67,7 +67,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatBRL } from "./helpers";
+import { formatBRL, useFinanceiroPerms } from "./helpers";
 import {
   FiltrosAtribuir,
   filtrosParaInput,
@@ -141,6 +141,7 @@ export function ComissoesTab() {
 
 function CalcularSection() {
   const utils = trpc.useUtils();
+  const perms = useFinanceiroPerms();
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const atendentes = useMemo(
     () =>
@@ -328,21 +329,24 @@ function CalcularSection() {
                 : `alíquota fixa ${aliquotaAplicada}%`}
               {" · "}valor mínimo {formatBRL(valorMinimo)}
             </span>
-            <Button
-              size="sm"
-              className="ml-auto"
-              disabled={
-                !sim.data ||
-                sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0
-              }
-              onClick={() => setConfirmFechar(true)}
-            >
-              <Lock className="h-3.5 w-3.5 mr-2" />
-              Fechar período
-            </Button>
+            {perms.podeCriar && (
+              <Button
+                size="sm"
+                className="ml-auto"
+                disabled={
+                  !sim.data ||
+                  sim.data.comissionaveis.length + sim.data.naoComissionaveis.length === 0
+                }
+                onClick={() => setConfirmFechar(true)}
+              >
+                <Lock className="h-3.5 w-3.5 mr-2" />
+                Fechar período
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
+              className={perms.podeCriar ? "" : "ml-auto"}
               onClick={() => setDiagOpen(true)}
               title="Compara cobranças pagas no período com o que entra na comissão"
             >
@@ -888,6 +892,7 @@ function CelulaComissao({
 
 function AtribuirSection() {
   const utils = trpc.useUtils();
+  const perms = useFinanceiroPerms();
   const { filtros, setFiltros, resetar } = useFiltrosAtribuir();
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [dialogAberto, setDialogAberto] = useState(false);
@@ -969,27 +974,31 @@ function AtribuirSection() {
                 : `${totalEncontrado} cobrança(s)`}
             </div>
             <div className="flex-1" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => reconciliarMut.mutate({})}
-              disabled={reconciliarMut.isPending}
-              title="Re-aplica a cascata de inferência (externalReference + atendente do cliente) sobre cobranças órfãs"
-            >
-              {reconciliarMut.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-              ) : (
-                <Wand2 className="h-3.5 w-3.5 mr-2" />
-              )}
-              Reconciliar órfãs
-            </Button>
-            <Button
-              size="sm"
-              disabled={selecionadas.size === 0}
-              onClick={() => setDialogAberto(true)}
-            >
-              Atribuir selecionadas ({selecionadas.size})
-            </Button>
+            {perms.podeEditar && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => reconciliarMut.mutate({})}
+                  disabled={reconciliarMut.isPending}
+                  title="Re-aplica a cascata de inferência (externalReference + atendente do cliente) sobre cobranças órfãs"
+                >
+                  {reconciliarMut.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-3.5 w-3.5 mr-2" />
+                  )}
+                  Reconciliar órfãs
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={selecionadas.size === 0}
+                  onClick={() => setDialogAberto(true)}
+                >
+                  Atribuir selecionadas ({selecionadas.size})
+                </Button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1069,7 +1078,7 @@ function AtribuirSection() {
                             comissionavelOverride: novo,
                           })
                         }
-                        disabled={overrideMut.isPending}
+                        disabled={overrideMut.isPending || !perms.podeEditar}
                       />
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">
@@ -1233,6 +1242,7 @@ function FechamentoDetalheDialog({
   onClose: () => void;
 }) {
   const utils = trpc.useUtils();
+  const perms = useFinanceiroPerms();
   const { data, isLoading } = trpc.comissoes.obterFechamento.useQuery({
     id: fechamentoId,
   });
@@ -1356,17 +1366,19 @@ function FechamentoDetalheDialog({
         )}
 
         <AlertDialogFooter className="flex-row gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={excluirMut.isPending}
-            onClick={() =>
-              excluirMut.mutate({ id: fechamentoId })
-            }
-            className="text-destructive hover:text-destructive"
-          >
-            Excluir fechamento
-          </Button>
+          {perms.podeExcluir && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={excluirMut.isPending}
+              onClick={() =>
+                excluirMut.mutate({ id: fechamentoId })
+              }
+              className="text-destructive hover:text-destructive"
+            >
+              Excluir fechamento
+            </Button>
+          )}
           <div className="flex-1" />
           <AlertDialogAction onClick={onClose}>Fechar</AlertDialogAction>
         </AlertDialogFooter>
