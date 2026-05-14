@@ -54,6 +54,7 @@ export interface DREResultado {
 const STATUS_PAGO = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"] as const;
 
 const SEM_CATEGORIA = "(sem categoria)";
+const CATEGORIA_REMOVIDA_PREFIX = "Categoria removida";
 
 /**
  * Calcula DRE pra um escritório num intervalo de datas (inclusivo).
@@ -155,9 +156,18 @@ export async function calcularDRE(
         ja.total += valorNum;
         ja.count++;
       } else {
+        // categoriaId=null → nunca classificada. categoriaId set + nome null
+        // → categoria foi deletada hard depois da cobrança (raro, só fica
+        // possível se algum admin apaga linha direto no banco; soft-delete
+        // via `ativo` preserva o nome).
+        const nome =
+          row.categoriaNome
+          ?? (row.categoriaId === null
+            ? SEM_CATEGORIA
+            : `${CATEGORIA_REMOVIDA_PREFIX} #${row.categoriaId}`);
         grupo.set(key, {
           categoriaId: row.categoriaId,
-          nome: row.categoriaNome ?? SEM_CATEGORIA,
+          nome,
           total: valorNum,
           count: 1,
         });
