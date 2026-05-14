@@ -50,6 +50,7 @@ import {
   Loader2,
   CalendarClock,
   CheckSquare,
+  Archive,
 } from "lucide-react";
 
 interface Props {
@@ -91,6 +92,19 @@ export default function MovimentacaoDetalheDrawer({ eventoId, onClose }: Props) 
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-20 w-full" />
+          </div>
+        ) : error?.data?.code === "NOT_FOUND" ? (
+          // Evento foi limpo do banco (cron remove eventos antigos pra
+          // liberar espaço — notificacoes.eventoId é intencionalmente um
+          // soft FK). Mostra estado arquivado em vez de toast de erro.
+          <div className="px-4 py-8 flex flex-col items-center gap-2 text-center">
+            <Archive className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm font-medium">Movimentação arquivada</p>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              Esta movimentação foi limpa do histórico (eventos antigos são
+              removidos periodicamente para liberar espaço). O título e a
+              data da notificação continuam disponíveis no inbox.
+            </p>
           </div>
         ) : error ? (
           <div className="px-4 py-6 text-sm text-destructive">

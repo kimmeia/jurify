@@ -350,7 +350,9 @@ export const agendamentos = mysqlTable("agendamentos", {
   /** Cliente vinculado (opcional). Permite que o "responsável do cliente"
    *  veja o agendamento mesmo não tendo sido o criador/responsável direto. */
   contatoId: int("contatoIdAgend"),
-  processoId: int("processoIdAgend"),
+  /** FK pra cliente_processos com ON DELETE SET NULL (migration 0104).
+   *  Deletar processo preserva agendamento/prazo do usuário com link nulo. */
+  processoId: int("processoIdAgend").references(() => clienteProcessos.id, { onDelete: "set null" }),
   corHex: varchar("corHex", { length: 7 }).default("#3b82f6").notNull(),
   createdAt: timestamp("createdAtAgend").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgend").defaultNow().onUpdateNow().notNull(),
@@ -972,7 +974,9 @@ export const tarefas = mysqlTable("tarefas", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdTarefa").notNull(),
   contatoId: int("contatoIdTarefa"),
-  processoId: int("processoIdTarefa"),
+  /** FK pra cliente_processos com ON DELETE SET NULL (migration 0104).
+   *  Deletar processo preserva tarefa do usuário com link nulo. */
+  processoId: int("processoIdTarefa").references(() => clienteProcessos.id, { onDelete: "set null" }),
   responsavelId: int("responsavelIdTarefa"),
   criadoPor: int("criadoPorTarefa").notNull(),
   titulo: varchar("tituloTarefa", { length: 255 }).notNull(),
@@ -1848,8 +1852,12 @@ export const kanbanCards = mysqlTable("kanban_cards", {
    * nem em pacote de ações compartilhando paymentId.
    *
    * NULL = card legado (criado por SmartFlow antigo ou via UI direto).
+   *
+   * FK pra cliente_processos com ON DELETE CASCADE (migration 0104).
+   * Cards são puramente visuais — quando processo é deletado, faz sentido
+   * remover os cards correspondentes (não há valor histórico em manter).
    */
-  processoId: int("processoIdKCard"),
+  processoId: int("processoIdKCard").references(() => clienteProcessos.id, { onDelete: "cascade" }),
   /** Se o card está atrasado (prazo vencido sem mover) */
   atrasado: boolean("atrasadoKCard").default(false).notNull(),
   ordem: int("ordemKCard").default(0).notNull(),
