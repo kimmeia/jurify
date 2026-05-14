@@ -162,9 +162,43 @@ function Empty() {
 // ───────────────────────── página ─────────────────────────
 
 export default function Relatorios() {
-  const [tab, setTab] = useState("atendimento");
   const [dias, setDias] = useState("30");
   const diasNum = Number(dias);
+
+  // Permissão por módulo — relatorios (atendimento/comercial/producao)
+  // e calculos (aba de Cálculos). Atendente/estagiário tem só calculos.
+  const { data: minhasPerms, isLoading: permsLoading } = trpc.permissoes.minhasPermissoes.useQuery(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  );
+  const can = (modulo: string): boolean => {
+    if (permsLoading || !minhasPerms?.permissoes) return true;
+    const p = (minhasPerms.permissoes as Record<string, { verTodos: boolean; verProprios: boolean } | undefined>)[modulo];
+    return !!(p?.verTodos || p?.verProprios);
+  };
+  const podeRelatorios = can("relatorios");
+  const podeCalculos = can("calculos");
+
+  // Default tab: primeira permitida. Atendente sem relatorios cai em "calculos".
+  const defaultTab = podeRelatorios ? "atendimento" : podeCalculos ? "calculos" : "atendimento";
+  const [tab, setTab] = useState(defaultTab);
+  // Re-alinha o tab atual quando permissões chegam (evita mostrar
+  // "atendimento" bloqueado pra atendente até o usuário clicar em algo).
+  useEffect(() => {
+    if (!permsLoading) {
+      if (tab === "atendimento" && !podeRelatorios && podeCalculos) {
+        setTab("calculos");
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permsLoading, podeRelatorios, podeCalculos]);
+
+  const tabsVisiveis = [
+    podeRelatorios && "atendimento",
+    podeRelatorios && "comercial",
+    podeRelatorios && "producao",
+    podeCalculos && "calculos",
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
@@ -190,36 +224,60 @@ export default function Relatorios() {
         </Select>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4 h-10">
-          <TabsTrigger value="atendimento" className="text-xs sm:text-sm gap-1.5">
-            <MessageCircle className="h-3.5 w-3.5" /> Atendimento
-          </TabsTrigger>
-          <TabsTrigger value="comercial" className="text-xs sm:text-sm gap-1.5">
-            <TrendingUp className="h-3.5 w-3.5" /> Comercial
-          </TabsTrigger>
-          <TabsTrigger value="producao" className="text-xs sm:text-sm gap-1.5">
-            <LayoutGrid className="h-3.5 w-3.5" /> Produção
-          </TabsTrigger>
-          <TabsTrigger value="calculos" className="text-xs sm:text-sm gap-1.5">
-            <Calculator className="h-3.5 w-3.5" /> Cálculos
-          </TabsTrigger>
-        </TabsList>
+      {tabsVisiveis.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Você não tem permissão para acessar nenhum relatório.
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className={`grid w-full h-10 grid-cols-${tabsVisiveis.length}`}>
+            {podeRelatorios && (
+              <TabsTrigger value="atendimento" className="text-xs sm:text-sm gap-1.5">
+                <MessageCircle className="h-3.5 w-3.5" /> Atendimento
+              </TabsTrigger>
+            )}
+            {podeRelatorios && (
+              <TabsTrigger value="comercial" className="text-xs sm:text-sm gap-1.5">
+                <TrendingUp className="h-3.5 w-3.5" /> Comercial
+              </TabsTrigger>
+            )}
+            {podeRelatorios && (
+              <TabsTrigger value="producao" className="text-xs sm:text-sm gap-1.5">
+                <LayoutGrid className="h-3.5 w-3.5" /> Produção
+              </TabsTrigger>
+            )}
+            {podeCalculos && (
+              <TabsTrigger value="calculos" className="text-xs sm:text-sm gap-1.5">
+                <Calculator className="h-3.5 w-3.5" /> Cálculos
+              </TabsTrigger>
+            )}
+          </TabsList>
 
-        <TabsContent value="atendimento" className="mt-4">
-          <AbaAtendimento dias={diasNum} />
-        </TabsContent>
-        <TabsContent value="comercial" className="mt-4 space-y-6">
-          <DashboardComercial />
-          <AbaComercial dias={diasNum} />
-        </TabsContent>
-        <TabsContent value="producao" className="mt-4">
-          <AbaProducao dias={diasNum} />
-        </TabsContent>
-        <TabsContent value="calculos" className="mt-4">
-          <AbaCalculos dias={diasNum} />
-        </TabsContent>
-      </Tabs>
+          {podeRelatorios && (
+            <TabsContent value="atendimento" className="mt-4">
+              <AbaAtendimento dias={diasNum} />
+            </TabsContent>
+          )}
+          {podeRelatorios && (
+            <TabsContent value="comercial" className="mt-4 space-y-6">
+              <DashboardComercial />
+              <AbaComercial dias={diasNum} />
+            </TabsContent>
+          )}
+          {podeRelatorios && (
+            <TabsContent value="producao" className="mt-4">
+              <AbaProducao dias={diasNum} />
+            </TabsContent>
+          )}
+          {podeCalculos && (
+            <TabsContent value="calculos" className="mt-4">
+              <AbaCalculos dias={diasNum} />
+            </TabsContent>
+          )}
+        </Tabs>
+      )}
     </div>
   );
 }
@@ -504,9 +562,9 @@ function DashboardComercial() {
 
   // Query do drill-down — só dispara quando algum atendente for selecionado.
   // Usa o mesmo período do dashboard (inicio/fim).
-  const { data: detalheAtendente, isLoading: loadingDetalhe } = (trpc as any).relatorios.detalheAtendenteComercial.useQuery(
+  const { data: detalheAtendente, isLoading: loadingDetalhe } = trpc.relatorios.detalheAtendenteComercial.useQuery(
     {
-      atendenteId: atendenteDrillDown?.id,
+      atendenteId: atendenteDrillDown?.id ?? 0,
       dataInicio: inicio,
       dataFim: fim,
     },
@@ -544,7 +602,7 @@ function DashboardComercial() {
 
   const atendenteIdEfetivo = atendenteSel === "__all__" ? undefined : parseInt(atendenteSel, 10);
 
-  const { data, isLoading } = (trpc as any).relatorios?.comercialDashboard?.useQuery?.(
+  const { data, isLoading } = trpc.relatorios.comercialDashboard.useQuery(
     {
       dataInicio: inicio,
       dataFim: fim,
@@ -552,7 +610,7 @@ function DashboardComercial() {
       atendenteId: atendenteIdEfetivo,
     },
     { refetchInterval: 60_000, retry: false },
-  ) ?? { data: undefined, isLoading: false };
+  );
 
   // Sem setor comercial configurado: convida o admin a configurar.
   if (setoresComerciais.length === 0) {
@@ -740,8 +798,11 @@ function DashboardComercial() {
                         {r.meta != null && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[10px]">
-                              <span className="text-muted-foreground">
-                                Meta: {formatBRL(r.meta)}
+                              <span
+                                className="text-muted-foreground"
+                                title={`Meta mensal: ${formatBRL(r.meta)}`}
+                              >
+                                Meta período: {formatBRL(r.metaPeriodo ?? r.meta)}
                               </span>
                               <span className="font-medium">
                                 {(r.progressoMeta ?? 0).toFixed(1)}%
@@ -883,10 +944,10 @@ function AbaComercial({ dias }: { dias: number }) {
   // Usa procedure dedicada que filtra por permissão: atendente/SDR/estagiário
   // só vê ele mesmo aqui (não consegue filtrar relatório por outro colaborador).
   // Gestor/dono vê todos.
-  const { data: colaboradoresData } = (trpc.configuracoes as any).listarColaboradoresParaFiltro?.useQuery(
+  const { data: colaboradoresData } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
     { modulo: "relatorios" },
     { retry: false, refetchOnWindowFocus: false },
-  ) ?? { data: undefined };
+  );
   const atendentes = colaboradoresData?.colaboradores ?? [];
 
   const responsavelId =
@@ -1170,13 +1231,13 @@ function AbaProducao({ dias }: { dias: number }) {
   // "todos" = sem filtro (null no backend); senão, funilId numérico como string
   const [funilSel, setFunilSel] = useState<string>("todos");
 
-  const { data: funis } = (trpc as any).kanban.listarFunis.useQuery(undefined, {
+  const { data: funis } = trpc.kanban.listarFunis.useQuery(undefined, {
     retry: false,
   });
 
   const funilIdInput = funilSel === "todos" ? undefined : Number(funilSel);
   const { data, isLoading } = trpc.relatorios.producao.useQuery(
-    { dias, funilId: funilIdInput } as any,
+    { dias, funilId: funilIdInput },
     { refetchInterval: 60_000 },
   );
 
