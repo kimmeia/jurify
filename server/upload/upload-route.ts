@@ -26,6 +26,36 @@ import crypto from "crypto";
 const UPLOAD_DIR = path.resolve("./uploads");
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
+/**
+ * Apaga arquivo do disco a partir de uma URL `/uploads/escritorio_{id}/{file}`.
+ * Não-fatal: ENOENT (arquivo já não existe), URL malformada, ou erro de I/O
+ * só logam — o caller normalmente está deletando metadado do DB e não pode
+ * abortar por causa do binário.
+ *
+ * Usado por: upload.excluir (procedure), router-clientes.excluirArquivo/
+ * excluirPasta/excluirCliente (cleanup de blobs órfãos).
+ */
+export async function apagarArquivoDoDisco(
+  url: string,
+  escritorioId: number,
+): Promise<void> {
+  // Path-traversal guard: URL precisa ser do escritório certo e sem ".."
+  const expected = `/uploads/escritorio_${escritorioId}/`;
+  if (!url || !url.startsWith(expected) || url.includes("..")) {
+    return; // URL externa (S3 legacy, etc) ou maliciosa — ignorar silenciosamente
+  }
+  const filepath = path.join(UPLOAD_DIR, url.replace("/uploads/", ""));
+  try {
+    await fs.unlink(filepath);
+  } catch (err: any) {
+    if (err.code !== "ENOENT") {
+      // Log mas não relança — caller já está em destruição.
+      // eslint-disable-next-line no-console
+      console.warn(`[upload] Falha ao apagar arquivo ${url}: ${err.message}`);
+    }
+  }
+}
+
 // MIME types aceitos. Mantemos lista explícita pra fechar a porta pra
 // formatos que nunca deveriam ser aceitos (ex: executáveis, scripts).
 const ALLOWED_TYPES = new Set([
@@ -164,21 +194,13 @@ export const uploadRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
 
-      // Segurança: garantir que o URL é do escritório do usuário (path
-      // traversal: bloqueia ".." e qualquer coisa fora do prefixo esperado).
+      // Segurança: bloqueia chamada com URL fora do escritório / com "..".
       const expected = `/uploads/escritorio_${esc.escritorio.id}/`;
       if (!input.url.startsWith(expected) || input.url.includes("..")) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir este arquivo." });
       }
 
-      const filepath = path.join(UPLOAD_DIR, input.url.replace("/uploads/", ""));
-      try {
-        await fs.unlink(filepath);
-      } catch (err: any) {
-        // ENOENT (arquivo já excluído) é benigno — sucesso idempotente.
-        if (err.code !== "ENOENT") throw err;
-      }
-
+      await apagarArquivoDoDisco(input.url, esc.escritorio.id);
       return { success: true };
     }),
 });

@@ -4,16 +4,40 @@
  * URL: /assinar/:token
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import SignaturePad from "signature_pad";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
+// Worker do pdfjs servido localmente via Vite `?url`. Atrelado à mesma
+// versão de pdfjs-dist (5.4.296) que o react-pdf bundla — alinhar via
+// package.json é crítico, caret/range causa mismatch.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { PenLine, FileText, CheckCircle, XCircle, Clock, Loader2, ExternalLink, ShieldCheck, AlertTriangle, Eraser } from "lucide-react";
+import {
+  PenLine, FileText, CheckCircle, XCircle, Clock, Loader2, ExternalLink,
+  ShieldCheck, AlertTriangle, Eraser, ChevronLeft, ChevronRight,
+  Calendar, User, IdCard,
+} from "lucide-react";
 import { toast } from "sonner";
+
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
+const TIPO_ICONE: Record<CampoTipo, any> = {
+  ASSINATURA: PenLine, DATA: Calendar, NOME: User, CPF: IdCard,
+};
+const TIPO_COR: Record<CampoTipo, string> = {
+  ASSINATURA: "bg-amber-200/70 border-amber-500 text-amber-900",
+  DATA: "bg-blue-200/70 border-blue-500 text-blue-900",
+  NOME: "bg-emerald-200/70 border-emerald-500 text-emerald-900",
+  CPF: "bg-violet-200/70 border-violet-500 text-violet-900",
+};
 
 const STATUS_LABELS: Record<string, string> = {
   pendente: "Aguardando", enviado: "Enviado", visualizado: "Visualizado",
@@ -37,6 +61,13 @@ export default function AssinarDocumento({ token }: { token: string }) {
   const { data: doc, isLoading, error } = (trpc as any).assinaturas.visualizarPorToken.useQuery(
     { token },
     { retry: false }
+  );
+
+  // Campos posicionais (Fase 1+). Quando vazio, fluxo legado
+  // (assinatura central na última página + página de certificação).
+  const { data: campos = [] } = (trpc as any).assinaturas.listarCamposPorToken.useQuery(
+    { token },
+    { retry: false, enabled: !!doc }
   );
 
   const assinarMut = (trpc as any).assinaturas.assinarPorToken.useMutation({
@@ -174,9 +205,10 @@ export default function AssinarDocumento({ token }: { token: string }) {
   }
 
   // Tela de assinatura
+  const temCamposPosicionais = (campos as any[]).length > 0;
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4 flex items-center justify-center">
-      <div className="w-full max-w-lg space-y-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+      <div className={`mx-auto ${temCamposPosicionais ? "max-w-5xl" : "max-w-lg"} space-y-4`}>
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center mx-auto shadow-lg">
@@ -185,6 +217,19 @@ export default function AssinarDocumento({ token }: { token: string }) {
           <h1 className="text-2xl font-bold tracking-tight">Assinatura Digital</h1>
           <p className="text-sm text-muted-foreground">Revise e assine o documento abaixo</p>
         </div>
+
+        {/* PDF preview com caixas posicionais (Fase 1+).
+            Só aparece quando temCamposPosicionais — caso contrário,
+            a UX legada (botão "Abrir documento" + form) é mantida.
+            Usa endpoint dedicado /api/assinatura/pdf/token/:token em
+            vez do path estático /uploads/...: passa pelo auth via token,
+            seta CORP cross-origin no header, e loga se PDF sumiu. */}
+        {temCamposPosicionais && (
+          <PreviewPdfComCampos
+            documentoUrl={`/api/assinatura/pdf/token/${token}`}
+            campos={campos as any[]}
+          />
+        )}
 
         {/* Documento */}
         <Card>
@@ -314,5 +359,164 @@ export default function AssinarDocumento({ token }: { token: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Preview do PDF com caixas amarelas marcando onde cada campo será
+ * carimbado. NÃO é interativo — só visual. O backend carimba
+ * automaticamente em cada coord quando o cliente clica "Assinar".
+ *
+ * Coords vêm do DB em pontos PDF bottom-left. Reconverte pra top-left
+ * (que é o que o overlay HTML precisa) no momento do render.
+ */
+function PreviewPdfComCampos({
+  documentoUrl,
+  campos,
+}: {
+  documentoUrl: string;
+  campos: Array<{
+    id: number; tipo: CampoTipo; pagina: number;
+    x: number; y: number; largura: number; altura: number;
+  }>;
+}) {
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(0);
+  const [pageSizePt, setPageSizePt] = useState<{ w: number; h: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Memoiza options pra Document não recriar transport a cada render
+  // (causa "sendWithPromise null" no Page).
+  const pdfOptions = useMemo(
+    () => ({ withCredentials: true } as any),
+    [],
+  );
+
+  const camposDaPagina = campos.filter((c) => c.pagina === paginaAtual);
+  const paginasComCampos = Array.from(new Set(campos.map((c) => c.pagina))).sort((a, b) => a - b);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <FileText className="h-4 w-4 text-amber-500" />
+            Onde sua assinatura vai aparecer
+          </CardTitle>
+          {totalPaginas > 0 && (
+            <div className="flex items-center gap-1 text-xs">
+              <Button
+                size="sm" variant="outline"
+                className="h-7 w-7 p-0"
+                onClick={() => setPaginaAtual((p) => Math.max(1, p - 1))}
+                disabled={paginaAtual <= 1}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="px-2 text-muted-foreground min-w-20 text-center">
+                {paginaAtual} / {totalPaginas}
+              </span>
+              <Button
+                size="sm" variant="outline"
+                className="h-7 w-7 p-0"
+                onClick={() => setPaginaAtual((p) => Math.min(totalPaginas, p + 1))}
+                disabled={paginaAtual >= totalPaginas}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {campos.length} campo(s) marcado(s). As caixas amarelas indicam onde sua
+          assinatura/dados serão inseridos automaticamente. Páginas com campos:{" "}
+          {paginasComCampos.join(", ")}.
+        </p>
+      </CardHeader>
+      <CardContent className="bg-muted/20 flex justify-center pt-2">
+        <Document
+          // key={documentoUrl} força remount limpo se a URL mudar
+          key={documentoUrl}
+          file={documentoUrl}
+          options={pdfOptions}
+          onLoadSuccess={({ numPages }) => setTotalPaginas(numPages)}
+          onLoadError={(err) => {
+            // eslint-disable-next-line no-console
+            console.error("[PreviewPdfComCampos] Falha ao carregar PDF", {
+              documentoUrl,
+              error: err?.message,
+              name: err?.name,
+            });
+          }}
+          loading={
+            <div className="p-12 text-center text-sm text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              Carregando documento...
+            </div>
+          }
+          error={
+            <div className="p-12 text-center text-sm text-red-600">
+              Não foi possível exibir o documento.
+            </div>
+          }
+        >
+          <div ref={containerRef} className="relative inline-block shadow-md bg-white">
+            <Page
+              pageNumber={paginaAtual}
+              width={600}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              // originalWidth/Height = pontos PDF reais (não pixels
+              // escalados). Sem isso, render do overlay desalinhava
+              // do canvas porque trabalhava em escalas mistas.
+              onLoadSuccess={(p) => setPageSizePt({ w: p.originalWidth, h: p.originalHeight })}
+            />
+            {pageSizePt &&
+              camposDaPagina.map((c) => {
+                // Mede o canvas + offset relativo ao container. O overlay
+                // é absolute em relação ao container, então qualquer
+                // diferença entre onde o canvas começa e onde o container
+                // começa precisa ser compensada — senão a caixa fica
+                // deslocada ("alguns cm acima da linha").
+                const canvas = containerRef.current?.querySelector(
+                  "canvas.react-pdf__Page__canvas",
+                ) as HTMLCanvasElement | null;
+                const containerRect = containerRef.current?.getBoundingClientRect();
+                const canvasRect = canvas?.getBoundingClientRect();
+                const renderW = canvasRect?.width ?? 600;
+                const renderH = canvasRect?.height ?? 800;
+                const offsetX =
+                  canvasRect && containerRect
+                    ? canvasRect.left - containerRect.left
+                    : 0;
+                const offsetY =
+                  canvasRect && containerRect
+                    ? canvasRect.top - containerRect.top
+                    : 0;
+                const scaleX = renderW / pageSizePt.w;
+                const scaleY = renderH / pageSizePt.h;
+                // Backend devolve em PDF bottom-left → converte pra top-left
+                const yTop = pageSizePt.h - c.y - c.altura;
+                const Icone = TIPO_ICONE[c.tipo];
+                return (
+                  <div
+                    key={c.id}
+                    className={`absolute border-2 ${TIPO_COR[c.tipo]} flex items-center justify-center text-[10px] font-medium pointer-events-none`}
+                    style={{
+                      left: c.x * scaleX + offsetX,
+                      top: yTop * scaleY + offsetY,
+                      width: c.largura * scaleX,
+                      height: c.altura * scaleY,
+                    }}
+                  >
+                    <Icone className="h-3 w-3 mr-0.5" />
+                    {c.tipo}
+                  </div>
+                );
+              })}
+          </div>
+        </Document>
+      </CardContent>
+    </Card>
   );
 }

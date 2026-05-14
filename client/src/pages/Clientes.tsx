@@ -29,7 +29,7 @@ import {
   Users, Plus, Search, Phone, Mail, Trash2, Loader2, ArrowLeft, User,
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
-  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello,
+  Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -50,11 +50,15 @@ import { parseValorBR } from "@shared/valor-br";
 import { useLocation } from "wouter";
 
 /**
- * Botão "Monitorar na Judit" — cria/remove um monitoramento de NOVAS AÇÕES
- * pro CPF/CNPJ do cliente. É TOGGLE: se já estiver monitorando, clicar
- * remove o monitoramento (e interrompe a cobrança mensal recorrente).
+ * Botão "Monitorar processos" — cria/remove um monitoramento de NOVAS
+ * AÇÕES pro CPF/CNPJ do cliente. É TOGGLE: se já estiver monitorando,
+ * clicar remove o monitoramento (e interrompe a cobrança mensal
+ * recorrente). O motor de busca é próprio (scrapers PJe TJCE / ESAJ
+ * TJCE via credenciais do cofre) — a nomenclatura "Judit" antiga foi
+ * removida da UI mas alguns nomes técnicos no schema (statusJudit,
+ * juditErro) permanecem por compatibilidade com dados históricos.
  */
-function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
+function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
   const clean = cpfCnpj.replace(/\D/g, "");
   const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
   const [, setLocation] = useLocation();
@@ -93,7 +97,7 @@ function MonitorarJuditButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string
     onSuccess: (r: any) => {
       if (r?.juditErro) {
         toast.warning("Monitoramento removido localmente", {
-          description: `Mas falhou na Judit: ${r.juditErro}. A cobrança mensal foi interrompida.`,
+          description: `Mas falhou ao avisar o motor: ${r.juditErro}. A cobrança mensal foi interrompida.`,
         });
       } else {
         toast.success(`Monitoramento de ${nome} removido`, {
@@ -221,6 +225,18 @@ function initials(n: string) {
   return n.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
+/**
+ * Valida formato CNJ (compacto ou formatado). Aceita:
+ *  - 20 dígitos seguidos: "12345678920248060001"
+ *  - Formato canônico: "1234567-89.2024.8.06.0001"
+ * Sem checagem de DV — backend faz isso. Aqui só barra entrada óbvia
+ * (ex: "aaaaaaaaaaaaaaa") antes de mandar pro servidor.
+ */
+function cnjFormatoValido(cnj: string): boolean {
+  const compacto = cnj.replace(/\D/g, "");
+  return compacto.length === 20;
+}
+
 function timeAgo(d: string) {
   if (!d) return "";
   const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
@@ -249,7 +265,10 @@ function exportClientesCSV(clientes: any[]) {
   link.href = url;
   link.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
-  URL.revokeObjectURL(url);
+  // Revogar s\u00edncronamente ap\u00f3s click() race com o download em Safari/Firefox
+  // (mesmo padr\u00e3o do baixarPastaZip e do exportarDuplicatasPdf). setTimeout
+  // afasta a revoga\u00e7\u00e3o pro pr\u00f3ximo tick.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // ─── Segmentação (chips) ─────────────────────────────────────────────────────
@@ -276,8 +295,16 @@ function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
     return clientes.filter((c) => new Date(c.createdAt).getTime() >= seteDias);
   }
   if (seg === "inativo") {
+    // "Inativo" = sem conversa nos últimos 30d. updatedAt era a referência
+    // antiga mas webhooks (sync Asaas, tags) tocam a coluna, deixando o
+    // filtro sempre vazio. ultimaConversaAt vem do backend (MAX por contato);
+    // quando null (nunca conversou), usa createdAt — cliente cadastrado há
+    // 30+d sem interação também é inativo.
     const trintaDias = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return clientes.filter((c) => new Date(c.updatedAt || c.createdAt).getTime() < trintaDias);
+    return clientes.filter((c) => {
+      const ref = c.ultimaConversaAt || c.createdAt;
+      return new Date(ref).getTime() < trintaDias;
+    });
   }
   if (seg === "vip") {
     return clientes.filter((c) => (c.tags || "").toLowerCase().includes("vip"));
@@ -300,10 +327,15 @@ export default function Clientes() {
   });
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
-    // Se veio com ?id=X na URL, abre direto no detalhe
+    // Se veio com ?id=X na URL, abre direto no detalhe.
+    // Guard contra NaN: ?id=abc → Number("abc") = NaN. Sem o guard, a
+    // query clientes.detalhe disparava com id: NaN e fazia round-trip
+    // desnecessário no servidor (que rejeita por zod).
     const params = new URLSearchParams(window.location.search);
     const idParam = params.get("id");
-    return idParam ? Number(idParam) : null;
+    if (!idParam) return null;
+    const n = Number(idParam);
+    return Number.isInteger(n) && n > 0 ? n : null;
   });
   const [showNovo, setShowNovo] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
@@ -338,6 +370,26 @@ export default function Clientes() {
     }, 300);
     return () => clearTimeout(t);
   }, [busca]);
+
+  // Limpa seleção quando o conjunto visível muda — segmento, busca ou
+  // página. Sem isso, IDs selecionados em "VIP" ficavam no Set ao trocar
+  // pra "Inativos" → bulk action exportava mix ou nada (IDs invisíveis).
+  useEffect(() => {
+    setSelecionados(new Set());
+  }, [segmento, buscaDebounced, pagina]);
+
+  // Sincroniza URL com selId/segmento — sem isso, F5 / back do browser
+  // perde o estado (volta sempre pra lista geral). replaceState não
+  // empilha entradas no histórico (back ainda volta pra página anterior
+  // ao Clientes, não entre seleções internas).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selId) params.set("id", String(selId));
+    if (segmento === "aguardando_docs") params.set("aguardandoDocs", "1");
+    const search = params.toString();
+    const url = `${window.location.pathname}${search ? "?" + search : ""}`;
+    window.history.replaceState({}, "", url);
+  }, [selId, segmento]);
 
   const { data: stats } = trpc.clientes.estatisticas.useQuery();
   const { data, refetch } = trpc.clientes.listar.useQuery({
@@ -374,6 +426,24 @@ export default function Clientes() {
   }, [data, segmento]);
 
   const totalPaginas = (data as any)?.totalPaginas || 1;
+
+  // Batch financeiro: 1 query pra todos os contatos visíveis em vez de
+  // N queries (uma por FinanceiroBadge no loop). asaas.resumoPorContatos
+  // devolve Record<contatoId, ResumoBadge>; o badge pega resumo[id] como
+  // resumoPreCarregado e pula o fetch individual.
+  const idsVisiveis = useMemo(
+    () => clientesFiltrados.map((c: any) => c.id),
+    [clientesFiltrados],
+  );
+  const { data: asaasStatusList } = (trpc as any).asaas?.status?.useQuery?.(undefined, { retry: false }) || { data: null };
+  const { data: resumoFinanceiroBatch } = (trpc as any).asaas?.resumoPorContatos?.useQuery?.(
+    { contatoIds: idsVisiveis },
+    {
+      enabled: !!asaasStatusList?.conectado && idsVisiveis.length > 0,
+      retry: false,
+      staleTime: 5 * 60_000,
+    },
+  ) || { data: null };
 
   const toggleSelecionado = (id: number) => {
     setSelecionados((prev) => {
@@ -616,7 +686,10 @@ export default function Clientes() {
                         </div>
                       </div>
                       <div className="w-32 text-right">
-                        <FinanceiroBadge contatoId={c.id} />
+                        <FinanceiroBadge
+                          contatoId={c.id}
+                          resumoPreCarregado={resumoFinanceiroBatch?.[c.id] ?? null}
+                        />
                       </div>
                       <Badge variant="outline" className="text-[10px] shrink-0 w-16 justify-center">
                         {c.origem}
@@ -820,7 +893,16 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
         )}
 
         {/* Dialog: criar card manual */}
-        <Dialog open={criarOpen} onOpenChange={setCriarOpen}>
+        <Dialog open={criarOpen} onOpenChange={(o) => {
+          setCriarOpen(o);
+          if (!o) {
+            // Reset form ao fechar — sem isso, reabrir mostrava
+            // titulo/funil/coluna da tentativa anterior.
+            setTitulo("");
+            setFunilSelecionado("");
+            setColunaSelecionada("");
+          }
+        }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Criar card no Kanban</DialogTitle>
@@ -1209,6 +1291,7 @@ function ProcessoCard({
     onSuccess: () => refetchAnotacoes(),
     onError: (e: any) => toast.error(e.message),
   });
+  const [excluirAnotAlvo, setExcluirAnotAlvo] = useState<number | null>(null);
 
   return (
     <Card className="hover:shadow-sm transition-all">
@@ -1314,9 +1397,7 @@ function ProcessoCard({
                       <p className="text-xs whitespace-pre-wrap flex-1">{a.conteudo}</p>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm("Excluir esta anotação?")) excluirAnot.mutate({ id: a.id });
-                        }}
+                        onClick={() => setExcluirAnotAlvo(a.id)}
                         className="text-[10px] text-muted-foreground hover:text-destructive"
                       >
                         ×
@@ -1339,6 +1420,31 @@ function ProcessoCard({
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={excluirAnotAlvo != null} onOpenChange={(o) => !o && setExcluirAnotAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir anotação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta anotação será removida permanentemente. Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (excluirAnotAlvo != null) {
+                  excluirAnot.mutate({ id: excluirAnotAlvo });
+                  setExcluirAnotAlvo(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -1368,6 +1474,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     });
   }
 
+  const utilsTrpc = trpc.useUtils();
   const { data: processos, refetch } = (trpc as any).clienteProcessos.listar.useQuery({ contatoId });
   const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
     onSuccess: (_r: any, vars: any) => {
@@ -1397,6 +1504,9 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
       setNovoModo("judicial");
       setNovoMonitorar(false);
       refetch();
+      // Invalida o detalhe do cliente — ele exibe contagem de processos
+      // no header. Sem isso, o número ficava stale até F5.
+      utilsTrpc.clientes.detalhe.invalidate({ id: contatoId });
     },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
@@ -1404,9 +1514,15 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
   const desvincularMut = (trpc as any).clienteProcessos.desvincular.useMutation({
-    onSuccess: () => { toast.success("Processo desvinculado"); refetch(); },
+    onSuccess: () => {
+      toast.success("Processo desvinculado");
+      refetch();
+      // Mesma invalidação do vincular — contagem no header refresca.
+      utilsTrpc.clientes.detalhe.invalidate({ id: contatoId });
+    },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
+  const [desvincularAlvo, setDesvincularAlvo] = useState<{ id: number; apelido: string | null; numeroCnj: string | null } | null>(null);
 
   const lista = processos || [];
 
@@ -1444,16 +1560,27 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               expandido={expandidos.has(p.id)}
               onToggle={() => toggleExpandido(p.id)}
               onAdicionarCnj={() => setAdicionarCnjOpen({ id: p.id, apelido: p.apelido })}
-              onDesvincular={() => {
-                if (confirm("Desvincular este processo do cliente?")) desvincularMut.mutate({ id: p.id });
-              }}
+              onDesvincular={() => setDesvincularAlvo({ id: p.id, apelido: p.apelido, numeroCnj: p.numeroCnj })}
             />
           ))}
         </div>
       )}
 
       {/* Dialog vincular processo */}
-      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      <Dialog open={novoOpen} onOpenChange={(o) => {
+        setNovoOpen(o);
+        if (!o) {
+          // Reset form ao fechar (Cancel, Esc, click-outside). Sem isso,
+          // reabrir o dialog mostrava o CNJ/apelido/polo da tentativa
+          // anterior — fluxo "ah me enganei, vou cadastrar outro" virava
+          // bagunça.
+          setNovoCnj("");
+          setNovoApelido("");
+          setNovoPolo("");
+          setNovoModo("judicial");
+          setNovoMonitorar(false);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Vincular processo</DialogTitle>
@@ -1560,7 +1687,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 // judicial_aguardando: tipo='litigioso' + CNJ vazio. Backend
                 // mantém o tipo escolhido (não força extrajudicial). Vai pra
                 // lista como "aguardando CNJ"; user adiciona depois.
-                const enviarCnj = novoCnj.trim().length >= 15 ? novoCnj.trim() : undefined;
+                const enviarCnj = cnjFormatoValido(novoCnj) ? novoCnj.trim() : undefined;
                 const tipoFinal: "extrajudicial" | "litigioso" =
                   novoModo === "extrajudicial" ? "extrajudicial" : "litigioso";
                 vincularMut.mutate({
@@ -1575,7 +1702,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               disabled={
                 vincularMut.isPending ||
                 (novoModo === "judicial"
-                  ? !novoCnj.trim() || novoCnj.trim().length < 15
+                  ? !cnjFormatoValido(novoCnj)
                   : !novoApelido.trim())
               }
             >
@@ -1628,7 +1755,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
               }}
               disabled={
                 atualizarProcessoMut.isPending ||
-                cnjAdicionado.trim().length < 15
+                !cnjFormatoValido(cnjAdicionado)
               }
             >
               {atualizarProcessoMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -1637,6 +1764,33 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!desvincularAlvo} onOpenChange={(o) => !o && setDesvincularAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular processo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove o vínculo de <strong>{desvincularAlvo?.apelido || desvincularAlvo?.numeroCnj || "este processo"}</strong> com o cliente.
+              Anotações no processo também serão perdidas. Cobranças vinculadas permanecem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (desvincularAlvo) {
+                  desvincularMut.mutate({ id: desvincularAlvo.id });
+                  setDesvincularAlvo(null);
+                }
+              }}
+              disabled={desvincularMut.isPending}
+            >
+              {desvincularMut.isPending ? "Desvinculando..." : "Desvincular"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1724,6 +1878,168 @@ function LeadAtendenteInline({
   );
 }
 
+// ─── Editar Lead (valor / etapa / excluir) ──────────────────────────────────
+// Cobre o caso "errei o valor do lançamento" + "esse lead nem deveria existir".
+// Backend: crm.atualizarLead (já existia) + crm.excluirLead.
+// Etapas do funil são as mesmas do schema (drizzle enum) — labels traduzidas
+// pra português aqui pra UX.
+const LEAD_ETAPAS = [
+  { value: "novo", label: "Novo" },
+  { value: "qualificado", label: "Qualificado" },
+  { value: "proposta", label: "Proposta" },
+  { value: "negociacao", label: "Negociação" },
+  { value: "fechado_ganho", label: "Fechado (ganho)" },
+  { value: "fechado_perdido", label: "Fechado (perdido)" },
+] as const;
+
+function EditarLeadDialog({
+  lead,
+  open,
+  onOpenChange,
+  onUpdated,
+}: {
+  lead: { id: number; etapaFunil: string; valorEstimado: string | null };
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onUpdated: () => void;
+}) {
+  // Estado local — só inicializa quando o dialog abre (key dispara remount).
+  const [etapa, setEtapa] = useState(lead.etapaFunil);
+  const [valor, setValor] = useState(lead.valorEstimado || "");
+  const [confirmExcluir, setConfirmExcluir] = useState(false);
+
+  const atualizarMut = (trpc as any).crm.atualizarLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead atualizado");
+      onOpenChange(false);
+      onUpdated();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao atualizar"),
+  });
+  const excluirMut = (trpc as any).crm.excluirLead.useMutation({
+    onSuccess: () => {
+      toast.success("Lead excluído");
+      setConfirmExcluir(false);
+      onOpenChange(false);
+      onUpdated();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao excluir"),
+  });
+
+  const valorNormalizado = valor.trim() ? parseValorBR(valor) : null;
+  const valorMudou = (lead.valorEstimado || "") !== valor;
+  const etapaMudou = lead.etapaFunil !== etapa;
+  const algoMudou = valorMudou || etapaMudou;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar negociação</DialogTitle>
+            <DialogDescription>
+              Ajuste valor ou etapa. Para fechamentos retroativos que não
+              deveriam existir, use Excluir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Etapa do funil</Label>
+              <select
+                value={etapa}
+                onChange={(e) => setEtapa(e.target.value)}
+                className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                disabled={atualizarMut.isPending}
+              >
+                {LEAD_ETAPAS.map((e) => (
+                  <option key={e.value} value={e.value}>{e.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Valor (R$)</Label>
+              <Input
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                placeholder="0,00"
+                disabled={atualizarMut.isPending}
+              />
+              {valor.trim() && valorNormalizado != null && (
+                <p className="text-[10px] text-muted-foreground">
+                  Será gravado como{" "}
+                  <span className="font-mono">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(valorNormalizado)}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 sm:mr-auto"
+              onClick={() => setConfirmExcluir(true)}
+              disabled={atualizarMut.isPending || excluirMut.isPending}
+            >
+              <Trash2 className="h-4 w-4 mr-1" /> Excluir
+            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={atualizarMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                // Normaliza valor BR antes de enviar pro backend (que armazena
+                // como string formato US "1500.00" pra somar via CAST DECIMAL).
+                const valorParaSalvar =
+                  valor.trim() === ""
+                    ? undefined // backend ignora quando undefined; pra "limpar" valor seria preciso flag separada
+                    : valorNormalizado != null
+                      ? valorNormalizado.toFixed(2)
+                      : undefined;
+                atualizarMut.mutate({
+                  id: lead.id,
+                  etapaFunil: etapaMudou ? etapa : undefined,
+                  valorEstimado: valorMudou ? valorParaSalvar : undefined,
+                });
+              }}
+              disabled={!algoMudou || atualizarMut.isPending}
+            >
+              {atualizarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmExcluir} onOpenChange={setConfirmExcluir}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta negociação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lead será apagado permanentemente. Se o lead estava em
+              <strong> fechado_ganho</strong>, a conversão some do Relatório
+              Comercial. Use quando o lançamento foi um engano.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => excluirMut.mutate({ id: lead.id })}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 // ─── Detalhe do Cliente ─────────────────────────────────────────────────────
 
 function ClienteDetalhe({
@@ -1761,6 +2077,19 @@ function ClienteDetalhe({
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const [excluirConfirmAlvo, setExcluirConfirmAlvo] = useState(false);
+  // Editor de lead na aba Histórico — abre quando user clica no lápis do card.
+  // null = fechado. Quando o lead muda (mutation), o key={alvo.id} no Dialog
+  // garante remount com valores frescos.
+  const [editarLeadAlvo, setEditarLeadAlvo] = useState<any | null>(null);
+
+  // Permissões pra esconder botão de excluir quando o user não pode.
+  // Sem isso, atendente vê o botão e backend rejeita — UX/backend mismatch.
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeExcluirCliente = !!(minhasPerms?.permissoes?.clientes?.excluir);
 
   if (!cliente) {
     return (
@@ -1860,24 +2189,49 @@ function ClienteDetalhe({
           Registrar fechamento
         </Button>
         {cliente.cpfCnpj && (
-          <MonitorarJuditButton
+          <MonitorarProcessosButton
             cpfCnpj={cliente.cpfCnpj}
-            nome={cliente.nome}
+            nome={cliente.nome || cliente.cpfCnpj}
           />
         )}
         <FinanceiroPopover contatoId={id} />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive"
-          onClick={() => {
-            if (confirm("Excluir cliente e dados associados?"))
-              excluirMut.mutate({ id });
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        {podeExcluirCliente && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
+            onClick={() => setExcluirConfirmAlvo(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
       </div>
+
+      <AlertDialog open={excluirConfirmAlvo} onOpenChange={setExcluirConfirmAlvo}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove <strong>{cliente.nome}</strong> e todos os dados vinculados:
+              conversas, leads, tarefas, anotações, arquivos, assinaturas e cobranças Asaas.
+              Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                excluirMut.mutate({ id });
+                setExcluirConfirmAlvo(false);
+              }}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 6 abas consolidadas */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -1904,25 +2258,34 @@ function ClienteDetalhe({
 
         {/* Aba 1: Visão Geral (dados + tarefas) */}
         <TabsContent value="visao-geral" className="mt-4 space-y-4">
-          <EditarForm cliente={cliente} onSuccess={() => { refetch(); onUpdate(); }} />
-          <TarefasClienteTab contatoId={id} />
+          {/* key={cliente.id} força remount ao trocar de cliente — os useState
+              do EditarForm são inicializados via `cliente.X` e não re-sincronizam
+              quando a prop muda; sem o key, salvar com cliente B persistiria
+              nome/CPF/qualificação do cliente A (corrupção silenciosa). */}
+          <EditarForm key={cliente.id} cliente={cliente} onSuccess={() => { refetch(); onUpdate(); }} />
+          <TarefasClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 2: Processos */}
         <TabsContent value="processos" className="mt-4 space-y-4">
-          <ProcessosClienteTab contatoId={id} />
+          <ProcessosClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 3: Kanban — cards onde este cliente está sendo trabalhado */}
         <TabsContent value="kanban" className="mt-4 space-y-4">
-          <KanbanClienteTab contatoId={id} />
+          {/* key={id} força remount ao trocar de cliente — o form interno
+              (titulo, funilSelecionado, etc) é inicializado com useState
+              e não se reseta quando contatoId muda. Sem o key, criar card
+              do cliente A → fechar dialog sem submeter → trocar pra B →
+              abrir dialog atribuiria os campos do A ao card do B. */}
+          <KanbanClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 4: Financeiro — bloco de vínculo + cobranças do Asaas + badge */}
         <TabsContent value="financeiro" className="mt-4 space-y-4">
-          <VincularAsaasBlock contatoId={id} cpfCnpj={cliente.cpfCnpj} />
+          <VincularAsaasBlock key={id} contatoId={id} cpfCnpj={cliente.cpfCnpj} />
           <FinanceiroBadge contatoId={id} />
-          <FinanceiroClienteTab contatoId={id} />
+          <FinanceiroClienteTab key={id} contatoId={id} />
         </TabsContent>
 
         {/* Aba 3: Histórico (conversas + leads + notas + timeline) */}
@@ -1977,11 +2340,13 @@ function ClienteDetalhe({
                   {(leadsData || []).map((l: any) => (
                     <div
                       key={l.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg border"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg border group"
                     >
                       <TrendingUp className="h-4 w-4 text-violet-500 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm">{l.etapaFunil}</p>
+                        <p className="text-sm">
+                          {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
+                        </p>
                         <LeadAtendenteInline
                           leadId={l.id}
                           responsavelAtualId={l.responsavelId ?? null}
@@ -1998,6 +2363,15 @@ function ClienteDetalhe({
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {timeAgo(l.createdAt)}
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Editar negociação"
+                        onClick={() => setEditarLeadAlvo(l)}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -2027,6 +2401,20 @@ function ClienteDetalhe({
         open={gerarContratoOpen}
         onOpenChange={setGerarContratoOpen}
       />
+
+      {editarLeadAlvo && (
+        <EditarLeadDialog
+          key={editarLeadAlvo.id}
+          lead={editarLeadAlvo}
+          open={!!editarLeadAlvo}
+          onOpenChange={(o) => { if (!o) setEditarLeadAlvo(null); }}
+          onUpdated={() => {
+            refetchLeads();
+            // detalhe.totalLeads no header também pode mudar (após excluir)
+            utilsTrpc.clientes.detalhe.invalidate({ id });
+          }}
+        />
+      )}
 
       <RegistrarFechamentoDialog
         open={fechamentoOpen}

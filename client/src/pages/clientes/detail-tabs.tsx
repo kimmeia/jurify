@@ -260,9 +260,15 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
 
 export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: number; anotacoes: any[]; onRefresh: () => void }) {
   const [titulo, setTitulo] = useState(""); const [conteudo, setConteudo] = useState("");
-  const criar = trpc.clientes.criarAnotacao.useMutation({ onSuccess: () => { setTitulo(""); setConteudo(""); onRefresh(); toast.success("Salvo!"); } });
-  const excluir = trpc.clientes.excluirAnotacao.useMutation({ onSuccess: () => { onRefresh(); } });
-  return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button></div>))}</div>}</CardContent></Card>);
+  const criar = trpc.clientes.criarAnotacao.useMutation({
+    onSuccess: () => { setTitulo(""); setConteudo(""); onRefresh(); toast.success("Salvo!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluir = trpc.clientes.excluirAnotacao.useMutation({
+    onSuccess: () => { onRefresh(); },
+    onError: (e) => toast.error(e.message),
+  });
+  return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div>{n.podeExcluir && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button>}</div>))}</div>}</CardContent></Card>);
 }
 
 type Breadcrumb = Array<{ id: number | null; nome: string }>;
@@ -290,6 +296,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const [criandoPasta, setCriandoPasta] = useState(false);
   const [renomeando, setRenomeando] = useState<{ id: number; nome: string } | null>(null);
   const [zipEmProgresso, setZipEmProgresso] = useState<number | null>(null);
+  const [excluirPastaAlvo, setExcluirPastaAlvo] = useState<{ id: number; nome: string } | null>(null);
 
   const { data: pastas = [] } = trpc.clientes.listarPastas.useQuery({ contatoId, parentId: pastaAtualId });
   const { data: arquivos = [] } = trpc.clientes.listarArquivos.useQuery({ contatoId, pastaId: pastaAtualId });
@@ -306,8 +313,12 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const uploadMut = (trpc as any).upload.enviar.useMutation();
   const salvar = trpc.clientes.salvarArquivo.useMutation({
     onSuccess: () => { setUrl(""); setNome(""); invalidar(); toast.success("Salvo!"); },
+    onError: (e) => toast.error(e.message),
   });
-  const excluirArq = trpc.clientes.excluirArquivo.useMutation({ onSuccess: () => invalidar() });
+  const excluirArq = trpc.clientes.excluirArquivo.useMutation({
+    onSuccess: () => { invalidar(); toast.success("Arquivo removido"); },
+    onError: (e) => toast.error(e.message),
+  });
   const moverArq = trpc.clientes.moverArquivo.useMutation({
     onSuccess: () => { invalidar(); toast.success("Arquivo movido"); },
     onError: (e) => toast.error("Erro ao mover", { description: e.message }),
@@ -327,15 +338,24 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
 
   const handleFiles = async (files: FileList | File[]) => {
     setUploading(true);
-    for (const file of Array.from(files)) {
-      if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} é muito grande (max 10MB)`); continue; }
-      try {
-        const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(new Error("Erro ao ler arquivo")); r.readAsDataURL(file); });
-        const result = await uploadMut.mutateAsync({ nome: file.name, tipo: file.type, base64, tamanho: file.size });
-        await salvar.mutateAsync({ contatoId, pastaId: pastaAtualId, nome: result.nome || file.name, tipo: result.tipo, tamanho: result.tamanho, url: result.url });
-      } catch (e: any) { toast.error(e.message || `Erro ao enviar ${file.name}`); }
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} é muito grande (max 10MB)`); continue; }
+        try {
+          const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(new Error("Erro ao ler arquivo")); r.readAsDataURL(file); });
+          const result = await uploadMut.mutateAsync({ nome: file.name, tipo: file.type, base64, tamanho: file.size });
+          await salvar.mutateAsync({ contatoId, pastaId: pastaAtualId, nome: result.nome || file.name, tipo: result.tipo, tamanho: result.tamanho, url: result.url });
+        } catch (e: any) { toast.error(e.message || `Erro ao enviar ${file.name}`); }
+      }
+    } finally {
+      // try/finally garante que uploading volta a false mesmo se algum
+      // erro fora do try interno escapar (ex: FileReader rejeitando antes
+      // do try). Sem isso, UI travava com spinner permanente.
+      setUploading(false);
+      // Invalida ao fim do lote (em vez de uma vez por arquivo) — uma
+      // refetch ao fim cobre todos os uploads bem-sucedidos.
+      invalidar();
     }
-    setUploading(false);
   };
 
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); };
@@ -345,10 +365,23 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const formatSize = (bytes: number) => { if (!bytes) return ""; if (bytes < 1024) return `${bytes}B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`; return `${(bytes / 1024 / 1024).toFixed(1)}MB`; };
   const isImage = (tipo: string) => tipo?.startsWith("image/");
 
+  // Ao navegar entre pastas, reseta states de formulário que não fazem
+  // sentido fora do contexto onde foram abertos. Sem isso, abrir
+  // "Renomear pasta X", navegar pra outra, voltar — o input de renomeação
+  // ainda estaria flutuando.
+  const resetEstadosLocais = () => {
+    setCriandoPasta(false);
+    setNovaPastaNome("");
+    setRenomeando(null);
+    setUrl("");
+    setNome("");
+  };
   const entrarNaPasta = (id: number, nomePasta: string) => {
+    resetEstadosLocais();
     setBreadcrumb([...breadcrumb, { id, nome: nomePasta }]);
   };
   const navegarPara = (index: number) => {
+    resetEstadosLocais();
     setBreadcrumb(breadcrumb.slice(0, index + 1));
   };
 
@@ -384,10 +417,15 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
       }
       const blob = await zip.generateAsync({ type: "blob" });
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
+      const urlBlob = URL.createObjectURL(blob);
+      link.href = urlBlob;
       link.download = `${nomePasta}.zip`;
       link.click();
-      URL.revokeObjectURL(link.href);
+      // link.click() dispara download assíncrono; revogar a URL agora
+      // racing pode abortar download em Safari/Firefox. setTimeout afasta
+      // a revogação pro próximo tick — browser tem tempo de iniciar o
+      // GET interno do blob. 60s é folga conservadora.
+      setTimeout(() => URL.revokeObjectURL(urlBlob), 60_000);
       if (falhas > 0) toast.warning(`ZIP baixado com ${falhas} falha(s)`, { description: `${sucessos}/${sucessos + falhas} arquivos.` });
       else toast.success("ZIP baixado", { description: `${sucessos} arquivo(s).` });
     } catch (e: any) {
@@ -533,11 +571,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => {
-                            if (confirm(`Excluir a pasta "${p.nome}" e tudo dentro dela (incluindo subpastas)?\n\nEsta ação é definitiva e não pode ser desfeita.`)) {
-                              excluirPastaMut.mutate({ id: p.id });
-                            }
-                          }}
+                          onClick={() => setExcluirPastaAlvo({ id: p.id, nome: p.nome })}
                         >
                           <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
                         </DropdownMenuItem>
@@ -600,6 +634,33 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <p className="text-sm text-muted-foreground text-center py-4">Nenhuma pasta ou arquivo aqui.</p>
         )}
       </CardContent>
+
+      <AlertDialog open={!!excluirPastaAlvo} onOpenChange={(o) => !o && setExcluirPastaAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir pasta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A pasta <strong>{excluirPastaAlvo?.nome}</strong> e tudo dentro dela (incluindo subpastas e arquivos)
+              será removida permanentemente. Não há como desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (excluirPastaAlvo) {
+                  excluirPastaMut.mutate({ id: excluirPastaAlvo.id });
+                  setExcluirPastaAlvo(null);
+                }
+              }}
+              disabled={excluirPastaMut.isPending}
+            >
+              {excluirPastaMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -657,6 +718,9 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   // o usuário terminou de digitar (CPF=11 dígitos ou CNPJ=14). A própria
   // procedure ignora chamadas com tamanho parcial.
   const [cpfDebounced, setCpfDebounced] = useState("");
+  // Memo do último CPF reconhecido pelo operador — evita reabrir o alert
+  // de duplicata depois que o user já fechou e voltou pra editar o CPF.
+  const [cpfDuplicataAck, setCpfDuplicataAck] = useState<string | null>(null);
   useEffect(() => {
     const t = setTimeout(() => setCpfDebounced(cpf), 400);
     return () => clearTimeout(t);
@@ -666,16 +730,26 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     { enabled: cpfDebounced.replace(/\D/g, "").length === 11 || cpfDebounced.replace(/\D/g, "").length === 14, retry: false },
   );
   useEffect(() => {
-    if (cpfExistente && open) {
+    if (cpfExistente && open && cpfDebounced !== cpfDuplicataAck) {
       setDuplicataAlerta({ clienteId: cpfExistente.id, nome: cpfExistente.nome });
     }
-  }, [cpfExistente, open]);
+  }, [cpfExistente, open, cpfDebounced, cpfDuplicataAck]);
+
+  const fecharDuplicataAlerta = () => {
+    // Lembra do CPF reconhecido pra não reabrir o alert se o user mantiver
+    // o mesmo CPF (caso ele escolha "voltar e ajustar" mas não muda nada).
+    if (cpfDebounced) setCpfDuplicataAck(cpfDebounced);
+    setDuplicataAlerta(null);
+  };
 
   const resetCadastro = () => {
     setNome(""); setTel(""); setEmail(""); setCpf(""); setResponsavelId("");
     setDocPendente(false); setDocObs(""); setCamposExtras({});
     setQualif({ ...QUALIFICACAO_ENDERECO_VAZIO }); setErros({});
     setJaFechado(false); setValorFechamento(""); setOrigemFechamento("");
+    // Sem isso, query cacheada de verificarCpf reabriria o alert no
+    // próximo "Novo cliente".
+    setCpfDebounced(""); setCpfDuplicataAck(null);
   };
 
   const criar = trpc.clientes.criar.useMutation({
@@ -683,7 +757,10 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       toast.success("Cadastrado!");
       const contatoId = data?.id;
       const eraFechado = jaFechado;
-      const valor = valorFechamento ? parseFloat(valorFechamento) : null;
+      // parseValorBR aceita "5.000,00" (BR) ou "5000.00" (US). parseFloat
+      // truncava em ponto-milhar: "5.000,00" → 5, corrompendo o valor da
+      // cobrança encadeada após cadastro com flag "já fechou contrato".
+      const valor = valorFechamento ? parseValorBR(valorFechamento) || null : null;
       resetCadastro();
       onOpenChange(false);
       onSuccess();
@@ -903,7 +980,10 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     valorInicial={cobrancaPosCadastro?.valor ?? undefined}
   />
   {/* Duplicata de CPF/CNPJ: oferece abrir ficha do cliente existente. */}
-  <AlertDialog open={duplicataAlerta != null}>
+  <AlertDialog
+    open={duplicataAlerta != null}
+    onOpenChange={(o) => { if (!o) fecharDuplicataAlerta(); }}
+  >
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>CPF/CNPJ já cadastrado</AlertDialogTitle>
@@ -916,7 +996,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel onClick={() => setDuplicataAlerta(null)}>
+        <AlertDialogCancel onClick={fecharDuplicataAlerta}>
           Voltar e ajustar CPF
         </AlertDialogCancel>
         <AlertDialogAction
@@ -948,14 +1028,24 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   const [docUrl, setDocUrl] = useState("");
   const [diasExp, setDiasExp] = useState(30);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  const [excluirAssinAlvo, setExcluirAssinAlvo] = useState<{ id: number; titulo: string } | null>(null);
 
   const criarMut = (trpc as any).assinaturas.criar.useMutation({
     onSuccess: (res: any) => { setShowNovo(false); setTitulo(""); setDescricao(""); setDocUrl(""); onRefresh(); toast.success("Documento criado! Copie o link para enviar."); setLinkCopiado(window.location.origin + res.linkAssinatura); },
     onError: (e: any) => toast.error(e.message),
   });
-  const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({ onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); } });
-  const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({ onSuccess: () => { onRefresh(); toast.success("Cancelado."); } });
-  const excluirMut = (trpc as any).assinaturas.excluir.useMutation({ onSuccess: () => { onRefresh(); } });
+  const enviarMut = (trpc as any).assinaturas.marcarEnviado.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Marcado como enviado!"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const cancelarMut = (trpc as any).assinaturas.cancelar.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Cancelado."); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const excluirMut = (trpc as any).assinaturas.excluir.useMutation({
+    onSuccess: () => { onRefresh(); toast.success("Documento excluído"); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const copiarLink = (token: string) => {
     const link = `${window.location.origin}/assinar/${token}`;
@@ -983,11 +1073,25 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   };
 
   const enviarWhatsApp = (token: string) => {
-    const link = `${window.location.origin}/assinar/${token}`;
+    // Pré-condições: telefone preenchido (formatado ou não) e a assinatura
+    // ainda existe na lista local (id resolvível). Sem isso, abriríamos
+    // "wa.me/?text=..." (URL quebrada) e mandaríamos `enviarMut({id: undefined})`
+    // que falha silenciosamente.
     const tel = (cliente.telefone || "").replace(/\D/g, "");
-    const msg = encodeURIComponent(`Olá ${cliente.nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
+    if (!tel) {
+      toast.error("Cliente sem telefone cadastrado.");
+      return;
+    }
+    const assin = assinaturas.find((a: any) => a.tokenAssinatura === token);
+    if (!assin?.id) {
+      toast.error("Documento não encontrado. Recarregue a lista.");
+      return;
+    }
+    const nome = cliente.nome || "tudo bem";
+    const link = `${window.location.origin}/assinar/${token}`;
+    const msg = encodeURIComponent(`Olá ${nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
     window.open(`https://wa.me/${tel}?text=${msg}`, "_blank");
-    enviarMut.mutate({ id: assinaturas.find((a: any) => a.tokenAssinatura === token)?.id });
+    enviarMut.mutate({ id: assin.id });
   };
 
   return (
@@ -1047,13 +1151,41 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
                   {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
                 </>)}
-                {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => { if (confirm("Excluir?")) excluirMut.mutate({ id: a.id }); }}><Trash2 className="h-3 w-3" /></Button>}
+                {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setExcluirAssinAlvo({ id: a.id, titulo: a.titulo || "Documento sem título" })}><Trash2 className="h-3 w-3" /></Button>}
               </div>
             </div>
           ))}
         </div>
       )}
-    </CardContent></Card>
+    </CardContent>
+
+    <AlertDialog open={!!excluirAssinAlvo} onOpenChange={(o) => !o && setExcluirAssinAlvo(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir documento de assinatura?</AlertDialogTitle>
+          <AlertDialogDescription>
+            <strong>{excluirAssinAlvo?.titulo}</strong> será removido permanentemente.
+            Se já tiver sido enviado ao cliente, o link parará de funcionar.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 hover:bg-red-700"
+            onClick={() => {
+              if (excluirAssinAlvo) {
+                excluirMut.mutate({ id: excluirAssinAlvo.id });
+                setExcluirAssinAlvo(null);
+              }
+            }}
+            disabled={excluirMut.isPending}
+          >
+            {excluirMut.isPending ? "Excluindo..." : "Excluir"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </Card>
   );
 }
 
@@ -1068,10 +1200,17 @@ const ST_LBL: Record<string, string> = { pendente: "Pendente", em_andamento: "Em
 export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
   const [titulo, setTitulo] = useState(""); const [showNova, setShowNova] = useState(false);
   const [prioridade, setPrioridade] = useState("normal"); const [dataVenc, setDataVenc] = useState("");
+  const [excluirTarefaAlvo, setExcluirTarefaAlvo] = useState<{ id: number; titulo: string } | null>(null);
   const { data: tarefas, refetch } = (trpc as any).tarefas.listar.useQuery({ contatoId });
   const criar = (trpc as any).tarefas.criar.useMutation({ onSuccess: () => { refetch(); setTitulo(""); setShowNova(false); toast.success("Tarefa criada!"); }, onError: (e: any) => toast.error(e.message) });
-  const atualizar = (trpc as any).tarefas.atualizar.useMutation({ onSuccess: () => refetch() });
-  const excluir = (trpc as any).tarefas.excluir.useMutation({ onSuccess: () => refetch() });
+  const atualizar = (trpc as any).tarefas.atualizar.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const excluir = (trpc as any).tarefas.excluir.useMutation({
+    onSuccess: () => { refetch(); toast.success("Tarefa removida"); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const lista = tarefas || [];
 
@@ -1110,10 +1249,37 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
             {t.dataVencimento && <p className={`text-[9px] flex items-center gap-0.5 ${t.vencida ? "text-red-500" : "text-muted-foreground"}`}><Calendar className="h-2 w-2" />{new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</p>}
           </div>
           <Badge className={`text-[8px] px-1 py-0 ${ST_COR[t.status] || ""}`}>{ST_LBL[t.status]}</Badge>
-          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => excluir.mutate({ id: t.id })}><Trash2 className="h-2.5 w-2.5" /></Button>
+          <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => setExcluirTarefaAlvo({ id: t.id, titulo: t.titulo })}><Trash2 className="h-2.5 w-2.5" /></Button>
         </div>
       ))}</div>
     )}
+
+    <AlertDialog open={!!excluirTarefaAlvo} onOpenChange={(o) => !o && setExcluirTarefaAlvo(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+          <AlertDialogDescription>
+            <strong>{excluirTarefaAlvo?.titulo}</strong> será removida.
+            O botão fica em hover-revealed (opacity-0 group-hover:opacity-100) —
+            confirmação evita click acidental no mobile/touch.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 hover:bg-red-700"
+            onClick={() => {
+              if (excluirTarefaAlvo) {
+                excluir.mutate({ id: excluirTarefaAlvo.id });
+                setExcluirTarefaAlvo(null);
+              }
+            }}
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </CardContent></Card>);
 }
 

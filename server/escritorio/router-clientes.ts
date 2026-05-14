@@ -48,6 +48,33 @@ function sanitizarCamposPersonalizados(
  * mysql2 + parameterized template), e o caso comum (escritório com até
  * milhares de clientes) não justifica a complexidade.
  */
+/**
+ * Verifica se o colaborador tem acesso ao cliente. Respeita verProprios:
+ *  - verTodos: qualquer cliente do escritório passa
+ *  - verProprios: só passa quando responsavelId === colaboradorId
+ *  - retorna false quando o cliente não existe no escritório
+ *
+ * Usado pelas procedures que recebem `contatoId` na input — anotações,
+ * arquivos, pastas, conversas, leads. Sem isso, atendente com verProprios
+ * conseguia operar em qualquer cliente do escritório só conhecendo o ID.
+ */
+async function podeVerCliente(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  contatoId: number,
+  escritorioId: number,
+  colabId: number,
+  verTodos: boolean,
+): Promise<boolean> {
+  const [c] = await db
+    .select({ responsavelId: contatos.responsavelId })
+    .from(contatos)
+    .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+  if (!c) return false;
+  if (verTodos) return true;
+  return c.responsavelId === colabId;
+}
+
 async function buscarClienteDuplicadoCpf(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
@@ -89,7 +116,42 @@ export const clientesRouter = router({
     if (input?.aguardandoDocumentacao) { where = and(where, eq(contatos.documentacaoPendente, true)); }
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
-    return { clientes: rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" })), total: Number((cnt as { count: number } | undefined)?.count || 0), pagina: input?.pagina || 1, limite, totalPaginas: Math.ceil(Number((cnt as { count: number } | undefined)?.count || 0) / limite) };
+
+    // Última interação humana por cliente — derivada de conversas. O frontend
+    // usa pro segmento "Inativos (30d+)". contatos.updatedAt sozinho não
+    // serve porque webhooks (sync Asaas, tags automáticas) tocam a coluna —
+    // filtro ficava sempre vazio em produção.
+    const ids = rows.map((r) => r.id);
+    const dateMap = new Map<number, string>();
+    if (ids.length > 0) {
+      const ultimaConversa = await db
+        .select({
+          contatoId: conversas.contatoId,
+          maxData: sql<Date | null>`MAX(${conversas.ultimaMensagemAt})`,
+        })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, perm.escritorioId),
+          inArray(conversas.contatoId, ids),
+        ))
+        .groupBy(conversas.contatoId);
+      for (const r of ultimaConversa) {
+        if (r.maxData) dateMap.set(r.contatoId, (r.maxData as Date).toISOString());
+      }
+    }
+
+    return {
+      clientes: rows.map((r) => ({
+        ...r,
+        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+        updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+        ultimaConversaAt: dateMap.get(r.id) ?? null,
+      })),
+      total: Number((cnt as { count: number } | undefined)?.count || 0),
+      pagina: input?.pagina || 1,
+      limite,
+      totalPaginas: Math.ceil(Number((cnt as { count: number } | undefined)?.count || 0) / limite),
+    };
   }),
 
   detalhe: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
@@ -403,18 +465,60 @@ export const clientesRouter = router({
   }),
 
   listarAnotacoes: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
-    const rows = await db.select().from(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.contatoId), eq(clienteAnotacoes.escritorioId, esc.escritorio.id))).orderBy(desc(clienteAnotacoes.createdAt));
-    return rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "", updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "" }));
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db.select().from(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.contatoId), eq(clienteAnotacoes.escritorioId, perm.escritorioId))).orderBy(desc(clienteAnotacoes.createdAt));
+    // podeExcluir embutido por linha: autor pode apagar a própria;
+    // dono/gestor (verTodos) pode apagar qualquer uma. Frontend usa
+    // pra esconder o botão de lixeira quando o user não pode.
+    return rows.map(r => ({
+      ...r,
+      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+      updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+      podeExcluir: perm.verTodos || r.criadoPor === perm.colaboradorId,
+    }));
   }),
   criarAnotacao: protectedProcedure.input(z.object({ contatoId: z.number(), titulo: z.string().max(255).optional(), conteudo: z.string().min(1) })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
-    const [r] = await db.insert(clienteAnotacoes).values({ escritorioId: esc.escritorio.id, contatoId: input.contatoId, titulo: input.titulo || null, conteudo: input.conteudo, criadoPor: esc.colaborador.id });
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
+    const [r] = await db.insert(clienteAnotacoes).values({ escritorioId: perm.escritorioId, contatoId: input.contatoId, titulo: input.titulo || null, conteudo: input.conteudo, criadoPor: perm.colaboradorId });
     return { id: (r as { insertId: number }).insertId };
   }),
   excluirAnotacao: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
-    await db.delete(clienteAnotacoes).where(and(eq(clienteAnotacoes.id, input.id), eq(clienteAnotacoes.escritorioId, esc.escritorio.id)));
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+
+    // Carrega a anotação para verificar autoria. criadoPor é o
+    // colaborador.id de quem criou (vide criarAnotacao).
+    const [anot] = await db
+      .select({ criadoPor: clienteAnotacoes.criadoPor })
+      .from(clienteAnotacoes)
+      .where(and(
+        eq(clienteAnotacoes.id, input.id),
+        eq(clienteAnotacoes.escritorioId, perm.escritorioId),
+      ))
+      .limit(1);
+    if (!anot) throw new TRPCError({ code: "NOT_FOUND" });
+
+    // Regra: autor pode excluir a própria; dono/gestor (verTodos) pode
+    // excluir qualquer uma. Atendente comum não apaga anotação alheia.
+    const ehAutor = anot.criadoPor === perm.colaboradorId;
+    if (!ehAutor && !perm.verTodos) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Você só pode excluir anotações que você criou.",
+      });
+    }
+
+    await db.delete(clienteAnotacoes).where(and(eq(clienteAnotacoes.id, input.id), eq(clienteAnotacoes.escritorioId, perm.escritorioId)));
     return { success: true };
   }),
 
@@ -424,10 +528,15 @@ export const clientesRouter = router({
     // number = só arquivos daquela pasta específica.
     pastaId: z.number().nullable().optional(),
   })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) return [];
     const conds: any[] = [
       eq(clienteArquivos.contatoId, input.contatoId),
-      eq(clienteArquivos.escritorioId, esc.escritorio.id),
+      eq(clienteArquivos.escritorioId, perm.escritorioId),
     ];
     if (input.pastaId === null) conds.push(isNull(clienteArquivos.pastaId));
     else if (typeof input.pastaId === "number") conds.push(eq(clienteArquivos.pastaId, input.pastaId));
@@ -440,53 +549,101 @@ export const clientesRouter = router({
     nome: z.string().max(255),
     tipo: z.string().max(255).optional(),
     tamanho: z.number().optional(),
-    url: z.string(),
+    // URL precisa ser uma das duas:
+    //  - caminho local "/uploads/..." (devolvido por upload.enviar — caso
+    //    comum, 99% das chamadas)
+    //  - URL absoluta http/https (legacy, integração externa)
+    //
+    // Bloqueia vetores de XSS quando renderizado em <a href>:
+    //  - javascript:, data:, file:, blob: → throw via z.string()/URL parse
+    //  - "//evil.com/x" → protocol-relative, browser resolveria como https
+    //    pro domínio externo. Pega o caso explicitamente.
+    url: z.string().refine(
+      (u) => {
+        if (u.startsWith("//")) return false;
+        if (u.startsWith("/")) return true; // caminho local
+        try {
+          const protocol = new URL(u).protocol;
+          return protocol === "http:" || protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "URL inválida. Use caminho interno (/uploads/...) ou http/https." },
+    ),
   })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
     // Se pastaId foi informado, valida que a pasta pertence ao contato/escritório.
     if (typeof input.pastaId === "number") {
       const [pasta] = await db.select({ id: clientePastas.id }).from(clientePastas)
         .where(and(
           eq(clientePastas.id, input.pastaId),
           eq(clientePastas.contatoId, input.contatoId),
-          eq(clientePastas.escritorioId, esc.escritorio.id),
+          eq(clientePastas.escritorioId, perm.escritorioId),
         ))
         .limit(1);
       if (!pasta) throw new Error("Pasta inválida ou não pertence a este cliente.");
     }
     const [r] = await db.insert(clienteArquivos).values({
-      escritorioId: esc.escritorio.id,
+      escritorioId: perm.escritorioId,
       contatoId: input.contatoId,
       pastaId: input.pastaId ?? null,
       nome: input.nome,
       tipo: input.tipo || null,
       tamanho: input.tamanho || null,
       url: input.url,
-      uploadPor: esc.colaborador.id,
+      uploadPor: perm.colaboradorId,
     });
     return { id: (r as { insertId: number }).insertId };
   }),
   excluirArquivo: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
-    await db.delete(clienteArquivos).where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)));
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    // Lookup do arquivo: precisa do contatoId pra verProprios E do url pra
+    // limpar o blob do disco depois de apagar a row (evita arquivo órfão).
+    const [arq] = await db.select({ contatoId: clienteArquivos.contatoId, url: clienteArquivos.url })
+      .from(clienteArquivos)
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)))
+      .limit(1);
+    if (!arq) throw new TRPCError({ code: "NOT_FOUND" });
+    const ok = await podeVerCliente(db, arq.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
+    await db.delete(clienteArquivos).where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)));
+    // Cleanup do blob no disco. Não-fatal: ENOENT/erro de I/O só loga
+    // (DB já confirmou a deleção). URLs externas/legacy são ignoradas
+    // silenciosamente pelo helper.
+    const { apagarArquivoDoDisco } = await import("../upload/upload-route");
+    await apagarArquivoDoDisco(arq.url, perm.escritorioId);
     return { success: true };
   }),
   moverArquivo: protectedProcedure.input(z.object({
     id: z.number(),
     pastaId: z.number().nullable(), // null = mover pra raiz
   })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
     // Pega o arquivo + contato pra validar que a pasta destino é do mesmo contato.
     const [arquivo] = await db.select().from(clienteArquivos)
-      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)))
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)))
       .limit(1);
     if (!arquivo) throw new Error("Arquivo não encontrado.");
+    const okClient = await podeVerCliente(db, arquivo.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!okClient) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
     if (input.pastaId !== null) {
       const [pasta] = await db.select({ id: clientePastas.id }).from(clientePastas)
         .where(and(
           eq(clientePastas.id, input.pastaId),
           eq(clientePastas.contatoId, arquivo.contatoId),
-          eq(clientePastas.escritorioId, esc.escritorio.id),
+          eq(clientePastas.escritorioId, perm.escritorioId),
         ))
         .limit(1);
       if (!pasta) throw new Error("Pasta destino inválida.");
@@ -502,10 +659,15 @@ export const clientesRouter = router({
     // parentId: undefined = todas do contato; null = só raiz; number = só filhas diretas.
     parentId: z.number().nullable().optional(),
   })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) return [];
     const conds: any[] = [
       eq(clientePastas.contatoId, input.contatoId),
-      eq(clientePastas.escritorioId, esc.escritorio.id),
+      eq(clientePastas.escritorioId, perm.escritorioId),
     ];
     if (input.parentId === null) conds.push(isNull(clientePastas.parentId));
     else if (typeof input.parentId === "number") conds.push(eq(clientePastas.parentId, input.parentId));
@@ -518,11 +680,11 @@ export const clientesRouter = router({
     if (ids.length > 0) {
       const arq = await db.select({ pastaId: clienteArquivos.pastaId, total: sql<number>`COUNT(*)` })
         .from(clienteArquivos)
-        .where(and(eq(clienteArquivos.escritorioId, esc.escritorio.id), inArray(clienteArquivos.pastaId, ids)))
+        .where(and(eq(clienteArquivos.escritorioId, perm.escritorioId), inArray(clienteArquivos.pastaId, ids)))
         .groupBy(clienteArquivos.pastaId);
       const sub = await db.select({ parentId: clientePastas.parentId, total: sql<number>`COUNT(*)` })
         .from(clientePastas)
-        .where(and(eq(clientePastas.escritorioId, esc.escritorio.id), inArray(clientePastas.parentId, ids)))
+        .where(and(eq(clientePastas.escritorioId, perm.escritorioId), inArray(clientePastas.parentId, ids)))
         .groupBy(clientePastas.parentId);
       for (const id of ids) contagens[id] = { arquivos: 0, subpastas: 0 };
       for (const r of arq) if (r.pastaId != null) contagens[r.pastaId].arquivos = Number(r.total);
@@ -542,7 +704,12 @@ export const clientesRouter = router({
     nome: z.string().min(1).max(128),
     parentId: z.number().nullable().optional(),
   })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
     const nomeLimpo = input.nome.trim();
     if (!nomeLimpo) throw new Error("Nome da pasta não pode ser vazio.");
 
@@ -552,7 +719,7 @@ export const clientesRouter = router({
         .where(and(
           eq(clientePastas.id, input.parentId),
           eq(clientePastas.contatoId, input.contatoId),
-          eq(clientePastas.escritorioId, esc.escritorio.id),
+          eq(clientePastas.escritorioId, perm.escritorioId),
         ))
         .limit(1);
       if (!mae) throw new Error("Pasta mãe inválida.");
@@ -561,7 +728,7 @@ export const clientesRouter = router({
     // Evita duplicata de nome no mesmo nível.
     const conds: any[] = [
       eq(clientePastas.contatoId, input.contatoId),
-      eq(clientePastas.escritorioId, esc.escritorio.id),
+      eq(clientePastas.escritorioId, perm.escritorioId),
       eq(clientePastas.nome, nomeLimpo),
     ];
     if (input.parentId == null) conds.push(isNull(clientePastas.parentId));
@@ -570,11 +737,11 @@ export const clientesRouter = router({
     if (dup) throw new Error("Já existe uma pasta com esse nome neste local.");
 
     const [r] = await db.insert(clientePastas).values({
-      escritorioId: esc.escritorio.id,
+      escritorioId: perm.escritorioId,
       contatoId: input.contatoId,
       parentId: input.parentId ?? null,
       nome: nomeLimpo,
-      criadoPor: esc.colaborador.id,
+      criadoPor: perm.colaboradorId,
     });
     return { id: (r as { insertId: number }).insertId };
   }),
@@ -583,18 +750,23 @@ export const clientesRouter = router({
     id: z.number(),
     nome: z.string().min(1).max(128),
   })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
     const nomeLimpo = input.nome.trim();
     if (!nomeLimpo) throw new Error("Nome da pasta não pode ser vazio.");
     const [atual] = await db.select().from(clientePastas)
-      .where(and(eq(clientePastas.id, input.id), eq(clientePastas.escritorioId, esc.escritorio.id)))
+      .where(and(eq(clientePastas.id, input.id), eq(clientePastas.escritorioId, perm.escritorioId)))
       .limit(1);
     if (!atual) throw new Error("Pasta não encontrada.");
+    const ok = await podeVerCliente(db, atual.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
 
     // Checa duplicata de nome no mesmo nível (exceto a própria pasta).
     const conds: any[] = [
       eq(clientePastas.contatoId, atual.contatoId),
-      eq(clientePastas.escritorioId, esc.escritorio.id),
+      eq(clientePastas.escritorioId, perm.escritorioId),
       eq(clientePastas.nome, nomeLimpo),
     ];
     if (atual.parentId == null) conds.push(isNull(clientePastas.parentId));
@@ -607,11 +779,16 @@ export const clientesRouter = router({
   }),
 
   excluirPasta: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) throw new Error("Escritório não encontrado."); const db = await getDb(); if (!db) throw new Error("Database indisponível");
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
     const [pasta] = await db.select().from(clientePastas)
-      .where(and(eq(clientePastas.id, input.id), eq(clientePastas.escritorioId, esc.escritorio.id)))
+      .where(and(eq(clientePastas.id, input.id), eq(clientePastas.escritorioId, perm.escritorioId)))
       .limit(1);
     if (!pasta) throw new Error("Pasta não encontrada.");
+    const ok = await podeVerCliente(db, pasta.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
 
     // BFS para coletar todos os IDs de subpastas (e a própria).
     const todosIds: number[] = [pasta.id];
@@ -619,7 +796,7 @@ export const clientesRouter = router({
     while (fronteira.length > 0) {
       const filhos = await db.select({ id: clientePastas.id }).from(clientePastas)
         .where(and(
-          eq(clientePastas.escritorioId, esc.escritorio.id),
+          eq(clientePastas.escritorioId, perm.escritorioId),
           inArray(clientePastas.parentId, fronteira),
         ));
       const novos = filhos.map((f) => f.id);
@@ -628,20 +805,39 @@ export const clientesRouter = router({
       fronteira = novos;
     }
 
+    // Coleta URLs dos arquivos ANTES de deletar — necessário pra limpar
+    // os blobs do disco depois (sem isso, ficariam órfãos consumindo
+    // espaço indefinidamente).
+    const arquivosAfetados = await db
+      .select({ url: clienteArquivos.url })
+      .from(clienteArquivos)
+      .where(and(
+        eq(clienteArquivos.escritorioId, perm.escritorioId),
+        inArray(clienteArquivos.pastaId, todosIds),
+      ));
+
     // Exclusão definitiva: primeiro arquivos de todas, depois as pastas.
     let arquivosExcluidos = 0;
     const delArq = await db.delete(clienteArquivos)
       .where(and(
-        eq(clienteArquivos.escritorioId, esc.escritorio.id),
+        eq(clienteArquivos.escritorioId, perm.escritorioId),
         inArray(clienteArquivos.pastaId, todosIds),
       ));
     arquivosExcluidos = (delArq as unknown as { affectedRows?: number })?.affectedRows ?? 0;
 
     await db.delete(clientePastas)
       .where(and(
-        eq(clientePastas.escritorioId, esc.escritorio.id),
+        eq(clientePastas.escritorioId, perm.escritorioId),
         inArray(clientePastas.id, todosIds),
       ));
+
+    // Cleanup dos blobs no disco. Não-fatal: erros não revertem o delete
+    // do DB (operação já confirmada). Em paralelo pra cascade de pasta
+    // com 50+ arquivos não travar a resposta.
+    const { apagarArquivoDoDisco } = await import("../upload/upload-route");
+    await Promise.allSettled(
+      arquivosAfetados.map((a) => apagarArquivoDoDisco(a.url, perm.escritorioId)),
+    );
 
     return { success: true, pastasExcluidas: todosIds.length, arquivosExcluidos };
   }),
@@ -654,13 +850,17 @@ export const clientesRouter = router({
   listarConteudoRecursivo: protectedProcedure.input(z.object({
     pastaId: z.number(),
   })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return { nome: "", arquivos: [] as Array<{ nome: string; url: string; pathRelativo: string }> };
-    const db = await getDb(); if (!db) return { nome: "", arquivos: [] };
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return { nome: "", arquivos: [] as Array<{ nome: string; url: string; pathRelativo: string }> };
+    const db = await getDb();
+    if (!db) return { nome: "", arquivos: [] };
 
     const [raiz] = await db.select().from(clientePastas)
-      .where(and(eq(clientePastas.id, input.pastaId), eq(clientePastas.escritorioId, esc.escritorio.id)))
+      .where(and(eq(clientePastas.id, input.pastaId), eq(clientePastas.escritorioId, perm.escritorioId)))
       .limit(1);
     if (!raiz) return { nome: "", arquivos: [] };
+    const ok = await podeVerCliente(db, raiz.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) return { nome: "", arquivos: [] };
 
     // BFS mantendo o caminho relativo de cada pasta.
     const caminhos = new Map<number, string>();
@@ -671,7 +871,7 @@ export const clientesRouter = router({
     while (fronteira.length > 0) {
       const arquivos = await db.select().from(clienteArquivos)
         .where(and(
-          eq(clienteArquivos.escritorioId, esc.escritorio.id),
+          eq(clienteArquivos.escritorioId, perm.escritorioId),
           inArray(clienteArquivos.pastaId, fronteira),
         ));
       for (const a of arquivos) {
@@ -681,7 +881,7 @@ export const clientesRouter = router({
 
       const subs = await db.select().from(clientePastas)
         .where(and(
-          eq(clientePastas.escritorioId, esc.escritorio.id),
+          eq(clientePastas.escritorioId, perm.escritorioId),
           inArray(clientePastas.parentId, fronteira),
         ));
       if (subs.length === 0) break;
@@ -696,13 +896,23 @@ export const clientesRouter = router({
   }),
 
   listarConversas: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
-    const rows = await db.select().from(conversas).where(and(eq(conversas.contatoId, input.contatoId), eq(conversas.escritorioId, esc.escritorio.id))).orderBy(desc(conversas.createdAt));
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) return [];
+    const rows = await db.select().from(conversas).where(and(eq(conversas.contatoId, input.contatoId), eq(conversas.escritorioId, perm.escritorioId))).orderBy(desc(conversas.createdAt));
     return rows.map(r => ({ id: r.id, status: r.status, assunto: r.assunto, ultimaMensagemPreview: r.ultimaMensagemPreview, ultimaMensagemAt: r.ultimaMensagemAt ? (r.ultimaMensagemAt as Date).toISOString() : "", createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "" }));
   }),
 
   listarLeads: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return []; const db = await getDb(); if (!db) return [];
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+    const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!ok) return [];
     const rows = await db
       .select({
         id: leads.id,
@@ -715,7 +925,7 @@ export const clientesRouter = router({
       .from(leads)
       .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
       .leftJoin(users, eq(colaboradores.userId, users.id))
-      .where(and(eq(leads.contatoId, input.contatoId), eq(leads.escritorioId, esc.escritorio.id)))
+      .where(and(eq(leads.contatoId, input.contatoId), eq(leads.escritorioId, perm.escritorioId)))
       .orderBy(desc(leads.createdAt));
     return rows.map(r => ({
       id: r.id,
@@ -728,14 +938,27 @@ export const clientesRouter = router({
   }),
 
   estatisticas: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id); if (!esc) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
-    const db = await getDb(); if (!db) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
-    const eid = esc.escritorio.id;
-    const [t] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(eq(contatos.escritorioId, eid));
-    const [ct] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`telefoneContato IS NOT NULL AND telefoneContato != ''`));
-    const [ce] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`emailContato IS NOT NULL AND emailContato != ''`));
-    const [nh] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), sql`DATE(createdAtContato) = CURDATE()`));
-    const [docs] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(and(eq(contatos.escritorioId, eid), eq(contatos.documentacaoPendente, true)));
+    const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+    if (!perm.allowed) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
+    const db = await getDb();
+    if (!db) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
+    // verProprios: atendente vê só estatísticas de seus clientes. Sem
+    // isso, dashboard exibia número global do escritório pra qualquer
+    // colaborador (vazamento de tamanho de base).
+    const escopoColaborador = !perm.verTodos && perm.verProprios
+      ? eq(contatos.responsavelId, perm.colaboradorId)
+      : undefined;
+    const baseWhere = (extra?: any) => {
+      const conds = [eq(contatos.escritorioId, perm.escritorioId)];
+      if (escopoColaborador) conds.push(escopoColaborador);
+      if (extra) conds.push(extra);
+      return and(...conds);
+    };
+    const [t] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere());
+    const [ct] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(sql`telefoneContato IS NOT NULL AND telefoneContato != ''`));
+    const [ce] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(sql`emailContato IS NOT NULL AND emailContato != ''`));
+    const [nh] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(sql`DATE(createdAtContato) = CURDATE()`));
+    const [docs] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(eq(contatos.documentacaoPendente, true)));
     return {
       total: Number((t as { count: number } | undefined)?.count || 0),
       novosHoje: Number((nh as { count: number } | undefined)?.count || 0),

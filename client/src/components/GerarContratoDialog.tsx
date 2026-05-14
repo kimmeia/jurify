@@ -40,9 +40,14 @@ import {
   Loader2,
   PenLine,
   Variable,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Placeholder } from "../../../shared/modelos-contrato-variaveis";
+import {
+  EditorPosicionamentoCampos,
+  type CampoParaSalvar,
+} from "@/components/EditorPosicionamentoCampos";
 
 interface ModeloLista {
   id: number;
@@ -69,12 +74,24 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
   const [valoresManuais, setValoresManuais] = useState<Record<string, string>>({});
   const [linkGerado, setLinkGerado] = useState<string | null>(null);
 
+  // Estado do editor de posicionamento — quando assinatura é criada com
+  // sucesso, recebemos {assinaturaId, token, documentoUrl} e abrimos o
+  // editor inline (substitui o conteúdo do dialog). Após salvar, devolve
+  // o link da assinatura pro user copiar.
+  const [editorState, setEditorState] = useState<{
+    assinaturaId: number;
+    token: string;
+    documentoUrl: string;
+    linkFinal: string;
+  } | null>(null);
+
   // Reset ao fechar
   useEffect(() => {
     if (!open) {
       setModeloId(null);
       setValoresManuais({});
       setLinkGerado(null);
+      setEditorState(null);
     }
   }, [open]);
 
@@ -123,25 +140,57 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
   });
 
   const assinaturaMut = (trpc as any).modelosContrato.gerarComoAssinatura.useMutation({
-    onSuccess: (r: { assinaturaId: number; token: string; linkAssinatura: string }) => {
-      // Constrói URL absoluta (linkAssinatura é só "/assinar/:token")
+    onSuccess: (r: { assinaturaId: number; token: string; linkAssinatura: string; documentoUrl?: string }) => {
       const fullUrl =
         typeof window !== "undefined"
           ? `${window.location.origin}${r.linkAssinatura}`
           : r.linkAssinatura;
-      setLinkGerado(fullUrl);
-      navigator.clipboard.writeText(fullUrl).catch(() => {
-        /* clipboard pode falhar em http; ignora */
-      });
-      toast.success("Assinatura criada", {
-        description: "Link copiado pro clipboard. Envie pro cliente.",
-      });
-      // Invalida lista de assinaturas do cliente pra aba "Documentos"
-      // pegar a nova entrada na próxima abertura.
+      // Invalida lista do cliente independente do fluxo escolhido.
       utils.assinaturas?.listarPorCliente?.invalidate?.({ contatoId });
+      if (modoPosicional) {
+        // Fluxo NOVO (Fase 1): abre editor de posicionamento.
+        // Usa endpoint dedicado /api/assinatura/pdf/:id em vez do path
+        // estático /uploads/... — passa pelo auth de sessão, evita o
+        // Cross-Origin-Resource-Policy do helmet, e loga se o PDF
+        // sumiu do disco.
+        setEditorState({
+          assinaturaId: r.assinaturaId,
+          token: r.token,
+          documentoUrl: `/api/assinatura/pdf/${r.assinaturaId}`,
+          linkFinal: fullUrl,
+        });
+      } else {
+        // Fluxo LEGADO: mostra direto o link copiável (assinatura cai na
+        // última página, certificação no final).
+        setLinkGerado(fullUrl);
+        navigator.clipboard.writeText(fullUrl).catch(() => { /* http ignora */ });
+        toast.success("Assinatura criada", {
+          description: "Link copiado pro clipboard. Envie pro cliente.",
+        });
+      }
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Mutation pra salvar campos posicionais (executada depois do editor).
+  const salvarCamposMut = (trpc as any).assinaturas.salvarCampos.useMutation({
+    onSuccess: () => {
+      if (!editorState) return;
+      // Encerra editor + mostra link final.
+      setLinkGerado(editorState.linkFinal);
+      navigator.clipboard.writeText(editorState.linkFinal).catch(() => { /* ignore */ });
+      toast.success("Assinatura pronta com campos posicionados", {
+        description: "Link copiado. Envie pro cliente.",
+      });
+      setEditorState(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Escolha entre fluxo legado (sem editor) e fluxo posicional (com editor).
+  // Default: posicional. Operador pode desativar via checkbox (caso só
+  // queira o comportamento antigo).
+  const [modoPosicional, setModoPosicional] = useState(true);
 
   const todosPreenchidos = placeholdersManuais.every((p) =>
     (valoresManuais[p.nome] || "").trim().length > 0,
@@ -165,6 +214,46 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
       contatoId,
       valoresManuais: placeholdersManuais.length > 0 ? valoresManuais : undefined,
     });
+  }
+
+  // Quando o editor está ativo, ocupa tela cheia (substitui o dialog padrão)
+  if (editorState) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => {
+        // Esc/click-outside no editor cancela o editor mas mantém a
+        // assinatura criada (operador pode reabrir do detalhe e refazer).
+        // Pra UX MVP: voltar pra etapa anterior do dialog.
+        if (!o) {
+          setEditorState(null);
+          onOpenChange(false);
+        }
+      }}>
+        <DialogContent
+          className="!max-w-[100vw] !w-screen !h-screen !rounded-none p-0 gap-0 flex flex-col"
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <EditorPosicionamentoCampos
+            pdfUrl={editorState.documentoUrl}
+            onSalvar={async (campos: CampoParaSalvar[]) => {
+              await salvarCamposMut.mutateAsync({
+                assinaturaId: editorState.assinaturaId,
+                campos,
+              });
+            }}
+            onCancelar={() => {
+              // Cancelar sem salvar → continua sendo possível clicar o
+              // link enviado (fluxo legado roda no backend pois 0 campos).
+              setLinkGerado(editorState.linkFinal);
+              setEditorState(null);
+              toast.info("Sem campos posicionados", {
+                description: "A assinatura cairá na última página (modo legado).",
+              });
+            }}
+            salvando={salvarCamposMut.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (
@@ -309,6 +398,29 @@ export function GerarContratoDialog({ contatoId, contatoNome, open, onOpenChange
                     Este modelo não tem placeholders. Será gerado idêntico ao original.
                   </p>
                 )}
+
+                {/* Modo posicional — checkbox antes do Enviar pra assinatura.
+                    Default ligado. Quando desligado, fluxo legado (carimbo
+                    na última página + página de certificação). */}
+                <label className="flex items-start gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/30">
+                  <input
+                    type="checkbox"
+                    checked={modoPosicional}
+                    onChange={(e) => setModoPosicional(e.target.checked)}
+                    className="h-4 w-4 mt-0.5"
+                  />
+                  <div className="flex-1 text-xs">
+                    <p className="font-medium flex items-center gap-1">
+                      <Settings className="h-3 w-3" />
+                      Posicionar campos visualmente no PDF
+                    </p>
+                    <p className="text-muted-foreground text-[10px] mt-0.5">
+                      Após gerar, abre editor pra você arrastar onde a
+                      assinatura, data, nome e CPF vão aparecer.
+                      Desmarcar = assinatura cai na última página (modo antigo).
+                    </p>
+                  </div>
+                </label>
               </>
             )}
           </div>

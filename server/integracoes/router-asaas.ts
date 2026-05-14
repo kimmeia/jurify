@@ -2238,6 +2238,70 @@ export const asaasRouter = router({
     }),
 
   /**
+   * Versão batch do `resumoContato` — pega o resumo (vinculado + somas
+   * pendente/vencido/pago) de vários contatos numa query só.
+   *
+   * Motivação: o componente FinanceiroBadge na lista de Clientes era
+   * renderizado por linha, disparando N queries `resumoContato` (1 por
+   * cliente visível, até 50/página). Esta procedure devolve um Record
+   * indexado por contatoId; frontend faz 1 chamada por página.
+   *
+   * Não retorna o array `cobrancas` (pesado e desnecessário pro badge —
+   * só os totais bastam). Pra detalhe completo, frontend continua usando
+   * `resumoContato`.
+   */
+  resumoPorContatos: protectedProcedure
+    .input(z.object({ contatoIds: z.array(z.number().int().positive()).max(100) }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc || input.contatoIds.length === 0) return {} as Record<number, {
+        vinculado: boolean; pendente: number; vencido: number; pago: number;
+      }>;
+      const db = await getDb();
+      if (!db) return {};
+
+      try {
+        // Vínculos primários (ou primeiro) por contato
+        const vinculos = await db.select({ contatoId: asaasClientes.contatoId })
+          .from(asaasClientes)
+          .where(and(
+            eq(asaasClientes.escritorioId, esc.escritorio.id),
+            inArray(asaasClientes.contatoId, input.contatoIds),
+          ));
+        const vinculados = new Set(vinculos.map((v) => v.contatoId));
+
+        // Cobranças agrupadas: traz só (contatoId, status, valor)
+        const cobs = await db.select({
+          contatoId: asaasCobrancas.contatoId,
+          status: asaasCobrancas.status,
+          valor: asaasCobrancas.valor,
+        }).from(asaasCobrancas).where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.contatoId, input.contatoIds),
+        ));
+
+        const result: Record<number, {
+          vinculado: boolean; pendente: number; vencido: number; pago: number;
+        }> = {};
+        for (const id of input.contatoIds) {
+          result[id] = { vinculado: vinculados.has(id), pendente: 0, vencido: 0, pago: 0 };
+        }
+        for (const c of cobs) {
+          if (c.contatoId == null) continue; // cobrança órfã — ignora
+          const r = result[c.contatoId];
+          if (!r) continue;
+          const val = parseFloat(c.valor) || 0;
+          if (c.status === "PENDING") r.pendente += val;
+          else if (c.status === "OVERDUE") r.vencido += val;
+          else if (c.status === "RECEIVED" || c.status === "CONFIRMED" || c.status === "RECEIVED_IN_CASH") r.pago += val;
+        }
+        return result;
+      } catch {
+        return {};
+      }
+    }),
+
+  /**
    * Sincroniza cobranças de um contato com o Asaas em dois passos:
    *
    *   1. Reconciliação por CPF: o Asaas permite duplicatas de customer com

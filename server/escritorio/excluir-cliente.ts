@@ -147,177 +147,151 @@ export async function excluirClienteEmCascata(
     log.warn({ err: err.message }, "Falha ao listar cobranças (pode ser tabela inexistente)");
   }
 
-  // ─── 2. Deletar espelho local das cobranças ─────────────────────────────
+  // ─── 2-11. Cascade local (transação atômica) ─────────────────────────────
+  //
+  // Antes do fix, cada passo abaixo tinha try/catch independente: uma
+  // falha no passo 5 deixava asaas_cobrancas + asaas_clientes deletados,
+  // mas conversas, leads, etc. órfãos. Sem rastreabilidade boa pra
+  // saneamento.
+  //
+  // Agora envolvemos tudo numa transação. Se qualquer passo falhar:
+  //   - rollback automático de todos os deletes locais
+  //   - função lança erro (caller mostra "falha — tente de novo")
+  //   - Asaas já cancelado (passo 1) fica como está; cobrança no Asaas
+  //     em estado CANCELLED + DB local intacto é recuperável
+  //     (reativar manualmente ou re-tentar exclusão pula passo 1 porque
+  //     status mudou).
+  //
+  // Step 1 (Asaas API) NÃO entra na transação — chamadas externas longas
+  // segurariam transação aberta + impossível rollback de ação remota.
+
+  // Coleta URLs dos arquivos do cliente ANTES da transação. Precisamos
+  // delas pra apagar os blobs do disco após o commit (sem isso, arquivos
+  // físicos ficariam órfãos consumindo espaço indefinidamente).
+  let urlsArquivos: string[] = [];
   try {
-    const delCob = await db
-      .delete(asaasCobrancas)
-      .where(
-        and(
-          eq(asaasCobrancas.escritorioId, escritorioId),
-          eq(asaasCobrancas.contatoId, contatoId),
-        ),
-      );
-    const n = (delCob as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-    log.info({ n }, "Cobranças locais excluídas");
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir cobranças locais");
+    const arqs = await db
+      .select({ url: clienteArquivos.url })
+      .from(clienteArquivos)
+      .where(and(
+        eq(clienteArquivos.escritorioId, escritorioId),
+        eq(clienteArquivos.contatoId, contatoId),
+      ));
+    urlsArquivos = arqs.map((a) => a.url).filter(Boolean);
+  } catch {
+    /* não-fatal — apenas perde a oportunidade de limpar blobs */
   }
 
-  // ─── 3. Deletar vínculo Asaas ───────────────────────────────────────────
   try {
-    await db
-      .delete(asaasClientes)
-      .where(
-        and(
-          eq(asaasClientes.escritorioId, escritorioId),
-          eq(asaasClientes.contatoId, contatoId),
-        ),
-      );
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir vínculo Asaas");
-  }
-
-  // ─── 4. Deletar mensagens (via conversas) ───────────────────────────────
-  const conversasDoContato = await db
-    .select({ id: conversas.id })
-    .from(conversas)
-    .where(
-      and(eq(conversas.escritorioId, escritorioId), eq(conversas.contatoId, contatoId)),
-    );
-
-  if (conversasDoContato.length > 0) {
-    const conversaIds = conversasDoContato.map((c) => c.id);
-    try {
-      const delMsgs = await db
-        .delete(mensagens)
-        .where(inArray(mensagens.conversaId, conversaIds));
-      resultado.mensagensExcluidas =
-        (delMsgs as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-    } catch (err: any) {
-      log.warn({ err: err.message }, "Falha ao excluir mensagens");
-    }
-
-    // ─── 5. Deletar conversas ────────────────────────────────────────────
-    try {
-      const delConv = await db
-        .delete(conversas)
+    await db.transaction(async (tx) => {
+      // ─── 2. Cobranças locais ─────────────────────────────────────────
+      const delCob = await tx
+        .delete(asaasCobrancas)
         .where(
           and(
-            eq(conversas.escritorioId, escritorioId),
-            eq(conversas.contatoId, contatoId),
+            eq(asaasCobrancas.escritorioId, escritorioId),
+            eq(asaasCobrancas.contatoId, contatoId),
           ),
         );
-      resultado.conversasExcluidas =
-        (delConv as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-    } catch (err: any) {
-      log.warn({ err: err.message }, "Falha ao excluir conversas");
-    }
-  }
+      const nCob = (delCob as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+      log.info({ n: nCob }, "Cobranças locais excluídas");
 
-  // ─── 6. Leads ────────────────────────────────────────────────────────────
-  try {
-    const delLeads = await db
-      .delete(leads)
-      .where(
-        and(eq(leads.escritorioId, escritorioId), eq(leads.contatoId, contatoId)),
-      );
-    resultado.leadsExcluidos =
-      (delLeads as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir leads");
-  }
+      // ─── 3. Vínculo Asaas ────────────────────────────────────────────
+      await tx
+        .delete(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, escritorioId),
+            eq(asaasClientes.contatoId, contatoId),
+          ),
+        );
 
-  // ─── 7. Tarefas ──────────────────────────────────────────────────────────
-  try {
-    const delTarefas = await db
-      .delete(tarefas)
-      .where(
-        and(
-          eq(tarefas.escritorioId, escritorioId),
-          eq(tarefas.contatoId, contatoId),
-        ),
-      );
-    resultado.tarefasExcluidas =
-      (delTarefas as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir tarefas");
-  }
+      // ─── 4. Mensagens (via conversas) ────────────────────────────────
+      const conversasDoContato = await tx
+        .select({ id: conversas.id })
+        .from(conversas)
+        .where(and(eq(conversas.escritorioId, escritorioId), eq(conversas.contatoId, contatoId)));
 
-  // ─── 8. Anotações ────────────────────────────────────────────────────────
-  try {
-    const delNotas = await db
-      .delete(clienteAnotacoes)
-      .where(
-        and(
-          eq(clienteAnotacoes.escritorioId, escritorioId),
-          eq(clienteAnotacoes.contatoId, contatoId),
-        ),
-      );
-    resultado.anotacoesExcluidas =
-      (delNotas as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir anotações");
-  }
+      if (conversasDoContato.length > 0) {
+        const conversaIds = conversasDoContato.map((c) => c.id);
+        const delMsgs = await tx
+          .delete(mensagens)
+          .where(inArray(mensagens.conversaId, conversaIds));
+        resultado.mensagensExcluidas =
+          (delMsgs as unknown as { affectedRows?: number })?.affectedRows ?? 0;
 
-  // ─── 9. Arquivos + pastas ────────────────────────────────────────────────
-  // Arquivos são deletados por contatoId — cobre tanto os soltos quanto os
-  // dentro de qualquer pasta (independente de profundidade). Depois as
-  // pastas em si são removidas pelo mesmo filtro de contatoId.
-  try {
-    const delArqs = await db
-      .delete(clienteArquivos)
-      .where(
-        and(
-          eq(clienteArquivos.escritorioId, escritorioId),
-          eq(clienteArquivos.contatoId, contatoId),
-        ),
-      );
-    resultado.arquivosExcluidos =
-      (delArqs as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir arquivos");
-  }
+        // ─── 5. Conversas ────────────────────────────────────────────
+        const delConv = await tx
+          .delete(conversas)
+          .where(and(eq(conversas.escritorioId, escritorioId), eq(conversas.contatoId, contatoId)));
+        resultado.conversasExcluidas =
+          (delConv as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+      }
 
-  try {
-    await db
-      .delete(clientePastas)
-      .where(
-        and(
-          eq(clientePastas.escritorioId, escritorioId),
-          eq(clientePastas.contatoId, contatoId),
-        ),
-      );
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir pastas");
-  }
+      // ─── 6. Leads ────────────────────────────────────────────────────
+      const delLeads = await tx
+        .delete(leads)
+        .where(and(eq(leads.escritorioId, escritorioId), eq(leads.contatoId, contatoId)));
+      resultado.leadsExcluidos =
+        (delLeads as unknown as { affectedRows?: number })?.affectedRows ?? 0;
 
-  // ─── 10. Assinaturas digitais ───────────────────────────────────────────
-  try {
-    const delAssin = await db
-      .delete(assinaturasDigitais)
-      .where(
-        and(
-          eq(assinaturasDigitais.escritorioId, escritorioId),
-          eq(assinaturasDigitais.contatoId, contatoId),
-        ),
-      );
-    resultado.assinaturasExcluidas =
-      (delAssin as unknown as { affectedRows?: number })?.affectedRows ?? 0;
-  } catch (err: any) {
-    log.warn({ err: err.message }, "Falha ao excluir assinaturas");
-  }
+      // ─── 7. Tarefas ──────────────────────────────────────────────────
+      const delTarefas = await tx
+        .delete(tarefas)
+        .where(and(eq(tarefas.escritorioId, escritorioId), eq(tarefas.contatoId, contatoId)));
+      resultado.tarefasExcluidas =
+        (delTarefas as unknown as { affectedRows?: number })?.affectedRows ?? 0;
 
-  // ─── 11. O próprio contato ──────────────────────────────────────────────
-  try {
-    await db
-      .delete(contatos)
-      .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)));
+      // ─── 8. Anotações ────────────────────────────────────────────────
+      const delNotas = await tx
+        .delete(clienteAnotacoes)
+        .where(and(eq(clienteAnotacoes.escritorioId, escritorioId), eq(clienteAnotacoes.contatoId, contatoId)));
+      resultado.anotacoesExcluidas =
+        (delNotas as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+
+      // ─── 9. Arquivos + pastas (cascade por contatoId, independente da profundidade) ──
+      const delArqs = await tx
+        .delete(clienteArquivos)
+        .where(and(eq(clienteArquivos.escritorioId, escritorioId), eq(clienteArquivos.contatoId, contatoId)));
+      resultado.arquivosExcluidos =
+        (delArqs as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+
+      await tx
+        .delete(clientePastas)
+        .where(and(eq(clientePastas.escritorioId, escritorioId), eq(clientePastas.contatoId, contatoId)));
+
+      // ─── 10. Assinaturas digitais ───────────────────────────────────
+      const delAssin = await tx
+        .delete(assinaturasDigitais)
+        .where(and(eq(assinaturasDigitais.escritorioId, escritorioId), eq(assinaturasDigitais.contatoId, contatoId)));
+      resultado.assinaturasExcluidas =
+        (delAssin as unknown as { affectedRows?: number })?.affectedRows ?? 0;
+
+      // ─── 11. O próprio contato ──────────────────────────────────────
+      await tx
+        .delete(contatos)
+        .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)));
+    });
     resultado.success = true;
     log.info({ contatoId, resultado }, "Exclusão em cascata concluída");
+
+    // Cleanup dos blobs no disco — só roda APÓS o commit da transação.
+    // Erros aqui não revertem a deleção (DB já confirmou). Promise.allSettled
+    // pra rodar em paralelo + não falhar cedo num arquivo problemático.
+    if (urlsArquivos.length > 0) {
+      try {
+        const { apagarArquivoDoDisco } = await import("../upload/upload-route");
+        await Promise.allSettled(
+          urlsArquivos.map((url) => apagarArquivoDoDisco(url, escritorioId)),
+        );
+      } catch (err: any) {
+        log.warn({ err: err.message }, "Falha no cleanup de blobs (não-fatal)");
+      }
+    }
   } catch (err: any) {
-    log.error({ err: err.message }, "Falha ao excluir o contato final");
+    log.error({ err: err.message, contatoId, escritorioId }, "Cascade local rolled back");
     throw new Error(
-      "Não foi possível excluir o cliente. Verifique se não há registros vinculados.",
+      `Não foi possível excluir o cliente (${err.message || "falha na cascata"}). Nenhum dado local foi alterado — tente novamente.`,
     );
   }
 
