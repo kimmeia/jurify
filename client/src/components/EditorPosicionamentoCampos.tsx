@@ -483,8 +483,14 @@ export function EditorPosicionamentoCampos({
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
                     onLoadSuccess={(p) => {
-                      // p.width e p.height são em pontos PDF
-                      setPageSizePt({ w: p.width, h: p.height });
+                      // CRÍTICO: usar originalWidth/Height (em pontos PDF
+                      // reais), NÃO width/height (que vêm em pixels já
+                      // escalados pelo Page width=700). pdf-lib trabalha
+                      // em pontos PDF, então as coords salvas precisam ser
+                      // em pontos. Sem isso, editor (width=700) salvava
+                      // em "px-700-based" e cliente (width=600) renderizava
+                      // em "px-600-based" → desvio visível "alguns cm acima".
+                      setPageSizePt({ w: p.originalWidth, h: p.originalHeight });
                     }}
                   />
 
