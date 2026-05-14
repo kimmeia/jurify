@@ -24,6 +24,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
+import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "./router-financeiro";
 
 const log = createLogger("relatorios");
@@ -47,10 +48,43 @@ const AtendimentoInput = z
   .optional();
 
 /** Mês vigente como range default — primeiro do mês até agora. */
-function mesVigente(): { dataInicio: Date; dataFim: Date } {
+export function mesVigente(): { dataInicio: Date; dataFim: Date } {
   const agora = new Date();
   const ini = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
   return { dataInicio: ini, dataFim: agora };
+}
+
+/** Subtrai 1 mês preservando o dia, mas com clamp pro último dia do mês
+ *  anterior quando o original não existe (ex.: 31 mar → 28 fev, nunca 3 mar).
+ *  Date#setMonth sozinho rola pra frente quando o dia não cabe — quebra
+ *  comparações MTD vs LMTD em fim de mês. */
+export function subtrairUmMesClamped(d: Date): Date {
+  const r = new Date(d);
+  const dia = r.getDate();
+  r.setDate(1);
+  r.setMonth(r.getMonth() - 1);
+  const ultimoDia = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(dia, ultimoDia));
+  return r;
+}
+
+/** Meta mensal proporcional ao range — `meta * (diasNoRange / diasNoMes)`.
+ *  Usa o mês civil de `dataInicio` como denominador. Ranges multi-mês
+ *  aceitam a aproximação (mesma escala). */
+export function metaProporcionalPeriodo(
+  metaMensal: number,
+  dataInicio: Date,
+  dataFim: Date,
+): number {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diasNoRange =
+    Math.floor((dataFim.getTime() - dataInicio.getTime()) / dayMs) + 1;
+  const diasNoMes = new Date(
+    dataInicio.getFullYear(),
+    dataInicio.getMonth() + 1,
+    0,
+  ).getDate();
+  return metaMensal * (diasNoRange / diasNoMes);
 }
 
 /** Resolve a lista de colaboradorIds que satisfaz os filtros opcionais
@@ -120,7 +154,7 @@ const ProducaoInput = z
   })
   .optional();
 
-function desdeDias(dias: number): Date {
+export function desdeDias(dias: number): Date {
   return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 }
 
@@ -297,10 +331,21 @@ export const relatoriosRouter = router({
     // verProprios trava no próprio colaborador. verTodos pode escolher um.
     // Atendente sem verTodos só pode filtrar por ELE MESMO — ignora qualquer
     // tentativa de filtrar por outro colaborador via input (proteção contra
-    // dropdown comprometido).
-    const filtroAtendente = soProprios
-      ? colabId
-      : (input?.responsavelId ?? null);
+    // dropdown comprometido). E mesmo verTodos: valida que o
+    // responsavelId pertence ao escritório (evita enumeração silenciosa).
+    let responsavelValidado: number | null = null;
+    if (!soProprios && input?.responsavelId) {
+      const [c] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.id, input.responsavelId),
+        ))
+        .limit(1);
+      responsavelValidado = c ? input.responsavelId : null;
+    }
+    const filtroAtendente = soProprios ? colabId : responsavelValidado;
 
     log.debug({
       proc: "comercial",
@@ -507,13 +552,8 @@ export const relatoriosRouter = router({
       let dataInicioAnterior: Date;
       let dataFimAnterior: Date;
       if (mesmoMesCivil) {
-        // Subtrai 1 mês preservando hora/dia. Date() trata overflow
-        // (ex.: 31 mar - 1 mês = 3 mar). Pra dashboard isso é aceitável e
-        // raro: ranges começam em dia 1 da maioria dos usos.
-        dataInicioAnterior = new Date(dataInicio);
-        dataInicioAnterior.setMonth(dataInicioAnterior.getMonth() - 1);
-        dataFimAnterior = new Date(dataFim);
-        dataFimAnterior.setMonth(dataFimAnterior.getMonth() - 1);
+        dataInicioAnterior = subtrairUmMesClamped(dataInicio);
+        dataFimAnterior = subtrairUmMesClamped(dataFim);
       } else {
         const duracaoMs = dataFim.getTime() - dataInicio.getTime();
         dataFimAnterior = new Date(dataInicio.getTime() - 1);
@@ -605,8 +645,6 @@ export const relatoriosRouter = router({
         };
       }
 
-      const STATUS_PAGO = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
-
       // ── KPIs período atual ────────────────────────────────────────────────
       const dataInicioStr = dataInicio.toISOString().slice(0, 10);
       const dataFimStr = dataFim.toISOString().slice(0, 10);
@@ -646,7 +684,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -668,7 +706,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioAnteriorStr),
           lte(asaasCobrancas.dataPagamento, dataFimAnteriorStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -761,7 +799,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -790,8 +828,13 @@ export const relatoriosRouter = router({
           const pagos = mapaPorAtendente.get(c.id) ?? { faturado: 0, cobrancas: 0, contratosPagos: 0 };
           const leadsDados = mapaLeads.get(c.id) ?? { valorFechado: 0, contratosFechados: 0 };
           const meta = c.metaMensal != null ? Number(c.metaMensal) : null;
-          const progressoMeta = meta && meta > 0
-            ? +((pagos.faturado / meta) * 100).toFixed(1)
+          // Proporcionalizar meta ao range: ranges não-mensais (1-7 mai)
+          // davam % falsamente baixa se comparassem com meta mensal cheia.
+          const metaPeriodo = meta != null && meta > 0
+            ? +metaProporcionalPeriodo(meta, dataInicio, dataFim).toFixed(2)
+            : null;
+          const progressoMeta = metaPeriodo && metaPeriodo > 0
+            ? +((pagos.faturado / metaPeriodo) * 100).toFixed(1)
             : null;
           return {
             atendenteId: c.id,
@@ -808,6 +851,7 @@ export const relatoriosRouter = router({
               ? +(pagos.faturado / pagos.contratosPagos).toFixed(2)
               : 0,
             meta,
+            metaPeriodo,
             progressoMeta,
           };
         })
@@ -830,7 +874,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -906,6 +950,21 @@ export const relatoriosRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode ver o próprio detalhamento." });
       }
 
+      // atendenteId precisa pertencer ao mesmo escritório do caller — sem isso,
+      // verTodos podia consultar IDs de outros escritórios (queries filtram por
+      // eid e dariam vazio, mas ainda é vetor de enumeração silenciosa).
+      const [atendente] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.id, input.atendenteId),
+        ))
+        .limit(1);
+      if (!atendente) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Atendente não encontrado." });
+      }
+
       // Range: default = mês vigente
       let dataInicio: Date;
       let dataFim: Date;
@@ -919,7 +978,6 @@ export const relatoriosRouter = router({
       }
       const dataInicioStr = dataInicio.toISOString().slice(0, 10);
       const dataFimStr = dataFim.toISOString().slice(0, 10);
-      const STATUS_PAGO_LOCAL = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
 
       // ── Leads fechado_ganho do atendente, agrupados por contatoId ──────────
       const leadsRows = await db
@@ -949,7 +1007,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           eq(asaasCobrancas.atendenteId, input.atendenteId),
-          inArray(asaasCobrancas.status, STATUS_PAGO_LOCAL),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
         ))
@@ -1086,7 +1144,9 @@ export const relatoriosRouter = router({
     };
 
     const [cardsTotal] = await cardsBase(gte(kanbanCards.createdAt, desde));
-    const [cardsAtrasados] = await cardsBase(eq(kanbanCards.atrasado, true));
+    const [cardsAtrasados] = await cardsBase(
+      and(eq(kanbanCards.atrasado, true), gte(kanbanCards.createdAt, desde)),
+    );
     const [cardsDentroPrazo] = await cardsBase(
       and(eq(kanbanCards.atrasado, false), gte(kanbanCards.createdAt, desde)),
     );
@@ -1140,8 +1200,18 @@ export const relatoriosRouter = router({
     };
   }),
 
-  /** Cálculos — histórico de cálculos do usuário */
+  /** Cálculos — histórico de cálculos do usuário.
+   *  Gateado por permissão `calculos` (não `relatorios`) pra que atendente
+   *  consiga ver o próprio histórico mesmo sem perm de relatórios. Filtra
+   *  por `userId`, isolamento natural. */
   calculos: protectedProcedure.input(PeriodoInput).query(async ({ ctx, input }) => {
+    const perm = await checkPermission(ctx.user.id, "calculos", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para ver histórico de cálculos.",
+      });
+    }
     const db = await getDb();
     if (!db) return null;
     const dias = input?.dias || 30;
