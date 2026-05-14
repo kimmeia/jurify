@@ -330,10 +330,21 @@ export const relatoriosRouter = router({
     // verProprios trava no próprio colaborador. verTodos pode escolher um.
     // Atendente sem verTodos só pode filtrar por ELE MESMO — ignora qualquer
     // tentativa de filtrar por outro colaborador via input (proteção contra
-    // dropdown comprometido).
-    const filtroAtendente = soProprios
-      ? colabId
-      : (input?.responsavelId ?? null);
+    // dropdown comprometido). E mesmo verTodos: valida que o
+    // responsavelId pertence ao escritório (evita enumeração silenciosa).
+    let responsavelValidado: number | null = null;
+    if (!soProprios && input?.responsavelId) {
+      const [c] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.id, input.responsavelId),
+        ))
+        .limit(1);
+      responsavelValidado = c ? input.responsavelId : null;
+    }
+    const filtroAtendente = soProprios ? colabId : responsavelValidado;
 
     log.debug({
       proc: "comercial",
@@ -940,6 +951,21 @@ export const relatoriosRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode ver o próprio detalhamento." });
       }
 
+      // atendenteId precisa pertencer ao mesmo escritório do caller — sem isso,
+      // verTodos podia consultar IDs de outros escritórios (queries filtram por
+      // eid e dariam vazio, mas ainda é vetor de enumeração silenciosa).
+      const [atendente] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.id, input.atendenteId),
+        ))
+        .limit(1);
+      if (!atendente) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Atendente não encontrado." });
+      }
+
       // Range: default = mês vigente
       let dataInicio: Date;
       let dataFim: Date;
@@ -1176,8 +1202,18 @@ export const relatoriosRouter = router({
     };
   }),
 
-  /** Cálculos — histórico de cálculos do usuário */
+  /** Cálculos — histórico de cálculos do usuário.
+   *  Gateado por permissão `calculos` (não `relatorios`) pra que atendente
+   *  consiga ver o próprio histórico mesmo sem perm de relatórios. Filtra
+   *  por `userId`, isolamento natural. */
   calculos: protectedProcedure.input(PeriodoInput).query(async ({ ctx, input }) => {
+    const perm = await checkPermission(ctx.user.id, "calculos", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para ver histórico de cálculos.",
+      });
+    }
     const db = await getDb();
     if (!db) return null;
     const dias = input?.dias || 30;
