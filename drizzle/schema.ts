@@ -1259,6 +1259,14 @@ export const asaasCobrancas = mysqlTable(
     idxParcelamentoLocal: index("asaas_cob_parcel_local_idx").on(
       t.parcelamentoLocalId,
     ),
+    // Acelera sync por-customer (asaas-sync.ts faz `WHERE escritorioId
+    // AND asaasCustomerId` em cada vínculo do escritório). Sem este
+    // índice, table-scan a cada chamada. Criado junto com a migration
+    // 0104 que também precisa dele pro cleanup das duplicatas.
+    idxEscritorioCustomer: index("asaas_cob_escr_customer_idx").on(
+      t.escritorioId,
+      t.asaasCustomerId,
+    ),
   }),
 );
 

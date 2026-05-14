@@ -33,6 +33,18 @@
 --   - ADD UNIQUE INDEX é capturado como "duplicate key name" pelo
 --     auto-migrate quando rerun
 
+-- 0. Índice de suporte: o UPDATE abaixo faz JOIN em
+--    (escritorioId, asaasCustomerId, contatoId). Sem índice, MySQL
+--    table-scaneia asaas_cobrancas por cada par de duplicatas — em
+--    escritórios com 100k+ cobranças e dezenas de duplicatas, pode
+--    levar minutos. O índice composto reduz pra lookup O(log n) por
+--    par. Vai sobreviver depois da migration pra acelerar queries
+--    cotidianas de sync por customer (asaas-sync.ts).
+CREATE INDEX IF NOT EXISTS asaas_cob_escr_customer_idx ON asaas_cobrancas (
+  escritorioIdAsaasCob,
+  asaasCustomerIdCob
+);
+
 -- 1. Re-aponta cobranças dos perdedores pro contatoId do sobrevivente.
 --    Para cada par (d1, d2) onde d1 é o sobrevivente E d2 o perdedor,
 --    atualiza cobranças cujo contatoId atual = d2.contatoId.
