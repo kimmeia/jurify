@@ -567,13 +567,16 @@ export async function syncCobrancasEscritorio(
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
 
-  // Throttle entre requests: o Asaas tem cota acumulada em janela longa
-  // (estoura com 429 e bloqueia 12h). Com N customers no escritório,
-  // sem delay o cron dispara N requests em poucos segundos — somado a
-  // outros escritórios + frontend, satura a cota. 200ms adiciona apenas
-  // (N × 0.2s) ao tick (100 customers = 20s extras, irrisório dentro
-  // do intervalo de 10min do cron) e dá fôlego pro Asaas processar.
-  const DELAY_ENTRE_REQUESTS_MS = 200;
+  // Throttle entre requests: o /payments do Asaas tipicamente tolera
+  // ~60 req/min antes de Camada 1 estourar. 200ms (= 300/min) sustentava
+  // 5x do limite e disparava o guard local em escritórios com 200+
+  // customers — primeiro vínculo passava, depois Camada 1 marcava
+  // remaining≤10 e os próximos abortavam o tick (visto em produção em
+  // 2026-05-14). 1000ms (= 60/min) deixa o sync abaixo do teto típico
+  // e o webhook continua sendo a fonte primária em tempo real. Custo:
+  // 200 customers × 1s = 3min30s extras, irrisório no intervalo de 24h
+  // do `syncAsaas` cron.
+  const DELAY_ENTRE_REQUESTS_MS = 1_000;
 
   for (let i = 0; i < vinculos.length; i++) {
     const vinculo = vinculos[i];

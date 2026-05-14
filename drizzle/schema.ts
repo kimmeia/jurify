@@ -1118,32 +1118,46 @@ export type InsertAsaasConfig = typeof asaasConfig.$inferInsert;
  * servem apenas para puxar o histórico financeiro (sync). Sempre deve haver
  * exatamente um primário por contato; secundários têm primario=false.
  */
-export const asaasClientes = mysqlTable("asaas_clientes", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorioIdAsaasCli").notNull(),
-  contatoId: int("contatoIdAsaas").notNull(),
-  asaasCustomerId: varchar("asaasCustomerId", { length: 64 }).notNull(),
-  cpfCnpj: varchar("cpfCnpjAsaas", { length: 18 }).notNull(),
-  nome: varchar("nomeAsaasCli", { length: 255 }),
-  primario: boolean("primarioAsaasCli").notNull().default(true),
-  sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
-  /**
-   * Flag de soft-disable. Cron de sync skipa rows com ativo=false.
-   * Marcado false quando o Asaas retorna 403 sistemicamente pra
-   * GET /payments?customer=X — chave sem permissão de ler aquele
-   * customer. Admin pode reativar via UI quando resolver.
-   */
-  ativo: boolean("ativo").notNull().default(true),
-  ultimoErro403Em: timestamp("ultimoErro403Em"),
-  ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
-  /**
-   * Mensagem da última falha de sync de cobranças. NULL = sem erro (último
-   * sync OK). Setado por `finalizarVinculacao` e pelo botão de sincronizar
-   * manual. UI exibe banner amarelo com "Tentar de novo" quando preenchido.
-   */
-  ultimoErroSync: varchar("ultimoErroSync", { length: 500 }),
-  ultimoErroSyncEm: timestamp("ultimoErroSyncEm"),
-});
+export const asaasClientes = mysqlTable(
+  "asaas_clientes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAsaasCli").notNull(),
+    contatoId: int("contatoIdAsaas").notNull(),
+    asaasCustomerId: varchar("asaasCustomerId", { length: 64 }).notNull(),
+    cpfCnpj: varchar("cpfCnpjAsaas", { length: 18 }).notNull(),
+    nome: varchar("nomeAsaasCli", { length: 255 }),
+    primario: boolean("primarioAsaasCli").notNull().default(true),
+    sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
+    /**
+     * Flag de soft-disable. Cron de sync skipa rows com ativo=false.
+     * Marcado false quando o Asaas retorna 403 sistemicamente pra
+     * GET /payments?customer=X — chave sem permissão de ler aquele
+     * customer. Admin pode reativar via UI quando resolver.
+     */
+    ativo: boolean("ativo").notNull().default(true),
+    ultimoErro403Em: timestamp("ultimoErro403Em"),
+    ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
+    /**
+     * Mensagem da última falha de sync de cobranças. NULL = sem erro (último
+     * sync OK). Setado por `finalizarVinculacao` e pelo botão de sincronizar
+     * manual. UI exibe banner amarelo com "Tentar de novo" quando preenchido.
+     */
+    ultimoErroSync: varchar("ultimoErroSync", { length: 500 }),
+    ultimoErroSyncEm: timestamp("ultimoErroSyncEm"),
+  },
+  (t) => ({
+    // 1 customer Asaas só pode ter 1 vínculo por escritório. Duplicatas
+    // históricas (bugs no fluxo de vincular contato) faziam o cron de
+    // sync chamar a API N vezes pro mesmo customer e cobranças
+    // oscilarem entre contatoIds. Criada via migration 0104 com
+    // cleanup das duplicatas existentes.
+    uqEscCustomer: uniqueIndex("asaas_cli_escr_customer_uq").on(
+      t.escritorioId,
+      t.asaasCustomerId,
+    ),
+  }),
+);
 
 export type AsaasCliente = typeof asaasClientes.$inferSelect;
 export type InsertAsaasCliente = typeof asaasClientes.$inferInsert;
