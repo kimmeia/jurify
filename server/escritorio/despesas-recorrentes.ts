@@ -27,6 +27,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { despesas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 const log = createLogger("escritorio-despesas-recorrentes");
 
@@ -117,7 +118,10 @@ export async function gerarFilhasDeModelo(modelo: {
     ...filhas.map((f) => f.vencimento),
   ]);
 
-  const hojeIso = new Date().toISOString().slice(0, 10);
+  // Fuso BR: server roda em UTC; após 21h BRT viraria amanhã e o cron
+  // antecipa a geração da próxima ocorrência por umas horas. Não é
+  // crítico, mas consistente com o resto do módulo.
+  const hojeIso = dataHojeBR();
   let proximoVencimento = avancarRecorrencia(ultimoVencimento, modelo.recorrencia);
   let geradas = 0;
 

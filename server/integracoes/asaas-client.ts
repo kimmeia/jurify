@@ -13,6 +13,7 @@
 
 import axios, { type AxiosInstance, type AxiosError } from "axios";
 import { AsaasRateGuard, type AsaasRateGuardInstance, RateLimitError } from "./asaas-rate-guard";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -584,7 +585,9 @@ export class AsaasClient {
     params?: { value?: number; paymentDate?: string; notifyCustomer?: boolean },
   ): Promise<AsaasPayment> {
     const body: Record<string, unknown> = {
-      paymentDate: params?.paymentDate ?? new Date().toISOString().slice(0, 10),
+      // Default "hoje" no fuso BR — após 21h BRT a versão UTC viraria
+      // amanhã, registrando pagamento com data futura no Asaas.
+      paymentDate: params?.paymentDate ?? dataHojeBR(),
       notifyCustomer: params?.notifyCustomer ?? false,
     };
     if (typeof params?.value === "number") body.value = params.value;

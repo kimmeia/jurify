@@ -28,6 +28,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { parseValorBR } from "../../shared/valor-br";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 const log = createLogger("dashboard-router");
 
@@ -382,7 +383,9 @@ export const dashboardRouter = router({
         let totalRecebido = 0;
         let totalPendente = 0;
         let totalVencido = 0;
-        const hoje = new Date().toISOString().slice(0, 10);
+        // Fuso BR: server roda UTC; após 21h BRT viraria amanhã e marcaria
+        // PENDING do dia atual como vencidas indevidamente.
+        const hoje = dataHojeBR();
 
         for (const c of cobrancas) {
           const valor = parseFloat(c.valor) || 0;
@@ -394,10 +397,17 @@ export const dashboardRouter = router({
               (c.createdAt as Date).toISOString().slice(0, 10);
             if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
           } else if (c.status === "PENDING") {
-            totalPendente += valor;
-            const dia = (c.vencimento || "").slice(0, 10);
-            if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
-          } else if (c.status === "OVERDUE" || (c.vencimento && c.vencimento < hoje && !pago)) {
+            // PENDING vencida vai pra totalVencido (mesma lógica do KPI
+            // e cashFlowMensal do router-asaas). PENDING dentro do prazo
+            // continua em totalPendente.
+            if (c.vencimento && c.vencimento < hoje) {
+              totalVencido += valor;
+            } else {
+              totalPendente += valor;
+              const dia = (c.vencimento || "").slice(0, 10);
+              if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
+            }
+          } else if (c.status === "OVERDUE") {
             totalVencido += valor;
           }
         }
