@@ -302,7 +302,7 @@ export const relatoriosRouter = router({
       ? colabId
       : (input?.responsavelId ?? null);
 
-    log.info({
+    log.debug({
       proc: "comercial",
       userId: ctx.user.id,
       colabId,
@@ -319,9 +319,6 @@ export const relatoriosRouter = router({
     const filtroLeadResp = filtroAtendente
       ? [eq(leads.responsavelId, filtroAtendente)]
       : [];
-    const filtroContResp = filtroAtendente
-      ? [eq(contatos.responsavelId, filtroAtendente)]
-      : [];
     const filtroConvResp = filtroAtendente
       ? [eq(conversas.atendenteId, filtroAtendente)]
       : [];
@@ -335,7 +332,7 @@ export const relatoriosRouter = router({
       .select({
         etapa: leads.etapaFunil,
         total: sql<number>`COUNT(*)`,
-        valor: sql<number>`COALESCE(SUM(CAST(valorEstimado AS DECIMAL(14,2))), 0)`,
+        valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)`,
       })
       .from(leads)
       .where(and(eq(leads.escritorioId, eid), ...rangeLead, ...filtroLeadResp))
@@ -361,6 +358,28 @@ export const relatoriosRouter = router({
     // ── Contatos por origem (whitelist + range do período) ─────────────────
     // Excluímos asaas/site/telefone: o relatório foca em CAPTAÇÃO ativa de
     // leads (canais por onde o cliente novo chega).
+    //
+    // Quando filtra por atendente: mostra origem dos contatos cujos LEADS
+    // no período pertencem ao atendente — alinha com os KPIs "Total leads"
+    // e "Contratos fechados" que filtram por leads.responsavelId. Filtrar
+    // por contatos.responsavelId aqui dava resultado dessincronizado
+    // (contato podia estar com outro dono mesmo com lead trabalhado pelo
+    // atendente filtrado).
+    const filtroOrigemPorLead = filtroAtendente
+      ? [
+          inArray(
+            contatos.id,
+            db
+              .select({ id: leads.contatoId })
+              .from(leads)
+              .where(and(
+                eq(leads.escritorioId, eid),
+                eq(leads.responsavelId, filtroAtendente),
+                ...rangeLead,
+              )),
+          ),
+        ]
+      : [];
     const origemRows = await db
       .select({ origem: contatos.origem, total: sql<number>`COUNT(*)` })
       .from(contatos)
@@ -369,7 +388,7 @@ export const relatoriosRouter = router({
           eq(contatos.escritorioId, eid),
           inArray(contatos.origem, [...ORIGENS_LEAD]),
           ...rangeContato,
-          ...filtroContResp,
+          ...filtroOrigemPorLead,
         ),
       )
       .groupBy(contatos.origem);
@@ -478,10 +497,28 @@ export const relatoriosRouter = router({
         dataFim = m.dataFim;
       }
 
-      // Período anterior: mesmo nº de dias, deslocado pra trás
-      const duracaoMs = dataFim.getTime() - dataInicio.getTime();
-      const dataFimAnterior = new Date(dataInicio.getTime() - 1);
-      const dataInicioAnterior = new Date(dataFimAnterior.getTime() - duracaoMs);
+      // Período anterior: quando o range cai inteiro num único mês civil,
+      // compara com os MESMOS DIAS no mês anterior (ex.: 1-13 mai vs 1-13
+      // abr) — padrão MTD vs LMTD que gestor espera. Pra ranges cross-mês,
+      // mantém o fallback "mesmos N dias antes" (sliding window).
+      const mesmoMesCivil =
+        dataInicio.getFullYear() === dataFim.getFullYear()
+        && dataInicio.getMonth() === dataFim.getMonth();
+      let dataInicioAnterior: Date;
+      let dataFimAnterior: Date;
+      if (mesmoMesCivil) {
+        // Subtrai 1 mês preservando hora/dia. Date() trata overflow
+        // (ex.: 31 mar - 1 mês = 3 mar). Pra dashboard isso é aceitável e
+        // raro: ranges começam em dia 1 da maioria dos usos.
+        dataInicioAnterior = new Date(dataInicio);
+        dataInicioAnterior.setMonth(dataInicioAnterior.getMonth() - 1);
+        dataFimAnterior = new Date(dataFim);
+        dataFimAnterior.setMonth(dataFimAnterior.getMonth() - 1);
+      } else {
+        const duracaoMs = dataFim.getTime() - dataInicio.getTime();
+        dataFimAnterior = new Date(dataInicio.getTime() - 1);
+        dataInicioAnterior = new Date(dataFimAnterior.getTime() - duracaoMs);
+      }
 
       // ── Atendentes elegíveis (do setor escolhido ou tipo='comercial') ─────
       // Se setorId vier, usa esse setor. Senão, pega TODOS os colaboradores
@@ -647,6 +684,11 @@ export const relatoriosRouter = router({
         : contratos > 0 ? 100 : 0;
 
       // ── Comissão a receber (fechamentos no período) ───────────────────────
+      // Overlap: período da comissão SE SOBREPÕE ao range do dashboard.
+      // O filtro antigo exigia que o período da comissão estivesse 100%
+      // dentro do range — comissão mensal não aparecia em filtro de
+      // quinzena. Agora qualquer interseção entra (valor exibido é o
+      // total da comissão, não proporcional ao overlap).
       const comissoesRows = await db
         .select({
           total: sql<number>`COALESCE(SUM(CAST(${comissoesFechadas.totalComissao} AS DECIMAL(14,2))), 0)`,
@@ -655,8 +697,8 @@ export const relatoriosRouter = router({
         .where(and(
           eq(comissoesFechadas.escritorioId, eid),
           inArray(comissoesFechadas.atendenteId, idsAtendentes),
-          gte(comissoesFechadas.periodoInicio, dataInicioStr),
-          lte(comissoesFechadas.periodoFim, dataFimStr),
+          lte(comissoesFechadas.periodoInicio, dataFimStr),
+          gte(comissoesFechadas.periodoFim, dataInicioStr),
         ));
       const comissaoTotal = Number(comissoesRows[0]?.total || 0);
 
@@ -778,7 +820,10 @@ export const relatoriosRouter = router({
         .select({
           dia: sql<string>`DATE(${asaasCobrancas.dataPagamento})`,
           faturado: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
-          contratos: sql<number>`COUNT(*)`,
+          // Parcelas do mesmo parcelamento contam como 1 contrato, igual ao
+          // KPI agregado do topo — evita gráfico mostrar "3 contratos no
+          // dia X" quando são 3 parcelas do mesmo cliente.
+          contratos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
         .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -1011,7 +1056,7 @@ export const relatoriosRouter = router({
     const colabId = esc.colaborador.id;
     const filtroResp = soProprios ? [eq(kanbanCards.responsavelId, colabId)] : [];
 
-    log.info({
+    log.debug({
       proc: "producao",
       userId: ctx.user.id,
       colabId,

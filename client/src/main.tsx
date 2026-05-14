@@ -8,6 +8,20 @@ import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
 
+// Umami — analytics opcional. Injetado em runtime (em vez de <script> no
+// index.html com placeholder %VITE_ANALYTICS_ENDPOINT%) porque o Vite
+// deixa o placeholder literal quando a variável está vazia, gerando
+// erro de MIME no console (script aponta pra SPA fallback HTML).
+const umamiEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined;
+const umamiWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined;
+if (umamiEndpoint && umamiWebsiteId && typeof document !== "undefined") {
+  const script = document.createElement("script");
+  script.defer = true;
+  script.src = `${umamiEndpoint}/umami`;
+  script.setAttribute("data-website-id", umamiWebsiteId);
+  document.head.appendChild(script);
+}
+
 // Sentry — frontend. DSN injetada no build via VITE_SENTRY_DSN. Vazio = no-op.
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 if (sentryDsn) {

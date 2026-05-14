@@ -93,23 +93,29 @@ export const adminRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    const allUsers = await db
-      .select({ createdAt: users.createdAt })
+    // Agrega no banco — evita carregar todos os users em memória só pra
+    // contar por mês (ficava O(n) em RAM com 50k+ usuários).
+    const rows = await db
+      .select({
+        mes: sql<string>`DATE_FORMAT(${users.createdAt}, '%Y-%m')`,
+        total: sql<number>`COUNT(*)`,
+      })
       .from(users)
-      .where(eq(users.role, "user"));
-    const meses: Record<string, number> = {};
+      .where(and(
+        eq(users.role, "user"),
+        sql`${users.createdAt} >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 11 MONTH)`,
+      ))
+      .groupBy(sql`DATE_FORMAT(${users.createdAt}, '%Y-%m')`);
 
+    const meses: Record<string, number> = {};
     for (let i = 11; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      meses[key] = 0;
+      meses[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = 0;
     }
-
-    for (const u of allUsers) {
-      const d = new Date(u.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (key in meses) meses[key]++;
+    for (const r of rows) {
+      const k = String(r.mes);
+      if (k in meses) meses[k] = Number(r.total);
     }
 
     return Object.entries(meses).map(([mes, total]) => ({ mes, total }));
@@ -120,29 +126,37 @@ export const adminRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    const allSubs = await db.select().from(subscriptionsTable);
-    const meses: Record<string, number> = {};
+    // Agrega no banco: pra cada (planId, mês de criação) traz a contagem
+    // de subs ativas. Antes carregava TODAS as subs em memória só pra
+    // iterar — quebrava com milhares de assinaturas. O `priceMonthly` mora
+    // em código (PLANS), por isso a resolução de valor fica em JS.
+    const rows = await db
+      .select({
+        planId: subscriptionsTable.planId,
+        mesCriacao: sql<string>`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`,
+        qtd: sql<number>`COUNT(*)`,
+      })
+      .from(subscriptionsTable)
+      .where(inArray(subscriptionsTable.status, ["active", "trialing"]))
+      .groupBy(subscriptionsTable.planId, sql`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`);
 
+    const meses: Record<string, number> = {};
     for (let i = 11; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      meses[key] = 0;
+      meses[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = 0;
     }
 
-    for (const sub of allSubs) {
-      if (sub.status !== "active" && sub.status !== "trialing") continue;
-      const d = new Date(sub.createdAt);
-      const plan = PLANS.find((p) => p.id === sub.planId);
-      const valor = plan ? plan.priceMonthly : 0;
-
-      // Considerar a sub ativa em todos os meses desde criação
+    // Pra cada (planId, mesCriacao): a sub conta em TODOS os meses
+    // >= mesCriacao (no horizonte de 12 meses). Multiplica por qtd e
+    // priceMonthly do plano.
+    for (const r of rows) {
+      const plan = PLANS.find((p) => p.id === r.planId);
+      if (!plan) continue;
+      const valor = plan.priceMonthly * Number(r.qtd);
+      const mesCri = String(r.mesCriacao);
       for (const mesKey of Object.keys(meses)) {
-        const [y, m] = mesKey.split("-").map(Number);
-        const mesDate = new Date(y, m - 1, 1);
-        if (d <= mesDate) {
-          meses[mesKey] += valor;
-        }
+        if (mesCri <= mesKey) meses[mesKey] += valor;
       }
     }
 
@@ -154,12 +168,14 @@ export const adminRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    const todos = await db.select({ tipo: calculosHistorico.tipo }).from(calculosHistorico);
-    const contagem: Record<string, number> = {};
-
-    for (const c of todos) {
-      contagem[c.tipo] = (contagem[c.tipo] || 0) + 1;
-    }
+    // GROUP BY no banco — antes carregava todos os tipos em memória.
+    const rows = await db
+      .select({
+        tipo: calculosHistorico.tipo,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(calculosHistorico)
+      .groupBy(calculosHistorico.tipo);
 
     const nomes: Record<string, string> = {
       bancario: "Bancário",
@@ -170,8 +186,12 @@ export const adminRouter = router({
       atualizacao_monetaria: "Cálculos Diversos",
     };
 
-    return Object.entries(contagem)
-      .map(([tipo, total]) => ({ tipo, nome: nomes[tipo] || tipo, total }))
+    return rows
+      .map((r) => ({
+        tipo: r.tipo,
+        nome: nomes[r.tipo] || r.tipo,
+        total: Number(r.total),
+      }))
       .sort((a, b) => b.total - a.total);
   }),
 
@@ -180,20 +200,25 @@ export const adminRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    const todos = await db.select({ createdAt: calculosHistorico.createdAt }).from(calculosHistorico);
-    const meses: Record<string, number> = {};
+    // GROUP BY no banco com filtro de período — escala melhor que ler tudo.
+    const rows = await db
+      .select({
+        mes: sql<string>`DATE_FORMAT(${calculosHistorico.createdAt}, '%Y-%m')`,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(calculosHistorico)
+      .where(sql`${calculosHistorico.createdAt} >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 11 MONTH)`)
+      .groupBy(sql`DATE_FORMAT(${calculosHistorico.createdAt}, '%Y-%m')`);
 
+    const meses: Record<string, number> = {};
     for (let i = 11; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      meses[key] = 0;
+      meses[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = 0;
     }
-
-    for (const c of todos) {
-      const d = new Date(c.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (key in meses) meses[key]++;
+    for (const r of rows) {
+      const k = String(r.mes);
+      if (k in meses) meses[k] = Number(r.total);
     }
 
     return Object.entries(meses).map(([mes, total]) => ({ mes, total }));
