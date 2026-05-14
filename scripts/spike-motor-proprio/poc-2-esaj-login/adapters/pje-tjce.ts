@@ -1308,7 +1308,30 @@ export class PjeTjceScraper {
     page: Page,
     onTotpAutoConfigurado: (secret: string) => void,
   ): Promise<void> {
-    await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
+    // Trajetória de navegação pra diagnosticar onde o fluxo trava
+    // quando o redirect pro PDPJ-cloud não chega. Captura cada
+    // framenavigated do main frame com timestamp relativo ao início.
+    const tStart = Date.now();
+    const trajetoria: Array<{ t: number; url: string; ev: string }> = [];
+    const onNav = (frame: import("@playwright/test").Frame) => {
+      if (frame === page.mainFrame() && trajetoria.length < 20) {
+        trajetoria.push({ t: Date.now() - tStart, url: frame.url(), ev: "nav" });
+      }
+    };
+    page.on("framenavigated", onNav);
+
+    let respostaGoto: import("@playwright/test").Response | null = null;
+    try {
+      respostaGoto = await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
+    } catch (err) {
+      page.off("framenavigated", onNav);
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `goto(${URL_ENTRADA_TJCE}) falhou após ${Date.now() - tStart}ms: ${msg}. ` +
+          `trajetoria=${JSON.stringify(trajetoria)}`,
+      );
+    }
+    trajetoria.push({ t: Date.now() - tStart, url: page.url(), ev: "after-goto" });
 
     // Aguarda redirect pro Keycloak. Pode demorar — TJCE faz vários
     // bounces antes de cair no SSO.
@@ -1322,11 +1345,67 @@ export class PjeTjceScraper {
       // Talvez já estava logado ou TJCE não redirecionou — tentamos
       // direto a URL de auth. Sem execution/tab_id frescos, vai pedir
       // pra reiniciar o login automaticamente.
+      page.off("framenavigated", onNav);
+      const title = await page.title().catch(() => "?");
+      const statusGoto = respostaGoto?.status() ?? -1;
+      const locationHeader = respostaGoto?.headers()["location"] ?? "(sem location)";
+      const finalUrlResp = respostaGoto?.url() ?? "(sem url)";
+
+      // Inspeciona HTML pra detectar se o redirect é meta-refresh,
+      // window.location JS, ou nada (tribunal pode ter mudado o fluxo).
+      const bodyDiag = await page
+        .evaluate(() => {
+          const metaEl = document.querySelector('meta[http-equiv="refresh" i]');
+          const meta = metaEl?.getAttribute("content") ?? "(sem meta refresh)";
+          const scripts = Array.from(document.querySelectorAll("script"))
+            .map((s) => s.textContent ?? "")
+            .filter((s) => /location|redirect|sso\.cloud|keycloak|window\.open/i.test(s))
+            .map((s) => s.replace(/\s+/g, " ").slice(0, 300))
+            .slice(0, 3);
+          const linksSso = Array.from(document.querySelectorAll("a[href*='sso.cloud'], a[href*='keycloak']"))
+            .map((a) => (a as HTMLAnchorElement).href)
+            .slice(0, 3);
+          return {
+            meta,
+            scripts: scripts.join(" || "),
+            linksSso: linksSso.join(" , "),
+            bodyLen: document.body?.innerHTML.length ?? 0,
+            hasFormLogin: !!document.querySelector(
+              "form#kc-form-login, form[action*='openid-connect'], input#username",
+            ),
+          };
+        })
+        .catch(() => ({
+          meta: "(evaluate-falhou)",
+          scripts: "",
+          linksSso: "",
+          bodyLen: 0,
+          hasFormLogin: false,
+        }));
+
+      // Cookies dos domínios PJe — pra detectar se sessão antiga ficou
+      // travando o redirect (ex: cookie JSESSIONID válido fazendo TJCE
+      // pular o SSO e cair direto no painel).
+      const cookies = await page.context().cookies().catch(() => []);
+      const cookieDiag = cookies
+        .filter((c) => /pje|tjce|cloud/i.test(c.domain))
+        .map((c) => `${c.domain}${c.path}:${c.name}=${c.value.slice(0, 8)}...`)
+        .slice(0, 8)
+        .join(" | ");
+
       throw new Error(
-        `TJCE não redirecionou pro PDPJ-cloud — URL atual: ${page.url()}. ` +
-          `Title: ${await page.title().catch(() => "?")}`,
+        `TJCE não redirecionou pro PDPJ-cloud após ${Date.now() - tStart}ms. ` +
+          `URL atual: ${page.url()}. Title: ${title}. ` +
+          `statusGoto=${statusGoto}, location-header="${locationHeader}", finalUrlResp=${finalUrlResp}, ` +
+          `bodyLen=${bodyDiag.bodyLen}, hasFormLogin=${bodyDiag.hasFormLogin}, ` +
+          `metaRefresh="${bodyDiag.meta}", ` +
+          `scriptsRedirect="${bodyDiag.scripts}", ` +
+          `linksSso="${bodyDiag.linksSso}", ` +
+          `cookies=[${cookieDiag}], ` +
+          `trajetoria=${JSON.stringify(trajetoria)}`,
       );
     }
+    page.off("framenavigated", onNav);
 
     await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
 
