@@ -319,9 +319,6 @@ export const relatoriosRouter = router({
     const filtroLeadResp = filtroAtendente
       ? [eq(leads.responsavelId, filtroAtendente)]
       : [];
-    const filtroContResp = filtroAtendente
-      ? [eq(contatos.responsavelId, filtroAtendente)]
-      : [];
     const filtroConvResp = filtroAtendente
       ? [eq(conversas.atendenteId, filtroAtendente)]
       : [];
@@ -361,6 +358,28 @@ export const relatoriosRouter = router({
     // ── Contatos por origem (whitelist + range do período) ─────────────────
     // Excluímos asaas/site/telefone: o relatório foca em CAPTAÇÃO ativa de
     // leads (canais por onde o cliente novo chega).
+    //
+    // Quando filtra por atendente: mostra origem dos contatos cujos LEADS
+    // no período pertencem ao atendente — alinha com os KPIs "Total leads"
+    // e "Contratos fechados" que filtram por leads.responsavelId. Filtrar
+    // por contatos.responsavelId aqui dava resultado dessincronizado
+    // (contato podia estar com outro dono mesmo com lead trabalhado pelo
+    // atendente filtrado).
+    const filtroOrigemPorLead = filtroAtendente
+      ? [
+          inArray(
+            contatos.id,
+            db
+              .select({ id: leads.contatoId })
+              .from(leads)
+              .where(and(
+                eq(leads.escritorioId, eid),
+                eq(leads.responsavelId, filtroAtendente),
+                ...rangeLead,
+              )),
+          ),
+        ]
+      : [];
     const origemRows = await db
       .select({ origem: contatos.origem, total: sql<number>`COUNT(*)` })
       .from(contatos)
@@ -369,7 +388,7 @@ export const relatoriosRouter = router({
           eq(contatos.escritorioId, eid),
           inArray(contatos.origem, [...ORIGENS_LEAD]),
           ...rangeContato,
-          ...filtroContResp,
+          ...filtroOrigemPorLead,
         ),
       )
       .groupBy(contatos.origem);
