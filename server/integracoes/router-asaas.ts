@@ -3447,7 +3447,21 @@ export const asaasRouter = router({
 
   /** Obter saldo da conta Asaas — só visível pra quem tem verTodos
    *  no módulo financeiro. Saldo é informação do escritório, não
-   *  pertence a um colaborador individual. */
+   *  pertence a um colaborador individual.
+   *
+   *  Cache em DB: o frontend (Financeiro.tsx) faz polling de 5min por
+   *  usuário aberto, e antes cada polling era 1 request direto ao Asaas.
+   *  10 users do mesmo escritório = 10 requests/5min — desperdício de
+   *  cota, todos retornando o mesmo número. Agora:
+   *
+   *    - Lê `asaas_config.saldo` do DB se < 10min de idade (TTL)
+   *    - Se stale ou nunca buscado, chama Asaas + cacheia (com timestamp)
+   *    - Webhook PAYMENT_RECEIVED/CONFIRMED zera o timestamp pra forçar
+   *      refresh na próxima leitura (saldo provavelmente mudou)
+   *
+   *  Não-fatal: se a chamada Asaas falha (rate limit, rede), devolve o
+   *  saldo cacheado mesmo que stale — UI mostra "saldo de há X minutos"
+   *  é melhor que mostrar nada. */
   obterSaldo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
@@ -3455,12 +3469,52 @@ export const asaasRouter = router({
     const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
     if (!perm.verTodos) return null;
 
+    const db = await getDb();
+    if (!db) return null;
+
+    const [cfg] = await db
+      .select({
+        id: asaasConfig.id,
+        saldo: asaasConfig.saldo,
+        saldoAtualizadoEm: asaasConfig.saldoAtualizadoEm,
+      })
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+
+    if (!cfg) return null;
+
+    const SALDO_CACHE_TTL_MS = 10 * 60 * 1000;
+    const cacheValido =
+      cfg.saldoAtualizadoEm !== null &&
+      cfg.saldo !== null &&
+      Date.now() - cfg.saldoAtualizadoEm.getTime() < SALDO_CACHE_TTL_MS;
+
+    if (cacheValido) {
+      return { balance: Number(cfg.saldo) || 0 };
+    }
+
     const client = await getAsaasClient(esc.escritorio.id);
-    if (!client) return null;
+    if (!client) {
+      // Sem client mas tem saldo cacheado → devolve stale (melhor que null)
+      if (cfg.saldo !== null) return { balance: Number(cfg.saldo) || 0 };
+      return null;
+    }
 
     try {
-      return await client.obterSaldo();
+      const saldo = await client.obterSaldo();
+      await db
+        .update(asaasConfig)
+        .set({
+          saldo: String(saldo.balance),
+          saldoAtualizadoEm: new Date(),
+        })
+        .where(eq(asaasConfig.id, cfg.id));
+      return saldo;
     } catch {
+      // Falha na chamada Asaas (rate limit, rede): devolve cacheado se
+      // houver. Pior que stale é nada — UI continua funcional.
+      if (cfg.saldo !== null) return { balance: Number(cfg.saldo) || 0 };
       return null;
     }
   }),
