@@ -2563,10 +2563,17 @@ export const asaasRouter = router({
       const vencFim = input?.vencimentoFim ?? null;
 
       // Predicados SQL alinhados com a lógica JS original:
-      //  - pago: status pago + dataPagamento dentro do range (NULL → fora)
+      //  - pago: status pago + dataPagamento dentro do range (sem filtro →
+      //          conta mesmo com dataPagamento NULL pra bater com noRangePag)
       //  - pendente: status=PENDING + vencimento >= hoje + vencimento no range
       //  - vencido: (status=OVERDUE OR (status=PENDING + venc < hoje))
       //             + vencimento no range
+      //
+      // Sobre dataPagamento NULL: o inRangePag faz `(pagIni IS NULL OR date >=
+      // pagIni) AND (pagFim IS NULL OR date <= pagFim)`. Quando sem filtro
+      // (ambos null), o OR é TRUE pra qualquer date (inclusive NULL). Quando
+      // com filtro, NULL >= pagIni vira NULL → o AND fica NULL → WHERE trata
+      // como FALSE → exclui. Mesmo behavior do JS `noRangePag(null)`.
       const inRangePag = sql`(${pagIni} IS NULL OR ${asaasCobrancas.dataPagamento} >= ${pagIni})
         AND (${pagFim} IS NULL OR ${asaasCobrancas.dataPagamento} <= ${pagFim})`;
       const inRangeVenc = sql`(${vencIni} IS NULL OR ${asaasCobrancas.vencimento} >= ${vencIni})
@@ -2578,16 +2585,15 @@ export const asaasRouter = router({
       const ehOverdue = sql`${asaasCobrancas.status} = 'OVERDUE'`;
       const pendingNoFuturo = sql`${asaasCobrancas.vencimento} >= ${hojeStr}`;
       const pendingNoPassado = sql`${asaasCobrancas.vencimento} < ${hojeStr}`;
-      const dataPagNotNull = sql`${asaasCobrancas.dataPagamento} IS NOT NULL`;
 
       const [agg] = await db
         .select({
-          recebido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${dataPagNotNull} AND ${inRangePag} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoLiquido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${dataPagNotNull} AND ${inRangePag} THEN ${valorLiquidoDec} ELSE 0 END), 0)`,
+          recebido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoLiquido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN ${valorLiquidoDec} ELSE 0 END), 0)`,
           pendente: sql<string>`COALESCE(SUM(CASE WHEN ${ehPending} AND ${pendingNoFuturo} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
           vencido: sql<string>`COALESCE(SUM(CASE WHEN ((${ehPending} AND ${pendingNoPassado}) OR ${ehOverdue}) AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
           totalCobrancas: sql<number>`COALESCE(SUM(CASE
-            WHEN ${ehPago} AND ${dataPagNotNull} AND ${inRangePag} THEN 1
+            WHEN ${ehPago} AND ${inRangePag} THEN 1
             WHEN ${ehPending} AND ${inRangeVenc} THEN 1
             WHEN ${ehOverdue} AND ${inRangeVenc} THEN 1
             ELSE 0 END), 0)`,
@@ -2785,7 +2791,8 @@ export const asaasRouter = router({
         const hoje = new Date();
         const fim = new Date();
         fim.setDate(fim.getDate() + dias);
-        const hojeStr = hoje.toISOString().slice(0, 10);
+        // Usa fuso BR (server roda UTC; após 21h BRT viraria amanhã)
+        const hojeStr = dataHojeBR();
         const fimStr = fim.toISOString().slice(0, 10);
 
         const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
@@ -2795,6 +2802,12 @@ export const asaasRouter = router({
         const condsP: any[] = [
           eq(asaasCobrancas.escritorioId, esc.escritorio.id),
           eq(asaasCobrancas.status, "PENDING"),
+          // Limita ao que o forecast pode usar: vencidas (qualquer data
+          // < hoje, contam como atrasado) OU dentro da janela de previsão
+          // (vencimento <= fimStr). Cobranças com vencimento > fim não
+          // entrariam em nenhum bucket — antes eram carregadas e
+          // descartadas em JS.
+          lte(asaasCobrancas.vencimento, fimStr),
         ];
         if (visiveis !== null) condsP.push(inArray(asaasCobrancas.contatoId, visiveis));
         const pendentes = await db.select().from(asaasCobrancas).where(and(...condsP));
