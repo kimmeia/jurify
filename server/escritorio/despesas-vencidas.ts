@@ -24,6 +24,7 @@ import { and, eq, gte, lt, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { despesas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 const log = createLogger("escritorio-despesas-vencidas");
 
@@ -43,7 +44,11 @@ export async function atualizarStatusDespesasVencidas(): Promise<ResultadoAtuali
     return { marcadasVencidas: 0, desmarcadasParaPendente: 0, desmarcadasParaParcial: 0 };
   }
 
-  const hojeIso = new Date().toISOString().slice(0, 10);
+  // Usa fuso BRT pra não marcar "vencido" 3h antes do dia terminar de fato
+  // pra o operador (server em UTC vê "amanhã" às 21h BRT). Crons globais
+  // assumem padrão BRT — escritórios em outros fusos seriam corner cases
+  // raros (Manaus/Acre/Noronha) e desviam no máximo 1h.
+  const hojeIso = dataHojeBR();
 
   // 1. Forward: pendente/parcial com vencimento < hoje → vencido.
   //    Comparação lexicográfica em string YYYY-MM-DD é equivalente a

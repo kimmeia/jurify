@@ -40,6 +40,7 @@ import {
 } from "./asaas-despesas-auto";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 /** Helper: retorna IDs dos contatos visíveis ao colaborador atual.
  *  Se ele tem verTodos no módulo "financeiro" → null (sem filtro).
@@ -1159,7 +1160,7 @@ export const asaasRouter = router({
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
 
-      const ate = input.ate ?? new Date().toISOString().slice(0, 10);
+      const ate = input.ate ?? dataHojeBR();
       const desde = input.desde ?? (() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
@@ -1896,7 +1897,7 @@ export const asaasRouter = router({
       }
 
       const dataPag = input.jaPaga
-        ? input.dataPagamento ?? new Date().toISOString().slice(0, 10)
+        ? input.dataPagamento ?? dataHojeBR()
         : null;
       const status = input.jaPaga ? "RECEIVED" : "PENDING";
 
@@ -1978,7 +1979,7 @@ export const asaasRouter = router({
         });
       }
 
-      const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+      const dataPag = input.dataPagamento ?? dataHojeBR();
       await db
         .update(asaasCobrancas)
         .set({ status: "RECEIVED", dataPagamento: dataPag })
@@ -2563,6 +2564,12 @@ export const asaasRouter = router({
       let pendente = 0;
       let vencido = 0;
       let totalCobrancas = 0;
+      // "Hoje" pra detectar PENDING-past-due. Bate com cashFlowMensal (que
+      // também classifica PENDING vencido como Vencido). Sem isso o KPI
+      // mostrava 0 enquanto o gráfico do hero mostrava o vencido real —
+      // status só vira OVERDUE quando o Asaas dispara PAYMENT_OVERDUE,
+      // que pode atrasar dias.
+      const hojeStr = dataHojeBR();
       for (const c of todas) {
         const val = parseFloat(c.valor) || 0;
         // valorLiquido vem do Asaas (`netValue`) com taxa já abatida.
@@ -2577,7 +2584,11 @@ export const asaasRouter = router({
           }
         } else if (c.status === "PENDING") {
           if (noRangeVenc(c.vencimento)) {
-            pendente += val;
+            if (c.vencimento < hojeStr) {
+              vencido += val;
+            } else {
+              pendente += val;
+            }
             totalCobrancas++;
           }
         } else if (c.status === "OVERDUE") {
@@ -2674,7 +2685,7 @@ export const asaasRouter = router({
         for (const k of chaves) buckets.set(k, { recebido: 0, pendente: 0, vencido: 0 });
 
         let totalRecebido = 0, totalPendente = 0, totalVencido = 0;
-        const hojeStr = new Date().toISOString().slice(0, 10);
+        const hojeStr = dataHojeBR();
         const sliceLen = granularidade === "dia" ? 10 : 7;
 
         for (const c of todas) {

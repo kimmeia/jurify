@@ -29,6 +29,7 @@ import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 import { extrairDataPagamento } from "./asaas-sync";
 import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
+import { dataHojeBR } from "../../shared/escritorio-types";
 const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
@@ -271,8 +272,7 @@ export function registerAsaasWebhook(app: Express) {
                     valor: payment.value,
                     valorLiquido: payment.netValue,
                     dataPagamento:
-                      extrairDataPagamento(payment) ??
-                      new Date().toISOString().slice(0, 10),
+                      extrairDataPagamento(payment) ?? dataHojeBR(),
                     descricaoCobranca: payment.description ?? null,
                     criadoPorUserId: esc.ownerId,
                   });

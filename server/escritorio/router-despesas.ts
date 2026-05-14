@@ -9,6 +9,7 @@ import {
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
@@ -347,7 +348,7 @@ export const despesasRouter = router({
       }
 
       const quitou = novoAcumulado >= valorTotal - 0.01;
-      const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+      const dataPag = input.dataPagamento ?? dataHojeBR();
 
       await db
         .update(despesas)
@@ -386,7 +387,7 @@ export const despesasRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+      const dataPag = input.dataPagamento ?? dataHojeBR();
       // Pega o valor pra setar valorPago = valor (quitado total).
       const [d] = await db
         .select({ valor: despesas.valor })
