@@ -3149,12 +3149,15 @@ export const asaasRouter = router({
       }
     }),
 
-  /** Obtém linha digitável do boleto */
+  /** Obtém linha digitável do boleto. Linha digitável é imutável por
+   *  boleto — uma vez emitida, o número não muda. Cacheamos em
+   *  `asaas_cobrancas.linhaDigitavelPayload` (JSON serializado dos 3
+   *  campos retornados pelo Asaas). Próximas leituras pulam a chamada
+   *  externa — antes era 1 request Asaas por copy do boleto. */
   obterLinhaDigitavel: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -3170,8 +3173,33 @@ export const asaasRouter = router({
         });
       }
 
+      // Cache hit: payload já persistido localmente. Pula chamada Asaas.
+      if (cob.linhaDigitavelPayload) {
+        try {
+          return JSON.parse(cob.linhaDigitavelPayload) as {
+            identificationField: string;
+            nossoNumero: string;
+            barCode: string;
+          };
+        } catch {
+          // JSON corrompido (improvável): cai pro fallback de buscar.
+        }
+      }
+
+      const client = await requireAsaasClient(esc.escritorio.id);
       try {
-        return await client.obterLinhaDigitavel(cob.asaasPaymentId);
+        const payload = await client.obterLinhaDigitavel(cob.asaasPaymentId);
+        // Cacheia pra próximas leituras. Falha aqui é não-fatal:
+        // resposta volta normal pro usuário; só não cacheou.
+        try {
+          await db
+            .update(asaasCobrancas)
+            .set({ linhaDigitavelPayload: JSON.stringify(payload) })
+            .where(eq(asaasCobrancas.id, cob.id));
+        } catch {
+          /* não bloqueia */
+        }
+        return payload;
       } catch {
         return null;
       }

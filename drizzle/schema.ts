@@ -1189,6 +1189,13 @@ export const asaasCobrancas = mysqlTable(
     invoiceUrl: text("invoiceUrlAsaas"),
     bankSlipUrl: text("bankSlipUrlAsaas"),
     pixQrCodePayload: text("pixQrCodePayload"),
+    /**
+     * Cache do payload da linha digitável de boleto. Asaas devolve
+     * 3 campos (identificationField, nossoNumero, barCode) — armazenamos
+     * o JSON serializado. Linha digitável é imutável por boleto, então
+     * cache nunca precisa ser invalidado.
+     */
+    linhaDigitavelPayload: text("linhaDigitavelPayload"),
     dataPagamento: varchar("dataPagamentoAsaas", { length: 10 }),
     externalReference: varchar("externalRefAsaas", { length: 255 }),
     /** Atendente que receberá comissão por esta cobrança (FK → colaboradores.id). */
