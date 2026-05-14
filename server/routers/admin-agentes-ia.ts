@@ -24,7 +24,7 @@ const log = createLogger("admin-agentes-ia");
 
 // Diretório pra uploads dos documentos dos agentes
 const UPLOAD_DIR = path.resolve("./uploads/agentes-admin");
-const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+const MAX_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const ALLOWED_MIMES = [
   "application/pdf",
   "application/msword",
@@ -318,7 +318,7 @@ export const adminAgentesIaRouter = router({
       const buffer = Buffer.from(base64Data, "base64");
 
       if (buffer.length > MAX_SIZE_BYTES) {
-        throw new Error(`Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 15MB.`);
+        throw new Error(`Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 2GB.`);
       }
 
       const agenteDir = path.join(UPLOAD_DIR, `agente_${input.agenteId}`);

@@ -188,7 +188,8 @@ export const backupRouter = router({
   /**
    * Solicita URL S3 pré-assinada (PUT, 30min) pra upload do ZIP de
    * import. Cliente sobe direto pro bucket — sem passar pelo express
-   * (que tem body limit 15MB, insuficiente pra ZIPs grandes).
+   * (que tem body limit 3GB; mesmo assim, ZIPs grandes carregam tudo em RAM,
+   * então S3 direto é mais seguro pra backups multi-GB).
    *
    * Key sempre dentro de `imports/escritorio_<id>/<uuid>.zip` — o
    * escritorioId é fixado no servidor, então mesmo que o cliente envie

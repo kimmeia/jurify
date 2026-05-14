@@ -340,7 +340,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} é muito grande (max 10MB)`); continue; }
+        if (file.size > 2 * 1024 * 1024 * 1024) { toast.error(`${file.name} é muito grande (max 2GB)`); continue; }
         try {
           const base64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(new Error("Erro ao ler arquivo")); r.readAsDataURL(file); });
           const result = await uploadMut.mutateAsync({ nome: file.name, tipo: file.type, base64, tamanho: file.size });
@@ -514,7 +514,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
         >
           {uploading ? <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-1" /> : <Upload className="h-6 w-6 text-muted-foreground/40 mx-auto mb-1" />}
           <p className="text-xs font-medium">{uploading ? "Enviando..." : "Arraste arquivos aqui"}</p>
-          <p className="text-[10px] text-muted-foreground">PDF, imagens, docs · Máx 10MB</p>
+          <p className="text-[10px] text-muted-foreground">PDF, imagens, docs · Máx 2GB</p>
         </div>
 
         {/* Pastas */}

@@ -406,8 +406,8 @@ function TreinamentoDialog({
     const file = e.target.files?.[0];
     if (!file || !agenteId) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (máx 15MB)");
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 2GB)");
       return;
     }
 
@@ -464,7 +464,7 @@ function TreinamentoDialog({
             <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
               <Label className="text-xs">Enviar arquivo</Label>
               <p className="text-[11px] text-muted-foreground">
-                PDF, DOCX, TXT, MD, CSV, JSON — até 15MB
+                PDF, DOCX, TXT, MD, CSV, JSON — até 2GB
               </p>
               <input
                 ref={fileInputRef}

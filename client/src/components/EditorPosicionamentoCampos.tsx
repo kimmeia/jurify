@@ -16,7 +16,7 @@
  *   - Tamanho fixo por tipo (sem resize handles)
  *   - 1 página visível por vez (paginação simples)
  *   - Sem virtualização de páginas (PDFs > 30pp podem ficar lentos —
- *     limite efetivo é o do upload, 10MB)
+ *     limite efetivo é o do upload, 2GB)
  *
  * Pra extensões futuras (Fase 2+): adicionar signatarioIndex selector,
  * resize handles, virtualização.
