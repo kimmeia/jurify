@@ -21,7 +21,7 @@
 
 import { getDb } from "../db";
 import { asaasCobrancas, smartflowCenarios, asaasClientes, escritorios } from "../../drizzle/schema";
-import { eq, and, ne, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { dispararPagamentoVencido, dispararProximoVencimento } from "./dispatcher";
 import {
@@ -89,13 +89,18 @@ async function carregarCenariosAtivos(): Promise<CenarioLite[]> {
 async function carregarCobrancasDoEscritorio(escritorioId: number) {
   const db = await getDb();
   if (!db) return [];
+  // Filtra direto no SQL pra status que disparam reminders: PENDING e
+  // OVERDUE. Antes carregava `ne(status, "RECEIVED")` e descartava em
+  // JS via STATUS_PAGO (CONFIRMED, RECEIVED_IN_CASH, REFUNDED). Trazia
+  // ~30% de tráfego desnecessário em escritórios com muitos pagamentos
+  // confirmados/estornados.
   return db
     .select()
     .from(asaasCobrancas)
     .where(
       and(
         eq(asaasCobrancas.escritorioId, escritorioId),
-        ne(asaasCobrancas.status, "RECEIVED"),
+        inArray(asaasCobrancas.status, ["PENDING", "OVERDUE"]),
       ),
     );
 }
