@@ -1322,7 +1322,12 @@ export class PjeTjceScraper {
 
     let respostaGoto: import("@playwright/test").Response | null = null;
     try {
-      respostaGoto = await page.goto(URL_ENTRADA_TJCE, { waitUntil: "domcontentloaded" });
+      // waitUntil "load" (em vez de "domcontentloaded") dá tempo dos
+      // redirects síncronos do TJCE completarem antes do waitForURL.
+      respostaGoto = await page.goto(URL_ENTRADA_TJCE, {
+        waitUntil: "load",
+        timeout: 45_000,
+      });
     } catch (err) {
       page.off("framenavigated", onNav);
       const msg = err instanceof Error ? err.message : String(err);
@@ -1333,11 +1338,11 @@ export class PjeTjceScraper {
     }
     trajetoria.push({ t: Date.now() - tStart, url: page.url(), ev: "after-goto" });
 
-    // Aguarda redirect pro Keycloak. Pode demorar — TJCE faz vários
-    // bounces antes de cair no SSO.
+    // Aguarda redirect pro Keycloak. TJCE faz cadeia de bounces (até 3)
+    // antes de cair no SSO; timeout generoso pra cobrir rede ruim.
     await page
       .waitForURL((url) => url.host.includes(HOST_KEYCLOAK), {
-        timeout: 18_000,
+        timeout: 45_000,
       })
       .catch(() => {});
 
