@@ -233,17 +233,30 @@ export const dashboardRouter = router({
       let finTotal = 0;
       if (!soProprios) {
         try {
-          const cobrancasLocal = await db
-            .select()
+          // Agregação em SQL: antes carregava TODAS as cobranças do
+          // escritório em memória só pra somar. Em escritórios com
+          // 10k+ cobranças isso era ~5MB de payload por load do home.
+          // Agora 1 linha agregada.
+          //
+          // Classificação alinhada com kpis/cashFlowMensal:
+          //   - pago: RECEIVED/CONFIRMED/RECEIVED_IN_CASH
+          //   - pendente: PENDING + vencimento >= hoje
+          //   - vencido: OVERDUE OR (PENDING + vencimento < hoje)
+          const hojeStr = dataHojeBR();
+          const valorDec = sql<number>`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
+          const [agg] = await db
+            .select({
+              recebido: sql<string>`COALESCE(SUM(CASE WHEN ${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH') THEN ${valorDec} ELSE 0 END), 0)`,
+              pendente: sql<string>`COALESCE(SUM(CASE WHEN ${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} >= ${hojeStr} THEN ${valorDec} ELSE 0 END), 0)`,
+              vencido: sql<string>`COALESCE(SUM(CASE WHEN ${asaasCobrancas.status} = 'OVERDUE' OR (${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} < ${hojeStr}) THEN ${valorDec} ELSE 0 END), 0)`,
+              total: sql<number>`COUNT(*)`,
+            })
             .from(asaasCobrancas)
             .where(eq(asaasCobrancas.escritorioId, escritorioId));
-          finTotal = cobrancasLocal.length;
-          for (const c of cobrancasLocal) {
-            const val = parseFloat(c.valor) || 0;
-            if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) finRecebido += val;
-            else if (c.status === "PENDING") finPendente += val;
-            else if (c.status === "OVERDUE") finVencido += val;
-          }
+          finRecebido = Number(agg?.recebido ?? 0);
+          finPendente = Number(agg?.pendente ?? 0);
+          finVencido = Number(agg?.vencido ?? 0);
+          finTotal = Number(agg?.total ?? 0);
         } catch {
           /* ignore — sem integração asaas */
         }
