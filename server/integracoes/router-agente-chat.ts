@@ -42,7 +42,7 @@ import { gerarRespostaAnthropic } from "./chatbot-openai";
 const log = createLogger("router-agente-chat");
 
 const UPLOAD_DIR = path.resolve("./uploads/agentes-escritorio");
-const MAX_SIZE_BYTES = 15 * 1024 * 1024;
+const MAX_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const ALLOWED_MIMES = [
   "application/pdf",
   "application/msword",
@@ -337,7 +337,7 @@ export const agenteChatRouter = router({
         const buffer = Buffer.from(base64Data, "base64");
         if (buffer.length > MAX_SIZE_BYTES) {
           throw new Error(
-            `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 15MB.`,
+            `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 2GB.`,
           );
         }
         const dir = path.join(

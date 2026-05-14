@@ -123,11 +123,13 @@ async function startServer() {
   });
 
   // Body parser. Limite maior que o padrão (100KB) pra acomodar uploads em
-  // base64 — 10MB de arquivo binário viram ~13.5MB de string base64.
-  // 15MB cobre com folga; mais que isso é payload grande demais e pode ser
-  // tentativa de DoS por exaustão de memória.
-  app.use(express.json({ limit: "15mb" }));
-  app.use(express.urlencoded({ limit: "15mb", extended: true }));
+  // base64 — base64 infla ~33%, então arquivo binário de 2GB chega como ~2.7GB
+  // de string. 3GB cobre com folga. Cuidado: uploads grandes carregam todo o
+  // buffer em memória — operador com upload concorrente pode estourar a RAM
+  // do Node (OOM). Limite operacional na prática é o que a infra do servidor
+  // aguenta, não esse número.
+  app.use(express.json({ limit: "3gb" }));
+  app.use(express.urlencoded({ limit: "3gb", extended: true }));
   // Serve uploaded files statically
   app.use("/uploads", express.static("./uploads"));
   // Rate limiting — aplicar globalmente ao tRPC e limites específicos para públicas

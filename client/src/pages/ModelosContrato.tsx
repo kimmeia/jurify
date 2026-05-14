@@ -377,8 +377,8 @@ function UploadWizardDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
       toast.error("Apenas arquivos .docx são aceitos");
       return;
     }
-    if (f.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (máx. 10MB)");
+    if (f.size > 2 * 1024 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 2GB)");
       return;
     }
     setArquivo(f);
