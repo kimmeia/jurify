@@ -622,6 +622,12 @@ export async function atualizarCobrancasLocaisDoEscritorio(
 
 export async function syncCobrancasEscritorio(
   escritorioId: number,
+  opts?: {
+    /** Override do `diasHistorico` propagado pra cada
+     *  `syncCobrancasDeCliente`. Default 90 (compat retroativa pro botão
+     *  manual). Cron diário usa 1 — webhook é fonte primária. */
+    diasHistorico?: number | null;
+  },
 ): Promise<{ clientes: number } & SyncCobrancasStats> {
   const zero = { clientes: 0, novas: 0, atualizadas: 0, removidas: 0 };
   const client = await getAsaasClientForEscritorio(escritorioId);
@@ -660,6 +666,9 @@ export async function syncCobrancasEscritorio(
         escritorioId,
         vinculo.contatoId,
         vinculo.asaasCustomerId,
+        opts?.diasHistorico !== undefined
+          ? { diasHistorico: opts.diasHistorico }
+          : undefined,
       );
       totais = somarStats(totais, s);
     } catch (err: any) {
@@ -903,7 +912,13 @@ export async function validarConexoesAsaasPendentes(): Promise<void> {
   }
 }
 
-export async function syncTodosEscritorios(): Promise<void> {
+export async function syncTodosEscritorios(opts?: {
+  /** Janela de história a sincronizar pra cada cliente vinculado.
+   *  Default 90 (preserva compat com chamadas manuais). Cron diário
+   *  usa 1 — webhook cobre eventos em tempo real, esta job só pega o
+   *  catch-up de 0.5% que o webhook perdeu. */
+  diasHistorico?: number | null;
+}): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
@@ -917,7 +932,7 @@ export async function syncTodosEscritorios(): Promise<void> {
 
   for (const { escritorioId } of escritorios) {
     try {
-      const result = await syncCobrancasEscritorio(escritorioId);
+      const result = await syncCobrancasEscritorio(escritorioId, opts);
       const total = result.novas + result.atualizadas + result.removidas;
       if (total > 0) {
         log.info(
