@@ -1347,10 +1347,38 @@ function NovasAcoesTab() {
   const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
-  const { data, refetch, isLoading } = (trpc.processos as any).listarNovasAcoes.useQuery(
-    { apenasNaoLidas, limite: 100 },
+  const LIMITE_PAGINA = 25;
+  const [cursor, setCursor] = useState(0);
+  const [acoesAcumuladas, setAcoesAcumuladas] = useState<any[]>([]);
+
+  const { data, refetch, isLoading, isFetching } = (trpc.processos as any).listarNovasAcoes.useQuery(
+    { apenasNaoLidas, limite: LIMITE_PAGINA, cursor },
     { retry: false },
   );
+
+  // Reseta paginação quando o filtro muda — caso contrário cursor antigo
+  // continuaria valendo num conjunto de dados diferente.
+  useEffect(() => {
+    setCursor(0);
+    setAcoesAcumuladas([]);
+  }, [apenasNaoLidas]);
+
+  // Acumula páginas: cursor=0 substitui (página inicial / refetch),
+  // cursor>0 anexa (carregar mais).
+  useEffect(() => {
+    if (!data?.acoes) return;
+    setAcoesAcumuladas((prev) => (cursor === 0 ? data.acoes : [...prev, ...data.acoes]));
+  }, [data, cursor]);
+
+  // Helper pra reset após mutações que alteram a lista.
+  // Mantém UX previsível: volta pro topo com dados frescos.
+  const recarregarDoTopo = () => {
+    if (cursor === 0) {
+      refetch();
+    } else {
+      setCursor(0);
+    }
+  };
 
   // Busca clientes cadastrados para seleção
   const { data: clientesData } = trpc.clientes.listar.useQuery(
@@ -1365,13 +1393,18 @@ function NovasAcoesTab() {
       setNovoOpen(false);
       setBuscaCliente("");
       setClienteSelecionado(null);
-      refetch();
+      recarregarDoTopo();
     },
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Marca lido só localmente — evita refetch que perderia a posição/scroll
+  // do usuário em listas longas. O backend acaba consistente no próximo
+  // fetch natural (carregar mais ou mudança de filtro).
   const marcarLidaMut = trpc.processos.marcarNovaAcaoLida.useMutation({
-    onSuccess: () => refetch(),
+    onMutate: ({ id }) => {
+      setAcoesAcumuladas((prev) => prev.map((a) => (a.id === id ? { ...a, lido: true } : a)));
+    },
   });
 
   const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
@@ -1390,7 +1423,7 @@ function NovasAcoesTab() {
       } else {
         toast.info(`Nenhuma ação nova (${r.cnjsTotal} processos já conhecidos)`);
       }
-      refetch();
+      recarregarDoTopo();
     },
     onError: (e: any) => toast.error("Erro ao atualizar", { description: e.message }),
   });
@@ -1403,13 +1436,15 @@ function NovasAcoesTab() {
         toast.success("Monitoramento removido", { description: "A cobrança mensal foi interrompida." });
       }
       setDeletarMonTarget(null);
-      refetch();
+      recarregarDoTopo();
     },
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
   });
 
-  const acoes = data?.acoes || [];
+  const acoes = acoesAcumuladas;
   const monitoramentos = data?.monitoramentos || [];
+  const hasMore = data?.hasMore ?? false;
+  const naoLidasAcumuladas = acoes.filter((a: any) => !a.lido).length;
 
   return (
     <div className="space-y-4">
@@ -1501,8 +1536,10 @@ function NovasAcoesTab() {
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {acoes.length} {acoes.length === 1 ? "nova ação" : "novas ações"} detectada{acoes.length === 1 ? "" : "s"}
-          {data?.totalNaoLidas ? ` (${data.totalNaoLidas} não lidas)` : ""}
+          {acoes.length}
+          {hasMore ? "+" : ""}{" "}
+          {acoes.length === 1 ? "nova ação" : "novas ações"} carregada{acoes.length === 1 ? "" : "s"}
+          {naoLidasAcumuladas ? ` (${naoLidasAcumuladas} não lidas)` : ""}
         </p>
         <Button
           size="sm"
@@ -1514,7 +1551,10 @@ function NovasAcoesTab() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {/* Mostra skeleton tambem em isFetching+lista vazia pra cobrir o gap
+          entre setCursor(0)/setAcoesAcumuladas([]) e o resultado da nova
+          query — sem isso, o user veria empty-state piscando entre filtros. */}
+      {isLoading || (isFetching && acoes.length === 0) ? (
         <Skeleton className="h-32 w-full" />
       ) : acoes.length === 0 ? (
         <Card>
@@ -1614,6 +1654,19 @@ function NovasAcoesTab() {
               </Card>
             );
           })}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isFetching}
+                onClick={() => setCursor((c) => c + LIMITE_PAGINA)}
+              >
+                {isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null}
+                Carregar mais
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
