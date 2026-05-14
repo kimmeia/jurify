@@ -740,8 +740,11 @@ function DashboardComercial() {
                         {r.meta != null && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[10px]">
-                              <span className="text-muted-foreground">
-                                Meta: {formatBRL(r.meta)}
+                              <span
+                                className="text-muted-foreground"
+                                title={`Meta mensal: ${formatBRL(r.meta)}`}
+                              >
+                                Meta período: {formatBRL(r.metaPeriodo ?? r.meta)}
                               </span>
                               <span className="font-medium">
                                 {(r.progressoMeta ?? 0).toFixed(1)}%

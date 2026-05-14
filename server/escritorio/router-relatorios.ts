@@ -53,6 +53,39 @@ function mesVigente(): { dataInicio: Date; dataFim: Date } {
   return { dataInicio: ini, dataFim: agora };
 }
 
+/** Subtrai 1 mês preservando o dia, mas com clamp pro último dia do mês
+ *  anterior quando o original não existe (ex.: 31 mar → 28 fev, nunca 3 mar).
+ *  Date#setMonth sozinho rola pra frente quando o dia não cabe — quebra
+ *  comparações MTD vs LMTD em fim de mês. */
+function subtrairUmMesClamped(d: Date): Date {
+  const r = new Date(d);
+  const dia = r.getDate();
+  r.setDate(1);
+  r.setMonth(r.getMonth() - 1);
+  const ultimoDia = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(dia, ultimoDia));
+  return r;
+}
+
+/** Meta mensal proporcional ao range — `meta * (diasNoRange / diasNoMes)`.
+ *  Usa o mês civil de `dataInicio` como denominador. Ranges multi-mês
+ *  aceitam a aproximação (mesma escala). */
+function metaProporcionalPeriodo(
+  metaMensal: number,
+  dataInicio: Date,
+  dataFim: Date,
+): number {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diasNoRange =
+    Math.floor((dataFim.getTime() - dataInicio.getTime()) / dayMs) + 1;
+  const diasNoMes = new Date(
+    dataInicio.getFullYear(),
+    dataInicio.getMonth() + 1,
+    0,
+  ).getDate();
+  return metaMensal * (diasNoRange / diasNoMes);
+}
+
 /** Resolve a lista de colaboradorIds que satisfaz os filtros opcionais
  *  setorId + atendenteId, respeitando permissão (soProprios trava no
  *  próprio colaborador). Retorna null quando o filtro resultaria em
@@ -507,13 +540,8 @@ export const relatoriosRouter = router({
       let dataInicioAnterior: Date;
       let dataFimAnterior: Date;
       if (mesmoMesCivil) {
-        // Subtrai 1 mês preservando hora/dia. Date() trata overflow
-        // (ex.: 31 mar - 1 mês = 3 mar). Pra dashboard isso é aceitável e
-        // raro: ranges começam em dia 1 da maioria dos usos.
-        dataInicioAnterior = new Date(dataInicio);
-        dataInicioAnterior.setMonth(dataInicioAnterior.getMonth() - 1);
-        dataFimAnterior = new Date(dataFim);
-        dataFimAnterior.setMonth(dataFimAnterior.getMonth() - 1);
+        dataInicioAnterior = subtrairUmMesClamped(dataInicio);
+        dataFimAnterior = subtrairUmMesClamped(dataFim);
       } else {
         const duracaoMs = dataFim.getTime() - dataInicio.getTime();
         dataFimAnterior = new Date(dataInicio.getTime() - 1);
@@ -790,8 +818,13 @@ export const relatoriosRouter = router({
           const pagos = mapaPorAtendente.get(c.id) ?? { faturado: 0, cobrancas: 0, contratosPagos: 0 };
           const leadsDados = mapaLeads.get(c.id) ?? { valorFechado: 0, contratosFechados: 0 };
           const meta = c.metaMensal != null ? Number(c.metaMensal) : null;
-          const progressoMeta = meta && meta > 0
-            ? +((pagos.faturado / meta) * 100).toFixed(1)
+          // Proporcionalizar meta ao range: ranges não-mensais (1-7 mai)
+          // davam % falsamente baixa se comparassem com meta mensal cheia.
+          const metaPeriodo = meta != null && meta > 0
+            ? +metaProporcionalPeriodo(meta, dataInicio, dataFim).toFixed(2)
+            : null;
+          const progressoMeta = metaPeriodo && metaPeriodo > 0
+            ? +((pagos.faturado / metaPeriodo) * 100).toFixed(1)
             : null;
           return {
             atendenteId: c.id,
@@ -808,6 +841,7 @@ export const relatoriosRouter = router({
               ? +(pagos.faturado / pagos.contratosPagos).toFixed(2)
               : 0,
             meta,
+            metaPeriodo,
             progressoMeta,
           };
         })
@@ -1086,7 +1120,9 @@ export const relatoriosRouter = router({
     };
 
     const [cardsTotal] = await cardsBase(gte(kanbanCards.createdAt, desde));
-    const [cardsAtrasados] = await cardsBase(eq(kanbanCards.atrasado, true));
+    const [cardsAtrasados] = await cardsBase(
+      and(eq(kanbanCards.atrasado, true), gte(kanbanCards.createdAt, desde)),
+    );
     const [cardsDentroPrazo] = await cardsBase(
       and(eq(kanbanCards.atrasado, false), gte(kanbanCards.createdAt, desde)),
     );
