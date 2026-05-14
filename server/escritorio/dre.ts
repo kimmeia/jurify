@@ -20,6 +20,7 @@
 
 import { and, between, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../db";
+import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import {
   asaasCobrancas,
   categoriasCobranca,
@@ -50,8 +51,6 @@ export interface DREResultado {
   /** Margem líquida em percentual (0-100). NaN se receita=0. */
   margemPercent: number;
 }
-
-const STATUS_PAGO = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"] as const;
 
 const SEM_CATEGORIA = "(sem categoria)";
 const CATEGORIA_REMOVIDA_PREFIX = "Categoria removida";
@@ -96,7 +95,7 @@ export async function calcularDRE(
     .where(
       and(
         eq(asaasCobrancas.escritorioId, escritorioId),
-        inArray(asaasCobrancas.status, STATUS_PAGO as unknown as string[]),
+        inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
         between(asaasCobrancas.dataPagamento, dataInicio, dataFim),
       ),
     );

@@ -24,6 +24,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
+import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "./router-financeiro";
 
 const log = createLogger("relatorios");
@@ -47,7 +48,7 @@ const AtendimentoInput = z
   .optional();
 
 /** Mês vigente como range default — primeiro do mês até agora. */
-function mesVigente(): { dataInicio: Date; dataFim: Date } {
+export function mesVigente(): { dataInicio: Date; dataFim: Date } {
   const agora = new Date();
   const ini = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
   return { dataInicio: ini, dataFim: agora };
@@ -57,7 +58,7 @@ function mesVigente(): { dataInicio: Date; dataFim: Date } {
  *  anterior quando o original não existe (ex.: 31 mar → 28 fev, nunca 3 mar).
  *  Date#setMonth sozinho rola pra frente quando o dia não cabe — quebra
  *  comparações MTD vs LMTD em fim de mês. */
-function subtrairUmMesClamped(d: Date): Date {
+export function subtrairUmMesClamped(d: Date): Date {
   const r = new Date(d);
   const dia = r.getDate();
   r.setDate(1);
@@ -70,7 +71,7 @@ function subtrairUmMesClamped(d: Date): Date {
 /** Meta mensal proporcional ao range — `meta * (diasNoRange / diasNoMes)`.
  *  Usa o mês civil de `dataInicio` como denominador. Ranges multi-mês
  *  aceitam a aproximação (mesma escala). */
-function metaProporcionalPeriodo(
+export function metaProporcionalPeriodo(
   metaMensal: number,
   dataInicio: Date,
   dataFim: Date,
@@ -153,7 +154,7 @@ const ProducaoInput = z
   })
   .optional();
 
-function desdeDias(dias: number): Date {
+export function desdeDias(dias: number): Date {
   return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
 }
 
@@ -644,8 +645,6 @@ export const relatoriosRouter = router({
         };
       }
 
-      const STATUS_PAGO = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
-
       // ── KPIs período atual ────────────────────────────────────────────────
       const dataInicioStr = dataInicio.toISOString().slice(0, 10);
       const dataFimStr = dataFim.toISOString().slice(0, 10);
@@ -685,7 +684,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -707,7 +706,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioAnteriorStr),
           lte(asaasCobrancas.dataPagamento, dataFimAnteriorStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -800,7 +799,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -875,7 +874,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           inArray(asaasCobrancas.atendenteId, idsAtendentes),
-          inArray(asaasCobrancas.status, STATUS_PAGO),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
@@ -979,7 +978,6 @@ export const relatoriosRouter = router({
       }
       const dataInicioStr = dataInicio.toISOString().slice(0, 10);
       const dataFimStr = dataFim.toISOString().slice(0, 10);
-      const STATUS_PAGO_LOCAL = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
 
       // ── Leads fechado_ganho do atendente, agrupados por contatoId ──────────
       const leadsRows = await db
@@ -1009,7 +1007,7 @@ export const relatoriosRouter = router({
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           eq(asaasCobrancas.atendenteId, input.atendenteId),
-          inArray(asaasCobrancas.status, STATUS_PAGO_LOCAL),
+          inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
         ))
