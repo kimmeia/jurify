@@ -214,6 +214,18 @@ export function registerAsaasWebhook(app: Express) {
         if (payment.status === "RECEIVED" || payment.status === "CONFIRMED" || payment.status === "RECEIVED_IN_CASH") {
           const primeiraVez = await marcarEventoProcessado(escritorioId, payment.id, "PAYMENT_RECEIVED");
           if (primeiraVez) {
+            // Invalida cache de saldo: pagamento confirmado provavelmente
+            // mudou o saldo no Asaas. Próxima leitura de `obterSaldo`
+            // vai detectar cache stale e refetchar.
+            try {
+              await db
+                .update(asaasConfig)
+                .set({ saldoAtualizadoEm: null })
+                .where(eq(asaasConfig.escritorioId, escritorioId));
+            } catch (err: any) {
+              log.warn({ err: err.message }, "[Asaas Webhook] falha ao invalidar cache de saldo (não bloqueia)");
+            }
+
             try {
               const { dispararPagamentoRecebido } = await import("../smartflow/dispatcher");
               await dispararPagamentoRecebido(escritorioId, {

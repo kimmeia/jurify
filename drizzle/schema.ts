@@ -1063,6 +1063,13 @@ export const asaasConfig = mysqlTable("asaas_config", {
   mensagemErro: varchar("mensagemErroAsaas", { length: 512 }),
   saldo: varchar("saldoAsaas", { length: 32 }),
   /**
+   * Timestamp da última atualização de `saldo` via chamada ao Asaas.
+   * Usado pra TTL do cache (default 10min). NULL → próxima leitura
+   * dispara refresh. Webhook PAYMENT_RECEIVED/CONFIRMED zera este
+   * campo pra forçar refresh quando o saldo provavelmente mudou.
+   */
+  saldoAtualizadoEm: timestamp("saldoAtualizadoEmAsaas"),
+  /**
    * Sincronização histórica controlada por janelas de tempo.
    * Webhook cobre eventos futuros automaticamente; estes campos
    * controlam a importação do passado em pedaços pequenos pra não
@@ -1182,6 +1189,13 @@ export const asaasCobrancas = mysqlTable(
     invoiceUrl: text("invoiceUrlAsaas"),
     bankSlipUrl: text("bankSlipUrlAsaas"),
     pixQrCodePayload: text("pixQrCodePayload"),
+    /**
+     * Cache do payload da linha digitável de boleto. Asaas devolve
+     * 3 campos (identificationField, nossoNumero, barCode) — armazenamos
+     * o JSON serializado. Linha digitável é imutável por boleto, então
+     * cache nunca precisa ser invalidado.
+     */
+    linhaDigitavelPayload: text("linhaDigitavelPayload"),
     dataPagamento: varchar("dataPagamentoAsaas", { length: 10 }),
     externalReference: varchar("externalRefAsaas", { length: 255 }),
     /** Atendente que receberá comissão por esta cobrança (FK → colaboradores.id). */
