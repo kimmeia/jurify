@@ -5,7 +5,7 @@
  * Backend decodifica e salva em ./uploads/{escritorioId}/
  * Arquivos servidos via Express static em /uploads/
  *
- * Limite: 10MB por arquivo. Suporta PDF, imagens, docs.
+ * Limite: 2GB por arquivo. Suporta PDF, imagens, docs.
  *
  * Validação de tipo: confiar no MIME enviado pelo cliente é inseguro
  * (cliente pode enviar `.exe` declarando `application/pdf`). Por isso
@@ -24,7 +24,7 @@ import path from "path";
 import crypto from "crypto";
 
 const UPLOAD_DIR = path.resolve("./uploads");
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 
 /**
  * Apaga arquivo do disco a partir de uma URL `/uploads/escritorio_{id}/{file}`.
@@ -130,7 +130,7 @@ export const uploadRouter = router({
       if (buffer.length > MAX_SIZE_BYTES) {
         throw new TRPCError({
           code: "PAYLOAD_TOO_LARGE",
-          message: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 10MB.`,
+          message: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 2GB.`,
         });
       }
       if (buffer.length === 0) {

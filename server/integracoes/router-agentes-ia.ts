@@ -49,7 +49,7 @@ const log = createLogger("router-agentes-ia");
 
 const ENCRYPTION_KEY = process.env.CANAIS_ENCRYPTION_KEY || "0".repeat(64);
 const UPLOAD_DIR = path.resolve("./uploads/agentes-escritorio");
-const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+const MAX_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const ALLOWED_MIMES = [
   "application/pdf",
   "application/msword",
@@ -532,7 +532,7 @@ export const agentesIaRouter = router({
       if (base64Data.includes(",")) base64Data = base64Data.split(",")[1];
       const buffer = Buffer.from(base64Data, "base64");
       if (buffer.length > MAX_SIZE_BYTES) {
-        throw new Error(`Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 15MB.`);
+        throw new Error(`Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 2GB.`);
       }
 
       const agenteDir = path.join(UPLOAD_DIR, `escritorio_${esc.escritorio.id}`, `agente_${input.agenteId}`);

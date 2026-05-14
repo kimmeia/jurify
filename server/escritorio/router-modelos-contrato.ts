@@ -46,7 +46,7 @@ import {
 const log = createLogger("router-modelos-contrato");
 
 const UPLOAD_DIR = path.resolve("./uploads/modelos-contrato");
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const ALLOWED_MIMES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
@@ -222,7 +222,7 @@ export const modelosContratoRouter = router({
       if (buffer.length > MAX_SIZE_BYTES) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 10MB.`,
+          message: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Máximo: 2GB.`,
         });
       }
 
