@@ -22,13 +22,13 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
+import { executarExclusaoCobrancasEmMassa } from "./asaas-cobrancas-bulk";
 import { adotarCobrancasOrfas } from "./asaas-adocao-orfas";
 import { calcularParcelas } from "./parcelamento-local";
 import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
   syncTodasCobrancasDoContato,
-  atualizarCobrancasLocaisDoEscritorio,
   agregarVinculosPorContato,
   type VinculoLinha,
   type CobrancaAgg,
@@ -1092,13 +1092,25 @@ export const asaasRouter = router({
     // agora tem vínculo (criado pelo sync de clientes acima) ficam com
     // nome correto. Resolve o caso "depois de sincronizar, cobranças
     // antigas ainda apareciam com '—'".
-    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0, cobAdotadas = 0;
+    // Refresh das cobranças via listagem paginada por janela curta
+    // (24h por padrão). Substituiu o pattern antigo de
+    // `atualizarCobrancasLocaisDoEscritorio` que fazia GET individual
+    // por cobrança local — em escritório com 500 cobranças vinha gerando
+    // 500 requests sequenciais ao Asaas (~3min de rajada).
+    //
+    // Agora usa `syncCobrancasEscritorio` com diasHistorico=1: pra cada
+    // vínculo, 1 request paginado (≤2 páginas no típico). 50 vínculos =
+    // ~50 requests em vez de 500. Webhook em tempo real cobre o resto
+    // dos eventos; este botão é só "catch-up" das últimas 24h.
+    let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
+    const cobAdotadas = 0;
     try {
-      const result = await atualizarCobrancasLocaisDoEscritorio(esc.escritorio.id);
+      const result = await syncCobrancasEscritorio(esc.escritorio.id, {
+        diasHistorico: 1,
+      });
+      cobNovas = result.novas;
       cobAtualizadas = result.atualizadas;
       cobRemovidas = result.removidas;
-      cobAdotadas = result.adotadas;
-      // cobNovas fica 0 — sync deste botão não importa nada novo
     } catch (err: any) {
       log.warn(`[Asaas] Erro ao atualizar cobranças locais: ${err.message}`);
     }
@@ -3038,6 +3050,49 @@ export const asaasRouter = router({
     }),
 
   /**
+   * Cancela várias cobranças PENDING em massa. Serializa as chamadas
+   * ao Asaas (uma de cada vez) pra respeitar o rate limit da API — se
+   * detectar `RateLimitError`, aborta o lote e devolve resumo do
+   * progresso. O frontend antes disparava N mutations em paralelo no
+   * `for (const c of selecionadas) excluirCobMut.mutate(...)`, podendo
+   * estourar a cota de 12h da API key.
+   *
+   * Filtros aplicados aqui (não no input):
+   *  - Ignora cobranças que não pertencem ao escritório do usuário
+   *  - Ignora cobranças com status != PENDING (já paga/vencida/etc)
+   *  - Cobranças com origem='manual' ou sem `asaasPaymentId` deletam
+   *    direto no DB sem chamar a API
+   *
+   * Resposta: contadores agregados + lista de erros por id. UI pode
+   * mostrar resumo "X canceladas, Y ignoradas, Z erros".
+   */
+  excluirCobrancasEmMassa: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para excluir cobranças no módulo Financeiro.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      return executarExclusaoCobrancasEmMassa({
+        db,
+        escritorioId: esc.escritorio.id,
+        ids: input.ids,
+        getAsaasClient: () => requireAsaasClient(esc.escritorio.id),
+      });
+    }),
+
+  /**
    * Obtém QR Code Pix de uma cobrança. Mutation (não query) porque
    * tem efeito colateral: cacheia o payload em `pixQrCodePayload` na
    * primeira chamada — assim cobranças PIX antigas (criadas antes do
@@ -3094,12 +3149,15 @@ export const asaasRouter = router({
       }
     }),
 
-  /** Obtém linha digitável do boleto */
+  /** Obtém linha digitável do boleto. Linha digitável é imutável por
+   *  boleto — uma vez emitida, o número não muda. Cacheamos em
+   *  `asaas_cobrancas.linhaDigitavelPayload` (JSON serializado dos 3
+   *  campos retornados pelo Asaas). Próximas leituras pulam a chamada
+   *  externa — antes era 1 request Asaas por copy do boleto. */
   obterLinhaDigitavel: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -3115,8 +3173,33 @@ export const asaasRouter = router({
         });
       }
 
+      // Cache hit: payload já persistido localmente. Pula chamada Asaas.
+      if (cob.linhaDigitavelPayload) {
+        try {
+          return JSON.parse(cob.linhaDigitavelPayload) as {
+            identificationField: string;
+            nossoNumero: string;
+            barCode: string;
+          };
+        } catch {
+          // JSON corrompido (improvável): cai pro fallback de buscar.
+        }
+      }
+
+      const client = await requireAsaasClient(esc.escritorio.id);
       try {
-        return await client.obterLinhaDigitavel(cob.asaasPaymentId);
+        const payload = await client.obterLinhaDigitavel(cob.asaasPaymentId);
+        // Cacheia pra próximas leituras. Falha aqui é não-fatal:
+        // resposta volta normal pro usuário; só não cacheou.
+        try {
+          await db
+            .update(asaasCobrancas)
+            .set({ linhaDigitavelPayload: JSON.stringify(payload) })
+            .where(eq(asaasCobrancas.id, cob.id));
+        } catch {
+          /* não bloqueia */
+        }
+        return payload;
       } catch {
         return null;
       }
@@ -3403,7 +3486,21 @@ export const asaasRouter = router({
 
   /** Obter saldo da conta Asaas — só visível pra quem tem verTodos
    *  no módulo financeiro. Saldo é informação do escritório, não
-   *  pertence a um colaborador individual. */
+   *  pertence a um colaborador individual.
+   *
+   *  Cache em DB: o frontend (Financeiro.tsx) faz polling de 5min por
+   *  usuário aberto, e antes cada polling era 1 request direto ao Asaas.
+   *  10 users do mesmo escritório = 10 requests/5min — desperdício de
+   *  cota, todos retornando o mesmo número. Agora:
+   *
+   *    - Lê `asaas_config.saldo` do DB se < 10min de idade (TTL)
+   *    - Se stale ou nunca buscado, chama Asaas + cacheia (com timestamp)
+   *    - Webhook PAYMENT_RECEIVED/CONFIRMED zera o timestamp pra forçar
+   *      refresh na próxima leitura (saldo provavelmente mudou)
+   *
+   *  Não-fatal: se a chamada Asaas falha (rate limit, rede), devolve o
+   *  saldo cacheado mesmo que stale — UI mostra "saldo de há X minutos"
+   *  é melhor que mostrar nada. */
   obterSaldo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return null;
@@ -3411,12 +3508,52 @@ export const asaasRouter = router({
     const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
     if (!perm.verTodos) return null;
 
+    const db = await getDb();
+    if (!db) return null;
+
+    const [cfg] = await db
+      .select({
+        id: asaasConfig.id,
+        saldo: asaasConfig.saldo,
+        saldoAtualizadoEm: asaasConfig.saldoAtualizadoEm,
+      })
+      .from(asaasConfig)
+      .where(eq(asaasConfig.escritorioId, esc.escritorio.id))
+      .limit(1);
+
+    if (!cfg) return null;
+
+    const SALDO_CACHE_TTL_MS = 10 * 60 * 1000;
+    const cacheValido =
+      cfg.saldoAtualizadoEm !== null &&
+      cfg.saldo !== null &&
+      Date.now() - cfg.saldoAtualizadoEm.getTime() < SALDO_CACHE_TTL_MS;
+
+    if (cacheValido) {
+      return { balance: Number(cfg.saldo) || 0 };
+    }
+
     const client = await getAsaasClient(esc.escritorio.id);
-    if (!client) return null;
+    if (!client) {
+      // Sem client mas tem saldo cacheado → devolve stale (melhor que null)
+      if (cfg.saldo !== null) return { balance: Number(cfg.saldo) || 0 };
+      return null;
+    }
 
     try {
-      return await client.obterSaldo();
+      const saldo = await client.obterSaldo();
+      await db
+        .update(asaasConfig)
+        .set({
+          saldo: String(saldo.balance),
+          saldoAtualizadoEm: new Date(),
+        })
+        .where(eq(asaasConfig.id, cfg.id));
+      return saldo;
     } catch {
+      // Falha na chamada Asaas (rate limit, rede): devolve cacheado se
+      // houver. Pior que stale é nada — UI continua funcional.
+      if (cfg.saldo !== null) return { balance: Number(cfg.saldo) || 0 };
       return null;
     }
   }),

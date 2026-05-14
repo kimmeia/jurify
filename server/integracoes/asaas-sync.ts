@@ -473,155 +473,21 @@ async function desativarVinculoPor403(
   }
 }
 
-/**
- * "Refresh" das cobranças JÁ EXISTENTES localmente. NÃO importa cobranças
- * novas do Asaas — só revisita as que estão no DB e atualiza
- * status/dataPagamento/valorLiquido. Pra cada cobrança local, faz
- * `GET /payments/{id}` no Asaas.
- *
- * Diferencia-se de `syncCobrancasDeCliente`:
- *  - Aquele LISTA tudo do Asaas (com filtro de data) e insere/atualiza
- *  - Este BUSCA por ID pra cada cobrança local conhecida
- *
- * Usado pelo botão "Sincronizar" do Financeiro: o usuário só quer um
- * refresh rápido (mudou status de algum boleto?), não importar histórico.
- * Pra puxar cobranças novas, usar "Importar histórico" em Configurações
- * (cron throttled).
- *
- * Throttle 350ms entre requests pra não estourar 200 req/min do Asaas
- * mesmo com 50+ cobranças locais.
- */
-const ATUALIZAR_THROTTLE_MS = 350;
-
-export async function atualizarCobrancasLocaisDoEscritorio(
-  escritorioId: number,
-): Promise<{
-  atualizadas: number;
-  removidas: number;
-  erros: number;
-  total: number;
-  adotadas: number;
-}> {
-  const stats = { atualizadas: 0, removidas: 0, erros: 0, total: 0, adotadas: 0 };
-  const client = await getAsaasClientForEscritorio(escritorioId);
-  if (!client) return stats;
-
-  const db = await getDb();
-  if (!db) return stats;
-
-  // Adoção bulk: cobranças com `contatoId IS NULL` cujo asaasCustomerId
-  // agora tem vínculo em `asaas_clientes` (resultado do `sincronizarClientes`
-  // que rodou logo antes) ficam com nome correto. Atende ao caso "depois
-  // de sincronizar, cobranças antigas ainda apareciam com '—'".
-  const vinculos = await db
-    .select({
-      asaasCustomerId: asaasClientes.asaasCustomerId,
-      contatoId: asaasClientes.contatoId,
-    })
-    .from(asaasClientes)
-    .where(eq(asaasClientes.escritorioId, escritorioId));
-
-  for (const v of vinculos) {
-    const r = await db
-      .update(asaasCobrancas)
-      .set({ contatoId: v.contatoId })
-      .where(
-        and(
-          eq(asaasCobrancas.escritorioId, escritorioId),
-          eq(asaasCobrancas.asaasCustomerId, v.asaasCustomerId),
-          isNull(asaasCobrancas.contatoId),
-        ),
-      );
-    const affected =
-      (r as any)?.[0]?.affectedRows ?? (r as any)?.affectedRows ?? 0;
-    stats.adotadas += Number(affected) || 0;
-  }
-
-  // Pega TODAS as cobranças locais com asaasPaymentId (origem='asaas').
-  // Manuais e órfãs (sem paymentId) não vão ser tocadas.
-  const locais = await db
-    .select({
-      id: asaasCobrancas.id,
-      asaasPaymentId: asaasCobrancas.asaasPaymentId,
-      status: asaasCobrancas.status,
-      dataPagamento: asaasCobrancas.dataPagamento,
-      valorLiquido: asaasCobrancas.valorLiquido,
-    })
-    .from(asaasCobrancas)
-    .where(
-      and(
-        eq(asaasCobrancas.escritorioId, escritorioId),
-        eq(asaasCobrancas.origem, "asaas"),
-      ),
-    );
-
-  stats.total = locais.length;
-
-  for (let i = 0; i < locais.length; i++) {
-    const local = locais[i];
-    if (!local.asaasPaymentId) continue;
-    if (i > 0) await new Promise((r) => setTimeout(r, ATUALIZAR_THROTTLE_MS));
-
-    try {
-      const cob = await client.buscarCobranca(local.asaasPaymentId);
-
-      // 404 sob outro nome: API responde com `deleted:true` quando a
-      // cobrança foi excluída. Remove local.
-      if (cob.deleted) {
-        await db
-          .delete(asaasCobrancas)
-          .where(eq(asaasCobrancas.id, local.id));
-        stats.removidas++;
-        continue;
-      }
-
-      const novaDataPag = extrairDataPagamento(cob);
-      const novoNet = cob.netValue?.toString() ?? null;
-      const mudouStatus = local.status !== cob.status;
-      const mudouData = (local.dataPagamento ?? null) !== novaDataPag;
-      const mudouNet = (local.valorLiquido ?? null) !== novoNet;
-
-      if (mudouStatus || mudouData || mudouNet) {
-        await db
-          .update(asaasCobrancas)
-          .set({
-            status: cob.status,
-            dataPagamento: novaDataPag,
-            valorLiquido: novoNet,
-          })
-          .where(eq(asaasCobrancas.id, local.id));
-        stats.atualizadas++;
-      }
-    } catch (err: any) {
-      const status = err?.response?.status ?? err?.cause?.response?.status;
-      // 404: cobrança apagada no Asaas → remove local
-      if (status === 404) {
-        await db
-          .delete(asaasCobrancas)
-          .where(eq(asaasCobrancas.id, local.id));
-        stats.removidas++;
-        continue;
-      }
-      // 429: rate limit — para o loop, deixa o próximo refresh continuar
-      if (status === 429) {
-        log.warn(
-          `[Asaas Refresh] Rate limit 429 no escritório ${escritorioId} após ${i} de ${locais.length} — abortando, próximo refresh continua`,
-        );
-        return stats;
-      }
-      stats.erros++;
-      log.warn(
-        { err: err.message, asaasPaymentId: local.asaasPaymentId },
-        "[Asaas Refresh] Erro ao buscar cobrança — pula",
-      );
-    }
-  }
-
-  return stats;
-}
+// Função `atualizarCobrancasLocaisDoEscritorio` foi removida: ela fazia
+// 1 GET ao Asaas por cobrança local (`buscarCobranca` em loop), gerando
+// rajadas de centenas de requests por clique do botão "Sincronizar".
+// Substituída pelo pattern `syncCobrancasEscritorio({ diasHistorico: 1 })`
+// que usa listagem paginada (~1-2 requests por cliente) e cobre o mesmo
+// caso de uso (refresh de status de cobranças recentes).
 
 export async function syncCobrancasEscritorio(
   escritorioId: number,
+  opts?: {
+    /** Override do `diasHistorico` propagado pra cada
+     *  `syncCobrancasDeCliente`. Default 90 (compat retroativa pro botão
+     *  manual). Cron diário usa 1 — webhook é fonte primária. */
+    diasHistorico?: number | null;
+  },
 ): Promise<{ clientes: number } & SyncCobrancasStats> {
   const zero = { clientes: 0, novas: 0, atualizadas: 0, removidas: 0 };
   const client = await getAsaasClientForEscritorio(escritorioId);
@@ -660,6 +526,9 @@ export async function syncCobrancasEscritorio(
         escritorioId,
         vinculo.contatoId,
         vinculo.asaasCustomerId,
+        opts?.diasHistorico !== undefined
+          ? { diasHistorico: opts.diasHistorico }
+          : undefined,
       );
       totais = somarStats(totais, s);
     } catch (err: any) {
@@ -903,7 +772,13 @@ export async function validarConexoesAsaasPendentes(): Promise<void> {
   }
 }
 
-export async function syncTodosEscritorios(): Promise<void> {
+export async function syncTodosEscritorios(opts?: {
+  /** Janela de história a sincronizar pra cada cliente vinculado.
+   *  Default 90 (preserva compat com chamadas manuais). Cron diário
+   *  usa 1 — webhook cobre eventos em tempo real, esta job só pega o
+   *  catch-up de 0.5% que o webhook perdeu. */
+  diasHistorico?: number | null;
+}): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
@@ -917,7 +792,7 @@ export async function syncTodosEscritorios(): Promise<void> {
 
   for (const { escritorioId } of escritorios) {
     try {
-      const result = await syncCobrancasEscritorio(escritorioId);
+      const result = await syncCobrancasEscritorio(escritorioId, opts);
       const total = result.novas + result.atualizadas + result.removidas;
       if (total > 0) {
         log.info(

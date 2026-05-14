@@ -12,16 +12,37 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { comissoesAgenda, comissoesLancamentosLog } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 
-async function requireGestor(userId: number) {
+async function requireEscritorio(userId: number) {
   const result = await getEscritorioPorUsuario(userId);
   if (!result) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Escritório não encontrado." });
   }
-  if (result.colaborador.cargo !== "dono" && result.colaborador.cargo !== "gestor") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas dono ou gestor pode operar comissões." });
-  }
   return result;
+}
+
+/**
+ * Gate único da agenda de comissões. Respeita a matriz de permissões
+ * (`checkPermission`) — funciona com cargos legados (dono/gestor) e
+ * personalizados. Substituiu o antigo `requireGestor` hardcode.
+ */
+async function exigirAcaoFinanceiro(
+  userId: number,
+  acao: "ver" | "criar" | "editar" | "excluir",
+): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", acao);
+  const ok =
+    (acao === "ver" && (perm.verTodos || perm.verProprios)) ||
+    (acao === "criar" && perm.criar) ||
+    (acao === "editar" && perm.editar) ||
+    (acao === "excluir" && perm.excluir);
+  if (!ok) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `Sem permissão para ${acao} no módulo Financeiro.`,
+    });
+  }
 }
 
 const horaInput = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use formato HH:MM (24h)");
@@ -29,7 +50,8 @@ const horaInput = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use formato HH:
 export const comissoesAgendaRouter = router({
   /** Lê a config atual. Retorna `null` se ainda não foi configurada. */
   obter: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await requireGestor(ctx.user.id);
+    const esc = await requireEscritorio(ctx.user.id);
+    await exigirAcaoFinanceiro(ctx.user.id, "ver");
     const db = await getDb();
     if (!db) return null;
     const [row] = await db
@@ -50,7 +72,8 @@ export const comissoesAgendaRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const esc = await requireGestor(ctx.user.id);
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -89,7 +112,8 @@ export const comissoesAgendaRouter = router({
   listarLog: protectedProcedure
     .input(z.object({ limit: z.number().int().min(1).max(100).default(20) }).optional())
     .query(async ({ ctx, input }) => {
-      const esc = await requireGestor(ctx.user.id);
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) return [];
       const rows = await db

@@ -152,10 +152,25 @@ export async function gerarFilhasDeModelo(modelo: {
       vencimentosExistentes.add(proximoVencimento);
       geradas++;
     } catch (err: any) {
-      log.warn(
-        { err: err.message, modeloId: modelo.id, vencimento: proximoVencimento },
-        "[despesas-recorrentes] falha ao gerar filha — pula",
-      );
+      // ER_DUP_ENTRY = race com outro caller (cron+botão "Gerar agora"
+      // simultâneos). A UNIQUE (recorrenciaDeOrigemId, vencimento) garante
+      // que só 1 filha vingue; o segundo INSERT cai aqui e é segurado
+      // pelo Set em memória pra próximas iterações.
+      if (
+        err.code === "ER_DUP_ENTRY" ||
+        /Duplicate entry/i.test(err.message ?? "")
+      ) {
+        vencimentosExistentes.add(proximoVencimento);
+        log.info(
+          { modeloId: modelo.id, vencimento: proximoVencimento },
+          "[despesas-recorrentes] filha já existia (race com outro worker) — pula",
+        );
+      } else {
+        log.warn(
+          { err: err.message, modeloId: modelo.id, vencimento: proximoVencimento },
+          "[despesas-recorrentes] falha ao gerar filha — pula",
+        );
+      }
     }
 
     proximoVencimento = avancarRecorrencia(proximoVencimento, modelo.recorrencia);

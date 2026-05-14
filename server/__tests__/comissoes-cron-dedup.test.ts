@@ -15,6 +15,13 @@ const fecharComissao = vi.fn();
 const marcarExecucaoConcluida = vi.fn();
 const marcarExecucaoFalhou = vi.fn();
 const reservarExecucao = vi.fn();
+const carregarRegraComissao = vi.fn(async () => ({
+  aliquotaPercent: 10,
+  valorMinimo: 0,
+  modo: "flat" as const,
+  baseFaixa: "comissionavel" as const,
+  faixas: [],
+}));
 
 // Stub da exceção — precisa ser uma classe pra `instanceof` funcionar.
 class FechamentoJaExisteError extends Error {
@@ -33,6 +40,7 @@ vi.mock("../escritorio/db-comissoes", () => ({
   marcarExecucaoConcluida,
   marcarExecucaoFalhou,
   reservarExecucao,
+  carregarRegraComissao,
   // Período fixo, independente da data do sistema. Evita flakiness.
   periodoMesAnterior: () => ({ inicio: "2026-03-01", fim: "2026-03-31" }),
 }));
@@ -99,6 +107,9 @@ beforeEach(() => {
   marcarExecucaoConcluida.mockReset();
   marcarExecucaoFalhou.mockReset();
   reservarExecucao.mockReset();
+  // mockClear preserva a implementação (return value do carregarRegraComissao);
+  // mockReset zeraria o factory. Usamos clear pra zerar só o histórico de chamadas.
+  carregarRegraComissao.mockClear();
   // Hora fixa: dia 10/abril/2026 às 18h (depois do gatilho dia=1 18:00).
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-04-10T21:00:00Z")); // 18:00 BRT
@@ -175,5 +186,21 @@ describe("processarAgendasComissao — dedup cross-origem", () => {
     expect(fecharComissao).toHaveBeenCalledOnce();
     expect(marcarExecucaoConcluida).toHaveBeenCalledWith(42, 777);
     expect(marcarExecucaoFalhou).not.toHaveBeenCalled();
+
+    // Regra carregada UMA vez por escritório (não 1x por atendente).
+    // Em escritórios com 50 atendentes ativos no mês, isso evita 100
+    // queries idênticas de regra+faixas.
+    expect(carregarRegraComissao).toHaveBeenCalledOnce();
+    expect(carregarRegraComissao).toHaveBeenCalledWith(100);
+
+    // Cron repassa a regra pra fecharComissao via params.regraCarregada
+    const callArgs = fecharComissao.mock.calls[0][0];
+    expect(callArgs.regraCarregada).toEqual({
+      aliquotaPercent: 10,
+      valorMinimo: 0,
+      modo: "flat",
+      baseFaixa: "comissionavel",
+      faixas: [],
+    });
   });
 });

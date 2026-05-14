@@ -41,10 +41,16 @@ async function expirarAssinaturas() {
   }
 }
 
-/** Sincroniza cobranças do Asaas para todos os escritórios conectados */
+/** Sincroniza cobranças do Asaas para todos os escritórios conectados.
+ *
+ *  Catch-up CONSERVADOR: roda 1x/dia com janela de 1 dia de histórico.
+ *  Antes era 10min × 90 dias por escritório — gerava milhares de requests
+ *  por dia mesmo sem nada ter mudado, porque o webhook (asaas-webhook.ts)
+ *  já cobre todos os eventos em tempo real. Esta job só pega o "0.5%" que
+ *  o webhook eventualmente perdeu por race ou downtime curto. */
 async function syncAsaas() {
   try {
-    await syncTodosEscritorios();
+    await syncTodosEscritorios({ diasHistorico: 1 });
   } catch (err: any) {
     log.error("[Cron] Erro ao sincronizar Asaas:", err.message);
   }
@@ -228,8 +234,13 @@ export function iniciarJobs() {
   setInterval(() => expirarAssinaturas(), 60 * 60 * 1000);
   setInterval(() => verificarPrazosKanban(), 60 * 60 * 1000);
 
-  // A cada 10 minutos: sincronizar cobranças do Asaas
-  setInterval(() => syncAsaas(), 10 * 60 * 1000);
+  // 1x por dia: catch-up de cobranças que o webhook eventualmente
+  // perdeu (race condition, downtime curto). Webhook (asaas-webhook.ts)
+  // é a fonte primária e cobre eventos em tempo real — não precisamos
+  // de polling agressivo de 10min. Janela de 1 dia (não 90) também
+  // reduz drasticamente o tráfego: pra escritório com 50 customers,
+  // saiu de ~7.200 requests/12h pra ~50/24h.
+  setInterval(() => syncAsaas(), 24 * 60 * 60 * 1000);
 
   // A cada 30 minutos: re-tenta validar configs Asaas em rate limit (429)
   setInterval(async () => {
@@ -275,6 +286,34 @@ export function iniciarJobs() {
       log.error("[Cron] gerarDespesasRecorrentes inicial falhou:", err.message);
     }
   }, 45_000);
+
+  // A cada 1h: atualiza status `vencido` de despesas. Forward: pendente/
+  // parcial com vencimento passado → vencido. Reverse: vencido com
+  // vencimento prorrogado pro futuro → volta a pendente/parcial. Sem isso
+  // o KPI "Vencido" do dashboard financeiro fica sempre R$ 0,00 (nenhum
+  // outro código seta status='vencido').
+  setInterval(async () => {
+    try {
+      const { atualizarStatusDespesasVencidas } = await import(
+        "../escritorio/despesas-vencidas"
+      );
+      await atualizarStatusDespesasVencidas();
+    } catch (err: any) {
+      log.error("[Cron] atualizarStatusDespesasVencidas falhou:", err.message);
+    }
+  }, 60 * 60 * 1000);
+  // Roda 1x na partida (50s pra evitar competir com despesas-recorrentes
+  // que roda em 45s).
+  setTimeout(async () => {
+    try {
+      const { atualizarStatusDespesasVencidas } = await import(
+        "../escritorio/despesas-vencidas"
+      );
+      await atualizarStatusDespesasVencidas();
+    } catch (err: any) {
+      log.error("[Cron] atualizarStatusDespesasVencidas inicial falhou:", err.message);
+    }
+  }, 50_000);
 
   // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
   // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal

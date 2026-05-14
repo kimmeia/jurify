@@ -235,7 +235,12 @@ describe("calcularDRE — agregação", () => {
     ]);
   });
 
-  it("despesas filtradas por status (pago/parcial) e período (dataPagamento|vencimento)", async () => {
+  it("despesas agregadas (filtro de período já aplicado pelo SQL)", async () => {
+    // O filtro `CASE WHEN status='pago' THEN dataPagamento ELSE vencimento END
+    // BETWEEN ... AND ...` é aplicado direto no WHERE do SQL. Como o mock
+    // não executa SQL, simulamos o resultado que o DB retornaria: só linhas
+    // dentro do período. A validação do filtro real depende de teste de
+    // integração com banco — fora do escopo de teste unitário.
     selectQueueByCall.push([]); // sem receitas
     selectQueueByCall.push([
       // pago com dataPagamento DENTRO do período
@@ -247,16 +252,7 @@ describe("calcularDRE — agregação", () => {
         dataPagamento: "2026-05-10",
         vencimento: "2026-05-05",
       },
-      // pago mas dataPagamento FORA do período → excluído
-      {
-        categoriaId: 10,
-        categoriaNome: "Aluguel",
-        valor: "3000.00",
-        status: "pago",
-        dataPagamento: "2026-04-30",
-        vencimento: "2026-05-05",
-      },
-      // parcial com vencimento DENTRO do período → incluído
+      // parcial com vencimento DENTRO do período
       {
         categoriaId: 11,
         categoriaNome: "Internet",
@@ -264,15 +260,6 @@ describe("calcularDRE — agregação", () => {
         status: "parcial",
         dataPagamento: null,
         vencimento: "2026-05-15",
-      },
-      // parcial com vencimento FORA → excluído
-      {
-        categoriaId: 11,
-        categoriaNome: "Internet",
-        valor: "200.00",
-        status: "parcial",
-        dataPagamento: null,
-        vencimento: "2026-06-15",
       },
     ]);
 

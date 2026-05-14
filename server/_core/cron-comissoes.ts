@@ -29,6 +29,7 @@ import {
 } from "../../drizzle/schema";
 import { and, eq, inArray, between, isNotNull } from "drizzle-orm";
 import {
+  carregarRegraComissao,
   fecharComissao,
   FechamentoJaExisteError,
   marcarExecucaoConcluida,
@@ -253,6 +254,12 @@ export async function processarAgendasComissao(): Promise<void> {
         continue;
       }
 
+      // Carrega a regra UMA vez por escritório e repassa pra cada
+      // fechamento — sem isso, `simularComissao` rele a regra+faixas a
+      // cada atendente (queries idempotentes mas desnecessárias em
+      // escritórios grandes com 50+ atendentes/mês).
+      const regraCarregada = await carregarRegraComissao(agenda.escritorioId);
+
       for (const at of atendentes) {
         const logId = await reservarExecucao({
           escritorioId: agenda.escritorioId,
@@ -276,6 +283,7 @@ export async function processarAgendasComissao(): Promise<void> {
             fechadoPorUserId,
             origem: "automatico",
             agendaId: agenda.id,
+            regraCarregada,
           });
           await marcarExecucaoConcluida(logId, r.id);
           fechadosOk += 1;

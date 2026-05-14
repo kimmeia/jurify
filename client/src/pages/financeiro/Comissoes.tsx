@@ -4,7 +4,7 @@
  * fechar o período (snapshot imutável) e consultar histórico de fechamentos.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -1398,13 +1398,22 @@ function AgendamentoSection() {
   const [horaLocal, setHoraLocal] = useState("18:00");
   const [carregouConfig, setCarregouConfig] = useState(false);
 
-  // Hidrata estado a partir da config carregada (apenas 1x)
-  if (config && !carregouConfig) {
-    setAtivo(config.ativo);
-    setDiaDoMes(config.diaDoMes);
-    setHoraLocal(config.horaLocal);
-    setCarregouConfig(true);
-  }
+  // Hidrata estado quando a config chega da query — apenas 1x, pra não
+  // atropelar edições posteriores do usuário (ex: ele troca o dia mas
+  // ainda não clicou Salvar; um refetch faria os states voltarem).
+  //
+  // Antes era um `if` direto no corpo do render que chamava setState —
+  // anti-pattern React que dispara warning em StrictMode e pode quebrar
+  // em concurrent rendering. useEffect garante o setState fora da fase
+  // de render.
+  useEffect(() => {
+    if (config && !carregouConfig) {
+      setAtivo(config.ativo);
+      setDiaDoMes(config.diaDoMes);
+      setHoraLocal(config.horaLocal);
+      setCarregouConfig(true);
+    }
+  }, [config, carregouConfig]);
 
   const salvar = (trpc as any).comissoesAgenda.salvar.useMutation({
     onSuccess: () => {

@@ -1063,6 +1063,13 @@ export const asaasConfig = mysqlTable("asaas_config", {
   mensagemErro: varchar("mensagemErroAsaas", { length: 512 }),
   saldo: varchar("saldoAsaas", { length: 32 }),
   /**
+   * Timestamp da última atualização de `saldo` via chamada ao Asaas.
+   * Usado pra TTL do cache (default 10min). NULL → próxima leitura
+   * dispara refresh. Webhook PAYMENT_RECEIVED/CONFIRMED zera este
+   * campo pra forçar refresh quando o saldo provavelmente mudou.
+   */
+  saldoAtualizadoEm: timestamp("saldoAtualizadoEmAsaas"),
+  /**
    * Sincronização histórica controlada por janelas de tempo.
    * Webhook cobre eventos futuros automaticamente; estes campos
    * controlam a importação do passado em pedaços pequenos pra não
@@ -1182,6 +1189,13 @@ export const asaasCobrancas = mysqlTable(
     invoiceUrl: text("invoiceUrlAsaas"),
     bankSlipUrl: text("bankSlipUrlAsaas"),
     pixQrCodePayload: text("pixQrCodePayload"),
+    /**
+     * Cache do payload da linha digitável de boleto. Asaas devolve
+     * 3 campos (identificationField, nossoNumero, barCode) — armazenamos
+     * o JSON serializado. Linha digitável é imutável por boleto, então
+     * cache nunca precisa ser invalidado.
+     */
+    linhaDigitavelPayload: text("linhaDigitavelPayload"),
     dataPagamento: varchar("dataPagamentoAsaas", { length: 10 }),
     externalReference: varchar("externalRefAsaas", { length: 255 }),
     /** Atendente que receberá comissão por esta cobrança (FK → colaboradores.id). */
@@ -2097,6 +2111,14 @@ export const despesas = mysqlTable(
     idxRecorrenciaOrigem: index("desp_recorrencia_origem_idx").on(
       t.recorrenciaDeOrigemId,
     ),
+    // Bloqueia race em `gerarFilhasDeModelo` (escritorio/despesas-recorrentes):
+    // cron de 1h + botão "Gerar agora" da UI podem ler o mesmo estado e
+    // tentar INSERT da mesma filha. UNIQUE faz o 2º INSERT falhar com
+    // ER_DUP_ENTRY — o try/catch existente absorve.
+    uqRecorrenciaModeloVenc: uniqueIndex("desp_recorrencia_modelo_venc_uq").on(
+      t.recorrenciaDeOrigemId,
+      t.vencimento,
+    ),
   }),
 );
 
@@ -2133,6 +2155,13 @@ export const regraComissao = mysqlTable(
     valorMinimoCobranca: decimal("valorMinimoCobRegraCom", { precision: 12, scale: 2 })
       .default("0")
       .notNull(),
+    /**
+     * Dia do mês seguinte em que a despesa automática de pagamento de
+     * comissão vence. Padrão 5 — alinhado ao comportamento histórico
+     * antes de virar configurável. Validado 1-31; clamp pra último dia
+     * do mês acontece no app (ex: dia 31 em fev → 28/29).
+     */
+    diaVencimentoDespesa: int("diaVencimentoDespesaRegraCom").default(5).notNull(),
     updatedAt: timestamp("updatedAtRegraCom").defaultNow().onUpdateNow().notNull(),
   },
   (t) => ({

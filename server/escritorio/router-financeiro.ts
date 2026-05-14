@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import {
   and,
   asc,
+  between,
   desc,
   eq,
   gte,
@@ -27,6 +28,7 @@ import {
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import {
+  aplicarConciliacaoOFXMatch,
   atribuirCobrancasEmMassa,
   atualizarCategoriaCobranca,
   atualizarCategoriaDespesa,
@@ -222,6 +224,7 @@ export const financeiroRouter = router({
         modo: "flat" as const,
         baseFaixa: "comissionavel" as const,
         valorMinimoCobranca: "0.00",
+        diaVencimentoDespesa: 5,
         faixas: [] as Array<{ limiteAte: string | null; aliquotaPercent: string }>,
       };
     }
@@ -230,6 +233,7 @@ export const financeiroRouter = router({
       modo: regra.modo,
       baseFaixa: regra.baseFaixa,
       valorMinimoCobranca: regra.valorMinimoCobranca,
+      diaVencimentoDespesa: regra.diaVencimentoDespesa,
       faixas: faixas.map((f) => ({
         limiteAte: f.limiteAte,
         aliquotaPercent: f.aliquotaPercent,
@@ -244,6 +248,12 @@ export const financeiroRouter = router({
         aliquotaPercent: z.number().min(0).max(100),
         valorMinimoCobranca: z.number().min(0),
         baseFaixa: z.enum(["bruto", "comissionavel"]).default("comissionavel"),
+        /**
+         * Dia do mês seguinte em que a despesa de comissão vence. 1-31.
+         * Clamp pra último dia do mês acontece em `calcularVencimentoComissao`.
+         * Default 5 preserva comportamento anterior ao campo virar configurável.
+         */
+        diaVencimentoDespesa: z.number().int().min(1).max(31).default(5),
         /**
          * Tabela de faixas. Última faixa pode ter `limiteAte: null` para
          * representar "sem teto". Vazia quando modo='flat'.
@@ -299,6 +309,7 @@ export const financeiroRouter = router({
         valorMinimoCobranca: input.valorMinimoCobranca,
         baseFaixa: input.baseFaixa,
         faixas: input.faixas,
+        diaVencimentoDespesa: input.diaVencimentoDespesa,
       });
       return { success: true };
     }),
@@ -953,6 +964,11 @@ export const financeiroRouter = router({
       const venciMin = ampliarData(dataMin, -10);
       const venciMax = ampliarData(dataMax, 10);
 
+      // Filtra por vencimento direto no SQL (between sobre string ISO
+      // YYYY-MM-DD comparada lexicograficamente — bate com comparação
+      // de data). Antes carregávamos todas as despesas/cobranças
+      // pendentes do escritório e filtrávamos em JS — não escala em
+      // escritórios com muito histórico.
       const despesasRows = await db
         .select({
           id: despesas.id,
@@ -965,8 +981,7 @@ export const financeiroRouter = router({
           and(
             eq(despesas.escritorioId, esc.escritorio.id),
             or(eq(despesas.status, "pendente"), eq(despesas.status, "parcial")),
-            // between via SQL pra evitar comparar string mês>dia em datas
-            // (datas ISO comparam-se lexicograficamente sem problemas)
+            between(despesas.vencimento, venciMin, venciMax),
           ),
         );
 
@@ -985,27 +1000,24 @@ export const financeiroRouter = router({
               eq(asaasCobrancas.status, "PENDING"),
               eq(asaasCobrancas.status, "OVERDUE"),
             ),
+            between(asaasCobrancas.vencimento, venciMin, venciMax),
           ),
         );
 
-      // Filtra em JS pelo intervalo ampliado de datas — evita complicar
-      // o WHERE com SQL between dependente do dialeto
-      const despesasFiltradas = despesasRows
-        .filter((d) => d.vencimento >= venciMin && d.vencimento <= venciMax)
-        .map((d) => ({
-          id: d.id,
-          descricao: d.descricao,
-          valor: parseFloat(d.valor),
-          vencimento: d.vencimento,
-        }));
-      const cobrancasFiltradas = cobrancasRows
-        .filter((c) => c.vencimento >= venciMin && c.vencimento <= venciMax)
-        .map((c) => ({
-          id: c.id,
-          descricao: c.descricao ?? "",
-          valor: parseFloat(c.valor),
-          vencimento: c.vencimento,
-        }));
+      // Filtro de vencimento já aplicado no WHERE — aqui só normaliza
+      // os tipos pro shape esperado por `sugerirConciliacao`.
+      const despesasFiltradas = despesasRows.map((d) => ({
+        id: d.id,
+        descricao: d.descricao,
+        valor: parseFloat(d.valor),
+        vencimento: d.vencimento,
+      }));
+      const cobrancasFiltradas = cobrancasRows.map((c) => ({
+        id: c.id,
+        descricao: c.descricao ?? "",
+        valor: parseFloat(c.valor),
+        vencimento: c.vencimento,
+      }));
 
       const sugestoes = sugerirConciliacao(
         transacoes,
@@ -1083,87 +1095,26 @@ export const financeiroRouter = router({
 
       for (const m of input.matches) {
         try {
-          // 1) Idempotência: registra FITID. Se já existe (UNIQUE viola),
-          // pula o match sem mutar entidade-pai. Faz isso ANTES do UPDATE
-          // pra garantir que reimport não sobrescreve dataPagamento.
-          try {
-            await db.insert(ofxImportacoesFitid).values({
-              escritorioId: esc.escritorio.id,
-              fitid: m.fitid,
-              tipoEntidade: m.tipo,
-              entidadeId: m.entidadeId,
-              valor: m.valor.toFixed(2),
-              dataPagamento: m.dataPagamento,
-              importadoPorUserId: ctx.user.id,
-            });
-          } catch (insertErr: any) {
-            // Drizzle / MySQL: erro 1062 = duplicate key
-            if (
-              insertErr.code === "ER_DUP_ENTRY" ||
-              /Duplicate entry/i.test(insertErr.message ?? "")
-            ) {
-              jaImportadas++;
-              continue;
-            }
-            throw insertErr;
-          }
-
-          // 2) Aplicação do match
-          if (m.tipo === "despesa") {
-            const [d] = await db
-              .select({ valor: despesas.valor })
-              .from(despesas)
-              .where(
-                and(
-                  eq(despesas.id, m.entidadeId),
-                  eq(despesas.escritorioId, esc.escritorio.id),
-                ),
-              )
-              .limit(1);
-            if (!d) {
-              erros.push(`Despesa #${m.entidadeId} não encontrada`);
-              continue;
-            }
-            await db
-              .update(despesas)
-              .set({
-                status: "pago",
-                dataPagamento: m.dataPagamento,
-                valorPago: d.valor,
-              })
-              .where(
-                and(
-                  eq(despesas.id, m.entidadeId),
-                  eq(despesas.escritorioId, esc.escritorio.id),
-                ),
-              );
-            despesasMarcadas++;
-          } else {
-            const [c] = await db
-              .select({ origem: asaasCobrancas.origem })
-              .from(asaasCobrancas)
-              .where(
-                and(
-                  eq(asaasCobrancas.id, m.entidadeId),
-                  eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-                ),
-              )
-              .limit(1);
-            if (!c) {
-              erros.push(`Cobrança #${m.entidadeId} não encontrada`);
-              continue;
-            }
-            if (c.origem !== "manual") {
-              erros.push(
-                `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
-              );
-              continue;
-            }
-            await db
-              .update(asaasCobrancas)
-              .set({ status: "RECEIVED", dataPagamento: m.dataPagamento })
-              .where(eq(asaasCobrancas.id, m.entidadeId));
-            cobrancasMarcadas++;
+          const r = await aplicarConciliacaoOFXMatch({
+            escritorioId: esc.escritorio.id,
+            importadoPorUserId: ctx.user.id,
+            fitid: m.fitid,
+            tipo: m.tipo,
+            entidadeId: m.entidadeId,
+            valor: m.valor,
+            dataPagamento: m.dataPagamento,
+          });
+          if (r.status === "aplicado_despesa") despesasMarcadas++;
+          else if (r.status === "aplicado_cobranca") cobrancasMarcadas++;
+          else if (r.status === "ja_importada") jaImportadas++;
+          else if (r.status === "entidade_nao_encontrada") {
+            erros.push(
+              `${r.tipo === "despesa" ? "Despesa" : "Cobrança"} #${m.entidadeId} não encontrada`,
+            );
+          } else if (r.status === "cobranca_asaas_pulada") {
+            erros.push(
+              `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
+            );
           }
         } catch (err: any) {
           erros.push(`${m.tipo} #${m.entidadeId}: ${err.message}`);
