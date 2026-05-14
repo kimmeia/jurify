@@ -466,7 +466,10 @@ function PreviewPdfComCampos({
               width={600}
               renderTextLayer={false}
               renderAnnotationLayer={false}
-              onLoadSuccess={(p) => setPageSizePt({ w: p.width, h: p.height })}
+              // originalWidth/Height = pontos PDF reais (não pixels
+              // escalados). Sem isso, render do overlay desalinhava
+              // do canvas porque trabalhava em escalas mistas.
+              onLoadSuccess={(p) => setPageSizePt({ w: p.originalWidth, h: p.originalHeight })}
             />
             {pageSizePt &&
               camposDaPagina.map((c) => {
