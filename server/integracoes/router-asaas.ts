@@ -22,6 +22,7 @@ import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { AsaasClient, type AsaasCustomer } from "./asaas-client";
+import { executarExclusaoCobrancasEmMassa } from "./asaas-cobrancas-bulk";
 import { adotarCobrancasOrfas } from "./asaas-adocao-orfas";
 import { calcularParcelas } from "./parcelamento-local";
 import {
@@ -3035,6 +3036,49 @@ export const asaasRouter = router({
       }
 
       return { success: true };
+    }),
+
+  /**
+   * Cancela várias cobranças PENDING em massa. Serializa as chamadas
+   * ao Asaas (uma de cada vez) pra respeitar o rate limit da API — se
+   * detectar `RateLimitError`, aborta o lote e devolve resumo do
+   * progresso. O frontend antes disparava N mutations em paralelo no
+   * `for (const c of selecionadas) excluirCobMut.mutate(...)`, podendo
+   * estourar a cota de 12h da API key.
+   *
+   * Filtros aplicados aqui (não no input):
+   *  - Ignora cobranças que não pertencem ao escritório do usuário
+   *  - Ignora cobranças com status != PENDING (já paga/vencida/etc)
+   *  - Cobranças com origem='manual' ou sem `asaasPaymentId` deletam
+   *    direto no DB sem chamar a API
+   *
+   * Resposta: contadores agregados + lista de erros por id. UI pode
+   * mostrar resumo "X canceladas, Y ignoradas, Z erros".
+   */
+  excluirCobrancasEmMassa: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão para excluir cobranças no módulo Financeiro.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      return executarExclusaoCobrancasEmMassa({
+        db,
+        escritorioId: esc.escritorio.id,
+        ids: input.ids,
+        getAsaasClient: () => requireAsaasClient(esc.escritorio.id),
+      });
     }),
 
   /**

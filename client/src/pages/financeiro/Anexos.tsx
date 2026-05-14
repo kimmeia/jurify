@@ -8,6 +8,16 @@ import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Download,
   FileText,
   Image as ImageIcon,
@@ -65,6 +75,9 @@ export function AnexosFinanceiro({
   const perms = useFinanceiroPerms();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [anexoParaExcluir, setAnexoParaExcluir] = useState<
+    { id: number; filename: string } | null
+  >(null);
   const utils = trpc.useUtils();
 
   const { data: anexos = [], isLoading } = (trpc as any).financeiro?.listarAnexos?.useQuery?.(
@@ -205,11 +218,9 @@ export function AnexosFinanceiro({
                   size="sm"
                   variant="ghost"
                   className="h-6 w-6 p-0 text-destructive"
-                  onClick={() => {
-                    if (confirm(`Remover "${a.filename}"?`)) {
-                      excluirMut?.mutate?.({ id: a.id });
-                    }
-                  }}
+                  onClick={() =>
+                    setAnexoParaExcluir({ id: a.id, filename: a.filename })
+                  }
                   disabled={excluirMut?.isPending}
                   title="Remover"
                 >
@@ -220,6 +231,38 @@ export function AnexosFinanceiro({
           ))}
         </ul>
       )}
+
+      <AlertDialog
+        open={anexoParaExcluir !== null}
+        onOpenChange={(o) => !o && setAnexoParaExcluir(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover anexo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O arquivo <strong>{anexoParaExcluir?.filename}</strong> será
+              excluído permanentemente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut?.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirMut?.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!anexoParaExcluir) return;
+                excluirMut?.mutate?.({ id: anexoParaExcluir.id });
+                setAnexoParaExcluir(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

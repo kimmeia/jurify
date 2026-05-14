@@ -16,6 +16,16 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight, BarChart3,
@@ -81,6 +91,8 @@ export default function Financeiro() {
   const [rangeInicioInput, setRangeInicioInput] = useState("");
   const [rangeFimInput, setRangeFimInput] = useState("");
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [confirmBulkCancel, setConfirmBulkCancel] = useState(false);
+  const [cobrancaParaCancelar, setCobrancaParaCancelar] = useState<any | null>(null);
 
   // Auto-refresh: cron sincroniza a cada 10min; webhook pode atualizar a
   // qualquer momento. Revalidamos a cada 5min — antes era 60s mas com 4
@@ -215,6 +227,42 @@ export default function Financeiro() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  // Bulk cancel via endpoint dedicado. Serializa as chamadas ao Asaas
+  // no backend pra respeitar rate limit (antes o frontend disparava N
+  // mutations em paralelo, podendo bloquear a API key por 12h).
+  const excluirCobBulkMut = (trpc as any).asaas?.excluirCobrancasEmMassa?.useMutation?.({
+    onSuccess: (r: {
+      excluidasAsaas: number;
+      excluidasManual: number;
+      ignoradas: number;
+      erros: Array<{ id: number; mensagem: string }>;
+      abortadoPorRateLimit: boolean;
+    }) => {
+      const total = r.excluidasAsaas + r.excluidasManual;
+      if (r.abortadoPorRateLimit) {
+        toast.warning(
+          `${total} cancelada(s) — lote pausado por rate limit. Tente o restante em alguns minutos.`,
+        );
+      } else if (r.erros.length > 0) {
+        toast.warning(
+          `${total} cancelada(s), ${r.erros.length} com erro` +
+            (r.ignoradas > 0 ? `, ${r.ignoradas} ignorada(s)` : ""),
+          { description: r.erros.slice(0, 3).map((e) => e.mensagem).join(" · ") },
+        );
+      } else {
+        toast.success(
+          `${total} cobrança(s) cancelada(s)` +
+            (r.ignoradas > 0 ? ` · ${r.ignoradas} ignorada(s)` : ""),
+        );
+      }
+      setSelecionadas(new Set());
+      utils.asaas.listarCobrancas.invalidate();
+      utils.asaas.kpis.invalidate();
+    },
+    onError: (err: any) =>
+      toast.error("Erro", { description: err.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+
   // Marca cobrança manual como recebida. Disponível só em cobranças
   // origem='manual' com status PENDING/OVERDUE — Asaas sincroniza
   // automaticamente via webhook nas origens 'asaas'.
@@ -272,19 +320,24 @@ export default function Financeiro() {
     }
   };
 
+  // Lista de cobranças pendentes selecionadas — derivada pra usar tanto no
+  // contador do dialog quanto na execução do bulk delete.
+  const cobrancasBulkSelecionadas = cobrancasFiltradas.filter(
+    (c: any) => selecionadas.has(c.id) && c.status === "PENDING",
+  );
+
   const handleBulkDelete = () => {
-    const selecionadasList = cobrancasFiltradas.filter(
-      (c: any) => selecionadas.has(c.id) && c.status === "PENDING",
-    );
-    if (selecionadasList.length === 0) {
+    if (cobrancasBulkSelecionadas.length === 0) {
       toast.error("Selecione cobranças pendentes para cancelar");
       return;
     }
-    if (!confirm(`Cancelar ${selecionadasList.length} cobrança(s) pendente(s)?`)) return;
-    for (const c of selecionadasList) {
-      excluirCobMut.mutate({ id: c.id });
-    }
-    setSelecionadas(new Set());
+    setConfirmBulkCancel(true);
+  };
+
+  const confirmarBulkCancel = () => {
+    const ids = cobrancasBulkSelecionadas.map((c: any) => Number(c.id));
+    excluirCobBulkMut.mutate({ ids });
+    setConfirmBulkCancel(false);
   };
 
   if (loadStatus) {
@@ -909,9 +962,7 @@ export default function Financeiro() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-destructive"
-                              onClick={() => {
-                                if (confirm("Cancelar?")) excluirCobMut.mutate({ id: c.id });
-                              }}
+                              onClick={() => setCobrancaParaCancelar(c)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -1093,6 +1144,84 @@ export default function Financeiro() {
           refetchClientes();
         }}
       />
+
+      <AlertDialog
+        open={confirmBulkCancel}
+        onOpenChange={setConfirmBulkCancel}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Cancelar {cobrancasBulkSelecionadas.length} cobrança(s)
+              pendente(s)?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              As cobranças pendentes selecionadas serão canceladas no Asaas e
+              no sistema, uma de cada vez. Cobranças já pagas ou estornadas
+              não são afetadas. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirCobBulkMut.isPending}>
+              Manter
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirCobBulkMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmarBulkCancel();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluirCobBulkMut.isPending ? "Cancelando..." : "Cancelar cobranças"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={cobrancaParaCancelar !== null}
+        onOpenChange={(o) => !o && setCobrancaParaCancelar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar cobrança?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A cobrança de{" "}
+              <strong>
+                {cobrancaParaCancelar?.nomeContato ?? "—"}
+              </strong>
+              {cobrancaParaCancelar?.valor && (
+                <>
+                  {" "}no valor de{" "}
+                  <strong>
+                    {formatBRL(parseFloat(cobrancaParaCancelar.valor))}
+                  </strong>
+                </>
+              )}{" "}
+              será cancelada no Asaas e no sistema. Esta ação não pode ser
+              desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirCobMut.isPending}>
+              Manter
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirCobMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!cobrancaParaCancelar) return;
+                excluirCobMut.mutate({ id: cobrancaParaCancelar.id });
+                setCobrancaParaCancelar(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Cancelar cobrança
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

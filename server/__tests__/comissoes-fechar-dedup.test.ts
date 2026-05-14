@@ -105,9 +105,11 @@ describe("fecharComissao — dedup cross-origem", () => {
   it("permite criar duplicado quando forcarDuplicado=true (skip da check)", async () => {
     // SELECT em comissoes_fechadas — NÃO é chamada porque forcar=true.
     // Precisamos preparar selects pra simularComissao em ordem:
-    //   1. carregarMapaCobrancasJaFechadas (anti-duplicate) → vazio
-    //   2. SELECT cobranças do período → vazio
-    selectQueue.push([]);
+    //   1. SELECT cobranças do período (NOT EXISTS embutido no SQL) → vazio
+    //
+    // Antes havia um SELECT extra do `carregarMapaCobrancasJaFechadas`
+    // (carregava lista de IDs pra memória + NOT IN). Substituído por
+    // subquery NOT EXISTS direto no WHERE — uma query a menos.
     selectQueue.push([]);
 
     const r = await fecharComissao({

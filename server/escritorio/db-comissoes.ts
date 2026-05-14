@@ -5,7 +5,7 @@
  *     15 min e fecha automaticamente conforme `comissoes_agenda`)
  *
  * A função NÃO valida permissão — o caller é responsável (no router já
- * há `requireGestao`; no cron é o sistema).
+ * há `exigirAcaoFinanceiro`/`checkPermission`; no cron é o sistema).
  */
 
 import { getDb } from "../db";
@@ -20,7 +20,7 @@ import {
   despesas,
   users,
 } from "../../drizzle/schema";
-import { and, asc, between, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, between, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   criarCategoriaDespesa,
   listarFaixasComissao,
@@ -86,23 +86,40 @@ async function carregarMapaCobrancasJaFechadas(
   return m;
 }
 
-/** Simula comissão detalhada de um atendente em um período. Lê regra
- *  vigente, faixas (se modo=faixas) e cobranças com JOIN em categoria.
- *  Retorna estrutura usada por UI e por `fecharComissao`. */
-export async function simularComissao(
-  escritorioId: number,
-  atendenteId: number,
-  periodoInicio: string,
-  periodoFim: string,
-) {
-  const db = await getDb();
-  if (!db) throw new Error("Database indisponível");
+/**
+ * Regra de comissão carregada e normalizada (number, não decimal-string),
+ * com faixas opcionais já mapeadas. Estrutura que `simularComissao`
+ * consome internamente — extraída pra permitir cache externo (cron
+ * mensal com N atendentes do mesmo escritório carrega 1x e passa N
+ * vezes, em vez de 2 queries × N atendentes idênticas).
+ */
+export interface RegraComissaoCarregada {
+  aliquotaPercent: number;
+  valorMinimo: number;
+  modo: "flat" | "faixas";
+  baseFaixa: "bruto" | "comissionavel";
+  faixas: FaixaComissao[];
+  /** Dia do mês seguinte em que a despesa de comissão vence (1-31).
+   *  Default 5 quando regra não configurada. Clamp pra último dia do
+   *  mês acontece em `calcularVencimentoComissao`. */
+  diaVencimentoDespesa: number;
+}
 
+/**
+ * Carrega regra + faixas pra um escritório, normaliza tipos e devolve
+ * a estrutura usada pelo cálculo de comissão. Defaults conservadores
+ * quando o escritório ainda não configurou regra: aliquota=0, mínimo=0,
+ * modo='flat' (resulta em comissão R$ 0, força operador a configurar).
+ */
+export async function carregarRegraComissao(
+  escritorioId: number,
+): Promise<RegraComissaoCarregada> {
   const regraRow = await obterRegraComissao(escritorioId);
   const aliquotaPercent = regraRow ? Number(regraRow.aliquotaPercent) : 0;
   const valorMinimo = regraRow ? Number(regraRow.valorMinimoCobranca) : 0;
   const modo = regraRow?.modo ?? "flat";
   const baseFaixa = regraRow?.baseFaixa ?? "comissionavel";
+  const diaVencimentoDespesa = regraRow?.diaVencimentoDespesa ?? 5;
 
   const faixasRows = modo === "faixas" ? await listarFaixasComissao(escritorioId) : [];
   const faixas: FaixaComissao[] = faixasRows.map((f) => ({
@@ -110,26 +127,59 @@ export async function simularComissao(
     aliquotaPercent: Number(f.aliquotaPercent),
   }));
 
+  return { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas, diaVencimentoDespesa };
+}
+
+/** Simula comissão detalhada de um atendente em um período. Lê regra
+ *  vigente, faixas (se modo=faixas) e cobranças com JOIN em categoria.
+ *  Retorna estrutura usada por UI e por `fecharComissao`.
+ *
+ *  Pode receber `regraCarregada` pré-carregada — caller que invoca em
+ *  loop (cron mensal por atendente do mesmo escritório) economiza N×2
+ *  queries idênticas. UI manual (uma chamada por clique) ignora o
+ *  parâmetro e a função carrega normalmente. */
+export async function simularComissao(
+  escritorioId: number,
+  atendenteId: number,
+  periodoInicio: string,
+  periodoFim: string,
+  regraCarregada?: RegraComissaoCarregada,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  const regra = regraCarregada ?? (await carregarRegraComissao(escritorioId));
+  const { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas } = regra;
+
   // Cobranças que já entraram em algum fechamento (de qualquer atendente)
   // — são excluídas pra impedir comissão duplicada. O vínculo "fechei
   // contrato dia X" fica preservado: a cobrança foi originalmente do
   // atendente A; mesmo que o cliente seja transferido pro B depois, as
   // parcelas continuam apontando pro A (atendenteId não muda na cobrança)
   // e ficam bloqueadas após o 1º fechamento.
-  const jaFechadasMap = await carregarMapaCobrancasJaFechadas(escritorioId);
-  const idsJaFechadas = Array.from(jaFechadasMap.keys());
-
+  //
+  // Implementado como NOT EXISTS no SQL em vez de carregar todos os IDs
+  // pra memória + `NOT IN (...)`. Em escritórios com 2+ anos de histórico
+  // (50 atendentes × 200 cob/mês × 24 meses = 240k IDs), o NOT IN ficava
+  // O(n) só no parsing do SQL. NOT EXISTS usa índice e escala flat.
+  // Filtra por `foiComissionavelItem=TRUE` pra ser consistente com o
+  // helper `carregarMapaCobrancasJaFechadas` (itens marcados não-com.
+  // num fechamento antigo podem re-entrar — semântica preservada).
   const condicoes = [
     eq(asaasCobrancas.escritorioId, escritorioId),
     eq(asaasCobrancas.atendenteId, atendenteId),
     isNotNull(asaasCobrancas.dataPagamento),
     between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
     inArray(asaasCobrancas.status, STATUS_PAGOS),
+    sql`NOT EXISTS (
+      SELECT 1 FROM ${comissoesFechadasItens}
+      INNER JOIN ${comissoesFechadas}
+        ON ${comissoesFechadas.id} = ${comissoesFechadasItens.comissaoFechadaId}
+      WHERE ${comissoesFechadasItens.asaasCobrancaId} = ${asaasCobrancas.id}
+        AND ${comissoesFechadas.escritorioId} = ${escritorioId}
+        AND ${comissoesFechadasItens.foiComissionavel} = TRUE
+    )`,
   ];
-  // notInArray vazio gera SQL inválido (NOT IN ()) — só adiciona se houver
-  if (idsJaFechadas.length > 0) {
-    condicoes.push(notInArray(asaasCobrancas.id, idsJaFechadas));
-  }
 
   const linhas = await db
     .select({
@@ -184,7 +234,7 @@ export async function simularComissao(
   };
 
   return {
-    regra: { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas },
+    regra: { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas, diaVencimentoDespesa: regra.diaVencimentoDespesa },
     aliquotaAplicada: resultado.aliquotaAplicada,
     faixaAplicada: resultado.faixaAplicada ?? null,
     comissionaveis: resultado.comissionaveis.map((c) => enriquecer(c.id)),
@@ -348,6 +398,10 @@ export interface FecharComissaoParams {
   origem?: "manual" | "automatico";
   agendaId?: number | null;
   observacoes?: string | null;
+  /** Regra pré-carregada. Caller que invoca em loop (cron mensal por
+   *  atendente do mesmo escritório) pode passar pra evitar reler a
+   *  regra do DB em cada iteração. UI manual omite. */
+  regraCarregada?: RegraComissaoCarregada;
   /**
    * Quando `false` (default), bloqueia criação se já existe fechamento pro
    * mesmo `(escritorioId, atendenteId, periodoInicio, periodoFim)` —
@@ -418,6 +472,7 @@ export async function fecharComissao(
     params.atendenteId,
     params.periodoInicio,
     params.periodoFim,
+    params.regraCarregada,
   );
 
   const [novo] = await db
@@ -470,7 +525,12 @@ export async function fecharComissao(
   if (sim.totais.valorComissao > 0) {
     try {
       const categoriaId = await garantirCategoriaComissoes(params.escritorioId);
-      const vencimento = calcularVencimentoComissao(params.periodoFim);
+      // sim.regra é a estrutura usada pelo cálculo, traz diaVencimentoDespesa
+      // direto da config (default 5 quando não setado).
+      const vencimento = calcularVencimentoComissao(
+        params.periodoFim,
+        sim.regra.diaVencimentoDespesa,
+      );
       // Nome do atendente pra descrição amigável da despesa.
       // Tolerante a falha: se não achar, usa fallback "atendente #id".
       let nomeAtendente = `Atendente #${params.atendenteId}`;
@@ -544,16 +604,36 @@ export function formatarDataBR(iso: string): string {
 }
 
 /** Calcula data de vencimento da despesa de comissão a partir do
- *  fim do período fechado: dia 5 do mês seguinte. Exemplos:
- *  "2026-03-31" → "2026-04-05"; "2026-12-31" → "2027-01-05". */
-export function calcularVencimentoComissao(periodoFim: string): string {
+ *  fim do período fechado e do dia configurado pelo escritório.
+ *
+ *  `dia` (default 5) é o dia do mês seguinte. Quando o dia escolhido
+ *  não existe no mês seguinte (ex: dia 31 e o próximo mês tem 30),
+ *  aplica clamp pro último dia disponível.
+ *
+ *  Exemplos:
+ *    ("2026-03-31", 5)  → "2026-04-05"
+ *    ("2026-12-31", 5)  → "2027-01-05" (virada de ano)
+ *    ("2026-03-31", 31) → "2026-04-30" (abril não tem 31, clamp)
+ *    ("2026-01-31", 31) → "2026-02-28" (fev não-bissexto)
+ *    ("2024-01-31", 31) → "2024-02-29" (fev bissexto)
+ */
+export function calcularVencimentoComissao(
+  periodoFim: string,
+  dia: number = 5,
+): string {
   const [ano, mes] = periodoFim.split("-").map(Number);
   if (!ano || !mes || Number.isNaN(ano) || Number.isNaN(mes)) {
     throw new Error(`periodoFim inválido: ${periodoFim}`);
   }
+  if (!Number.isInteger(dia) || dia < 1 || dia > 31) {
+    throw new Error(`dia inválido (esperado 1-31): ${dia}`);
+  }
   const proxAno = mes === 12 ? ano + 1 : ano;
   const proxMes = mes === 12 ? 1 : mes + 1;
-  return `${proxAno}-${String(proxMes).padStart(2, "0")}-05`;
+  // Último dia do mês seguinte = dia 0 do mês após o seguinte.
+  const ultimoDia = new Date(Date.UTC(proxAno, proxMes, 0)).getUTCDate();
+  const diaEfetivo = Math.min(dia, ultimoDia);
+  return `${proxAno}-${String(proxMes).padStart(2, "0")}-${String(diaEfetivo).padStart(2, "0")}`;
 }
 
 // ─── Helpers de período ─────────────────────────────────────────────────────

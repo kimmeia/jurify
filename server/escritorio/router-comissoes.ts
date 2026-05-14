@@ -12,6 +12,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
+import { checkPermission } from "./check-permission";
 import { diagnosticarComissao, fecharComissao, FechamentoJaExisteError, simularComissao } from "./db-comissoes";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,11 +29,28 @@ async function requireEscritorio(userId: number) {
   return result;
 }
 
-function requireGestao(cargo: string) {
-  if (cargo !== "dono" && cargo !== "gestor") {
+/**
+ * Gate único do módulo Comissões. Respeita a matriz de permissões
+ * (`checkPermission`) — funciona com cargos legados (dono/gestor) e
+ * cargos personalizados configurados pelo admin via flag `financeiro.<acao>`.
+ *
+ * Substituiu o antigo `requireGestao(cargo)` hardcode dono/gestor, que
+ * ignorava cargos personalizados.
+ */
+async function exigirAcaoFinanceiro(
+  userId: number,
+  acao: "ver" | "criar" | "editar" | "excluir",
+): Promise<void> {
+  const perm = await checkPermission(userId, "financeiro", acao);
+  const ok =
+    (acao === "ver" && (perm.verTodos || perm.verProprios)) ||
+    (acao === "criar" && perm.criar) ||
+    (acao === "editar" && perm.editar) ||
+    (acao === "excluir" && perm.excluir);
+  if (!ok) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Apenas dono ou gestor pode operar comissões.",
+      message: `Sem permissão para ${acao} no módulo Financeiro.`,
     });
   }
 }
@@ -51,7 +69,7 @@ export const comissoesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       if (input.periodoInicio > input.periodoFim) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -82,7 +100,7 @@ export const comissoesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       if (input.periodoInicio > input.periodoFim) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -115,7 +133,7 @@ export const comissoesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "criar");
       try {
         const r = await fecharComissao({
           escritorioId: esc.escritorio.id,
@@ -152,7 +170,7 @@ export const comissoesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) return [];
 
@@ -187,7 +205,7 @@ export const comissoesRouter = router({
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -247,7 +265,7 @@ export const comissoesRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
-      requireGestao(esc.colaborador.cargo);
+      await exigirAcaoFinanceiro(ctx.user.id, "excluir");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 

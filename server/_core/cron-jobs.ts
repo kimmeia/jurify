@@ -276,6 +276,34 @@ export function iniciarJobs() {
     }
   }, 45_000);
 
+  // A cada 1h: atualiza status `vencido` de despesas. Forward: pendente/
+  // parcial com vencimento passado → vencido. Reverse: vencido com
+  // vencimento prorrogado pro futuro → volta a pendente/parcial. Sem isso
+  // o KPI "Vencido" do dashboard financeiro fica sempre R$ 0,00 (nenhum
+  // outro código seta status='vencido').
+  setInterval(async () => {
+    try {
+      const { atualizarStatusDespesasVencidas } = await import(
+        "../escritorio/despesas-vencidas"
+      );
+      await atualizarStatusDespesasVencidas();
+    } catch (err: any) {
+      log.error("[Cron] atualizarStatusDespesasVencidas falhou:", err.message);
+    }
+  }, 60 * 60 * 1000);
+  // Roda 1x na partida (50s pra evitar competir com despesas-recorrentes
+  // que roda em 45s).
+  setTimeout(async () => {
+    try {
+      const { atualizarStatusDespesasVencidas } = await import(
+        "../escritorio/despesas-vencidas"
+      );
+      await atualizarStatusDespesasVencidas();
+    } catch (err: any) {
+      log.error("[Cron] atualizarStatusDespesasVencidas inicial falhou:", err.message);
+    }
+  }, 50_000);
+
   // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
   // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal
   // ao saldo (preserva sobras + pacotes pré-pagos).
