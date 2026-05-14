@@ -16,6 +16,7 @@ import { asaasConfig, asaasClientes, asaasCobrancas, contatos, colaboradores, no
 import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
+import { RateLimitError } from "./asaas-rate-guard";
 import { createLogger } from "../_core/logger";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
 
@@ -84,6 +85,43 @@ export function somarStats(a: SyncCobrancasStats, b: SyncCobrancasStats): SyncCo
     atualizadas: a.atualizadas + b.atualizadas,
     removidas: a.removidas + b.removidas,
   };
+}
+
+/**
+ * Dedup de vínculos por `asaasCustomerId`. A tabela `asaas_clientes` não
+ * tem UNIQUE (escritorioId, asaasCustomerId) — duplicatas podem aparecer
+ * por bugs históricos no fluxo de vincular contato ou em data imports.
+ *
+ * Sem dedup o cron de sync chama a API uma vez por linha duplicada,
+ * gastando cota do rate guard à toa. Pior: cada iteração faz UPDATE no
+ * `contatoId` das cobranças daquele customer, então cobranças oscilam
+ * entre contatos a cada cron.
+ *
+ * Escolha do "melhor" vínculo por customer: o marcado `primario=true`;
+ * empate ou ausência → o de menor `id` (estável e determinístico).
+ */
+export function deduplicarVinculosPorCustomer<T extends {
+  id: number;
+  asaasCustomerId: string;
+  primario?: boolean | null;
+}>(vinculos: T[]): T[] {
+  const porCustomer = new Map<string, T>();
+  for (const v of vinculos) {
+    const atual = porCustomer.get(v.asaasCustomerId);
+    if (!atual) {
+      porCustomer.set(v.asaasCustomerId, v);
+      continue;
+    }
+    // Prefere primario=true; se ambos primários ou ambos não, menor id.
+    const atualPrim = atual.primario === true;
+    const novoPrim = v.primario === true;
+    if (novoPrim && !atualPrim) {
+      porCustomer.set(v.asaasCustomerId, v);
+    } else if (novoPrim === atualPrim && v.id < atual.id) {
+      porCustomer.set(v.asaasCustomerId, v);
+    }
+  }
+  return Array.from(porCustomer.values());
 }
 
 /**
@@ -337,16 +375,29 @@ export async function syncTodasCobrancasDoContato(
   }
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
-  for (const v of vinculos) {
+  // Dedup por customerId — mesma razão da `syncCobrancasEscritorio`.
+  // Aqui não esperamos duplicatas (já é por-contato), mas defesa
+  // barata caso o filtro de vincularContato tenha furo no futuro.
+  const customerIdsUnicos = Array.from(new Set(vinculos.map((v) => v.asaasCustomerId)));
+  for (const asaasCustomerId of customerIdsUnicos) {
     try {
-      const s = await syncCobrancasDeCliente(client, escritorioId, contatoId, v.asaasCustomerId, {
+      const s = await syncCobrancasDeCliente(client, escritorioId, contatoId, asaasCustomerId, {
         apenasCriarAtualizar: opts?.apenasCriarAtualizar,
         diasHistorico: opts?.historicoCompleto ? null : undefined,
       });
       totais = somarStats(totais, s);
     } catch (err: any) {
+      // RateLimitError local: aborta a iteração; próximos cairiam no
+      // mesmo bloqueio. Caller decide se persiste o erro pra UI.
+      if (err instanceof RateLimitError) {
+        log.warn(
+          { camada: err.camada, waitMs: err.waitMs, contatoId },
+          "[Asaas Sync] Rate guard local bloqueou — abortando sync deste contato",
+        );
+        throw err;
+      }
       log.warn(
-        { err: err.message, contatoId, asaasCustomerId: v.asaasCustomerId },
+        { err: err.message, contatoId, asaasCustomerId },
         "[Asaas Sync] Erro ao sincronizar um dos customers vinculados — prossegue com os demais",
       );
     }
@@ -499,11 +550,20 @@ export async function syncCobrancasEscritorio(
   // Filtra ativo=true: customers que deram 403 sistemicamente (sem
   // permissão da API key) ficam fora do polling automático. Admin pode
   // reativar manualmente quando resolver permissão no painel Asaas.
-  const vinculos = await db.select().from(asaasClientes)
+  const vinculosRaw = await db.select().from(asaasClientes)
     .where(and(
       eq(asaasClientes.escritorioId, escritorioId),
       eq(asaasClientes.ativo, true),
     ));
+
+  // Dedup por asaasCustomerId: a tabela não tem UNIQUE (escritorioId,
+  // asaasCustomerId), então o mesmo customer pode aparecer N vezes (em
+  // contatos diferentes ou no mesmo contato via bugs históricos). Sem
+  // dedup, o sync chama a API N vezes pro mesmo customer — duplica
+  // consumo de cota do rate guard e provoca oscilação de contatoId nas
+  // cobranças (cada iteração faz UPDATE pro contatoId daquela row).
+  // Preferimos vinculos primario=true e, como tiebreak, o de menor id.
+  const vinculos = deduplicarVinculosPorCustomer(vinculosRaw);
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
 
@@ -533,6 +593,20 @@ export async function syncCobrancasEscritorio(
       totais = somarStats(totais, s);
     } catch (err: any) {
       const status = err?.response?.status ?? err?.cause?.response?.status;
+
+      // RateLimitError local (Camadas 1/2/4 do guard): NÃO é erro Asaas
+      // — é bloqueio preemptivo. Continuar iterando vai disparar a mesma
+      // exception em cada vínculo restante, poluindo logs e atrasando o
+      // tick à toa. Aborta igual ao 429. Não muda status pra
+      // aguardando_validacao porque o guard libera sozinho quando o
+      // reset do endpoint chega (Camada 1) ou a janela rola (2/4).
+      if (err instanceof RateLimitError) {
+        log.warn(
+          { camada: err.camada, waitMs: err.waitMs, escritorioId },
+          `[Asaas Sync] Rate guard local bloqueou no vínculo ${vinculo.asaasCustomerId} — abortando tick (próximos vínculos cairiam no mesmo bloqueio)`,
+        );
+        return { clientes: vinculos.length, ...totais };
+      }
 
       // 429: rate limit estourado. Continuar tentando agrava o problema
       // (Asaas pode escalar pra 12h de bloqueio). Aborta o tick desse
