@@ -236,11 +236,29 @@ function rangeMesVigente(): { inicio: string; fim: string } {
   };
 }
 
+/** Range = últimos N dias até hoje (corresponde ao select global do topo). */
+function rangeDeDias(dias: number): { inicio: string; fim: string } {
+  const hoje = new Date();
+  const ini = new Date(hoje.getTime() - dias * 24 * 60 * 60 * 1000);
+  return {
+    inicio: ini.toISOString().slice(0, 10),
+    fim: hoje.toISOString().slice(0, 10),
+  };
+}
+
 function AbaAtendimento({ dias }: { dias: number }) {
-  // Filtros locais sobrepõem o dias global. Default = mês vigente.
+  // Filtros locais sobrepõem o `dias` global; sem personalização, segue o
+  // select do topo (antes era fixo "mês vigente" e ignorava o select).
   const [setorId, setSetorId] = useState<number | null>(null);
   const [atendenteId, setAtendenteId] = useState<number | null>(null);
-  const [{ inicio, fim }, setRange] = useState(rangeMesVigente);
+  const [{ inicio, fim }, setRange] = useState(() => rangeDeDias(dias));
+  const [personalizado, setPersonalizado] = useState(false);
+
+  // Quando `dias` global muda no topo, re-sincroniza o range — exceto se o
+  // usuário já personalizou as datas localmente (não derrubar customização).
+  useEffect(() => {
+    if (!personalizado) setRange(rangeDeDias(dias));
+  }, [dias, personalizado]);
 
   const { data: setoresList } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
   const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
@@ -317,7 +335,10 @@ function AbaAtendimento({ dias }: { dias: number }) {
                 type="date"
                 className="text-xs h-9"
                 value={inicio}
-                onChange={(e) => setRange((r) => ({ ...r, inicio: e.target.value }))}
+                onChange={(e) => {
+                  setRange((r) => ({ ...r, inicio: e.target.value }));
+                  setPersonalizado(true);
+                }}
                 max={fim}
               />
             </div>
@@ -328,14 +349,19 @@ function AbaAtendimento({ dias }: { dias: number }) {
                 type="date"
                 className="text-xs h-9"
                 value={fim}
-                onChange={(e) => setRange((r) => ({ ...r, fim: e.target.value }))}
+                onChange={(e) => {
+                  setRange((r) => ({ ...r, fim: e.target.value }));
+                  setPersonalizado(true);
+                }}
                 max={new Date().toISOString().slice(0, 10)}
               />
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">
-              Padrão: mês vigente. Filtros sobrepõem o período global do topo.
+              {personalizado
+                ? "Período personalizado — sobrepõe o select global do topo."
+                : `Acompanhando o select do topo (últimos ${dias} dias).`}
             </span>
             <Button
               variant="ghost"
@@ -344,7 +370,8 @@ function AbaAtendimento({ dias }: { dias: number }) {
               onClick={() => {
                 setSetorId(null);
                 setAtendenteId(null);
-                setRange(rangeMesVigente());
+                setPersonalizado(false);
+                setRange(rangeDeDias(dias));
               }}
             >
               Limpar
