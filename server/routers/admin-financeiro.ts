@@ -66,9 +66,12 @@ export const adminFinanceiroRouter = router({
   kpis: adminProcedure.query(async () => {
     const client = await getClient();
 
-    // Busca todas as cobranças recentes (limite amplo)
-    const cobs = await client.listarCobrancas({ limit: 100 });
-    const subs = await client.listarAssinaturas({ limit: 100 });
+    // Paginado: antes pegava `limit: 100` (primeira página apenas), o
+    // que zerava MRR/receita30d quando Jurify cresceu além de 100
+    // assinaturas ou 100 cobranças recentes. Agora itera todas as
+    // páginas (cap em 100 páginas × 100 itens = 10k registros).
+    const cobs = await client.listarTodasCobrancasPaginado();
+    const subs = await client.listarTodasAssinaturasPaginado();
 
     const agora = Date.now();
     const trinta = agora - 30 * 24 * 60 * 60 * 1000;
@@ -78,7 +81,7 @@ export const adminFinanceiroRouter = router({
     let vencido = 0;
     let pago30d = 0;
 
-    for (const c of cobs.data) {
+    for (const c of cobs) {
       if (c.deleted) continue;
       const d = c.paymentDate
         ? new Date(c.paymentDate).getTime()
@@ -98,7 +101,7 @@ export const adminFinanceiroRouter = router({
     }
 
     // MRR = soma das assinaturas ACTIVE
-    const mrr = subs.data
+    const mrr = subs
       .filter((s) => s.status === "ACTIVE" && !s.deleted)
       .reduce((sum, s) => {
         // Normaliza ciclos não-mensais pra base mensal
@@ -120,7 +123,7 @@ export const adminFinanceiroRouter = router({
       pendente: Math.round(pendente * 100),
       vencido: Math.round(vencido * 100),
       pago30d,
-      assinaturasAtivas: subs.data.filter((s) => s.status === "ACTIVE" && !s.deleted).length,
+      assinaturasAtivas: subs.filter((s) => s.status === "ACTIVE" && !s.deleted).length,
     };
   }),
 
@@ -228,7 +231,9 @@ export const adminFinanceiroRouter = router({
     .input(z.object({ meses: z.number().min(1).max(24).default(6) }))
     .query(async ({ input }) => {
       const client = await getClient();
-      const cobs = await client.listarCobrancas({ limit: 200 });
+      // Paginado: antes pegava `limit: 200` e perdia meses inteiros
+      // quando Jurify acumulava muitos pagamentos no período.
+      const cobs = await client.listarTodasCobrancasPaginado();
 
       // Inicializa meses com zero
       const meses: Record<string, { mes: string; recebido: number; pendente: number; vencido: number }> = {};
@@ -239,7 +244,7 @@ export const adminFinanceiroRouter = router({
         meses[key] = { mes: key, recebido: 0, pendente: 0, vencido: 0 };
       }
 
-      for (const c of cobs.data) {
+      for (const c of cobs) {
         if (c.deleted) continue;
         // Data relevante: paymentDate se paga, senão dueDate
         const dateStr =

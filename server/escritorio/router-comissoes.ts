@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -281,14 +281,20 @@ export const comissoesRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
-      // Cascata da despesa automática vinculada — só se ainda pendente.
-      // Despesa já paga fica preservada (não rebobinar histórico
-      // financeiro com efeito real).
+      // Cascata da despesa automática vinculada — só se NÃO houve
+      // pagamento ainda (valorPago = 0). Cobre tanto 'pendente' quanto
+      // 'vencido' (que é só pendente passado do vencimento — o cron
+      // `atualizarStatusDespesasVencidas` transiciona automaticamente).
+      // Status 'parcial' e 'pago' têm valorPago > 0 → preservados
+      // (efeito real no caixa, não rebobinar).
       if (existente.despesaId) {
         await db
           .delete(despesas)
           .where(
-            and(eq(despesas.id, existente.despesaId), eq(despesas.status, "pendente")),
+            and(
+              eq(despesas.id, existente.despesaId),
+              sql`CAST(${despesas.valorPago} AS DECIMAL(12,2)) = 0`,
+            ),
           );
       }
 

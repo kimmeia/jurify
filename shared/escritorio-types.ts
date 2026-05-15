@@ -69,6 +69,29 @@ export const FUSOS_HORARIOS_VALIDOS = new Set(FUSOS_HORARIOS.map((f) => f.valor)
 /** Fuso padrão quando o escritório não define explicitamente. */
 export const FUSO_HORARIO_PADRAO = "America/Sao_Paulo";
 
+/**
+ * Retorna a data "hoje" no formato ISO `YYYY-MM-DD` observada num fuso IANA.
+ *
+ * Default é o fuso brasileiro padrão (`America/Sao_Paulo`). O server em
+ * produção (Railway/AWS) costuma rodar em UTC, então `new Date().toISOString()`
+ * dá a data UTC — que vira "amanhã" pra um operador no BRT após 21h. Pra
+ * defaults de "Marcar paga hoje" / "Hoje" em filtros, usar este helper
+ * preserva a percepção do usuário.
+ *
+ * Recebe optional `tz` pra suportar escritórios em outros fusos brasileiros
+ * (Manaus, Acre, Noronha). Sem `tz`, usa o padrão.
+ */
+export function dataHojeBR(tz: string = FUSO_HORARIO_PADRAO): string {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => partes.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface EscritorioInfo {
