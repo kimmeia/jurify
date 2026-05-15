@@ -60,6 +60,12 @@ import { useLocation } from "wouter";
  */
 function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
   const clean = cpfCnpj.replace(/\D/g, "");
+  // Early return ANTES de qualquer hook (rules of hooks). CPF (11) ou
+  // CNPJ (14) — fora disso = cadastro malformado, backend rejeitaria com
+  // erro genérico depois do user pagar 35 créditos.
+  if (clean.length !== 11 && clean.length !== 14) {
+    return null;
+  }
   const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
   const [, setLocation] = useLocation();
   const [confirmCriarOpen, setConfirmCriarOpen] = useState(false);
@@ -248,17 +254,21 @@ function timeAgo(d: string) {
 }
 
 function exportClientesCSV(clientes: any[]) {
+  // RFC 4180: cerca todo campo com aspas duplas e escapa aspas internas
+  // dobrando-as. Antes só nome/tags eram cercados; telefone/email/cpf/origem
+  // ficavam crus — vírgula em campo livre (raro mas possível) quebrava o CSV.
+  const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const headers = ["Nome", "Telefone", "Email", "CPF/CNPJ", "Origem", "Tags", "Criado em"];
   const rows = clientes.map((c) => [
-    `"${(c.nome || "").replace(/"/g, '""')}"`,
-    c.telefone || "",
-    c.email || "",
-    c.cpfCnpj || "",
-    c.origem || "",
-    `"${(c.tags || "").replace(/"/g, '""')}"`,
-    new Date(c.createdAt).toLocaleDateString("pt-BR"),
+    esc(c.nome),
+    esc(c.telefone),
+    esc(c.email),
+    esc(c.cpfCnpj),
+    esc(c.origem),
+    esc(c.tags),
+    esc(new Date(c.createdAt).toLocaleDateString("pt-BR")),
   ]);
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const csv = [headers.map(esc).join(","), ...rows.map((r) => r.join(","))].join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -396,9 +406,10 @@ export default function Clientes() {
     busca: buscaDebounced || undefined,
     pagina,
     limite: 50,
-    // Filtra no servidor pra não perder clientes além do limite 50.
-    // O aplicarSegmento no client roda em cima dessa lista (no-op aqui).
-    aguardandoDocumentacao: segmento === "aguardando_docs" ? true : undefined,
+    // Segmento aplicado no servidor — antes era filtro client-side em
+    // cima dos 50 da página atual, resultando em listas parciais (VIP
+    // com 200 clientes mostrava só os entre os 50 mais recentes).
+    segmento,
   });
 
   // Permissões pra mostrar/esconder ícone de excluir na row.
@@ -420,8 +431,14 @@ export default function Clientes() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Filtragem agora é 100% server-side via input.segmento — `aplicarSegmento`
+  // local ficou só pra retrocompat caso o backend pre-deploy ainda não
+  // reconheça o input (devolve a lista crua). Em escritórios > 50 clientes,
+  // o filtro client-side seria parcial (só os da página atual).
   const clientesFiltrados = useMemo(() => {
     const base = data?.clientes || [];
+    // Idempotente em segmento="todos"; nos outros, o backend já filtrou,
+    // então re-aplicar não muda a lista (só protege rollout).
     return aplicarSegmento(base, segmento);
   }, [data, segmento]);
 

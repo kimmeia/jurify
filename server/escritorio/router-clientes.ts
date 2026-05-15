@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
 import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users } from "../../drizzle/schema";
-import { eq, and, desc, like, or, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
@@ -14,6 +14,49 @@ import { criarLead } from "./db-crm";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-clientes");
+
+const ORIGEM_CONTATO = ["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"] as const;
+
+/**
+ * Calcula início e fim de "hoje" no fuso do escritório, devolvendo
+ * instantes UTC pra comparar com `createdAt` (TIMESTAMP, UTC no DB).
+ * Usado em `estatisticas.novosHoje` — antes do fix usávamos CURDATE()
+ * do MySQL, que respondia conforme TZ da sessão; em produção Railway
+ * (UTC), cliente cadastrado às 22h horário SP virava "amanhã".
+ *
+ * Considera DST consultando o offset ao meio-dia do dia em questão.
+ */
+function diaAtualEmTz(fusoHorario: string): { inicio: Date; fim: Date } {
+  const agora = new Date();
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: fusoHorario,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [ano, mes, dia] = fmt.format(agora).split("-").map(Number);
+
+  // Offset do fuso ao meio-dia (ancora num horário sem ambiguidade de DST)
+  const refAoMeioDia = new Date(Date.UTC(ano, mes - 1, dia, 12, 0, 0));
+  const tzName =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: fusoHorario,
+      timeZoneName: "longOffset",
+    })
+      .formatToParts(refAoMeioDia)
+      .find((p) => p.type === "timeZoneName")?.value ?? "GMT+00:00";
+  const match = tzName.match(/GMT([+-])(\d{1,2}):?(\d{2})?/);
+  const offsetMs = match
+    ? (match[1] === "+" ? 1 : -1) *
+      (Number(match[2]) * 60 + Number(match[3] ?? 0)) *
+      60 *
+      1000
+    : 0;
+
+  const inicio = new Date(Date.UTC(ano, mes - 1, dia) - offsetMs);
+  const fim = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+  return { inicio, fim };
+}
 
 /** Remove entradas vazias/nulas e serializa pra TEXT.
  *  - `null`, `""`, `undefined` → omitidos
@@ -104,7 +147,20 @@ async function buscarClienteDuplicadoCpf(
 }
 
 export const clientesRouter = router({
-  listar: protectedProcedure.input(z.object({ busca: z.string().optional(), limite: z.number().min(1).max(100).optional(), pagina: z.number().min(1).optional(), aguardandoDocumentacao: z.boolean().optional() }).optional()).query(async ({ ctx, input }) => {
+  listar: protectedProcedure.input(z.object({
+    busca: z.string().optional(),
+    limite: z.number().min(1).max(100).optional(),
+    pagina: z.number().min(1).optional(),
+    aguardandoDocumentacao: z.boolean().optional(),
+    /**
+     * Segmento aplicado no servidor — antes era filtro client-side
+     * em cima dos 50 da página, resultando em listas parciais (VIP
+     * com 200 clientes mostrava só os VIPs entre os 50 mais recentes).
+     */
+    segmento: z
+      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs"])
+      .optional(),
+  }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
     const db = await getDb(); if (!db) return { clientes: [], total: 0 };
@@ -113,7 +169,39 @@ export const clientesRouter = router({
     // Se só pode ver próprios, filtra por responsável
     if (!perm.verTodos && perm.verProprios) { where = and(where, eq(contatos.responsavelId, perm.colaboradorId)); }
     if (input?.busca) { const b = `%${input.busca}%`; where = and(where, or(like(contatos.nome, b), like(contatos.telefone, b), like(contatos.email, b), like(contatos.cpfCnpj, b))); }
-    if (input?.aguardandoDocumentacao) { where = and(where, eq(contatos.documentacaoPendente, true)); }
+
+    // Segmento — `aguardandoDocumentacao` (legacy) mapeia pra "aguardando_docs"
+    // pra retrocompat com callers existentes.
+    const seg = input?.segmento ?? (input?.aguardandoDocumentacao ? "aguardando_docs" : "todos");
+    if (seg === "aguardando_docs") {
+      where = and(where, eq(contatos.documentacaoPendente, true));
+    } else if (seg === "vip") {
+      // tags é text livre separado por vírgula. MySQL utf8mb4_general_ci é
+      // case-insensitive por default, então %vip% pega "VIP", "Vip", " vip ".
+      where = and(where, sql`${contatos.tags} LIKE '%vip%'`);
+    } else if (seg === "com_email") {
+      where = and(where, sql`${contatos.email} IS NOT NULL AND ${contatos.email} <> ''`);
+    } else if (seg === "com_telefone") {
+      where = and(where, sql`${contatos.telefone} IS NOT NULL AND ${contatos.telefone} <> ''`);
+    } else if (seg === "novos") {
+      const seteDias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      where = and(where, gte(contatos.createdAt, seteDias));
+    } else if (seg === "inativo") {
+      // "Inativo" = cliente criado há mais de 30d E sem conversa nos últimos 30d.
+      // NOT IN com subquery escopa por escritório (defesa em profundidade contra
+      // colisão de contatoId entre escritórios em caso de bug futuro).
+      const trintaDias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      where = and(
+        where,
+        lt(contatos.createdAt, trintaDias),
+        sql`${contatos.id} NOT IN (
+          SELECT ${conversas.contatoId} FROM ${conversas}
+          WHERE ${conversas.escritorioId} = ${perm.escritorioId}
+            AND ${conversas.ultimaMensagemAt} >= ${trintaDias}
+        )`,
+      );
+    }
+
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
 
@@ -172,7 +260,7 @@ export const clientesRouter = router({
     return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.string().optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional(),
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.enum(ORIGEM_CONTATO).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional(),
     /**
      * Marcar cliente como JÁ FECHADO no momento do cadastro manual.
      * Quando true, cria lead automaticamente com etapaFunil="fechado_ganho" —
@@ -220,7 +308,7 @@ export const clientesRouter = router({
       // Campos personalizados — só persiste o que tiver chave válida (string)
       // e pelo menos um valor não-vazio.
       const camposJson = sanitizarCamposPersonalizados(input.camposPersonalizados);
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: (input.origem || "manual") as any, observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
+      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
       const contatoId = (r as { insertId: number }).insertId;
 
       // Se marcado "já fechado", cria lead com etapa fechado_ganho — entra
@@ -336,6 +424,27 @@ export const clientesRouter = router({
       if (input.telefone && !validarTelefone(input.telefone)) throw new Error("Telefone inválido.");
       const db = await getDb(); if (!db) throw new Error("Database indisponível");
 
+      // Carrega o cliente UMA vez — usa o resultado pra:
+      //  1) gate verProprios (cliente alheio? bloqueia)
+      //  2) preservar telefone anterior em telefonesAnteriores
+      //  3) detectar troca de responsavelId (reconciliação)
+      // Antes do fix: a procedure só escopava por escritorioId. Atendente
+      // com verProprios=true conseguia editar cliente alheio passando o
+      // ID na input — escalação horizontal por enumeração.
+      const [contatoAtual] = await db
+        .select({
+          responsavelId: contatos.responsavelId,
+          telefone: contatos.telefone,
+          telefonesAnteriores: contatos.telefonesAnteriores,
+        })
+        .from(contatos)
+        .where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!contatoAtual) throw new Error("Cliente não encontrado.");
+      if (!perm.verTodos && perm.verProprios && contatoAtual.responsavelId !== perm.colaboradorId) {
+        throw new Error("Sem permissão para editar este cliente.");
+      }
+
       // Unicidade de CPF/CNPJ: se o operador trocou pra um CPF de outro
       // cliente, bloqueia. excludeId evita comparar contra si mesmo.
       if (input.cpfCnpj) {
@@ -352,38 +461,33 @@ export const clientesRouter = router({
       // para que o handler do WhatsApp ainda reconheça mensagens do número
       // anterior (evita perda de histórico/conexão).
       let telefonesAnterioresAtualizado: string | null | undefined;
-      if (input.telefone !== undefined) {
-        try {
-          const [existente] = await db.select({
-            telefone: contatos.telefone,
-            telefonesAnteriores: contatos.telefonesAnteriores,
-          }).from(contatos)
-            .where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)))
-            .limit(1);
-
-          if (existente?.telefone && existente.telefone !== input.telefone) {
-            const historico = (existente.telefonesAnteriores || "")
-              .split(",")
-              .map((t: string) => t.trim())
-              .filter(Boolean);
-            if (!historico.includes(existente.telefone)) {
-              historico.unshift(existente.telefone);
-            }
-            telefonesAnterioresAtualizado = historico.join(",");
-          }
-        } catch {
-          /* schema antigo — ignora, próximo deploy garante a coluna */
+      if (
+        input.telefone !== undefined &&
+        contatoAtual.telefone &&
+        contatoAtual.telefone !== input.telefone
+      ) {
+        const historico = (contatoAtual.telefonesAnteriores || "")
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+        if (!historico.includes(contatoAtual.telefone)) {
+          historico.unshift(contatoAtual.telefone);
         }
+        telefonesAnterioresAtualizado = historico.join(",");
       }
 
+      // Empty string → null pra colunas opcionais. `criar` já faz isso
+      // (`input.x || null`); `atualizar` antes salvava "" direto, gerando
+      // inconsistência (downstream — sync Asaas, contratos, SmartFlow —
+      // espera null pra "ausente").
       const { id, ...d } = input; const u: Record<string, unknown> = {};
       if (d.nome !== undefined) u.nome = d.nome;
-      if (d.telefone !== undefined) u.telefone = d.telefone;
+      if (d.telefone !== undefined) u.telefone = d.telefone || null;
       if (telefonesAnterioresAtualizado !== undefined) u.telefonesAnteriores = telefonesAnterioresAtualizado;
-      if (d.email !== undefined) u.email = d.email;
-      if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj;
-      if (d.observacoes !== undefined) u.observacoes = d.observacoes;
-      if (d.tags !== undefined) u.tags = d.tags;
+      if (d.email !== undefined) u.email = d.email || null;
+      if (d.cpfCnpj !== undefined) u.cpfCnpj = d.cpfCnpj || null;
+      if (d.observacoes !== undefined) u.observacoes = d.observacoes || null;
+      if (d.tags !== undefined) u.tags = d.tags || null;
       if (d.documentacaoPendente !== undefined) u.documentacaoPendente = d.documentacaoPendente;
       if (d.documentacaoObservacoes !== undefined) u.documentacaoObservacoes = d.documentacaoObservacoes;
       if (d.camposPersonalizados !== undefined) u.camposPersonalizados = sanitizarCamposPersonalizados(d.camposPersonalizados);
@@ -407,12 +511,7 @@ export const clientesRouter = router({
       let responsavelMudou = false;
       let responsavelAlvo: number | null | undefined;
       if (d.responsavelId !== undefined && perm.verTodos) {
-        const [antes] = await db.select({ atual: contatos.responsavelId })
-          .from(contatos)
-          .where(and(eq(contatos.id, id), eq(contatos.escritorioId, perm.escritorioId)))
-          .limit(1);
-        const valorAtual = antes?.atual ?? null;
-        responsavelMudou = valorAtual !== (d.responsavelId ?? null);
+        responsavelMudou = (contatoAtual.responsavelId ?? null) !== (d.responsavelId ?? null);
         responsavelAlvo = d.responsavelId;
         u.responsavelId = d.responsavelId;
       }
@@ -457,6 +556,23 @@ export const clientesRouter = router({
   excluir: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
     if (!perm.allowed) throw new Error("Sem permissão para excluir clientes.");
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+
+    // verProprios: confirma propriedade ANTES da cascata destrutiva.
+    // Cargos legados (atendente/estagiário) já têm excluir=false, mas
+    // cargo personalizado pode habilitar excluir+verProprios — sem este
+    // gate, qualquer cliente do escritório era apagável por enumeração.
+    const [contato] = await db
+      .select({ responsavelId: contatos.responsavelId })
+      .from(contatos)
+      .where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)))
+      .limit(1);
+    if (!contato) throw new Error("Cliente não encontrado.");
+    if (!perm.verTodos && perm.verProprios && contato.responsavelId !== perm.colaboradorId) {
+      throw new Error("Sem permissão para excluir este cliente.");
+    }
+
     // Cascata: cancela cobranças no Asaas, deleta espelhos locais,
     // conversas, mensagens, leads, tarefas, anotações, arquivos e
     // assinaturas — tudo vinculado a este cliente.
@@ -942,29 +1058,43 @@ export const clientesRouter = router({
     if (!perm.allowed) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
     const db = await getDb();
     if (!db) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
+
+    // "Hoje" no fuso do escritório (não no fuso do MySQL). Antes do fix,
+    // CURDATE() respondia em UTC em produção — cadastro às 22h horário
+    // de Brasília aparecia como "amanhã" no dashboard.
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    const fuso = esc?.escritorio.fusoHorario || "America/Sao_Paulo";
+    const { inicio: inicioHoje, fim: fimHoje } = diaAtualEmTz(fuso);
+
     // verProprios: atendente vê só estatísticas de seus clientes. Sem
     // isso, dashboard exibia número global do escritório pra qualquer
     // colaborador (vazamento de tamanho de base).
-    const escopoColaborador = !perm.verTodos && perm.verProprios
-      ? eq(contatos.responsavelId, perm.colaboradorId)
-      : undefined;
-    const baseWhere = (extra?: any) => {
-      const conds = [eq(contatos.escritorioId, perm.escritorioId)];
-      if (escopoColaborador) conds.push(escopoColaborador);
-      if (extra) conds.push(extra);
-      return and(...conds);
-    };
-    const [t] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere());
-    const [ct] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(sql`telefoneContato IS NOT NULL AND telefoneContato != ''`));
-    const [ce] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(sql`emailContato IS NOT NULL AND emailContato != ''`));
-    const [nh] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(sql`DATE(createdAtContato) = CURDATE()`));
-    const [docs] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(baseWhere(eq(contatos.documentacaoPendente, true)));
+    const conds = [eq(contatos.escritorioId, perm.escritorioId)];
+    if (!perm.verTodos && perm.verProprios) {
+      conds.push(eq(contatos.responsavelId, perm.colaboradorId));
+    }
+    const where = and(...conds);
+
+    // Single query com SUM(CASE WHEN) — antes eram 5 COUNT(*) sequenciais
+    // (5 full-table-scans). Em escritórios com 10k+ contatos, virava o
+    // gargalo do dashboard.
+    const [stats] = await db
+      .select({
+        total: sql<number | string>`COUNT(*)`,
+        novosHoje: sql<number | string>`SUM(CASE WHEN ${contatos.createdAt} >= ${inicioHoje} AND ${contatos.createdAt} < ${fimHoje} THEN 1 ELSE 0 END)`,
+        comTelefone: sql<number | string>`SUM(CASE WHEN ${contatos.telefone} IS NOT NULL AND ${contatos.telefone} <> '' THEN 1 ELSE 0 END)`,
+        comEmail: sql<number | string>`SUM(CASE WHEN ${contatos.email} IS NOT NULL AND ${contatos.email} <> '' THEN 1 ELSE 0 END)`,
+        aguardandoDocumentacao: sql<number | string>`SUM(CASE WHEN ${contatos.documentacaoPendente} = 1 THEN 1 ELSE 0 END)`,
+      })
+      .from(contatos)
+      .where(where);
+
     return {
-      total: Number((t as { count: number } | undefined)?.count || 0),
-      novosHoje: Number((nh as { count: number } | undefined)?.count || 0),
-      comTelefone: Number((ct as { count: number } | undefined)?.count || 0),
-      comEmail: Number((ce as { count: number } | undefined)?.count || 0),
-      aguardandoDocumentacao: Number((docs as { count: number } | undefined)?.count || 0),
+      total: Number(stats?.total ?? 0),
+      novosHoje: Number(stats?.novosHoje ?? 0),
+      comTelefone: Number(stats?.comTelefone ?? 0),
+      comEmail: Number(stats?.comEmail ?? 0),
+      aguardandoDocumentacao: Number(stats?.aguardandoDocumentacao ?? 0),
     };
   }),
 
