@@ -350,7 +350,9 @@ export const agendamentos = mysqlTable("agendamentos", {
   /** Cliente vinculado (opcional). Permite que o "responsável do cliente"
    *  veja o agendamento mesmo não tendo sido o criador/responsável direto. */
   contatoId: int("contatoIdAgend"),
-  processoId: int("processoIdAgend"),
+  /** FK pra cliente_processos com ON DELETE SET NULL (migration 0104).
+   *  Deletar processo preserva agendamento/prazo do usuário com link nulo. */
+  processoId: int("processoIdAgend").references(() => clienteProcessos.id, { onDelete: "set null" }),
   corHex: varchar("corHex", { length: 7 }).default("#3b82f6").notNull(),
   createdAt: timestamp("createdAtAgend").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgend").defaultNow().onUpdateNow().notNull(),
@@ -972,7 +974,9 @@ export const tarefas = mysqlTable("tarefas", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdTarefa").notNull(),
   contatoId: int("contatoIdTarefa"),
-  processoId: int("processoIdTarefa"),
+  /** FK pra cliente_processos com ON DELETE SET NULL (migration 0104).
+   *  Deletar processo preserva tarefa do usuário com link nulo. */
+  processoId: int("processoIdTarefa").references(() => clienteProcessos.id, { onDelete: "set null" }),
   responsavelId: int("responsavelIdTarefa"),
   criadoPor: int("criadoPorTarefa").notNull(),
   titulo: varchar("tituloTarefa", { length: 255 }).notNull(),
@@ -1118,32 +1122,46 @@ export type InsertAsaasConfig = typeof asaasConfig.$inferInsert;
  * servem apenas para puxar o histórico financeiro (sync). Sempre deve haver
  * exatamente um primário por contato; secundários têm primario=false.
  */
-export const asaasClientes = mysqlTable("asaas_clientes", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorioIdAsaasCli").notNull(),
-  contatoId: int("contatoIdAsaas").notNull(),
-  asaasCustomerId: varchar("asaasCustomerId", { length: 64 }).notNull(),
-  cpfCnpj: varchar("cpfCnpjAsaas", { length: 18 }).notNull(),
-  nome: varchar("nomeAsaasCli", { length: 255 }),
-  primario: boolean("primarioAsaasCli").notNull().default(true),
-  sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
-  /**
-   * Flag de soft-disable. Cron de sync skipa rows com ativo=false.
-   * Marcado false quando o Asaas retorna 403 sistemicamente pra
-   * GET /payments?customer=X — chave sem permissão de ler aquele
-   * customer. Admin pode reativar via UI quando resolver.
-   */
-  ativo: boolean("ativo").notNull().default(true),
-  ultimoErro403Em: timestamp("ultimoErro403Em"),
-  ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
-  /**
-   * Mensagem da última falha de sync de cobranças. NULL = sem erro (último
-   * sync OK). Setado por `finalizarVinculacao` e pelo botão de sincronizar
-   * manual. UI exibe banner amarelo com "Tentar de novo" quando preenchido.
-   */
-  ultimoErroSync: varchar("ultimoErroSync", { length: 500 }),
-  ultimoErroSyncEm: timestamp("ultimoErroSyncEm"),
-});
+export const asaasClientes = mysqlTable(
+  "asaas_clientes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAsaasCli").notNull(),
+    contatoId: int("contatoIdAsaas").notNull(),
+    asaasCustomerId: varchar("asaasCustomerId", { length: 64 }).notNull(),
+    cpfCnpj: varchar("cpfCnpjAsaas", { length: 18 }).notNull(),
+    nome: varchar("nomeAsaasCli", { length: 255 }),
+    primario: boolean("primarioAsaasCli").notNull().default(true),
+    sincronizadoEm: timestamp("sincronizadoEmAsaas").defaultNow().notNull(),
+    /**
+     * Flag de soft-disable. Cron de sync skipa rows com ativo=false.
+     * Marcado false quando o Asaas retorna 403 sistemicamente pra
+     * GET /payments?customer=X — chave sem permissão de ler aquele
+     * customer. Admin pode reativar via UI quando resolver.
+     */
+    ativo: boolean("ativo").notNull().default(true),
+    ultimoErro403Em: timestamp("ultimoErro403Em"),
+    ultimoErro403Mensagem: varchar("ultimoErro403Mensagem", { length: 255 }),
+    /**
+     * Mensagem da última falha de sync de cobranças. NULL = sem erro (último
+     * sync OK). Setado por `finalizarVinculacao` e pelo botão de sincronizar
+     * manual. UI exibe banner amarelo com "Tentar de novo" quando preenchido.
+     */
+    ultimoErroSync: varchar("ultimoErroSync", { length: 500 }),
+    ultimoErroSyncEm: timestamp("ultimoErroSyncEm"),
+  },
+  (t) => ({
+    // 1 customer Asaas só pode ter 1 vínculo por escritório. Duplicatas
+    // históricas (bugs no fluxo de vincular contato) faziam o cron de
+    // sync chamar a API N vezes pro mesmo customer e cobranças
+    // oscilarem entre contatoIds. Criada via migration 0104 com
+    // cleanup das duplicatas existentes.
+    uqEscCustomer: uniqueIndex("asaas_cli_escr_customer_uq").on(
+      t.escritorioId,
+      t.asaasCustomerId,
+    ),
+  }),
+);
 
 export type AsaasCliente = typeof asaasClientes.$inferSelect;
 export type InsertAsaasCliente = typeof asaasClientes.$inferInsert;
@@ -1244,6 +1262,14 @@ export const asaasCobrancas = mysqlTable(
     // Acelera lookup de parcelamento (agrupar parcelas no CRM).
     idxParcelamentoLocal: index("asaas_cob_parcel_local_idx").on(
       t.parcelamentoLocalId,
+    ),
+    // Acelera sync por-customer (asaas-sync.ts faz `WHERE escritorioId
+    // AND asaasCustomerId` em cada vínculo do escritório). Sem este
+    // índice, table-scan a cada chamada. Criado junto com a migration
+    // 0104 que também precisa dele pro cleanup das duplicatas.
+    idxEscritorioCustomer: index("asaas_cob_escr_customer_idx").on(
+      t.escritorioId,
+      t.asaasCustomerId,
     ),
   }),
 );
@@ -1848,8 +1874,12 @@ export const kanbanCards = mysqlTable("kanban_cards", {
    * nem em pacote de ações compartilhando paymentId.
    *
    * NULL = card legado (criado por SmartFlow antigo ou via UI direto).
+   *
+   * FK pra cliente_processos com ON DELETE CASCADE (migration 0104).
+   * Cards são puramente visuais — quando processo é deletado, faz sentido
+   * remover os cards correspondentes (não há valor histórico em manter).
    */
-  processoId: int("processoIdKCard"),
+  processoId: int("processoIdKCard").references(() => clienteProcessos.id, { onDelete: "cascade" }),
   /** Se o card está atrasado (prazo vencido sem mover) */
   atrasado: boolean("atrasadoKCard").default(false).notNull(),
   ordem: int("ordemKCard").default(0).notNull(),

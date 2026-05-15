@@ -118,6 +118,13 @@ export function NovaCobrancaDialog({
       if (valorInicial != null) setValor(String(valorInicial));
     }
   }, [open, contatoIdInicial, valorInicial]);
+  // Quando o Asaas desconecta com o dialog montado, força modo='manual'
+  // (os botões dos outros modos somem da UI, mas o state precisa
+  // acompanhar — senão o usuário fica preso tentando criar 'avulsa'
+  // contra um Asaas que sumiu).
+  useEffect(() => {
+    if (!asaasConectado) setModo("manual");
+  }, [asaasConectado]);
   const [vencimento, setVencimento] = useState(""); const [forma, setForma] = useState("PIX"); const [descricao, setDescricao] = useState(""); const [parcelas, setParcelas] = useState("2"); const [ciclo, setCiclo] = useState("MONTHLY"); const [resultado, setResultado] = useState<any>(null);
   // Modo manual: campos extras
   const [jaPaga, setJaPaga] = useState(false);
@@ -195,7 +202,7 @@ export function NovaCobrancaDialog({
     onError: (err: any) => toast.error("Erro", { description: err.message, duration: 8000 }),
   });
   const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending || criarManualMut.isPending;
-  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo("avulsa"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); setAcoesIds([]); };
+  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo(asaasConectado ? "avulsa" : "manual"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); setAcoesIds([]); };
   const handleCriar = () => {
     const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
     const comissaoFields = {
@@ -497,7 +504,7 @@ export function NovaCobrancaDialog({
                 </p>
               )}
             </div>
-          </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
+          </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
         )}
       </DialogContent>
     </Dialog>

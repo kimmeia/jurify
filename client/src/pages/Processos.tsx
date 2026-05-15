@@ -9,6 +9,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -552,7 +562,7 @@ function ConsultarTab() {
                     {(c.nome || "?")[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{c.nome}</p>
+                    <p className="text-sm font-medium truncate" title={c.nome}>{c.nome}</p>
                     <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>
                   </div>
                   <Button
@@ -597,6 +607,7 @@ function MonitoramentoCard({
 }) {
   const [aberto, setAberto] = useState(false);
   const [resumoIA, setResumoIA] = useState<string | null>(null);
+  const [confirmResumoOpen, setConfirmResumoOpen] = useState(false);
   // Suporta formato local DB (statusJudit/searchKey) e Judit API (status/search.search_key)
   const status = mon.statusJudit || mon.status || "created";
   const searchKey = mon.searchKey || mon.search?.search_key || "-";
@@ -613,8 +624,12 @@ function MonitoramentoCard({
       // ao caso "ia" — usuário só precisa saber que veio de IA.
       const fonteLabel = data.fonte === "judit_ia" || data.fonte === "ia" ? " — análise IA" : "";
       toast.success(`Resumo gerado (1 crédito)${fonteLabel}`);
+      setConfirmResumoOpen(false);
     },
-    onError: (e: any) => toast.error("Erro no resumo IA", { description: e.message }),
+    onError: (e: any) => {
+      toast.error("Erro no resumo IA", { description: e.message });
+      setConfirmResumoOpen(false);
+    },
   });
 
   // Lock síncrono pra impedir double-click cobrar 2 créditos. mutation.isPending
@@ -714,6 +729,7 @@ function MonitoramentoCard({
   const passivos = partes.filter((p: any) => p.side === "Passive").slice(0, 5);
 
   return (
+    <>
     <Card className="transition-all hover:shadow-sm">
       <CardContent className="pt-3 pb-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
@@ -728,7 +744,7 @@ function MonitoramentoCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-mono font-medium truncate">{mon.apelido || searchKey}</p>
+              <p className="text-sm font-mono font-medium truncate" title={mon.apelido || searchKey}>{mon.apelido || searchKey}</p>
               <Badge variant="outline" className="text-[9px] shrink-0">{TIPO_LABELS[searchType] || searchType}</Badge>
               <Badge variant="outline" className={`text-[9px] shrink-0 ${st.cor}`}>{st.label}</Badge>
             </div>
@@ -757,7 +773,7 @@ function MonitoramentoCard({
                   className="h-7 text-[10px] text-violet-600"
                   title="Gerar resumo IA detalhado (1 crédito)"
                   disabled={resumoMut.isPending}
-                  onClick={() => resumoMut.mutate({ cnj: searchKey })}
+                  onClick={() => setConfirmResumoOpen(true)}
                 >
                   {resumoMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <FileText className="h-3 w-3 mr-1" />}
                   Resumo IA
@@ -903,6 +919,33 @@ function MonitoramentoCard({
         )}
       </CardContent>
     </Card>
+
+    <AlertDialog open={confirmResumoOpen} onOpenChange={setConfirmResumoOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Gerar resumo IA?</AlertDialogTitle>
+          <AlertDialogDescription>
+            A IA analisará a capa e as movimentações deste processo e gerará um resumo
+            estruturado. <strong>Esta operação custa 1 crédito</strong> e é debitada
+            imediatamente do saldo do escritório.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={resumoMut.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              resumoMut.mutate({ cnj: searchKey });
+            }}
+            disabled={resumoMut.isPending}
+          >
+            {resumoMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}
+            Gerar resumo (1 crédito)
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 
@@ -914,6 +957,7 @@ function MonitorarTab() {
   const [novoOpen, setNovoOpen] = useState(false);
   const [novoValor, setNovoValor] = useState("");
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
+  const [deletarTarget, setDeletarTarget] = useState<{ id: number; nome: string } | null>(null);
 
   // Suporte a deep-link de Clientes.tsx: ?abrirMonitor=1&cnj=...
   // abre o modal já preenchido com o CNJ vindo do vínculo de processo
@@ -961,6 +1005,7 @@ function MonitorarTab() {
     onSuccess: (r: any) => {
       if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha ao avisar o motor: ${r.juditErro}` });
       else toast.success("Monitoramento removido");
+      setDeletarTarget(null);
       refetch();
     },
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
@@ -1005,7 +1050,7 @@ function MonitorarTab() {
               mon={m}
               onPausar={() => pausarMut.mutate({ id: m.id })}
               onReativar={() => reativarMut.mutate({ id: m.id })}
-              onDeletar={() => { if (confirm("Remover monitoramento?")) deletarMut.mutate({ id: m.id }); }}
+              onDeletar={() => setDeletarTarget({ id: m.id, nome: m.apelido || m.searchKey || "monitoramento" })}
             />
           ))}
         </div>
@@ -1084,6 +1129,32 @@ function MonitorarTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deletarTarget} onOpenChange={(open) => !open && setDeletarTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover monitoramento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você deixará de receber movimentações de <strong>{deletarTarget?.nome}</strong> e
+              a <strong>cobrança mensal será interrompida</strong> imediatamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (deletarTarget) deletarMut.mutate({ id: deletarTarget.id });
+              }}
+              disabled={deletarMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1271,14 +1342,43 @@ function NovasAcoesTab() {
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [credencialId, setCredencialId] = useState<string>("");
+  const [deletarMonTarget, setDeletarMonTarget] = useState<{ id: number; nome: string } | null>(null);
 
   const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
-  const { data, refetch, isLoading } = (trpc.processos as any).listarNovasAcoes.useQuery(
-    { apenasNaoLidas, limite: 100 },
+  const LIMITE_PAGINA = 25;
+  const [cursor, setCursor] = useState(0);
+  const [acoesAcumuladas, setAcoesAcumuladas] = useState<any[]>([]);
+
+  const { data, refetch, isLoading, isFetching } = (trpc.processos as any).listarNovasAcoes.useQuery(
+    { apenasNaoLidas, limite: LIMITE_PAGINA, cursor },
     { retry: false },
   );
+
+  // Reseta paginação quando o filtro muda — caso contrário cursor antigo
+  // continuaria valendo num conjunto de dados diferente.
+  useEffect(() => {
+    setCursor(0);
+    setAcoesAcumuladas([]);
+  }, [apenasNaoLidas]);
+
+  // Acumula páginas: cursor=0 substitui (página inicial / refetch),
+  // cursor>0 anexa (carregar mais).
+  useEffect(() => {
+    if (!data?.acoes) return;
+    setAcoesAcumuladas((prev) => (cursor === 0 ? data.acoes : [...prev, ...data.acoes]));
+  }, [data, cursor]);
+
+  // Helper pra reset após mutações que alteram a lista.
+  // Mantém UX previsível: volta pro topo com dados frescos.
+  const recarregarDoTopo = () => {
+    if (cursor === 0) {
+      refetch();
+    } else {
+      setCursor(0);
+    }
+  };
 
   // Busca clientes cadastrados para seleção
   const { data: clientesData } = trpc.clientes.listar.useQuery(
@@ -1293,13 +1393,18 @@ function NovasAcoesTab() {
       setNovoOpen(false);
       setBuscaCliente("");
       setClienteSelecionado(null);
-      refetch();
+      recarregarDoTopo();
     },
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Marca lido só localmente — evita refetch que perderia a posição/scroll
+  // do usuário em listas longas. O backend acaba consistente no próximo
+  // fetch natural (carregar mais ou mudança de filtro).
   const marcarLidaMut = trpc.processos.marcarNovaAcaoLida.useMutation({
-    onSuccess: () => refetch(),
+    onMutate: ({ id }) => {
+      setAcoesAcumuladas((prev) => prev.map((a) => (a.id === id ? { ...a, lido: true } : a)));
+    },
   });
 
   const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
@@ -1318,7 +1423,7 @@ function NovasAcoesTab() {
       } else {
         toast.info(`Nenhuma ação nova (${r.cnjsTotal} processos já conhecidos)`);
       }
-      refetch();
+      recarregarDoTopo();
     },
     onError: (e: any) => toast.error("Erro ao atualizar", { description: e.message }),
   });
@@ -1330,13 +1435,16 @@ function NovasAcoesTab() {
       } else {
         toast.success("Monitoramento removido", { description: "A cobrança mensal foi interrompida." });
       }
-      refetch();
+      setDeletarMonTarget(null);
+      recarregarDoTopo();
     },
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
   });
 
-  const acoes = data?.acoes || [];
+  const acoes = acoesAcumuladas;
   const monitoramentos = data?.monitoramentos || [];
+  const hasMore = data?.hasMore ?? false;
+  const naoLidasAcumuladas = acoes.filter((a: any) => !a.lido).length;
 
   return (
     <div className="space-y-4">
@@ -1384,10 +1492,10 @@ function NovasAcoesTab() {
                       <User className="h-3.5 w-3.5 text-violet-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate">
+                      <p className="text-xs font-semibold truncate" title={m.apelido || m.searchKey}>
                         {m.apelido || m.searchKey}
                       </p>
-                      <p className="text-[10px] text-muted-foreground font-mono truncate">
+                      <p className="text-[10px] text-muted-foreground font-mono truncate" title={`${(m.searchType || "").toUpperCase()}: ${m.searchKey}`}>
                         {(m.searchType || "").toUpperCase()}: {m.searchKey}
                       </p>
                     </div>
@@ -1413,10 +1521,7 @@ function NovasAcoesTab() {
                       size="sm"
                       className="h-7 w-7 p-0 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                       title="Remover monitoramento"
-                      onClick={() => {
-                        if (confirm(`Parar de monitorar ${m.apelido || m.searchKey}?\n\nA cobrança mensal será interrompida.`))
-                          deletarMonMut.mutate({ id: m.id });
-                      }}
+                      onClick={() => setDeletarMonTarget({ id: m.id, nome: m.apelido || m.searchKey || "cliente" })}
                       disabled={deletarMonMut.isPending}
                     >
                       {deletarMonMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -1431,8 +1536,10 @@ function NovasAcoesTab() {
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {acoes.length} {acoes.length === 1 ? "nova ação" : "novas ações"} detectada{acoes.length === 1 ? "" : "s"}
-          {data?.totalNaoLidas ? ` (${data.totalNaoLidas} não lidas)` : ""}
+          {acoes.length}
+          {hasMore ? "+" : ""}{" "}
+          {acoes.length === 1 ? "nova ação" : "novas ações"} carregada{acoes.length === 1 ? "" : "s"}
+          {naoLidasAcumuladas ? ` (${naoLidasAcumuladas} não lidas)` : ""}
         </p>
         <Button
           size="sm"
@@ -1444,7 +1551,10 @@ function NovasAcoesTab() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {/* Mostra skeleton tambem em isFetching+lista vazia pra cobrir o gap
+          entre setCursor(0)/setAcoesAcumuladas([]) e o resultado da nova
+          query — sem isso, o user veria empty-state piscando entre filtros. */}
+      {isLoading || (isFetching && acoes.length === 0) ? (
         <Skeleton className="h-32 w-full" />
       ) : acoes.length === 0 ? (
         <Card>
@@ -1491,7 +1601,7 @@ function NovasAcoesTab() {
                         <div className="flex items-center gap-1.5 mt-1 text-[10px] text-violet-700 dark:text-violet-400">
                           <User className="h-3 w-3" />
                           <span className="font-medium">Cliente monitorado:</span>
-                          <span className="font-semibold truncate">
+                          <span className="font-semibold truncate" title={a.clienteApelido || a.clienteSearchKey}>
                             {a.clienteApelido || a.clienteSearchKey}
                           </span>
                           {a.clienteApelido && a.clienteSearchKey && (
@@ -1502,7 +1612,7 @@ function NovasAcoesTab() {
                         </div>
                       )}
                       {a.classeProcesso && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{a.classeProcesso}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate" title={a.classeProcesso}>{a.classeProcesso}</p>
                       )}
                       <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                         {a.dataDistribuicao && (
@@ -1544,6 +1654,19 @@ function NovasAcoesTab() {
               </Card>
             );
           })}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isFetching}
+                onClick={() => setCursor((c) => c + LIMITE_PAGINA)}
+              >
+                {isFetching ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null}
+                Carregar mais
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1580,7 +1703,7 @@ function NovasAcoesTab() {
                       {(c.nome || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{c.nome}</p>
+                      <p className="text-sm font-medium truncate" title={c.nome}>{c.nome}</p>
                       <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>
                     </div>
                   </button>
@@ -1668,6 +1791,33 @@ function NovasAcoesTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deletarMonTarget} onOpenChange={(open) => !open && setDeletarMonTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Parar de monitorar {deletarMonTarget?.nome}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você deixará de ser avisado sobre novas ações distribuídas contra
+              este cliente, e a <strong>cobrança mensal recorrente</strong> será
+              interrompida imediatamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarMonMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (deletarMonTarget) deletarMonMut.mutate({ id: deletarMonTarget.id });
+              }}
+              disabled={deletarMonMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarMonMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Parar monitoramento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1690,6 +1840,7 @@ function CofreTab() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
+  const [removerTarget, setRemoverTarget] = useState<{ id: number; apelido: string } | null>(null);
 
   const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
@@ -1710,6 +1861,7 @@ function CofreTab() {
   const removerMut = trpc.cofreCredenciais.removerMinha.useMutation({
     onSuccess: () => {
       toast.success("Credencial removida");
+      setRemoverTarget(null);
       refetch();
     },
     onError: (e: any) => toast.error(e.message),
@@ -1783,8 +1935,8 @@ function CofreTab() {
                     <KeyRound className="h-4 w-4 text-violet-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{c.apelido || c.usernameMascarado}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">
+                    <p className="text-sm font-semibold truncate" title={c.apelido || c.usernameMascarado}>{c.apelido || c.usernameMascarado}</p>
+                    <p className="text-[10px] text-muted-foreground truncate" title={(c.sistema || c.systemName || "").toUpperCase()}>
                       {(c.sistema || c.systemName || "").toUpperCase()}
                     </p>
                   </div>
@@ -1805,7 +1957,7 @@ function CofreTab() {
                 <div className="mt-2 space-y-1 text-xs">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <User className="h-3 w-3" />
-                    <span className="font-mono truncate">{c.usernameMascarado}</span>
+                    <span className="font-mono truncate" title={c.usernameMascarado}>{c.usernameMascarado}</span>
                   </div>
                   {(c.tem2fa || c.has2fa) && (
                     <div className="flex items-center gap-1.5 text-violet-600">
@@ -1832,11 +1984,7 @@ function CofreTab() {
                     size="sm"
                     variant="ghost"
                     className="h-7 text-xs text-destructive ml-auto"
-                    onClick={() => {
-                      if (confirm(`Remover credencial "${c.apelido}"? Monitoramentos que dependem dela vão parar de funcionar.`)) {
-                        removerMut.mutate({ id: c.id });
-                      }
-                    }}
+                    onClick={() => setRemoverTarget({ id: c.id, apelido: c.apelido || c.usernameMascarado || "credencial" })}
                   >
                     <Trash2 className="h-3 w-3 mr-1" />Remover
                   </Button>
@@ -1949,6 +2097,32 @@ function CofreTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!removerTarget} onOpenChange={(open) => !open && setRemoverTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover credencial "{removerTarget?.apelido}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Monitoramentos que dependem dela vão <strong>parar de funcionar</strong>.
+              Para voltar a operar você precisará cadastrar a credencial novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removerMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (removerTarget) removerMut.mutate({ id: removerTarget.id });
+              }}
+              disabled={removerMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removerMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

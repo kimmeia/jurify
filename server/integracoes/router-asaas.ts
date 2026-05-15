@@ -30,6 +30,7 @@ import {
   syncCobrancasEscritorio,
   syncTodasCobrancasDoContato,
   agregarVinculosPorContato,
+  inserirVinculoAsaasIdempotente,
   type VinculoLinha,
   type CobrancaAgg,
   type ContatoMeta,
@@ -40,6 +41,7 @@ import {
 } from "./asaas-despesas-auto";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 /** Helper: retorna IDs dos contatos visíveis ao colaborador atual.
  *  Se ele tem verTodos no módulo "financeiro" → null (sem filtro).
@@ -312,7 +314,7 @@ async function finalizarVinculacao(
     eq(contatos.escritorioId, escritorioId),
   ));
 
-  await db.insert(asaasClientes).values({
+  await inserirVinculoAsaasIdempotente({
     escritorioId,
     contatoId,
     asaasCustomerId: asaasCli.id,
@@ -323,7 +325,7 @@ async function finalizarVinculacao(
 
   for (const sec of secundarios) {
     if (sec.id === asaasCli.id) continue;
-    await db.insert(asaasClientes).values({
+    await inserirVinculoAsaasIdempotente({
       escritorioId,
       contatoId,
       asaasCustomerId: sec.id,
@@ -1159,7 +1161,7 @@ export const asaasRouter = router({
       const esc = await requireEscritorio(ctx.user.id);
       const client = await requireAsaasClient(esc.escritorio.id);
 
-      const ate = input.ate ?? new Date().toISOString().slice(0, 10);
+      const ate = input.ate ?? dataHojeBR();
       const desde = input.desde ?? (() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
@@ -1578,7 +1580,7 @@ export const asaasRouter = router({
 
       let customersAdicionados = 0;
       for (const cli of novos) {
-        await db.insert(asaasClientes).values({
+        await inserirVinculoAsaasIdempotente({
           escritorioId: esc.escritorio.id,
           contatoId: input.contatoId,
           asaasCustomerId: cli.id,
@@ -1896,7 +1898,7 @@ export const asaasRouter = router({
       }
 
       const dataPag = input.jaPaga
-        ? input.dataPagamento ?? new Date().toISOString().slice(0, 10)
+        ? input.dataPagamento ?? dataHojeBR()
         : null;
       const status = input.jaPaga ? "RECEIVED" : "PENDING";
 
@@ -1978,7 +1980,7 @@ export const asaasRouter = router({
         });
       }
 
-      const dataPag = input.dataPagamento ?? new Date().toISOString().slice(0, 10);
+      const dataPag = input.dataPagamento ?? dataHojeBR();
       await db
         .update(asaasCobrancas)
         .set({ status: "RECEIVED", dataPagamento: dataPag })
@@ -2422,7 +2424,7 @@ export const asaasRouter = router({
 
             for (const cli of novos) {
               const ehEsteOPrimario = !jaTemPrimario;
-              await db.insert(asaasClientes).values({
+              await inserirVinculoAsaasIdempotente({
                 escritorioId: esc.escritorio.id,
                 contatoId: input.contatoId,
                 asaasCustomerId: cli.id,
@@ -2542,53 +2544,70 @@ export const asaasRouter = router({
       if (visiveis !== null && visiveis.length === 0) return ZERO;
       const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
       if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
-      const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
-      const noRangePag = (data: string | null): boolean => {
-        if (!input?.pagamentoInicio && !input?.pagamentoFim) return true;
-        if (!data) return false;
-        if (input.pagamentoInicio && data < input.pagamentoInicio) return false;
-        if (input.pagamentoFim && data > input.pagamentoFim) return false;
-        return true;
+      // Agregação em SQL via CASE WHEN. Antes carregávamos TODAS as
+      // cobranças do escritório em memória (`db.select().from(...)`) e
+      // somávamos em JS — em escritórios com 10k+ cobranças isso era
+      // ~5MB de payload e segundos de CPU por chamada, multiplicado
+      // por refetch a cada 5min na UI. Agora 1 row volta do DB.
+      //
+      // "Hoje" pra detectar PENDING-past-due. Bate com cashFlowMensal
+      // (que também classifica PENDING vencido como Vencido). Sem isso
+      // o KPI mostrava 0 enquanto o gráfico do hero mostrava o vencido
+      // real — status só vira OVERDUE quando o Asaas dispara
+      // PAYMENT_OVERDUE, que pode atrasar dias.
+      const hojeStr = dataHojeBR();
+      const pagIni = input?.pagamentoInicio ?? null;
+      const pagFim = input?.pagamentoFim ?? null;
+      const vencIni = input?.vencimentoInicio ?? null;
+      const vencFim = input?.vencimentoFim ?? null;
+
+      // Predicados SQL alinhados com a lógica JS original:
+      //  - pago: status pago + dataPagamento dentro do range (sem filtro →
+      //          conta mesmo com dataPagamento NULL pra bater com noRangePag)
+      //  - pendente: status=PENDING + vencimento >= hoje + vencimento no range
+      //  - vencido: (status=OVERDUE OR (status=PENDING + venc < hoje))
+      //             + vencimento no range
+      //
+      // Sobre dataPagamento NULL: o inRangePag faz `(pagIni IS NULL OR date >=
+      // pagIni) AND (pagFim IS NULL OR date <= pagFim)`. Quando sem filtro
+      // (ambos null), o OR é TRUE pra qualquer date (inclusive NULL). Quando
+      // com filtro, NULL >= pagIni vira NULL → o AND fica NULL → WHERE trata
+      // como FALSE → exclui. Mesmo behavior do JS `noRangePag(null)`.
+      const inRangePag = sql`(${pagIni} IS NULL OR ${asaasCobrancas.dataPagamento} >= ${pagIni})
+        AND (${pagFim} IS NULL OR ${asaasCobrancas.dataPagamento} <= ${pagFim})`;
+      const inRangeVenc = sql`(${vencIni} IS NULL OR ${asaasCobrancas.vencimento} >= ${vencIni})
+        AND (${vencFim} IS NULL OR ${asaasCobrancas.vencimento} <= ${vencFim})`;
+      const valorDec = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
+      const valorLiquidoDec = sql`CAST(COALESCE(${asaasCobrancas.valorLiquido}, ${asaasCobrancas.valor}) AS DECIMAL(20,2))`;
+      const ehPago = sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`;
+      const ehPending = sql`${asaasCobrancas.status} = 'PENDING'`;
+      const ehOverdue = sql`${asaasCobrancas.status} = 'OVERDUE'`;
+      const pendingNoFuturo = sql`${asaasCobrancas.vencimento} >= ${hojeStr}`;
+      const pendingNoPassado = sql`${asaasCobrancas.vencimento} < ${hojeStr}`;
+
+      const [agg] = await db
+        .select({
+          recebido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoLiquido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN ${valorLiquidoDec} ELSE 0 END), 0)`,
+          pendente: sql<string>`COALESCE(SUM(CASE WHEN ${ehPending} AND ${pendingNoFuturo} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
+          vencido: sql<string>`COALESCE(SUM(CASE WHEN ((${ehPending} AND ${pendingNoPassado}) OR ${ehOverdue}) AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
+          totalCobrancas: sql<number>`COALESCE(SUM(CASE
+            WHEN ${ehPago} AND ${inRangePag} THEN 1
+            WHEN ${ehPending} AND ${inRangeVenc} THEN 1
+            WHEN ${ehOverdue} AND ${inRangeVenc} THEN 1
+            ELSE 0 END), 0)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(...conds));
+
+      return {
+        recebido: Number(agg?.recebido ?? 0),
+        recebidoLiquido: Number(agg?.recebidoLiquido ?? 0),
+        pendente: Number(agg?.pendente ?? 0),
+        vencido: Number(agg?.vencido ?? 0),
+        totalCobrancas: Number(agg?.totalCobrancas ?? 0),
       };
-      const noRangeVenc = (venc: string): boolean => {
-        if (!input?.vencimentoInicio && !input?.vencimentoFim) return true;
-        if (input.vencimentoInicio && venc < input.vencimentoInicio) return false;
-        if (input.vencimentoFim && venc > input.vencimentoFim) return false;
-        return true;
-      };
-
-      let recebido = 0;
-      let recebidoLiquido = 0;
-      let pendente = 0;
-      let vencido = 0;
-      let totalCobrancas = 0;
-      for (const c of todas) {
-        const val = parseFloat(c.valor) || 0;
-        // valorLiquido vem do Asaas (`netValue`) com taxa já abatida.
-        // Pra cobranças sem este campo (manuais ou antigas), usamos o
-        // bruto como aproximação — sem taxa, líquido = bruto.
-        const liq = c.valorLiquido != null ? parseFloat(c.valorLiquido) : val;
-        if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) {
-          if (noRangePag(c.dataPagamento)) {
-            recebido += val;
-            recebidoLiquido += liq;
-            totalCobrancas++;
-          }
-        } else if (c.status === "PENDING") {
-          if (noRangeVenc(c.vencimento)) {
-            pendente += val;
-            totalCobrancas++;
-          }
-        } else if (c.status === "OVERDUE") {
-          if (noRangeVenc(c.vencimento)) {
-            vencido += val;
-            totalCobrancas++;
-          }
-        }
-      }
-
-      return { recebido, recebidoLiquido, pendente, vencido, totalCobrancas };
     } catch {
       return ZERO;
     }
@@ -2668,42 +2687,81 @@ export const asaasRouter = router({
         if (visiveis !== null && visiveis.length === 0) return ZERO;
         const conds = [eq(asaasCobrancas.escritorioId, esc.escritorio.id)];
         if (visiveis !== null) conds.push(inArray(asaasCobrancas.contatoId, visiveis));
-        const todas = await db.select().from(asaasCobrancas).where(and(...conds));
 
+        // Agregação em SQL: antes carregávamos TODAS as cobranças do
+        // escritório em memória (`db.select().from(...)`) e bucketizávamos
+        // em JS — escritórios com 10k+ cobranças geravam payload de MBs
+        // a cada refresh do gráfico (10min na UI). Agora 1 query agrupa
+        // por mês/dia, retornando só uma linha por bucket.
         const buckets = new Map<string, Bucket>();
         for (const k of chaves) buckets.set(k, { recebido: 0, pendente: 0, vencido: 0 });
 
-        let totalRecebido = 0, totalPendente = 0, totalVencido = 0;
-        const hojeStr = new Date().toISOString().slice(0, 10);
+        if (chaves.length === 0) {
+          return { granularidade, pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
+        }
+
+        const hojeStr = dataHojeBR();
         const sliceLen = granularidade === "dia" ? 10 : 7;
+        // Limites do range pra filtro de WHERE: 1º dia do 1º bucket até
+        // último dia do último bucket. Em granularidade=dia as chaves já
+        // são YYYY-MM-DD; em mes calculamos último dia do mês.
+        const primeiraChave = chaves[0];
+        const ultimaChave = chaves[chaves.length - 1];
+        const rangeIni = granularidade === "dia" ? primeiraChave : `${primeiraChave}-01`;
+        const rangeFim = granularidade === "dia"
+          ? ultimaChave
+          : (() => {
+              const [y, m] = ultimaChave.split("-").map(Number);
+              return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+            })();
 
-        for (const c of todas) {
-          const valor = parseFloat(c.valor) || 0;
-          const pago = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status);
-          const refDate = pago ? (c.dataPagamento || c.vencimento) : c.vencimento;
-          if (!refDate) continue;
-          const chave = refDate.slice(0, sliceLen);
-          const bucket = buckets.get(chave);
-          // Totais só contam o que cai DENTRO do range escolhido pelo usuário
-          // (bate com o que o gráfico mostra). Sem essa guarda, o número
-          // grande do hero ficaria com o acumulado histórico do escritório.
+        // SQL: GROUP BY o "refDate" recortado (data de pagamento pra pago,
+        // vencimento pro resto). LEFT(date, N) funciona com strings YYYY-MM-DD.
+        const valorDec = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
+        const ehPago = sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`;
+        const ehPending = sql`${asaasCobrancas.status} = 'PENDING'`;
+        const ehOverdue = sql`${asaasCobrancas.status} = 'OVERDUE'`;
+        const refDateExpr = sql`CASE WHEN ${ehPago}
+          THEN COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento})
+          ELSE ${asaasCobrancas.vencimento} END`;
+
+        const linhas = await db
+          .select({
+            chave: sql<string>`LEFT(${refDateExpr}, ${sliceLen})`,
+            recebido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} THEN ${valorDec} ELSE 0 END), 0)`,
+            pendente: sql<string>`COALESCE(SUM(CASE WHEN ${ehPending} AND ${asaasCobrancas.vencimento} >= ${hojeStr} THEN ${valorDec} ELSE 0 END), 0)`,
+            vencido: sql<string>`COALESCE(SUM(CASE WHEN ${ehOverdue} OR (${ehPending} AND ${asaasCobrancas.vencimento} < ${hojeStr}) THEN ${valorDec} ELSE 0 END), 0)`,
+          })
+          .from(asaasCobrancas)
+          .where(
+            and(
+              ...conds,
+              // Filtro de range — limita cobranças carregadas ao período
+              // do gráfico. Usa o refDate (mesma expressão do GROUP BY)
+              // pra garantir consistência com a bucketização.
+              sql`(
+                (${ehPago} AND COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}) BETWEEN ${rangeIni} AND ${rangeFim})
+                OR ((${ehPending} OR ${ehOverdue}) AND ${asaasCobrancas.vencimento} BETWEEN ${rangeIni} AND ${rangeFim})
+              )`,
+            ),
+          )
+          .groupBy(sql`LEFT(${refDateExpr}, ${sliceLen})`);
+
+        let totalRecebido = 0, totalPendente = 0, totalVencido = 0;
+        for (const r of linhas) {
+          const bucket = buckets.get(r.chave);
+          // Chaves fora do range escolhido (raro — filtro WHERE deveria
+          // ter cortado) são ignoradas pra não inflar totais.
           if (!bucket) continue;
-
-          if (pago) {
-            totalRecebido += valor;
-            bucket.recebido += valor;
-          } else if (c.status === "PENDING") {
-            if (c.vencimento < hojeStr) {
-              totalVencido += valor;
-              bucket.vencido += valor;
-            } else {
-              totalPendente += valor;
-              bucket.pendente += valor;
-            }
-          } else if (c.status === "OVERDUE") {
-            totalVencido += valor;
-            bucket.vencido += valor;
-          }
+          const rec = Number(r.recebido ?? 0);
+          const pen = Number(r.pendente ?? 0);
+          const ven = Number(r.vencido ?? 0);
+          bucket.recebido = rec;
+          bucket.pendente = pen;
+          bucket.vencido = ven;
+          totalRecebido += rec;
+          totalPendente += pen;
+          totalVencido += ven;
         }
 
         const pontos = Array.from(buckets.entries()).map(([chave, v]) => ({
@@ -2733,7 +2791,8 @@ export const asaasRouter = router({
         const hoje = new Date();
         const fim = new Date();
         fim.setDate(fim.getDate() + dias);
-        const hojeStr = hoje.toISOString().slice(0, 10);
+        // Usa fuso BR (server roda UTC; após 21h BRT viraria amanhã)
+        const hojeStr = dataHojeBR();
         const fimStr = fim.toISOString().slice(0, 10);
 
         const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
@@ -2743,6 +2802,12 @@ export const asaasRouter = router({
         const condsP: any[] = [
           eq(asaasCobrancas.escritorioId, esc.escritorio.id),
           eq(asaasCobrancas.status, "PENDING"),
+          // Limita ao que o forecast pode usar: vencidas (qualquer data
+          // < hoje, contam como atrasado) OU dentro da janela de previsão
+          // (vencimento <= fimStr). Cobranças com vencimento > fim não
+          // entrariam em nenhum bucket — antes eram carregadas e
+          // descartadas em JS.
+          lte(asaasCobrancas.vencimento, fimStr),
         ];
         if (visiveis !== null) condsP.push(inArray(asaasCobrancas.contatoId, visiveis));
         const pendentes = await db.select().from(asaasCobrancas).where(and(...condsP));
@@ -2915,7 +2980,7 @@ export const asaasRouter = router({
         .limit(1);
 
       if (!jaVinculado) {
-        await db.insert(asaasClientes).values({
+        await inserirVinculoAsaasIdempotente({
           escritorioId: esc.escritorio.id,
           contatoId,
           asaasCustomerId: asaasCli.id,

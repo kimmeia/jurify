@@ -43,7 +43,7 @@ export const tarefasRouter = router({
       vencimentoAte: z.string().optional(), // ISO date
     }).optional())
     .query(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+      const perm = await checkPermission(ctx.user.id, "tarefas", "ver", { fallbackModulo: "agenda" });
       if (!perm.allowed) return [];
       const db = await getDb();
       if (!db) return [];
@@ -119,7 +119,7 @@ export const tarefasRouter = router({
       dataVencimento: z.string().optional(), // ISO date
     }))
     .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "agenda", "criar");
+      const perm = await checkPermission(ctx.user.id, "tarefas", "criar", { fallbackModulo: "agenda" });
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
@@ -151,7 +151,7 @@ export const tarefasRouter = router({
       dataVencimento: z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      const perm = await checkPermission(ctx.user.id, "tarefas", "editar", { fallbackModulo: "agenda" });
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
@@ -186,7 +186,7 @@ export const tarefasRouter = router({
   excluir: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const perm = await checkPermission(ctx.user.id, "agenda", "excluir");
+      const perm = await checkPermission(ctx.user.id, "tarefas", "excluir", { fallbackModulo: "agenda" });
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");

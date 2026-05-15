@@ -927,7 +927,14 @@ export class PjeTjceScraper {
         ]);
         // CRÍTICO: só "Valor da causa" — NUNCA fallback "Valor" sozinho
         // (pegava "Valor do bem alienado" ≠ valor da causa, dando 100x off).
-        const valor = ler([
+        //
+        // Bug #12: usa SOMENTE lerEmListaDefinicao (match estrito em
+        // <dt>/<dd>/<th>) — não cai no procurarValorPorLabel (XPath
+        // contains() loose) que em HTML mal-formado podia casar texto
+        // adjacente e devolver valor de outro campo. Pior caso aqui:
+        // valor=null em vez de valor 100x errado — frontend já mostra
+        // "—" pra null.
+        const valor = lerEmListaDefinicao([
           "Valor da causa",
           "Valor da Causa",
         ]);
@@ -1102,7 +1109,7 @@ export class PjeTjceScraper {
         //     </div>
         //   </div>
         let container: Element | null = null;
-        let containerSelUsado = "(body fallback)";
+        let containerSelUsado = "(nenhum)";
         const tentativas = [
           "#divTimeLine\\:eventosTimeLineElement",
           "[id$=':eventosTimeLineElement']",
@@ -1128,7 +1135,16 @@ export class PjeTjceScraper {
             break;
           }
         }
-        if (!container) container = document.body;
+        // Se nenhum dos 11 seletores casar, retorna vazio + diag.
+        // Antes caía em `document.body` que captura header/menu/footer e
+        // gera movimentações fantasmas (notificações falsas, baseline
+        // contaminado). Pior caso aqui é 0 movs — cron trata graceful.
+        if (!container) {
+          return {
+            movs: [],
+            diag: `nenhum-seletor-de-timeline-casou (tentativas=${tentativas.length})`,
+          };
+        }
 
         // Items são <div class="media"> (sem outras classes especiais).
         // Separadores de dia têm `.data-interna`. Pegamos APENAS filhos

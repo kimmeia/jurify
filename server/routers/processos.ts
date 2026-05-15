@@ -988,13 +988,15 @@ export const processosRouter = router({
       z.object({
         apenasNaoLidas: z.boolean().optional(),
         limite: z.number().int().min(1).max(100).default(20),
+        cursor: z.number().int().min(0).default(0),
       }),
     )
     .query(async ({ ctx, input }) => {
+      const empty = { acoes: [], monitoramentos: [], totalNaoLidas: 0, hasMore: false, nextCursor: 0 };
       const db = await getDb();
-      if (!db) return { acoes: [], monitoramentos: [], totalNaoLidas: 0 };
+      if (!db) return empty;
       const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return { acoes: [], monitoramentos: [], totalNaoLidas: 0 };
+      if (!esc) return empty;
 
       // Frontend (Processos.tsx) espera campos enriquecidos: cnj,
       // tribunal, clienteApelido, clienteSearchKey/Type — eventos_processo
@@ -1008,6 +1010,9 @@ export const processosRouter = router({
       // ações é a hora em que o cron detectou (não temos a distribuição
       // real sem consulta detalhada). Mapeamos dataEvento pro nome que
       // o frontend já espera pra evitar mexer na UI.
+      // Pedimos limite+1 pra detectar se há mais páginas sem precisar de
+      // segunda query de COUNT(*). Se vier limite+1, fatiamos e marcamos
+      // hasMore=true.
       const acoesRaw = await db
         .select({
           id: eventosProcesso.id,
@@ -1034,7 +1039,8 @@ export const processosRouter = router({
           ),
         )
         .orderBy(desc(eventosProcesso.createdAt))
-        .limit(input.limite);
+        .offset(input.cursor)
+        .limit(input.limite + 1);
 
       const monitoramentos = await db
         .select()
@@ -1053,10 +1059,24 @@ export const processosRouter = router({
       // validarCnj em extrairCnjs, mas o lixo histórico fica no DB —
       // este filtro garante que não polui a UI mesmo sem cleanup
       // explícito de cada placeholder conhecido.
-      const acoesValidas = acoesRaw.filter((a) => a.cnj && validarCnj(a.cnj));
+      const acoesFiltradas = acoesRaw.filter((a) => a.cnj && validarCnj(a.cnj));
+
+      // hasMore detecta a presença do +1 da query (antes do filtro de DV
+      // inválido — o filtro pode reduzir o tamanho mas não muda se há
+      // próxima página no DB).
+      const hasMore = acoesRaw.length > input.limite;
+      const acoesValidas = hasMore
+        ? acoesFiltradas.slice(0, input.limite)
+        : acoesFiltradas;
 
       const naoLidas = acoesValidas.filter((a) => !a.lido).length;
-      return { acoes: acoesValidas, monitoramentos, totalNaoLidas: naoLidas };
+      return {
+        acoes: acoesValidas,
+        monitoramentos,
+        totalNaoLidas: naoLidas,
+        hasMore,
+        nextCursor: hasMore ? input.cursor + input.limite : input.cursor + acoesValidas.length,
+      };
     }),
 
   marcarNovaAcaoLida: protectedProcedure

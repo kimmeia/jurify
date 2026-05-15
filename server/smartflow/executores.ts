@@ -655,9 +655,13 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       if (!principal) throw new Error("Contato não tem cliente Asaas vinculado");
 
       const dias = params.vencimentoDias ?? 7;
-      const dueDate = new Date(Date.now() + dias * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
+      // Soma "dias" sobre o hoje no fuso BR (evita off-by-one após 21h
+      // BRT, quando new Date().toISOString() já mostraria amanhã).
+      const { dataHojeBR } = await import("../../shared/escritorio-types");
+      const [y, m, d] = dataHojeBR().split("-").map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() + dias);
+      const dueDate = dt.toISOString().slice(0, 10);
 
       const cobranca = await client.criarCobranca({
         customer: principal.asaasCustomerId,

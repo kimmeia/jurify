@@ -33,8 +33,11 @@ import { ambienteSuportaTeste } from "../_core/ambiente";
 
 /**
  * Cofre é restrito a admin do módulo processos: cargo com `verTodos=true`
- * em processos. Hoje na matriz: dono e gestor. Atendente/SDR/estagiário
- * ficam bloqueados (têm verProprios mas não verTodos).
+ * em processos. Hoje na matriz padrão: dono e gestor passam, atendente/SDR/
+ * estagiário ficam bloqueados (têm verProprios mas não verTodos).
+ *
+ * Cargos personalizados com `verTodos=true` em processos também passam —
+ * o gate é por permissão, não por nome de cargo.
  *
  * Por que não criar módulo "cofre" separado: a matriz já discrimina
  * naturalmente quem é admin de processos. Criar um módulo novo
@@ -46,7 +49,9 @@ async function exigirAdminProcessos(userId: number): Promise<void> {
   if (!perm.verTodos) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Apenas dono ou gestor pode gerenciar credenciais do cofre.",
+      message:
+        "Acesso ao cofre exige permissão administrativa em Processos (ver tudo). " +
+        "Solicite ao dono do escritório.",
     });
   }
 }

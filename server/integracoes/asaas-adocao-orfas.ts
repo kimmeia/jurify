@@ -32,6 +32,7 @@ import { getDb } from "../db";
 import { asaasClientes, asaasCobrancas, contatos } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import type { AsaasClient } from "./asaas-client";
+import { inserirVinculoAsaasIdempotente } from "./asaas-sync";
 
 const log = createLogger("asaas-adocao-orfas");
 
@@ -156,7 +157,7 @@ export async function adotarCobrancasOrfas(
         vinculadosExistentes++;
       }
 
-      await db.insert(asaasClientes).values({
+      await inserirVinculoAsaasIdempotente({
         escritorioId,
         contatoId: contatoIdAlvo,
         asaasCustomerId: customerId,

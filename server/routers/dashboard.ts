@@ -28,6 +28,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { parseValorBR } from "../../shared/valor-br";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 const log = createLogger("dashboard-router");
 
@@ -232,17 +233,30 @@ export const dashboardRouter = router({
       let finTotal = 0;
       if (!soProprios) {
         try {
-          const cobrancasLocal = await db
-            .select()
+          // Agregação em SQL: antes carregava TODAS as cobranças do
+          // escritório em memória só pra somar. Em escritórios com
+          // 10k+ cobranças isso era ~5MB de payload por load do home.
+          // Agora 1 linha agregada.
+          //
+          // Classificação alinhada com kpis/cashFlowMensal:
+          //   - pago: RECEIVED/CONFIRMED/RECEIVED_IN_CASH
+          //   - pendente: PENDING + vencimento >= hoje
+          //   - vencido: OVERDUE OR (PENDING + vencimento < hoje)
+          const hojeStr = dataHojeBR();
+          const valorDec = sql<number>`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
+          const [agg] = await db
+            .select({
+              recebido: sql<string>`COALESCE(SUM(CASE WHEN ${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH') THEN ${valorDec} ELSE 0 END), 0)`,
+              pendente: sql<string>`COALESCE(SUM(CASE WHEN ${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} >= ${hojeStr} THEN ${valorDec} ELSE 0 END), 0)`,
+              vencido: sql<string>`COALESCE(SUM(CASE WHEN ${asaasCobrancas.status} = 'OVERDUE' OR (${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} < ${hojeStr}) THEN ${valorDec} ELSE 0 END), 0)`,
+              total: sql<number>`COUNT(*)`,
+            })
             .from(asaasCobrancas)
             .where(eq(asaasCobrancas.escritorioId, escritorioId));
-          finTotal = cobrancasLocal.length;
-          for (const c of cobrancasLocal) {
-            const val = parseFloat(c.valor) || 0;
-            if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status)) finRecebido += val;
-            else if (c.status === "PENDING") finPendente += val;
-            else if (c.status === "OVERDUE") finVencido += val;
-          }
+          finRecebido = Number(agg?.recebido ?? 0);
+          finPendente = Number(agg?.pendente ?? 0);
+          finVencido = Number(agg?.vencido ?? 0);
+          finTotal = Number(agg?.total ?? 0);
         } catch {
           /* ignore — sem integração asaas */
         }
@@ -382,7 +396,9 @@ export const dashboardRouter = router({
         let totalRecebido = 0;
         let totalPendente = 0;
         let totalVencido = 0;
-        const hoje = new Date().toISOString().slice(0, 10);
+        // Fuso BR: server roda UTC; após 21h BRT viraria amanhã e marcaria
+        // PENDING do dia atual como vencidas indevidamente.
+        const hoje = dataHojeBR();
 
         for (const c of cobrancas) {
           const valor = parseFloat(c.valor) || 0;
@@ -394,10 +410,17 @@ export const dashboardRouter = router({
               (c.createdAt as Date).toISOString().slice(0, 10);
             if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
           } else if (c.status === "PENDING") {
-            totalPendente += valor;
-            const dia = (c.vencimento || "").slice(0, 10);
-            if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
-          } else if (c.status === "OVERDUE" || (c.vencimento && c.vencimento < hoje && !pago)) {
+            // PENDING vencida vai pra totalVencido (mesma lógica do KPI
+            // e cashFlowMensal do router-asaas). PENDING dentro do prazo
+            // continua em totalPendente.
+            if (c.vencimento && c.vencimento < hoje) {
+              totalVencido += valor;
+            } else {
+              totalPendente += valor;
+              const dia = (c.vencimento || "").slice(0, 10);
+              if (porDia.has(dia)) porDia.get(dia)!.pendente += valor;
+            }
+          } else if (c.status === "OVERDUE") {
             totalVencido += valor;
           }
         }
