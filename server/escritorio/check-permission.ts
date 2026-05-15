@@ -18,7 +18,7 @@
 
 import { getDb } from "../db";
 import { colaboradores, cargosPersonalizados, permissoesCargo } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 
 export interface PermissionResult {
@@ -49,6 +49,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     atendimento: perm(true, true, true, true, false),
     kanban: perm(true, true, true, true, false),
     agenda: perm(true, true, true, true, false),
+    tarefas: perm(true, true, true, true, false),
     smartflow: perm(true, true, true, true, false),
     agentesIa: perm(true, true, true, true, false),
     relatorios: perm(true, true, false, false, false),
@@ -67,6 +68,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     atendimento: perm(false, true, true, true, false),
     kanban: perm(false, true, true, true, false),
     agenda: perm(false, true, true, true, false),
+    tarefas: perm(false, true, true, true, false),
     smartflow: perm(false, false, false, false, false),
     agentesIa: perm(false, true, false, false, false),
     relatorios: perm(false, false, false, false, false),
@@ -84,6 +86,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     atendimento: perm(false, false, false, false, false),
     kanban: perm(false, false, false, false, false),
     agenda: perm(false, true, false, false, false),
+    tarefas: perm(false, true, false, false, false),
     smartflow: perm(false, false, false, false, false),
     agentesIa: perm(false, false, false, false, false),
     relatorios: perm(false, false, false, false, false),
@@ -107,6 +110,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     atendimento: perm(false, true, true, true, false),
     kanban: perm(false, true, true, true, false),
     agenda: perm(false, true, true, true, false),
+    tarefas: perm(false, true, true, true, false),
     smartflow: perm(false, false, false, false, false),
     agentesIa: perm(false, true, false, false, false),
     relatorios: perm(false, true, false, false, false),  // ← chave: vê próprios
@@ -125,7 +129,7 @@ function perm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Per
 function defaultPerm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolean): Record<string, PermissionResult> {
   const modules = [
     "dashboard", "calculos", "clientes", "processos", "atendimento",
-    "kanban", "agenda", "smartflow", "agentesIa", "relatorios", "financeiro",
+    "kanban", "agenda", "tarefas", "smartflow", "agentesIa", "relatorios", "financeiro",
     "configuracoes", "equipe",
     // legados
     "pipeline", "agendamento",
@@ -137,14 +141,23 @@ function defaultPerm(vt: boolean, vp: boolean, c: boolean, e: boolean, x: boolea
 
 /**
  * Verifica se o usuário tem permissão para uma ação em um módulo.
+ *
+ * Aceita um `fallbackModulo` opcional pra suportar módulos que foram
+ * desmembrados de outros (ex: "tarefas" foi extraído de "agenda"). Se o
+ * cargo personalizado não tem entry específica pro novo módulo, tenta
+ * a do fallback antes de negar — preserva comportamento de cargos
+ * configurados antes do split.
  */
 export async function checkPermission(
   userId: number,
   modulo: string,
   acao: "ver" | "criar" | "editar" | "excluir" = "ver",
+  options?: { fallbackModulo?: string },
 ): Promise<PermissionResult> {
-  // Cache check
-  const cacheKey = `${userId}:${modulo}`;
+  const fallbackModulo = options?.fallbackModulo;
+  // Cache key inclui fallback pra não misturar resultados (mesmo user,
+  // mesmo módulo, fallback diferente pode dar resultado diferente).
+  const cacheKey = `${userId}:${modulo}${fallbackModulo ? `|${fallbackModulo}` : ""}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return applyAction(cached.data, acao);
@@ -198,9 +211,23 @@ export async function checkPermission(
   if (cargoId) {
     const db = await getDb();
     if (db) {
-      const [permRow] = await db.select().from(permissoesCargo)
-        .where(and(eq(permissoesCargo.cargoId, cargoId), eq(permissoesCargo.modulo, modulo)))
-        .limit(1);
+      // Tenta o módulo solicitado; se ausente E houver fallbackModulo,
+      // aceita a permissão do fallback (comportamento backward-compat
+      // após split de módulo).
+      const modulosBusca = fallbackModulo ? [modulo, fallbackModulo] : [modulo];
+      const permRows = await db.select().from(permissoesCargo)
+        .where(and(
+          eq(permissoesCargo.cargoId, cargoId),
+          fallbackModulo
+            ? or(eq(permissoesCargo.modulo, modulo), eq(permissoesCargo.modulo, fallbackModulo))!
+            : eq(permissoesCargo.modulo, modulo),
+        ));
+
+      // Prioriza match exato (modulo) sobre fallback (fallbackModulo)
+      let permRow = permRows.find(r => r.modulo === modulo);
+      if (!permRow && fallbackModulo) {
+        permRow = permRows.find(r => r.modulo === fallbackModulo);
+      }
 
       if (permRow) {
         const result: PermissionResult = {
@@ -216,7 +243,8 @@ export async function checkPermission(
         return applyAction(result, acao);
       }
       // Cargo personalizado existe mas não tem entry pra este módulo
-      // → tratar como negado (era visível antes pelo fallback "true")
+      // (nem fallback) → tratar como negado (era visível antes pelo
+      // fallback "true")
       const negado: PermissionResult = {
         allowed: false, verTodos: false, verProprios: false,
         criar: false, editar: false, excluir: false, ...base,
@@ -226,8 +254,10 @@ export async function checkPermission(
     }
   }
 
-  // Fallback: permissões legadas baseadas no cargo
-  const legado = PERMISSOES_LEGADO[esc.colaborador.cargo]?.[modulo];
+  // Fallback: permissões legadas baseadas no cargo. Tenta módulo direto
+  // primeiro, depois fallback antes de negar.
+  const legado = PERMISSOES_LEGADO[esc.colaborador.cargo]?.[modulo]
+    ?? (fallbackModulo ? PERMISSOES_LEGADO[esc.colaborador.cargo]?.[fallbackModulo] : undefined);
   if (legado) {
     const result = { ...legado, ...base };
     cache.set(cacheKey, { data: result, ts: Date.now() });
