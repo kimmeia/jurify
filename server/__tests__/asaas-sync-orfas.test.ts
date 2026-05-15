@@ -282,6 +282,33 @@ describe("syncTodasCobrancasDoContato — adoção bulk de órfãs pré-iteraç�
     const anyUpdate = captured.find((c) => c.op === "update");
     expect(anyUpdate).toBeUndefined();
   });
+
+  it("após bulk adoção, dispara reconciliarCobrancasOrfas → atendenteId vira responsavelId do contato (cura Pix-avulsa)", async () => {
+    // Regressão do bug "Pix-recebido-avulso fica fora do ranking comercial":
+    // webhook insere com atendenteId=NULL, UPDATE preserva por design, ranking
+    // filtra inArray(atendenteId, ids) que exclui NULL. Fix: depois do bulk
+    // adoção de contatoId, dispara reconciliarCobrancasOrfas pra inferir
+    // atendente a partir de contato.responsavelId.
+    selectQueue.push([{ asaasCustomerId: "cus_X" }]); // vínculos
+    selectQueue.push([
+      { id: 99, contatoId: 42, externalReference: null }, // órfã achada por reconciliar
+    ]);
+    selectQueue.push([{ responsavelId: 77 }]); // contato → responsável Eduardo
+
+    const client = fakeClient([
+      { data: [], hasMore: false, limit: 100, offset: 0 },
+    ]);
+
+    await syncTodasCobrancasDoContato(client as any, 1, 42);
+
+    const atendenteUpdate = captured.find(
+      (c) =>
+        c.op === "update" &&
+        c.table.startsWith("asaas_cob") &&
+        (c.set as any)?.atendenteId === 77,
+    );
+    expect(atendenteUpdate).toBeDefined();
+  });
 });
 
 describe("apenasCriarAtualizar — botão UI nunca deleta cobranças", () => {
