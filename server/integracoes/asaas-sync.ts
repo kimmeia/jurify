@@ -18,7 +18,7 @@ import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
 import { RateLimitError } from "./asaas-rate-guard";
 import { createLogger } from "../_core/logger";
-import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
+import { inferirAtendentePorCobranca, reconciliarCobrancasOrfas } from "../escritorio/db-financeiro";
 
 /** Extrai a "data de pagamento" mais confiável da cobrança Asaas.
  *
@@ -413,6 +413,21 @@ export async function syncTodasCobrancasDoContato(
           or(isNull(asaasCobrancas.contatoId), ne(asaasCobrancas.contatoId, contatoId)),
         ),
       );
+
+    // Cobranças que ganharam contatoId agora têm "responsavelId do contato"
+    // disponível pro inferirAtendente — sem isso, atendenteId fica NULL
+    // pra sempre (webhook só seta no insert; UPDATE preserva por design)
+    // e some do ranking comercial (filtra inArray atendenteId, que exclui
+    // NULL). Caso clássico: PIX recebido avulso → cobrança órfã → vínculo
+    // criado depois → Recebido(caixa) do responsável fica zerado.
+    try {
+      await reconciliarCobrancasOrfas(escritorioId, contatoId);
+    } catch (err: any) {
+      log.warn(
+        { err: err?.message, escritorioId, contatoId },
+        "[Asaas Sync] reconciliarCobrancasOrfas falhou após adoção bulk (não bloqueia sync)",
+      );
+    }
   }
 
   let totais: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
