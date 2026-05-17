@@ -11,9 +11,6 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Tabs, TabsContent, TabsList, TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -216,6 +213,51 @@ export default function Relatorios() {
             Atendimento, comercial, produção jurídica e cálculos
           </p>
         </div>
+
+        {tabsVisiveis.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Relatório:</span>
+            <Select value={tab} onValueChange={setTab}>
+              <SelectTrigger className="w-52 h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {podeRelatorios && (
+                  <SelectItem value="atendimento">
+                    <span className="flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4 text-blue-500" />
+                      Atendimento
+                    </span>
+                  </SelectItem>
+                )}
+                {podeRelatorios && (
+                  <SelectItem value="comercial">
+                    <span className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-emerald-500" />
+                      Comercial
+                    </span>
+                  </SelectItem>
+                )}
+                {podeRelatorios && (
+                  <SelectItem value="producao">
+                    <span className="flex items-center gap-2">
+                      <LayoutGrid className="h-4 w-4 text-indigo-500" />
+                      Produção
+                    </span>
+                  </SelectItem>
+                )}
+                {podeCalculos && (
+                  <SelectItem value="calculos">
+                    <span className="flex items-center gap-2">
+                      <Calculator className="h-4 w-4 text-amber-500" />
+                      Cálculos
+                    </span>
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {tabsVisiveis.length === 0 ? (
@@ -225,52 +267,17 @@ export default function Relatorios() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className={`grid w-full h-10 grid-cols-${tabsVisiveis.length}`}>
-            {podeRelatorios && (
-              <TabsTrigger value="atendimento" className="text-xs sm:text-sm gap-1.5">
-                <MessageCircle className="h-3.5 w-3.5" /> Atendimento
-              </TabsTrigger>
-            )}
-            {podeRelatorios && (
-              <TabsTrigger value="comercial" className="text-xs sm:text-sm gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5" /> Comercial
-              </TabsTrigger>
-            )}
-            {podeRelatorios && (
-              <TabsTrigger value="producao" className="text-xs sm:text-sm gap-1.5">
-                <LayoutGrid className="h-3.5 w-3.5" /> Produção
-              </TabsTrigger>
-            )}
-            {podeCalculos && (
-              <TabsTrigger value="calculos" className="text-xs sm:text-sm gap-1.5">
-                <Calculator className="h-3.5 w-3.5" /> Cálculos
-              </TabsTrigger>
-            )}
-          </TabsList>
-
-          {podeRelatorios && (
-            <TabsContent value="atendimento" className="mt-4">
-              <AbaAtendimento />
-            </TabsContent>
-          )}
-          {podeRelatorios && (
-            <TabsContent value="comercial" className="mt-4 space-y-6">
+        <div>
+          {tab === "atendimento" && podeRelatorios && <AbaAtendimento />}
+          {tab === "comercial" && podeRelatorios && (
+            <div className="space-y-6">
               <DashboardComercial />
               <AbaComercial />
-            </TabsContent>
+            </div>
           )}
-          {podeRelatorios && (
-            <TabsContent value="producao" className="mt-4">
-              <AbaProducao />
-            </TabsContent>
-          )}
-          {podeCalculos && (
-            <TabsContent value="calculos" className="mt-4">
-              <AbaCalculos />
-            </TabsContent>
-          )}
-        </Tabs>
+          {tab === "producao" && podeRelatorios && <AbaProducao />}
+          {tab === "calculos" && podeCalculos && <AbaCalculos />}
+        </div>
       )}
     </div>
   );
