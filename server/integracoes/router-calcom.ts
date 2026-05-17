@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { obterConfigCanal, atualizarConfigCanal, atualizarStatusCanal, registrarAudit } from "../escritorio/db-canais";
 import { criarCalcomClient } from "./calcom-client";
 import type { CalcomConfig } from "../../shared/calcom-types";
@@ -45,11 +46,10 @@ export const calcomRouter = router({
       baseUrl: z.string().default("https://cal.com"),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "configuracoes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão.");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
 
       // Testar antes de salvar
       const client = criarCalcomClient({ apiKey: input.apiKey, baseUrl: input.baseUrl, defaultDuration: 30 });
@@ -119,11 +119,10 @@ export const calcomRouter = router({
       webhookSecret: z.string().max(256).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "configuracoes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão.");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
 
       await atualizarConfigCanal(input.canalId, esc.escritorio.id, {
         apiKey: input.apiKey,
