@@ -156,7 +156,7 @@ export default function Financeiro() {
   const filtraPorVencimento = filtroStatus.length > 0 && filtroStatus.every(
     (s) => s === "PENDING" || s === "OVERDUE",
   );
-  const ITENS_POR_PAGINA = 50;
+  const ITENS_POR_PAGINA = 25;
   const [paginaCob, setPaginaCob] = useState(0);
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
     trpc.asaas.listarCobrancas.useQuery(
