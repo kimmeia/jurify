@@ -161,15 +161,15 @@ function ClienteDetalheDialog({
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
-  const retirarMut = (trpc.admin as any).retirarCreditos?.useMutation({
-    onSuccess: (res: any) => {
+  const retirarMut = trpc.admin.retirarCreditos.useMutation({
+    onSuccess: (res) => {
       toast.success(res.mensagem);
       setCreditosQtd("");
       utils.admin.clienteDetalhes.invalidate({ userId: userId! });
       onRefresh();
     },
-    onError: (err: any) => toast.error("Erro", { description: err.message }),
-  }) ?? { mutate: () => {}, isPending: false };
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
 
   const bloquearMut = trpc.admin.bloquearUsuario.useMutation({
     onSuccess: () => {
@@ -1015,16 +1015,16 @@ export default function AdminClients() {
   const totalPaginas = Math.ceil(total / LIMITE);
 
   // Migração one-shot userCredits (legacy) → escritorio_creditos. Idempotente.
-  const migrarLegacyMut = (trpc.admin as any).migrarCreditosLegacy?.useMutation({
-    onSuccess: (res: any) => {
+  const migrarLegacyMut = trpc.admin.migrarCreditosLegacy.useMutation({
+    onSuccess: (res) => {
       toast.success("Migração concluída", {
         description: `${res.migrados} escritório(s) migrados, ${res.totalCreditos} créditos transferidos. ${res.pulados} pulados (já migrados ou sem saldo).`,
         duration: 10000,
       });
       refetch();
     },
-    onError: (err: any) => toast.error("Erro na migração", { description: err.message }),
-  }) ?? { mutate: () => {}, isPending: false };
+    onError: (err) => toast.error("Erro na migração", { description: err.message }),
+  });
 
   const [migrarLegacyAberto, setMigrarLegacyAberto] = useState(false);
 
@@ -1181,7 +1181,7 @@ export default function AdminClients() {
               disabled={migrarLegacyMut.isPending}
               onClick={(e) => {
                 e.preventDefault();
-                migrarLegacyMut.mutate({});
+                migrarLegacyMut.mutate();
                 setMigrarLegacyAberto(false);
               }}
             >

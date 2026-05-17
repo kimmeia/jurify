@@ -433,8 +433,15 @@ export async function getRecentSubscriptions(limit = 10) {
     .orderBy(desc(subscriptions.createdAt))
     .limit(limit);
 
-  // Build user map
-  const usersList = await db.select().from(users);
+  // Build user map. Projeção explícita — antes era SELECT * que trazia
+  // passwordHash desnecessariamente (só usamos name + email).
+  const userIdsSubs = Array.from(new Set(allSubs.map((s) => s.userId)));
+  const usersList = userIdsSubs.length === 0
+    ? []
+    : await db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(inArray(users.id, userIdsSubs));
   const userMap = new Map<number, string>();
   usersList.forEach((u) => {
     userMap.set(u.id, u.name || u.email || "—");

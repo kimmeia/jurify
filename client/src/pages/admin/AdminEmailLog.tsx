@@ -44,15 +44,15 @@ export default function AdminEmailLog() {
     offset: (pagina - 1) * limite,
   };
 
-  const { data, isLoading, refetch } = (trpc as any).adminEmailLog.listar.useQuery(filtros, {
+  const { data, isLoading, refetch } = trpc.adminEmailLog.listar.useQuery(filtros, {
     refetchOnWindowFocus: true,
   });
 
-  const { data: resumo } = (trpc as any).adminEmailLog.resumo.useQuery(undefined, {
+  const { data: resumo } = trpc.adminEmailLog.resumo.useQuery(undefined, {
     refetchOnWindowFocus: true,
   });
 
-  const reenviarMut = (trpc as any).adminEmailLog.reenviar.useMutation({
+  const reenviarMut = trpc.adminEmailLog.reenviar.useMutation({
     onSuccess: (r: { sucesso: boolean; erro?: string }) => {
       if (r.sucesso) toast.success("Email reenviado com sucesso");
       else toast.error("Reenvio falhou", { description: r.erro });

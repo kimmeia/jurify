@@ -97,7 +97,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const [target] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
 
       await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
@@ -265,7 +269,29 @@ export const adminRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const user = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      // Projeção explícita — antes era SELECT * que devolvia passwordHash
+      // pra UI (vazamento real de hash de senha em /admin/clients).
+      const user = await db
+        .select({
+          id: users.id,
+          openId: users.openId,
+          name: users.name,
+          email: users.email,
+          googleSub: users.googleSub,
+          loginMethod: users.loginMethod,
+          role: users.role,
+          asaasCustomerId: users.asaasCustomerId,
+          bloqueado: users.bloqueado,
+          motivoBloqueio: users.motivoBloqueio,
+          bloqueadoEm: users.bloqueadoEm,
+          aceitouTermosEm: users.aceitouTermosEm,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          lastSignedIn: users.lastSignedIn,
+        })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (user.length === 0) throw new Error("Utilizador não encontrado");
 
       // Saldo: prefere fonte real (escritório). Fallback pra userCredits
@@ -470,7 +496,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const [target] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
 
       await db
@@ -500,7 +530,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const [target] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
 
       await db
@@ -771,7 +805,19 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      // Reset de senha PRECISA do passwordHash pra checar se o user tem
+      // (login Google não tem). Único lugar onde mantemos o hash na query.
+      const [target] = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          passwordHash: users.passwordHash,
+        })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
       if (!target.passwordHash) {
         throw new Error("Este usuário não tem senha (login via Google ou outro provider).");
