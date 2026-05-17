@@ -315,6 +315,33 @@ export function iniciarJobs() {
     }
   }, 50_000);
 
+  // A cada 24h: sincroniza extrato Asaas (taxas, transferências, mensalidade
+  // Asaas) pra todos os escritórios com Asaas conectado. Idempotente via
+  // UNIQUE INDEX (escritorioId, asaasFinTransId), então rodar puxando 3 dias
+  // só importa novas movimentações. Cobre o caso comum de quem nunca clica
+  // no botão manual "Sincronizar extrato" em Configurações.
+  setInterval(async () => {
+    try {
+      const { sincronizarExtratoTodosEscritorios } = await import(
+        "../integracoes/cron-extrato-asaas"
+      );
+      await sincronizarExtratoTodosEscritorios();
+    } catch (err: any) {
+      log.error("[Cron] sincronizarExtratoTodosEscritorios falhou:", err.message);
+    }
+  }, 24 * 60 * 60 * 1000);
+  // Roda 1x na partida (60s pra evitar competir com despesas-recorrentes/vencidas).
+  setTimeout(async () => {
+    try {
+      const { sincronizarExtratoTodosEscritorios } = await import(
+        "../integracoes/cron-extrato-asaas"
+      );
+      await sincronizarExtratoTodosEscritorios();
+    } catch (err: any) {
+      log.error("[Cron] sincronizarExtratoTodosEscritorios inicial falhou:", err.message);
+    }
+  }, 60_000);
+
   // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
   // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal
   // ao saldo (preserva sobras + pacotes pré-pagos).
