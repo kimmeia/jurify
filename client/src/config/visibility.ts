@@ -16,7 +16,6 @@
 
 /** Módulos que recebem badge "Beta" na sidebar (já são visíveis). */
 export const MODULOS_BETA = new Set<string>([
-  "clientes",
   "kanban",
   "financeiro",
   "agenda",
