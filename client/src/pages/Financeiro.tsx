@@ -29,8 +29,14 @@ import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
-  Paperclip, FileUp, Percent,
+  Paperclip, FileUp, Percent, MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -407,28 +413,6 @@ export default function Financeiro() {
               Conectar Asaas
             </Button>
           )}
-          {perms.podeEditar && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setOfxOpen(true)}
-              title="Conciliar extrato bancário (OFX): marcar pagas as despesas/cobranças que o banco confirmou"
-            >
-              <FileUp className="h-4 w-4 mr-1.5" />
-              Importar OFX
-            </Button>
-          )}
-          {perms.podeExcluir && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setLimpezaOpen(true)}
-              title="Remover contatos importados do Asaas que não têm cobrança nem processo vinculado"
-            >
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              Limpar órfãos
-            </Button>
-          )}
           {perms.podeCriar && (
             <Button
               size="sm"
@@ -438,6 +422,35 @@ export default function Financeiro() {
               <Plus className="h-4 w-4 mr-1.5" />
               Nova cobrança
             </Button>
+          )}
+          {(perms.podeEditar || perms.podeExcluir) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="px-2" title="Mais ações">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {perms.podeEditar && (
+                  <DropdownMenuItem
+                    onClick={() => setOfxOpen(true)}
+                    title="Conciliar extrato bancário (OFX): marcar pagas as despesas/cobranças que o banco confirmou"
+                  >
+                    <FileUp className="h-4 w-4 mr-2" />
+                    Importar OFX
+                  </DropdownMenuItem>
+                )}
+                {perms.podeExcluir && (
+                  <DropdownMenuItem
+                    onClick={() => setLimpezaOpen(true)}
+                    title="Remover contatos importados do Asaas que não têm cobrança nem processo vinculado"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Limpar órfãos
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -451,24 +464,38 @@ export default function Financeiro() {
         próprios — total comissionável, sem decisão, próximo lançamento).
       */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="sticky top-0 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 py-2 border-b">
-          <TabsList>
-          <TabsTrigger value="cobrancas" className="gap-1.5">
-            <Receipt className="h-3.5 w-3.5" />
-            Cobranças ({kpis?.totalCobrancas ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="clientes" className="gap-1.5">
-            <Users className="h-3.5 w-3.5" />
-            Clientes ({clientesVinculados?.length ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="comissoes" className="gap-1.5">
-            <DollarSign className="h-3.5 w-3.5" />
-            Comissões
-          </TabsTrigger>
-          <TabsTrigger value="despesas" className="gap-1.5">
-            <Wallet className="h-3.5 w-3.5" />
-            Despesas
-          </TabsTrigger>
+        <div className="sticky top-0 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <TabsList className="bg-transparent p-0 h-auto w-full justify-start gap-6 border-b rounded-none overflow-x-auto">
+            <TabsTrigger
+              value="cobrancas"
+              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none gap-1.5"
+            >
+              Cobranças
+              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 rounded tabular-nums">
+                {kpis?.totalCobrancas ?? 0}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="clientes"
+              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none gap-1.5"
+            >
+              Clientes
+              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 rounded tabular-nums">
+                {clientesVinculados?.length ?? 0}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="comissoes"
+              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none"
+            >
+              Comissões
+            </TabsTrigger>
+            <TabsTrigger
+              value="despesas"
+              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none"
+            >
+              Despesas
+            </TabsTrigger>
           </TabsList>
         </div>
 
