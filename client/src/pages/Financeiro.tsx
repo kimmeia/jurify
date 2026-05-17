@@ -29,7 +29,7 @@ import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
-  Paperclip, FileUp,
+  Paperclip, FileUp, Percent,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -724,12 +724,35 @@ export default function Financeiro() {
               value={formatBRL(kpis?.vencido ?? 0)}
               color="red"
             />
-            <KPICard
-              icon={Wallet}
-              label="Saldo Asaas"
-              value={saldo ? formatBRL(saldo.balance) : "—"}
-              color="blue"
-            />
+            {(() => {
+              // Inadimplência exata: do que devia ter sido pago no período,
+              // quanto está em aberto vencido. Numerador e denominador usam
+              // o MESMO filtro de vencimento, evitando o viés de comparar
+              // "pago em X" com "venceu em X" (que misturava recortes).
+              const venc = kpis?.vencido ?? 0;
+              const pend = kpis?.pendente ?? 0;
+              const recVenc = kpis?.recebidoComVencimentoNoPeriodo ?? 0;
+              const totalEsperado = venc + pend + recVenc;
+              const pctInadimp = totalEsperado > 0
+                ? (venc / totalEsperado) * 100
+                : null;
+              const cor: "emerald" | "amber" | "red" = pctInadimp == null
+                ? "emerald"
+                : pctInadimp >= 15 ? "red"
+                : pctInadimp >= 5 ? "amber"
+                : "emerald";
+              return (
+                <KPICard
+                  icon={Percent}
+                  label="Inadimplência"
+                  value={pctInadimp == null ? "—" : `${pctInadimp.toFixed(1).replace(".", ",")}%`}
+                  subValue={pctInadimp != null
+                    ? `${formatBRL(venc)} de ${formatBRL(totalEsperado)}`
+                    : "sem vencimentos no período"}
+                  color={cor}
+                />
+              );
+            })()}
           </div>
             </>
           )}
