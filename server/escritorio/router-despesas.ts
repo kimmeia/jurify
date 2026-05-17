@@ -62,8 +62,12 @@ export const despesasRouter = router({
             .enum(["manual", "taxa_asaas", "recorrencia", "extrato_asaas"])
             .optional(),
           busca: z.string().max(128).optional(),
+          valorMinimo: z.number().min(0).optional(),
+          valorMaximo: z.number().min(0).optional(),
           periodoInicio: dataInput.optional(),
           periodoFim: dataInput.optional(),
+          orderBy: z.enum(["vencimento", "valor"]).default("vencimento"),
+          orderDir: z.enum(["asc", "desc"]).default("asc"),
           limit: z.number().min(1).max(500).default(200),
           offset: z.number().min(0).default(0),
         })
@@ -89,6 +93,12 @@ export const despesasRouter = router({
       if (input?.busca && input.busca.trim().length > 0) {
         conds.push(like(despesas.descricao, `%${input.busca.trim()}%`));
       }
+      if (input?.valorMinimo != null) {
+        conds.push(gte(despesas.valor, input.valorMinimo.toFixed(2)));
+      }
+      if (input?.valorMaximo != null) {
+        conds.push(lte(despesas.valor, input.valorMaximo.toFixed(2)));
+      }
       if (input?.periodoInicio && input?.periodoFim) {
         conds.push(between(despesas.vencimento, input.periodoInicio, input.periodoFim));
       } else if (input?.periodoInicio) {
@@ -103,6 +113,10 @@ export const despesasRouter = router({
         .from(despesas)
         .where(and(...conds));
       const total = Number(totalRow?.count ?? 0);
+
+      const orderCol =
+        input?.orderBy === "valor" ? despesas.valor : despesas.vencimento;
+      const orderFn = input?.orderDir === "desc" ? desc : asc;
 
       const items = await db
         .select({
@@ -128,7 +142,7 @@ export const despesasRouter = router({
           eq(categoriasDespesa.id, despesas.categoriaId),
         )
         .where(and(...conds))
-        .orderBy(asc(despesas.vencimento))
+        .orderBy(orderFn(orderCol))
         .limit(input?.limit ?? 200)
         .offset(input?.offset ?? 0);
 
