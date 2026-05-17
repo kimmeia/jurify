@@ -3,11 +3,12 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
-import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users } from "../../drizzle/schema";
+import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios } from "../../drizzle/schema";
 import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
+import { dataHojeBR, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
 import { criarLead } from "./db-crm";
@@ -1208,10 +1209,14 @@ export const clientesRouter = router({
       }))
       .sort((a, b) => b.qtd - a.qtd);
 
+    // Data do arquivo usa o fuso do escritório (não o UTC do server).
+    // Sem isso, dono em SP exportando às 22h BRT baixaria
+    // `duplicatas_2026-05-18.pdf` (dia seguinte) — confundindo a auditoria.
+    const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
     const { gerarDuplicatasPDF } = await import("./duplicatas-pdf");
     const buffer = await gerarDuplicatasPDF(grupos, esc.escritorio.nome);
     return {
-      filename: `duplicatas_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `duplicatas_${dataHojeBR(fuso)}.pdf`,
       base64: buffer.toString("base64"),
       mimeType: "application/pdf",
     };

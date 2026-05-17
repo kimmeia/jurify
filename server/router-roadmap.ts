@@ -19,6 +19,7 @@ import { z } from "zod";
 import { eq, and, desc, like, or, sql, inArray, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, protectedProcedure, router } from "./_core/trpc";
+import { escapeLikePattern } from "./_core/sql-helpers";
 import { getDb } from "./db";
 import {
   roadmapItens,
@@ -90,7 +91,7 @@ export const roadmapRouter = router({
       if (input.status !== "todos") conds.push(eq(roadmapItens.status, input.status));
       if (input.categoria !== "todos") conds.push(eq(roadmapItens.categoria, input.categoria));
       if (input.busca) {
-        const b = `%${input.busca}%`;
+        const b = `%${escapeLikePattern(input.busca)}%`;
         conds.push(or(like(roadmapItens.titulo, b), like(roadmapItens.descricao, b)));
       }
 

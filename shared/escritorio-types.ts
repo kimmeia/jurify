@@ -92,6 +92,92 @@ export function dataHojeBR(tz: string = FUSO_HORARIO_PADRAO): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+/**
+ * Retorna o offset (em ms) do fuso `tz` no instante `instante`.
+ * Ex: para America/Sao_Paulo (BRT, sem horário de verão desde 2019),
+ *     offset = -3h × 3600 × 1000 = -10800000 (UTC-3).
+ *
+ * Usa duas formatações em paralelo (`tz` e UTC) e diff em ms — robusto
+ * pra fusos com DST mesmo que o Brasil hoje não use (suporta expansão
+ * futura pra outros países).
+ *
+ * `sv-SE` locale garante formato 24h sem ambiguidade ("00" pra meia-noite,
+ * não "24"). `Intl.DateTimeFormat` é stdlib do Node 18+ — sem dependência.
+ */
+function obterOffsetFusoMs(instante: Date, tz: string): number {
+  const partesNoFuso = (zone: string) =>
+    new Intl.DateTimeFormat("sv-SE", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(instante);
+
+  const partsToMs = (parts: Intl.DateTimeFormatPart[]) => {
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value || 0);
+    return Date.UTC(
+      get("year"),
+      get("month") - 1,
+      get("day"),
+      get("hour"),
+      get("minute"),
+      get("second"),
+    );
+  };
+
+  return partsToMs(partesNoFuso(tz)) - partsToMs(partesNoFuso("UTC"));
+}
+
+/**
+ * Início do dia `yyyy-mm-dd` no fuso `tz`, como `Date` UTC.
+ *
+ * Ex: `inicioDoDiaNoFuso("2026-05-17", "America/Sao_Paulo")`
+ *     → `Date(2026-05-17T03:00:00.000Z)` — 03h UTC = 00h BRT.
+ *
+ * Usado em filtros `gte(coluna, inicio)` em queries que comparam com
+ * colunas DATETIME (MySQL armazena em UTC). Antes do fix do bug #7, o
+ * código usava `new Date("2026-05-17")` que vira `2026-05-17T00:00:00Z`,
+ * que em SP é `2026-05-16T21:00:00 BRT` — perdendo eventos das 22h do
+ * dia anterior. Pior: usuário filtrando "hoje" não via os compromissos
+ * do dia.
+ */
+export function inicioDoDiaNoFuso(
+  yyyymmdd: string,
+  tz: string = FUSO_HORARIO_PADRAO,
+): Date {
+  const [year, month, day] = yyyymmdd.split("-").map(Number);
+  if (!year || !month || !day) {
+    throw new Error(`yyyymmdd inválido: ${yyyymmdd}`);
+  }
+  const tentativaUtc = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+  const offset = obterOffsetFusoMs(new Date(tentativaUtc), tz);
+  return new Date(tentativaUtc - offset);
+}
+
+/**
+ * Fim do dia `yyyy-mm-dd` no fuso `tz` (23:59:59.999), como `Date` UTC.
+ *
+ * Usado em filtros `lte(coluna, fim)` pra incluir compromissos do dia
+ * inteiro. Antes do fix, `new Date("2026-05-17")` virava 00h UTC do
+ * mesmo dia — perdia tudo que estava entre 00h e 23h59 BR.
+ */
+export function fimDoDiaNoFuso(
+  yyyymmdd: string,
+  tz: string = FUSO_HORARIO_PADRAO,
+): Date {
+  const [year, month, day] = yyyymmdd.split("-").map(Number);
+  if (!year || !month || !day) {
+    throw new Error(`yyyymmdd inválido: ${yyyymmdd}`);
+  }
+  const tentativaUtc = Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+  const offset = obterOffsetFusoMs(new Date(tentativaUtc), tz);
+  return new Date(tentativaUtc - offset);
+}
+
 // ─── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface EscritorioInfo {

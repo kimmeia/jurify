@@ -100,6 +100,56 @@ export function registerAsaasWebhook(app: Express) {
         const payment = body.payment;
         log.info(`[Asaas Webhook] Escritório ${escritorioId} | ${body.event} | Payment: ${payment.id} | Status: ${payment.status}`);
 
+        // Dedup early-exit para eventos com side-effects (SmartFlow,
+        // despesa de taxa, invalidação de cache de saldo). Asaas retenta
+        // webhook em timeout/erro de rede; sem essa proteção, retentativa
+        // faria SELECT vínculo + SELECT config-pai + upsert + dispatch
+        // SmartFlow + cria despesa de taxa novamente. Embora o upsert
+        // e o `marcarEventoProcessado` interno (mais abaixo) sejam
+        // idempotentes, fazer o trabalho duas vezes desperdiça queries
+        // e janela de race aumenta. Bloqueando aqui economiza 5-10
+        // queries por retentativa.
+        //
+        // Eventos sem side-effects (PAYMENT_CREATED/UPDATED/DELETED/
+        // RESTORED/REFUNDED) NÃO entram no early-exit porque carregam
+        // dados que precisam virar UPDATE na cobrança local
+        // (vencimento, valor, status novo, etc.).
+        const eventoComSideEffect =
+          payment.status === "RECEIVED" ||
+          payment.status === "CONFIRMED" ||
+          payment.status === "RECEIVED_IN_CASH" ||
+          body.event === "PAYMENT_OVERDUE" ||
+          payment.status === "OVERDUE";
+
+        if (eventoComSideEffect) {
+          // Chave de dedup é o evento "alto-nível" — PAYMENT_RECEIVED
+          // cobre RECEIVED/CONFIRMED/RECEIVED_IN_CASH (chega como event
+          // distinto mas o side-effect é o mesmo). Mesma normalização
+          // que já era usada no bloco interno (linha removida abaixo).
+          const eventoNormalizado =
+            payment.status === "OVERDUE" || body.event === "PAYMENT_OVERDUE"
+              ? "PAYMENT_OVERDUE"
+              : "PAYMENT_RECEIVED";
+
+          const primeiraVez = await marcarEventoProcessado(
+            escritorioId,
+            payment.id,
+            eventoNormalizado,
+          );
+          if (!primeiraVez) {
+            log.info(
+              {
+                escritorioId,
+                paymentId: payment.id,
+                evento: body.event,
+                eventoNormalizado,
+              },
+              "[Asaas Webhook] Retentativa detectada — early-exit (já processado)",
+            );
+            return res.status(200).json({ received: true, deduplicated: true });
+          }
+        }
+
         if (body.event === "PAYMENT_DELETED" || payment.deleted) {
           await db.delete(asaasCobrancas).where(and(
             eq(asaasCobrancas.asaasPaymentId, payment.id),
@@ -209,108 +259,103 @@ export function registerAsaasWebhook(app: Express) {
         }
 
         // SmartFlow: disparar cenário "pagamento_recebido" se pagamento confirmado.
-        // Guardado por `marcarEventoProcessado` para retries do Asaas (mesmo
-        // event+paymentId chegando 2-3 vezes) não gerarem WhatsApp/e-mail
-        // duplicado pro cliente.
+        // Chegamos aqui porque o early-exit acima JÁ garantiu primeira vez
+        // (marcou o evento como processado). Sem re-checar; se chegou,
+        // dispara. Retentativa do Asaas com mesmo paymentId+evento abortou
+        // lá em cima e nunca chega nesse ponto.
         if (payment.status === "RECEIVED" || payment.status === "CONFIRMED" || payment.status === "RECEIVED_IN_CASH") {
-          const primeiraVez = await marcarEventoProcessado(escritorioId, payment.id, "PAYMENT_RECEIVED");
-          if (primeiraVez) {
-            // Invalida cache de saldo: pagamento confirmado provavelmente
-            // mudou o saldo no Asaas. Próxima leitura de `obterSaldo`
-            // vai detectar cache stale e refetchar.
-            try {
-              await db
-                .update(asaasConfig)
-                .set({ saldoAtualizadoEm: null })
-                .where(eq(asaasConfig.escritorioId, escritorioId));
-            } catch (err: any) {
-              log.warn({ err: err.message }, "[Asaas Webhook] falha ao invalidar cache de saldo (não bloqueia)");
-            }
+          // Invalida cache de saldo: pagamento confirmado provavelmente
+          // mudou o saldo no Asaas. Próxima leitura de `obterSaldo`
+          // vai detectar cache stale e refetchar.
+          try {
+            await db
+              .update(asaasConfig)
+              .set({ saldoAtualizadoEm: null })
+              .where(eq(asaasConfig.escritorioId, escritorioId));
+          } catch (err: any) {
+            log.warn({ err: err.message }, "[Asaas Webhook] falha ao invalidar cache de saldo (não bloqueia)");
+          }
 
-            try {
-              const { dispararPagamentoRecebido } = await import("../smartflow/dispatcher");
-              await dispararPagamentoRecebido(escritorioId, {
-                pagamentoId: payment.id,
-                valor: Math.round((payment.value || 0) * 100),
-                descricao: payment.description || `Pagamento ${payment.id}`,
-                tipo: payment.billingType || "UNDEFINED",
-                assinaturaId: (payment as any).subscription || undefined,
-                clienteNome: payment.customer ? undefined : undefined, // Asaas não envia nome aqui
-                clienteAsaasId: payment.customer,
-              });
-            } catch (err: any) {
-              log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
-            }
+          try {
+            const { dispararPagamentoRecebido } = await import("../smartflow/dispatcher");
+            await dispararPagamentoRecebido(escritorioId, {
+              pagamentoId: payment.id,
+              valor: Math.round((payment.value || 0) * 100),
+              descricao: payment.description || `Pagamento ${payment.id}`,
+              tipo: payment.billingType || "UNDEFINED",
+              assinaturaId: (payment as any).subscription || undefined,
+              clienteNome: payment.customer ? undefined : undefined, // Asaas não envia nome aqui
+              clienteAsaasId: payment.customer,
+            });
+          } catch (err: any) {
+            log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_recebido falhou (não bloqueia)");
+          }
 
-            // Despesa automática de taxa Asaas (valor - netValue).
-            // Idempotência: além do `primeiraVez` acima, o helper usa
-            // UNIQUE INDEX (cobrancaOriginalId, origem) como defesa final.
-            // Falha aqui é não-fatal: cobrança principal já foi gravada.
-            try {
-              const taxaPositiva =
-                typeof payment.netValue === "number" &&
-                typeof payment.value === "number" &&
-                payment.value > payment.netValue;
-              if (taxaPositiva) {
-                const [cobLocal] = await db
-                  .select({ id: asaasCobrancas.id })
-                  .from(asaasCobrancas)
-                  .where(and(
-                    eq(asaasCobrancas.escritorioId, escritorioId),
-                    eq(asaasCobrancas.asaasPaymentId, payment.id),
-                  ))
-                  .limit(1);
-                const [esc] = await db
-                  .select({ ownerId: escritorios.ownerId })
-                  .from(escritorios)
-                  .where(eq(escritorios.id, escritorioId))
-                  .limit(1);
-                if (cobLocal && esc) {
-                  await gerarDespesaTaxaAsaas({
-                    escritorioId,
-                    cobrancaOriginalId: cobLocal.id,
-                    valor: payment.value,
-                    valorLiquido: payment.netValue,
-                    dataPagamento:
-                      extrairDataPagamento(payment) ?? dataHojeBR(),
-                    descricaoCobranca: payment.description ?? null,
-                    criadoPorUserId: esc.ownerId,
-                  });
-                }
+          // Despesa automática de taxa Asaas (valor - netValue).
+          // Idempotência: o helper usa UNIQUE INDEX
+          // (cobrancaOriginalId, origem) como defesa final. Falha aqui é
+          // não-fatal: cobrança principal já foi gravada.
+          try {
+            const taxaPositiva =
+              typeof payment.netValue === "number" &&
+              typeof payment.value === "number" &&
+              payment.value > payment.netValue;
+            if (taxaPositiva) {
+              const [cobLocal] = await db
+                .select({ id: asaasCobrancas.id })
+                .from(asaasCobrancas)
+                .where(and(
+                  eq(asaasCobrancas.escritorioId, escritorioId),
+                  eq(asaasCobrancas.asaasPaymentId, payment.id),
+                ))
+                .limit(1);
+              const [esc] = await db
+                .select({ ownerId: escritorios.ownerId })
+                .from(escritorios)
+                .where(eq(escritorios.id, escritorioId))
+                .limit(1);
+              if (cobLocal && esc) {
+                await gerarDespesaTaxaAsaas({
+                  escritorioId,
+                  cobrancaOriginalId: cobLocal.id,
+                  valor: payment.value,
+                  valorLiquido: payment.netValue,
+                  dataPagamento:
+                    extrairDataPagamento(payment) ?? dataHojeBR(),
+                  descricaoCobranca: payment.description ?? null,
+                  criadoPorUserId: esc.ownerId,
+                });
               }
-            } catch (err: any) {
-              log.warn(
-                { err: err.message, paymentId: payment.id },
-                "[Asaas Webhook] gerarDespesaTaxaAsaas falhou (não bloqueia)",
-              );
             }
+          } catch (err: any) {
+            log.warn(
+              { err: err.message, paymentId: payment.id },
+              "[Asaas Webhook] gerarDespesaTaxaAsaas falhou (não bloqueia)",
+            );
           }
         }
 
         // SmartFlow: disparar cenário "pagamento_vencido" no PAYMENT_OVERDUE.
-        // Mesma proteção de idempotência.
+        // Mesma garantia: early-exit acima já fez dedup.
         if (body.event === "PAYMENT_OVERDUE" || payment.status === "OVERDUE") {
-          const primeiraVez = await marcarEventoProcessado(escritorioId, payment.id, "PAYMENT_OVERDUE");
-          if (primeiraVez) {
-            try {
-              const { dispararPagamentoVencido } = await import("../smartflow/dispatcher");
-              const [vinculo2] = await db.select().from(asaasClientes)
-                .where(and(
-                  eq(asaasClientes.asaasCustomerId, payment.customer),
-                  eq(asaasClientes.escritorioId, escritorioId)
-                )).limit(1);
-              await dispararPagamentoVencido(escritorioId, {
-                pagamentoId: payment.id,
-                valor: Math.round((payment.value || 0) * 100),
-                descricao: payment.description || `Cobrança ${payment.id}`,
-                vencimento: payment.dueDate,
-                clienteAsaasId: payment.customer,
-                clienteNome: vinculo2?.nome || undefined,
-                contatoId: vinculo2?.contatoId || undefined,
-              });
-            } catch (err: any) {
-              log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_vencido falhou (não bloqueia)");
-            }
+          try {
+            const { dispararPagamentoVencido } = await import("../smartflow/dispatcher");
+            const [vinculo2] = await db.select().from(asaasClientes)
+              .where(and(
+                eq(asaasClientes.asaasCustomerId, payment.customer),
+                eq(asaasClientes.escritorioId, escritorioId)
+              )).limit(1);
+            await dispararPagamentoVencido(escritorioId, {
+              pagamentoId: payment.id,
+              valor: Math.round((payment.value || 0) * 100),
+              descricao: payment.description || `Cobrança ${payment.id}`,
+              vencimento: payment.dueDate,
+              clienteAsaasId: payment.customer,
+              clienteNome: vinculo2?.nome || undefined,
+              contatoId: vinculo2?.contatoId || undefined,
+            });
+          } catch (err: any) {
+            log.warn({ err: err.message }, "[Asaas Webhook] SmartFlow pagamento_vencido falhou (não bloqueia)");
           }
         }
       }

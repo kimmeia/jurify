@@ -32,6 +32,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createLogger } from "../_core/logger";
 import { converterDocxParaPdf } from "./docx-to-pdf";
+import { checkPermissionAdminOuMatriz } from "./check-permission";
 import {
   CATALOGO_BASE,
   detectarPlaceholders,
@@ -55,11 +56,18 @@ function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function requireGestao(cargo: string) {
-  if (cargo !== "dono" && cargo !== "gestor") {
+/**
+ * Garante que o usuário pode gerenciar modelos de contrato. Aceita dono,
+ * gestor (legado preservado) ou cargo personalizado com permissão de
+ * editar "configuracoes". Antes do bug #9, hardcode em `cargo === "dono" ||
+ * cargo === "gestor"` ignorava cargos personalizados criados via UI.
+ */
+async function requireGestao(userId: number): Promise<void> {
+  const perm = await checkPermissionAdminOuMatriz(userId, "configuracoes", "editar");
+  if (!perm.allowed) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Apenas dono ou gestor pode gerenciar modelos de contrato.",
+      message: "Apenas dono, gestor ou cargo com permissão de editar configurações pode gerenciar modelos de contrato.",
     });
   }
 }
@@ -204,7 +212,7 @@ export const modelosContratoRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-      requireGestao(esc.colaborador.cargo);
+      await requireGestao(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -332,7 +340,7 @@ export const modelosContratoRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-      requireGestao(esc.colaborador.cargo);
+      await requireGestao(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -392,7 +400,7 @@ export const modelosContratoRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-      requireGestao(esc.colaborador.cargo);
+      await requireGestao(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -413,7 +421,7 @@ export const modelosContratoRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-      requireGestao(esc.colaborador.cargo);
+      await requireGestao(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 

@@ -26,6 +26,7 @@ export default function CalcomConfig({ canalId, status }: CalcomConfigProps) {
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("https://cal.com");
   const [duration, setDuration] = useState(30);
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -78,7 +79,13 @@ export default function CalcomConfig({ canalId, status }: CalcomConfigProps) {
       return;
     }
     setSaving(true);
-    salvarConfig.mutate({ canalId, apiKey, baseUrl, defaultDuration: duration });
+    salvarConfig.mutate({
+      canalId,
+      apiKey,
+      baseUrl,
+      defaultDuration: duration,
+      webhookSecret: webhookSecret.trim() || undefined,
+    });
   };
 
   const handleTestar = () => {
@@ -147,6 +154,23 @@ export default function CalcomConfig({ canalId, status }: CalcomConfigProps) {
                 <SelectItem value="90">90 min</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Segredo do Webhook (recomendado)</Label>
+            <Input
+              type="password"
+              placeholder="whsec_..."
+              value={webhookSecret}
+              onChange={(e) => setWebhookSecret(e.target.value)}
+              className="text-sm"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              No painel Cal.com, vá em Settings → Webhooks, cadastre a URL{" "}
+              <code className="text-xs bg-muted px-1 rounded">/api/webhooks/calcom</code>{" "}
+              e copie o "Webhook Secret" gerado. Sem isso, o Jurify aceita
+              qualquer POST nesse endpoint — qualquer um pode forjar
+              agendamentos no seu escritório.
+            </p>
           </div>
 
           <div className="flex gap-2 pt-2">

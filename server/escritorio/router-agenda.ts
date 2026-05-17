@@ -11,13 +11,38 @@
 
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { escapeLikePattern } from "../_core/sql-helpers";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { agendamentos, agendamentoLembretes, tarefas, contatos, users, colaboradores } from "../../drizzle/schema";
+import { agendamentos, agendamentoLembretes, tarefas, contatos, users, colaboradores, escritorios } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, or, like, asc, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
+import {
+  FUSO_HORARIO_PADRAO,
+  inicioDoDiaNoFuso,
+  fimDoDiaNoFuso,
+  dataHojeBR,
+} from "../../shared/escritorio-types";
+
+/**
+ * Lê o `fusoHorario` do escritório (configurado pelo dono em
+ * Configurações → Escritório). Default `FUSO_HORARIO_PADRAO` se não
+ * encontrar — preserva comportamento histórico em escritórios antigos
+ * que ainda não migraram a coluna.
+ */
+async function obterFusoHorarioEscritorio(
+  db: any,
+  escritorioId: number,
+): Promise<string> {
+  const [row] = await db
+    .select({ fusoHorario: escritorios.fusoHorario })
+    .from(escritorios)
+    .where(eq(escritorios.id, escritorioId))
+    .limit(1);
+  return row?.fusoHorario || FUSO_HORARIO_PADRAO;
+}
 
 /** Helper: IDs dos contatos cujo responsavelId é o colaborador.
  *  Usado pra filtro verProprios em agendamentos/tarefas — assim quando
@@ -120,6 +145,11 @@ export const agendaRouter = router({
       const filtrarProprios = !perm.verTodos && perm.verProprios;
       const eventos: EventoUnificado[] = [];
 
+      // Fuso horário do escritório — base dos filtros `dataInicio/dataFim`
+      // pra que "filtrar pelo dia 17/05" inclua TUDO entre 00h e 23h59
+      // no fuso BR do operador (não no UTC do server Railway).
+      const fusoHorario = await obterFusoHorarioEscritorio(db, escritorioId);
+
       // Mapa de nomes de colaboradores
       const colabs = await db.select({ id: colaboradores.id, userId: colaboradores.userId })
         .from(colaboradores).where(eq(colaboradores.escritorioId, escritorioId));
@@ -160,11 +190,24 @@ export const agendaRouter = router({
           agConditions.push(or(...ors));
         }
 
-        if (input?.dataInicio) agConditions.push(gte(agendamentos.dataInicio, new Date(input.dataInicio)));
-        if (input?.dataFim) agConditions.push(lte(agendamentos.dataInicio, new Date(input.dataFim)));
+        // `inicioDoDiaNoFuso` / `fimDoDiaNoFuso` interpretam o YYYY-MM-DD
+        // como dia local NO FUSO DO ESCRITÓRIO, convertendo pra instante
+        // UTC pra bater com as colunas DATETIME (MySQL armazena em UTC).
+        // Sem isso, `new Date("2026-05-17")` virava `2026-05-17T00:00:00Z`,
+        // que em SP é 16/05 às 21h — perdendo eventos do dia 17 todo.
+        if (input?.dataInicio) {
+          agConditions.push(
+            gte(agendamentos.dataInicio, inicioDoDiaNoFuso(input.dataInicio, fusoHorario)),
+          );
+        }
+        if (input?.dataFim) {
+          agConditions.push(
+            lte(agendamentos.dataInicio, fimDoDiaNoFuso(input.dataFim, fusoHorario)),
+          );
+        }
         if (input?.status) agConditions.push(eq(agendamentos.status, input.status as any));
         if (input?.busca) {
-          const b = `%${input.busca}%`;
+          const b = `%${escapeLikePattern(input.busca)}%`;
           agConditions.push(or(like(agendamentos.titulo, b), like(agendamentos.descricao, b)));
         }
 
@@ -213,8 +256,12 @@ export const agendaRouter = router({
         }
 
         if (input?.dataInicio && input?.dataFim) {
-          tConditions.push(gte(tarefas.dataVencimento, new Date(input.dataInicio)));
-          tConditions.push(lte(tarefas.dataVencimento, new Date(input.dataFim)));
+          tConditions.push(
+            gte(tarefas.dataVencimento, inicioDoDiaNoFuso(input.dataInicio, fusoHorario)),
+          );
+          tConditions.push(
+            lte(tarefas.dataVencimento, fimDoDiaNoFuso(input.dataFim, fusoHorario)),
+          );
         }
         if (input?.status) {
           // Mapear status unificado para status de tarefa
@@ -227,7 +274,7 @@ export const agendaRouter = router({
           tConditions.push(eq(tarefas.status, (statusMap[input.status] || input.status) as any));
         }
         if (input?.busca) {
-          const b = `%${input.busca}%`;
+          const b = `%${escapeLikePattern(input.busca)}%`;
           tConditions.push(or(like(tarefas.titulo, b), like(tarefas.descricao, b)));
         }
 
@@ -246,8 +293,15 @@ export const agendaRouter = router({
           }
         }
 
+        // Fallback de tarefa sem `dataVencimento`: usa início do dia
+        // ATUAL no fuso do escritório (não no UTC do server). Antes, em
+        // SP às 22h BRT, o `new Date().toISOString()` retornava o
+        // instante UTC já no dia seguinte — a tarefa aparecia no agrupador
+        // "amanhã" do calendário em vez de hoje. Em Manaus piora 1h.
+        const fallbackVenc = inicioDoDiaNoFuso(dataHojeBR(fusoHorario), fusoHorario).toISOString();
+
         for (const t of trs) {
-          const venc = t.dataVencimento ? (t.dataVencimento as Date).toISOString() : new Date().toISOString();
+          const venc = t.dataVencimento ? (t.dataVencimento as Date).toISOString() : fallbackVenc;
           eventos.push({
             id: t.id,
             fonte: "tarefa",
@@ -311,8 +365,14 @@ export const agendaRouter = router({
         )!]
       : [];
 
-    const now = new Date();
-    const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // "Hoje" e "amanhã" no FUSO do escritório, não no UTC do server.
+    // Server Railway/AWS roda em UTC — pra um operador em SP às 22h BRT,
+    // `now.getDate()` retornava o dia seguinte (UTC já passou meia-noite),
+    // e o painel "Hoje" mostrava os compromissos de amanhã. Pior em
+    // Manaus (UTC-4): a falha começava às 20h local.
+    const fusoHorario = await obterFusoHorarioEscritorio(db, escritorioId);
+    const hojeYmd = dataHojeBR(fusoHorario);
+    const hojeInicio = inicioDoDiaNoFuso(hojeYmd, fusoHorario);
     const hojeFim = new Date(hojeInicio.getTime() + 86400000);
     const amanhaFim = new Date(hojeInicio.getTime() + 172800000);
 

@@ -1452,42 +1452,49 @@ export const juditTransacoes = escritorioTransacoes;
  * Eventos detectados são gravados em `eventos_processo` (sem FK
  * porque Drizzle/MySQL não dá conta de FK polimórficas).
  */
-export const motorMonitoramentos = mysqlTable("motor_monitoramentos", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorio_id").notNull(),
-  criadoPor: int("criado_por").notNull(),
-  tipoMonitoramento: mysqlEnum("tipo_monitoramento", ["movimentacoes", "novas_acoes"]).notNull(),
-  searchType: mysqlEnum("search_type", ["lawsuit_cnj", "cpf", "cnpj"]).notNull(),
-  searchKey: varchar("search_key", { length: 64 }).notNull(),
-  apelido: varchar("apelido", { length: 255 }),
-  tribunal: varchar("tribunal", { length: 16 }).notNull(),
-  credencialId: int("credencial_id"),
-  status: mysqlEnum("status", ["ativo", "pausado", "erro"]).default("ativo").notNull(),
-  recurrenceHoras: int("recurrence_horas").default(6).notNull(),
-  ultimaConsultaEm: timestamp("ultima_consulta_em"),
-  ultimaMovimentacaoEm: timestamp("ultima_movimentacao_em"),
-  ultimaMovimentacaoTexto: text("ultima_movimentacao_texto"),
-  totalAtualizacoes: int("total_atualizacoes").default(0).notNull(),
-  totalNovasAcoes: int("total_novas_acoes").default(0).notNull(),
-  hashUltimasMovs: varchar("hash_ultimas_movs", { length: 64 }),
-  cnjsConhecidos: text("cnjs_conhecidos"),
-  /**
-   * Capa do processo serializada (classeProcesso, juiz, vara,
-   * valorCausaCentavos, dataDistribuicao, etc.). Persistida pelo cron
-   * + pela busca sob demanda — frontend lê daqui em vez de re-consultar
-   * o tribunal a cada refresh.
-   */
-  capaJson: text("capa_json"),
-  /**
-   * Partes do processo serializadas (autor, réu, advogados, polos).
-   * Mesmo padrão de capaJson.
-   */
-  partesJson: text("partes_json"),
-  ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
-  ultimoErro: text("ultimo_erro"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
+export const motorMonitoramentos = mysqlTable(
+  "motor_monitoramentos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorio_id").notNull(),
+    criadoPor: int("criado_por").notNull(),
+    tipoMonitoramento: mysqlEnum("tipo_monitoramento", ["movimentacoes", "novas_acoes"]).notNull(),
+    searchType: mysqlEnum("search_type", ["lawsuit_cnj", "cpf", "cnpj"]).notNull(),
+    searchKey: varchar("search_key", { length: 64 }).notNull(),
+    apelido: varchar("apelido", { length: 255 }),
+    tribunal: varchar("tribunal", { length: 16 }).notNull(),
+    credencialId: int("credencial_id"),
+    status: mysqlEnum("status", ["ativo", "pausado", "erro"]).default("ativo").notNull(),
+    recurrenceHoras: int("recurrence_horas").default(6).notNull(),
+    ultimaConsultaEm: timestamp("ultima_consulta_em"),
+    ultimaMovimentacaoEm: timestamp("ultima_movimentacao_em"),
+    ultimaMovimentacaoTexto: text("ultima_movimentacao_texto"),
+    totalAtualizacoes: int("total_atualizacoes").default(0).notNull(),
+    totalNovasAcoes: int("total_novas_acoes").default(0).notNull(),
+    hashUltimasMovs: varchar("hash_ultimas_movs", { length: 64 }),
+    cnjsConhecidos: text("cnjs_conhecidos"),
+    /**
+     * Capa do processo serializada (classeProcesso, juiz, vara,
+     * valorCausaCentavos, dataDistribuicao, etc.). Persistida pelo cron
+     * + pela busca sob demanda — frontend lê daqui em vez de re-consultar
+     * o tribunal a cada refresh.
+     */
+    capaJson: text("capa_json"),
+    /**
+     * Partes do processo serializadas (autor, réu, advogados, polos).
+     * Mesmo padrão de capaJson.
+     */
+    partesJson: text("partes_json"),
+    ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
+    ultimoErro: text("ultimo_erro"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    idxEscrCreated: index("idx_motor_mon_escr_created").on(t.escritorioId, t.createdAt),
+    idxStatusConsulta: index("idx_motor_mon_status_consulta").on(t.status, t.ultimaConsultaEm),
+  }),
+);
 
 export type MotorMonitoramento = typeof motorMonitoramentos.$inferSelect;
 export type InsertMotorMonitoramento = typeof motorMonitoramentos.$inferInsert;
@@ -2274,11 +2281,28 @@ export const comissoesFechadas = mysqlTable(
      *  cria despesa pendente automática. Permite cascata na exclusão
      *  do fechamento. */
     despesaId: int("despesaIdComFech"),
+    /** Versão do fechamento pro mesmo período. `0` = fechamento primário
+     *  (default); `1, 2, ...` = re-fechamentos forçados (forcarDuplicado
+     *  na UI). A `versao` participa do UNIQUE abaixo: race entre cron
+     *  automático e clique manual ambos tentam versao=0 → segundo INSERT
+     *  cai em ER_DUP_ENTRY (capturado em db-comissoes.fecharComissao). */
+    versao: int("versao").default(0).notNull(),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
       t.escritorioId,
       t.atendenteId,
+    ),
+    /** Idempotência cross-origem: protege contra race condition entre
+     *  cron `processarAgendasComissao` e clique manual em "Fechar período"
+     *  no mesmo (escritório, atendente, período). Versão diferencia
+     *  re-fechamentos legítimos (forcarDuplicado) de duplicação por race. */
+    uqPeriodoVersao: uniqueIndex("com_fech_periodo_versao_uq").on(
+      t.escritorioId,
+      t.atendenteId,
+      t.periodoInicio,
+      t.periodoFim,
+      t.versao,
     ),
   }),
 );
@@ -2631,36 +2655,42 @@ export type InsertCofreSessao = typeof cofreSessoes.$inferInsert;
  * ter monitoramento prévio (caso clássico: cliente foi citado em ação
  * nova).
  */
-export const eventosProcesso = mysqlTable("eventos_processo", {
-  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
-  monitoramentoId: int("monitoramentoId"),
-  escritorioId: int("escritorioId").notNull(),
-  tipo: mysqlEnum("tipoEvento", [
-    "movimentacao",
-    "publicacao_dje",
-    "nova_acao",
-    "mandado",
-    "intimacao",
-    "citacao",
-    "sentenca",
-    "despacho",
-    "audiencia",
-    "outro",
-  ]).notNull(),
-  /** Quando o evento aconteceu no tribunal (não quando foi coletado) */
-  dataEvento: timestamp("dataEvento").notNull(),
-  fonte: mysqlEnum("fonteEvento", ["judit", "pje", "esaj", "eproc", "dje", "manual"]).notNull(),
-  conteudo: text("conteudo").notNull(),
-  /** Versão estruturada quando parser conseguiu extrair campos. JSON dentro de TEXT. */
-  conteudoJson: text("conteudoJson"),
-  cnjAfetado: varchar("cnjAfetado", { length: 32 }),
-  /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
-  hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
-  lido: boolean("lido").default(false).notNull(),
-  alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
-  alertaEnviadoEm: timestamp("alertaEnviadoEm"),
-  createdAt: timestamp("createdAtEvento").defaultNow().notNull(),
-});
+export const eventosProcesso = mysqlTable(
+  "eventos_processo",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    monitoramentoId: int("monitoramentoId"),
+    escritorioId: int("escritorioId").notNull(),
+    tipo: mysqlEnum("tipoEvento", [
+      "movimentacao",
+      "publicacao_dje",
+      "nova_acao",
+      "mandado",
+      "intimacao",
+      "citacao",
+      "sentenca",
+      "despacho",
+      "audiencia",
+      "outro",
+    ]).notNull(),
+    /** Quando o evento aconteceu no tribunal (não quando foi coletado) */
+    dataEvento: timestamp("dataEvento").notNull(),
+    fonte: mysqlEnum("fonteEvento", ["judit", "pje", "esaj", "eproc", "dje", "manual"]).notNull(),
+    conteudo: text("conteudo").notNull(),
+    /** Versão estruturada quando parser conseguiu extrair campos. JSON dentro de TEXT. */
+    conteudoJson: text("conteudoJson"),
+    cnjAfetado: varchar("cnjAfetado", { length: 32 }),
+    /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
+    hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
+    lido: boolean("lido").default(false).notNull(),
+    alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
+    alertaEnviadoEm: timestamp("alertaEnviadoEm"),
+    createdAt: timestamp("createdAtEvento").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxEscrCnjData: index("idx_eventos_proc_escr_cnj_data").on(t.escritorioId, t.cnjAfetado, t.dataEvento),
+  }),
+);
 
 export type EventoProcesso = typeof eventosProcesso.$inferSelect;
 export type InsertEventoProcesso = typeof eventosProcesso.$inferInsert;
@@ -2815,3 +2845,37 @@ export const ofxImportacoesFitid = mysqlTable(
 );
 
 export type OfxImportacaoFitid = typeof ofxImportacoesFitid.$inferSelect;
+
+/**
+ * Log de emails enviados via Resend (bug #6). Antes só vivia no logger —
+ * erros somiam, admin não tinha rastro.
+ *
+ * Cobre TODOS os tipos: boas_vindas, redefinir_senha, convite_colaborador,
+ * etc. Para reenviar, basta carregar a row + chamar enviarEmail com o
+ * mesmo destinatário/assunto/html.
+ */
+export const emailLog = mysqlTable(
+  "email_log",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tipo: varchar("tipo", { length: 64 }).notNull(),
+    destinatario: varchar("destinatario", { length: 320 }).notNull(),
+    assunto: varchar("assunto", { length: 512 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull(),
+    erro: varchar("erro", { length: 1024 }),
+    escritorioId: int("escritorioId"),
+    userId: int("userId"),
+    contextoJson: text("contextoJson"),
+    tentativas: int("tentativas").default(1).notNull(),
+    ultimaTentativaEm: timestamp("ultimaTentativaEm").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxStatusCreated: index("idx_email_log_status_created").on(t.status, t.createdAt),
+    idxDestinatario: index("idx_email_log_destinatario").on(t.destinatario),
+    idxEscritorio: index("idx_email_log_escritorio").on(t.escritorioId),
+  }),
+);
+
+export type EmailLog = typeof emailLog.$inferSelect;
+export type InsertEmailLog = typeof emailLog.$inferInsert;

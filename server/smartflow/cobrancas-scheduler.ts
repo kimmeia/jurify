@@ -23,6 +23,7 @@ import { getDb } from "../db";
 import { asaasCobrancas, smartflowCenarios, asaasClientes, escritorios } from "../../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { captureError } from "../_core/sentry";
 import { dispararPagamentoVencido, dispararProximoVencimento } from "./dispatcher";
 import {
   acharSlotAtivo,
@@ -38,6 +39,24 @@ import type {
 } from "../../shared/smartflow-types";
 
 const log = createLogger("smartflow-cobrancas-scheduler");
+
+/**
+ * Reporta erros INESPERADOS escapados de `rodarCicloCobrancas`. O try/catch
+ * interno da função já trata erros previsíveis e retorna `{vencidas:0,
+ * proximas:0}` — esse handler cobre rejeições que furam o try (ex: erro
+ * async fora do try-block). Sem isso, lembretes de cobrança não disparam
+ * e o operador só descobre quando inadimplentes deixam de receber aviso.
+ *
+ * Exportada para teste em
+ * `server/__tests__/smartflow-schedulers-error-handler.test.ts`.
+ */
+export function reportarErroInesperado(err: unknown): void {
+  log.error(
+    { err: err instanceof Error ? err.stack : String(err) },
+    "[Cobranças] Erro inesperado escapou do ciclo — verifique rejeição async fora do try interno",
+  );
+  captureError(err, { kind: "smartflow-cobrancas-scheduler" });
+}
 
 /** Cron de 15min — precisão suficiente pros slots configuráveis. */
 const INTERVALO_MS = 15 * 60 * 1000;
@@ -232,8 +251,11 @@ export async function rodarCicloCobrancas(): Promise<{ vencidas: number; proxima
 export function iniciarCobrancasSchedulerSmartFlow() {
   if (intervalo) return;
   log.info({ intervaloMs: INTERVALO_MS }, "[Cobranças] Scheduler SmartFlow iniciado");
-  setTimeout(() => rodarCicloCobrancas().catch(() => {}), 2 * 60_000);
-  intervalo = setInterval(() => rodarCicloCobrancas().catch(() => {}), INTERVALO_MS);
+  setTimeout(() => rodarCicloCobrancas().catch(reportarErroInesperado), 2 * 60_000);
+  intervalo = setInterval(
+    () => rodarCicloCobrancas().catch(reportarErroInesperado),
+    INTERVALO_MS,
+  );
 }
 
 export function pararCobrancasSchedulerSmartFlow() {
