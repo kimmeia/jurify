@@ -2532,7 +2532,7 @@ export const asaasRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-    const ZERO = { recebido: 0, recebidoLiquido: 0, pendente: 0, vencido: 0, totalCobrancas: 0 };
+    const ZERO = { recebido: 0, recebidoLiquido: 0, pendente: 0, vencido: 0, recebidoComVencimentoNoPeriodo: 0, totalCobrancas: 0 };
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return ZERO;
 
@@ -2592,6 +2592,9 @@ export const asaasRouter = router({
           recebidoLiquido: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN ${valorLiquidoDec} ELSE 0 END), 0)`,
           pendente: sql<string>`COALESCE(SUM(CASE WHEN ${ehPending} AND ${pendingNoFuturo} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
           vencido: sql<string>`COALESCE(SUM(CASE WHEN ((${ehPending} AND ${pendingNoPassado}) OR ${ehOverdue}) AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
+          // Cobranças pagas cujo VENCIMENTO foi no período (independente de quando o pagamento ocorreu).
+          // Usado pra calcular taxa de inadimplência exata: do que deveria ser pago no período, quanto foi.
+          recebidoComVencimentoNoPeriodo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
           totalCobrancas: sql<number>`COALESCE(SUM(CASE
             WHEN ${ehPago} AND ${inRangePag} THEN 1
             WHEN ${ehPending} AND ${inRangeVenc} THEN 1
@@ -2606,6 +2609,7 @@ export const asaasRouter = router({
         recebidoLiquido: Number(agg?.recebidoLiquido ?? 0),
         pendente: Number(agg?.pendente ?? 0),
         vencido: Number(agg?.vencido ?? 0),
+        recebidoComVencimentoNoPeriodo: Number(agg?.recebidoComVencimentoNoPeriodo ?? 0),
         totalCobrancas: Number(agg?.totalCobrancas ?? 0),
       };
     } catch {
