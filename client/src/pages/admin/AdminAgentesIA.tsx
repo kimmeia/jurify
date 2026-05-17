@@ -12,6 +12,10 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -714,9 +718,12 @@ export default function AdminAgentesIA() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  const [deletarAgenteConfirm, setDeletarAgenteConfirm] = useState<{ id: number; nome: string } | null>(null);
+
   const deletarMut = trpc.adminAgentesIa.deletar.useMutation({
     onSuccess: () => {
       toast.success("Agente deletado");
+      setDeletarAgenteConfirm(null);
       refetch();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
@@ -876,11 +883,8 @@ export default function AdminAgentesIA() {
                     size="sm"
                     variant="ghost"
                     className="text-[10px] h-7 px-2 text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm(`Deletar agente "${a.nome}"? Todos os documentos também serão removidos.`)) {
-                        deletarMut.mutate({ id: a.id });
-                      }
-                    }}
+                    onClick={() => setDeletarAgenteConfirm({ id: a.id, nome: a.nome })}
+                    disabled={deletarMut.isPending}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -908,6 +912,37 @@ export default function AdminAgentesIA() {
         open={!!treinandoId}
         onOpenChange={(o) => { if (!o) setTreinandoId(null); }}
       />
+
+      <AlertDialog
+        open={deletarAgenteConfirm !== null}
+        onOpenChange={(o) => { if (!o) setDeletarAgenteConfirm(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Deletar agente <strong>{deletarAgenteConfirm?.nome}</strong>?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>Todos os documentos vinculados</strong> também serão
+              removidos (cascata). Esta ação não pode ser desfeita. Conversas
+              ativas que dependem desse agente vão começar a falhar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deletarAgenteConfirm) deletarMut.mutate({ id: deletarAgenteConfirm.id });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarMut.isPending ? "Deletando..." : "Deletar agente + documentos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

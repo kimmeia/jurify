@@ -133,6 +133,7 @@ function ClienteDetalheDialog({
   const [excluirOpen, setExcluirOpen] = useState(false);
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [forcarExcluir, setForcarExcluir] = useState(false);
+  const [retirarConfirm, setRetirarConfirm] = useState<{ qtd: number; motivo?: string } | null>(null);
   const [cortesiaOpen, setCortesiaOpen] = useState(false);
   const [motivoCortesia, setMotivoCortesia] = useState("");
   const [expiraEmCortesia, setExpiraEmCortesia] = useState("");
@@ -455,8 +456,7 @@ function ClienteDetalheDialog({
                         toast.error("Quantidade maior que saldo", { description: `Saldo atual: ${saldoAtual}` });
                         return;
                       }
-                      if (!confirm(`Retirar ${qtd} créditos do escritório?`)) return;
-                      retirarMut.mutate({ userId: userId!, quantidade: qtd });
+                      setRetirarConfirm({ qtd });
                     }}
                     disabled={concederMut.isPending || retirarMut.isPending || (data as any)?.creditsSource !== "escritorio"}
                     className="flex-1 text-destructive hover:text-destructive"
@@ -474,10 +474,7 @@ function ClienteDetalheDialog({
                       size="sm"
                       variant="ghost"
                       className="w-full text-xs text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        if (!confirm(`Zerar todo o saldo do escritório (${saldoAtual} créditos)? Útil pra resetar testes.`)) return;
-                        retirarMut.mutate({ userId: userId!, quantidade: saldoAtual, motivo: "Zerado pelo admin" });
-                      }}
+                      onClick={() => setRetirarConfirm({ qtd: saldoAtual, motivo: "Zerado pelo admin" })}
                       disabled={retirarMut.isPending}
                     >
                       {retirarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
@@ -808,6 +805,42 @@ function ClienteDetalheDialog({
             >
               {bloquearMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Bloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={retirarConfirm !== null} onOpenChange={(o) => { if (!o) setRetirarConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {retirarConfirm?.motivo === "Zerado pelo admin"
+                ? `Zerar saldo (${retirarConfirm?.qtd} créditos)?`
+                : `Retirar ${retirarConfirm?.qtd} créditos do escritório?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa operação é registrada na auditoria. Use apenas pra correção
+              manual de saldo (ex: reembolso, ajuste pós-suporte) ou pra resetar
+              testes em produção.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={retirarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={retirarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!retirarConfirm || !userId) return;
+                retirarMut.mutate({
+                  userId,
+                  quantidade: retirarConfirm.qtd,
+                  motivo: retirarConfirm.motivo,
+                });
+                setRetirarConfirm(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {retirarMut.isPending ? "Retirando..." : "Confirmar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
