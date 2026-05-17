@@ -89,12 +89,16 @@ describe("admin.stats", () => {
 });
 
 describe("admin.allUsers", () => {
-  it("returns users list for admin", async () => {
+  it("returns paginated users list for admin", async () => {
     const ctx = createAdminContext();
     const caller = appRouter.createCaller(ctx);
-    const usersList = await caller.admin.allUsers();
+    const result = await caller.admin.allUsers();
 
-    expect(Array.isArray(usersList)).toBe(true);
+    // Novo shape: { itens, total } pra UI paginar (era array antes).
+    expect(result).toHaveProperty("itens");
+    expect(result).toHaveProperty("total");
+    expect(Array.isArray(result.itens)).toBe(true);
+    expect(typeof result.total).toBe("number");
   });
 
   it("rejects non-admin user", async () => {
@@ -140,12 +144,14 @@ describe("admin.recentSubscriptions", () => {
 });
 
 describe("admin.allSubscriptions", () => {
-  it("returns all subscriptions for admin", async () => {
+  it("returns paginated subscriptions list for admin", async () => {
     const ctx = createAdminContext();
     const caller = appRouter.createCaller(ctx);
-    const subs = await caller.admin.allSubscriptions();
+    const result = await caller.admin.allSubscriptions();
 
-    expect(Array.isArray(subs)).toBe(true);
+    expect(result).toHaveProperty("itens");
+    expect(result).toHaveProperty("total");
+    expect(Array.isArray(result.itens)).toBe(true);
   });
 
   it("rejects non-admin user", async () => {

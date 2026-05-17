@@ -13,6 +13,10 @@ import { TRPCError } from "@trpc/server";
 import { eq, inArray, desc, and, gt, sql } from "drizzle-orm";
 import { adminProcedure, router } from "../_core/trpc";
 import { registrarAuditoria } from "../_core/audit";
+import { consume as rateLimitConsume } from "../_core/rate-limit";
+import { createLogger } from "../_core/logger";
+
+const log = createLogger("admin-router");
 import {
   getDb,
   getAllUsers,
@@ -49,8 +53,24 @@ export const adminRouter = router({
   /** Get all users (legacy) */
   users: adminProcedure.query(async () => getAllUsers()),
 
-  /** Get all users with subscription status */
-  allUsers: adminProcedure.query(async () => getAllUsersWithSubscription()),
+  /**
+   * Lista paginada de users com info de subscription + escritório.
+   *
+   * Aceita `limit`, `offset`, `busca` e `tipo` (admin/cliente/colaborador/todos).
+   * Retorna `{ itens, total }` — UI usa `total` pra mostrar contador e calcular
+   * páginas.
+   *
+   * Antes do refactor de paginação, devolvia array com TODOS os users — quebrava
+   * conforme a base crescia.
+   */
+  allUsers: adminProcedure
+    .input(z.object({
+      limit: z.number().int().min(1).max(200).default(50),
+      offset: z.number().int().min(0).default(0),
+      busca: z.string().max(320).optional(),
+      tipo: z.enum(["admin", "cliente", "colaborador", "todos"]).default("todos"),
+    }).optional())
+    .query(async ({ input }) => getAllUsersWithSubscription(input ?? {})),
 
   /** Get recent users (last 10) */
   recentUsers: adminProcedure.query(async () => getRecentUsers(10)),
@@ -58,8 +78,18 @@ export const adminRouter = router({
   /** Get recent subscriptions with user info */
   recentSubscriptions: adminProcedure.query(async () => getRecentSubscriptions(10)),
 
-  /** Get all subscriptions with user info */
-  allSubscriptions: adminProcedure.query(async () => getAllSubscriptionsWithUsers()),
+  /**
+   * Lista paginada de subscriptions com nome do user.
+   * Mesmo padrão de `allUsers`: paginação + busca + filtro de status.
+   */
+  allSubscriptions: adminProcedure
+    .input(z.object({
+      limit: z.number().int().min(1).max(200).default(50),
+      offset: z.number().int().min(0).default(0),
+      busca: z.string().max(320).optional(),
+      status: z.string().max(32).optional(),
+    }).optional())
+    .query(async ({ input }) => getAllSubscriptionsWithUsers(input ?? {})),
 
   /** Update user role */
   updateUserRole: adminProcedure
@@ -67,7 +97,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const [target] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
 
       await db.update(users).set({ role: input.role }).where(eq(users.id, input.userId));
@@ -235,7 +269,29 @@ export const adminRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const user = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      // Projeção explícita — antes era SELECT * que devolvia passwordHash
+      // pra UI (vazamento real de hash de senha em /admin/clients).
+      const user = await db
+        .select({
+          id: users.id,
+          openId: users.openId,
+          name: users.name,
+          email: users.email,
+          googleSub: users.googleSub,
+          loginMethod: users.loginMethod,
+          role: users.role,
+          asaasCustomerId: users.asaasCustomerId,
+          bloqueado: users.bloqueado,
+          motivoBloqueio: users.motivoBloqueio,
+          bloqueadoEm: users.bloqueadoEm,
+          aceitouTermosEm: users.aceitouTermosEm,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          lastSignedIn: users.lastSignedIn,
+        })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (user.length === 0) throw new Error("Utilizador não encontrado");
 
       // Saldo: prefere fonte real (escritório). Fallback pra userCredits
@@ -440,7 +496,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const [target] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
 
       await db
@@ -470,7 +530,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      const [target] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
 
       await db
@@ -489,27 +553,98 @@ export const adminRouter = router({
       return { success: true, mensagem: "Usuário desbloqueado" };
     }),
 
-  /** Excluir usuário e dados associados */
+  /**
+   * Exclui usuário e seus vínculos como colaborador.
+   *
+   * Proteções (bug de segurança admin):
+   *  - `motivo` obrigatório (auditoria + lembrar admin que é destrutivo)
+   *  - Bloqueia exclusão de admins (já existia)
+   *  - Bloqueia exclusão do PRÓPRIO admin logado (suicídio acidental)
+   *  - Bloqueia se for dono de escritório com colaboradores ativos —
+   *    deletaria dados de N pessoas. Use `suspenderEscritorio` antes
+   *    ou passe `forcarMesmoComEscritorio=true` (auditado)
+   *  - Rate limit por admin: 5 exclusões / hora (evita botão preso /
+   *    automação ruim)
+   *  - Transaction: colabs + user numa unidade — sem mais
+   *    `try {} catch {}` silencioso que deixava órfãos
+   */
   excluirUsuario: adminProcedure
-    .input(z.object({ userId: z.number(), motivo: z.string().max(500).optional() }))
+    .input(z.object({
+      userId: z.number(),
+      motivo: z.string().min(5).max(500),
+      forcarMesmoComEscritorio: z.boolean().default(false),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+
+      const rl = rateLimitConsume({
+        name: "admin-excluir-usuario",
+        key: String(ctx.user.id),
+        max: 5,
+        windowMs: 60 * 60_000,
+      });
+      if (!rl.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Limite de exclusões atingido (5/h). Tente novamente em ${Math.ceil(rl.retryAfter / 60)} min.`,
+        });
+      }
+
+      const [target] = await db
+        .select({ id: users.id, email: users.email, name: users.name, role: users.role })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
-      if (target.role === "admin") throw new Error("Não é possível excluir um administrador");
+      if (target.role === "admin") throw new Error("Não é possível excluir um administrador. Remova o role primeiro.");
+      if (target.id === ctx.user.id) throw new Error("Não é possível excluir a si mesmo");
 
-      // Excluir colaborador e escritório vinculado
-      try {
-        const { colaboradores: colabTable, escritorios: escTable } = await import("../../drizzle/schema");
-        const colabs = await db.select().from(colabTable).where(eq(colabTable.userId, input.userId));
+      const { colaboradores: colabTable, escritorios: escTable } = await import("../../drizzle/schema");
+
+      // Bloqueia se o user é dono de escritório com colaboradores ativos
+      // — exclusão destruiria dados de toda a equipe. Admin deve usar
+      // suspenderEscritorio ou passar forcarMesmoComEscritorio=true
+      // (decisão consciente, auditada).
+      const escritoriosProprios = await db
+        .select({ id: escTable.id, nome: escTable.nome })
+        .from(escTable)
+        .where(eq(escTable.ownerId, input.userId));
+
+      if (escritoriosProprios.length > 0 && !input.forcarMesmoComEscritorio) {
+        const escIds = escritoriosProprios.map((e) => e.id);
+        const colabsCount = await db
+          .select({ c: sql<number>`COUNT(*)` })
+          .from(colabTable)
+          .where(and(inArray(colabTable.escritorioId, escIds), eq(colabTable.ativo, true)));
+        const total = Number(colabsCount[0]?.c ?? 0);
+
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Usuário é dono de ${escritoriosProprios.length} escritório(s) com ${total} colaborador(es) ativo(s). Use "suspender escritório" antes, ou marque "forçar mesmo com escritório" se realmente quer destruir tudo.`,
+        });
+      }
+
+      // Transaction: tudo ou nada. Erro de delete dos colaboradores não
+      // pode mais deixar o user "excluído" + colaboradores órfãos no DB.
+      await db.transaction(async (tx) => {
+        const colabs = await tx.select({ id: colabTable.id }).from(colabTable).where(eq(colabTable.userId, input.userId));
         for (const c of colabs) {
-          await db.delete(colabTable).where(eq(colabTable.id, c.id));
+          await tx.delete(colabTable).where(eq(colabTable.id, c.id));
         }
-      } catch { /* ignore */ }
+        await tx.delete(users).where(eq(users.id, input.userId));
+      });
 
-      // Excluir usuário
-      await db.delete(users).where(eq(users.id, input.userId));
+      log.info(
+        {
+          adminId: ctx.user.id,
+          userId: input.userId,
+          email: target.email,
+          escritoriosProprios: escritoriosProprios.length,
+          forcado: input.forcarMesmoComEscritorio,
+        },
+        "Admin excluiu usuário",
+      );
 
       await registrarAuditoria({
         ctx,
@@ -517,7 +652,11 @@ export const adminRouter = router({
         alvoTipo: "user",
         alvoId: input.userId,
         alvoNome: target.name || target.email || undefined,
-        detalhes: input.motivo ? { motivo: input.motivo } : undefined,
+        detalhes: {
+          motivo: input.motivo,
+          escritoriosProprios: escritoriosProprios.length,
+          forcado: input.forcarMesmoComEscritorio,
+        },
       });
 
       return { success: true, mensagem: `Usuário ${target.email} excluído` };
@@ -666,7 +805,19 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const [target] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      // Reset de senha PRECISA do passwordHash pra checar se o user tem
+      // (login Google não tem). Único lugar onde mantemos o hash na query.
+      const [target] = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          passwordHash: users.passwordHash,
+        })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
       if (!target) throw new Error("Usuário não encontrado");
       if (!target.passwordHash) {
         throw new Error("Este usuário não tem senha (login via Google ou outro provider).");

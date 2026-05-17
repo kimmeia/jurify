@@ -43,11 +43,11 @@ export default function AdminErros() {
   const [pagina, setPagina] = useState(1);
   const limite = 25;
 
-  const { data, isLoading, refetch } = (trpc as any).adminErros.listar.useQuery({
+  const { data, isLoading, refetch } = trpc.adminErros.listar.useQuery({
     status, busca: busca || undefined, limite, pagina,
   }, { refetchOnWindowFocus: true });
 
-  const resolverMut = (trpc as any).adminErros.resolver.useMutation({
+  const resolverMut = trpc.adminErros.resolver.useMutation({
     onSuccess: () => { toast.success("Issue marcada como resolvida"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });

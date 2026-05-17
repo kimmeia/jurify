@@ -373,8 +373,12 @@ export async function criarConvite(
 
   if (existente) throw new Error(`Já existe um convite pendente para ${email}.`);
 
-  // Verificar se já é colaborador
-  const [userExistente] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+  // Verificar se já é colaborador. Projeção explícita — só precisa do id.
+  const [userExistente] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email.toLowerCase()))
+    .limit(1);
   if (userExistente) {
     const [colabExistente] = await db.select().from(colaboradores)
       .where(and(eq(colaboradores.escritorioId, escritorioId), eq(colaboradores.userId, userExistente.id), eq(colaboradores.ativo, true)))
