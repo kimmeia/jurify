@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, between, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, between, desc, eq, gte, inArray, like, lte, ne, sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
@@ -56,7 +56,12 @@ export const despesasRouter = router({
       z
         .object({
           status: z.enum(["pendente", "parcial", "pago", "vencido"]).optional(),
-          categoriaId: z.number().optional(),
+          categoriaIds: z.array(z.number().int().positive()).optional(),
+          recorrencia: z.enum(["todas", "recorrentes", "pontuais"]).optional(),
+          origem: z
+            .enum(["manual", "taxa_asaas", "recorrencia", "extrato_asaas"])
+            .optional(),
+          busca: z.string().max(128).optional(),
           periodoInicio: dataInput.optional(),
           periodoFim: dataInput.optional(),
           limit: z.number().min(1).max(500).default(200),
@@ -72,7 +77,18 @@ export const despesasRouter = router({
 
       const conds = [eq(despesas.escritorioId, esc.escritorio.id)];
       if (input?.status) conds.push(eq(despesas.status, input.status));
-      if (input?.categoriaId) conds.push(eq(despesas.categoriaId, input.categoriaId));
+      if (input?.categoriaIds && input.categoriaIds.length > 0) {
+        conds.push(inArray(despesas.categoriaId, input.categoriaIds));
+      }
+      if (input?.origem) conds.push(eq(despesas.origem, input.origem));
+      if (input?.recorrencia === "recorrentes") {
+        conds.push(ne(despesas.recorrencia, "nenhuma"));
+      } else if (input?.recorrencia === "pontuais") {
+        conds.push(eq(despesas.recorrencia, "nenhuma"));
+      }
+      if (input?.busca && input.busca.trim().length > 0) {
+        conds.push(like(despesas.descricao, `%${input.busca.trim()}%`));
+      }
       if (input?.periodoInicio && input?.periodoFim) {
         conds.push(between(despesas.vencimento, input.periodoInicio, input.periodoFim));
       } else if (input?.periodoInicio) {
@@ -507,6 +523,175 @@ export const despesasRouter = router({
           ),
         );
       return { success: true, filhasRemovidas };
+    }),
+
+  /**
+   * Atribui uma categoria a várias despesas de uma vez. Permite categoriaId
+   * null pra desvincular. Não toca em campos de pagamento/recorrência.
+   */
+  atribuirCategoriaEmMassa: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+        categoriaId: z.number().int().positive().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Valida categoria pertence ao escritório, se fornecida.
+      if (input.categoriaId !== null) {
+        const [cat] = await db
+          .select({ id: categoriasDespesa.id })
+          .from(categoriasDespesa)
+          .where(
+            and(
+              eq(categoriasDespesa.id, input.categoriaId),
+              eq(categoriasDespesa.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
+        if (!cat) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Categoria não encontrada.",
+          });
+        }
+      }
+
+      const r = await db
+        .update(despesas)
+        .set({ categoriaId: input.categoriaId })
+        .where(
+          and(
+            eq(despesas.escritorioId, esc.escritorio.id),
+            inArray(despesas.id, input.ids),
+          ),
+        );
+      const atualizadas =
+        Number((r as any)?.[0]?.affectedRows ?? (r as any)?.affectedRows ?? 0);
+      return { atualizadas };
+    }),
+
+  /**
+   * Marca várias despesas como pagas (integral) numa data única. Pula despesas
+   * já pagas. Pagamento parcial fica como mutation individual — bulk só faz
+   * pagamento integral pra evitar UX complicada de informar valor por item.
+   */
+  marcarPagoEmMassa: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+        dataPagamento: dataInput.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const dataPag = input.dataPagamento ?? dataHojeBR();
+
+      // Pega valor de cada despesa pra setar valorPago = valor.
+      const alvos = await db
+        .select({
+          id: despesas.id,
+          valor: despesas.valor,
+          status: despesas.status,
+        })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.escritorioId, esc.escritorio.id),
+            inArray(despesas.id, input.ids),
+          ),
+        );
+
+      let atualizadas = 0;
+      let jaPagas = 0;
+      for (const d of alvos) {
+        if (d.status === "pago") {
+          jaPagas++;
+          continue;
+        }
+        await db
+          .update(despesas)
+          .set({
+            status: "pago",
+            dataPagamento: dataPag,
+            valorPago: d.valor,
+          })
+          .where(
+            and(
+              eq(despesas.id, d.id),
+              eq(despesas.escritorioId, esc.escritorio.id),
+            ),
+          );
+        atualizadas++;
+      }
+      return { atualizadas, jaPagas };
+    }),
+
+  /**
+   * Exclui várias despesas em massa. Quando uma despesa-modelo recorrente
+   * é incluída no batch, suas filhas pendentes também são removidas (mesmo
+   * comportamento do excluir individual).
+   */
+  excluirEmMassa: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await exigirAcaoFinanceiro(ctx.user.id, "excluir");
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Modelos recorrentes incluídos → remove filhas pendentes antes.
+      const modelos = await db
+        .select({ id: despesas.id, recorrencia: despesas.recorrencia })
+        .from(despesas)
+        .where(
+          and(
+            eq(despesas.escritorioId, esc.escritorio.id),
+            inArray(despesas.id, input.ids),
+            ne(despesas.recorrencia, "nenhuma"),
+          ),
+        );
+
+      let filhasRemovidas = 0;
+      if (modelos.length > 0) {
+        const modeloIds = modelos.map((m) => m.id);
+        const r = await db
+          .delete(despesas)
+          .where(
+            and(
+              eq(despesas.escritorioId, esc.escritorio.id),
+              inArray(despesas.recorrenciaDeOrigemId, modeloIds),
+              eq(despesas.status, "pendente"),
+            ),
+          );
+        filhasRemovidas =
+          Number((r as any)?.[0]?.affectedRows ?? (r as any)?.affectedRows ?? 0);
+      }
+
+      const r = await db
+        .delete(despesas)
+        .where(
+          and(
+            eq(despesas.escritorioId, esc.escritorio.id),
+            inArray(despesas.id, input.ids),
+          ),
+        );
+      const excluidas =
+        Number((r as any)?.[0]?.affectedRows ?? (r as any)?.affectedRows ?? 0);
+      return { excluidas, filhasRemovidas };
     }),
 
   /** Totais agregados para o card de KPIs (no período de vencimento). */

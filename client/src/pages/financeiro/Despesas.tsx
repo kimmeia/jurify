@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import {
   Select,
   SelectContent,
@@ -61,6 +63,8 @@ import {
   Plus,
   Repeat,
   RotateCcw,
+  Search,
+  Tag,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -127,12 +131,21 @@ export function DespesasTab() {
   const [periodoInicio, setPeriodoInicio] = useState(inicioDoMesIso());
   const [periodoFim, setPeriodoFim] = useState(fimDoMesIso());
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
+  const [filtroRecorrencia, setFiltroRecorrencia] = useState<"todas" | "recorrentes" | "pontuais">("todas");
+  const [filtroOrigem, setFiltroOrigem] = useState<string>("todas");
+  const [busca, setBusca] = useState("");
   const [novaAberta, setNovaAberta] = useState(false);
   const [editando, setEditando] = useState<DespesaListItem | null>(null);
   const [pagando, setPagando] = useState<DespesaListItem | null>(null);
   const [despesaParaExcluir, setDespesaParaExcluir] = useState<DespesaListItem | null>(
     null,
   );
+  // Bulk select + ações em massa
+  const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
+  const [bulkCategoriaOpen, setBulkCategoriaOpen] = useState(false);
+  const [bulkPagarOpen, setBulkPagarOpen] = useState(false);
+  const [bulkExcluirOpen, setBulkExcluirOpen] = useState(false);
   const perms = useFinanceiroPerms();
 
   // Paginação server-side: 20 itens por página, reset ao mudar filtros.
@@ -140,13 +153,21 @@ export function DespesasTab() {
   const [pagina, setPagina] = useState(0);
   useEffect(() => {
     setPagina(0);
-  }, [periodoInicio, periodoFim, filtroStatus]);
+    // Limpa seleção quando filtro muda (linhas selecionadas podem sair de vista).
+    setSelecionadas(new Set());
+  }, [periodoInicio, periodoFim, filtroStatus, filtroCategorias, filtroRecorrencia, filtroOrigem, busca]);
 
   const status = filtroStatus === "todos" ? undefined : (filtroStatus as any);
   const lista = trpc.despesas.listar.useQuery({
     periodoInicio,
     periodoFim,
     status,
+    categoriaIds: filtroCategorias.length > 0
+      ? filtroCategorias.map((s) => Number(s))
+      : undefined,
+    recorrencia: filtroRecorrencia === "todas" ? undefined : filtroRecorrencia,
+    origem: filtroOrigem === "todas" ? undefined : (filtroOrigem as any),
+    busca: busca.trim() || undefined,
     limit: ITENS_POR_PAGINA,
     offset: pagina * ITENS_POR_PAGINA,
   });
@@ -154,6 +175,66 @@ export function DespesasTab() {
   const total = lista.data?.total ?? 0;
   const totalPaginas = Math.max(1, Math.ceil(total / ITENS_POR_PAGINA));
   const kpis = trpc.despesas.kpis.useQuery({ periodoInicio, periodoFim });
+  const categoriasQ = trpc.financeiro.listarCategoriasDespesa.useQuery();
+  const categorias = categoriasQ.data ?? [];
+
+  // Helpers de bulk select.
+  const toggleSelecionada = (id: number) => {
+    setSelecionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelecionarTodas = () => {
+    if (selecionadas.size === itens.length && itens.length > 0) {
+      setSelecionadas(new Set());
+    } else {
+      setSelecionadas(new Set(itens.map((d) => d.id)));
+    }
+  };
+
+  // Mutations bulk.
+  const bulkCategoriaMut = (trpc as any).despesas.atribuirCategoriaEmMassa.useMutation({
+    onSuccess: (r: { atualizadas: number }) => {
+      toast.success(`${r.atualizadas} despesa(s) atualizada(s)`);
+      utils.despesas.listar.invalidate();
+      utils.despesas.kpis.invalidate();
+      setSelecionadas(new Set());
+      setBulkCategoriaOpen(false);
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+  const bulkPagarMut = (trpc as any).despesas.marcarPagoEmMassa.useMutation({
+    onSuccess: (r: { atualizadas: number; jaPagas: number }) => {
+      toast.success(
+        `${r.atualizadas} despesa(s) marcada(s) como paga`,
+        r.jaPagas > 0
+          ? { description: `${r.jaPagas} já estavam pagas.` }
+          : undefined,
+      );
+      utils.despesas.listar.invalidate();
+      utils.despesas.kpis.invalidate();
+      setSelecionadas(new Set());
+      setBulkPagarOpen(false);
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+  const bulkExcluirMut = (trpc as any).despesas.excluirEmMassa.useMutation({
+    onSuccess: (r: { excluidas: number; filhasRemovidas: number }) => {
+      const desc =
+        r.filhasRemovidas > 0
+          ? `${r.filhasRemovidas} ocorrência(s) recorrente(s) também removida(s).`
+          : undefined;
+      toast.success(`${r.excluidas} despesa(s) excluída(s)`, desc ? { description: desc } : undefined);
+      utils.despesas.listar.invalidate();
+      utils.despesas.kpis.invalidate();
+      setSelecionadas(new Set());
+      setBulkExcluirOpen(false);
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
 
   const reabrirMut = trpc.despesas.reabrir.useMutation({
     onSuccess: () => {
@@ -202,47 +283,159 @@ export function DespesasTab() {
 
   return (
     <div className="space-y-4">
-      {/* Filtros */}
+      {/* Filtros — 2 linhas: busca + período/ação na 1ª, filtros multi na 2ª */}
       <Card>
-        <CardContent className="pt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-            <div className="space-y-1.5">
-              <Label className="text-xs">De (vencimento)</Label>
+        <CardContent className="pt-5 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar descrição..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="pl-9 h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">De (venc.)</Label>
               <Input
                 type="date"
                 value={periodoInicio}
                 onChange={(e) => setPeriodoInicio(e.target.value)}
+                className="h-9 text-xs w-36"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Até</Label>
+            <div className="space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">Até</Label>
               <Input
                 type="date"
                 value={periodoFim}
                 onChange={(e) => setPeriodoFim(e.target.value)}
+                className="h-9 text-xs w-36"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Status</Label>
-              <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="parcial">Parcial</SelectItem>
-                  <SelectItem value="pago">Pago</SelectItem>
-                  <SelectItem value="vencido">Vencido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="flex-1" />
             {perms.podeCriar && (
               <Button onClick={() => setNovaAberta(true)}>
                 <Plus className="h-4 w-4 mr-2" /> Nova despesa
               </Button>
             )}
           </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Filtros:</span>
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="h-9 text-xs w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Status: Todos</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="parcial">Parcial</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="vencido">Vencido</SelectItem>
+              </SelectContent>
+            </Select>
+            <MultiSelectFilter
+              placeholder="Categorias"
+              value={filtroCategorias}
+              onChange={setFiltroCategorias}
+              className="w-44"
+              options={categorias.map((c: any) => ({
+                value: String(c.id),
+                label: c.nome,
+              }))}
+            />
+            <Select
+              value={filtroRecorrencia}
+              onValueChange={(v) => setFiltroRecorrencia(v as any)}
+            >
+              <SelectTrigger className="h-9 text-xs w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Recorrência: Todas</SelectItem>
+                <SelectItem value="recorrentes">Só recorrentes</SelectItem>
+                <SelectItem value="pontuais">Só pontuais</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+              <SelectTrigger className="h-9 text-xs w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Origem: Todas</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+                <SelectItem value="recorrencia">Recorrência (auto)</SelectItem>
+                <SelectItem value="taxa_asaas">Taxa Asaas</SelectItem>
+                <SelectItem value="extrato_asaas">Extrato Asaas</SelectItem>
+              </SelectContent>
+            </Select>
+            {(filtroStatus !== "todos" ||
+              filtroCategorias.length > 0 ||
+              filtroRecorrencia !== "todas" ||
+              filtroOrigem !== "todas" ||
+              busca.trim() !== "") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs"
+                onClick={() => {
+                  setFiltroStatus("todos");
+                  setFiltroCategorias([]);
+                  setFiltroRecorrencia("todas");
+                  setFiltroOrigem("todas");
+                  setBusca("");
+                }}
+              >
+                Limpar
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
+
+      {/* Bulk action bar — visível só quando há seleções */}
+      {selecionadas.size > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/30 dark:border-blue-900">
+          <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+            {selecionadas.size} despesa(s) selecionada(s)
+          </span>
+          <div className="flex-1" />
+          {perms.podeEditar && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkCategoriaOpen(true)}
+            >
+              <Tag className="h-3.5 w-3.5 mr-1.5" />
+              Mudar categoria
+            </Button>
+          )}
+          {perms.podeEditar && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkPagarOpen(true)}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+              Marcar como pago
+            </Button>
+          )}
+          {perms.podeExcluir && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              onClick={() => setBulkExcluirOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Excluir
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelecionadas(new Set())}
+          >
+            Limpar seleção
+          </Button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -296,6 +489,15 @@ export function DespesasTab() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="text-xs w-10">
+                    <Checkbox
+                      checked={
+                        itens.length > 0 && selecionadas.size === itens.length
+                      }
+                      onCheckedChange={toggleSelecionarTodas}
+                      aria-label="Selecionar todas"
+                    />
+                  </TableHead>
                   <TableHead className="text-xs">Vencimento</TableHead>
                   <TableHead className="text-xs">Descrição</TableHead>
                   <TableHead className="text-xs">Categoria</TableHead>
@@ -311,7 +513,17 @@ export function DespesasTab() {
                   const valorPago = Number(d.valorPago ?? 0);
                   const restante = Math.max(0, valorTotal - valorPago);
                   return (
-                    <TableRow key={d.id}>
+                    <TableRow
+                      key={d.id}
+                      data-state={selecionadas.has(d.id) ? "selected" : undefined}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selecionadas.has(d.id)}
+                          onCheckedChange={() => toggleSelecionada(d.id)}
+                          aria-label={`Selecionar despesa ${d.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="text-xs">{formatData(d.vencimento)}</TableCell>
                       <TableCell className="text-xs max-w-[260px] truncate">
                         {d.descricao}
@@ -538,6 +750,54 @@ export function DespesasTab() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <BulkCategoriaDialog
+        open={bulkCategoriaOpen}
+        onOpenChange={setBulkCategoriaOpen}
+        ids={Array.from(selecionadas)}
+        categorias={categorias}
+        onConfirm={(catId) =>
+          bulkCategoriaMut.mutate({ ids: Array.from(selecionadas), categoriaId: catId })
+        }
+        isPending={bulkCategoriaMut.isPending}
+      />
+
+      <BulkPagarDialog
+        open={bulkPagarOpen}
+        onOpenChange={setBulkPagarOpen}
+        ids={Array.from(selecionadas)}
+        onConfirm={(dataPag) =>
+          bulkPagarMut.mutate({ ids: Array.from(selecionadas), dataPagamento: dataPag })
+        }
+        isPending={bulkPagarMut.isPending}
+      />
+
+      <AlertDialog open={bulkExcluirOpen} onOpenChange={setBulkExcluirOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selecionadas.size} despesa(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se alguma for despesa-modelo recorrente, todas as filhas pendentes
+              também serão removidas. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                bulkExcluirMut.mutate({ ids: Array.from(selecionadas) })
+              }
+              disabled={bulkExcluirMut.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {bulkExcluirMut.isPending && (
+                <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              )}
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -951,6 +1211,128 @@ function RegistrarPagamentoDialog({
               <DollarSign className="h-4 w-4 mr-2" />
             )}
             Registrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Dialog: mudar categoria em massa ─────────────────────────────────────
+function BulkCategoriaDialog({
+  open,
+  onOpenChange,
+  ids,
+  categorias,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  ids: number[];
+  categorias: Array<{ id: number; nome: string }>;
+  onConfirm: (categoriaId: number | null) => void;
+  isPending: boolean;
+}) {
+  const [valor, setValor] = useState<string>("");
+  useEffect(() => {
+    if (open) setValor("");
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mudar categoria de {ids.length} despesa(s)</DialogTitle>
+          <DialogDescription>
+            As despesas selecionadas terão a categoria atualizada. Outras
+            informações (valor, vencimento, status) não mudam.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">Nova categoria</Label>
+          <Select value={valor} onValueChange={setValor}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__null__">— Sem categoria —</SelectItem>
+              {categorias.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => {
+              const id = valor === "__null__" ? null : Number(valor) || null;
+              onConfirm(id);
+            }}
+            disabled={!valor || isPending}
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+            Atualizar {ids.length} despesa(s)
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Dialog: marcar várias como pagas (integral, mesma data) ─────────────
+function BulkPagarDialog({
+  open,
+  onOpenChange,
+  ids,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  ids: number[];
+  onConfirm: (dataPagamento: string) => void;
+  isPending: boolean;
+}) {
+  const [data, setData] = useState<string>(hojeIso());
+  useEffect(() => {
+    if (open) setData(hojeIso());
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Marcar {ids.length} despesa(s) como pagas</DialogTitle>
+          <DialogDescription>
+            Cada despesa será marcada como paga integralmente (<code>valorPago = valor</code>)
+            na data informada. Despesas que já estão como "pago" são puladas
+            sem erro. Pagamento parcial precisa ser feito uma por vez.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">Data do pagamento</Label>
+          <Input
+            type="date"
+            value={data}
+            onChange={(e) => setData(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => onConfirm(data)}
+            disabled={!data || isPending}
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+            Marcar como pago
           </Button>
         </DialogFooter>
       </DialogContent>
