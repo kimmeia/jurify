@@ -1751,7 +1751,7 @@ function NovasAcoesTab() {
                 </select>
                 {credsAtivas.length === 0 && (
                   <p className="text-[10px] text-orange-600 mt-1">
-                    Sem credenciais ativas. Cadastre uma em /cofre-credenciais primeiro.
+                    Sem credenciais ativas. Cadastre uma na aba "Cofre de Credenciais" primeiro.
                   </p>
                 )}
               </div>
