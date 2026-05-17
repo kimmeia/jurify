@@ -23,7 +23,7 @@ import {
   AlertTriangle, RotateCcw, Users as UsersIcon, Gift,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -130,6 +130,10 @@ function ClienteDetalheDialog({
   const [categoriaNota, setCategoriaNota] = useState<string>("geral");
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
   const [bloquearOpen, setBloquearOpen] = useState(false);
+  const [excluirOpen, setExcluirOpen] = useState(false);
+  const [motivoExclusao, setMotivoExclusao] = useState("");
+  const [forcarExcluir, setForcarExcluir] = useState(false);
+  const [retirarConfirm, setRetirarConfirm] = useState<{ qtd: number; motivo?: string } | null>(null);
   const [cortesiaOpen, setCortesiaOpen] = useState(false);
   const [motivoCortesia, setMotivoCortesia] = useState("");
   const [expiraEmCortesia, setExpiraEmCortesia] = useState("");
@@ -158,15 +162,15 @@ function ClienteDetalheDialog({
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
-  const retirarMut = (trpc.admin as any).retirarCreditos?.useMutation({
-    onSuccess: (res: any) => {
+  const retirarMut = trpc.admin.retirarCreditos.useMutation({
+    onSuccess: (res) => {
       toast.success(res.mensagem);
       setCreditosQtd("");
       utils.admin.clienteDetalhes.invalidate({ userId: userId! });
       onRefresh();
     },
-    onError: (err: any) => toast.error("Erro", { description: err.message }),
-  }) ?? { mutate: () => {}, isPending: false };
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
 
   const bloquearMut = trpc.admin.bloquearUsuario.useMutation({
     onSuccess: () => {
@@ -182,10 +186,17 @@ function ClienteDetalheDialog({
   const excluirMut = trpc.admin.excluirUsuario.useMutation({
     onSuccess: (data) => {
       toast.success(data.mensagem);
+      setExcluirOpen(false);
+      setMotivoExclusao("");
+      setForcarExcluir(false);
       onOpenChange(false);
       onRefresh();
     },
-    onError: (err) => toast.error("Erro ao excluir", { description: err.message }),
+    onError: (err) => {
+      // Se o servidor pediu pra "forçar mesmo com escritório", oferecemos
+      // o toggle no diálogo em vez de fechar.
+      toast.error("Erro ao excluir", { description: err.message });
+    },
   });
 
   const desbloquearMut = trpc.admin.desbloquearUsuario.useMutation({
@@ -200,13 +211,14 @@ function ClienteDetalheDialog({
   const impersonateMut = trpc.admin.impersonarUsuario.useMutation({
     onSuccess: (res) => {
       toast.success(res.mensagem);
-      // Aguarda o cookie ser persistido, limpa QUALQUER cache do React
-      // Query (pra forçar refetch do auth.me no próximo page load) e faz
-      // hard reload. Vai pra raiz "/" — Home.tsx cuida do roteamento
-      // correto baseado na subscription do usuário impersonado.
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 600);
+      // O servidor seta o cookie de sessão como parte da MESMA response
+      // dessa mutation — quando o handler `onSuccess` roda, o navegador
+      // já comitou o Set-Cookie no jar. Não precisa de setTimeout.
+      //
+      // Hard reload pra raiz: descarta cache do React Query e força
+      // refetch do `auth.me` com a nova sessão. Home.tsx decide pra onde
+      // rotear baseado no role/subscription do user impersonado.
+      window.location.href = "/";
     },
     onError: (err) => {
       console.error("[impersonarUsuario] erro:", err);
@@ -444,8 +456,7 @@ function ClienteDetalheDialog({
                         toast.error("Quantidade maior que saldo", { description: `Saldo atual: ${saldoAtual}` });
                         return;
                       }
-                      if (!confirm(`Retirar ${qtd} créditos do escritório?`)) return;
-                      retirarMut.mutate({ userId: userId!, quantidade: qtd });
+                      setRetirarConfirm({ qtd });
                     }}
                     disabled={concederMut.isPending || retirarMut.isPending || (data as any)?.creditsSource !== "escritorio"}
                     className="flex-1 text-destructive hover:text-destructive"
@@ -463,10 +474,7 @@ function ClienteDetalheDialog({
                       size="sm"
                       variant="ghost"
                       className="w-full text-xs text-muted-foreground hover:text-destructive"
-                      onClick={() => {
-                        if (!confirm(`Zerar todo o saldo do escritório (${saldoAtual} créditos)? Útil pra resetar testes.`)) return;
-                        retirarMut.mutate({ userId: userId!, quantidade: saldoAtual, motivo: "Zerado pelo admin" });
-                      }}
+                      onClick={() => setRetirarConfirm({ qtd: saldoAtual, motivo: "Zerado pelo admin" })}
                       disabled={retirarMut.isPending}
                     >
                       {retirarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
@@ -753,15 +761,11 @@ function ClienteDetalheDialog({
                   size="sm"
                   variant="destructive"
                   className="w-full mt-2"
-                  onClick={() => {
-                    if (confirm("ATENÇÃO: Excluir permanentemente este usuário e todos os dados? Esta ação NÃO pode ser desfeita.")) {
-                      excluirMut.mutate({ userId: userId! });
-                    }
-                  }}
+                  onClick={() => setExcluirOpen(true)}
                   disabled={excluirMut?.isPending}
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                  {excluirMut?.isPending ? "Excluindo..." : "Excluir conta permanentemente"}
+                  Excluir conta permanentemente
                 </Button>
               </div>
             </TabsContent>
@@ -801,6 +805,104 @@ function ClienteDetalheDialog({
             >
               {bloquearMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Bloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={retirarConfirm !== null} onOpenChange={(o) => { if (!o) setRetirarConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {retirarConfirm?.motivo === "Zerado pelo admin"
+                ? `Zerar saldo (${retirarConfirm?.qtd} créditos)?`
+                : `Retirar ${retirarConfirm?.qtd} créditos do escritório?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa operação é registrada na auditoria. Use apenas pra correção
+              manual de saldo (ex: reembolso, ajuste pós-suporte) ou pra resetar
+              testes em produção.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={retirarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={retirarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!retirarConfirm || !userId) return;
+                retirarMut.mutate({
+                  userId,
+                  quantidade: retirarConfirm.qtd,
+                  motivo: retirarConfirm.motivo,
+                });
+                setRetirarConfirm(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {retirarMut.isPending ? "Retirando..." : "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={excluirOpen} onOpenChange={(o) => { if (!o) { setExcluirOpen(false); setMotivoExclusao(""); setForcarExcluir(false); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Excluir <strong>{user?.name || user?.email}</strong> permanentemente?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação <strong>NÃO PODE ser desfeita</strong>. O usuário e todos
+              os seus vínculos como colaborador serão removidos. Se for dono de
+              escritório com colaboradores ativos, a exclusão será bloqueada pelo
+              servidor — use a opção de forçar apenas se realmente quiser destruir
+              o escritório inteiro.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-sm font-medium">Motivo (obrigatório, ≥5 chars) *</label>
+              <Textarea
+                value={motivoExclusao}
+                onChange={(e) => setMotivoExclusao(e.target.value)}
+                placeholder="Ex: usuário pediu exclusão LGPD via ticket #1234..."
+                className="mt-1 text-sm"
+                rows={3}
+              />
+            </div>
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={forcarExcluir}
+                onChange={(e) => setForcarExcluir(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Forçar mesmo se for dono de escritório</strong> — destruirá
+                escritórios e dados de colaboradores subordinados. Por padrão
+                BLOQUEADO. Use só se tem certeza absoluta.
+              </span>
+            </label>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirMut.isPending || motivoExclusao.trim().length < 5}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!userId || motivoExclusao.trim().length < 5) return;
+                excluirMut.mutate({
+                  userId,
+                  motivo: motivoExclusao.trim(),
+                  forcarMesmoComEscritorio: forcarExcluir,
+                });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -916,31 +1018,48 @@ function ClienteDetalheDialog({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function AdminClients() {
-  const { data: allUsers, isLoading, refetch } = trpc.admin.allUsers.useQuery(undefined, { retry: false });
   const [busca, setBusca] = useState("");
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  const [tipo, setTipo] = useState<"todos" | "admin" | "cliente" | "colaborador">("todos");
+  const [pagina, setPagina] = useState(0);
   const [detalheUserId, setDetalheUserId] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
+  const LIMITE = 50;
+
+  // Debounce busca pra não disparar query a cada tecla (evita N+1 requests
+  // em conexões lentas; também evita rebuild do count() no servidor).
+  useEffect(() => {
+    const t = setTimeout(() => { setBuscaDebounced(busca); setPagina(0); }, 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  const { data, isLoading, refetch } = trpc.admin.allUsers.useQuery(
+    {
+      limit: LIMITE,
+      offset: pagina * LIMITE,
+      busca: buscaDebounced || undefined,
+      tipo,
+    },
+    { retry: false },
+  );
+
+  const allUsers = data?.itens ?? [];
+  const total = data?.total ?? 0;
+  const totalPaginas = Math.ceil(total / LIMITE);
 
   // Migração one-shot userCredits (legacy) → escritorio_creditos. Idempotente.
-  const migrarLegacyMut = (trpc.admin as any).migrarCreditosLegacy?.useMutation({
-    onSuccess: (res: any) => {
+  const migrarLegacyMut = trpc.admin.migrarCreditosLegacy.useMutation({
+    onSuccess: (res) => {
       toast.success("Migração concluída", {
         description: `${res.migrados} escritório(s) migrados, ${res.totalCreditos} créditos transferidos. ${res.pulados} pulados (já migrados ou sem saldo).`,
         duration: 10000,
       });
       refetch();
     },
-    onError: (err: any) => toast.error("Erro na migração", { description: err.message }),
-  }) ?? { mutate: () => {}, isPending: false };
-
-  const filtrados = allUsers?.filter((u) => {
-    if (!busca.trim()) return true;
-    const b = busca.toLowerCase();
-    return (
-      (u.name || "").toLowerCase().includes(b) ||
-      (u.email || "").toLowerCase().includes(b)
-    );
+    onError: (err) => toast.error("Erro na migração", { description: err.message }),
   });
+
+  const [migrarLegacyAberto, setMigrarLegacyAberto] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -951,25 +1070,35 @@ export default function AdminClients() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <CardTitle className="text-base">Todos os clientes</CardTitle>
-              <CardDescription>{filtrados?.length ?? 0} utilizadores registados</CardDescription>
+              <CardDescription>
+                {total.toLocaleString("pt-BR")} utilizadores
+                {tipo !== "todos" || buscaDebounced ? " (filtrado)" : ""}
+              </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  if (!confirm("Migrar saldo userCredits (legacy) para escritorio_creditos?\n\nIdempotente — pode rodar várias vezes sem duplicar saldo. Roda 1x em produção após deploy.")) return;
-                  migrarLegacyMut.mutate({});
-                }}
+                onClick={() => setMigrarLegacyAberto(true)}
                 disabled={migrarLegacyMut.isPending}
                 className="text-xs"
               >
                 {migrarLegacyMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RotateCcw className="h-3 w-3 mr-1" />}
                 Migrar legacy
               </Button>
+              <select
+                value={tipo}
+                onChange={(e) => { setTipo(e.target.value as any); setPagina(0); }}
+                className="h-9 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="todos">Todos</option>
+                <option value="admin">Admins</option>
+                <option value="cliente">Clientes (donos)</option>
+                <option value="colaborador">Colaboradores</option>
+              </select>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -989,7 +1118,7 @@ export default function AdminClients() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : filtrados && filtrados.length > 0 ? (
+          ) : allUsers.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1003,16 +1132,16 @@ export default function AdminClients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtrados.map((u) => (
+                {allUsers.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.name || "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{u.email || "—"}</TableCell>
                     <TableCell>
                       <RoleBadge
                         role={u.role}
-                        tipoUsuario={(u as any).tipoUsuario}
-                        escritorioVinculado={(u as any).escritorioVinculado}
-                        cargoColaborador={(u as any).cargoColaborador}
+                        tipoUsuario={u.tipoUsuario}
+                        escritorioVinculado={u.escritorioVinculado}
+                        cargoColaborador={u.cargoColaborador}
                       />
                     </TableCell>
                     <TableCell><SubBadge active={u.hasActiveSubscription} /></TableCell>
@@ -1039,8 +1168,61 @@ export default function AdminClients() {
               <p className="text-sm">{busca ? "Nenhum resultado para a busca." : "Nenhum cliente encontrado."}</p>
             </div>
           )}
+
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t mt-4">
+              <div className="text-sm text-muted-foreground">
+                Página {pagina + 1} de {totalPaginas} • {total.toLocaleString("pt-BR")} {total === 1 ? "registro" : "registros"}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pagina === 0}
+                  onClick={() => setPagina((p) => Math.max(p - 1, 0))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pagina + 1 >= totalPaginas}
+                  onClick={() => setPagina((p) => p + 1)}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={migrarLegacyAberto} onOpenChange={setMigrarLegacyAberto}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Migrar saldo userCredits (legacy)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vai transferir saldo de <code>userCredits</code> (modelo antigo)
+              para <code>escritorio_creditos</code>. <strong>Idempotente</strong> —
+              pode rodar várias vezes sem duplicar saldo. Deve rodar 1× em produção
+              após o deploy do novo modelo de créditos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={migrarLegacyMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={migrarLegacyMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                migrarLegacyMut.mutate();
+                setMigrarLegacyAberto(false);
+              }}
+            >
+              {migrarLegacyMut.isPending ? "Migrando..." : "Migrar agora"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ClienteDetalheDialog
         userId={detalheUserId}

@@ -29,12 +29,12 @@ function formatarTamanho(bytes: number): string {
 
 export default function AdminBackups() {
   const utils = trpc.useUtils();
-  const status = (trpc as any).adminBackup.status.useQuery();
-  const lista = (trpc as any).adminBackup.listar.useQuery(
+  const status = trpc.adminBackup.status.useQuery();
+  const lista = trpc.adminBackup.listar.useQuery(
     { limite: 50 },
     { enabled: status.data?.configurado === true },
   );
-  const gerarMut = (trpc as any).adminBackup.gerarAgora.useMutation({
+  const gerarMut = trpc.adminBackup.gerarAgora.useMutation({
     onSuccess: () => {
       toast.success("Backup gerado com sucesso");
       utils.adminBackup.listar.invalidate();
