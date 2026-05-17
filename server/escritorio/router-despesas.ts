@@ -60,6 +60,7 @@ export const despesasRouter = router({
           periodoInicio: dataInput.optional(),
           periodoFim: dataInput.optional(),
           limit: z.number().min(1).max(500).default(200),
+          offset: z.number().min(0).default(0),
         })
         .optional(),
     )
@@ -67,7 +68,7 @@ export const despesasRouter = router({
       const esc = await requireEscritorio(ctx.user.id);
       await exigirAcaoFinanceiro(ctx.user.id, "ver");
       const db = await getDb();
-      if (!db) return [];
+      if (!db) return { items: [], total: 0 };
 
       const conds = [eq(despesas.escritorioId, esc.escritorio.id)];
       if (input?.status) conds.push(eq(despesas.status, input.status));
@@ -80,7 +81,14 @@ export const despesasRouter = router({
         conds.push(lte(despesas.vencimento, input.periodoFim));
       }
 
-      return db
+      // Total separado pra paginação saber quantas páginas existem.
+      const [totalRow] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(despesas)
+        .where(and(...conds));
+      const total = Number(totalRow?.count ?? 0);
+
+      const items = await db
         .select({
           id: despesas.id,
           descricao: despesas.descricao,
@@ -105,7 +113,10 @@ export const despesasRouter = router({
         )
         .where(and(...conds))
         .orderBy(asc(despesas.vencimento))
-        .limit(input?.limit ?? 200);
+        .limit(input?.limit ?? 200)
+        .offset(input?.offset ?? 0);
+
+      return { items, total };
     }),
 
   /**
