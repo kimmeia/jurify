@@ -243,7 +243,7 @@ export async function getAllUsersWithSubscription() {
   const db = await getDb();
   if (!db) return [];
 
-  const allUsersList = await db.select().from(users).orderBy(desc(users.createdAt));
+  const allUsersList = await db.select(USERS_PUBLIC_COLUMNS).from(users).orderBy(desc(users.createdAt));
   const activeSubs = await db
     .select()
     .from(subscriptions)
@@ -471,11 +471,35 @@ export async function getAdminStats() {
   };
 }
 
-/** Legacy: get all users */
+/**
+ * Colunas seguras de `users` pra retornar em APIs admin. EXCLUI
+ * `passwordHash` — não deve sair do servidor nem mesmo pra admin (era
+ * leakage real antes do fix: select().from(users) trazia o hash de
+ * scrypt junto, exposto na response).
+ */
+const USERS_PUBLIC_COLUMNS = {
+  id: users.id,
+  openId: users.openId,
+  name: users.name,
+  email: users.email,
+  googleSub: users.googleSub,
+  loginMethod: users.loginMethod,
+  role: users.role,
+  asaasCustomerId: users.asaasCustomerId,
+  bloqueado: users.bloqueado,
+  motivoBloqueio: users.motivoBloqueio,
+  bloqueadoEm: users.bloqueadoEm,
+  aceitouTermosEm: users.aceitouTermosEm,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt,
+  lastSignedIn: users.lastSignedIn,
+} as const;
+
+/** Legacy: get all users (sem passwordHash). */
 export async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(users);
+  return db.select(USERS_PUBLIC_COLUMNS).from(users);
 }
 
 // ─── Histórico de Cálculos ─────────────────────────────────────────────────────
