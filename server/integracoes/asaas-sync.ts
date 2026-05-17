@@ -735,6 +735,7 @@ export type CobrancaAgg = {
   asaasCustomerId: string;
   valor: string;
   status: string;
+  vencimento: string | null;
 };
 
 export type ContatoMeta = {
@@ -760,6 +761,9 @@ export type ClienteAgregado = {
   pendente: number;
   vencido: number;
   pago: number;
+  /** Maior atraso (em dias) entre as cobranças vencidas em aberto.
+   *  null quando o cliente não tem nada vencido. */
+  diasAtrasoMax: number | null;
 };
 
 /**
@@ -796,6 +800,15 @@ export function agregarVinculosPorContato(
     let vencido = 0;
     let pago = 0;
     let total = 0;
+    // "Dias em atraso" = maior diferença em dias entre hoje e o vencimento das
+    // cobranças em aberto que já passaram. Considera OVERDUE explícito + PENDING
+    // com vencimento < hoje (Asaas demora pra mover pra OVERDUE em alguns casos).
+    const hojeMs = Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate(),
+    );
+    let diasAtrasoMax: number | null = null;
     for (const c of cobrancas) {
       if (!setIds.has(c.asaasCustomerId)) continue;
       total++;
@@ -803,6 +816,18 @@ export function agregarVinculosPorContato(
       if (c.status === "PENDING") pendente += val;
       else if (c.status === "OVERDUE") vencido += val;
       else if (c.status === "RECEIVED" || c.status === "CONFIRMED" || c.status === "RECEIVED_IN_CASH") pago += val;
+
+      // Atraso: olha vencimento de OVERDUE OR (PENDING com venc < hoje)
+      if (c.vencimento && (c.status === "OVERDUE" || c.status === "PENDING")) {
+        const partes = c.vencimento.split("-");
+        if (partes.length === 3) {
+          const vencMs = Date.UTC(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+          const dias = Math.floor((hojeMs - vencMs) / 86_400_000);
+          if (dias > 0) {
+            diasAtrasoMax = diasAtrasoMax == null ? dias : Math.max(diasAtrasoMax, dias);
+          }
+        }
+      }
     }
 
     const meta = contatosMeta[contatoId];
@@ -821,6 +846,7 @@ export function agregarVinculosPorContato(
       pendente,
       vencido,
       pago,
+      diasAtrasoMax,
     });
   }
 

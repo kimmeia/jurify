@@ -78,6 +78,13 @@ export default function Financeiro() {
   const [limpezaOpen, setLimpezaOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
+  // Aba Clientes: chip de quick filter + filtro de dias em atraso + ordenação por coluna.
+  type ClientesChip = "todos" | "inadimplentes" | "pendente" | "bons" | "sem_cobranca";
+  type ClientesSortCol = "nome" | "cobrancas" | "pendente" | "vencido" | "pago" | "atraso";
+  type ClientesSortDir = "asc" | "desc";
+  const [chipClientes, setChipClientes] = useState<ClientesChip>("todos");
+  const [filtroDiasAtraso, setFiltroDiasAtraso] = useState<string>("");
+  const [sortClientes, setSortClientes] = useState<{ col: ClientesSortCol; dir: ClientesSortDir } | null>(null);
   // Filtros multi-select. Vazio = "todos" (sem filtro).
   const [filtroStatus, setFiltroStatus] = useState<string[]>([]);
   const [filtroForma, setFiltroForma] = useState<string[]>([]);
@@ -1075,68 +1082,18 @@ export default function Financeiro() {
           {!conectado ? (
             <AsaasDisconnectedCta titulo="Clientes vinculados" descricao="Sincronização com clientes do Asaas." />
           ) : (
-            <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar cliente..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-9 h-9 text-sm"
-              />
-            </div>
-            <Button size="sm" variant="outline" onClick={() => setNovoClienteOpen(true)}>
-              <UserPlus className="h-3.5 w-3.5 mr-1" />
-              Novo cliente
-            </Button>
-          </div>
-          {clientesVinculados && clientesVinculados.length > 0 ? (
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>CPF/CNPJ</TableHead>
-                    <TableHead>Contato</TableHead>
-                    <TableHead className="text-center">Cobranças</TableHead>
-                    <TableHead>Pendente</TableHead>
-                    <TableHead>Vencido</TableHead>
-                    <TableHead>Pago</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {clientesVinculados.map((c: any) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-medium text-sm">{c.contatoNome}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {c.cpfCnpj}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {c.contatoTelefone || c.contatoEmail || "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-center">{c.totalCobrancas}</TableCell>
-                      <TableCell className="text-sm text-amber-600">
-                        {c.pendente > 0 ? formatBRL(c.pendente) : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-red-600">
-                        {c.vencido > 0 ? formatBRL(c.vencido) : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm text-emerald-600">
-                        {c.pago > 0 ? formatBRL(c.pago) : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 gap-2">
-              <Users className="h-8 w-8 text-muted-foreground opacity-30" />
-              <p className="text-sm text-muted-foreground">Nenhum cliente vinculado.</p>
-            </div>
-          )}
-            </div>
+            <ClientesContent
+              clientes={clientesVinculados ?? []}
+              busca={busca}
+              setBusca={setBusca}
+              onNovoCliente={() => setNovoClienteOpen(true)}
+              chip={chipClientes}
+              setChip={setChipClientes}
+              filtroDiasAtraso={filtroDiasAtraso}
+              setFiltroDiasAtraso={setFiltroDiasAtraso}
+              sort={sortClientes}
+              setSort={setSortClientes}
+            />
           )}
         </TabsContent>
 
@@ -1265,6 +1222,273 @@ export default function Financeiro() {
       </AlertDialog>
     </div>
   );
+}
+
+// ─── Sub-componente: aba Clientes (filtros + ordenação client-side) ──────
+
+type ClientesChipLocal = "todos" | "inadimplentes" | "pendente" | "bons" | "sem_cobranca";
+type ClientesSortColLocal = "nome" | "cobrancas" | "pendente" | "vencido" | "pago" | "atraso";
+type ClientesSortDirLocal = "asc" | "desc";
+
+function ClientesContent({
+  clientes,
+  busca,
+  setBusca,
+  onNovoCliente,
+  chip,
+  setChip,
+  filtroDiasAtraso,
+  setFiltroDiasAtraso,
+  sort,
+  setSort,
+}: {
+  clientes: any[];
+  busca: string;
+  setBusca: (v: string) => void;
+  onNovoCliente: () => void;
+  chip: ClientesChipLocal;
+  setChip: (v: ClientesChipLocal) => void;
+  filtroDiasAtraso: string;
+  setFiltroDiasAtraso: (v: string) => void;
+  sort: { col: ClientesSortColLocal; dir: ClientesSortDirLocal } | null;
+  setSort: (v: { col: ClientesSortColLocal; dir: ClientesSortDirLocal } | null) => void;
+}) {
+  // Contagens pra mostrar nos chips
+  const contagens = useMemo(() => ({
+    todos: clientes.length,
+    inadimplentes: clientes.filter((c) => c.vencido > 0).length,
+    pendente: clientes.filter((c) => c.pendente > 0).length,
+    bons: clientes.filter((c) => c.pago > 0 && c.vencido === 0).length,
+    sem_cobranca: clientes.filter((c) => c.totalCobrancas === 0).length,
+  }), [clientes]);
+
+  // Aplica filtro do chip + filtro de dias em atraso
+  const filtrados = useMemo(() => {
+    let lista = clientes;
+    if (chip === "inadimplentes") lista = lista.filter((c) => c.vencido > 0);
+    else if (chip === "pendente") lista = lista.filter((c) => c.pendente > 0);
+    else if (chip === "bons") lista = lista.filter((c) => c.pago > 0 && c.vencido === 0);
+    else if (chip === "sem_cobranca") lista = lista.filter((c) => c.totalCobrancas === 0);
+    const minDias = parseInt(filtroDiasAtraso, 10);
+    if (!isNaN(minDias) && minDias > 0) {
+      lista = lista.filter((c) => c.diasAtrasoMax != null && c.diasAtrasoMax >= minDias);
+    }
+    return lista;
+  }, [clientes, chip, filtroDiasAtraso]);
+
+  // Ordenação. Quando sort=null, aplica a ordem default conforme o chip ativo.
+  const ordenados = useMemo(() => {
+    const efetivo = sort ?? defaultSortPorChip(chip);
+    const cmp = (a: any, b: any) => {
+      const vA = valorOrdenacao(a, efetivo.col);
+      const vB = valorOrdenacao(b, efetivo.col);
+      if (vA < vB) return efetivo.dir === "asc" ? -1 : 1;
+      if (vA > vB) return efetivo.dir === "asc" ? 1 : -1;
+      return 0;
+    };
+    return [...filtrados].sort(cmp);
+  }, [filtrados, sort, chip]);
+
+  const handleSort = (col: ClientesSortColLocal) => {
+    if (!sort || sort.col !== col) {
+      setSort({ col, dir: "desc" });
+    } else if (sort.dir === "desc") {
+      setSort({ col, dir: "asc" });
+    } else {
+      setSort(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Linha 1: busca + filtro dias + novo cliente */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar cliente..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-1.5 text-xs border rounded px-2 h-9 bg-background">
+          <span className="text-muted-foreground">Atraso &gt;</span>
+          <Input
+            type="number"
+            min="0"
+            value={filtroDiasAtraso}
+            onChange={(e) => setFiltroDiasAtraso(e.target.value)}
+            className="h-7 w-14 text-xs border-0 shadow-none px-1 focus-visible:ring-0"
+            placeholder="0"
+          />
+          <span className="text-muted-foreground">dias</span>
+        </div>
+        {(chip !== "todos" || filtroDiasAtraso !== "" || sort != null) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-9 text-xs"
+            onClick={() => {
+              setChip("todos");
+              setFiltroDiasAtraso("");
+              setSort(null);
+            }}
+          >
+            Limpar
+          </Button>
+        )}
+        <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={onNovoCliente}>
+          <UserPlus className="h-3.5 w-3.5 mr-1" />
+          Novo cliente
+        </Button>
+      </div>
+
+      {/* Linha 2: chips de quick filter */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Mostrar:</span>
+        <ClientesChipBtn ativo={chip === "todos"} onClick={() => setChip("todos")}>
+          Todos ({contagens.todos})
+        </ClientesChipBtn>
+        <ClientesChipBtn ativo={chip === "inadimplentes"} onClick={() => setChip("inadimplentes")}>
+          ⚠ Inadimplentes ({contagens.inadimplentes})
+        </ClientesChipBtn>
+        <ClientesChipBtn ativo={chip === "pendente"} onClick={() => setChip("pendente")}>
+          ⏱ Com pendente ({contagens.pendente})
+        </ClientesChipBtn>
+        <ClientesChipBtn ativo={chip === "bons"} onClick={() => setChip("bons")}>
+          ✓ Bons pagadores ({contagens.bons})
+        </ClientesChipBtn>
+        <ClientesChipBtn ativo={chip === "sem_cobranca"} onClick={() => setChip("sem_cobranca")}>
+          — Sem cobrança ({contagens.sem_cobranca})
+        </ClientesChipBtn>
+      </div>
+
+      {ordenados.length > 0 ? (
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead><SortBtn label="Nome" col="nome" sort={sort} onClick={handleSort} /></TableHead>
+                <TableHead>CPF/CNPJ</TableHead>
+                <TableHead>Contato</TableHead>
+                <TableHead className="text-center"><SortBtn label="Cobranças" col="cobrancas" sort={sort} onClick={handleSort} /></TableHead>
+                <TableHead className="text-right"><SortBtn label="Pendente" col="pendente" sort={sort} onClick={handleSort} /></TableHead>
+                <TableHead className="text-right"><SortBtn label="Vencido" col="vencido" sort={sort} onClick={handleSort} /></TableHead>
+                <TableHead className="text-right"><SortBtn label="Pago" col="pago" sort={sort} onClick={handleSort} /></TableHead>
+                <TableHead className="text-right"><SortBtn label="Atraso" col="atraso" sort={sort} onClick={handleSort} /></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ordenados.map((c: any) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium text-sm">{c.contatoNome}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{c.cpfCnpj}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {c.contatoTelefone || c.contatoEmail || "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-center tabular-nums">{c.totalCobrancas}</TableCell>
+                  <TableCell className="text-sm text-right text-amber-600 tabular-nums">
+                    {c.pendente > 0 ? formatBRL(c.pendente) : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-right text-red-600 tabular-nums">
+                    {c.vencido > 0 ? formatBRL(c.vencido) : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-right text-emerald-600 tabular-nums">
+                    {c.pago > 0 ? formatBRL(c.pago) : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-right tabular-nums">
+                    {c.diasAtrasoMax != null ? (
+                      <span className="text-red-600 font-semibold">{c.diasAtrasoMax} dias</span>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 gap-2">
+          <Users className="h-8 w-8 text-muted-foreground opacity-30" />
+          <p className="text-sm text-muted-foreground">
+            {clientes.length === 0 ? "Nenhum cliente vinculado." : "Nenhum cliente bate com os filtros."}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClientesChipBtn({
+  ativo,
+  onClick,
+  children,
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+        ativo
+          ? "bg-foreground text-background border-foreground"
+          : "bg-background text-muted-foreground hover:bg-muted border-border"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SortBtn({
+  label,
+  col,
+  sort,
+  onClick,
+}: {
+  label: string;
+  col: ClientesSortColLocal;
+  sort: { col: ClientesSortColLocal; dir: ClientesSortDirLocal } | null;
+  onClick: (c: ClientesSortColLocal) => void;
+}) {
+  const ativo = sort?.col === col;
+  const icon = !ativo ? "↕" : sort?.dir === "desc" ? "↓" : "↑";
+  return (
+    <button
+      onClick={() => onClick(col)}
+      className={`inline-flex items-center gap-1 font-semibold hover:text-foreground ${
+        ativo ? "text-foreground" : "text-muted-foreground"
+      }`}
+    >
+      {label}
+      <span className={ativo ? "" : "text-muted-foreground/50"}>{icon}</span>
+    </button>
+  );
+}
+
+function defaultSortPorChip(
+  chip: ClientesChipLocal,
+): { col: ClientesSortColLocal; dir: ClientesSortDirLocal } {
+  if (chip === "inadimplentes") return { col: "atraso", dir: "desc" };
+  if (chip === "pendente") return { col: "pendente", dir: "desc" };
+  if (chip === "bons") return { col: "pago", dir: "desc" };
+  return { col: "nome", dir: "asc" };
+}
+
+function valorOrdenacao(c: any, col: ClientesSortColLocal): number | string {
+  switch (col) {
+    case "nome": return (c.contatoNome || "").toLowerCase();
+    case "cobrancas": return c.totalCobrancas || 0;
+    case "pendente": return c.pendente || 0;
+    case "vencido": return c.vencido || 0;
+    case "pago": return c.pago || 0;
+    case "atraso": return c.diasAtrasoMax ?? -1;
+  }
 }
 
 // ─── Sub-componente: KPI Card ─────────────────────────────────────────────
