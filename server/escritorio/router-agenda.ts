@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { escapeLikePattern } from "../_core/sql-helpers";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { agendamentos, agendamentoLembretes, tarefas, contatos, users, colaboradores, escritorios } from "../../drizzle/schema";
@@ -206,7 +207,7 @@ export const agendaRouter = router({
         }
         if (input?.status) agConditions.push(eq(agendamentos.status, input.status as any));
         if (input?.busca) {
-          const b = `%${input.busca}%`;
+          const b = `%${escapeLikePattern(input.busca)}%`;
           agConditions.push(or(like(agendamentos.titulo, b), like(agendamentos.descricao, b)));
         }
 
@@ -273,7 +274,7 @@ export const agendaRouter = router({
           tConditions.push(eq(tarefas.status, (statusMap[input.status] || input.status) as any));
         }
         if (input?.busca) {
-          const b = `%${input.busca}%`;
+          const b = `%${escapeLikePattern(input.busca)}%`;
           tConditions.push(or(like(tarefas.titulo, b), like(tarefas.descricao, b)));
         }
 

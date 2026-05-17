@@ -20,6 +20,7 @@ import { getDb } from "../db";
 import { emailLog } from "../../drizzle/schema";
 import { enviarEmail } from "../_core/email";
 import { createLogger } from "../_core/logger";
+import { escapeLikePattern } from "../_core/sql-helpers";
 
 const log = createLogger("admin-router-email-log");
 
@@ -43,7 +44,7 @@ export const adminEmailLogRouter = router({
       if (input.status) conds.push(eq(emailLog.status, input.status));
       if (input.tipo) conds.push(eq(emailLog.tipo, input.tipo));
       if (input.destinatario) {
-        conds.push(like(emailLog.destinatario, `%${input.destinatario}%`));
+        conds.push(like(emailLog.destinatario, `%${escapeLikePattern(input.destinatario)}%`));
       }
       const whereClause = conds.length > 0 ? and(...conds) : undefined;
 
