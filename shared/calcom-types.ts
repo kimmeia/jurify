@@ -10,6 +10,21 @@ export interface CalcomConfig {
   baseUrl: string; // ex: https://cal.com ou self-hosted
   eventTypeId?: number; // ID do tipo de evento no Cal.com
   defaultDuration?: number; // minutos (padrão 30)
+  /**
+   * Segredo HMAC do webhook Cal.com — quando configurado, o handler
+   * `/api/webhooks/calcom` valida o header `X-Cal-Signature-256` (hex
+   * SHA-256 do body raw com este segredo) e rejeita 401 se não bater.
+   *
+   * Quando ausente em TODOS os canais Cal.com cadastrados, o webhook
+   * processa sem validação e loga warn (modo legado / setups antigos).
+   * Assim que pelo menos um canal definir secret, validação fica
+   * obrigatória pra requests que se identificam como daquele canal.
+   *
+   * Cal.com SaaS gera o secret quando você cria o webhook no painel
+   * (Settings → Webhooks → Subscribe to → "Webhook Secret"). Self-hosted
+   * permite definir manualmente. Cole o valor exato aqui.
+   */
+  webhookSecret?: string;
 }
 
 export interface CalcomEventType {

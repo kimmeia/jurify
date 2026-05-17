@@ -107,13 +107,16 @@ export const calcomRouter = router({
       return result;
     }),
 
-  /** Salva configuração Cal.com (API key + URL base) */
+  /** Salva configuração Cal.com (API key + URL base + secret HMAC) */
   salvarConfig: protectedProcedure
     .input(z.object({
       canalId: z.number(),
       apiKey: z.string().min(10, "API Key inválida"),
       baseUrl: z.string().url("URL inválida").default("https://cal.com"),
       defaultDuration: z.number().min(15).max(240).optional(),
+      /** Segredo HMAC do webhook Cal.com (Settings → Webhooks → Webhook
+       *  Secret). Vazio/ausente = sem validação de assinatura (legado). */
+      webhookSecret: z.string().max(256).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -126,6 +129,7 @@ export const calcomRouter = router({
         apiKey: input.apiKey,
         baseUrl: input.baseUrl,
         defaultDuration: String(input.defaultDuration || 30),
+        webhookSecret: input.webhookSecret ?? "",
       });
 
       // Testar automaticamente após salvar
