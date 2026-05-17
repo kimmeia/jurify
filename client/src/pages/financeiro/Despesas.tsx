@@ -3,7 +3,7 @@
  * Lista despesas com filtros, mostra KPIs e permite criar/editar/marcar paga.
  */
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -135,13 +135,24 @@ export function DespesasTab() {
   );
   const perms = useFinanceiroPerms();
 
+  // Paginação server-side: 20 itens por página, reset ao mudar filtros.
+  const ITENS_POR_PAGINA = 20;
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => {
+    setPagina(0);
+  }, [periodoInicio, periodoFim, filtroStatus]);
+
   const status = filtroStatus === "todos" ? undefined : (filtroStatus as any);
   const lista = trpc.despesas.listar.useQuery({
     periodoInicio,
     periodoFim,
     status,
-    limit: 200,
+    limit: ITENS_POR_PAGINA,
+    offset: pagina * ITENS_POR_PAGINA,
   });
+  const itens = lista.data?.items ?? [];
+  const total = lista.data?.total ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(total / ITENS_POR_PAGINA));
   const kpis = trpc.despesas.kpis.useQuery({ periodoInicio, periodoFim });
 
   const reabrirMut = trpc.despesas.reabrir.useMutation({
@@ -268,7 +279,7 @@ export function DespesasTab() {
             <Wallet className="h-4 w-4" />
             Despesas
             <Badge variant="outline" className="ml-2">
-              {lista.data?.length ?? 0}
+              {total}
             </Badge>
           </CardTitle>
         </CardHeader>
@@ -277,7 +288,7 @@ export function DespesasTab() {
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : (lista.data ?? []).length === 0 ? (
+          ) : itens.length === 0 ? (
             <p className="text-xs text-muted-foreground py-6 text-center">
               Nenhuma despesa no período. Clique em "Nova despesa" para começar.
             </p>
@@ -295,7 +306,7 @@ export function DespesasTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(lista.data ?? []).map((d) => {
+                {itens.map((d) => {
                   const valorTotal = Number(d.valor);
                   const valorPago = Number(d.valorPago ?? 0);
                   const restante = Math.max(0, valorTotal - valorPago);
@@ -419,6 +430,38 @@ export function DespesasTab() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {!lista.isLoading && total > ITENS_POR_PAGINA && (
+            <div className="flex items-center justify-between pt-3 border-t mt-2">
+              <p className="text-xs text-muted-foreground">
+                Mostrando <b>{pagina * ITENS_POR_PAGINA + 1}</b>–
+                <b>{Math.min((pagina + 1) * ITENS_POR_PAGINA, total)}</b> de{" "}
+                <b>{total}</b> despesas
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => setPagina((p) => Math.max(0, p - 1))}
+                  disabled={pagina === 0 || lista.isLoading}
+                >
+                  ← Anterior
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Página <b>{pagina + 1}</b> de <b>{totalPaginas}</b>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => setPagina((p) => p + 1)}
+                  disabled={(pagina + 1) * ITENS_POR_PAGINA >= total || lista.isLoading}
+                >
+                  Próxima →
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
