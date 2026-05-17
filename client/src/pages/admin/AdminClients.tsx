@@ -130,6 +130,9 @@ function ClienteDetalheDialog({
   const [categoriaNota, setCategoriaNota] = useState<string>("geral");
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
   const [bloquearOpen, setBloquearOpen] = useState(false);
+  const [excluirOpen, setExcluirOpen] = useState(false);
+  const [motivoExclusao, setMotivoExclusao] = useState("");
+  const [forcarExcluir, setForcarExcluir] = useState(false);
   const [cortesiaOpen, setCortesiaOpen] = useState(false);
   const [motivoCortesia, setMotivoCortesia] = useState("");
   const [expiraEmCortesia, setExpiraEmCortesia] = useState("");
@@ -182,10 +185,17 @@ function ClienteDetalheDialog({
   const excluirMut = trpc.admin.excluirUsuario.useMutation({
     onSuccess: (data) => {
       toast.success(data.mensagem);
+      setExcluirOpen(false);
+      setMotivoExclusao("");
+      setForcarExcluir(false);
       onOpenChange(false);
       onRefresh();
     },
-    onError: (err) => toast.error("Erro ao excluir", { description: err.message }),
+    onError: (err) => {
+      // Se o servidor pediu pra "forçar mesmo com escritório", oferecemos
+      // o toggle no diálogo em vez de fechar.
+      toast.error("Erro ao excluir", { description: err.message });
+    },
   });
 
   const desbloquearMut = trpc.admin.desbloquearUsuario.useMutation({
@@ -200,13 +210,14 @@ function ClienteDetalheDialog({
   const impersonateMut = trpc.admin.impersonarUsuario.useMutation({
     onSuccess: (res) => {
       toast.success(res.mensagem);
-      // Aguarda o cookie ser persistido, limpa QUALQUER cache do React
-      // Query (pra forçar refetch do auth.me no próximo page load) e faz
-      // hard reload. Vai pra raiz "/" — Home.tsx cuida do roteamento
-      // correto baseado na subscription do usuário impersonado.
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 600);
+      // O servidor seta o cookie de sessão como parte da MESMA response
+      // dessa mutation — quando o handler `onSuccess` roda, o navegador
+      // já comitou o Set-Cookie no jar. Não precisa de setTimeout.
+      //
+      // Hard reload pra raiz: descarta cache do React Query e força
+      // refetch do `auth.me` com a nova sessão. Home.tsx decide pra onde
+      // rotear baseado no role/subscription do user impersonado.
+      window.location.href = "/";
     },
     onError: (err) => {
       console.error("[impersonarUsuario] erro:", err);
@@ -753,15 +764,11 @@ function ClienteDetalheDialog({
                   size="sm"
                   variant="destructive"
                   className="w-full mt-2"
-                  onClick={() => {
-                    if (confirm("ATENÇÃO: Excluir permanentemente este usuário e todos os dados? Esta ação NÃO pode ser desfeita.")) {
-                      excluirMut.mutate({ userId: userId! });
-                    }
-                  }}
+                  onClick={() => setExcluirOpen(true)}
                   disabled={excluirMut?.isPending}
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                  {excluirMut?.isPending ? "Excluindo..." : "Excluir conta permanentemente"}
+                  Excluir conta permanentemente
                 </Button>
               </div>
             </TabsContent>
@@ -801,6 +808,68 @@ function ClienteDetalheDialog({
             >
               {bloquearMut.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Bloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={excluirOpen} onOpenChange={(o) => { if (!o) { setExcluirOpen(false); setMotivoExclusao(""); setForcarExcluir(false); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">
+              Excluir <strong>{user?.name || user?.email}</strong> permanentemente?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação <strong>NÃO PODE ser desfeita</strong>. O usuário e todos
+              os seus vínculos como colaborador serão removidos. Se for dono de
+              escritório com colaboradores ativos, a exclusão será bloqueada pelo
+              servidor — use a opção de forçar apenas se realmente quiser destruir
+              o escritório inteiro.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-sm font-medium">Motivo (obrigatório, ≥5 chars) *</label>
+              <Textarea
+                value={motivoExclusao}
+                onChange={(e) => setMotivoExclusao(e.target.value)}
+                placeholder="Ex: usuário pediu exclusão LGPD via ticket #1234..."
+                className="mt-1 text-sm"
+                rows={3}
+              />
+            </div>
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={forcarExcluir}
+                onChange={(e) => setForcarExcluir(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Forçar mesmo se for dono de escritório</strong> — destruirá
+                escritórios e dados de colaboradores subordinados. Por padrão
+                BLOQUEADO. Use só se tem certeza absoluta.
+              </span>
+            </label>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirMut.isPending || motivoExclusao.trim().length < 5}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!userId || motivoExclusao.trim().length < 5) return;
+                excluirMut.mutate({
+                  userId,
+                  motivo: motivoExclusao.trim(),
+                  forcarMesmoComEscritorio: forcarExcluir,
+                });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
