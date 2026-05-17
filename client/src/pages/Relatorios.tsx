@@ -32,7 +32,11 @@ import {
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  ComposedChart, Area,
 } from "recharts";
+import {
+  formatBRLShort, formatDiaCurto, formatDiaCompleto,
+} from "./financeiro/helpers";
 
 // ───────────────────────── helpers ─────────────────────────
 
@@ -165,9 +169,6 @@ function Empty() {
 // ───────────────────────── página ─────────────────────────
 
 export default function Relatorios() {
-  const [dias, setDias] = useState("30");
-  const diasNum = Number(dias);
-
   // Permissão por módulo — relatorios (atendimento/comercial/producao)
   // e calculos (aba de Cálculos). Atendente/estagiário tem só calculos.
   const { data: minhasPerms, isLoading: permsLoading } = trpc.permissoes.minhasPermissoes.useQuery(
@@ -215,16 +216,6 @@ export default function Relatorios() {
             Atendimento, comercial, produção jurídica e cálculos
           </p>
         </div>
-        <Select value={dias} onValueChange={setDias}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Últimos 7 dias</SelectItem>
-            <SelectItem value="15">Últimos 15 dias</SelectItem>
-            <SelectItem value="30">Últimos 30 dias</SelectItem>
-            <SelectItem value="90">Últimos 90 dias</SelectItem>
-            <SelectItem value="365">Último ano</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {tabsVisiveis.length === 0 ? (
@@ -260,23 +251,23 @@ export default function Relatorios() {
 
           {podeRelatorios && (
             <TabsContent value="atendimento" className="mt-4">
-              <AbaAtendimento dias={diasNum} />
+              <AbaAtendimento />
             </TabsContent>
           )}
           {podeRelatorios && (
             <TabsContent value="comercial" className="mt-4 space-y-6">
               <DashboardComercial />
-              <AbaComercial dias={diasNum} />
+              <AbaComercial />
             </TabsContent>
           )}
           {podeRelatorios && (
             <TabsContent value="producao" className="mt-4">
-              <AbaProducao dias={diasNum} />
+              <AbaProducao />
             </TabsContent>
           )}
           {podeCalculos && (
             <TabsContent value="calculos" className="mt-4">
-              <AbaCalculos dias={diasNum} />
+              <AbaCalculos />
             </TabsContent>
           )}
         </Tabs>
@@ -307,19 +298,13 @@ function rangeDeDias(dias: number): { inicio: string; fim: string } {
   };
 }
 
-function AbaAtendimento({ dias }: { dias: number }) {
-  // Filtros locais sobrepõem o `dias` global; sem personalização, segue o
-  // select do topo (antes era fixo "mês vigente" e ignorava o select).
+const DIAS_DEFAULT_RELATORIO = 30;
+
+function AbaAtendimento() {
   const [setorId, setSetorId] = useState<number | null>(null);
   const [atendenteId, setAtendenteId] = useState<number | null>(null);
-  const [{ inicio, fim }, setRange] = useState(() => rangeDeDias(dias));
+  const [{ inicio, fim }, setRange] = useState(() => rangeDeDias(DIAS_DEFAULT_RELATORIO));
   const [personalizado, setPersonalizado] = useState(false);
-
-  // Quando `dias` global muda no topo, re-sincroniza o range — exceto se o
-  // usuário já personalizou as datas localmente (não derrubar customização).
-  useEffect(() => {
-    if (!personalizado) setRange(rangeDeDias(dias));
-  }, [dias, personalizado]);
 
   const { data: setoresList } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
   const { data: colabsList } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
@@ -421,8 +406,8 @@ function AbaAtendimento({ dias }: { dias: number }) {
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">
               {personalizado
-                ? "Período personalizado — sobrepõe o select global do topo."
-                : `Acompanhando o select do topo (últimos ${dias} dias).`}
+                ? "Período personalizado."
+                : `Últimos ${DIAS_DEFAULT_RELATORIO} dias por padrão — ajuste De/Até para personalizar.`}
             </span>
             <Button
               variant="ghost"
@@ -432,7 +417,7 @@ function AbaAtendimento({ dias }: { dias: number }) {
                 setSetorId(null);
                 setAtendenteId(null);
                 setPersonalizado(false);
-                setRange(rangeDeDias(dias));
+                setRange(rangeDeDias(DIAS_DEFAULT_RELATORIO));
               }}
             >
               Limpar
@@ -446,13 +431,13 @@ function AbaAtendimento({ dias }: { dias: number }) {
       ) : !data ? (
         <Empty />
       ) : (
-        <AbaAtendimentoConteudo data={data} dias={dias} />
+        <AbaAtendimentoConteudo data={data} />
       )}
     </div>
   );
 }
 
-function AbaAtendimentoConteudo({ data, dias: _dias }: { data: any; dias: number }) {
+function AbaAtendimentoConteudo({ data }: { data: any }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -924,20 +909,62 @@ function DashboardComercial() {
             </CardContent>
           </Card>
 
-          {/* Cobranças por dia */}
+          {/* Faturado por dia — mesmo padrão visual do Financeiro */}
           {data.cobrancasPorDia.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">Faturado por dia</CardTitle>
               </CardHeader>
               <CardContent>
-                <BarsMini
-                  dados={data.cobrancasPorDia.map((d: any) => ({
-                    label: d.dia.slice(5),
-                    value: d.faturado,
-                  }))}
-                  cor="bg-emerald-500/80"
-                />
+                <div className="h-56 -mx-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={data.cobrancasPorDia.map((d: any) => ({
+                        dia: d.dia,
+                        faturado: d.faturado,
+                      }))}
+                      margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="relatoriosColorFaturado" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="dia"
+                        tick={{ fontSize: 10, fill: "#9ca3af" }}
+                        tickFormatter={formatDiaCurto}
+                        stroke="#e5e7eb"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#9ca3af" }}
+                        tickFormatter={formatBRLShort}
+                        stroke="#e5e7eb"
+                        width={60}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "white",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                        labelFormatter={formatDiaCompleto}
+                        formatter={(v: number) => formatBRL(v)}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="faturado"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#relatoriosColorFaturado)"
+                        name="Faturado"
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -1026,11 +1053,11 @@ function DashboardComercial() {
 
 // ───────────────────── aba: Comercial (legado: leads/funil) ─────────────────────
 
-function AbaComercial({ dias }: { dias: number }) {
+function AbaComercial() {
   // Atendente (string p/ Select shadcn — "todos" = sem filtro)
   const [responsavelSel, setResponsavelSel] = useState<string>("todos");
 
-  // Range customizado (sobrepõe o `dias` global quando preenchido)
+  // Range customizado (sobrepõe o default de últimos 30 dias quando preenchido)
   const [rangeCustom, setRangeCustom] = useState<{ inicio: string; fim: string } | null>(null);
   const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
   const [rangeInicioInput, setRangeInicioInput] = useState("");
@@ -1051,7 +1078,7 @@ function AbaComercial({ dias }: { dias: number }) {
 
   const { data, isLoading } = trpc.relatorios.comercial.useQuery(
     {
-      dias: rangeCustom ? undefined : dias,
+      dias: rangeCustom ? undefined : DIAS_DEFAULT_RELATORIO,
       dataInicio: rangeCustom?.inicio,
       dataFim: rangeCustom?.fim,
       responsavelId,
@@ -1097,7 +1124,7 @@ function AbaComercial({ dias }: { dias: number }) {
               } else {
                 const hoje = new Date();
                 const inicio = new Date(hoje);
-                inicio.setDate(hoje.getDate() - dias);
+                inicio.setDate(hoje.getDate() - DIAS_DEFAULT_RELATORIO);
                 setRangeInicioInput(inicio.toISOString().slice(0, 10));
                 setRangeFimInput(hoje.toISOString().slice(0, 10));
               }
@@ -1134,7 +1161,7 @@ function AbaComercial({ dias }: { dias: number }) {
               />
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Sobrepõe o filtro global de dias.
+              Sobrepõe o default de últimos {DIAS_DEFAULT_RELATORIO} dias.
             </p>
             <div className="flex gap-2 pt-1">
               {rangeCustom && (
@@ -1275,9 +1302,9 @@ function ComercialConteudo({ data }: { data: any }) {
       {/* Origem dos contatos — whitelist de canais de captação */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Contatos por Origem</CardTitle>
+          <CardTitle className="text-sm">Contatos por canal de captação</CardTitle>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            Apenas canais de captação (WhatsApp, Instagram, Facebook, manual).
+            Por onde o contato chegou (WhatsApp, Instagram, Facebook, manual, telefone, site).
           </p>
         </CardHeader>
         <CardContent>
@@ -1300,20 +1327,30 @@ function ComercialConteudo({ data }: { data: any }) {
         </CardContent>
       </Card>
 
-      {/* Leads por mês */}
+      {/* Fechamentos por origem — texto livre vindo do cadastro de fechamento */}
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Leads / Mês (últimos 6m)</CardTitle></CardHeader>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).
+          </p>
+        </CardHeader>
         <CardContent>
-          {!data.leadsPorMes.length ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Sem dados.</p>
+          {(!data.fechamentosPorOrigem || data.fechamentosPorOrigem.length === 0) ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Sem fechamentos com origem cadastrada no período.
+            </p>
           ) : (
-            <BarsMini
-              dados={data.leadsPorMes.map((d: any) => ({
-                label: `${d.mes.slice(5)}/${d.mes.slice(2, 4)}`,
-                value: d.total,
-              }))}
-              cor="bg-violet-500/80"
-            />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {data.fechamentosPorOrigem.map((o: any) => (
+                <div key={o.origem} className="rounded-lg border p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-700">{o.total}</p>
+                  <p className="text-xs text-muted-foreground truncate" title={o.origem}>
+                    {o.origem}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1323,9 +1360,10 @@ function ComercialConteudo({ data }: { data: any }) {
 
 // ───────────────────── aba: Produção ─────────────────────
 
-function AbaProducao({ dias }: { dias: number }) {
+function AbaProducao() {
   // "todos" = sem filtro (null no backend); senão, funilId numérico como string
   const [funilSel, setFunilSel] = useState<string>("todos");
+  const [dias, setDias] = useState<string>(String(DIAS_DEFAULT_RELATORIO));
 
   const { data: funis } = trpc.kanban.listarFunis.useQuery(undefined, {
     retry: false,
@@ -1333,13 +1371,13 @@ function AbaProducao({ dias }: { dias: number }) {
 
   const funilIdInput = funilSel === "todos" ? undefined : Number(funilSel);
   const { data, isLoading } = trpc.relatorios.producao.useQuery(
-    { dias, funilId: funilIdInput },
+    { dias: Number(dias), funilId: funilIdInput },
     { refetchInterval: 60_000 },
   );
 
   return (
     <div className="space-y-4">
-      {/* Filtro de funil */}
+      {/* Filtros locais */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground">Funil:</span>
         <Select value={funilSel} onValueChange={setFunilSel}>
@@ -1353,6 +1391,18 @@ function AbaProducao({ dias }: { dias: number }) {
                 {f.nome}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <span className="text-xs text-muted-foreground ml-2">Período:</span>
+        <Select value={dias} onValueChange={setDias}>
+          <SelectTrigger className="w-36 h-9 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Últimos 7 dias</SelectItem>
+            <SelectItem value="15">Últimos 15 dias</SelectItem>
+            <SelectItem value="30">Últimos 30 dias</SelectItem>
+            <SelectItem value="90">Últimos 90 dias</SelectItem>
+            <SelectItem value="365">Último ano</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1433,14 +1483,41 @@ function ProducaoConteudo({ data }: { data: any }) {
 
 // ───────────────────── aba: Cálculos ─────────────────────
 
-function AbaCalculos({ dias }: { dias: number }) {
+function AbaCalculos() {
+  const [dias, setDias] = useState<string>(String(DIAS_DEFAULT_RELATORIO));
   const { data, isLoading } = trpc.relatorios.calculos.useQuery(
-    { dias },
+    { dias: Number(dias) },
     { refetchInterval: 60_000 },
   );
-  if (isLoading) return <LoadingBlock />;
-  if (!data) return <Empty />;
 
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">Período:</span>
+        <Select value={dias} onValueChange={setDias}>
+          <SelectTrigger className="w-36 h-9 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Últimos 7 dias</SelectItem>
+            <SelectItem value="15">Últimos 15 dias</SelectItem>
+            <SelectItem value="30">Últimos 30 dias</SelectItem>
+            <SelectItem value="90">Últimos 90 dias</SelectItem>
+            <SelectItem value="365">Último ano</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <LoadingBlock />
+      ) : !data ? (
+        <Empty />
+      ) : (
+        <AbaCalculosConteudo data={data} />
+      )}
+    </div>
+  );
+}
+
+function AbaCalculosConteudo({ data }: { data: any }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">

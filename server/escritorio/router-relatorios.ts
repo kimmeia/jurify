@@ -438,6 +438,28 @@ export const relatoriosRouter = router({
       )
       .groupBy(contatos.origem);
 
+    // ── Fechamentos por origem (texto livre vindo do catálogo do escritório)
+    // Diferente de "Contatos por origem" (enum de canal de captação),
+    // aqui agregamos leads.origemLead — texto preenchido no cadastro do
+    // fechamento (ex: "Google revisional", "Meta leilão", "BNI", "Indicação").
+    // Filtra apenas leads que viraram contrato (etapaFunil=fechado_ganho).
+    const fechamentosOrigemRows = await db
+      .select({
+        origem: leads.origemLead,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(leads)
+      .where(
+        and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          ...rangeLead,
+          ...filtroLeadResp,
+          sql`${leads.origemLead} IS NOT NULL AND ${leads.origemLead} != ''`,
+        ),
+      )
+      .groupBy(leads.origemLead);
+
     // ── Conversas atendidas no período ─────────────────────────────────────
     const [conversasTotal] = await db
       .select({ total: sql<number>`COUNT(*)` })
@@ -478,6 +500,10 @@ export const relatoriosRouter = router({
       leadsPorMes: leadsPorMes.map((r) => ({ mes: String(r.mes), total: Number(r.total) })),
       contatosPorOrigem: origemRows.map((r) => ({
         origem: r.origem as string,
+        total: Number(r.total),
+      })),
+      fechamentosPorOrigem: fechamentosOrigemRows.map((r) => ({
+        origem: (r.origem || "Sem origem") as string,
         total: Number(r.total),
       })),
     };
