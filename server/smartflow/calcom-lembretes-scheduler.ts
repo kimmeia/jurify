@@ -22,10 +22,29 @@ import { dispararAgendamentoLembrete } from "./dispatcher";
 import { deveDispararLembrete } from "./dispatcher-helpers";
 import { obterCalcomClient } from "./executores";
 import { createLogger } from "../_core/logger";
+import { captureError } from "../_core/sentry";
 import type { ConfigGatilhoAgendamentoLembrete } from "../../shared/smartflow-types";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 
 const log = createLogger("smartflow-calcom-lembretes-scheduler");
+
+/**
+ * Reporta erros INESPERADOS escapados de `rodarCicloCalcomLembretes`. O
+ * try/catch interno da função já trata erros previsíveis e retorna
+ * `{disparados:0}` — esse handler cobre rejeições que furam o try (ex:
+ * erro async fora do try-block). Sem isso, lembretes de agendamento não
+ * disparam e o cliente não recebe aviso da reunião.
+ *
+ * Exportada para teste em
+ * `server/__tests__/smartflow-schedulers-error-handler.test.ts`.
+ */
+export function reportarErroInesperado(err: unknown): void {
+  log.error(
+    { err: err instanceof Error ? err.stack : String(err) },
+    "[Lembretes] Erro inesperado escapou do ciclo — verifique rejeição async fora do try interno",
+  );
+  captureError(err, { kind: "smartflow-calcom-lembretes-scheduler" });
+}
 
 const INTERVALO_MS = 15 * 60 * 1000;
 const TOLERANCIA_MIN = 15;
@@ -151,8 +170,11 @@ export async function rodarCicloCalcomLembretes(): Promise<{ disparados: number 
 export function iniciarCalcomLembretesScheduler() {
   if (intervalo) return;
   log.info({ intervaloMs: INTERVALO_MS }, "[Lembretes] Scheduler SmartFlow iniciado");
-  setTimeout(() => rodarCicloCalcomLembretes().catch(() => {}), 3 * 60_000);
-  intervalo = setInterval(() => rodarCicloCalcomLembretes().catch(() => {}), INTERVALO_MS);
+  setTimeout(() => rodarCicloCalcomLembretes().catch(reportarErroInesperado), 3 * 60_000);
+  intervalo = setInterval(
+    () => rodarCicloCalcomLembretes().catch(reportarErroInesperado),
+    INTERVALO_MS,
+  );
 }
 
 export function pararCalcomLembretesScheduler() {
