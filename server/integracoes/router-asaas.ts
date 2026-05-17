@@ -18,6 +18,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
+import { alias as aliasedTable } from "drizzle-orm/mysql-core";
+import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -3822,5 +3824,141 @@ export const asaasRouter = router({
     );
 
     return { deletados, vinculosRemovidos };
+  }),
+
+  /**
+   * Diagnostica possíveis duplicidades de cobranças/pagamentos no escritório.
+   * Read-only — não cancela nem altera nada. Retorna 3 categorias:
+   *
+   * 1. Cobranças órfãs pagas: status RECEIVED/CONFIRMED/RECEIVED_IN_CASH
+   *    sem `contatoId` vinculado. Típico de Pix em nome de terceiro
+   *    (esposa/marido) que o webhook não conseguiu vincular ao cliente
+   *    do CRM.
+   *
+   * 2. Pares suspeitos: 2 cobranças pagas com mesmo valor + dataPagamento
+   *    ≤ 7 dias entre si + ao menos uma é manual ou órfã. Heurística
+   *    grossa propositalmente — usuário valida caso a caso (parcelamentos
+   *    do mesmo cliente ficam de fora via parcelamentoLocalId).
+   *
+   * 3. Cobranças manuais já-pagas (origem='manual', status pago): volume
+   *    informativo, pra calibrar a probabilidade de duplicidade
+   *    (manual já-paga é o caminho típico do cenário Carlos+Esposa).
+   */
+  diagnosticarDuplicidades: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
+    if (!perm.allowed) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão pra ler o financeiro.",
+      });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) {
+      return {
+        orfasRecebidas: { count: 0, valorTotal: 0 },
+        paresSuspeitos: { count: 0, valorTotal: 0, exemplos: [] },
+        manuaisJaPagas: { count: 0, valorTotal: 0 },
+      };
+    }
+
+    const eid = esc.escritorio.id;
+    const statusPagoList = STATUS_PAGO_ASAAS as unknown as string[];
+    const valorDec = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
+
+    // 1. Órfãs pagas
+    const [orfas] = await db
+      .select({
+        count: sql<number>`COUNT(*)`,
+        valorTotal: sql<string>`COALESCE(SUM(${valorDec}), 0)`,
+      })
+      .from(asaasCobrancas)
+      .where(and(
+        eq(asaasCobrancas.escritorioId, eid),
+        isNull(asaasCobrancas.contatoId),
+        inArray(asaasCobrancas.status, statusPagoList),
+      ));
+
+    // 2. Pares suspeitos via self-join. Heurística: mesmo valor + datas próximas,
+    //    pelo menos uma é manual ou órfã. Exclui parcelas do mesmo parcelamento.
+    //    a.id < b.id evita contar (A,B) e (B,A) como duplicata.
+    const aliasB = aliasedTable(asaasCobrancas, "b");
+    const paresRows = await db
+      .select({
+        aId: asaasCobrancas.id,
+        bId: aliasB.id,
+        valor: asaasCobrancas.valor,
+        aContatoId: asaasCobrancas.contatoId,
+        aOrigem: asaasCobrancas.origem,
+        aDataPag: asaasCobrancas.dataPagamento,
+        bContatoId: aliasB.contatoId,
+        bOrigem: aliasB.origem,
+        bDataPag: aliasB.dataPagamento,
+      })
+      .from(asaasCobrancas)
+      .innerJoin(
+        aliasB,
+        and(
+          eq(aliasB.escritorioId, asaasCobrancas.escritorioId),
+          sql`${asaasCobrancas.id} < ${aliasB.id}`,
+          eq(aliasB.valor, asaasCobrancas.valor),
+          inArray(aliasB.status, statusPagoList),
+          sql`ABS(DATEDIFF(${asaasCobrancas.dataPagamento}, ${aliasB.dataPagamento})) <= 7`,
+        ),
+      )
+      .where(and(
+        eq(asaasCobrancas.escritorioId, eid),
+        inArray(asaasCobrancas.status, statusPagoList),
+        // Pelo menos um lado é manual ou órfã
+        sql`(${asaasCobrancas.origem} = 'manual' OR ${aliasB.origem} = 'manual'
+             OR ${asaasCobrancas.contatoId} IS NULL OR ${aliasB.contatoId} IS NULL)`,
+        // Exclui parcelas do mesmo parcelamento
+        sql`(${asaasCobrancas.parcelamentoLocalId} IS NULL
+             OR ${aliasB.parcelamentoLocalId} IS NULL
+             OR ${asaasCobrancas.parcelamentoLocalId} != ${aliasB.parcelamentoLocalId})`,
+      ))
+      .limit(100);
+
+    const paresValorTotal = paresRows.reduce(
+      (acc, p) => acc + (parseFloat(p.valor as string) || 0),
+      0,
+    );
+    const exemplos = paresRows.slice(0, 5).map((p) => ({
+      idA: p.aId,
+      idB: p.bId,
+      valor: parseFloat(p.valor as string) || 0,
+      lados: `${p.aOrigem === "manual" ? "manual" : p.aContatoId == null ? "órfã" : "asaas"} ↔ ${p.bOrigem === "manual" ? "manual" : p.bContatoId == null ? "órfã" : "asaas"}`,
+      dataPagA: p.aDataPag,
+      dataPagB: p.bDataPag,
+    }));
+
+    // 3. Manuais já-pagas (volume informativo)
+    const [manuais] = await db
+      .select({
+        count: sql<number>`COUNT(*)`,
+        valorTotal: sql<string>`COALESCE(SUM(${valorDec}), 0)`,
+      })
+      .from(asaasCobrancas)
+      .where(and(
+        eq(asaasCobrancas.escritorioId, eid),
+        eq(asaasCobrancas.origem, "manual"),
+        inArray(asaasCobrancas.status, statusPagoList),
+      ));
+
+    return {
+      orfasRecebidas: {
+        count: Number(orfas?.count ?? 0),
+        valorTotal: Number(orfas?.valorTotal ?? 0),
+      },
+      paresSuspeitos: {
+        count: paresRows.length,
+        valorTotal: paresValorTotal,
+        exemplos,
+      },
+      manuaisJaPagas: {
+        count: Number(manuais?.count ?? 0),
+        valorTotal: Number(manuais?.valorTotal ?? 0),
+      },
+    };
   }),
 });

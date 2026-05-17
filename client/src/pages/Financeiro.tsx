@@ -51,6 +51,7 @@ import {
 import { DespesasWrapper } from "./financeiro/DespesasWrapper";
 import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
+import { DiagnosticarDuplicidadesDialog } from "./financeiro/DiagnosticarDuplicidadesDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 /** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
@@ -75,6 +76,7 @@ export default function Financeiro() {
   const [anexosCobrId, setAnexosCobrId] = useState<number | null>(null);
   const [ofxOpen, setOfxOpen] = useState(false);
   const [limpezaOpen, setLimpezaOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Aba Clientes: chip de quick filter + filtro de dias em atraso + ordenação por coluna.
@@ -455,6 +457,13 @@ export default function Financeiro() {
                     Limpar órfãos
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => setDiagOpen(true)}
+                  title="Diagnostica possíveis pagamentos duplicados (read-only, não altera nada)"
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  Diagnosticar duplicidades
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -1130,6 +1139,10 @@ export default function Financeiro() {
           refetchCob();
           refetchClientes();
         }}
+      />
+      <DiagnosticarDuplicidadesDialog
+        open={diagOpen}
+        onOpenChange={setDiagOpen}
       />
 
       <AlertDialog
