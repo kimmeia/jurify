@@ -659,6 +659,10 @@ export const relatoriosRouter = router({
             contratos: 0,
             contratosPeriodoAnterior: 0,
             variacaoContratos: 0,
+            contratosFechados: 0,
+            contratosFechadosPeriodoAnterior: 0,
+            variacaoContratosFechados: 0,
+            valorTotalFechado: 0,
             ticketMedio: 0,
             comissao: 0,
           },
@@ -749,6 +753,37 @@ export const relatoriosRouter = router({
       const variacaoContratos = contratosAnterior > 0
         ? +(((contratos - contratosAnterior) / contratosAnterior) * 100).toFixed(1)
         : contratos > 0 ? 100 : 0;
+
+      // ── Contratos fechados (leads.fechado_ganho) — atual e anterior ───────
+      // Reusa o mesmo filtro do ranking (idsAtendentes + createdAt range).
+      // O total do período atual também é refletido em `etapas.fechado_ganho.total`,
+      // mas mantemos no kpis pra alinhar com faturado/contratos (variação + payload anterior).
+      const [contratosFechadosAtualAgg] = await db
+        .select({ total: sql<number>`COUNT(*)`, valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)` })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          inArray(leads.responsavelId, idsAtendentes),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+        ));
+      const [contratosFechadosAntAgg] = await db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          inArray(leads.responsavelId, idsAtendentes),
+          gte(leads.createdAt, dataInicioAnterior),
+          lte(leads.createdAt, dataFimAnterior),
+        ));
+      const contratosFechados = Number(contratosFechadosAtualAgg?.total || 0);
+      const valorTotalFechado = Number(contratosFechadosAtualAgg?.valor || 0);
+      const contratosFechadosPeriodoAnterior = Number(contratosFechadosAntAgg?.total || 0);
+      const variacaoContratosFechados = contratosFechadosPeriodoAnterior > 0
+        ? +(((contratosFechados - contratosFechadosPeriodoAnterior) / contratosFechadosPeriodoAnterior) * 100).toFixed(1)
+        : contratosFechados > 0 ? 100 : 0;
 
       // ── Comissão a receber (fechamentos no período) ───────────────────────
       // Overlap: período da comissão SE SOBREPÕE ao range do dashboard.
@@ -1000,6 +1035,10 @@ export const relatoriosRouter = router({
           contratos,
           contratosPeriodoAnterior: contratosAnterior,
           variacaoContratos,
+          contratosFechados,
+          contratosFechadosPeriodoAnterior,
+          variacaoContratosFechados,
+          valorTotalFechado,
           ticketMedio,
           comissao: comissaoTotal,
         },

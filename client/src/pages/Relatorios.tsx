@@ -828,65 +828,126 @@ function DashboardComercial() {
         <LoadingBlock />
       ) : (
         <>
-          {/* KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Card>
-              <CardContent className="pt-4 space-y-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
-                  Recebido
-                </div>
-                <p className="text-2xl font-bold text-emerald-600">{formatBRL(data.kpis.faturado)}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">vs anterior</span>
-                  <VariacaoBadge pct={data.kpis.variacaoFaturado} />
-                </div>
-                <p className="text-[10px] text-muted-foreground italic">
-                  cobranças pagas no período
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 space-y-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
-                  Contratos pagos
-                </div>
-                <p className="text-2xl font-bold">{data.kpis.contratos}</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">vs anterior</span>
-                  <VariacaoBadge pct={data.kpis.variacaoContratos} />
-                </div>
-                <p className="text-[10px] text-muted-foreground italic">
-                  parcelas do mesmo contrato contam como 1
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 space-y-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Activity className="h-3.5 w-3.5 text-violet-500" />
-                  Ticket médio
-                </div>
-                <p className="text-2xl font-bold">{formatBRL(data.kpis.ticketMedio)}</p>
-                <p className="text-[10px] text-muted-foreground italic">
-                  recebido ÷ contratos pagos
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 space-y-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Percent className="h-3.5 w-3.5 text-amber-500" />
-                  Comissão
-                </div>
-                <p className="text-2xl font-bold text-amber-600">{formatBRL(data.kpis.comissao)}</p>
-                <p className="text-[10px] text-muted-foreground italic">
-                  fechamentos no período
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* KPIs principais — 4 cards com métrica principal + secundária derivada */}
+          {(() => {
+            const faturado = data.kpis.faturado || 0;
+            const contratosPagos = data.kpis.contratos || 0;
+            const contratosFechados = data.kpis.contratosFechados || 0;
+            const valorTotalFechado = data.kpis.valorTotalFechado || 0;
+            const pctRecebidoDoFechado = valorTotalFechado > 0
+              ? (faturado / valorTotalFechado) * 100
+              : null;
+            const pctPagosDosFechados = contratosFechados > 0
+              ? (contratosPagos / contratosFechados) * 100
+              : null;
+            const ticketMedioFechado = contratosFechados > 0
+              ? valorTotalFechado / contratosFechados
+              : 0;
+            const ticketMedioPago = data.kpis.ticketMedio || 0;
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Card className="border-2 border-emerald-200">
+                  <CardContent className="pt-4 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                      Recebido
+                    </div>
+                    <p className="text-2xl font-bold text-emerald-600 tabular-nums">{formatBRL(faturado)}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground">vs anterior</span>
+                      <VariacaoBadge pct={data.kpis.variacaoFaturado} />
+                    </div>
+                    <div className="rounded bg-emerald-50 border border-emerald-200 px-1.5 py-1 dark:bg-emerald-950/30">
+                      {pctRecebidoDoFechado != null ? (
+                        <>
+                          <p className="text-[10px] text-emerald-700 font-semibold">
+                            {pctRecebidoDoFechado.toFixed(1).replace(".", ",")}% do total fechado
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">
+                            de {formatBRL(valorTotalFechado)}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground">sem fechado no período</p>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      cobranças pagas no período
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-blue-200">
+                  <CardContent className="pt-4 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
+                      Contratos fechados
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600 tabular-nums">{contratosFechados}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground">vs anterior</span>
+                      <VariacaoBadge pct={data.kpis.variacaoContratosFechados} />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      leads ganhos no período
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-indigo-200">
+                  <CardContent className="pt-4 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-indigo-500" />
+                      Contratos pagos
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-600 tabular-nums">{contratosPagos}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground">vs anterior</span>
+                      <VariacaoBadge pct={data.kpis.variacaoContratos} />
+                    </div>
+                    <div className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-1 dark:bg-indigo-950/30">
+                      {pctPagosDosFechados != null ? (
+                        <>
+                          <p className="text-[10px] text-indigo-700 font-semibold">
+                            {pctPagosDosFechados.toFixed(1).replace(".", ",")}% dos fechados
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">
+                            {contratosPagos} de {contratosFechados} contratos
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground">sem fechado no período</p>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      parcelas do mesmo contrato contam como 1
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-violet-200">
+                  <CardContent className="pt-4 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Activity className="h-3.5 w-3.5 text-violet-500" />
+                      Ticket médio
+                    </div>
+                    <p className="text-2xl font-bold text-violet-600 tabular-nums">{formatBRL(ticketMedioFechado)}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      fechado ÷ contratos fechados
+                    </p>
+                    <div className="rounded bg-violet-50 border border-violet-200 px-1.5 py-1 dark:bg-violet-950/30">
+                      <p className="text-[10px] text-violet-700 font-semibold tabular-nums">
+                        {formatBRL(ticketMedioPago)} recebido
+                      </p>
+                      <p className="text-[9px] text-muted-foreground">
+                        recebido ÷ contratos pagos
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
 
           {/* Ranking */}
           <Card>
