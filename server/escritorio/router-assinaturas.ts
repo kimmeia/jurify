@@ -65,7 +65,7 @@ export const assinaturasRouter = router({
       contatoId: z.number(),
       titulo: z.string().min(2).max(255),
       descricao: z.string().max(512).optional(),
-      documentoUrl: z.string().min(5),
+      documentoUrl: z.string().url().max(2048),
       diasExpiracao: z.number().min(1).max(90).optional(),
     }))
     .mutation(async ({ ctx, input }) => {

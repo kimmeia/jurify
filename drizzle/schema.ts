@@ -1452,42 +1452,49 @@ export const juditTransacoes = escritorioTransacoes;
  * Eventos detectados são gravados em `eventos_processo` (sem FK
  * porque Drizzle/MySQL não dá conta de FK polimórficas).
  */
-export const motorMonitoramentos = mysqlTable("motor_monitoramentos", {
-  id: int("id").autoincrement().primaryKey(),
-  escritorioId: int("escritorio_id").notNull(),
-  criadoPor: int("criado_por").notNull(),
-  tipoMonitoramento: mysqlEnum("tipo_monitoramento", ["movimentacoes", "novas_acoes"]).notNull(),
-  searchType: mysqlEnum("search_type", ["lawsuit_cnj", "cpf", "cnpj"]).notNull(),
-  searchKey: varchar("search_key", { length: 64 }).notNull(),
-  apelido: varchar("apelido", { length: 255 }),
-  tribunal: varchar("tribunal", { length: 16 }).notNull(),
-  credencialId: int("credencial_id"),
-  status: mysqlEnum("status", ["ativo", "pausado", "erro"]).default("ativo").notNull(),
-  recurrenceHoras: int("recurrence_horas").default(6).notNull(),
-  ultimaConsultaEm: timestamp("ultima_consulta_em"),
-  ultimaMovimentacaoEm: timestamp("ultima_movimentacao_em"),
-  ultimaMovimentacaoTexto: text("ultima_movimentacao_texto"),
-  totalAtualizacoes: int("total_atualizacoes").default(0).notNull(),
-  totalNovasAcoes: int("total_novas_acoes").default(0).notNull(),
-  hashUltimasMovs: varchar("hash_ultimas_movs", { length: 64 }),
-  cnjsConhecidos: text("cnjs_conhecidos"),
-  /**
-   * Capa do processo serializada (classeProcesso, juiz, vara,
-   * valorCausaCentavos, dataDistribuicao, etc.). Persistida pelo cron
-   * + pela busca sob demanda — frontend lê daqui em vez de re-consultar
-   * o tribunal a cada refresh.
-   */
-  capaJson: text("capa_json"),
-  /**
-   * Partes do processo serializadas (autor, réu, advogados, polos).
-   * Mesmo padrão de capaJson.
-   */
-  partesJson: text("partes_json"),
-  ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
-  ultimoErro: text("ultimo_erro"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
+export const motorMonitoramentos = mysqlTable(
+  "motor_monitoramentos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorio_id").notNull(),
+    criadoPor: int("criado_por").notNull(),
+    tipoMonitoramento: mysqlEnum("tipo_monitoramento", ["movimentacoes", "novas_acoes"]).notNull(),
+    searchType: mysqlEnum("search_type", ["lawsuit_cnj", "cpf", "cnpj"]).notNull(),
+    searchKey: varchar("search_key", { length: 64 }).notNull(),
+    apelido: varchar("apelido", { length: 255 }),
+    tribunal: varchar("tribunal", { length: 16 }).notNull(),
+    credencialId: int("credencial_id"),
+    status: mysqlEnum("status", ["ativo", "pausado", "erro"]).default("ativo").notNull(),
+    recurrenceHoras: int("recurrence_horas").default(6).notNull(),
+    ultimaConsultaEm: timestamp("ultima_consulta_em"),
+    ultimaMovimentacaoEm: timestamp("ultima_movimentacao_em"),
+    ultimaMovimentacaoTexto: text("ultima_movimentacao_texto"),
+    totalAtualizacoes: int("total_atualizacoes").default(0).notNull(),
+    totalNovasAcoes: int("total_novas_acoes").default(0).notNull(),
+    hashUltimasMovs: varchar("hash_ultimas_movs", { length: 64 }),
+    cnjsConhecidos: text("cnjs_conhecidos"),
+    /**
+     * Capa do processo serializada (classeProcesso, juiz, vara,
+     * valorCausaCentavos, dataDistribuicao, etc.). Persistida pelo cron
+     * + pela busca sob demanda — frontend lê daqui em vez de re-consultar
+     * o tribunal a cada refresh.
+     */
+    capaJson: text("capa_json"),
+    /**
+     * Partes do processo serializadas (autor, réu, advogados, polos).
+     * Mesmo padrão de capaJson.
+     */
+    partesJson: text("partes_json"),
+    ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
+    ultimoErro: text("ultimo_erro"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    idxEscrCreated: index("idx_motor_mon_escr_created").on(t.escritorioId, t.createdAt),
+    idxStatusConsulta: index("idx_motor_mon_status_consulta").on(t.status, t.ultimaConsultaEm),
+  }),
+);
 
 export type MotorMonitoramento = typeof motorMonitoramentos.$inferSelect;
 export type InsertMotorMonitoramento = typeof motorMonitoramentos.$inferInsert;
@@ -2648,36 +2655,42 @@ export type InsertCofreSessao = typeof cofreSessoes.$inferInsert;
  * ter monitoramento prévio (caso clássico: cliente foi citado em ação
  * nova).
  */
-export const eventosProcesso = mysqlTable("eventos_processo", {
-  id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
-  monitoramentoId: int("monitoramentoId"),
-  escritorioId: int("escritorioId").notNull(),
-  tipo: mysqlEnum("tipoEvento", [
-    "movimentacao",
-    "publicacao_dje",
-    "nova_acao",
-    "mandado",
-    "intimacao",
-    "citacao",
-    "sentenca",
-    "despacho",
-    "audiencia",
-    "outro",
-  ]).notNull(),
-  /** Quando o evento aconteceu no tribunal (não quando foi coletado) */
-  dataEvento: timestamp("dataEvento").notNull(),
-  fonte: mysqlEnum("fonteEvento", ["judit", "pje", "esaj", "eproc", "dje", "manual"]).notNull(),
-  conteudo: text("conteudo").notNull(),
-  /** Versão estruturada quando parser conseguiu extrair campos. JSON dentro de TEXT. */
-  conteudoJson: text("conteudoJson"),
-  cnjAfetado: varchar("cnjAfetado", { length: 32 }),
-  /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
-  hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
-  lido: boolean("lido").default(false).notNull(),
-  alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
-  alertaEnviadoEm: timestamp("alertaEnviadoEm"),
-  createdAt: timestamp("createdAtEvento").defaultNow().notNull(),
-});
+export const eventosProcesso = mysqlTable(
+  "eventos_processo",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    monitoramentoId: int("monitoramentoId"),
+    escritorioId: int("escritorioId").notNull(),
+    tipo: mysqlEnum("tipoEvento", [
+      "movimentacao",
+      "publicacao_dje",
+      "nova_acao",
+      "mandado",
+      "intimacao",
+      "citacao",
+      "sentenca",
+      "despacho",
+      "audiencia",
+      "outro",
+    ]).notNull(),
+    /** Quando o evento aconteceu no tribunal (não quando foi coletado) */
+    dataEvento: timestamp("dataEvento").notNull(),
+    fonte: mysqlEnum("fonteEvento", ["judit", "pje", "esaj", "eproc", "dje", "manual"]).notNull(),
+    conteudo: text("conteudo").notNull(),
+    /** Versão estruturada quando parser conseguiu extrair campos. JSON dentro de TEXT. */
+    conteudoJson: text("conteudoJson"),
+    cnjAfetado: varchar("cnjAfetado", { length: 32 }),
+    /** SHA-256 de (tipo + cnj + dataEvento + 200 chars do conteudo) — UNIQUE */
+    hashDedup: varchar("hashDedup", { length: 64 }).notNull(),
+    lido: boolean("lido").default(false).notNull(),
+    alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
+    alertaEnviadoEm: timestamp("alertaEnviadoEm"),
+    createdAt: timestamp("createdAtEvento").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxEscrCnjData: index("idx_eventos_proc_escr_cnj_data").on(t.escritorioId, t.cnjAfetado, t.dataEvento),
+  }),
+);
 
 export type EventoProcesso = typeof eventosProcesso.$inferSelect;
 export type InsertEventoProcesso = typeof eventosProcesso.$inferInsert;
