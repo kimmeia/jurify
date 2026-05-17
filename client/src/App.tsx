@@ -22,9 +22,6 @@ import AdminAuditoria from "./pages/admin/AdminAuditoria";
 import AdminErros from "./pages/admin/AdminErros";
 import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminBackups from "./pages/admin/AdminBackups";
-import AdminInadimplentes from "./pages/admin/AdminInadimplentes";
-import AdminPlanos from "./pages/admin/AdminPlanos";
-import AdminCupons from "./pages/admin/AdminCupons";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
@@ -122,21 +119,6 @@ function Router() {
       <Route path="/admin/subscriptions">
         <AdminArea>
           <AdminSubscriptions />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/inadimplentes">
-        <AdminArea>
-          <AdminInadimplentes />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/planos">
-        <AdminArea>
-          <AdminPlanos />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/cupons">
-        <AdminArea>
-          <AdminCupons />
         </AdminArea>
       </Route>
       <Route path="/admin/financeiro">

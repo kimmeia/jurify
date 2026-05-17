@@ -52,7 +52,6 @@ function CriarCupomDialog({
   const criarMut = trpc.admin.criarCupom.useMutation({
     onSuccess: () => {
       toast.success("Cupom criado!");
-      // Reset
       setCodigo("");
       setDescricao("");
       setTipo("percentual");
@@ -80,7 +79,6 @@ function CriarCupomDialog({
       codigo: codigo.trim(),
       descricao: descricao.trim() || undefined,
       tipo,
-      // Para valorFixo, convertemos reais para centavos
       valor: tipo === "valorFixo" ? Math.round(parseFloat(valor.replace(",", ".")) * 100) : v,
       validoAte: validoAte ? new Date(validoAte).toISOString() : undefined,
       maxUsos: maxUsos ? parseInt(maxUsos) : undefined,
@@ -220,7 +218,7 @@ function CriarCupomDialog({
   );
 }
 
-export default function AdminCupons() {
+export function CuponsSection() {
   const { data: cupons, isLoading, refetch } = trpc.admin.listarCupons.useQuery();
   const [criarOpen, setCriarOpen] = useState(false);
 
@@ -250,25 +248,13 @@ export default function AdminCupons() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-pink-100 to-rose-100 dark:from-pink-900/40 dark:to-rose-900/40">
-            <Tag className="h-6 w-6 text-pink-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Cupons</h1>
-            <p className="text-muted-foreground mt-1">
-              Códigos promocionais para aplicar descontos no checkout.
-            </p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end">
         <Button onClick={() => setCriarOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" />
           Novo cupom
         </Button>
       </div>
 
-      {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
@@ -290,7 +276,6 @@ export default function AdminCupons() {
         </Card>
       </div>
 
-      {/* Lista */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Todos os cupons</CardTitle>
