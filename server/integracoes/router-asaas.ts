@@ -3049,6 +3049,7 @@ export const asaasRouter = router({
                 asaasCustomerId: asaasCobrancas.asaasCustomerId,
                 valor: asaasCobrancas.valor,
                 status: asaasCobrancas.status,
+                vencimento: asaasCobrancas.vencimento,
               })
               .from(asaasCobrancas)
               .where(and(
@@ -3074,6 +3075,7 @@ export const asaasRouter = router({
             asaasCustomerId: c.asaasCustomerId,
             valor: c.valor,
             status: c.status,
+            vencimento: c.vencimento,
           }));
 
         return agregarVinculosPorContato(vinculos, cobrancas, contatosMeta);
