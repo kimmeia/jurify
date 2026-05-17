@@ -2274,11 +2274,28 @@ export const comissoesFechadas = mysqlTable(
      *  cria despesa pendente automática. Permite cascata na exclusão
      *  do fechamento. */
     despesaId: int("despesaIdComFech"),
+    /** Versão do fechamento pro mesmo período. `0` = fechamento primário
+     *  (default); `1, 2, ...` = re-fechamentos forçados (forcarDuplicado
+     *  na UI). A `versao` participa do UNIQUE abaixo: race entre cron
+     *  automático e clique manual ambos tentam versao=0 → segundo INSERT
+     *  cai em ER_DUP_ENTRY (capturado em db-comissoes.fecharComissao). */
+    versao: int("versao").default(0).notNull(),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
       t.escritorioId,
       t.atendenteId,
+    ),
+    /** Idempotência cross-origem: protege contra race condition entre
+     *  cron `processarAgendasComissao` e clique manual em "Fechar período"
+     *  no mesmo (escritório, atendente, período). Versão diferencia
+     *  re-fechamentos legítimos (forcarDuplicado) de duplicação por race. */
+    uqPeriodoVersao: uniqueIndex("com_fech_periodo_versao_uq").on(
+      t.escritorioId,
+      t.atendenteId,
+      t.periodoInicio,
+      t.periodoFim,
+      t.versao,
     ),
   }),
 );
