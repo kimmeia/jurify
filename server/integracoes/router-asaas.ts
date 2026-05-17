@@ -2624,7 +2624,7 @@ export const asaasRouter = router({
         .object({
           /** Quantidade de meses contando do mês corrente pra trás. Ignorado se
            *  `dataInicio` e `dataFim` forem informados. Default: 6. */
-          meses: z.number().int().min(1).max(24).optional(),
+          meses: z.number().int().min(1).max(60).optional(),
           /** Range customizado — primeiro dia do mês inicial (YYYY-MM-DD). */
           dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
           /** Range customizado — último dia do mês final (YYYY-MM-DD). */
@@ -2666,10 +2666,13 @@ export const asaasRouter = router({
             i++;
           }
         } else {
+          // Hard cap de 60 meses (5 anos). Range maior é truncado silenciosamente —
+          // o filtro WHERE usa rangeFim baseado na última chave, então cobranças
+          // fora desse cap não aparecem nem no SUM nem nos buckets.
           const cursor = new Date(ini.getFullYear(), ini.getMonth(), 1);
           const fimChave = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}`;
           let i = 0;
-          while (i < 36) {
+          while (i < 60) {
             const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
             chaves.push(k);
             if (k === fimChave) break;
@@ -2776,7 +2779,11 @@ export const asaasRouter = router({
         }));
 
         return { granularidade, pontos, totalRecebido, totalPendente, totalVencido };
-      } catch {
+      } catch (err) {
+        log.error(
+          { module: "asaas-cashFlowMensal", err, input },
+          "Falha ao agregar fluxo de caixa",
+        );
         return ZERO;
       }
     }),
