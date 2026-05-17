@@ -18,6 +18,9 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -549,6 +552,166 @@ function VariacaoBadge({ pct }: { pct: number }) {
   );
 }
 
+function corBarraMeta(progresso: number): string {
+  if (progresso >= 100) return "bg-emerald-500";
+  if (progresso >= 70) return "bg-blue-500";
+  if (progresso >= 40) return "bg-amber-500";
+  return "bg-red-500";
+}
+
+function RankingPodioTabela({
+  ranking,
+  onSelecionar,
+}: {
+  ranking: any[];
+  onSelecionar: (id: number, nome: string) => void;
+}) {
+  const topTres = ranking.slice(0, 3);
+  const resto = ranking.slice(3);
+  const bgsPodio = [
+    "bg-amber-50 border-amber-300 dark:bg-amber-950/30",
+    "bg-slate-100 border-slate-300 dark:bg-slate-800/40",
+    "bg-orange-50 border-orange-300 dark:bg-orange-950/30",
+  ];
+
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+        {topTres.map((r: any, idx: number) => {
+          const medalha = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
+          const progresso = r.progressoMeta ?? 0;
+          return (
+            <div
+              key={r.atendenteId}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelecionar(r.atendenteId, r.nome)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelecionar(r.atendenteId, r.nome); }}
+              className={`border-2 rounded-lg p-3 space-y-2 cursor-pointer hover:shadow-md transition-shadow ${bgsPodio[idx]}`}
+              title="Clique pra ver os clientes deste atendente"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{medalha}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate">{r.nome}</p>
+                  {r.setorNome && (
+                    <p className="text-[10px] text-muted-foreground">{r.setorNome}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-2">
+                  <p className="text-[10px] text-muted-foreground">Fechado</p>
+                  <p className="text-sm font-bold text-blue-700">{formatBRL(r.valorFechado || 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {r.contratosFechados || 0} contrato(s)
+                  </p>
+                </div>
+                <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
+                  <p className="text-[10px] text-muted-foreground">Recebido</p>
+                  <p className="text-sm font-bold text-emerald-700">{formatBRL(r.faturado)}</p>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground text-right">
+                Ticket médio: {formatBRL(r.ticketMedio)}
+              </p>
+              {r.meta != null && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span
+                      className="text-muted-foreground"
+                      title={`Meta mensal: ${formatBRL(r.meta)}`}
+                    >
+                      Meta: {formatBRL(r.metaPeriodo ?? r.meta)}
+                    </span>
+                    <span className="font-bold">{progresso.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-white/60 dark:bg-black/30 overflow-hidden">
+                    <div
+                      className={`h-full ${corBarraMeta(progresso)}`}
+                      style={{ width: `${Math.min(100, progresso)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {resto.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10 text-xs">#</TableHead>
+              <TableHead className="text-xs">Atendente</TableHead>
+              <TableHead className="text-xs text-right">Fechado</TableHead>
+              <TableHead className="text-xs text-right">Contratos</TableHead>
+              <TableHead className="text-xs text-right">Recebido</TableHead>
+              <TableHead className="text-xs text-right">Ticket médio</TableHead>
+              <TableHead className="text-xs w-36">Meta</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {resto.map((r: any, idxResto: number) => {
+              const idx = idxResto + 3;
+              const progresso = r.progressoMeta ?? 0;
+              return (
+                <TableRow
+                  key={r.atendenteId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelecionar(r.atendenteId, r.nome)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelecionar(r.atendenteId, r.nome); }}
+                  className="cursor-pointer"
+                  title="Clique pra ver os clientes deste atendente"
+                >
+                  <TableCell className="text-xs text-muted-foreground">#{idx + 1}</TableCell>
+                  <TableCell className="text-xs">
+                    <p className="font-medium truncate max-w-[180px]">{r.nome}</p>
+                    {r.setorNome && (
+                      <p className="text-[10px] text-muted-foreground">{r.setorNome}</p>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-right font-medium text-blue-700 tabular-nums">
+                    {formatBRL(r.valorFechado || 0)}
+                  </TableCell>
+                  <TableCell className="text-xs text-right text-muted-foreground tabular-nums">
+                    {r.contratosFechados || 0}
+                  </TableCell>
+                  <TableCell className="text-xs text-right font-medium text-emerald-700 tabular-nums">
+                    {formatBRL(r.faturado)}
+                  </TableCell>
+                  <TableCell className="text-xs text-right text-muted-foreground tabular-nums">
+                    {formatBRL(r.ticketMedio)}
+                  </TableCell>
+                  <TableCell>
+                    {r.meta != null ? (
+                      <div className="flex items-center gap-2" title={`Meta: ${formatBRL(r.metaPeriodo ?? r.meta)}`}>
+                        <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden min-w-[40px]">
+                          <div
+                            className={`h-full ${corBarraMeta(progresso)}`}
+                            style={{ width: `${Math.min(100, progresso)}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-medium w-10 text-right tabular-nums">
+                          {progresso.toFixed(0)}%
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </>
+  );
+}
+
 function DashboardComercial() {
   // Filtros locais: setor (default = primeiro tipo='comercial'),
   // atendente, período (default mês vigente).
@@ -753,77 +916,10 @@ function DashboardComercial() {
                   Sem atendentes no setor comercial selecionado.
                 </p>
               ) : (
-                <div className="space-y-2">
-                  {data.ranking.map((r: any, idx: number) => {
-                    const medalha = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
-                    return (
-                      <div
-                        key={r.atendenteId}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setAtendenteDrillDown({ id: r.atendenteId, nome: r.nome })}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setAtendenteDrillDown({ id: r.atendenteId, nome: r.nome }); }}
-                        className="border rounded-lg p-3 space-y-2 cursor-pointer hover:border-primary hover:bg-accent/30 transition-colors"
-                        title="Clique pra ver os clientes deste atendente"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base w-6 text-center">
-                            {medalha || <span className="text-xs text-muted-foreground">#{idx + 1}</span>}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{r.nome}</p>
-                            {r.setorNome && (
-                              <p className="text-[10px] text-muted-foreground">{r.setorNome}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-md bg-blue-500/5 border border-blue-500/20 p-2">
-                            <p className="text-[10px] text-muted-foreground">Fechado (pipeline)</p>
-                            <p className="text-sm font-bold text-blue-700">{formatBRL(r.valorFechado || 0)}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {r.contratosFechados || 0} contrato(s)
-                            </p>
-                          </div>
-                          <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 p-2">
-                            <p className="text-[10px] text-muted-foreground">Recebido (caixa)</p>
-                            <p className="text-sm font-bold text-emerald-700">{formatBRL(r.faturado)}</p>
-                          </div>
-                        </div>
-
-                        <p className="text-[10px] text-muted-foreground text-right">
-                          Ticket médio: {formatBRL(r.ticketMedio)}
-                        </p>
-                        {r.meta != null && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[10px]">
-                              <span
-                                className="text-muted-foreground"
-                                title={`Meta mensal: ${formatBRL(r.meta)}`}
-                              >
-                                Meta período: {formatBRL(r.metaPeriodo ?? r.meta)}
-                              </span>
-                              <span className="font-medium">
-                                {(r.progressoMeta ?? 0).toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                              <div
-                                className={`h-full ${
-                                  (r.progressoMeta ?? 0) >= 100 ? "bg-emerald-500" :
-                                  (r.progressoMeta ?? 0) >= 70 ? "bg-blue-500" :
-                                  (r.progressoMeta ?? 0) >= 40 ? "bg-amber-500" : "bg-red-500"
-                                }`}
-                                style={{ width: `${Math.min(100, r.progressoMeta ?? 0)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <RankingPodioTabela
+                  ranking={data.ranking}
+                  onSelecionar={(id, nome) => setAtendenteDrillDown({ id, nome })}
+                />
               )}
             </CardContent>
           </Card>
