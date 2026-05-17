@@ -24,8 +24,9 @@ import { Label } from "@/components/ui/label";
 import {
   BarChart3, MessageCircle, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
   Activity, CheckCircle2, Target, AlertTriangle, Percent,
-  LayoutGrid, Calculator,
+  LayoutGrid, Calculator, Wallet,
 } from "lucide-react";
+import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ComposedChart, Area,
@@ -178,26 +179,36 @@ export default function Relatorios() {
   };
   const podeRelatorios = can("relatorios");
   const podeCalculos = can("calculos");
+  const podeFinanceiro = can("financeiro");
 
-  // Default tab: primeira permitida. Atendente sem relatorios cai em "calculos".
-  const defaultTab = podeRelatorios ? "atendimento" : podeCalculos ? "calculos" : "atendimento";
+  // Default tab: primeira permitida. Atendente sem relatorios cai em "calculos"
+  // (ou "financeiro" se for a única acessível).
+  const defaultTab = podeRelatorios
+    ? "atendimento"
+    : podeCalculos
+      ? "calculos"
+      : podeFinanceiro
+        ? "financeiro"
+        : "atendimento";
   const [tab, setTab] = useState(defaultTab);
   // Re-alinha o tab atual quando permissões chegam (evita mostrar
   // "atendimento" bloqueado pra atendente até o usuário clicar em algo).
   useEffect(() => {
     if (!permsLoading) {
-      if (tab === "atendimento" && !podeRelatorios && podeCalculos) {
-        setTab("calculos");
+      if (tab === "atendimento" && !podeRelatorios) {
+        if (podeCalculos) setTab("calculos");
+        else if (podeFinanceiro) setTab("financeiro");
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permsLoading, podeRelatorios, podeCalculos]);
+  }, [permsLoading, podeRelatorios, podeCalculos, podeFinanceiro]);
 
   const tabsVisiveis = [
     podeRelatorios && "atendimento",
     podeRelatorios && "comercial",
     podeRelatorios && "producao",
     podeCalculos && "calculos",
+    podeFinanceiro && "financeiro",
   ].filter(Boolean) as string[];
 
   return (
@@ -253,6 +264,14 @@ export default function Relatorios() {
                     </span>
                   </SelectItem>
                 )}
+                {podeFinanceiro && (
+                  <SelectItem value="financeiro">
+                    <span className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-amber-500" />
+                      Financeiro
+                    </span>
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -271,6 +290,7 @@ export default function Relatorios() {
           {tab === "comercial" && podeRelatorios && <DashboardComercial />}
           {tab === "producao" && podeRelatorios && <AbaProducao />}
           {tab === "calculos" && podeCalculos && <AbaCalculos />}
+          {tab === "financeiro" && podeFinanceiro && <DreFinanceiroTab />}
         </div>
       )}
     </div>
