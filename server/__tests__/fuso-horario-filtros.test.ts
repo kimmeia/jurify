@@ -13,13 +13,17 @@
  * como dia local NO FUSO DO ESCRITÓRIO (lido de `escritorios.fusoHorario`).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   inicioDoDiaNoFuso,
   fimDoDiaNoFuso,
   dataHojeBR,
   FUSO_HORARIO_PADRAO,
 } from "../../shared/escritorio-types";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("inicioDoDiaNoFuso — fusos brasileiros oficiais", () => {
   it("America/Sao_Paulo (UTC-3) → 00h BRT = 03h UTC", () => {
@@ -181,6 +185,51 @@ describe("Regressão direta do bug #7 — filtro de UM dia inclui eventos das 10
     const compromissoTarde = new Date("2026-05-18T03:30:00.000Z");
     expect(compromissoTarde.getTime()).toBeGreaterThan(fimSP.getTime());
     expect(compromissoTarde.getTime()).toBeLessThanOrEqual(fimManaus.getTime());
+  });
+});
+
+describe("Regressão direta do bug #8 — tarefa sem dataVencimento usa fuso, não UTC", () => {
+  it("operador SP às 22h BRT (= 01h UTC do dia seguinte): fallback fica no dia certo", () => {
+    // Server UTC. Operador em SP às 22h do dia 17/05 BRT → server UTC
+    // já está em 18/05 01h.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-18T01:00:00.000Z"));
+
+    // Comportamento ANTIGO (bug): `new Date().toISOString()` retorna
+    // "2026-05-18T01:00:00.000Z" — frontend mostra como dia 18.
+    const oldBuggy = new Date().toISOString();
+    expect(oldBuggy.slice(0, 10)).toBe("2026-05-18"); // dia ERRADO pro operador
+
+    // Comportamento NOVO (fix): início do dia no fuso SP.
+    const fixSP = inicioDoDiaNoFuso(dataHojeBR("America/Sao_Paulo"), "America/Sao_Paulo").toISOString();
+    // dataHojeBR("America/Sao_Paulo") com agora=2026-05-18T01:00:00Z é "2026-05-17"
+    // inicioDoDiaNoFuso("2026-05-17", "America/Sao_Paulo") = 2026-05-17T03:00:00Z
+    expect(fixSP).toBe("2026-05-17T03:00:00.000Z");
+    // Operador em SP vê dia 17 — coerente com sua percepção
+  });
+
+  it("operador Manaus às 21h AMT (= 01h UTC do dia seguinte): fallback fica no dia certo", () => {
+    // Manaus UTC-4. 21h AMT = 01h UTC do dia seguinte.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-18T01:00:00.000Z"));
+
+    const fixAM = inicioDoDiaNoFuso(
+      dataHojeBR("America/Manaus"),
+      "America/Manaus",
+    ).toISOString();
+    // dataHojeBR("America/Manaus") com agora=01h UTC = 21h AMT do dia 17 → "2026-05-17"
+    // inicioDoDiaNoFuso("2026-05-17", "America/Manaus") = 2026-05-17T04:00:00Z
+    expect(fixAM).toBe("2026-05-17T04:00:00.000Z");
+  });
+
+  it("não regride: às 14h UTC (11h BRT), dia atual é o mesmo em todo fuso BR", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T14:00:00.000Z"));
+
+    expect(dataHojeBR("America/Sao_Paulo")).toBe("2026-05-17");
+    expect(dataHojeBR("America/Manaus")).toBe("2026-05-17");
+    expect(dataHojeBR("America/Rio_Branco")).toBe("2026-05-17");
+    expect(dataHojeBR("America/Noronha")).toBe("2026-05-17");
   });
 });
 

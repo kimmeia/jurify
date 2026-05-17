@@ -292,8 +292,15 @@ export const agendaRouter = router({
           }
         }
 
+        // Fallback de tarefa sem `dataVencimento`: usa início do dia
+        // ATUAL no fuso do escritório (não no UTC do server). Antes, em
+        // SP às 22h BRT, o `new Date().toISOString()` retornava o
+        // instante UTC já no dia seguinte — a tarefa aparecia no agrupador
+        // "amanhã" do calendário em vez de hoje. Em Manaus piora 1h.
+        const fallbackVenc = inicioDoDiaNoFuso(dataHojeBR(fusoHorario), fusoHorario).toISOString();
+
         for (const t of trs) {
-          const venc = t.dataVencimento ? (t.dataVencimento as Date).toISOString() : new Date().toISOString();
+          const venc = t.dataVencimento ? (t.dataVencimento as Date).toISOString() : fallbackVenc;
           eventos.push({
             id: t.id,
             fonte: "tarefa",
