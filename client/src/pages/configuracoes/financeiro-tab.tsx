@@ -33,11 +33,13 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AgendamentoComissaoCard } from "./agendamento-comissao";
 
 export function FinanceiroTab({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="space-y-4">
       <RegraComissaoCard canEdit={canEdit} />
+      <AgendamentoComissaoCard />
       <CategoriasCobrancaCard canEdit={canEdit} />
       <CategoriasDespesaCard canEdit={canEdit} />
     </div>
