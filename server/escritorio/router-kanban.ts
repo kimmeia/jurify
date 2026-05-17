@@ -1019,4 +1019,52 @@ export const kanbanRouter = router({
       }
       return { success: true };
     }),
+
+  // ─── IMPORT DO TRELLO ─────────────────────────────────────────────────────
+
+  /** Prévia da importação — calcula totais sem efetuar. */
+  preverImportTrello: protectedProcedure
+    .input(z.object({
+      json: z.string().min(2).max(20_000_000), // 20MB de margem (Trello grande)
+      ignorarArchivados: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { preverImportTrello } = await import("./kanban-import-trello");
+      try {
+        return preverImportTrello(input.json, {
+          ignorarArchivados: input.ignorarArchivados,
+        });
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err?.message ?? "Não consegui ler o JSON",
+        });
+      }
+    }),
+
+  /** Executa a importação: cria 1 funil + colunas + cards a partir do JSON. */
+  importarDoTrello: protectedProcedure
+    .input(z.object({
+      json: z.string().min(2).max(20_000_000),
+      ignorarArchivados: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+
+      const { importarTrelloJson } = await import("./kanban-import-trello");
+      try {
+        return await importarTrelloJson(
+          esc.escritorio.id,
+          ctx.user.id,
+          input.json,
+          { ignorarArchivados: input.ignorarArchivados },
+        );
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err?.message ?? "Falha ao importar do Trello",
+        });
+      }
+    }),
 });
