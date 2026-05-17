@@ -304,11 +304,8 @@
 - [x] Polling automático a cada 60s para verificar novas notificações
 - [x] 394 testes passando no total
 
-## Bug Fix - Movimentações DataJud
-- [ ] Investigar: processo 0076233-35.2025.4.05.8100 mostra última movimentação de 26/12/2025, mas tem movimentações mais recentes
-- [ ] Corrigir consulta DataJud para trazer todas as movimentações (incluindo recentes)
-- [ ] Melhorar exibição das movimentações: muito genérico, dificulta entendimento
-- [ ] Adicionar mais detalhes nas movimentações (complementos, tipo, descrição expandida)
+## Bug Fix - Movimentações DataJud  (OBSOLETO — DataJud removido)
+- [x] OBSOLETO: módulo DataJud foi descontinuado (migration 0044_drop_legacy_datajud.sql) e substituído pelo motor próprio PJe TJCE em 08/05/2026. Lógica de "última movimentação" no motor próprio (cron-monitoramento.ts) está correta: scraper retorna em ordem cronológica decrescente, e `movimentacoes[0]` = mais recente (validado em pje-tjce.ts:526 onde `movimentacoes[length-1]` é descrito como "mais antiga")
 
 ## Etapa 2 — Integração Cal.com (Agendamento Online)
 - [x] Tipos compartilhados Cal.com (shared/calcom-types.ts)

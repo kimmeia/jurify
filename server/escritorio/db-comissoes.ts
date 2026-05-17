@@ -439,10 +439,18 @@ export async function fecharComissao(
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
-  // Dedup cross-origem: protege tanto cron quanto manual de criar
-  // fechamento duplicado pro mesmo período. Cron pula silencioso; UI
-  // manual deve mostrar dialog "já existe" antes de re-tentar com
-  // `forcarDuplicado:true`.
+  // Dedup cross-origem em 2 camadas:
+  //  (1) Check SELECT pré-INSERT — UX-first: retorna `FechamentoJaExisteError`
+  //      estruturado com id e origem pra UI mostrar "Ver existente / Recriar".
+  //  (2) UNIQUE no DB (escritorio, atendente, inicio, fim, versao) — fecha
+  //      a janela de race entre o check (1) e o INSERT abaixo. Sem essa
+  //      camada, cron `processarAgendasComissao` e clique manual disparados
+  //      no mesmo segundo passam ambos pelo check e criam 2 fechamentos
+  //      duplicados + 2 despesas pendentes.
+  //
+  // Re-fechamento legítimo após correção: caller passa `forcarDuplicado=true`
+  // → pula check (1) e calcula `versao` incremental via MAX+1. UNIQUE
+  // permite múltiplos fechamentos com versões diferentes.
   if (!params.forcarDuplicado) {
     const [existente] = await db
       .select({
@@ -456,6 +464,7 @@ export async function fecharComissao(
           eq(comissoesFechadas.atendenteId, params.atendenteId),
           eq(comissoesFechadas.periodoInicio, params.periodoInicio),
           eq(comissoesFechadas.periodoFim, params.periodoFim),
+          eq(comissoesFechadas.versao, 0),
         ),
       )
       .limit(1);
@@ -467,6 +476,27 @@ export async function fecharComissao(
     }
   }
 
+  // Versão = 0 pro fechamento primário (default); MAX+1 quando o operador
+  // forçar re-fechamento. Lê só rows do mesmo (escritório, atendente,
+  // período) — não afeta outros períodos.
+  let versao = 0;
+  if (params.forcarDuplicado) {
+    const [maxRow] = await db
+      .select({
+        max: sql<number>`COALESCE(MAX(${comissoesFechadas.versao}), -1)`,
+      })
+      .from(comissoesFechadas)
+      .where(
+        and(
+          eq(comissoesFechadas.escritorioId, params.escritorioId),
+          eq(comissoesFechadas.atendenteId, params.atendenteId),
+          eq(comissoesFechadas.periodoInicio, params.periodoInicio),
+          eq(comissoesFechadas.periodoFim, params.periodoFim),
+        ),
+      );
+    versao = Number(maxRow?.max ?? -1) + 1;
+  }
+
   const sim = await simularComissao(
     params.escritorioId,
     params.atendenteId,
@@ -475,28 +505,67 @@ export async function fecharComissao(
     params.regraCarregada,
   );
 
-  const [novo] = await db
-    .insert(comissoesFechadas)
-    .values({
-      escritorioId: params.escritorioId,
-      atendenteId: params.atendenteId,
-      periodoInicio: params.periodoInicio,
-      periodoFim: params.periodoFim,
-      totalBrutoRecebido: sim.totais.bruto.toFixed(2),
-      totalComissionavel: sim.totais.comissionavel.toFixed(2),
-      totalNaoComissionavel: sim.totais.naoComissionavel.toFixed(2),
-      totalComissao: sim.totais.valorComissao.toFixed(2),
-      aliquotaUsada: sim.aliquotaAplicada.toFixed(2),
-      modoUsado: sim.regra.modo,
-      baseFaixaUsada: sim.regra.modo === "faixas" ? sim.regra.baseFaixa : null,
-      faixasUsadas: sim.regra.modo === "faixas" ? JSON.stringify(sim.regra.faixas) : null,
-      valorMinimoUsado: sim.regra.valorMinimo.toFixed(2),
-      fechadoPorUserId: params.fechadoPorUserId,
-      observacoes: params.observacoes ?? null,
-      origem: params.origem ?? "manual",
-      agendaId: params.agendaId ?? null,
-    })
-    .$returningId();
+  let novo: { id: number };
+  try {
+    [novo] = await db
+      .insert(comissoesFechadas)
+      .values({
+        escritorioId: params.escritorioId,
+        atendenteId: params.atendenteId,
+        periodoInicio: params.periodoInicio,
+        periodoFim: params.periodoFim,
+        totalBrutoRecebido: sim.totais.bruto.toFixed(2),
+        totalComissionavel: sim.totais.comissionavel.toFixed(2),
+        totalNaoComissionavel: sim.totais.naoComissionavel.toFixed(2),
+        totalComissao: sim.totais.valorComissao.toFixed(2),
+        aliquotaUsada: sim.aliquotaAplicada.toFixed(2),
+        modoUsado: sim.regra.modo,
+        baseFaixaUsada: sim.regra.modo === "faixas" ? sim.regra.baseFaixa : null,
+        faixasUsadas: sim.regra.modo === "faixas" ? JSON.stringify(sim.regra.faixas) : null,
+        valorMinimoUsado: sim.regra.valorMinimo.toFixed(2),
+        fechadoPorUserId: params.fechadoPorUserId,
+        observacoes: params.observacoes ?? null,
+        origem: params.origem ?? "manual",
+        agendaId: params.agendaId ?? null,
+        versao,
+      })
+      .$returningId();
+  } catch (err: unknown) {
+    // ER_DUP_ENTRY = race condition: outro caller (cron ou manual)
+    // inseriu mesma (escritório, atendente, período, versao) entre nosso
+    // check pré-INSERT e o INSERT. Drizzle envolve mysql2; código real
+    // fica em err.cause.code/errno.
+    const errAny = err as { cause?: { code?: string; errno?: number } };
+    const isDupKey =
+      errAny?.cause?.code === "ER_DUP_ENTRY" || errAny?.cause?.errno === 1062;
+    if (isDupKey && !params.forcarDuplicado) {
+      // Refetch o vencedor pra retornar erro estruturado idêntico ao do
+      // check pré-INSERT. UI segue tratando como "já existe — recriar?".
+      const [existente] = await db
+        .select({
+          id: comissoesFechadas.id,
+          origem: comissoesFechadas.origem,
+        })
+        .from(comissoesFechadas)
+        .where(
+          and(
+            eq(comissoesFechadas.escritorioId, params.escritorioId),
+            eq(comissoesFechadas.atendenteId, params.atendenteId),
+            eq(comissoesFechadas.periodoInicio, params.periodoInicio),
+            eq(comissoesFechadas.periodoFim, params.periodoFim),
+            eq(comissoesFechadas.versao, 0),
+          ),
+        )
+        .limit(1);
+      if (existente) {
+        throw new FechamentoJaExisteError(
+          existente.id,
+          existente.origem as "manual" | "automatico",
+        );
+      }
+    }
+    throw err;
+  }
 
   const itens = [
     ...sim.comissionaveis.map((c) => ({

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { checkPermission } from "./check-permission";
+import { checkPermission, checkPermissionAdminOuMatriz } from "./check-permission";
 import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
@@ -75,23 +75,21 @@ export const crmRouter = router({
       duplicadoId: z.number(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Apenas dono ou gestor pode unificar contatos.");
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new Error("Apenas dono, gestor ou cargo com permissão de excluir clientes pode unificar contatos.");
       }
-      return unificarContatos(esc.escritorio.id, input.principalId, input.duplicadoId);
+      return unificarContatos(perm.escritorioId, input.principalId, input.duplicadoId);
     }),
 
   excluirContato: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") throw new Error("Sem permissão.");
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) throw new Error("Sem permissão.");
       // Cascata: cancela cobranças no Asaas + deleta todos os dados
       // vinculados (conversas, mensagens, leads, tarefas, arquivos, etc).
-      const resultado = await excluirClienteEmCascata(input.id, esc.escritorio.id);
+      const resultado = await excluirClienteEmCascata(input.id, perm.escritorioId);
       return resultado;
     }),
 

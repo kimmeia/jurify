@@ -22,6 +22,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Zap, Plus, Trash2, Loader2, MessageCircle, Calendar,
   Play, Clock,
   Users, CheckCircle2, Activity, AlertTriangle, XCircle,
@@ -92,6 +102,7 @@ const STATUS_EXEC: Record<StatusExecucao, { label: string; cor: string; icon: Lu
 export default function SmartFlow() {
   const [tab, setTab] = useState("cenarios");
   const [detalheId, setDetalheId] = useState<number | null>(null);
+  const [excluirCenario, setExcluirCenario] = useState<{ id: number; nome: string } | null>(null);
 
   const { data: cenarios, isLoading, refetch } = (trpc as any).smartflow.listar.useQuery();
   const { data: execucoes } = (trpc as any).smartflow.execucoes.useQuery(
@@ -109,7 +120,11 @@ export default function SmartFlow() {
   });
   const toggleMut = (trpc as any).smartflow.toggleAtivo.useMutation({ onSuccess: () => refetch() });
   const deletarMut = (trpc as any).smartflow.deletar.useMutation({
-    onSuccess: () => { toast.success("Cenário removido"); refetch(); },
+    onSuccess: () => {
+      toast.success("Cenário removido");
+      setExcluirCenario(null);
+      refetch();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const executarMut = (trpc as any).smartflow.executar.useMutation({
@@ -195,7 +210,8 @@ export default function SmartFlow() {
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0 text-destructive"
-                            onClick={() => { if (confirm("Excluir este cenário?")) deletarMut.mutate({ id: c.id }); }}
+                            onClick={() => setExcluirCenario({ id: c.id, nome: c.nome })}
+                            disabled={deletarMut.isPending}
                             title="Excluir"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -299,6 +315,35 @@ export default function SmartFlow() {
       </Tabs>
 
       <ExecucaoDetalheDialog id={detalheId} onClose={() => setDetalheId(null)} />
+
+      <AlertDialog
+        open={excluirCenario !== null}
+        onOpenChange={(open) => { if (!open) setExcluirCenario(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cenário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O cenário <strong>{excluirCenario?.nome}</strong> será removido
+              permanentemente. Execuções já registradas serão preservadas no
+              histórico, mas o cenário não rodará mais. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (excluirCenario) deletarMut.mutate({ id: excluirCenario.id });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarMut.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

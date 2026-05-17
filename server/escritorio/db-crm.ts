@@ -7,6 +7,7 @@ import { eq, and, desc, asc, or, sql, gte, lte, like } from "drizzle-orm";
 import { getDb } from "../db";
 import { contatos, conversas, mensagens, leads, colaboradores, users, canaisIntegrados, escritorios } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { escapeLikePattern } from "../_core/sql-helpers";
 import { normalizarValorBR } from "../../shared/valor-br";
 
 /**
@@ -31,11 +32,14 @@ export async function buscarContatoPorTelefone(
   const variantes = phoneVariantsBR(telefoneNormalizado);
   const candidatos = variantes.length > 0 ? variantes : [telefoneNormalizado];
 
-  const conditions = candidatos.flatMap((v) => [
-    eq(contatos.telefone, v),
-    like(contatos.telefonesAnteriores, `%${v}%`),
-    like(contatos.telefonesSecundarios, `%${v}%`),
-  ]);
+  const conditions = candidatos.flatMap((v) => {
+    const esc = escapeLikePattern(v);
+    return [
+      eq(contatos.telefone, v),
+      like(contatos.telefonesAnteriores, `%${esc}%`),
+      like(contatos.telefonesSecundarios, `%${esc}%`),
+    ];
+  });
 
   const rows = await db
     .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
@@ -167,10 +171,11 @@ export async function listarContatos(escritorioId: number, busca?: string) {
   if (!db) return [];
   const conditions = [eq(contatos.escritorioId, escritorioId)];
   if (busca) {
+    const b = `%${escapeLikePattern(busca)}%`;
     conditions.push(or(
-      like(contatos.nome, `%${busca}%`),
-      like(contatos.telefone, `%${busca}%`),
-      like(contatos.email, `%${busca}%`),
+      like(contatos.nome, b),
+      like(contatos.telefone, b),
+      like(contatos.email, b),
     )!);
   }
   const rows = await db.select().from(contatos)

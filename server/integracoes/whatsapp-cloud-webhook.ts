@@ -17,24 +17,51 @@ import { processarMensagemRecebida } from "./whatsapp-handler";
 import { decryptConfig } from "../escritorio/crypto-utils";
 import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
 import { createLogger } from "../_core/logger";
+import { verificarAssinaturaMeta } from "./meta-signature";
 const log = createLogger("integracoes-whatsapp-cloud-webhook");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Busca o verify token configurado no admin (adminIntegracoes provedor=whatsapp_cloud) */
-async function getVerifyToken(): Promise<string> {
+/**
+ * Lê a config Meta decriptada de `admin_integracoes` (provedor='whatsapp_cloud').
+ * Retorna `{verifyToken, appSecret}` — campos individuais existem na mesma
+ * config, então combinar ambos numa só leitura economiza chamadas. Vazio
+ * em qualquer campo significa "não configurado" (modo legado).
+ */
+async function getMetaConfig(): Promise<{
+  verifyToken: string;
+  appSecret: string;
+}> {
   const db = await getDb();
-  if (!db) return "";
+  if (!db) return { verifyToken: "", appSecret: "" };
   try {
-    const [row] = await db.select().from(adminIntegracoes)
-      .where(eq(adminIntegracoes.provedor, "whatsapp_cloud")).limit(1);
-    if (!row?.apiKeyEncrypted || !row?.apiKeyIv || !row?.apiKeyTag) return "";
-    // decryptConfig já retorna o objeto parseado: {appId, appSecret, webhookVerifyToken}
-    const config = decryptConfig(row.apiKeyEncrypted, row.apiKeyIv, row.apiKeyTag);
-    return config.webhookVerifyToken || "";
-  } catch { return ""; }
+    const [row] = await db
+      .select()
+      .from(adminIntegracoes)
+      .where(eq(adminIntegracoes.provedor, "whatsapp_cloud"))
+      .limit(1);
+    if (!row?.apiKeyEncrypted || !row?.apiKeyIv || !row?.apiKeyTag) {
+      return { verifyToken: "", appSecret: "" };
+    }
+    const config = decryptConfig(
+      row.apiKeyEncrypted,
+      row.apiKeyIv,
+      row.apiKeyTag,
+    );
+    return {
+      verifyToken: typeof config?.webhookVerifyToken === "string" ? config.webhookVerifyToken : "",
+      appSecret: typeof config?.appSecret === "string" ? config.appSecret : "",
+    };
+  } catch {
+    return { verifyToken: "", appSecret: "" };
+  }
+}
+
+/** Mantido por compat — usado só no GET de verificação. */
+async function getVerifyToken(): Promise<string> {
+  return (await getMetaConfig()).verifyToken;
 }
 
 /** Busca canal CoEx pelo phoneNumberId ou wabaId */
@@ -114,7 +141,37 @@ export function registerWhatsAppCloudWebhook(app: Express) {
 
   // ─── POST: Receber mensagens e status updates ────────────────────────
   app.post("/api/webhooks/whatsapp", async (req: Request, res: Response) => {
-    // Meta espera 200 imediatamente
+    // Valida HMAC ANTES de responder/processar. Atacante na internet
+    // podia forjar mensagens recebidas (criar conversas fake, disparar
+    // SmartFlow, transferir conversas) sem essa proteção. Body raw foi
+    // capturado em `req.rawBody` pelo middleware verify do express.json
+    // (server/_core/index.ts) pra paths /api/webhooks/.
+    const { appSecret } = await getMetaConfig();
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+    const sigHeader = req.header("X-Hub-Signature-256");
+    const verif = verificarAssinaturaMeta(rawBody, sigHeader, appSecret);
+
+    if (!verif.ok) {
+      log.warn(
+        {
+          mode: verif.mode,
+          motivo: verif.motivo,
+          hasHeader: !!sigHeader,
+        },
+        "[WhatsApp Cloud] Assinatura HMAC inválida — request rejeitada",
+      );
+      // 401 não 200: Meta vai retentar (configurável no painel). Atacante
+      // recebe rejeição clara em vez de ack silencioso.
+      return res.status(401).json({ error: "Assinatura inválida" });
+    }
+    if (verif.mode === "no-secret") {
+      log.warn(
+        "[WhatsApp Cloud] appSecret não configurado em admin_integracoes — cadastre o App Secret do Facebook App pra ativar validação HMAC. Sem isso, qualquer um pode forjar mensagens recebidas.",
+      );
+    }
+
+    // Meta espera 200 dentro de ~20s. HMAC já validado em <1ms; resto
+    // do processamento (DB, SmartFlow) roda em background.
     res.status(200).send("OK");
 
     try {

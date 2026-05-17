@@ -19,7 +19,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
-import { checkPermission } from "../escritorio/check-permission";
+import { checkPermission, checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { agentesIa, agenteIaDocumentos, adminIntegracoes } from "../../drizzle/schema";
@@ -508,10 +508,10 @@ export const agentesIaRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "agentesIa", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão.");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor")
-        throw new Error("Sem permissão.");
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 

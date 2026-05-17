@@ -1573,8 +1573,8 @@ function NovasAcoesTab() {
             return (
               <Card
                 key={a.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${!a.lido ? "border-red-500/40 bg-red-50/30 dark:bg-red-950/10" : ""}`}
-                onClick={() => { if (!a.lido) marcarLidaMut.mutate({ id: a.id }); }}
+                className={`cursor-pointer transition-all hover:shadow-md ${!a.lido ? "border-red-500/40 bg-red-50/30 dark:bg-red-950/10" : ""} ${marcarLidaMut.isPending ? "pointer-events-none opacity-70" : ""}`}
+                onClick={() => { if (!a.lido && !marcarLidaMut.isPending) marcarLidaMut.mutate({ id: a.id }); }}
               >
                 <CardContent className="pt-3 pb-3">
                   <div className="flex items-start gap-3">
