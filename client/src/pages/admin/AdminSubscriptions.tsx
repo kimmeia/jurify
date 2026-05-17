@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, Search, XCircle, Loader2, TrendingDown, DollarSign, Users2, Gift } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 function SubscriptionStatusBadge({ status }: { status: string }) {
@@ -39,14 +39,33 @@ function SubscriptionStatusBadge({ status }: { status: string }) {
 }
 
 export default function AdminSubscriptions() {
-  const { data: allSubs, isLoading, refetch } = trpc.admin.allSubscriptions.useQuery(undefined, {
-    retry: false,
-  });
+  const [busca, setBusca] = useState("");
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState<string>("all");
+  const [pagina, setPagina] = useState(0);
+  const LIMITE = 50;
+
+  // Debounce busca pra não disparar query a cada tecla.
+  useEffect(() => {
+    const t = setTimeout(() => { setBuscaDebounced(busca); setPagina(0); }, 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  const { data, isLoading, refetch } = trpc.admin.allSubscriptions.useQuery(
+    {
+      limit: LIMITE,
+      offset: pagina * LIMITE,
+      busca: buscaDebounced || undefined,
+      status: statusFiltro === "all" ? undefined : statusFiltro,
+    },
+    { retry: false },
+  );
 
   const { data: stats } = trpc.admin.stats.useQuery(undefined, { retry: false });
 
-  const [busca, setBusca] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState<string>("all");
+  const allSubs = data?.itens ?? [];
+  const totalSubs = data?.total ?? 0;
+  const totalPaginas = Math.ceil(totalSubs / LIMITE);
   const [cancelarSub, setCancelarSub] = useState<any | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [cortesiaSub, setCortesiaSub] = useState<any | null>(null);
@@ -89,19 +108,9 @@ export default function AdminSubscriptions() {
   const formatCurrency = (cents: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
-  const filtradas = useMemo(() => {
-    if (!allSubs) return [];
-    return allSubs.filter((s) => {
-      if (statusFiltro !== "all" && s.status !== statusFiltro) return false;
-      if (busca.trim()) {
-        const b = busca.toLowerCase();
-        const nome = (s.userName || "").toLowerCase();
-        const plano = (s.planName || "").toLowerCase();
-        if (!nome.includes(b) && !plano.includes(b)) return false;
-      }
-      return true;
-    });
-  }, [allSubs, busca, statusFiltro]);
+  // Filtros (busca/status) agora rodam no servidor via parâmetros
+  // da query — UI passou a usar `allSubs` direto sem filter local.
+  const filtradas = allSubs;
 
   const mrr = stats?.mrr ?? 0;
   const ativas = stats?.activeSubscriptions ?? 0;
@@ -152,7 +161,7 @@ export default function AdminSubscriptions() {
               <div>
                 <p className="text-sm text-muted-foreground">Vencidas</p>
                 <p className="text-2xl font-bold">
-                  {allSubs?.filter((s) => s.status === "past_due").length ?? 0}
+                  {stats?.pastDueSubscriptions ?? 0}
                 </p>
               </div>
             </div>
@@ -299,6 +308,22 @@ export default function AdminSubscriptions() {
                   ? "Nenhuma assinatura para os filtros."
                   : "Nenhuma assinatura encontrada."}
               </p>
+            </div>
+          )}
+
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t mt-4">
+              <div className="text-sm text-muted-foreground">
+                Página {pagina + 1} de {totalPaginas} • {totalSubs.toLocaleString("pt-BR")} {totalSubs === 1 ? "registro" : "registros"}
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={pagina === 0} onClick={() => setPagina((p) => Math.max(p - 1, 0))}>
+                  Anterior
+                </Button>
+                <Button size="sm" variant="outline" disabled={pagina + 1 >= totalPaginas} onClick={() => setPagina((p) => p + 1)}>
+                  Próxima
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

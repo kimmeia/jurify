@@ -23,7 +23,7 @@ import {
   AlertTriangle, RotateCcw, Users as UsersIcon, Gift,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -916,10 +916,34 @@ function ClienteDetalheDialog({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function AdminClients() {
-  const { data: allUsers, isLoading, refetch } = trpc.admin.allUsers.useQuery(undefined, { retry: false });
   const [busca, setBusca] = useState("");
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  const [tipo, setTipo] = useState<"todos" | "admin" | "cliente" | "colaborador">("todos");
+  const [pagina, setPagina] = useState(0);
   const [detalheUserId, setDetalheUserId] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
+  const LIMITE = 50;
+
+  // Debounce busca pra não disparar query a cada tecla (evita N+1 requests
+  // em conexões lentas; também evita rebuild do count() no servidor).
+  useEffect(() => {
+    const t = setTimeout(() => { setBuscaDebounced(busca); setPagina(0); }, 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  const { data, isLoading, refetch } = trpc.admin.allUsers.useQuery(
+    {
+      limit: LIMITE,
+      offset: pagina * LIMITE,
+      busca: buscaDebounced || undefined,
+      tipo,
+    },
+    { retry: false },
+  );
+
+  const allUsers = data?.itens ?? [];
+  const total = data?.total ?? 0;
+  const totalPaginas = Math.ceil(total / LIMITE);
 
   // Migração one-shot userCredits (legacy) → escritorio_creditos. Idempotente.
   const migrarLegacyMut = (trpc.admin as any).migrarCreditosLegacy?.useMutation({
@@ -933,14 +957,7 @@ export default function AdminClients() {
     onError: (err: any) => toast.error("Erro na migração", { description: err.message }),
   }) ?? { mutate: () => {}, isPending: false };
 
-  const filtrados = allUsers?.filter((u) => {
-    if (!busca.trim()) return true;
-    const b = busca.toLowerCase();
-    return (
-      (u.name || "").toLowerCase().includes(b) ||
-      (u.email || "").toLowerCase().includes(b)
-    );
-  });
+  const [migrarLegacyAberto, setMigrarLegacyAberto] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -951,25 +968,35 @@ export default function AdminClients() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <CardTitle className="text-base">Todos os clientes</CardTitle>
-              <CardDescription>{filtrados?.length ?? 0} utilizadores registados</CardDescription>
+              <CardDescription>
+                {total.toLocaleString("pt-BR")} utilizadores
+                {tipo !== "todos" || buscaDebounced ? " (filtrado)" : ""}
+              </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  if (!confirm("Migrar saldo userCredits (legacy) para escritorio_creditos?\n\nIdempotente — pode rodar várias vezes sem duplicar saldo. Roda 1x em produção após deploy.")) return;
-                  migrarLegacyMut.mutate({});
-                }}
+                onClick={() => setMigrarLegacyAberto(true)}
                 disabled={migrarLegacyMut.isPending}
                 className="text-xs"
               >
                 {migrarLegacyMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RotateCcw className="h-3 w-3 mr-1" />}
                 Migrar legacy
               </Button>
+              <select
+                value={tipo}
+                onChange={(e) => { setTipo(e.target.value as any); setPagina(0); }}
+                className="h-9 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="todos">Todos</option>
+                <option value="admin">Admins</option>
+                <option value="cliente">Clientes (donos)</option>
+                <option value="colaborador">Colaboradores</option>
+              </select>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -989,7 +1016,7 @@ export default function AdminClients() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : filtrados && filtrados.length > 0 ? (
+          ) : allUsers.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1003,16 +1030,16 @@ export default function AdminClients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtrados.map((u) => (
+                {allUsers.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.name || "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{u.email || "—"}</TableCell>
                     <TableCell>
                       <RoleBadge
                         role={u.role}
-                        tipoUsuario={(u as any).tipoUsuario}
-                        escritorioVinculado={(u as any).escritorioVinculado}
-                        cargoColaborador={(u as any).cargoColaborador}
+                        tipoUsuario={u.tipoUsuario}
+                        escritorioVinculado={u.escritorioVinculado}
+                        cargoColaborador={u.cargoColaborador}
                       />
                     </TableCell>
                     <TableCell><SubBadge active={u.hasActiveSubscription} /></TableCell>
@@ -1039,8 +1066,61 @@ export default function AdminClients() {
               <p className="text-sm">{busca ? "Nenhum resultado para a busca." : "Nenhum cliente encontrado."}</p>
             </div>
           )}
+
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t mt-4">
+              <div className="text-sm text-muted-foreground">
+                Página {pagina + 1} de {totalPaginas} • {total.toLocaleString("pt-BR")} {total === 1 ? "registro" : "registros"}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pagina === 0}
+                  onClick={() => setPagina((p) => Math.max(p - 1, 0))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pagina + 1 >= totalPaginas}
+                  onClick={() => setPagina((p) => p + 1)}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={migrarLegacyAberto} onOpenChange={setMigrarLegacyAberto}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Migrar saldo userCredits (legacy)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vai transferir saldo de <code>userCredits</code> (modelo antigo)
+              para <code>escritorio_creditos</code>. <strong>Idempotente</strong> —
+              pode rodar várias vezes sem duplicar saldo. Deve rodar 1× em produção
+              após o deploy do novo modelo de créditos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={migrarLegacyMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={migrarLegacyMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                migrarLegacyMut.mutate({});
+                setMigrarLegacyAberto(false);
+              }}
+            >
+              {migrarLegacyMut.isPending ? "Migrando..." : "Migrar agora"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ClienteDetalheDialog
         userId={detalheUserId}

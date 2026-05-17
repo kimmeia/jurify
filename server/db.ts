@@ -1,8 +1,9 @@
-import { eq, and, or, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql, like, inArray, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico, escritorios, colaboradores } from "../drizzle/schema";
 import { PLANS } from "./billing/products";
 import { createLogger } from "./_core/logger";
+import { escapeLikePattern } from "./_core/sql-helpers";
 const log = createLogger("db");
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -239,37 +240,120 @@ function getPlanPrice(planId: string | null): number {
  * Pra "colaborador", retorna `escritorioVinculado` (nome) e
  * `cargoColaborador` pro frontend mostrar no tooltip.
  */
-export async function getAllUsersWithSubscription() {
+export interface GetAllUsersOpts {
+  limit?: number;
+  offset?: number;
+  busca?: string;
+  tipo?: "admin" | "cliente" | "colaborador" | "todos";
+}
+
+/**
+ * Lista paginada de users com info de subscription + escritório vinculado.
+ *
+ * Antes: SELECT * FROM users (sem limit) + N queries auxiliares + JOIN em
+ * JS. Quebrava conforme a base crescia — admin abria /admin/clients e a
+ * tela travava porque o backend devolvia toda a coleção numa request só.
+ *
+ * Agora: paginação no SQL com LIMIT/OFFSET, filtro por busca (LIKE
+ * escapado) e filtro por tipo aplicado em subqueries no banco. Queries
+ * auxiliares (subscriptions, escritórios, colaboradores) também limitam
+ * o input via `IN (...userIdsDaPagina)` — evita carregar dados que não
+ * serão exibidos.
+ *
+ * Retorna `{ itens, total }` pra UI conseguir mostrar contador e pager.
+ */
+export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): Promise<{
+  itens: Array<{
+    id: number;
+    name: string | null;
+    email: string | null;
+    role: "user" | "admin";
+    hasActiveSubscription: boolean;
+    createdAt: Date;
+    lastSignedIn: Date;
+    tipoUsuario: "admin" | "cliente" | "colaborador";
+    escritorioVinculado: string | null;
+    cargoColaborador: string | null;
+  }>;
+  total: number;
+}> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) return { itens: [], total: 0 };
 
-  const allUsersList = await db.select(USERS_PUBLIC_COLUMNS).from(users).orderBy(desc(users.createdAt));
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const tipo = opts.tipo ?? "todos";
+
+  const conds: any[] = [];
+  if (opts.busca && opts.busca.trim()) {
+    const b = `%${escapeLikePattern(opts.busca.trim())}%`;
+    conds.push(or(like(users.name, b), like(users.email, b)));
+  }
+  if (tipo === "admin") {
+    conds.push(eq(users.role, "admin"));
+  } else if (tipo === "cliente") {
+    // Dono de escritório (registrado em escritorios.ownerId)
+    conds.push(inArray(users.id, db.select({ id: escritorios.ownerId }).from(escritorios)));
+  } else if (tipo === "colaborador") {
+    // Está em colaboradores ativos MAS não é dono de nenhum escritório.
+    // Evita classificar dupla quando user é dono de A e colab em B.
+    conds.push(inArray(
+      users.id,
+      db.select({ id: colaboradores.userId }).from(colaboradores).where(eq(colaboradores.ativo, true)),
+    ));
+    conds.push(notInArray(
+      users.id,
+      db.select({ id: escritorios.ownerId }).from(escritorios),
+    ));
+  }
+  const whereClause = conds.length > 0 ? and(...conds) : undefined;
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(users)
+    .where(whereClause);
+
+  const allUsersList = await db
+    .select(USERS_PUBLIC_COLUMNS)
+    .from(users)
+    .where(whereClause)
+    .orderBy(desc(users.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  if (allUsersList.length === 0) {
+    return { itens: [], total: Number(total) };
+  }
+
+  const userIds = allUsersList.map((u) => u.id);
+
+  // Subqueries auxiliares restritas aos userIds desta página (não carrega
+  // o universo inteiro de subscriptions/escritórios/colaboradores).
   const activeSubs = await db
-    .select()
+    .select({ userId: subscriptions.userId })
     .from(subscriptions)
-    .where(or(eq(subscriptions.status, "active"), eq(subscriptions.status, "trialing")));
+    .where(and(
+      inArray(subscriptions.userId, userIds),
+      or(eq(subscriptions.status, "active"), eq(subscriptions.status, "trialing")),
+    ));
+  const activeUserIds = new Set<number>(activeSubs.map((s) => s.userId));
 
-  const activeUserIds = new Set<number>();
-  activeSubs.forEach((s) => activeUserIds.add(s.userId));
-
-  // Mapa userId → escritório (como dono)
   const escritoriosOwned = await db
     .select({ ownerId: escritorios.ownerId, nome: escritorios.nome })
-    .from(escritorios);
+    .from(escritorios)
+    .where(inArray(escritorios.ownerId, userIds));
   const ownersMap = new Map<number, string>();
   for (const e of escritoriosOwned) ownersMap.set(e.ownerId, e.nome);
 
-  // Mapa userId → colaboração ativa (escritorioId + cargo + escritório nome)
   const colabsAtivos = await db
     .select({
       userId: colaboradores.userId,
       cargo: colaboradores.cargo,
-      escritorioId: colaboradores.escritorioId,
       escritorioNome: escritorios.nome,
     })
     .from(colaboradores)
     .leftJoin(escritorios, eq(escritorios.id, colaboradores.escritorioId))
-    .where(eq(colaboradores.ativo, true));
+    .where(and(inArray(colaboradores.userId, userIds), eq(colaboradores.ativo, true)));
   // Um user pode estar em mais de um escritório como colaborador — pegamos
   // o primeiro (caso raro; aceitar limitação por enquanto).
   const colabsMap = new Map<number, { cargo: string; escritorioNome: string | null }>();
@@ -279,7 +363,7 @@ export async function getAllUsersWithSubscription() {
     }
   }
 
-  return allUsersList.map((u) => {
+  const itens = allUsersList.map((u) => {
     const escritorioOwned = ownersMap.get(u.id) ?? null;
     const colab = colabsMap.get(u.id);
     let tipoUsuario: "admin" | "cliente" | "colaborador" = "cliente";
@@ -310,6 +394,8 @@ export async function getAllUsersWithSubscription() {
       cargoColaborador,
     };
   });
+
+  return { itens, total: Number(total) };
 }
 
 /**
@@ -367,22 +453,91 @@ export async function getRecentSubscriptions(limit = 10) {
 /**
  * Get all subscriptions with user info (admin).
  */
-export async function getAllSubscriptionsWithUsers() {
+export interface GetAllSubscriptionsOpts {
+  limit?: number;
+  offset?: number;
+  busca?: string;
+  status?: string;
+}
+
+/**
+ * Lista paginada de subscriptions enriquecida com nome do user.
+ *
+ * Antes: SELECT * FROM subscriptions + SELECT * FROM users (sem limit) +
+ * JOIN em JS. Quebrava conforme as bases cresciam.
+ *
+ * Agora: LIMIT/OFFSET no SQL, filtro de busca por nome/email do user via
+ * subquery `userId IN (SELECT id FROM users WHERE name LIKE ... OR email LIKE ...)`.
+ * Query do `userMap` agora limita a `userId IN (...subsDaPagina)`.
+ */
+export async function getAllSubscriptionsWithUsers(opts: GetAllSubscriptionsOpts = {}): Promise<{
+  itens: Array<{
+    id: number;
+    userId: number;
+    userName: string;
+    planName: string;
+    priceAmount: number;
+    status: string;
+    currentPeriodEnd: number | null;
+    cancelAtPeriodEnd: boolean | null;
+    cortesia: boolean | null;
+    cortesiaMotivo: string | null;
+    cortesiaExpiraEm: number | null;
+    createdAt: Date;
+  }>;
+  total: number;
+}> {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) return { itens: [], total: 0 };
+
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+
+  const conds: any[] = [];
+  if (opts.status && opts.status !== "all") {
+    // Cast pra any porque o status é mysqlEnum estrito mas a UI passa string
+    // genérica (o input do tRPC já valida com z.string()).
+    conds.push(eq(subscriptions.status, opts.status as any));
+  }
+  if (opts.busca && opts.busca.trim()) {
+    const b = `%${escapeLikePattern(opts.busca.trim())}%`;
+    // Subquery: busca pelo nome/email do user dono da assinatura.
+    conds.push(inArray(
+      subscriptions.userId,
+      db.select({ id: users.id }).from(users).where(or(like(users.name, b), like(users.email, b))),
+    ));
+  }
+  const whereClause = conds.length > 0 ? and(...conds) : undefined;
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(subscriptions)
+    .where(whereClause);
 
   const allSubs = await db
     .select()
     .from(subscriptions)
-    .orderBy(desc(subscriptions.createdAt));
+    .where(whereClause)
+    .orderBy(desc(subscriptions.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-  const usersList = await db.select().from(users);
+  if (allSubs.length === 0) {
+    return { itens: [], total: Number(total) };
+  }
+
+  const userIds = Array.from(new Set(allSubs.map((s) => s.userId)));
+  // Só os campos necessários — passwordHash NÃO precisa nem deve sair daqui.
+  const usersList = await db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(inArray(users.id, userIds));
   const userMap = new Map<number, string>();
   usersList.forEach((u) => {
     userMap.set(u.id, u.name || u.email || "—");
   });
 
-  return allSubs.map((s) => ({
+  const itens = allSubs.map((s) => ({
     id: s.id,
     userId: s.userId,
     userName: userMap.get(s.userId) || "—",
@@ -396,6 +551,8 @@ export async function getAllSubscriptionsWithUsers() {
     cortesiaExpiraEm: s.cortesiaExpiraEm,
     createdAt: s.createdAt,
   }));
+
+  return { itens, total: Number(total) };
 }
 
 /**
@@ -408,6 +565,7 @@ export async function getAdminStats() {
       totalClients: 0,
       activeSubscriptions: 0,
       trialingSubscriptions: 0,
+      pastDueSubscriptions: 0,
       mrr: 0,
       conversionRate: 0,
       newClientsThisMonth: 0,
@@ -415,7 +573,12 @@ export async function getAdminStats() {
     };
   }
 
-  const allClients = await db.select().from(users).where(eq(users.role, "user"));
+  // Só `id` e `createdAt` — nada mais precisa pra computar stats. Antes
+  // fazia `select()` que trazia passwordHash desnecessariamente.
+  const allClients = await db
+    .select({ id: users.id, createdAt: users.createdAt })
+    .from(users)
+    .where(eq(users.role, "user"));
   const totalClients = allClients.length;
 
   const activeSubs = await db
@@ -427,6 +590,12 @@ export async function getAdminStats() {
     .select()
     .from(subscriptions)
     .where(eq(subscriptions.status, "trialing"));
+
+  const [pastDueRow] = await db
+    .select({ c: sql<number>`COUNT(*)` })
+    .from(subscriptions)
+    .where(eq(subscriptions.status, "past_due"));
+  const pastDueSubscriptions = Number(pastDueRow?.c ?? 0);
 
   const activeSubscriptions = activeSubs.length;
   const trialingSubscriptions = trialingSubs.length;
@@ -464,6 +633,7 @@ export async function getAdminStats() {
     totalClients,
     activeSubscriptions,
     trialingSubscriptions,
+    pastDueSubscriptions,
     mrr,
     conversionRate,
     newClientsThisMonth,

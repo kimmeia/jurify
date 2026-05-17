@@ -49,8 +49,24 @@ export const adminRouter = router({
   /** Get all users (legacy) */
   users: adminProcedure.query(async () => getAllUsers()),
 
-  /** Get all users with subscription status */
-  allUsers: adminProcedure.query(async () => getAllUsersWithSubscription()),
+  /**
+   * Lista paginada de users com info de subscription + escritório.
+   *
+   * Aceita `limit`, `offset`, `busca` e `tipo` (admin/cliente/colaborador/todos).
+   * Retorna `{ itens, total }` — UI usa `total` pra mostrar contador e calcular
+   * páginas.
+   *
+   * Antes do refactor de paginação, devolvia array com TODOS os users — quebrava
+   * conforme a base crescia.
+   */
+  allUsers: adminProcedure
+    .input(z.object({
+      limit: z.number().int().min(1).max(200).default(50),
+      offset: z.number().int().min(0).default(0),
+      busca: z.string().max(320).optional(),
+      tipo: z.enum(["admin", "cliente", "colaborador", "todos"]).default("todos"),
+    }).optional())
+    .query(async ({ input }) => getAllUsersWithSubscription(input ?? {})),
 
   /** Get recent users (last 10) */
   recentUsers: adminProcedure.query(async () => getRecentUsers(10)),
@@ -58,8 +74,18 @@ export const adminRouter = router({
   /** Get recent subscriptions with user info */
   recentSubscriptions: adminProcedure.query(async () => getRecentSubscriptions(10)),
 
-  /** Get all subscriptions with user info */
-  allSubscriptions: adminProcedure.query(async () => getAllSubscriptionsWithUsers()),
+  /**
+   * Lista paginada de subscriptions com nome do user.
+   * Mesmo padrão de `allUsers`: paginação + busca + filtro de status.
+   */
+  allSubscriptions: adminProcedure
+    .input(z.object({
+      limit: z.number().int().min(1).max(200).default(50),
+      offset: z.number().int().min(0).default(0),
+      busca: z.string().max(320).optional(),
+      status: z.string().max(32).optional(),
+    }).optional())
+    .query(async ({ input }) => getAllSubscriptionsWithUsers(input ?? {})),
 
   /** Update user role */
   updateUserRole: adminProcedure
