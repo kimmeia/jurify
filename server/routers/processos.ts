@@ -213,7 +213,7 @@ export const processosRouter = router({
           message:
             `Pra consultar processos do ${tribunal.siglaTribunal}, ` +
             `cadastre sua credencial OAB-${tribunal.uf ?? ""} no Cofre. ` +
-            `→ /cofre-credenciais`,
+            `→ /processos?tab=cofre`,
           cause: { motivo: "credencial_ausente", tribunal: tribunal.codigoTribunal },
         });
       }
@@ -457,7 +457,7 @@ export const processosRouter = router({
       if (!cred) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Credencial não encontrada ou inativa. Cadastre/valide em /cofre-credenciais.",
+          message: "Credencial não encontrada ou inativa. Cadastre/valide em /processos?tab=cofre.",
         });
       }
 

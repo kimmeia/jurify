@@ -34,9 +34,9 @@ function AtrasoBadge({ dias }: { dias: number }) {
   return <Badge variant="destructive" className="text-[10px]">{dias}d atrasado</Badge>;
 }
 
-export default function AdminInadimplentes() {
+export function InadimplentesSection() {
   const { data: inadimplentes, isLoading } = trpc.admin.listarInadimplentes.useQuery(undefined, {
-    refetchInterval: 60000, // refresh a cada 1 min
+    refetchInterval: 60000,
   });
 
   const total = inadimplentes?.length ?? 0;
@@ -47,19 +47,6 @@ export default function AdminInadimplentes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/40 dark:to-orange-900/40">
-          <AlertTriangle className="h-6 w-6 text-red-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Inadimplência</h1>
-          <p className="text-muted-foreground mt-1">
-            Assinaturas com pagamento em atraso (status <code className="text-xs">past_due</code>).
-          </p>
-        </div>
-      </div>
-
-      {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-red-500/30">
           <CardContent className="pt-6">
@@ -104,7 +91,6 @@ export default function AdminInadimplentes() {
         </Card>
       </div>
 
-      {/* Tabela */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Clientes em atraso</CardTitle>
@@ -122,7 +108,7 @@ export default function AdminInadimplentes() {
           ) : !inadimplentes || inadimplentes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <CheckCircle2 className="h-16 w-16 mb-4 text-emerald-500/40" />
-              <p className="text-lg font-medium text-foreground">Nenhum inadimplente! 🎉</p>
+              <p className="text-lg font-medium text-foreground">Nenhum inadimplente!</p>
               <p className="text-sm text-center mt-2 max-w-md">
                 Todas as assinaturas estão em dia. Os webhooks do Asaas atualizam
                 este status automaticamente.
