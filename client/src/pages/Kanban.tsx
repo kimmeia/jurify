@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
-  ExternalLink, ArrowRight, Tag, X, Settings,
+  ExternalLink, ArrowRight, Tag, X, Settings, Upload,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import { ResponsavelAvatar } from "./kanban/responsavel-avatar";
 import { LancarCobrancaCardModal, type LancarCobrancaCardCtx } from "./kanban/lancar-cobranca-modal";
 import { ComentariosSection } from "./kanban/comentarios-section";
 import { FiltrosBar, type FiltrosKanban, FILTROS_VAZIOS } from "./kanban/filtros-bar";
+import { ImportarTrelloDialog } from "./kanban/ImportarTrelloDialog";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30",
@@ -37,6 +38,7 @@ export default function Kanban() {
   const [, setLocation] = useLocation();
   const [funilAtivo, setFunilAtivo] = useState<number | null>(null);
   const [novoFunilOpen, setNovoFunilOpen] = useState(false);
+  const [importTrelloOpen, setImportTrelloOpen] = useState(false);
   const [cardAberto, setCardAberto] = useState<number | null>(null);
   const [novaTagOpen, setNovaTagOpen] = useState(false);
   const [novaTagNome, setNovaTagNome] = useState("");
@@ -221,6 +223,9 @@ export default function Kanban() {
             <h1 className="text-2xl font-bold tracking-tight">Kanban</h1>
             <p className="text-sm text-muted-foreground">Gestão visual de processos em produção</p>
           </div>
+          <Button variant="outline" onClick={() => setImportTrelloOpen(true)}>
+            <Upload className="h-4 w-4 mr-1.5" /> Importar do Trello
+          </Button>
           <Button onClick={() => setNovoFunilOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Novo funil</Button>
         </div>
 
@@ -271,6 +276,15 @@ export default function Kanban() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <ImportarTrelloDialog
+          open={importTrelloOpen}
+          onOpenChange={setImportTrelloOpen}
+          onSuccess={(funilId) => {
+            refetchFunis();
+            setFunilAtivo(funilId);
+          }}
+        />
       </div>
     );
   }
