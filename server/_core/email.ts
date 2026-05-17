@@ -22,6 +22,59 @@ interface EmailOptions {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Tipo do email para rastreio no log (bug #6). Padroniza por:
+   * boas_vindas, redefinir_senha, convite_colaborador, outro.
+   * Quando omitido, fica como "outro".
+   */
+  tipo?: string;
+  escritorioId?: number;
+  userId?: number;
+}
+
+/**
+ * Persiste resultado do envio no `email_log` (bug #6). Antes os erros
+ * viviam só no logger e somiam — admin não tinha como auditar nem reenviar.
+ *
+ * Best-effort: se o INSERT falhar (DB indisponível, schema fora de sync),
+ * apenas loga e continua — falha de log NÃO deve impedir o caller original
+ * de receber a resposta da chamada de email.
+ */
+async function registrarEmailLog(params: {
+  tipo: string;
+  destinatario: string;
+  assunto: string;
+  status: "sucesso" | "falha";
+  erro?: string;
+  escritorioId?: number;
+  userId?: number;
+  contexto?: { html: string; text?: string };
+}): Promise<number | null> {
+  try {
+    const { getDb } = await import("../db");
+    const { emailLog } = await import("../../drizzle/schema");
+    const db = await getDb();
+    if (!db) return null;
+
+    const contextoJson = params.contexto
+      ? JSON.stringify({ html: params.contexto.html, text: params.contexto.text })
+      : null;
+
+    const res: any = await db.insert(emailLog).values({
+      tipo: params.tipo,
+      destinatario: params.destinatario,
+      assunto: params.assunto,
+      status: params.status,
+      erro: params.erro?.slice(0, 1024) ?? null,
+      escritorioId: params.escritorioId ?? null,
+      userId: params.userId ?? null,
+      contextoJson,
+    });
+    return res?.[0]?.insertId ?? null;
+  } catch (err: any) {
+    log.warn({ err: err.message }, "Falha ao registrar email_log (best-effort, ignorado)");
+    return null;
+  }
 }
 
 type ResendKeyResult = {
@@ -84,16 +137,28 @@ async function getResendApiKey(): Promise<ResendKeyResult> {
   return { apiKey: "", fonte: "vazio", diagnostico: dbDiag };
 }
 
-export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string }> {
+export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string; logId?: number | null }> {
+  const tipo = options.tipo ?? "outro";
   const { apiKey, fonte, diagnostico } = await getResendApiKey();
+
   if (!apiKey) {
+    const erroMsg = diagnostico
+      ? `Serviço de email não configurado. ${diagnostico}. Admin → Integrações → Resend.`
+      : "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.";
     log.warn({ diagnostico }, "Resend API key não configurada — email não enviado");
-    return {
-      success: false,
-      error: diagnostico
-        ? `Serviço de email não configurado. ${diagnostico}. Admin → Integrações → Resend.`
-        : "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.",
-    };
+
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject,
+      status: "falha",
+      erro: erroMsg,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html, text: options.text },
+    });
+
+    return { success: false, error: erroMsg, logId };
   }
   log.debug({ fonte, to: options.to }, "Enviando email via Resend");
 
@@ -116,15 +181,45 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
     if (!res.ok) {
       const err = await res.text();
       log.error({ status: res.status, err }, "Resend retornou erro");
-      return { success: false, error: `Erro ao enviar email: ${res.status}` };
+      const erroMsg = `Erro ao enviar email: ${res.status} ${err.slice(0, 256)}`;
+      const logId = await registrarEmailLog({
+        tipo,
+        destinatario: options.to,
+        assunto: options.subject,
+        status: "falha",
+        erro: erroMsg,
+        escritorioId: options.escritorioId,
+        userId: options.userId,
+        contexto: { html: options.html, text: options.text },
+      });
+      return { success: false, error: erroMsg, logId };
     }
 
     const data = await res.json();
     log.info({ to: options.to, id: data.id }, "Email enviado com sucesso");
-    return { success: true };
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject,
+      status: "sucesso",
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html, text: options.text },
+    });
+    return { success: true, logId };
   } catch (err: any) {
     log.error({ err: err.message }, "Falha ao enviar email");
-    return { success: false, error: err.message };
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject,
+      status: "falha",
+      erro: err.message,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html, text: options.text },
+    });
+    return { success: false, error: err.message, logId };
   }
 }
 
@@ -190,6 +285,7 @@ export async function enviarEmailConvite(params: {
     subject: `Convite para ${params.nomeEscritorio} — Jurify`,
     html,
     text,
+    tipo: "convite_colaborador",
   });
 }
 
@@ -234,7 +330,7 @@ export async function enviarEmailRedefinirSenha(params: {
 </body>
 </html>`;
   const text = `Olá ${params.nome || "Usuário"},\n\nRecebemos uma solicitação para redefinir sua senha do Jurify.\n\nAcesse o link abaixo (expira em 1h):\n${link}\n\nSe você não solicitou, ignore este email.`;
-  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — Jurify", html, text });
+  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — Jurify", html, text, tipo: "redefinir_senha" });
 }
 
 /**
@@ -275,5 +371,5 @@ export async function enviarEmailBoasVindas(params: {
 </body>
 </html>`;
   const text = `Olá ${params.nome},\n\nSua conta no Jurify foi criada com sucesso. Estamos felizes em ter você.\n\nAcesse: ${APP_URL}/dashboard\n\nEstamos em versão Beta — use o menu Roadmap dentro do app pra sugerir melhorias.`;
-  return enviarEmail({ to: params.email, subject: "Bem-vindo ao Jurify", html, text });
+  return enviarEmail({ to: params.email, subject: "Bem-vindo ao Jurify", html, text, tipo: "boas_vindas" });
 }

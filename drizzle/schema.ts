@@ -2832,3 +2832,37 @@ export const ofxImportacoesFitid = mysqlTable(
 );
 
 export type OfxImportacaoFitid = typeof ofxImportacoesFitid.$inferSelect;
+
+/**
+ * Log de emails enviados via Resend (bug #6). Antes só vivia no logger —
+ * erros somiam, admin não tinha rastro.
+ *
+ * Cobre TODOS os tipos: boas_vindas, redefinir_senha, convite_colaborador,
+ * etc. Para reenviar, basta carregar a row + chamar enviarEmail com o
+ * mesmo destinatário/assunto/html.
+ */
+export const emailLog = mysqlTable(
+  "email_log",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tipo: varchar("tipo", { length: 64 }).notNull(),
+    destinatario: varchar("destinatario", { length: 320 }).notNull(),
+    assunto: varchar("assunto", { length: 512 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull(),
+    erro: varchar("erro", { length: 1024 }),
+    escritorioId: int("escritorioId"),
+    userId: int("userId"),
+    contextoJson: text("contextoJson"),
+    tentativas: int("tentativas").default(1).notNull(),
+    ultimaTentativaEm: timestamp("ultimaTentativaEm").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxStatusCreated: index("idx_email_log_status_created").on(t.status, t.createdAt),
+    idxDestinatario: index("idx_email_log_destinatario").on(t.destinatario),
+    idxEscritorio: index("idx_email_log_escritorio").on(t.escritorioId),
+  }),
+);
+
+export type EmailLog = typeof emailLog.$inferSelect;
+export type InsertEmailLog = typeof emailLog.$inferInsert;
