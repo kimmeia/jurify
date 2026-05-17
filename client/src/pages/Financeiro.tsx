@@ -28,7 +28,7 @@ import {
 import {
   DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
-  UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight, BarChart3,
+  UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
   Paperclip, FileUp,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,7 +44,6 @@ import {
 } from "./financeiro/dialogs";
 import { ComissoesTab } from "./financeiro/Comissoes";
 import { DespesasTab } from "./financeiro/Despesas";
-import { RelatoriosTab } from "./financeiro/Relatorios";
 import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -469,10 +468,6 @@ export default function Financeiro() {
           <TabsTrigger value="despesas" className="gap-1.5">
             <Wallet className="h-3.5 w-3.5" />
             Despesas
-          </TabsTrigger>
-          <TabsTrigger value="relatorios" className="gap-1.5">
-            <BarChart3 className="h-3.5 w-3.5" />
-            Relatórios
           </TabsTrigger>
           </TabsList>
         </div>
@@ -1101,10 +1096,6 @@ export default function Financeiro() {
 
         <TabsContent value="despesas" className="mt-4">
           <DespesasTab />
-        </TabsContent>
-
-        <TabsContent value="relatorios" className="mt-4">
-          <RelatoriosTab />
         </TabsContent>
       </Tabs>
 
