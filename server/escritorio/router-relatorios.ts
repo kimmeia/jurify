@@ -664,6 +664,9 @@ export const relatoriosRouter = router({
           },
           ranking: [],
           cobrancasPorDia: [],
+          etapas: {} as Record<string, { total: number; valor: number }>,
+          contatosPorOrigem: [] as Array<{ origem: string; total: number }>,
+          fechamentosPorOrigem: [] as Array<{ origem: string; total: number }>,
           filtros: {
             setorId: input?.setorId ?? null,
             atendenteId: input?.atendenteId ?? null,
@@ -909,6 +912,78 @@ export const relatoriosRouter = router({
         .groupBy(sql`DATE(${asaasCobrancas.dataPagamento})`)
         .orderBy(sql`DATE(${asaasCobrancas.dataPagamento})`);
 
+      // ── Funil de Vendas ───────────────────────────────────────────────────
+      // Mesmo filtro do ranking (idsAtendentes + createdAt range) pra evitar
+      // divergência: a soma de "contratosFechados" do ranking precisa bater
+      // com o total da etapa "Ganho" do funil.
+      const etapaRows = await db
+        .select({
+          etapa: leads.etapaFunil,
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)`,
+        })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          inArray(leads.responsavelId, idsAtendentes),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+        ))
+        .groupBy(leads.etapaFunil);
+
+      const etapas: Record<string, { total: number; valor: number }> = {};
+      for (const r of etapaRows) {
+        etapas[r.etapa as string] = {
+          total: Number(r.total),
+          valor: Number(r.valor),
+        };
+      }
+
+      // ── Contatos por canal de captação ────────────────────────────────────
+      // Whitelist de origens "ativas". Filtra contatos cujo lead no período
+      // pertence a um dos idsAtendentes (mesmo critério do ranking).
+      const contatosOrigemRows = await db
+        .select({
+          origem: contatos.origem,
+          total: sql<number>`COUNT(*)`,
+        })
+        .from(contatos)
+        .where(and(
+          eq(contatos.escritorioId, eid),
+          inArray(contatos.origem, [...ORIGENS_LEAD]),
+          gte(contatos.createdAt, dataInicio),
+          lte(contatos.createdAt, dataFim),
+          inArray(
+            contatos.id,
+            db.select({ id: leads.contatoId })
+              .from(leads)
+              .where(and(
+                eq(leads.escritorioId, eid),
+                inArray(leads.responsavelId, idsAtendentes),
+                gte(leads.createdAt, dataInicio),
+                lte(leads.createdAt, dataFim),
+              )),
+          ),
+        ))
+        .groupBy(contatos.origem);
+
+      // ── Fechamentos por origem (texto livre do catálogo do escritório) ────
+      const fechamentosOrigemRows = await db
+        .select({
+          origem: leads.origemLead,
+          total: sql<number>`COUNT(*)`,
+        })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          inArray(leads.responsavelId, idsAtendentes),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+          sql`${leads.origemLead} IS NOT NULL AND ${leads.origemLead} != ''`,
+        ))
+        .groupBy(leads.origemLead);
+
       return {
         periodo: {
           dataInicio: dataInicioStr,
@@ -933,6 +1008,15 @@ export const relatoriosRouter = router({
           dia: String(r.dia),
           faturado: Number(r.faturado || 0),
           contratos: Number(r.contratos || 0),
+        })),
+        etapas,
+        contatosPorOrigem: contatosOrigemRows.map((r) => ({
+          origem: r.origem as string,
+          total: Number(r.total),
+        })),
+        fechamentosPorOrigem: fechamentosOrigemRows.map((r) => ({
+          origem: (r.origem || "Sem origem") as string,
+          total: Number(r.total),
         })),
         filtros: {
           setorId: input?.setorId ?? null,

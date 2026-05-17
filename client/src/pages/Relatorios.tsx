@@ -18,14 +18,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   BarChart3, MessageCircle, TrendingUp, DollarSign, ArrowUpRight, ArrowDownRight,
-  Activity, Loader2, Users, CheckCircle2, Target, AlertTriangle, Percent,
-  LayoutGrid, Calculator, CalendarRange, TrendingDown,
+  Activity, CheckCircle2, Target, AlertTriangle, Percent,
+  LayoutGrid, Calculator,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -269,12 +268,7 @@ export default function Relatorios() {
       ) : (
         <div>
           {tab === "atendimento" && podeRelatorios && <AbaAtendimento />}
-          {tab === "comercial" && podeRelatorios && (
-            <div className="space-y-6">
-              <DashboardComercial />
-              <AbaComercial />
-            </div>
-          )}
+          {tab === "comercial" && podeRelatorios && <DashboardComercial />}
           {tab === "producao" && podeRelatorios && <AbaProducao />}
           {tab === "calculos" && podeCalculos && <AbaCalculos />}
         </div>
@@ -975,6 +969,104 @@ function DashboardComercial() {
               </CardContent>
             </Card>
           )}
+
+          {/* Funil de Vendas — mesmas etapas em ordem fixa do funil */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Funil de Vendas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(() => {
+                  const max = Math.max(
+                    ...ETAPAS_FUNIL.map((e) => data.etapas?.[e]?.total ?? 0),
+                    1,
+                  );
+                  return ETAPAS_FUNIL.map((e) => {
+                    const info = data.etapas?.[e] ?? { total: 0, valor: 0 };
+                    const pct = max > 0 ? (info.total / max) * 100 : 0;
+                    return (
+                      <div key={e} className="flex items-center gap-3">
+                        <div className="w-24 text-xs font-medium truncate">
+                          {ETAPA_LABELS[e] || e}
+                        </div>
+                        <div className="flex-1 h-7 bg-muted/40 rounded-full overflow-hidden relative">
+                          {info.total > 0 && (
+                            <div
+                              className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-gray-400"}`}
+                              style={{ width: `${Math.max(pct, 3)}%` }}
+                            />
+                          )}
+                          <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium">
+                            {info.total}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground w-24 text-right">
+                          {formatBRL(info.valor)}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contatos por canal de captação — enum (whatsapp/instagram/...) */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Contatos por canal de captação</CardTitle>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Por onde o contato chegou (WhatsApp, Instagram, Facebook, manual, telefone, site).
+              </p>
+            </CardHeader>
+            <CardContent>
+              {(!data.contatosPorOrigem || data.contatosPorOrigem.length === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Sem contatos no período.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {data.contatosPorOrigem.map((o: any) => (
+                    <div key={o.origem} className="rounded-lg border p-3 text-center">
+                      <p className="text-xl font-bold">{o.total}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ORIGEM_LABELS[o.origem] || o.origem}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Fechamentos por origem — texto livre do cadastro de fechamento */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).
+              </p>
+            </CardHeader>
+            <CardContent>
+              {(!data.fechamentosPorOrigem || data.fechamentosPorOrigem.length === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Sem fechamentos com origem cadastrada no período.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {data.fechamentosPorOrigem.map((o: any) => (
+                    <div key={o.origem} className="rounded-lg border p-3 text-center">
+                      <p className="text-xl font-bold text-emerald-700">{o.total}</p>
+                      <p className="text-xs text-muted-foreground truncate" title={o.origem}>
+                        {o.origem}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -1054,313 +1146,6 @@ function DashboardComercial() {
           </div>
         </SheetContent>
       </Sheet>
-    </div>
-  );
-}
-
-// ───────────────────── aba: Comercial (legado: leads/funil) ─────────────────────
-
-function AbaComercial() {
-  // Atendente (string p/ Select shadcn — "todos" = sem filtro)
-  const [responsavelSel, setResponsavelSel] = useState<string>("todos");
-
-  // Range customizado (sobrepõe o default de últimos 30 dias quando preenchido)
-  const [rangeCustom, setRangeCustom] = useState<{ inicio: string; fim: string } | null>(null);
-  const [rangePopoverOpen, setRangePopoverOpen] = useState(false);
-  const [rangeInicioInput, setRangeInicioInput] = useState("");
-  const [rangeFimInput, setRangeFimInput] = useState("");
-
-  // Atendentes do escritório pra alimentar o select.
-  // Usa procedure dedicada que filtra por permissão: atendente/SDR/estagiário
-  // só vê ele mesmo aqui (não consegue filtrar relatório por outro colaborador).
-  // Gestor/dono vê todos.
-  const { data: colaboradoresData } = trpc.configuracoes.listarColaboradoresParaFiltro.useQuery(
-    { modulo: "relatorios" },
-    { retry: false, refetchOnWindowFocus: false },
-  );
-  const atendentes = colaboradoresData?.colaboradores ?? [];
-
-  const responsavelId =
-    responsavelSel === "todos" ? undefined : Number(responsavelSel);
-
-  const { data, isLoading } = trpc.relatorios.comercial.useQuery(
-    {
-      dias: rangeCustom ? undefined : DIAS_DEFAULT_RELATORIO,
-      dataInicio: rangeCustom?.inicio,
-      dataFim: rangeCustom?.fim,
-      responsavelId,
-    },
-    { refetchInterval: 60_000 },
-  );
-
-  const labelRange = rangeCustom
-    ? `${rangeCustom.inicio.split("-").reverse().join("/")} → ${rangeCustom.fim
-        .split("-")
-        .reverse()
-        .join("/")}`
-    : "Personalizar";
-
-  return (
-    <div className="space-y-4">
-      {/* ── Faixa de filtros locais ──────────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground">Atendente:</span>
-        <Select value={responsavelSel} onValueChange={setResponsavelSel}>
-          <SelectTrigger className="w-52 h-9 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os atendentes</SelectItem>
-            {atendentes.map((a: any) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.userName || a.userEmail}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <span className="text-xs text-muted-foreground ml-2">Período:</span>
-        <Popover
-          open={rangePopoverOpen}
-          onOpenChange={(o) => {
-            setRangePopoverOpen(o);
-            if (o) {
-              if (rangeCustom) {
-                setRangeInicioInput(rangeCustom.inicio);
-                setRangeFimInput(rangeCustom.fim);
-              } else {
-                const hoje = new Date();
-                const inicio = new Date(hoje);
-                inicio.setDate(hoje.getDate() - DIAS_DEFAULT_RELATORIO);
-                setRangeInicioInput(inicio.toISOString().slice(0, 10));
-                setRangeFimInput(hoje.toISOString().slice(0, 10));
-              }
-            }
-          }}
-        >
-          <PopoverTrigger asChild>
-            <Button
-              variant={rangeCustom ? "default" : "outline"}
-              size="sm"
-              className="h-9 text-xs gap-1.5"
-            >
-              <CalendarRange className="h-3.5 w-3.5" />
-              {labelRange}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">De</Label>
-              <Input
-                type="date"
-                value={rangeInicioInput}
-                onChange={(e) => setRangeInicioInput(e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Até</Label>
-              <Input
-                type="date"
-                value={rangeFimInput}
-                onChange={(e) => setRangeFimInput(e.target.value)}
-                className="h-8 text-sm"
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              Sobrepõe o default de últimos {DIAS_DEFAULT_RELATORIO} dias.
-            </p>
-            <div className="flex gap-2 pt-1">
-              {rangeCustom && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="flex-1 h-8 text-xs"
-                  onClick={() => {
-                    setRangeCustom(null);
-                    setRangePopoverOpen(false);
-                  }}
-                >
-                  Limpar
-                </Button>
-              )}
-              <Button
-                size="sm"
-                className="flex-1 h-8 text-xs"
-                disabled={
-                  !rangeInicioInput ||
-                  !rangeFimInput ||
-                  rangeInicioInput > rangeFimInput
-                }
-                onClick={() => {
-                  setRangeCustom({ inicio: rangeInicioInput, fim: rangeFimInput });
-                  setRangePopoverOpen(false);
-                }}
-              >
-                Aplicar
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      {isLoading ? (
-        <LoadingBlock />
-      ) : !data ? (
-        <Empty />
-      ) : (
-        <ComercialConteudo data={data} />
-      )}
-    </div>
-  );
-}
-
-function ComercialConteudo({ data }: { data: any }) {
-  return (
-    <div className="space-y-4">
-      {/* KPIs principais */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi icon={<MessageCircle className="h-5 w-5 text-blue-500" />} label="Conversas" value={data.conversasAtendidas} />
-        <Kpi icon={<Users className="h-5 w-5 text-violet-500" />} label="Total Leads" value={data.totalLeads} />
-        <Kpi
-          icon={<CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-          label="Contratos fechados"
-          value={data.leadsGanhos}
-          highlight="text-emerald-600"
-        />
-        <Kpi
-          icon={<Target className="h-5 w-5 text-indigo-500" />}
-          label="Taxa de conversão"
-          value={`${data.taxaConversao}%`}
-          highlight="text-indigo-600"
-        />
-      </div>
-
-      {/* Linha de valores: receita / pipeline em aberto / pipeline perdido / leads perdidos */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi
-          icon={<DollarSign className="h-5 w-5 text-emerald-500" />}
-          label="Receita (ganhos)"
-          value={formatBRL(data.valorGanho)}
-          small
-          highlight="text-emerald-600"
-        />
-        <Kpi
-          icon={<TrendingUp className="h-5 w-5 text-amber-500" />}
-          label="Pipeline estimado"
-          value={formatBRL(data.valorPipeline)}
-          small
-        />
-        <Kpi
-          icon={<TrendingDown className="h-5 w-5 text-red-500" />}
-          label="Pipeline perdido"
-          value={formatBRL(data.valorPerdido ?? 0)}
-          small
-          highlight="text-red-600"
-        />
-        <Kpi
-          icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
-          label="Leads perdidos"
-          value={data.leadsPerdidos}
-          highlight="text-red-600"
-        />
-      </div>
-
-      {/* Funil — sempre todas as etapas em ordem (primeiro → último) */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Funil de Vendas</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {(() => {
-              const max = Math.max(
-                ...ETAPAS_FUNIL.map((e) => data.etapas?.[e]?.total ?? 0),
-                1,
-              );
-              return ETAPAS_FUNIL.map((e) => {
-                const info = data.etapas?.[e] ?? { total: 0, valor: 0 };
-                const pct = max > 0 ? (info.total / max) * 100 : 0;
-                return (
-                  <div key={e} className="flex items-center gap-3">
-                    <div className="w-24 text-xs font-medium truncate">
-                      {ETAPA_LABELS[e] || e}
-                    </div>
-                    <div className="flex-1 h-7 bg-muted/40 rounded-full overflow-hidden relative">
-                      {info.total > 0 && (
-                        <div
-                          className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-gray-400"}`}
-                          style={{ width: `${Math.max(pct, 3)}%` }}
-                        />
-                      )}
-                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium">
-                        {info.total}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground w-24 text-right">
-                      {formatBRL(info.valor)}
-                    </span>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Origem dos contatos — whitelist de canais de captação */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Contatos por canal de captação</CardTitle>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Por onde o contato chegou (WhatsApp, Instagram, Facebook, manual, telefone, site).
-          </p>
-        </CardHeader>
-        <CardContent>
-          {data.contatosPorOrigem.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Sem contatos no período.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {data.contatosPorOrigem.map((o: any) => (
-                <div key={o.origem} className="rounded-lg border p-3 text-center">
-                  <p className="text-xl font-bold">{o.total}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {ORIGEM_LABELS[o.origem] || o.origem}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Fechamentos por origem — texto livre vindo do cadastro de fechamento */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).
-          </p>
-        </CardHeader>
-        <CardContent>
-          {(!data.fechamentosPorOrigem || data.fechamentosPorOrigem.length === 0) ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Sem fechamentos com origem cadastrada no período.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {data.fechamentosPorOrigem.map((o: any) => (
-                <div key={o.origem} className="rounded-lg border p-3 text-center">
-                  <p className="text-xl font-bold text-emerald-700">{o.total}</p>
-                  <p className="text-xs text-muted-foreground truncate" title={o.origem}>
-                    {o.origem}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
