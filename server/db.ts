@@ -576,7 +576,7 @@ export async function getAdminStats() {
       mrr: 0,
       conversionRate: 0,
       newClientsThisMonth: 0,
-      planBreakdown: { iniciante: 0, profissional: 0, escritorio: 0 },
+      planBreakdown: { basico: 0, intermediario: 0, completo: 0 },
     };
   }
 
@@ -608,21 +608,21 @@ export async function getAdminStats() {
   const trialingSubscriptions = trialingSubs.length;
 
   let mrr = 0;
-  const planBreakdown = { iniciante: 0, profissional: 0, escritorio: 0 };
+  const planBreakdown = { basico: 0, intermediario: 0, completo: 0 };
 
   const allActiveSubs = activeSubs.concat(trialingSubs);
   for (const sub of allActiveSubs) {
-    const pid = sub.planId || "iniciante";
+    const pid = sub.planId || "basico";
     const plan = PLANS.find((p) => p.id === pid);
     if (plan) {
       mrr += plan.priceMonthly;
     } else {
-      mrr += 9900;
+      mrr += 9700;
     }
-    if (pid === "iniciante") planBreakdown.iniciante++;
-    else if (pid === "profissional") planBreakdown.profissional++;
-    else if (pid === "escritorio") planBreakdown.escritorio++;
-    else planBreakdown.iniciante++;
+    if (pid === "basico") planBreakdown.basico++;
+    else if (pid === "intermediario") planBreakdown.intermediario++;
+    else if (pid === "completo") planBreakdown.completo++;
+    else planBreakdown.basico++;
   }
 
   const now = new Date();

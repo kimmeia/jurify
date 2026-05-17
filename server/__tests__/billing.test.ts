@@ -73,9 +73,9 @@ describe("isPaymentOverdueEvent", () => {
 
 describe("parseExternalReference", () => {
   it("formato padrão userId:planId", () => {
-    expect(parseExternalReference("42:profissional")).toEqual({
+    expect(parseExternalReference("42:intermediario")).toEqual({
       userId: 42,
-      planId: "profissional",
+      planId: "intermediario",
     });
   });
 
@@ -136,15 +136,20 @@ describe("dataVencimentoEmDias", () => {
 
 // ─── Estrutura dos planos ───────────────────────────────────────────────
 
-describe("PLANS (jurify products)", () => {
-  it("tem exatamente 3 planos: iniciante, profissional, escritorio", () => {
-    expect(PLANS).toHaveLength(3);
+describe("PLANS (fallback estático — fonte de verdade é tabela `planos`)", () => {
+  it("tem os 4 slugs canônicos: free, basico, intermediario, completo", () => {
+    expect(PLANS).toHaveLength(4);
     const ids = PLANS.map((p) => p.id);
-    expect(ids).toEqual(["iniciante", "profissional", "escritorio"]);
+    expect(ids).toEqual(["free", "basico", "intermediario", "completo"]);
   });
 
-  it("preços anuais sempre menores que 12x mensal (desconto)", () => {
+  it("free tem preço zero", () => {
+    expect(getPlanById("free")?.priceMonthly).toBe(0);
+  });
+
+  it("planos pagos têm desconto anual (priceYearly < 12x mensal)", () => {
     for (const plan of PLANS) {
+      if (plan.priceMonthly === 0) continue;
       expect(plan.priceYearly).toBeLessThan(plan.priceMonthly * 12);
       expect(plan.priceYearly).toBeGreaterThan(0);
     }
@@ -156,48 +161,49 @@ describe("PLANS (jurify products)", () => {
     }
   });
 
-  it("profissional é o popular", () => {
+  it("intermediario é o popular", () => {
     const popular = PLANS.filter((p) => p.popular);
     expect(popular).toHaveLength(1);
-    expect(popular[0].id).toBe("profissional");
+    expect(popular[0].id).toBe("intermediario");
   });
 
   it("getPlanById retorna o plano correto", () => {
-    expect(getPlanById("profissional")?.name).toBe("Profissional");
+    expect(getPlanById("intermediario")?.name).toBe("Intermediário");
     expect(getPlanById("inexistente")).toBeUndefined();
   });
 });
 
-// ─── Plan limits batem com products ─────────────────────────────────────
+// ─── Plan limits batem com slugs novos ──────────────────────────────────
 
 describe("plan-limits.ts <-> products.ts", () => {
-  it("todo planId em PLANS tem limites definidos", () => {
+  it("todo planId pago em PLANS tem limites definidos", () => {
     for (const plan of PLANS) {
+      if (plan.id === "free") continue;
       const limits = getLimites(plan.id);
       // Não deve cair no fallback "free"
       expect(limits.maxClientes).toBeGreaterThan(10);
     }
   });
 
-  it("escritorio tem limites ilimitados (>= 999999)", () => {
-    const lim = getLimites("escritorio");
+  it("completo tem limites ilimitados (>= 999999)", () => {
+    const lim = getLimites("completo");
     expect(lim.maxClientes).toBeGreaterThanOrEqual(999999);
     expect(lim.maxColaboradores).toBeGreaterThanOrEqual(999999);
   });
 
-  it("planId desconhecido cai no plano free (trial)", () => {
+  it("planId desconhecido cai no plano free (fallback)", () => {
     const lim = getLimites("plano-fake-xyz");
-    expect(lim.maxClientes).toBe(10); // free tier
+    expect(lim.maxClientes).toBe(10);
   });
 
-  it("hierarquia de limites: iniciante < profissional < escritorio", () => {
-    const ini = getLimites("iniciante");
-    const pro = getLimites("profissional");
-    const esc = getLimites("escritorio");
+  it("hierarquia de limites: basico ≤ intermediario ≤ completo", () => {
+    const ba = getLimites("basico");
+    const it = getLimites("intermediario");
+    const co = getLimites("completo");
 
-    expect(ini.maxClientes).toBeLessThan(pro.maxClientes);
-    expect(pro.maxClientes).toBeLessThan(esc.maxClientes);
-    expect(ini.maxColaboradores).toBeLessThanOrEqual(pro.maxColaboradores);
-    expect(pro.maxColaboradores).toBeLessThanOrEqual(esc.maxColaboradores);
+    expect(ba.maxClientes).toBeLessThanOrEqual(it.maxClientes);
+    expect(it.maxClientes).toBeLessThanOrEqual(co.maxClientes);
+    expect(ba.maxColaboradores).toBeLessThanOrEqual(it.maxColaboradores);
+    expect(it.maxColaboradores).toBeLessThanOrEqual(co.maxColaboradores);
   });
 });

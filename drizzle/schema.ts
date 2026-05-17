@@ -1569,7 +1569,51 @@ export type InsertAuditLog = typeof auditLog.$inferInsert;
  *
  * Cada linha referencia um planId (que precisa existir em PLANS).
  * Campos null = mantém valor do hardcoded. Campos não-null sobrescrevem.
+ *
+ * NOTA: tabela substituída por `planos` (migration 0108) — mantida apenas
+ * pra rollback. Será removida em PR futuro.
  */
+export const planos = mysqlTable("planos", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  descricao: varchar("descricao", { length: 255 }),
+  publicoAlvo: varchar("publico_alvo", { length: 255 }),
+
+  precoMensalCentavos: int("preco_mensal_centavos").notNull().default(0),
+  precoAnualCentavos: int("preco_anual_centavos"),
+
+  trialDias: int("trial_dias").notNull().default(0),
+
+  maxUsuarios: int("max_usuarios").notNull().default(1),
+  maxArmazenamentoMb: int("max_armazenamento_mb").notNull().default(100),
+  maxClientes: int("max_clientes"),
+  maxConexoesWhatsapp: int("max_conexoes_whatsapp").notNull().default(0),
+  maxAgentesIa: int("max_agentes_ia").notNull().default(0),
+  maxMonitoramentosProcessos: int("max_monitoramentos_processos"),
+  creditosCalculosMes: int("creditos_calculos_mes").notNull().default(0),
+
+  /** JSON array de slugs de módulos liberados (ver shared/modulos-app.ts). */
+  modulosLiberados: json("modulos_liberados").notNull(),
+  /** JSON array de strings — bullets que aparecem na LP e em /plans. */
+  features: json("features").notNull(),
+
+  popular: boolean("popular").notNull().default(false),
+  oculto: boolean("oculto").notNull().default(false),
+  ordem: int("ordem").notNull().default(0),
+
+  criadoPor: int("criado_por"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoPor: int("atualizado_por"),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  idxOculto: index("idx_planos_oculto").on(t.oculto),
+  idxOrdem: index("idx_planos_ordem").on(t.ordem),
+}));
+
+export type PlanoRow = typeof planos.$inferSelect;
+export type InsertPlanoRow = typeof planos.$inferInsert;
+
 export const planosOverrides = mysqlTable("planos_overrides", {
   id: int("id").autoincrement().primaryKey(),
   /** ID do plano em PLANS (ex: "iniciante", "profissional", "escritorio") */
