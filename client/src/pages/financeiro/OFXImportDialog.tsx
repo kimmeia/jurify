@@ -110,16 +110,30 @@ export function OFXImportDialog({
     onSuccess: (r: {
       despesasMarcadas: number;
       cobrancasMarcadas: number;
+      jaImportadas: number;
       erros: string[];
+      abortado?: boolean;
     }) => {
+      // Abortado (bug #10): erros estruturais detectados na pré-validação
+      // → NADA foi gravado. Mostra a lista pro usuário corrigir antes de re-tentar.
+      if (r.abortado) {
+        toast.error("Importação cancelada — nenhum lançamento foi gravado", {
+          description:
+            r.erros.length === 1
+              ? r.erros[0]
+              : `${r.erros.length} erros encontrados: ${r.erros.slice(0, 2).join(" • ")}${r.erros.length > 2 ? "..." : ""}`,
+        });
+        return;
+      }
+
       const total = r.despesasMarcadas + r.cobrancasMarcadas;
       if (total > 0) {
         toast.success(
           `${total} ${total === 1 ? "lançamento conciliado" : "lançamentos conciliados"}`,
           {
             description:
-              r.erros.length > 0
-                ? `${r.erros.length} aviso(s) — confira detalhes na conta`
+              r.jaImportadas > 0
+                ? `${r.jaImportadas} já importado(s) anteriormente — skipados`
                 : undefined,
           },
         );
@@ -128,8 +142,11 @@ export function OFXImportDialog({
         setPreview(null);
         setSelecoes({});
       } else {
-        toast.warning("Nenhum lançamento foi conciliado", {
-          description: r.erros[0],
+        toast.warning("Nenhum lançamento novo foi conciliado", {
+          description:
+            r.jaImportadas > 0
+              ? `${r.jaImportadas} lançamento(s) já haviam sido importados`
+              : undefined,
         });
       }
     },
