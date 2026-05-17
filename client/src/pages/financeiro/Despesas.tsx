@@ -135,6 +135,12 @@ export function DespesasTab() {
   const [filtroRecorrencia, setFiltroRecorrencia] = useState<"todas" | "recorrentes" | "pontuais">("todas");
   const [filtroOrigem, setFiltroOrigem] = useState<string>("todas");
   const [busca, setBusca] = useState("");
+  const [valorMin, setValorMin] = useState<string>("");
+  const [valorMax, setValorMax] = useState<string>("");
+  const [ordem, setOrdem] = useState<{ col: "vencimento" | "valor"; dir: "asc" | "desc" }>({
+    col: "vencimento",
+    dir: "asc",
+  });
   const [novaAberta, setNovaAberta] = useState(false);
   const [editando, setEditando] = useState<DespesaListItem | null>(null);
   const [pagando, setPagando] = useState<DespesaListItem | null>(null);
@@ -155,7 +161,7 @@ export function DespesasTab() {
     setPagina(0);
     // Limpa seleção quando filtro muda (linhas selecionadas podem sair de vista).
     setSelecionadas(new Set());
-  }, [periodoInicio, periodoFim, filtroStatus, filtroCategorias, filtroRecorrencia, filtroOrigem, busca]);
+  }, [periodoInicio, periodoFim, filtroStatus, filtroCategorias, filtroRecorrencia, filtroOrigem, busca, valorMin, valorMax, ordem]);
 
   const status = filtroStatus === "todos" ? undefined : (filtroStatus as any);
   const lista = trpc.despesas.listar.useQuery({
@@ -168,6 +174,14 @@ export function DespesasTab() {
     recorrencia: filtroRecorrencia === "todas" ? undefined : filtroRecorrencia,
     origem: filtroOrigem === "todas" ? undefined : (filtroOrigem as any),
     busca: busca.trim() || undefined,
+    valorMinimo: valorMin.trim() !== "" && !isNaN(Number(valorMin))
+      ? Number(valorMin)
+      : undefined,
+    valorMaximo: valorMax.trim() !== "" && !isNaN(Number(valorMax))
+      ? Number(valorMax)
+      : undefined,
+    orderBy: ordem.col,
+    orderDir: ordem.dir,
     limit: ITENS_POR_PAGINA,
     offset: pagina * ITENS_POR_PAGINA,
   });
@@ -365,11 +379,37 @@ export function DespesasTab() {
                 <SelectItem value="extrato_asaas">Extrato Asaas</SelectItem>
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-1.5 text-xs border rounded px-2 h-9 bg-background">
+              <span className="text-muted-foreground">R$</span>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={valorMin}
+                onChange={(e) => setValorMin(e.target.value)}
+                placeholder="min"
+                className="h-7 w-20 text-xs border-0 shadow-none px-1 focus-visible:ring-0 tabular-nums"
+              />
+              <span className="text-muted-foreground">→</span>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={valorMax}
+                onChange={(e) => setValorMax(e.target.value)}
+                placeholder="máx"
+                className="h-7 w-20 text-xs border-0 shadow-none px-1 focus-visible:ring-0 tabular-nums"
+              />
+            </div>
             {(filtroStatus !== "todos" ||
               filtroCategorias.length > 0 ||
               filtroRecorrencia !== "todas" ||
               filtroOrigem !== "todas" ||
-              busca.trim() !== "") && (
+              busca.trim() !== "" ||
+              valorMin !== "" ||
+              valorMax !== "" ||
+              ordem.col !== "vencimento" ||
+              ordem.dir !== "asc") && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -380,6 +420,9 @@ export function DespesasTab() {
                   setFiltroRecorrencia("todas");
                   setFiltroOrigem("todas");
                   setBusca("");
+                  setValorMin("");
+                  setValorMax("");
+                  setOrdem({ col: "vencimento", dir: "asc" });
                 }}
               >
                 Limpar
@@ -498,12 +541,44 @@ export function DespesasTab() {
                       aria-label="Selecionar todas"
                     />
                   </TableHead>
-                  <TableHead className="text-xs">Vencimento</TableHead>
+                  <TableHead className="text-xs">
+                    <button
+                      onClick={() =>
+                        setOrdem((o) =>
+                          o.col === "vencimento"
+                            ? { col: "vencimento", dir: o.dir === "asc" ? "desc" : "asc" }
+                            : { col: "vencimento", dir: "asc" },
+                        )
+                      }
+                      className="inline-flex items-center gap-1 font-semibold hover:text-foreground"
+                    >
+                      Vencimento
+                      <span className={ordem.col === "vencimento" ? "" : "text-muted-foreground/50"}>
+                        {ordem.col !== "vencimento" ? "↕" : ordem.dir === "asc" ? "↑" : "↓"}
+                      </span>
+                    </button>
+                  </TableHead>
                   <TableHead className="text-xs">Descrição</TableHead>
                   <TableHead className="text-xs">Categoria</TableHead>
                   <TableHead className="text-xs">Recorrência</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Valor</TableHead>
+                  <TableHead className="text-xs text-right">
+                    <button
+                      onClick={() =>
+                        setOrdem((o) =>
+                          o.col === "valor"
+                            ? { col: "valor", dir: o.dir === "asc" ? "desc" : "asc" }
+                            : { col: "valor", dir: "desc" },
+                        )
+                      }
+                      className="inline-flex items-center gap-1 font-semibold hover:text-foreground"
+                    >
+                      Valor
+                      <span className={ordem.col === "valor" ? "" : "text-muted-foreground/50"}>
+                        {ordem.col !== "valor" ? "↕" : ordem.dir === "asc" ? "↑" : "↓"}
+                      </span>
+                    </button>
+                  </TableHead>
                   <TableHead className="text-xs"></TableHead>
                 </TableRow>
               </TableHeader>
