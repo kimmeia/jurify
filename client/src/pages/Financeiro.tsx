@@ -48,8 +48,7 @@ import {
 import {
   NovaCobrancaDialog, NovoClienteDialog, AnexosCobrancaDialog,
 } from "./financeiro/dialogs";
-import { ComissoesTab } from "./financeiro/Comissoes";
-import { DespesasTab } from "./financeiro/Despesas";
+import { DespesasWrapper } from "./financeiro/DespesasWrapper";
 import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -490,12 +489,6 @@ export default function Financeiro() {
               <span className="text-[10px] bg-muted text-muted-foreground px-1.5 rounded tabular-nums">
                 {clientesVinculados?.length ?? 0}
               </span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="comissoes"
-              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none"
-            >
-              Comissões
             </TabsTrigger>
             <TabsTrigger
               value="despesas"
@@ -1097,12 +1090,8 @@ export default function Financeiro() {
           )}
         </TabsContent>
 
-        <TabsContent value="comissoes" className="mt-4">
-          <ComissoesTab />
-        </TabsContent>
-
         <TabsContent value="despesas" className="mt-4">
-          <DespesasTab />
+          <DespesasWrapper />
         </TabsContent>
       </Tabs>
 
