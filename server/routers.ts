@@ -18,8 +18,6 @@ import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 // Notificações in-app
 import { notificacoesRouter } from "./processos/router-notificacoes";
 
-// Motor próprio (Spike — staging-only, admin-only)
-import { motorProprioTesteRouter } from "./processos/router-motor-proprio-teste";
 import { cofreCredenciaisRouter } from "./escritorio/router-cofre-credenciais";
 
 // Escritório
@@ -89,9 +87,6 @@ export const appRouter = router({
 
   // Notificações in-app
   notificacoes: notificacoesRouter,
-
-  // Motor próprio — endpoint de teste manual via UI (Spike)
-  motorProprioTeste: motorProprioTesteRouter,
 
   // Cofre de credenciais (Frente B — gerenciar OAB+senha+2FA pra acessar
   // tribunais autenticados como E-SAJ TJCE)

@@ -42,7 +42,6 @@ import {
   Bug,
   Mail,
   Database,
-  Scale,
   KeyRound,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -185,7 +184,6 @@ function AdminSidebarContent({
     { icon: Package, label: "Planos", path: "/admin/planos" },
     { icon: Tag, label: "Cupons", path: "/admin/cupons" },
     { icon: BrainCircuit, label: "Agentes IA", path: "/admin/agentes-ia" },
-    { icon: Scale, label: "Motor Próprio (Spike)", path: "/admin/motor-proprio-teste" },
     { icon: KeyRound, label: "Cofre de Credenciais", path: "/admin/cofre-credenciais" },
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },

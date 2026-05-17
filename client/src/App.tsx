@@ -27,7 +27,6 @@ import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminCupons from "./pages/admin/AdminCupons";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
-import MotorProprioTeste from "./pages/admin/MotorProprioTeste";
 import CofreCredenciais from "./pages/admin/CofreCredenciais";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
@@ -149,11 +148,6 @@ function Router() {
       <Route path="/admin/agentes-ia">
         <AdminArea>
           <AdminAgentesIA />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/motor-proprio-teste">
-        <AdminArea>
-          <MotorProprioTeste />
         </AdminArea>
       </Route>
       <Route path="/admin/cofre-credenciais">
