@@ -3,14 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Package, Edit, Eye, EyeOff, RotateCcw, Loader2, Star, Plus, X, Check, Trash2 } from "lucide-react";
+import { Edit, EyeOff, RotateCcw, Loader2, Star, Plus, X, Check, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -224,176 +223,6 @@ function EditarPlanoDialog({
   );
 }
 
-export default function AdminPlanos() {
-  const { data: planos, isLoading, refetch } = trpc.admin.listarPlanosEditaveis.useQuery();
-  const [editando, setEditando] = useState<PlanoEditavel | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [criarOpen, setCriarOpen] = useState(false);
-
-  const resetMut = trpc.admin.resetarOverridePlano.useMutation({
-    onSuccess: () => {
-      toast.success("Override removido — plano voltou ao default");
-      refetch();
-    },
-    onError: (err) => toast.error("Erro", { description: err.message }),
-  });
-
-  const deletarCustomMut = trpc.admin.deletarPlanoPersonalizado.useMutation({
-    onSuccess: () => {
-      toast.success("Plano personalizado deletado");
-      refetch();
-    },
-    onError: (err) => toast.error("Erro ao deletar", { description: err.message }),
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-            <Package className="h-6 w-6 text-violet-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Planos</h1>
-            <p className="text-muted-foreground mt-1">
-              Edite preços, features ou crie planos totalmente personalizados.
-            </p>
-          </div>
-        </div>
-        <Button onClick={() => setCriarOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Criar novo plano
-        </Button>
-      </div>
-
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Skeleton className="h-80 rounded-xl" />
-          <Skeleton className="h-80 rounded-xl" />
-          <Skeleton className="h-80 rounded-xl" />
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          {planos?.map((plan) => (
-            <Card
-              key={plan.id}
-              className={`relative ${plan.popular ? "border-violet-500/50 shadow-md" : ""} ${plan.oculto ? "opacity-60" : ""}`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-violet-600 hover:bg-violet-600 text-white shadow-sm">
-                    <Star className="h-3 w-3 mr-1" /> Popular
-                  </Badge>
-                </div>
-              )}
-              {plan.oculto && (
-                <div className="absolute top-3 right-3">
-                  <Badge variant="outline" className="text-[10px]">
-                    <EyeOff className="h-2.5 w-2.5 mr-1" /> Oculto
-                  </Badge>
-                </div>
-              )}
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-lg">{plan.name}</CardTitle>
-                  {(plan as any).isCustom ? (
-                    <Badge className="bg-purple-500/15 text-purple-700 border-purple-500/30 text-[10px]">
-                      Personalizado
-                    </Badge>
-                  ) : plan.hasOverride ? (
-                    <Badge variant="secondary" className="text-[10px]">Modificado</Badge>
-                  ) : null}
-                </div>
-                <CardDescription className="text-xs">{plan.description}</CardDescription>
-                <code className="text-[10px] text-muted-foreground">{plan.id}</code>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-2xl font-bold">{formatBRL(plan.priceMonthly)}<span className="text-xs text-muted-foreground font-normal">/mês</span></p>
-                  <p className="text-sm text-muted-foreground">{formatBRL(plan.priceYearly)}/ano</p>
-                </div>
-
-                <ul className="space-y-1 text-xs text-muted-foreground border-t pt-3">
-                  {plan.features.slice(0, 4).map((f: string, i: number) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <Check className="h-3 w-3 text-emerald-600 mt-0.5 shrink-0" />
-                      <span className="truncate">{f}</span>
-                    </li>
-                  ))}
-                  {plan.features.length > 4 && (
-                    <li className="text-[10px] italic">+ {plan.features.length - 4} mais</li>
-                  )}
-                </ul>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 text-xs"
-                    onClick={() => {
-                      setEditando({
-                        ...plan,
-                        features: [...plan.features],
-                        defaultFeatures: [...plan.defaultFeatures],
-                      } as PlanoEditavel);
-                      setEditOpen(true);
-                    }}
-                  >
-                    <Edit className="h-3 w-3 mr-1" />
-                    Editar
-                  </Button>
-                  {(plan as any).isCustom ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs text-destructive hover:text-destructive"
-                      title="Deletar plano personalizado (só se não houver assinantes)"
-                      onClick={() => {
-                        if (confirm(`Deletar plano "${plan.name}"? Esta ação não pode ser desfeita.`)) {
-                          deletarCustomMut.mutate({ planId: plan.id });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  ) : plan.hasOverride && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs text-muted-foreground"
-                      title="Remove o override e volta ao default do código"
-                      onClick={() => {
-                        if (confirm(`Resetar plano ${plan.id} ao default do código?`)) {
-                          resetMut.mutate({ planId: plan.id });
-                        }
-                      }}
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <EditarPlanoDialog
-        plano={editando}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSaved={refetch}
-      />
-
-      <CriarPlanoDialog
-        open={criarOpen}
-        onOpenChange={setCriarOpen}
-        onCreated={refetch}
-      />
-    </div>
-  );
-}
-
 function CriarPlanoDialog({
   open,
   onOpenChange,
@@ -568,5 +397,164 @@ function CriarPlanoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function PlanosSection() {
+  const { data: planos, isLoading, refetch } = trpc.admin.listarPlanosEditaveis.useQuery();
+  const [editando, setEditando] = useState<PlanoEditavel | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [criarOpen, setCriarOpen] = useState(false);
+
+  const resetMut = trpc.admin.resetarOverridePlano.useMutation({
+    onSuccess: () => {
+      toast.success("Override removido — plano voltou ao default");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro", { description: err.message }),
+  });
+
+  const deletarCustomMut = trpc.admin.deletarPlanoPersonalizado.useMutation({
+    onSuccess: () => {
+      toast.success("Plano personalizado deletado");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro ao deletar", { description: err.message }),
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-end">
+        <Button onClick={() => setCriarOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Criar novo plano
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          {planos?.map((plan) => (
+            <Card
+              key={plan.id}
+              className={`relative ${plan.popular ? "border-violet-500/50 shadow-md" : ""} ${plan.oculto ? "opacity-60" : ""}`}
+            >
+              {plan.popular && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-violet-600 hover:bg-violet-600 text-white shadow-sm">
+                    <Star className="h-3 w-3 mr-1" /> Popular
+                  </Badge>
+                </div>
+              )}
+              {plan.oculto && (
+                <div className="absolute top-3 right-3">
+                  <Badge variant="outline" className="text-[10px]">
+                    <EyeOff className="h-2.5 w-2.5 mr-1" /> Oculto
+                  </Badge>
+                </div>
+              )}
+              <CardHeader>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-lg">{plan.name}</CardTitle>
+                  {(plan as any).isCustom ? (
+                    <Badge className="bg-purple-500/15 text-purple-700 border-purple-500/30 text-[10px]">
+                      Personalizado
+                    </Badge>
+                  ) : plan.hasOverride ? (
+                    <Badge variant="secondary" className="text-[10px]">Modificado</Badge>
+                  ) : null}
+                </div>
+                <CardDescription className="text-xs">{plan.description}</CardDescription>
+                <code className="text-[10px] text-muted-foreground">{plan.id}</code>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-2xl font-bold">{formatBRL(plan.priceMonthly)}<span className="text-xs text-muted-foreground font-normal">/mês</span></p>
+                  <p className="text-sm text-muted-foreground">{formatBRL(plan.priceYearly)}/ano</p>
+                </div>
+
+                <ul className="space-y-1 text-xs text-muted-foreground border-t pt-3">
+                  {plan.features.slice(0, 4).map((f: string, i: number) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <Check className="h-3 w-3 text-emerald-600 mt-0.5 shrink-0" />
+                      <span className="truncate">{f}</span>
+                    </li>
+                  ))}
+                  {plan.features.length > 4 && (
+                    <li className="text-[10px] italic">+ {plan.features.length - 4} mais</li>
+                  )}
+                </ul>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 text-xs"
+                    onClick={() => {
+                      setEditando({
+                        ...plan,
+                        features: [...plan.features],
+                        defaultFeatures: [...plan.defaultFeatures],
+                      } as PlanoEditavel);
+                      setEditOpen(true);
+                    }}
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    Editar
+                  </Button>
+                  {(plan as any).isCustom ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-destructive hover:text-destructive"
+                      title="Deletar plano personalizado (só se não houver assinantes)"
+                      onClick={() => {
+                        if (confirm(`Deletar plano "${plan.name}"? Esta ação não pode ser desfeita.`)) {
+                          deletarCustomMut.mutate({ planId: plan.id });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  ) : plan.hasOverride && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-muted-foreground"
+                      title="Remove o override e volta ao default do código"
+                      onClick={() => {
+                        if (confirm(`Resetar plano ${plan.id} ao default do código?`)) {
+                          resetMut.mutate({ planId: plan.id });
+                        }
+                      }}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <EditarPlanoDialog
+        plano={editando}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={refetch}
+      />
+
+      <CriarPlanoDialog
+        open={criarOpen}
+        onOpenChange={setCriarOpen}
+        onCreated={refetch}
+      />
+    </div>
   );
 }
