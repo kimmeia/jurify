@@ -22,6 +22,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Check, Loader2, ArrowRight, XCircle, AlertCircle, Clock } from "lucide-react";
+import { StatusPlanoBadge } from "@/components/StatusPlanoBadge";
+import { resolverStatusVisual } from "@/lib/subscription-status";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -296,36 +298,36 @@ export default function Plans() {
                     {plans?.find((p) => p.id === currentPlanId)?.name ??
                       currentPlanId}
                   </p>
-                  <Badge variant="default" className="text-xs">
-                    Ativo
-                  </Badge>
+                  <StatusPlanoBadge status={resolverStatusVisual(currentSub)} />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {currentSub.currentPeriodEnd && (
-                    <>
-                      Próxima cobrança em{" "}
-                      {new Date(currentSub.currentPeriodEnd).toLocaleDateString(
-                        "pt-BR",
+                  {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
+                    ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}. Adicione forma de pagamento pra continuar.`
+                    : currentSub.currentPeriodEnd && (
+                        <>
+                          Próxima cobrança em{" "}
+                          {new Date(currentSub.currentPeriodEnd).toLocaleDateString("pt-BR")}
+                        </>
                       )}
-                    </>
-                  )}
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={cancelLoading}
-                  className="text-destructive hover:text-destructive"
-                >
-                  {cancelLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <XCircle className="h-4 w-4 mr-1" />
-                  )}
-                  Cancelar Assinatura
-                </Button>
+                {currentSub.status !== "trialing" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancel}
+                    disabled={cancelLoading}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    {cancelLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <XCircle className="h-4 w-4 mr-1" />
+                    )}
+                    Cancelar Assinatura
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -373,8 +375,11 @@ export default function Plans() {
           const isUpgrade = currentSub && planIndex > currentIndex;
           const isDowngrade = currentSub && planIndex < currentIndex;
 
+          const isTrial = currentSub?.status === "trialing";
+
           let buttonLabel = "Assinar";
-          if (isCurrentPlan) buttonLabel = "Plano Atual";
+          if (isCurrentPlan && isTrial) buttonLabel = "Continuar com este plano";
+          else if (isCurrentPlan) buttonLabel = "Plano Atual";
           else if (isUpgrade) buttonLabel = "Fazer Upgrade";
           else if (isDowngrade) buttonLabel = "Fazer Downgrade";
 

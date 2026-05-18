@@ -6,8 +6,7 @@
 import { eq, and, desc } from "drizzle-orm";
 import { getDb } from "../db";
 import { escritorios, colaboradores, convitesColaborador, users } from "../../drizzle/schema";
-import type { CargoColaborador, PlanoAtendimento } from "../../shared/escritorio-types";
-import { PLANO_LIMITES } from "../../shared/escritorio-types";
+import type { CargoColaborador } from "../../shared/escritorio-types";
 import crypto from "crypto";
 
 // ─── Escritório ──────────────────────────────────────────────────────────────
@@ -40,16 +39,16 @@ export async function criarEscritorio(userId: number, nome: string, email?: stri
   const existente = await getEscritorioPorUsuario(userId);
   if (existente) throw new Error("Você já pertence a um escritório.");
 
-  const limites = PLANO_LIMITES["basico"];
-
-  // Criar escritório
+  // Criar escritório. Os campos `planoAtendimento`, `maxColaboradores` e
+  // `maxConexoesWhatsapp` são deprecated (substituídos pela leitura via
+  // `subscriptions.planId` + `getPlanoBySlug` em runtime — Fase 4). Mantemos
+  // o `planoAtendimento` aqui preenchido com "basico" só pra satisfazer o
+  // NOT NULL da coluna até a migration de DROP da Fase 5+.
   const [result] = await db.insert(escritorios).values({
     nome,
     email: email ?? null,
     ownerId: userId,
     planoAtendimento: "basico",
-    maxColaboradores: limites.maxColaboradores,
-    maxConexoesWhatsapp: limites.maxConexoesWhatsapp,
     diasFuncionamento: JSON.stringify(["seg", "ter", "qua", "qui", "sex"]),
   });
 

@@ -7,7 +7,6 @@
 
 export type CargoColaborador = "dono" | "gestor" | "atendente" | "estagiario" | "sdr";
 export type StatusConvite = "pendente" | "aceito" | "expirado" | "cancelado";
-export type PlanoAtendimento = "basico" | "intermediario" | "completo";
 
 export const CARGO_LABELS: Record<CargoColaborador, string> = {
   dono: "Dono",
@@ -25,19 +24,12 @@ export const CARGO_DESCRICAO: Record<CargoColaborador, string> = {
   sdr: "Sales Development Representative — qualifica leads, gerencia pipeline próprio, acessa relatórios próprios",
 };
 
-export const PLANO_LABELS: Record<PlanoAtendimento, string> = {
-  basico: "Básico",
-  intermediario: "Intermediário",
-  completo: "Completo",
-};
-
-export const PLANO_LIMITES: Record<PlanoAtendimento, { maxColaboradores: number; maxConexoesWhatsapp: number; canaisExtras: boolean }> = {
-  basico: { maxColaboradores: 1, maxConexoesWhatsapp: 0, canaisExtras: false },
-  intermediario: { maxColaboradores: 3, maxConexoesWhatsapp: 1, canaisExtras: true },
-  completo: { maxColaboradores: 5, maxConexoesWhatsapp: 3, canaisExtras: true },
-};
-
-/** Custo por colaborador extra acima do limite do plano */
+/**
+ * Custo por colaborador extra acima do limite do plano.
+ * @deprecated O sistema de planos passou a usar `planos.max_usuarios` (Fase 4
+ * do roadmap de Planos). Este multiplicador será removido quando a UI de
+ * "cobrança de colaborador extra" for refatorada pra usar o admin.
+ */
 export const CUSTO_COLABORADOR_EXTRA = 9.90;
 
 // ─── Fusos horários ───────────────────────────────────────────────────────────
@@ -194,9 +186,6 @@ export interface EscritorioInfo {
   diasFuncionamento: string[];
   mensagemAusencia?: string;
   mensagemBoasVindas?: string;
-  planoAtendimento: PlanoAtendimento;
-  maxColaboradores: number;
-  maxConexoesWhatsapp: number;
   ownerId: number;
   createdAt: string;
 }

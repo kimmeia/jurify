@@ -22,7 +22,7 @@ import { BackupDialog } from "./configuracoes/backup-dialog";
 import Plans from "./Plans";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
-import { CARGO_LABELS, CARGO_DESCRICAO, PLANO_LABELS, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
+import { CARGO_LABELS, CARGO_DESCRICAO, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
@@ -351,7 +351,7 @@ export default function Configuracoes() {
         </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-          <p className="text-sm text-muted-foreground">{escritorio.nome} · {PLANO_LABELS[escritorio.planoAtendimento as keyof typeof PLANO_LABELS]}</p>
+          <p className="text-sm text-muted-foreground">{escritorio.nome}</p>
         </div>
         <CargoBadge
           cargo={colaborador.cargo as CargoColaborador}

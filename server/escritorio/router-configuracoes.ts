@@ -36,7 +36,7 @@ import {
 } from "./db-canais";
 import { checkPermission } from "./check-permission";
 import type { CargoColaborador } from "../../shared/escritorio-types";
-import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
+import { CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
 
 /**
  * Checa permissão no módulo `configuracoes` ou `equipe` respeitando o
