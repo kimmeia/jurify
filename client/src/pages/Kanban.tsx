@@ -40,6 +40,24 @@ export default function Kanban() {
   const [funilAtivo, setFunilAtivo] = useState<number | null>(null);
   const [novoFunilOpen, setNovoFunilOpen] = useState(false);
   const [importTrelloOpen, setImportTrelloOpen] = useState(false);
+  // Modo compacto (cards menores) — salvo em localStorage por usuário.
+  const [modoCompacto, setModoCompactoRaw] = useState<boolean>(() => {
+    try { return localStorage.getItem("kanban:modoCompacto") === "1"; } catch { return false; }
+  });
+  const setModoCompacto = (v: boolean) => {
+    setModoCompactoRaw(v);
+    try { localStorage.setItem("kanban:modoCompacto", v ? "1" : "0"); } catch { /* localStorage indisponível, ignora */ }
+  };
+  // Default: cada coluna mostra 5 cards. Usuário expande pra ver todos.
+  const CARDS_INICIAIS = 5;
+  const [colunasExpandidas, setColunasExpandidas] = useState<Set<number>>(new Set());
+  const toggleExpandirColuna = (id: number) =>
+    setColunasExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [cardAberto, setCardAberto] = useState<number | null>(null);
   const [novaTagOpen, setNovaTagOpen] = useState(false);
   const [novaTagNome, setNovaTagNome] = useState("");
@@ -318,12 +336,32 @@ export default function Kanban() {
 
       <FiltrosBar filtros={filtros} setFiltros={setFiltros} />
 
-      {/* Colunas */}
-      <div className="flex gap-4 overflow-x-auto pb-4 px-2" style={{ minHeight: "70vh" }}>
+      {/* Toggle modo compacto */}
+      <div className="flex items-center gap-2 text-xs px-2">
+        <span className="text-muted-foreground">Cards:</span>
+        <div className="inline-flex rounded-md border bg-background">
+          <button
+            onClick={() => setModoCompacto(false)}
+            className={`px-2.5 py-1 text-xs rounded-l-md ${!modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            Normal
+          </button>
+          <button
+            onClick={() => setModoCompacto(true)}
+            className={`px-2.5 py-1 text-xs rounded-r-md border-l ${modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+          >
+            Compacto
+          </button>
+        </div>
+      </div>
+
+      {/* Colunas — altura máx 70vh com scroll INTERNO; header sticky no topo da coluna */}
+      <div className="flex gap-4 overflow-x-auto pb-4 px-2">
         {colunas.map((col: any) => (
           <div
             key={col.id}
-            className={`flex-shrink-0 w-72 bg-muted/30 rounded-xl p-3 space-y-2 ${dragColunaId === col.id ? "opacity-50" : ""}`}
+            className={`flex-shrink-0 ${modoCompacto ? "w-60" : "w-72"} bg-muted/30 rounded-xl p-3 space-y-2 flex flex-col ${dragColunaId === col.id ? "opacity-50" : ""}`}
+            style={{ maxHeight: "calc(100vh - 240px)" }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => {
               // Drop entre tipos: se está arrastando coluna, reordena;
@@ -332,9 +370,9 @@ export default function Kanban() {
               else handleDrop(col.id);
             }}
           >
-            {/* Header coluna — draggable pra reordenar colunas */}
+            {/* Header coluna — draggable pra reordenar colunas; sticky no topo da coluna scrollada */}
             <div
-              className="flex items-center justify-between mb-2 cursor-move"
+              className="flex items-center justify-between cursor-move sticky top-0 bg-muted/30 backdrop-blur z-10 -mx-3 -mt-3 px-3 pt-3 pb-2 rounded-t-xl"
               draggable
               onDragStart={() => setDragColunaId(col.id)}
               onDragEnd={() => setDragColunaId(null)}
@@ -385,8 +423,16 @@ export default function Kanban() {
               </div>
             </div>
 
-            {/* Cards */}
-            {(col.cards || []).map((card: any) => {
+            {/* Cards: limita aos primeiros CARDS_INICIAIS por coluna até user clicar em "ver mais". */}
+            {(() => {
+              const todos = (col.cards || []);
+              const expandida = colunasExpandidas.has(col.id);
+              const cardsVisiveis = expandida ? todos : todos.slice(0, CARDS_INICIAIS);
+              const restantes = todos.length - cardsVisiveis.length;
+              return (
+                <>
+                  <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-2">
+                    {cardsVisiveis.map((card: any) => {
               const tagsList = tags || [];
               const cardTags = card.tags ? card.tags.split(",").map((t: string) => t.trim()).filter(Boolean) : [];
               const isAtrasado = card.atrasado || (card.prazo && new Date(card.prazo) < new Date());
@@ -398,7 +444,10 @@ export default function Kanban() {
                   onDragStart={() => setDragCardId(card.id)}
                   onDragEnd={() => setDragCardId(null)}
                   onClick={() => setCardAberto(card.id)}
-                  className={`group rounded-lg border border-l-4 p-3 bg-card shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${PRIORIDADE_COR[card.prioridade] || ""}`}
+                  className={`group rounded-lg border border-l-4 bg-card shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${
+                    modoCompacto ? "px-2 py-1.5" : "p-3"
+                  } ${PRIORIDADE_COR[card.prioridade] || ""}`}
+                  title={modoCompacto ? card.titulo : undefined}
                 >
                   <div className="flex items-start justify-between gap-1">
                     <div className="flex items-center gap-1.5">
@@ -420,7 +469,8 @@ export default function Kanban() {
                       <Trash2 className="h-2.5 w-2.5" />
                     </Button>
                   </div>
-                  {card.cnj && <p className="text-[10px] font-mono text-muted-foreground mt-1">{card.cnj}</p>}
+                  {!modoCompacto && card.cnj && <p className="text-[10px] font-mono text-muted-foreground mt-1">{card.cnj}</p>}
+                  {!modoCompacto && (
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                     {card.clienteNome && (
                       <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
@@ -452,14 +502,35 @@ export default function Kanban() {
                       );
                     })}
                   </div>
+                  )}
                 </div>
               );
             })}
+                    {restantes > 0 && (
+                      <button
+                        onClick={() => toggleExpandirColuna(col.id)}
+                        className="w-full py-1.5 text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded-md hover:border-solid transition-colors"
+                      >
+                        Ver mais {restantes} {restantes === 1 ? "card" : "cards"} →
+                      </button>
+                    )}
+                    {expandida && todos.length > CARDS_INICIAIS && (
+                      <button
+                        onClick={() => toggleExpandirColuna(col.id)}
+                        className="w-full py-1.5 text-[11px] text-muted-foreground hover:text-foreground rounded-md transition-colors"
+                      >
+                        ← Recolher
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Botão add card no fundo */}
             <button
               onClick={() => setNovoCardOpen(col.id)}
-              className="w-full py-2 text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-lg hover:border-solid transition-colors"
+              className="w-full py-2 text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-lg hover:border-solid transition-colors shrink-0"
             >
               <Plus className="h-3 w-3 inline mr-1" />Adicionar card
             </button>

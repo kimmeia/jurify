@@ -225,9 +225,13 @@ export const kanbanRouter = router({
           }
           let responsavelNome: string | null = null;
           if (card.responsavelId) {
-            const [r] = await db.select({ userId: colaboradores.userId }).from(colaboradores)
-              .where(eq(colaboradores.id, card.responsavelId)).limit(1);
-            responsavelNome = r ? `Colab #${card.responsavelId}` : null;
+            const [r] = await db
+              .select({ nome: users.name, email: users.email })
+              .from(colaboradores)
+              .innerJoin(users, eq(colaboradores.userId, users.id))
+              .where(eq(colaboradores.id, card.responsavelId))
+              .limit(1);
+            responsavelNome = r?.nome ?? r?.email ?? null;
           }
           // Apelido da ação (se vinculada via processoId) — fallback pro
           // CNJ se sem apelido. Permite ao usuário ver "Cliente · Ação"
