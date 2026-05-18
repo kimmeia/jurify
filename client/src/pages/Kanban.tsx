@@ -79,6 +79,14 @@ export default function Kanban() {
   const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
   const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c: any) => c.ativo);
 
+  // Drag state — declarado antes das queries pra pausar polling durante drag
+  // (evita race entre HTML5 DnD nativo e reconciliador do React, que
+  // causava NotFoundError "insertBefore" em boards grandes).
+  const [dragCardId, setDragCardId] = useState<number | null>(null);
+  const [dragColunaId, setDragColunaId] = useState<number | null>(null);
+  // Card sobre o qual o usuário está pairando o drag (pra mostrar indicador).
+  const [dragOverCardId, setDragOverCardId] = useState<number | null>(null);
+
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
   const [filtros, setFiltros] = useState<FiltrosKanban>(FILTROS_VAZIOS);
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
@@ -86,10 +94,10 @@ export default function Kanban() {
     {
       enabled: !!funilAtivo,
       // Polling 5s pra refletir movimentações de outros usuários em
-      // quase-tempo-real (atendente A move card → gestor vê em até 5s).
-      // Reduzido de 15s pro time multi-usuário não precisar dar F5.
-      refetchInterval: 5_000,
-      refetchOnWindowFocus: true,
+      // quase-tempo-real. PAUSADO durante drag pra evitar refetch que
+      // remonta DOM no meio do drag-and-drop (bug "insertBefore").
+      refetchInterval: dragCardId || dragColunaId ? false : 5_000,
+      refetchOnWindowFocus: !dragCardId && !dragColunaId,
     },
   );
 
@@ -109,8 +117,9 @@ export default function Kanban() {
     { id: cardAberto! },
     {
       enabled: !!cardAberto,
-      refetchInterval: 10_000,
-      refetchOnWindowFocus: true,
+      // Pausa polling durante drag pra evitar race com reconciliador React.
+      refetchInterval: dragCardId || dragColunaId ? false : 10_000,
+      refetchOnWindowFocus: !dragCardId && !dragColunaId,
     },
   );
 
@@ -267,10 +276,6 @@ export default function Kanban() {
     0,
   );
 
-  // Drag state — cards e colunas usam estados separados pra não interferir.
-  const [dragCardId, setDragCardId] = useState<number | null>(null);
-  const [dragColunaId, setDragColunaId] = useState<number | null>(null);
-
   const reordenarColunasMut = (trpc as any).kanban.reordenarColunas.useMutation({
     onSuccess: () => refetchFunil(),
     onError: (e: any) => toast.error(e.message),
@@ -308,9 +313,6 @@ export default function Kanban() {
     },
     onSettled: () => refetchFunil(),
   });
-
-  // Card sobre o qual o usuário está pairando o drag (pra mostrar indicador).
-  const [dragOverCardId, setDragOverCardId] = useState<number | null>(null);
 
   // Drop sobre um card específico = colocar o arrastado ANTES desse card.
   // Funciona tanto pra reorder na mesma coluna quanto pra mover entre colunas
@@ -692,15 +694,15 @@ export default function Kanban() {
                     setDragOverCardId(null);
                   }}
                   onDragOver={(e) => {
-                    // Marca esse card como "drop target" se há outro card sendo arrastado.
+                    // Marca esse card como drop target. Setter do React faz
+                    // bail-out se mesmo valor, então OK chamar sempre. Sem
+                    // onDragLeave pra evitar flicker null↔id sobre filhos
+                    // (badges/spans) que forçaria rerender massivo.
                     if (dragCardId && dragCardId !== card.id) {
                       e.preventDefault();
                       e.stopPropagation();
-                      setDragOverCardId(card.id);
+                      if (dragOverCardId !== card.id) setDragOverCardId(card.id);
                     }
-                  }}
-                  onDragLeave={() => {
-                    if (dragOverCardId === card.id) setDragOverCardId(null);
                   }}
                   onDrop={(e) => {
                     if (!dragCardId || dragCardId === card.id) return;
