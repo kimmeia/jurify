@@ -1193,7 +1193,10 @@ export const kanbanRouter = router({
    */
   arquivarCardsEmMassa: protectedProcedure
     .input(z.object({
-      ids: z.array(z.number().int().positive()).min(1).max(500),
+      // Cap defensivo. Boards importados do Trello podem ter 1000+ cards na
+      // mesma coluna — 2000 cobre o caso real com margem. Acima disso, UI
+      // pode dividir em chunks.
+      ids: z.array(z.number().int().positive()).min(1).max(2000),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "kanban", "editar");
