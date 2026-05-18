@@ -48,6 +48,7 @@ import Agenda from "./pages/Agenda";
 import Tarefas from "./pages/Tarefas";
 import AssinarDocumento from "./pages/AssinarDocumento";
 import AceitarConvite from "./pages/AceitarConvite";
+import ConfirmarEmail from "./pages/auth/ConfirmarEmail";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import SubscriptionGuard from "./components/SubscriptionGuard";
@@ -88,6 +89,7 @@ function Router() {
       <Route path="/privacidade" component={Privacidade} />
       <Route path="/esqueci-senha" component={EsqueciSenha} />
       <Route path="/redefinir-senha" component={RedefinirSenha} />
+      <Route path="/confirmar-email/:token" component={ConfirmarEmail} />
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/assinar/:token">
         {(params: any) => <AssinarDocumento token={params.token} />}

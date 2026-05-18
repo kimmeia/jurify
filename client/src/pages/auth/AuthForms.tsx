@@ -57,12 +57,28 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
 
   // ─── Mutations ─────────────────────────────────────────────────────────────
 
+  // Email pendente de confirmação (signup → tela "confirme seu email")
+  const [emailPendenteConfirmacao, setEmailPendenteConfirmacao] = useState<string | null>(null);
+  // Erro de login com email não confirmado: mostra CTA "reenviar email"
+  const [emailNaoConfirmadoLogin, setEmailNaoConfirmadoLogin] = useState<string | null>(null);
+
   const signupMut = trpc.auth.signup.useMutation({
-    onSuccess: async () => {
-      toast.success("Conta criada com sucesso!");
-      await utils.auth.me.invalidate();
-      onSuccess?.();
+    onSuccess: async (data) => {
+      if (data.needsConfirmation) {
+        setEmailPendenteConfirmacao(data.email);
+        toast.success("Cadastro recebido! Verifique seu email.");
+      } else {
+        // Fallback: legacy ou cenário sem confirmação
+        toast.success("Conta criada com sucesso!");
+        await utils.auth.me.invalidate();
+        onSuccess?.();
+      }
     },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const reenviarConfirmacaoMut = trpc.auth.reenviarConfirmacao.useMutation({
+    onSuccess: () => toast.success("Email reenviado. Verifique sua caixa de entrada."),
     onError: (e) => toast.error(e.message),
   });
 
@@ -72,7 +88,14 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
       await utils.auth.me.invalidate();
       onSuccess?.();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      // Erro específico: email não confirmado → expõe CTA pra reenviar.
+      const motivo = (e.data as any)?.cause?.motivo;
+      if (motivo === "email_nao_confirmado" || /confirme seu email/i.test(e.message)) {
+        setEmailNaoConfirmadoLogin(loginEmail.trim().toLowerCase());
+      }
+      toast.error(e.message);
+    },
   });
 
   const loginGoogleMut = trpc.auth.loginGoogle.useMutation({
@@ -182,11 +205,19 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
       toast.error("Você precisa aceitar os Termos e a Política de Privacidade");
       return;
     }
+    // Lê plano escolhido na LP (persistido em sessionStorage pelo Pricing.tsx)
+    let planoSlug: string | undefined;
+    try {
+      planoSlug = sessionStorage.getItem("planoEscolhido") || undefined;
+    } catch {
+      // sessionStorage bloqueado — ignora
+    }
     signupMut.mutate({
       name: signupName.trim(),
       email: signupEmail.trim().toLowerCase(),
       password: signupPassword,
       aceitouTermos: true,
+      planoSlug,
     });
   };
 
@@ -209,6 +240,35 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
+  // Tela "Verifique seu email" — substitui o formulário após signup
+  // bem-sucedido. Cliente precisa clicar no link no email pra continuar.
+  if (emailPendenteConfirmacao) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center space-y-4">
+        <div className="mx-auto h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
+          <Mail className="h-7 w-7 text-primary" />
+        </div>
+        <h2 className="text-xl font-semibold">Verifique seu email</h2>
+        <p className="text-sm text-muted-foreground">
+          Enviamos um link de confirmação pra <strong>{emailPendenteConfirmacao}</strong>.
+          Clique no link pra ativar sua conta. O link expira em 24 horas.
+        </p>
+        <div className="flex flex-col gap-2 pt-2">
+          <Button
+            variant="outline"
+            disabled={reenviarConfirmacaoMut.isPending}
+            onClick={() => reenviarConfirmacaoMut.mutate({ email: emailPendenteConfirmacao })}
+          >
+            {reenviarConfirmacaoMut.isPending ? "Enviando..." : "Reenviar email"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setEmailPendenteConfirmacao(null)}>
+            Voltar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-md mx-auto">
       {logoutMotivo && (
@@ -217,6 +277,25 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <span>{logoutMotivo}</span>
           </div>
+        </div>
+      )}
+      {emailNaoConfirmadoLogin && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+          <div className="flex items-start gap-2 mb-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-200" />
+            <span className="text-sm text-amber-800 dark:text-amber-200">
+              Confirme seu email antes de entrar. Não recebeu o link?
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={reenviarConfirmacaoMut.isPending}
+            onClick={() => reenviarConfirmacaoMut.mutate({ email: emailNaoConfirmadoLogin })}
+            className="ml-6"
+          >
+            {reenviarConfirmacaoMut.isPending ? "Enviando..." : "Reenviar email"}
+          </Button>
         </div>
       )}
       <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
