@@ -23,13 +23,22 @@ import {
   upsertUser,
   getUserByEmail,
   getUserByGoogleSub,
-  getUserByOpenId,
   getDb,
 } from "../db";
-import { colaboradores, users, passwordResetTokens } from "../../drizzle/schema";
-import { and, eq, isNull } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
-import { enviarEmailRedefinirSenha, enviarEmailBoasVindas } from "../_core/email";
+import { colaboradores, users, passwordResetTokens, emailConfirmationTokens } from "../../drizzle/schema";
+import { and, eq, isNull, gt } from "drizzle-orm";
+import { randomBytes, randomUUID } from "node:crypto";
+import {
+  enviarEmailRedefinirSenha,
+  enviarEmailBoasVindas,
+  enviarEmailConfirmacao,
+} from "../_core/email";
+
+const CONFIRMACAO_EMAIL_TTL_MS = 24 * 60 * 60_000; // 24h
+
+function gerarTokenConfirmacao(): string {
+  return randomBytes(32).toString("hex");
+}
 
 /** Bloqueia login de usuário que foi removido de TODOS os escritórios
  *  em que tinha vínculo. Mantém o flag de remoção visível pra ele entender
@@ -155,19 +164,27 @@ export const authRouter = router({
     };
   }),
 
-  /** Cadastro com email + senha. */
+  /**
+   * Cadastro com email + senha.
+   *
+   * Fase 2: NÃO cria sessão imediatamente. Cria user com `emailVerificado=false`,
+   * gera token e envia email de confirmação (válido 24h). Cliente precisa
+   * clicar no link antes de conseguir logar.
+   *
+   * `planoSlug` opcional: slug do plano que o cliente escolheu na LP. Será
+   * consumido na Fase 3 pra iniciar trial após a confirmação.
+   */
   signup: publicProcedure
     .input(
       z.object({
         name: z.string().min(2).max(255),
         email: z.string().email().max(320),
         password: z.string().min(6).max(128),
-        // LGPD: aceite explícito dos Termos + Política. Frontend só
-        // habilita o botão com isso true. Validamos de novo aqui (defesa
-        // em profundidade).
         aceitouTermos: z.literal(true, {
           errorMap: () => ({ message: "Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar a conta." }),
         }),
+        /** Slug do plano escolhido na LP (sessionStorage do Pricing.tsx). */
+        planoSlug: z.string().max(64).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -237,17 +254,46 @@ export const authRouter = router({
         aceitouTermosEm: new Date(),
       });
 
-      await setSessionCookie(ctx, openId, input.name);
+      // Pega o user recém-criado pra ter id + persistir planoPretendido
+      const userCriado = await getUserByEmail(email);
+      if (!userCriado) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao criar conta." });
+      }
 
-      log.info({ email }, "Novo cadastro via email/senha");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
 
-      // Email de boas-vindas — não bloqueia signup se falhar (Resend
-      // pode estar fora ou config faltando). Só loga.
-      void enviarEmailBoasVindas({ email, nome: input.name }).then((r) => {
-        if (!r.success) log.warn({ email, error: r.error }, "Falha ao enviar email de boas-vindas");
+      // Persiste plano escolhido (se veio da LP) pra Fase 3 consumir.
+      // emailVerificado já é false por default da migration.
+      if (input.planoSlug) {
+        await db.update(users)
+          .set({ planoPretendido: input.planoSlug })
+          .where(eq(users.id, userCriado.id));
+      }
+
+      // Gera token de confirmação (24h)
+      const token = gerarTokenConfirmacao();
+      const expiraEm = new Date(Date.now() + CONFIRMACAO_EMAIL_TTL_MS);
+      await db.insert(emailConfirmationTokens).values({
+        userId: userCriado.id,
+        token,
+        expiresAt: expiraEm,
       });
 
-      return { success: true, email, name: input.name } as const;
+      log.info({ email }, "Novo cadastro via email/senha — aguardando confirmação");
+
+      // Email de confirmação — não bloqueia signup se Resend falhar (cliente
+      // pode pedir "reenviar" depois). Erro fica em email_log pra admin ver.
+      void enviarEmailConfirmacao({ email, nome: input.name, token }).then((r) => {
+        if (!r.success) log.warn({ email, error: r.error }, "Falha ao enviar email de confirmação");
+      });
+
+      return {
+        success: true,
+        email,
+        name: input.name,
+        needsConfirmation: true,
+      } as const;
     }),
 
   /** Login com email + senha. */
@@ -296,6 +342,16 @@ export const authRouter = router({
       const valid = await verifyPassword(input.password, user.passwordHash);
       if (!valid) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "E-mail ou senha incorretos." });
+      }
+
+      // Email não confirmado: bloqueia login. Frontend exibe botão pra
+      // reenviar confirmação. `cause` carrega o motivo pra UI tratar.
+      if (!user.emailVerificado) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Confirme seu email antes de entrar. Verifique sua caixa de entrada.",
+          cause: { motivo: "email_nao_confirmado", email },
+        });
       }
 
       // Bloqueia login se o usuário foi removido de todos os escritórios
@@ -350,7 +406,8 @@ export const authRouter = router({
 
       const openId = user?.openId || googleSubToOpenId(profile.sub);
 
-      // Cria ou atualiza
+      // Cria ou atualiza. Google já valida o email no provedor, então
+      // marca emailVerificado=true automaticamente.
       await upsertUser({
         openId,
         name: profile.name,
@@ -358,6 +415,8 @@ export const authRouter = router({
         googleSub: profile.sub,
         loginMethod: "google",
         lastSignedIn: new Date(),
+        emailVerificado: true,
+        emailVerificadoEm: new Date(),
       });
 
       // Bloqueia login se o usuário foi removido de todos os escritórios
@@ -486,6 +545,151 @@ export const authRouter = router({
       rateLimitReset("login-email", user.email || "");
 
       log.info({ userId: user.id }, "Senha redefinida via token");
+      return { success: true } as const;
+    }),
+
+  /**
+   * Confirma email via token enviado no signup. Marca `emailVerificado=true`,
+   * invalida o token e cria sessão (login automático após confirmação).
+   *
+   * Retorna `planoPretendido` se houver — o frontend usa pra direcionar
+   * o cliente pro fluxo de trial (Fase 3) ou pra /plans (fallback).
+   */
+  confirmarEmail: publicProcedure
+    .input(z.object({ token: z.string().min(32).max(128) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const [reg] = await db
+        .select()
+        .from(emailConfirmationTokens)
+        .where(eq(emailConfirmationTokens.token, input.token))
+        .limit(1);
+
+      if (!reg) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Link inválido ou já usado." });
+      }
+      if (reg.usedAt) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este link já foi usado. Tente fazer login." });
+      }
+      if (reg.expiresAt < new Date()) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Link expirado. Solicite um novo email de confirmação.",
+          cause: { motivo: "token_expirado" },
+        });
+      }
+
+      const [userRow] = await db.select().from(users).where(eq(users.id, reg.userId)).limit(1);
+      if (!userRow) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário não encontrado." });
+
+      // Bloqueia se conta foi banida no intervalo entre signup e confirmação
+      if (userRow.bloqueado) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: userRow.motivoBloqueio || "Sua conta está bloqueada.",
+        });
+      }
+
+      // Marca verificado + consome token (idempotente: se já estava
+      // verificado, ainda cria sessão pra UX consistente).
+      await db.update(users)
+        .set({
+          emailVerificado: true,
+          emailVerificadoEm: new Date(),
+          lastSignedIn: new Date(),
+        })
+        .where(eq(users.id, userRow.id));
+
+      await db.update(emailConfirmationTokens)
+        .set({ usedAt: new Date() })
+        .where(eq(emailConfirmationTokens.id, reg.id));
+
+      await setSessionCookie(ctx, userRow.openId, userRow.name || userRow.email || "");
+
+      log.info({ userId: userRow.id, email: userRow.email }, "Email confirmado");
+
+      return {
+        success: true,
+        email: userRow.email,
+        name: userRow.name,
+        planoPretendido: userRow.planoPretendido,
+      } as const;
+    }),
+
+  /**
+   * Reenvia email de confirmação. Rate limit estrito (1/min/email) pra
+   * evitar abuso. Invalida tokens anteriores não usados.
+   *
+   * Sempre retorna sucesso (mesmo se email não existe) pra não vazar
+   * existência de conta.
+   */
+  reenviarConfirmacao: publicProcedure
+    .input(z.object({ email: z.string().email().max(320) }))
+    .mutation(async ({ ctx, input }) => {
+      const ip = ctx.req.ip || "unknown";
+      const email = input.email.trim().toLowerCase();
+
+      // Rate limit: 1/min/email + 3/h/IP
+      const rlEmail = rateLimitConsume({
+        name: "reenviar-confirmacao-email",
+        key: email,
+        max: 1,
+        windowMs: 60_000,
+      });
+      if (!rlEmail.allowed) {
+        return { success: true } as const;
+      }
+      const rlIp = rateLimitConsume({
+        name: "reenviar-confirmacao-ip",
+        key: ip,
+        max: 3,
+        windowMs: 60 * 60_000,
+      });
+      if (!rlIp.allowed) {
+        return { success: true } as const;
+      }
+
+      const user = await getUserByEmail(email);
+      if (!user) {
+        log.info({ email }, "Reenvio solicitado pra email inexistente");
+        return { success: true } as const;
+      }
+      if (user.emailVerificado) {
+        // Já verificado — não envia, mas retorna sucesso pra não confundir.
+        return { success: true } as const;
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Invalida tokens anteriores não usados (mantém histórico via usedAt)
+      await db.update(emailConfirmationTokens)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(emailConfirmationTokens.userId, user.id),
+          isNull(emailConfirmationTokens.usedAt),
+        ));
+
+      // Gera token novo
+      const token = gerarTokenConfirmacao();
+      const expiraEm = new Date(Date.now() + CONFIRMACAO_EMAIL_TTL_MS);
+      await db.insert(emailConfirmationTokens).values({
+        userId: user.id,
+        token,
+        expiresAt: expiraEm,
+      });
+
+      const r = await enviarEmailConfirmacao({
+        email,
+        nome: user.name || "",
+        token,
+      });
+      if (!r.success) {
+        log.warn({ email, error: r.error }, "Falha ao reenviar email de confirmação");
+      }
+
       return { success: true } as const;
     }),
 });

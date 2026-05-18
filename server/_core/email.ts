@@ -334,6 +334,59 @@ export async function enviarEmailRedefinirSenha(params: {
 }
 
 /**
+ * Email de confirmação de cadastro (Fase 2 do roadmap de Planos).
+ *
+ * Disparado no signup. Cliente clica no link → `/confirmar-email/:token`
+ * que valida e ativa a conta. Sem confirmar, login fica bloqueado.
+ */
+export async function enviarEmailConfirmacao(params: {
+  email: string;
+  nome: string;
+  token: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const link = `${APP_URL}/confirmar-email/${encodeURIComponent(params.token)}`;
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
+  <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">Jurify</h1>
+    </div>
+    <h2 style="font-size: 20px; color: #111827; margin-bottom: 8px;">Confirme seu email</h2>
+    <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Olá ${params.nome || "Usuário"},</p>
+    <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">
+      Bem-vindo ao Jurify! Pra ativar sua conta e começar a usar a plataforma, clique no botão abaixo:
+    </p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${link}" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+        Confirmar email e entrar
+      </a>
+    </div>
+    <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">
+      Se o botão não funcionar, copie e cole no navegador:<br>
+      <a href="${link}" style="color: #7c3aed; word-break: break-all;">${link}</a>
+    </p>
+    <p style="color: #9ca3af; font-size: 12px; margin-top: 24px; text-align: center;">
+      Este link expira em <strong>24 horas</strong>.<br>
+      Se você não criou esta conta, ignore este email.
+    </p>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+  </div>
+</body>
+</html>`;
+  const text = `Olá ${params.nome || "Usuário"},\n\nBem-vindo ao Jurify!\n\nConfirme seu email pra ativar sua conta (link válido por 24h):\n${link}\n\nSe você não criou esta conta, ignore este email.`;
+  return enviarEmail({
+    to: params.email,
+    subject: "Confirme seu email — Jurify",
+    html,
+    text,
+    tipo: "confirmacao_email",
+  });
+}
+
+/**
  * Email de boas-vindas pós-signup com CTA pra dashboard.
  */
 export async function enviarEmailBoasVindas(params: {

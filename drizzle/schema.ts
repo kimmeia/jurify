@@ -50,10 +50,43 @@ export const users = mysqlTable("users", {
    * (TODO frontend).
    */
   aceitouTermosEm: timestamp("aceitouTermosEm"),
+  /**
+   * Confirmação de email (Fase 2 do roadmap de Planos).
+   * Signup novo: false até clicar no link enviado por Resend.
+   * Login Google: marca true automaticamente (Google já valida).
+   * Legacy (criados antes da migration 0109): backfill marcou true.
+   */
+  emailVerificado: boolean("email_verificado").default(false).notNull(),
+  emailVerificadoEm: timestamp("email_verificado_em"),
+  /**
+   * Slug do plano que o cliente escolheu na LP (sessionStorage do Pricing.tsx
+   * é passado pro signup). A Fase 3 consome esse valor pra iniciar trial
+   * automaticamente após `confirmarEmail`. Null = não escolheu.
+   */
+  planoPretendido: varchar("plano_pretendido", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
+
+/**
+ * Tokens de confirmação de email no signup. Geração: `randomBytes(32).hex`
+ * (256 bits). Validade: 24h. `used_at != null` = token consumido (não usa
+ * de novo).
+ */
+export const emailConfirmationTokens = mysqlTable("email_confirmation_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  idxToken: index("idx_email_conf_token").on(t.token),
+  idxUser: index("idx_email_conf_user").on(t.userId),
+}));
+
+export type EmailConfirmationToken = typeof emailConfirmationTokens.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
