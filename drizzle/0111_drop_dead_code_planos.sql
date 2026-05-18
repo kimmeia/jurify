@@ -1,10 +1,7 @@
 -- Migration 0111: drop do dead code do sistema antigo de planos (Fase 5)
 --
--- ⚠️ EXECUTAR SOMENTE APÓS validar Fases 0-4 em produção por pelo menos 2
--- semanas. Antes disso, mantemos as colunas/tabela como dead code pra ter
--- rollback rápido caso algo dê errado.
---
--- O que cai:
+-- Remove campos/tabelas legados que ficaram no banco mas não são mais
+-- consumidos por nenhum código (validado via grep + typecheck).
 --
 -- 1. `escritorios.planoAtendimento` + `maxColaboradores` + `maxConexoesWhatsapp`
 --    Substituídos por leitura dinâmica de `subscriptions.planId` →
@@ -13,17 +10,10 @@
 -- 2. Tabela `planos_overrides`
 --    Substituída pela tabela `planos` (Fase 0) que é a fonte de verdade
 --    única editável pelo admin.
---
--- DRY RUN antes de rodar: confirme que nenhum SELECT no código produção
--- ainda lê esses campos:
---   grep -rn "planoAtendimento\|planos_overrides" server/ client/src/
---
--- Para rolar essa migration, descomente os ALTER/DROP abaixo. Mantida em
--- estado comentado pra evitar execução acidental.
 
--- ALTER TABLE escritorios
---   DROP COLUMN planoAtendimento,
---   DROP COLUMN maxColaboradores,
---   DROP COLUMN maxConexoesWhatsapp;
+ALTER TABLE escritorios
+  DROP COLUMN planoAtendimento,
+  DROP COLUMN maxColaboradores,
+  DROP COLUMN maxConexoesWhatsapp;
 
--- DROP TABLE IF EXISTS planos_overrides;
+DROP TABLE IF EXISTS planos_overrides;

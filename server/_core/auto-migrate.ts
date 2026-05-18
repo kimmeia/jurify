@@ -683,30 +683,8 @@ async function ensureClienteControlSchema(connection: mysql.Connection): Promise
       }
     }
 
-    // ─── planos_overrides: editar planos sem deploy ────────────────────
-    try {
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS planos_overrides (
-          id INT NOT NULL AUTO_INCREMENT,
-          planIdOverride VARCHAR(64) NOT NULL UNIQUE,
-          nameOverride VARCHAR(100),
-          descriptionOverride VARCHAR(500),
-          priceMonthlyOverride INT,
-          priceYearlyOverride INT,
-          featuresOverride TEXT,
-          popularOverride BOOLEAN,
-          ocultoOverride BOOLEAN DEFAULT FALSE,
-          updatedByOverride INT,
-          updatedAtOverride TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-      log.info("planos_overrides criada (ou já existia)");
-    } catch (err: any) {
-      if (!isHarmlessError(err.message || String(err))) {
-        log.warn({ err: err.message }, "Falha ao criar planos_overrides");
-      }
-    }
+    // (removido: bloco de auto-migrate de planos_overrides — tabela DROPADA
+    //  na migration 0111. Catálogo de planos vive na tabela `planos` agora.)
 
     // ─── cupons: descontos promocionais ────────────────────────────────
     try {
