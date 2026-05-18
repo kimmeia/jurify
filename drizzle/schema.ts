@@ -1894,6 +1894,11 @@ export const kanbanCards = mysqlTable("kanban_cards", {
   processoId: int("processoIdKCard").references(() => clienteProcessos.id, { onDelete: "cascade" }),
   /** Se o card está atrasado (prazo vencido sem mover) */
   atrasado: boolean("atrasadoKCard").default(false).notNull(),
+  /** Arquivar = some do quadro sem perder dados. Histórico/comentários/
+   *  movimentações continuam intactos. Útil pra cards concluídos antigos
+   *  que poluem visualmente a coluna de Finalizado. */
+  arquivado: boolean("arquivadoKCard").default(false).notNull(),
+  arquivadoEm: timestamp("arquivadoEmKCard"),
   ordem: int("ordemKCard").default(0).notNull(),
   createdAt: timestamp("createdAtKCard").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtKCard").defaultNow().onUpdateNow().notNull(),
