@@ -62,8 +62,8 @@ export function LandingFooter() {
             <h4 className="font-semibold text-sm mb-3">Suporte</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <a href="mailto:contato@jurify.com.br" className="hover:text-foreground transition-colors">
-                  contato@jurify.com.br
+                <a href="mailto:contato@juridflow.com.br" className="hover:text-foreground transition-colors">
+                  contato@juridflow.com.br
                 </a>
               </li>
             </ul>

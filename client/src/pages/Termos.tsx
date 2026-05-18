@@ -109,7 +109,7 @@ export default function Termos() {
 
         <h2 className="text-xl font-semibold pt-4">Contato</h2>
         <p>
-          Dúvidas: <a href="mailto:contato@jurify.com.br" className="text-violet-600 hover:underline">contato@jurify.com.br</a>
+          Dúvidas: <a href="mailto:contato@juridflow.com.br" className="text-violet-600 hover:underline">contato@juridflow.com.br</a>
         </p>
       </section>
     </div>
