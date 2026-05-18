@@ -16,7 +16,7 @@ import {
   Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
-  Database, CreditCard as CreditCardIcon, Megaphone, Pencil,
+  Database, CreditCard as CreditCardIcon, Megaphone, Pencil, Stethoscope,
 } from "lucide-react";
 import { BackupDialog } from "./configuracoes/backup-dialog";
 import Plans from "./Plans";
@@ -186,6 +186,11 @@ export default function Configuracoes() {
   const [editColabMaxAtend, setEditColabMaxAtend] = useState<number>(5);
   const [editColabRecebeLeads, setEditColabRecebeLeads] = useState<boolean>(false);
   const [editColabMetaMensal, setEditColabMetaMensal] = useState<string>("");
+  const [diagColabId, setDiagColabId] = useState<number | null>(null);
+  const { data: diagData, isFetching: diagLoading } = trpc.permissoes.diagnosticarColaborador.useQuery(
+    diagColabId ? { colaboradorId: diagColabId } : (undefined as any),
+    { enabled: !!diagColabId, retry: false },
+  );
 
   const { data: cargosList } = trpc.permissoes.listarCargos.useQuery(undefined, { retry: false });
   const { data: setoresList, refetch: refetchSetores } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
@@ -595,6 +600,17 @@ export default function Configuracoes() {
                         onClick={() => abrirEditColab(c)}
                       >
                         <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {isDono && c.ativo && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0"
+                        title="Ver permissões efetivas (diagnóstico)"
+                        onClick={() => setDiagColabId(c.id)}
+                      >
+                        <Stethoscope className="h-4 w-4" />
                       </Button>
                     )}
                     {isDono && c.cargo !== "dono" && c.ativo && (
@@ -1146,6 +1162,118 @@ export default function Configuracoes() {
               )}
               Salvar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Diagnóstico de permissões efetivas ─────────────────────────── */}
+      <Dialog open={!!diagColabId} onOpenChange={(open) => !open && setDiagColabId(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5" />
+              Permissões efetivas
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              O que o backend realmente enxerga pra este colaborador. Útil
+              quando "está marcado mas não funciona".
+            </p>
+          </DialogHeader>
+          {diagLoading && (
+            <div className="flex items-center gap-2 py-8 justify-center">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Carregando...</span>
+            </div>
+          )}
+          {!diagLoading && diagData && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
+                <div>
+                  <p className="text-[11px] text-muted-foreground uppercase">Cargo (enum)</p>
+                  <p className="font-medium">{diagData.colaborador.cargo}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground uppercase">cargoPersonalizadoId</p>
+                  <p className="font-mono text-xs">{diagData.colaborador.cargoPersonalizadoId ?? "null"}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground uppercase">Cargo resolvido</p>
+                  <p className="font-medium">{diagData.cargo?.nome ?? "—"} {diagData.cargo?.isDefault ? "(default)" : diagData.cargo ? "(custom)" : ""}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-muted-foreground uppercase">Resolvido via</p>
+                  <p className="font-mono text-xs">{diagData.cargoResolvidoVia}</p>
+                </div>
+              </div>
+
+              {diagData.cargoResolvidoVia === "nome-fallback" && (
+                <div className="border border-amber-500/40 bg-amber-500/10 rounded-lg p-3 text-xs">
+                  <p className="font-medium text-amber-700 dark:text-amber-400">⚠ Vínculo fraco</p>
+                  <p className="text-muted-foreground">
+                    O <code>cargoPersonalizadoId</code> está null no colaborador. O cargo está sendo resolvido pelo nome
+                    (lookup em <code>cargosPersonalizados</code>). Se houver mais de um cargo com mesmo nome, pode pegar o "errado".
+                    Pra corrigir, edite o colaborador e atribua o cargo explicitamente.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Matriz efetiva por módulo</h4>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-2 py-1.5 font-medium">Módulo</th>
+                        <th className="px-2 py-1.5 font-medium">Ver Todos</th>
+                        <th className="px-2 py-1.5 font-medium">Ver Próprios</th>
+                        <th className="px-2 py-1.5 font-medium">Criar</th>
+                        <th className="px-2 py-1.5 font-medium">Editar</th>
+                        <th className="px-2 py-1.5 font-medium">Excluir</th>
+                        <th className="px-2 py-1.5 font-medium">DB</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagData.modulos.map((m) => {
+                        const ef = (diagData.efetiva as any)[m];
+                        const db = (diagData.permissoesDB as any)[m];
+                        const divergencia = db && (
+                          ef.verTodos !== db.verTodos ||
+                          ef.verProprios !== db.verProprios ||
+                          ef.criar !== db.criar ||
+                          ef.editar !== db.editar ||
+                          ef.excluir !== db.excluir
+                        );
+                        const cell = (v: boolean) => (
+                          <span className={v ? "text-emerald-600 font-bold" : "text-muted-foreground"}>
+                            {v ? "✓" : "—"}
+                          </span>
+                        );
+                        return (
+                          <tr key={m} className={`border-t ${divergencia ? "bg-amber-500/5" : ""}`}>
+                            <td className="px-2 py-1.5 font-medium">{m}</td>
+                            <td className="text-center">{cell(ef.verTodos)}</td>
+                            <td className="text-center">{cell(ef.verProprios)}</td>
+                            <td className="text-center">{cell(ef.criar)}</td>
+                            <td className="text-center">{cell(ef.editar)}</td>
+                            <td className="text-center">{cell(ef.excluir)}</td>
+                            <td className="text-center text-[10px] text-muted-foreground">
+                              {db ? "ok" : <span className="text-amber-600">sem row</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Linhas com fundo âmbar indicam divergência entre matriz DB e a permissão efetiva.
+                  Coluna "DB" = "sem row" indica que o cargo não tem entry pra esse módulo (cargo criado antes do módulo existir).
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiagColabId(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
