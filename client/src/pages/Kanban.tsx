@@ -48,6 +48,7 @@ export default function Kanban() {
     setModoCompactoRaw(v);
     try { localStorage.setItem("kanban:modoCompacto", v ? "1" : "0"); } catch { /* localStorage indisponível, ignora */ }
   };
+  const [mostrarArquivados, setMostrarArquivados] = useState(false);
   // Default: cada coluna mostra 5 cards. Usuário expande pra ver todos.
   const CARDS_INICIAIS = 5;
   const [colunasExpandidas, setColunasExpandidas] = useState<Set<number>>(new Set());
@@ -76,7 +77,7 @@ export default function Kanban() {
   const { data: funis, refetch: refetchFunis } = (trpc as any).kanban.listarFunis.useQuery();
   const [filtros, setFiltros] = useState<FiltrosKanban>(FILTROS_VAZIOS);
   const { data: funilData, refetch: refetchFunil } = (trpc as any).kanban.obterFunil.useQuery(
-    { funilId: funilAtivo!, ...filtros },
+    { funilId: funilAtivo!, ...filtros, mostrarArquivados },
     {
       enabled: !!funilAtivo,
       // Polling 5s pra refletir movimentações de outros usuários em
@@ -131,12 +132,71 @@ export default function Kanban() {
     onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "", valorEstimado: "" }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const arquivarCardMut = (trpc as any).kanban.arquivarCard.useMutation({
+    onSuccess: () => {
+      toast.success("Card arquivado");
+      refetchFunil();
+      refetchDetalhe();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const desarquivarCardMut = (trpc as any).kanban.desarquivarCard.useMutation({
+    onSuccess: () => {
+      toast.success("Card desarquivado");
+      refetchFunil();
+      refetchDetalhe();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const deletarCardMut = (trpc as any).kanban.deletarCard.useMutation({
     onSuccess: () => refetchFunil(),
     onError: (e: any) => toast.error(e.message),
   });
+  const utilsTrpc = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
   const moverCardMut = (trpc as any).kanban.moverCard.useMutation({
-    onSuccess: () => refetchFunil(),
+    // Optimistic update: move o card no cache LOCAL antes do server responder.
+    // Sensação instantânea no drag-and-drop. Sem isso, board de 1k cards
+    // tinha delay perceptível (refetch completo da query a cada drop).
+    onMutate: async (vars: { cardId: number; colunaDestinoId: number; ordem?: number }) => {
+      if (!funilAtivo || !utilsTrpc?.kanban?.obterFunil) return;
+      const queryKey = { funilId: funilAtivo, ...filtros };
+      await utilsTrpc.kanban.obterFunil.cancel(queryKey);
+      const anterior = utilsTrpc.kanban.obterFunil.getData(queryKey);
+      if (!anterior) return { anterior };
+
+      let cardMovido: any = null;
+      const novasColunas = (anterior.colunas || []).map((col: any) => {
+        const sem = (col.cards || []).filter((c: any) => {
+          if (c.id === vars.cardId) {
+            cardMovido = { ...c, colunaId: vars.colunaDestinoId };
+            return false;
+          }
+          return true;
+        });
+        return { ...col, cards: sem };
+      });
+      if (cardMovido) {
+        const final = novasColunas.map((col: any) => {
+          if (col.id === vars.colunaDestinoId) {
+            return { ...col, cards: [...(col.cards || []), cardMovido] };
+          }
+          return col;
+        });
+        utilsTrpc.kanban.obterFunil.setData(queryKey, { ...anterior, colunas: final });
+      }
+      return { anterior };
+    },
+    onError: (_e: any, _vars: any, ctx: any) => {
+      // Reverte cache se mutação falhou no server.
+      if (ctx?.anterior && funilAtivo) {
+        utilsTrpc?.kanban?.obterFunil?.setData({ funilId: funilAtivo, ...filtros }, ctx.anterior);
+      }
+    },
+    onSettled: () => {
+      // Sincroniza com o server pra garantir consistência (ordem real,
+      // outros usuários, etc).
+      refetchFunil();
+    },
   });
 
   // ─── Modal "Lançar cobrança" ao mover card pra coluna Ganho ─────────────
@@ -336,23 +396,34 @@ export default function Kanban() {
 
       <FiltrosBar filtros={filtros} setFiltros={setFiltros} />
 
-      {/* Toggle modo compacto */}
-      <div className="flex items-center gap-2 text-xs px-2">
-        <span className="text-muted-foreground">Cards:</span>
-        <div className="inline-flex rounded-md border bg-background">
-          <button
-            onClick={() => setModoCompacto(false)}
-            className={`px-2.5 py-1 text-xs rounded-l-md ${!modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
-          >
-            Normal
-          </button>
-          <button
-            onClick={() => setModoCompacto(true)}
-            className={`px-2.5 py-1 text-xs rounded-r-md border-l ${modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
-          >
-            Compacto
-          </button>
+      {/* Toggle modo compacto + mostrar arquivados */}
+      <div className="flex items-center gap-3 text-xs px-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Cards:</span>
+          <div className="inline-flex rounded-md border bg-background">
+            <button
+              onClick={() => setModoCompacto(false)}
+              className={`px-2.5 py-1 text-xs rounded-l-md ${!modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+            >
+              Normal
+            </button>
+            <button
+              onClick={() => setModoCompacto(true)}
+              className={`px-2.5 py-1 text-xs rounded-r-md border-l ${modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+            >
+              Compacto
+            </button>
+          </div>
         </div>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground">
+          <input
+            type="checkbox"
+            checked={mostrarArquivados}
+            onChange={(e) => setMostrarArquivados(e.target.checked)}
+            className="cursor-pointer"
+          />
+          Mostrar arquivados
+        </label>
       </div>
 
       {/* Colunas — altura máx 70vh com scroll INTERNO; header sticky no topo da coluna */}
@@ -722,8 +793,38 @@ export default function Kanban() {
                   <h3 className="text-lg font-bold">{cardDetalhe.titulo}</h3>
                   {cardDetalhe.atrasado && <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px]">Atrasado</Badge>}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setCardAberto(null)}><X className="h-4 w-4" /></Button>
+                <div className="flex items-center gap-1">
+                  {cardDetalhe.arquivado ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => desarquivarCardMut.mutate({ id: cardDetalhe.id })}
+                      disabled={desarquivarCardMut.isPending}
+                      title="Voltar pro quadro"
+                    >
+                      Desarquivar
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => arquivarCardMut.mutate({ id: cardDetalhe.id })}
+                      disabled={arquivarCardMut.isPending}
+                      title="Esconde do quadro sem perder dados"
+                    >
+                      Arquivar
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => setCardAberto(null)}><X className="h-4 w-4" /></Button>
+                </div>
               </div>
+              {cardDetalhe.arquivado && (
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  📦 Este card está arquivado — não aparece no quadro até desarquivar.
+                </div>
+              )}
 
               {/* Edição inline */}
               <div className="space-y-3 rounded-lg border p-3 bg-muted/20">

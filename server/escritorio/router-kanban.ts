@@ -7,7 +7,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
-import { eq, and, desc, asc, or, like, gte, lte, lt, sql } from "drizzle-orm";
+import { eq, and, desc, asc, or, like, gte, lte, lt, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
 
@@ -170,6 +170,8 @@ export const kanbanRouter = router({
       // Filtros de data de criação (range YYYY-MM-DD)
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
+      // Cards arquivados ficam OCULTOS por default (default false).
+      mostrarArquivados: z.boolean().optional(),
     }))
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "kanban", "ver");
@@ -193,73 +195,121 @@ export const kanbanRouter = router({
       const fimHoje = new Date(hoje); fimHoje.setHours(23, 59, 59, 999);
       const fim7 = new Date(hoje); fim7.setDate(fim7.getDate() + 7); fim7.setHours(23, 59, 59, 999);
 
-      const result = [];
-      for (const col of colunas) {
-        const cardConditions: any[] = [eq(kanbanCards.colunaId, col.id)];
-        if (filtrarProprios) cardConditions.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
-        if (input.responsavelId) cardConditions.push(eq(kanbanCards.responsavelId, input.responsavelId));
-        if (input.prioridade) cardConditions.push(eq(kanbanCards.prioridade, input.prioridade));
-        if (input.dataInicio) cardConditions.push(gte(kanbanCards.createdAt, new Date(`${input.dataInicio}T00:00:00`)));
-        if (input.dataFim) cardConditions.push(lte(kanbanCards.createdAt, new Date(`${input.dataFim}T23:59:59`)));
-        if (input.prazoFiltro === "vencidos") cardConditions.push(and(sql`${kanbanCards.prazo} IS NOT NULL`, lt(kanbanCards.prazo, hoje)));
-        else if (input.prazoFiltro === "hoje") cardConditions.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fimHoje)));
-        else if (input.prazoFiltro === "7dias") cardConditions.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fim7)));
-        else if (input.prazoFiltro === "sem_prazo") cardConditions.push(sql`${kanbanCards.prazo} IS NULL`);
+      // Filtros que valem pra TODOS os cards (independente da coluna) — usados
+      // numa única query bulk em vez de loop por coluna (N+1 → 1).
+      const colunasIds = colunas.map((c) => c.id);
+      if (colunasIds.length === 0) {
+        return { funil, colunas: [] };
+      }
 
-        const cards = await db.select().from(kanbanCards)
-          .where(and(...cardConditions))
-          .orderBy(asc(kanbanCards.ordem));
+      const cardCondsGlobal: any[] = [
+        inArray(kanbanCards.colunaId, colunasIds),
+        eq(kanbanCards.escritorioId, perm.escritorioId),
+      ];
+      if (!input.mostrarArquivados) {
+        cardCondsGlobal.push(eq(kanbanCards.arquivado, false));
+      }
+      if (filtrarProprios) cardCondsGlobal.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
+      if (input.responsavelId) cardCondsGlobal.push(eq(kanbanCards.responsavelId, input.responsavelId));
+      if (input.prioridade) cardCondsGlobal.push(eq(kanbanCards.prioridade, input.prioridade));
+      if (input.dataInicio) cardCondsGlobal.push(gte(kanbanCards.createdAt, new Date(`${input.dataInicio}T00:00:00`)));
+      if (input.dataFim) cardCondsGlobal.push(lte(kanbanCards.createdAt, new Date(`${input.dataFim}T23:59:59`)));
+      if (input.prazoFiltro === "vencidos") cardCondsGlobal.push(and(sql`${kanbanCards.prazo} IS NOT NULL`, lt(kanbanCards.prazo, hoje)));
+      else if (input.prazoFiltro === "hoje") cardCondsGlobal.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fimHoje)));
+      else if (input.prazoFiltro === "7dias") cardCondsGlobal.push(and(gte(kanbanCards.prazo, hoje), lte(kanbanCards.prazo, fim7)));
+      else if (input.prazoFiltro === "sem_prazo") cardCondsGlobal.push(sql`${kanbanCards.prazo} IS NULL`);
 
-        // Enriquecer cards com nome do cliente + tags resolvidas.
-        // Tags single-source: se card tem clienteId, mostra contatos.tags;
-        // senão usa kanbanCards.tags próprio (cards sem cliente vinculado).
-        const cardsEnriquecidos = [];
-        for (const card of cards) {
-          let clienteNome: string | null = null;
-          let tagsResolvidas: string | null = card.tags;
-          if (card.clienteId) {
-            const [c] = await db.select({ nome: contatos.nome, tags: contatos.tags }).from(contatos)
-              .where(eq(contatos.id, card.clienteId)).limit(1);
-            clienteNome = c?.nome || null;
-            tagsResolvidas = c?.tags || null;
-          }
-          let responsavelNome: string | null = null;
-          if (card.responsavelId) {
-            const [r] = await db
-              .select({ nome: users.name, email: users.email })
-              .from(colaboradores)
-              .innerJoin(users, eq(colaboradores.userId, users.id))
-              .where(eq(colaboradores.id, card.responsavelId))
-              .limit(1);
-            responsavelNome = r?.nome ?? r?.email ?? null;
-          }
-          // Apelido da ação (se vinculada via processoId) — fallback pro
-          // CNJ se sem apelido. Permite ao usuário ver "Cliente · Ação"
-          // direto no card sem abrir os detalhes.
-          let acaoApelido: string | null = null;
-          if (card.processoId) {
-            const [p] = await db.select({
+      const todosCards = await db
+        .select()
+        .from(kanbanCards)
+        .where(and(...cardCondsGlobal))
+        .orderBy(asc(kanbanCards.colunaId), asc(kanbanCards.ordem));
+
+      // Bulk-load das informações relacionadas (contato, colaborador, processo)
+      // em 3 queries totais — não mais N×3. Antes 1043 cards = ~3000 queries.
+      const clienteIdsSet = new Set<number>();
+      const responsavelIdsSet = new Set<number>();
+      const processoIdsSet = new Set<number>();
+      for (const c of todosCards) {
+        if (c.clienteId) clienteIdsSet.add(c.clienteId);
+        if (c.responsavelId) responsavelIdsSet.add(c.responsavelId);
+        if (c.processoId) processoIdsSet.add(c.processoId);
+      }
+      const clienteIds = [...clienteIdsSet];
+      const responsavelIds = [...responsavelIdsSet];
+      const processoIds = [...processoIdsSet];
+
+      const contatosRows = clienteIds.length > 0
+        ? await db
+            .select({ id: contatos.id, nome: contatos.nome, tags: contatos.tags })
+            .from(contatos)
+            .where(inArray(contatos.id, clienteIds))
+        : [];
+      const respRows = responsavelIds.length > 0
+        ? await db
+            .select({
+              colaboradorId: colaboradores.id,
+              nome: users.name,
+              email: users.email,
+            })
+            .from(colaboradores)
+            .innerJoin(users, eq(colaboradores.userId, users.id))
+            .where(inArray(colaboradores.id, responsavelIds))
+        : [];
+      const procRows = processoIds.length > 0
+        ? await db
+            .select({
+              id: clienteProcessos.id,
               apelido: clienteProcessos.apelido,
               numeroCnj: clienteProcessos.numeroCnj,
-            }).from(clienteProcessos)
-              .where(eq(clienteProcessos.id, card.processoId)).limit(1);
-            acaoApelido = p ? (p.apelido || p.numeroCnj) : null;
-          }
-          cardsEnriquecidos.push({ ...card, tags: tagsResolvidas, clienteNome, responsavelNome, acaoApelido });
-        }
-
-        // Filtro por tag aplicado APÓS o enrich (tags vêm do cliente quando
-        // card tem clienteId). Compara case-insensitive em qualquer item da
-        // lista CSV de tags.
-        const cardsFiltrados = input.tag
-          ? cardsEnriquecidos.filter((c) => {
-              const lista = (c.tags || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-              return lista.includes(input.tag!.toLowerCase());
             })
-          : cardsEnriquecidos;
+            .from(clienteProcessos)
+            .where(inArray(clienteProcessos.id, processoIds))
+        : [];
 
-        result.push({ ...col, cards: cardsFiltrados });
+      const mapContato = new Map<number, { nome: string | null; tags: string | null }>();
+      for (const c of contatosRows) mapContato.set(c.id, { nome: c.nome, tags: c.tags });
+      const mapResp = new Map<number, string | null>();
+      for (const r of respRows) mapResp.set(r.colaboradorId, r.nome ?? r.email ?? null);
+      const mapProc = new Map<number, string | null>();
+      for (const p of procRows) mapProc.set(p.id, p.apelido || p.numeroCnj || null);
+
+      // Agrupa cards por coluna (lookup local, O(N)).
+      const cardsPorColuna = new Map<number, any[]>();
+      for (const card of todosCards) {
+        const ctt = card.clienteId ? mapContato.get(card.clienteId) : null;
+        const clienteNome = ctt?.nome ?? null;
+        // Tags single-source: cliente vence card próprio quando há cliente.
+        const tagsResolvidas = card.clienteId ? (ctt?.tags ?? null) : card.tags;
+        const responsavelNome = card.responsavelId ? mapResp.get(card.responsavelId) ?? null : null;
+        const acaoApelido = card.processoId ? mapProc.get(card.processoId) ?? null : null;
+        const enriquecido = {
+          ...card,
+          tags: tagsResolvidas,
+          clienteNome,
+          responsavelNome,
+          acaoApelido,
+        };
+        const arr = cardsPorColuna.get(card.colunaId) ?? [];
+        arr.push(enriquecido);
+        cardsPorColuna.set(card.colunaId, arr);
       }
+
+      // Filtro por tag (client-side aqui pois depende do enriquecimento).
+      const tagFiltro = input.tag?.toLowerCase();
+      const result = colunas.map((col) => {
+        let cardsCol = cardsPorColuna.get(col.id) ?? [];
+        if (tagFiltro) {
+          cardsCol = cardsCol.filter((c) => {
+            const lista = (c.tags || "")
+              .split(",")
+              .map((s: string) => s.trim().toLowerCase())
+              .filter(Boolean);
+            return lista.includes(tagFiltro);
+          });
+        }
+        return { ...col, cards: cardsCol };
+      });
 
       return { funil, colunas: result };
     }),
@@ -1046,6 +1096,47 @@ export const kanbanRouter = router({
           .set({ ordem: i + 1 })
           .where(eq(kanbanColunas.id, input.idsOrdenados[i]));
       }
+      return { success: true };
+    }),
+
+  /**
+   * Arquiva o card: some do quadro (obterFunil filtra arquivado=false por
+   * default), mas dados continuam intactos no DB. Reversível via desarquivar.
+   * Comportamento: marca arquivado=true + grava timestamp em arquivadoEm.
+   */
+  arquivarCard: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (!perm.verTodos && perm.verProprios) {
+        const ok = await podeMexerNoCard(db, input.id, perm.escritorioId, perm.colaboradorId);
+        if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode arquivar seus próprios cards." });
+      }
+
+      await db
+        .update(kanbanCards)
+        .set({ arquivado: true, arquivadoEm: new Date() })
+        .where(and(eq(kanbanCards.id, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
+      return { success: true };
+    }),
+
+  /** Reverte arquivamento — card volta pro quadro. */
+  desarquivarCard: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(kanbanCards)
+        .set({ arquivado: false, arquivadoEm: null })
+        .where(and(eq(kanbanCards.id, input.id), eq(kanbanCards.escritorioId, perm.escritorioId)));
       return { success: true };
     }),
 
