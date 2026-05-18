@@ -17,6 +17,32 @@ import { consume as rateLimitConsume } from "../_core/rate-limit";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("admin-router");
+
+/** JSON array parse seguro (string vinda do DB pode estar serializada). */
+function safeJsonArray(raw: unknown): unknown[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Gera slug do nome do plano (remove acentos, espaços, etc). */
+function gerarSlugPlano(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
 import {
   getDb,
   getAllUsers,
@@ -32,6 +58,9 @@ import {
   getActiveSubscription,
 } from "../db";
 import { PLANS } from "../billing/products";
+import { invalidarCachePlanos } from "../billing/planos-repo";
+import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
+import { PLANOS_PADRAO_SLUGS } from "@shared/planos-types";
 import { isAsaasBillingConfigured } from "../billing/asaas-billing-client";
 import {
   users,
@@ -1062,272 +1091,254 @@ export const adminRouter = router({
     }),
 
   // ═══════════════════════════════════════════════════════════════════════
-  // PLANOS DINÂMICOS — Sprint 3
+  // PLANOS — catálogo gerenciado via tabela `planos` (Fase 1)
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Lista os planos com overrides aplicados + planos customizados
-   * criados pelo admin. Usado pela página /admin/planos.
+   * Lista todos os planos da tabela (inclui ocultos). Usado pela UI
+   * /admin/planos pra grid de edição.
    */
   listarPlanosEditaveis: adminProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
+    const { planos } = await import("../../drizzle/schema");
+    const rows = await db.select().from(planos).orderBy(planos.ordem);
 
-    const { planosOverrides } = await import("../../drizzle/schema");
-    const overrides = await db.select().from(planosOverrides);
-    const overrideMap = new Map(overrides.map((o) => [o.planId, o]));
-    const defaultIds = new Set(PLANS.map((p) => p.id));
+    return rows.map((row) => {
+      const modulosRaw = Array.isArray(row.modulosLiberados)
+        ? row.modulosLiberados
+        : safeJsonArray(row.modulosLiberados);
+      const featuresRaw = Array.isArray(row.features)
+        ? row.features
+        : safeJsonArray(row.features);
+      const modulos = modulosRaw.filter((m): m is string => typeof m === "string");
+      const features = featuresRaw.filter((f): f is string => typeof f === "string");
+      const slugProtegido = (PLANOS_PADRAO_SLUGS as readonly string[]).includes(row.slug);
 
-    // Planos hardcoded (com overrides se houver)
-    const planosHardcoded = PLANS.map((plan) => {
-      const ov = overrideMap.get(plan.id);
       return {
-        id: plan.id,
-        isCustom: false,
-        // Hardcoded (default)
-        defaultName: plan.name,
-        defaultDescription: plan.description,
-        defaultPriceMonthly: plan.priceMonthly,
-        defaultPriceYearly: plan.priceYearly,
-        defaultFeatures: plan.features as string[],
-        defaultPopular: plan.popular ?? false,
-        // Atual (com override)
-        name: ov?.name ?? plan.name,
-        description: ov?.description ?? plan.description,
-        priceMonthly: ov?.priceMonthly ?? plan.priceMonthly,
-        priceYearly: ov?.priceYearly ?? plan.priceYearly,
-        features: ov?.features ? (() => {
-          try { return JSON.parse(ov.features) as string[]; } catch { return plan.features as string[]; }
-        })() : (plan.features as string[]),
-        popular: ov?.popular ?? plan.popular ?? false,
-        oculto: ov?.oculto ?? false,
-        hasOverride: !!ov,
-        updatedAt: ov?.updatedAt,
+        id: row.id,
+        slug: row.slug,
+        nome: row.nome,
+        descricao: row.descricao,
+        publicoAlvo: row.publicoAlvo,
+        precoMensalCentavos: row.precoMensalCentavos,
+        precoAnualCentavos: row.precoAnualCentavos,
+        trialDias: row.trialDias,
+        maxUsuarios: row.maxUsuarios,
+        maxArmazenamentoMb: row.maxArmazenamentoMb,
+        maxClientes: row.maxClientes,
+        maxConexoesWhatsapp: row.maxConexoesWhatsapp,
+        maxAgentesIa: row.maxAgentesIa,
+        maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
+        creditosCalculosMes: row.creditosCalculosMes,
+        modulosLiberados: modulos.filter(ehModuloValido),
+        features,
+        popular: row.popular,
+        oculto: row.oculto,
+        ordem: row.ordem,
+        slugProtegido,
+        atualizadoEm: row.atualizadoEm,
       };
     });
-
-    // Planos customizados (criados pelo admin — planId não existe em PLANS)
-    const planosCustom = overrides
-      .filter((ov) => !defaultIds.has(ov.planId))
-      .map((ov) => {
-        const features: string[] = ov.features ? (() => {
-          try { return JSON.parse(ov.features) as string[]; } catch { return []; }
-        })() : [];
-        return {
-          id: ov.planId,
-          isCustom: true,
-          defaultName: ov.name ?? "",
-          defaultDescription: ov.description ?? "",
-          defaultPriceMonthly: ov.priceMonthly ?? 0,
-          defaultPriceYearly: ov.priceYearly ?? 0,
-          defaultFeatures: features,
-          defaultPopular: ov.popular ?? false,
-          name: ov.name ?? "",
-          description: ov.description ?? "",
-          priceMonthly: ov.priceMonthly ?? 0,
-          priceYearly: ov.priceYearly ?? 0,
-          features,
-          popular: ov.popular ?? false,
-          oculto: ov.oculto ?? false,
-          hasOverride: true,
-          updatedAt: ov.updatedAt,
-        };
-      });
-
-    return [...planosHardcoded, ...planosCustom];
   }),
 
-  /**
-   * Cria um plano totalmente personalizado (não existe em PLANS hardcoded).
-   * Gera um planId baseado no nome + timestamp pra evitar colisão.
-   */
-  criarPlanoPersonalizado: adminProcedure
+  /** Cria plano novo. Gera slug imutável a partir do nome (+ sufixo se colidir). */
+  criarPlano: adminProcedure
     .input(z.object({
-      name: z.string().min(2).max(100),
-      description: z.string().max(500).optional(),
-      priceMonthly: z.number().int().min(0),
-      priceYearly: z.number().int().min(0),
-      features: z.array(z.string()).optional(),
-      popular: z.boolean().optional(),
-      oculto: z.boolean().optional(),
+      nome: z.string().min(2).max(100),
+      descricao: z.string().max(255).optional(),
+      publicoAlvo: z.string().max(255).optional(),
+      precoMensalCentavos: z.number().int().min(0),
+      precoAnualCentavos: z.number().int().min(0).nullable().optional(),
+      trialDias: z.number().int().min(0).max(90).default(0),
+      maxUsuarios: z.number().int().min(1).default(1),
+      maxArmazenamentoMb: z.number().int().min(0).default(100),
+      maxClientes: z.number().int().min(0).nullable().optional(),
+      maxConexoesWhatsapp: z.number().int().min(0).default(0),
+      maxAgentesIa: z.number().int().min(0).default(0),
+      maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
+      creditosCalculosMes: z.number().int().min(0).default(0),
+      modulosLiberados: z.array(z.string()).default([]),
+      features: z.array(z.string()).default([]),
+      popular: z.boolean().default(false),
+      oculto: z.boolean().default(false),
+      ordem: z.number().int().min(0).default(99),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Slug do nome + sufixo random pra id único
-      const slug = input.name
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 40);
-      const planId = `${slug}-${Date.now().toString(36).slice(-5)}`;
+      const modulosValidos = input.modulosLiberados.filter(ehModuloValido);
 
-      // Verifica se não colide com hardcoded
-      if (PLANS.some((p) => p.id === planId)) {
-        throw new Error("ID de plano duplicado — tente outro nome");
+      const baseSlug = gerarSlugPlano(input.nome);
+      if (!baseSlug) throw new Error("Nome inválido — não foi possível gerar slug");
+
+      const { planos } = await import("../../drizzle/schema");
+      let slug = baseSlug;
+      const existente = await db.select({ id: planos.id }).from(planos).where(eq(planos.slug, slug)).limit(1);
+      if (existente.length > 0) {
+        slug = `${baseSlug}-${Date.now().toString(36).slice(-5)}`;
       }
 
-      const { planosOverrides } = await import("../../drizzle/schema");
-      await db.insert(planosOverrides).values({
-        planId,
-        name: input.name,
-        description: input.description ?? null,
-        priceMonthly: input.priceMonthly,
-        priceYearly: input.priceYearly,
-        features: input.features ? JSON.stringify(input.features) : null,
-        popular: input.popular ?? false,
-        oculto: input.oculto ?? false,
-        updatedBy: ctx.user.id,
+      await db.insert(planos).values({
+        slug,
+        nome: input.nome,
+        descricao: input.descricao ?? null,
+        publicoAlvo: input.publicoAlvo ?? null,
+        precoMensalCentavos: input.precoMensalCentavos,
+        precoAnualCentavos: input.precoAnualCentavos ?? null,
+        trialDias: input.trialDias,
+        maxUsuarios: input.maxUsuarios,
+        maxArmazenamentoMb: input.maxArmazenamentoMb,
+        maxClientes: input.maxClientes ?? null,
+        maxConexoesWhatsapp: input.maxConexoesWhatsapp,
+        maxAgentesIa: input.maxAgentesIa,
+        maxMonitoramentosProcessos: input.maxMonitoramentosProcessos ?? null,
+        creditosCalculosMes: input.creditosCalculosMes,
+        modulosLiberados: modulosValidos,
+        features: input.features,
+        popular: input.popular,
+        oculto: input.oculto,
+        ordem: input.ordem,
+        criadoPor: ctx.user.id,
+        atualizadoPor: ctx.user.id,
       });
+
+      invalidarCachePlanos();
 
       await registrarAuditoria({
         ctx,
         acao: "plano.criar",
         alvoTipo: "plano",
-        alvoNome: planId,
-        detalhes: {
-          name: input.name,
-          priceMonthly: input.priceMonthly,
-        },
+        alvoNome: slug,
+        detalhes: { nome: input.nome, preco: input.precoMensalCentavos },
       });
 
-      return { success: true, planId, mensagem: `Plano "${input.name}" criado` };
+      return { success: true, slug, mensagem: `Plano "${input.nome}" criado` };
     }),
 
   /**
-   * Deleta um plano personalizado. NÃO permite deletar planos hardcoded
-   * (use resetarOverridePlano pra isso). Falha se houver assinaturas
-   * ativas usando o plano.
-   */
-  deletarPlanoPersonalizado: adminProcedure
-    .input(z.object({ planId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-
-      // Blinda contra deletar plano hardcoded
-      if (PLANS.some((p) => p.id === input.planId)) {
-        throw new Error("Não é possível deletar plano nativo. Use 'Resetar ao default' pra remover customizações.");
-      }
-
-      // Verifica se tem assinaturas ativas
-      const subs = await db
-        .select({ id: subscriptionsTable.id })
-        .from(subscriptionsTable)
-        .where(
-          and(
-            eq(subscriptionsTable.planId, input.planId),
-            eq(subscriptionsTable.status, "active"),
-          ),
-        )
-        .limit(1);
-
-      if (subs.length > 0) {
-        throw new Error("Existem assinaturas ativas neste plano — cancele primeiro.");
-      }
-
-      const { planosOverrides } = await import("../../drizzle/schema");
-      await db.delete(planosOverrides).where(eq(planosOverrides.planId, input.planId));
-
-      await registrarAuditoria({
-        ctx,
-        acao: "plano.deletar",
-        alvoTipo: "plano",
-        alvoNome: input.planId,
-      });
-
-      return { success: true };
-    }),
-
-  /**
-   * Edita um plano (cria ou atualiza override). Campos null = remove
-   * o override desse campo (volta ao default).
+   * Edita plano por slug. Slug em si não pode mudar (é FK lógica em
+   * subscriptions.planId). Todos os outros campos editáveis.
    */
   editarPlano: adminProcedure
     .input(z.object({
-      planId: z.string(),
-      name: z.string().max(100).nullable().optional(),
-      description: z.string().max(500).nullable().optional(),
-      priceMonthly: z.number().int().min(0).nullable().optional(),
-      priceYearly: z.number().int().min(0).nullable().optional(),
-      features: z.array(z.string()).nullable().optional(),
-      popular: z.boolean().nullable().optional(),
+      slug: z.string().min(1),
+      nome: z.string().min(2).max(100).optional(),
+      descricao: z.string().max(255).nullable().optional(),
+      publicoAlvo: z.string().max(255).nullable().optional(),
+      precoMensalCentavos: z.number().int().min(0).optional(),
+      precoAnualCentavos: z.number().int().min(0).nullable().optional(),
+      trialDias: z.number().int().min(0).max(90).optional(),
+      maxUsuarios: z.number().int().min(1).optional(),
+      maxArmazenamentoMb: z.number().int().min(0).optional(),
+      maxClientes: z.number().int().min(0).nullable().optional(),
+      maxConexoesWhatsapp: z.number().int().min(0).optional(),
+      maxAgentesIa: z.number().int().min(0).optional(),
+      maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
+      creditosCalculosMes: z.number().int().min(0).optional(),
+      modulosLiberados: z.array(z.string()).optional(),
+      features: z.array(z.string()).optional(),
+      popular: z.boolean().optional(),
       oculto: z.boolean().optional(),
+      ordem: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const { planos } = await import("../../drizzle/schema");
 
-      // Validar que planId existe no hardcoded
-      const planoBase = PLANS.find((p) => p.id === input.planId);
-      if (!planoBase) throw new Error(`Plano "${input.planId}" não existe`);
+      const [existente] = await db.select().from(planos).where(eq(planos.slug, input.slug)).limit(1);
+      if (!existente) throw new Error(`Plano "${input.slug}" não encontrado`);
 
-      const { planosOverrides } = await import("../../drizzle/schema");
-      const [existing] = await db
-        .select()
-        .from(planosOverrides)
-        .where(eq(planosOverrides.planId, input.planId))
-        .limit(1);
-
-      const valores = {
-        name: input.name === null ? null : input.name,
-        description: input.description === null ? null : input.description,
-        priceMonthly: input.priceMonthly === null ? null : input.priceMonthly,
-        priceYearly: input.priceYearly === null ? null : input.priceYearly,
-        features: input.features === null ? null : (input.features ? JSON.stringify(input.features) : null),
-        popular: input.popular === null ? null : input.popular,
-        oculto: input.oculto ?? false,
-        updatedBy: ctx.user.id,
+      const dadosUpdate: Record<string, unknown> = {
+        atualizadoPor: ctx.user.id,
       };
+      if (input.nome !== undefined) dadosUpdate.nome = input.nome;
+      if (input.descricao !== undefined) dadosUpdate.descricao = input.descricao;
+      if (input.publicoAlvo !== undefined) dadosUpdate.publicoAlvo = input.publicoAlvo;
+      if (input.precoMensalCentavos !== undefined) dadosUpdate.precoMensalCentavos = input.precoMensalCentavos;
+      if (input.precoAnualCentavos !== undefined) dadosUpdate.precoAnualCentavos = input.precoAnualCentavos;
+      if (input.trialDias !== undefined) dadosUpdate.trialDias = input.trialDias;
+      if (input.maxUsuarios !== undefined) dadosUpdate.maxUsuarios = input.maxUsuarios;
+      if (input.maxArmazenamentoMb !== undefined) dadosUpdate.maxArmazenamentoMb = input.maxArmazenamentoMb;
+      if (input.maxClientes !== undefined) dadosUpdate.maxClientes = input.maxClientes;
+      if (input.maxConexoesWhatsapp !== undefined) dadosUpdate.maxConexoesWhatsapp = input.maxConexoesWhatsapp;
+      if (input.maxAgentesIa !== undefined) dadosUpdate.maxAgentesIa = input.maxAgentesIa;
+      if (input.maxMonitoramentosProcessos !== undefined) dadosUpdate.maxMonitoramentosProcessos = input.maxMonitoramentosProcessos;
+      if (input.creditosCalculosMes !== undefined) dadosUpdate.creditosCalculosMes = input.creditosCalculosMes;
+      if (input.modulosLiberados !== undefined) dadosUpdate.modulosLiberados = input.modulosLiberados.filter(ehModuloValido);
+      if (input.features !== undefined) dadosUpdate.features = input.features;
+      if (input.popular !== undefined) dadosUpdate.popular = input.popular;
+      if (input.oculto !== undefined) dadosUpdate.oculto = input.oculto;
+      if (input.ordem !== undefined) dadosUpdate.ordem = input.ordem;
 
-      if (existing) {
-        await db
-          .update(planosOverrides)
-          .set(valores)
-          .where(eq(planosOverrides.planId, input.planId));
-      } else {
-        await db.insert(planosOverrides).values({
-          planId: input.planId,
-          ...valores,
-        });
-      }
+      await db.update(planos).set(dadosUpdate).where(eq(planos.slug, input.slug));
+
+      invalidarCachePlanos();
 
       await registrarAuditoria({
         ctx,
         acao: "plano.editar",
         alvoTipo: "plano",
-        alvoNome: input.planId,
-        detalhes: {
-          priceMonthly: valores.priceMonthly,
-          priceYearly: valores.priceYearly,
-          oculto: valores.oculto,
-        },
+        alvoNome: input.slug,
+        detalhes: dadosUpdate,
       });
 
       return { success: true, mensagem: "Plano atualizado" };
     }),
 
-  /** Remove override de um plano (volta tudo ao default do código) */
-  resetarOverridePlano: adminProcedure
-    .input(z.object({ planId: z.string() }))
+  /**
+   * Deleta plano. Não permite:
+   *   1. Deletar slugs default (free/basico/intermediario/completo)
+   *   2. Deletar plano com assinantes ativos
+   */
+  deletarPlano: adminProcedure
+    .input(z.object({ slug: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      const { planosOverrides } = await import("../../drizzle/schema");
-      await db.delete(planosOverrides).where(eq(planosOverrides.planId, input.planId));
+
+      if ((PLANOS_PADRAO_SLUGS as readonly string[]).includes(input.slug)) {
+        throw new Error("Planos default não podem ser deletados — apenas editados ou ocultados.");
+      }
+
+      const subs = await db
+        .select({ id: subscriptionsTable.id })
+        .from(subscriptionsTable)
+        .where(
+          and(
+            eq(subscriptionsTable.planId, input.slug),
+            eq(subscriptionsTable.status, "active"),
+          ),
+        )
+        .limit(1);
+      if (subs.length > 0) throw new Error("Existem assinaturas ativas neste plano — cancele primeiro.");
+
+      const { planos } = await import("../../drizzle/schema");
+      await db.delete(planos).where(eq(planos.slug, input.slug));
+
+      invalidarCachePlanos();
 
       await registrarAuditoria({
         ctx,
-        acao: "plano.resetar",
+        acao: "plano.deletar",
         alvoTipo: "plano",
-        alvoNome: input.planId,
+        alvoNome: input.slug,
       });
 
       return { success: true };
     }),
+
+  /** Catálogo de módulos pra render do dialog de edição. */
+  listarModulosApp: adminProcedure.query(() => {
+    return MODULOS_APP.map((m) => ({
+      id: m.id,
+      nome: m.nome,
+      descricao: m.descricao,
+      obrigatorio: m.obrigatorio,
+    }));
+  }),
 
   // ═══════════════════════════════════════════════════════════════════════
   // CUPONS DE DESCONTO — Sprint 3

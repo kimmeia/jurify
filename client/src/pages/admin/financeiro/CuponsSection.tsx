@@ -177,16 +177,16 @@ function CriarCupomDialog({
             <Label>Planos elegíveis</Label>
             <div className="flex flex-wrap gap-2">
               {planosEditaveis?.map((p) => {
-                const selected = planosSelecionados.includes(p.id);
+                const selected = planosSelecionados.includes(p.slug);
                 return (
                   <button
-                    key={p.id}
+                    key={p.slug}
                     type="button"
                     onClick={() => {
                       if (selected) {
-                        setPlanosSelecionados(planosSelecionados.filter((x) => x !== p.id));
+                        setPlanosSelecionados(planosSelecionados.filter((x) => x !== p.slug));
                       } else {
-                        setPlanosSelecionados([...planosSelecionados, p.id]);
+                        setPlanosSelecionados([...planosSelecionados, p.slug]);
                       }
                     }}
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
@@ -195,7 +195,7 @@ function CriarCupomDialog({
                         : "bg-background text-muted-foreground border-muted hover:border-primary/50"
                     }`}
                   >
-                    {p.name}
+                    {p.nome}
                   </button>
                 );
               })}

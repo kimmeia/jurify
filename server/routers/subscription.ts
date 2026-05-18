@@ -174,18 +174,57 @@ export const subscriptionRouter = router({
     return getUserSubscriptions(ctx.user.id);
   }),
 
-  /** Get available plans (todos recorrentes — não tem mais avulso) */
+  /**
+   * Lista planos visíveis na LP/checkout. Lê da tabela `planos` (fonte de
+   * verdade) com shape rico — slug+nome+limites+módulos+trial.
+   *
+   * Mantém campos legados (id/name/priceMonthly/priceYearly) como aliases pra
+   * não quebrar callers existentes (Plans.tsx, CheckoutSuccess, etc).
+   */
   plans: publicProcedure.query(async () => {
-    const plans = await getPlansResolved(false); // só os visíveis
-    return plans.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
+    const { getPlanosVisiveis } = await import("../billing/planos-repo");
+    const planos = await getPlanosVisiveis();
+
+    if (planos.length === 0) {
+      // Fallback estático (DB vazio ou migration não rodou) — mantém compat
+      const fallback = await getPlansResolved(false);
+      return fallback.map((p) => ({
+        id: p.id,
+        slug: p.id,
+        name: p.name,
+        nome: p.name,
+        description: p.description,
+        descricao: p.description,
+        publicoAlvo: null as string | null,
+        features: p.features,
+        priceMonthly: p.priceMonthly,
+        precoMensalCentavos: p.priceMonthly,
+        priceYearly: p.priceYearly,
+        precoAnualCentavos: p.priceYearly,
+        currency: p.currency,
+        popular: p.popular ?? false,
+        trialDias: 0,
+        modulosLiberados: [] as string[],
+      }));
+    }
+
+    return planos.map((p) => ({
+      id: p.slug,
+      slug: p.slug,
+      name: p.nome,
+      nome: p.nome,
+      description: p.descricao ?? "",
+      descricao: p.descricao,
+      publicoAlvo: p.publicoAlvo,
       features: p.features,
-      priceMonthly: p.priceMonthly,
-      priceYearly: p.priceYearly,
-      currency: p.currency,
-      popular: p.popular ?? false,
+      priceMonthly: p.precoMensalCentavos,
+      precoMensalCentavos: p.precoMensalCentavos,
+      priceYearly: p.precoAnualCentavos ?? p.precoMensalCentavos * 12,
+      precoAnualCentavos: p.precoAnualCentavos,
+      currency: "brl",
+      popular: p.popular,
+      trialDias: p.trialDias,
+      modulosLiberados: p.modulosLiberados,
     }));
   }),
 
