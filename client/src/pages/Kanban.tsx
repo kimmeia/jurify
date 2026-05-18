@@ -248,6 +248,88 @@ export default function Kanban() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Reordena cards dentro de uma coluna (drag dropado sobre outro card).
+  // Faz UPDATE em massa da ordem nova; usa optimistic update no cache local.
+  const reordenarCardsMut = (trpc as any).kanban.reordenarCardsEmColuna.useMutation({
+    onMutate: async (vars: { colunaId: number; idsOrdenados: number[] }) => {
+      if (!funilAtivo || !utilsTrpc?.kanban?.obterFunil) return;
+      const queryKey = { funilId: funilAtivo, ...filtros, mostrarArquivados };
+      await utilsTrpc.kanban.obterFunil.cancel(queryKey);
+      const anterior = utilsTrpc.kanban.obterFunil.getData(queryKey);
+      if (!anterior) return { anterior };
+
+      const novasColunas = (anterior.colunas || []).map((col: any) => {
+        if (col.id !== vars.colunaId) return col;
+        const porId = new Map<number, any>();
+        for (const c of (col.cards || [])) porId.set(c.id, c);
+        const reordenados = vars.idsOrdenados
+          .map((id) => porId.get(id))
+          .filter(Boolean);
+        return { ...col, cards: reordenados };
+      });
+      utilsTrpc.kanban.obterFunil.setData(queryKey, { ...anterior, colunas: novasColunas });
+      return { anterior };
+    },
+    onError: (_e: any, _vars: any, ctx: any) => {
+      if (ctx?.anterior && funilAtivo) {
+        utilsTrpc?.kanban?.obterFunil?.setData(
+          { funilId: funilAtivo, ...filtros, mostrarArquivados },
+          ctx.anterior,
+        );
+      }
+    },
+    onSettled: () => refetchFunil(),
+  });
+
+  // Card sobre o qual o usuário está pairando o drag (pra mostrar indicador).
+  const [dragOverCardId, setDragOverCardId] = useState<number | null>(null);
+
+  // Drop sobre um card específico = colocar o arrastado ANTES desse card.
+  // Funciona tanto pra reorder na mesma coluna quanto pra mover entre colunas
+  // colocando em posição específica.
+  const handleDropOnCard = (cardAlvoId: number, colunaAlvoId: number) => {
+    if (!dragCardId || dragCardId === cardAlvoId) {
+      setDragOverCardId(null);
+      return;
+    }
+    const cardIdLocal = dragCardId;
+    setDragCardId(null);
+    setDragOverCardId(null);
+
+    // Acha a coluna origem (de onde o card está saindo) e a alvo.
+    const colunaAlvo = colunas.find((c: any) => c.id === colunaAlvoId);
+    if (!colunaAlvo) return;
+    const colunaOrigem = colunas.find((c: any) =>
+      (c.cards || []).some((k: any) => k.id === cardIdLocal),
+    );
+
+    // Constrói nova ordem da coluna alvo: remove o card-arrastado se já
+    // estava lá (mesma coluna) e insere antes do card-alvo.
+    const cardsAlvo = (colunaAlvo.cards || []).filter((c: any) => c.id !== cardIdLocal);
+    const idxAlvo = cardsAlvo.findIndex((c: any) => c.id === cardAlvoId);
+    const novosIds: number[] = [];
+    for (let i = 0; i < cardsAlvo.length; i++) {
+      if (i === idxAlvo) novosIds.push(cardIdLocal);
+      novosIds.push(cardsAlvo[i].id);
+    }
+    // Se idxAlvo for -1 (segurança), insere no fim.
+    if (idxAlvo === -1) novosIds.push(cardIdLocal);
+
+    // Se mudou de coluna, precisamos mover ANTES de reordenar.
+    if (colunaOrigem && colunaOrigem.id !== colunaAlvoId) {
+      moverCardMut.mutate(
+        { cardId: cardIdLocal, colunaDestinoId: colunaAlvoId },
+        {
+          onSettled: () => {
+            reordenarCardsMut.mutate({ colunaId: colunaAlvoId, idsOrdenados: novosIds });
+          },
+        },
+      );
+    } else {
+      reordenarCardsMut.mutate({ colunaId: colunaAlvoId, idsOrdenados: novosIds });
+    }
+  };
+
   const handleColunaDropOnTarget = (alvoColunaId: number) => {
     if (!dragColunaId || dragColunaId === alvoColunaId) {
       setDragColunaId(null);
@@ -499,14 +581,20 @@ export default function Kanban() {
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setNovoCardOpen(col.id)}>
                   <Plus className="h-3 w-3" />
                 </Button>
-                {col.tipo === "conclusao" && (col.cards?.length ?? 0) > 0 && (
+                {col.tipo === "conclusao" && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-amber-600 hover:text-amber-700"
-                    title={`Arquivar todos os ${col.cards.length} cards desta coluna`}
+                    className={`h-6 w-6 p-0 ${(col.cards?.length ?? 0) > 0 ? "text-amber-600 hover:text-amber-700" : "text-muted-foreground/50"}`}
+                    title={
+                      (col.cards?.length ?? 0) > 0
+                        ? `Arquivar todos os ${col.cards.length} cards desta coluna`
+                        : "Sem cards pra arquivar"
+                    }
+                    disabled={(col.cards?.length ?? 0) === 0 || arquivarLoteMut.isPending}
                     onClick={() => {
-                      const total = col.cards.length;
+                      const total = col.cards?.length ?? 0;
+                      if (total === 0) return;
                       if (confirm(`Arquivar todos os ${total} card(s) de "${col.nome}"? Eles somem do quadro mas continuam consultáveis em "Mostrar arquivados".`)) {
                         arquivarLoteMut.mutate({ ids: col.cards.map((c: any) => c.id) });
                       }
@@ -539,12 +627,39 @@ export default function Kanban() {
                 <div
                   key={card.id}
                   draggable
-                  onDragStart={() => setDragCardId(card.id)}
-                  onDragEnd={() => setDragCardId(null)}
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    setDragCardId(card.id);
+                  }}
+                  onDragEnd={() => {
+                    setDragCardId(null);
+                    setDragOverCardId(null);
+                  }}
+                  onDragOver={(e) => {
+                    // Marca esse card como "drop target" se há outro card sendo arrastado.
+                    if (dragCardId && dragCardId !== card.id) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDragOverCardId(card.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverCardId === card.id) setDragOverCardId(null);
+                  }}
+                  onDrop={(e) => {
+                    if (!dragCardId || dragCardId === card.id) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDropOnCard(card.id, col.id);
+                  }}
                   onClick={() => setCardAberto(card.id)}
                   className={`group rounded-lg border border-l-4 bg-card shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${
                     modoCompacto ? "px-2 py-1.5" : "p-3"
-                  } ${PRIORIDADE_COR[card.prioridade] || ""}`}
+                  } ${PRIORIDADE_COR[card.prioridade] || ""} ${
+                    dragOverCardId === card.id && dragCardId && dragCardId !== card.id
+                      ? "ring-2 ring-primary ring-offset-1"
+                      : ""
+                  }`}
                   title={modoCompacto ? card.titulo : undefined}
                 >
                   <div className="flex items-start justify-between gap-1">
