@@ -14,6 +14,8 @@ import {
   listarColaboradores,
   atualizarColaborador,
   removerColaborador,
+  restaurarColaborador,
+  listarColaboradoresRemovidos,
   criarConvite,
   listarConvites,
   aceitarConvite,
@@ -310,7 +312,40 @@ export const configuracoesRouter = router({
         ctx.user.id, "equipe", "excluir",
         "Sem permissão para remover colaboradores.",
       );
-      await removerColaborador(input.colaboradorId, result.escritorio.id);
+      await removerColaborador(
+        input.colaboradorId,
+        result.escritorio.id,
+        result.colaborador.id,
+      );
+      return { success: true };
+    }),
+
+  /** Lista colaboradores que foram removidos (soft delete). Mostra na UI
+   *  uma seção "Removidos" com botão Restaurar pra reverter exclusões
+   *  feitas por engano. */
+  listarRemovidos: protectedProcedure.query(async ({ ctx }) => {
+    const result = await getEscritorioPorUsuario(ctx.user.id);
+    if (!result) return [];
+    await exigirPermissao(
+      ctx.user.id, "equipe", "ver",
+      "Sem permissão para ver a equipe.",
+    );
+    return listarColaboradoresRemovidos(result.escritorio.id);
+  }),
+
+  /** Restaura um colaborador removido. Reverte ativo=true, limpa
+   *  removidoEm/removidoPor. Histórico (cards, comentários, etc) já
+   *  estava intacto graças ao soft delete. */
+  restaurarColaborador: protectedProcedure
+    .input(z.object({ colaboradorId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await getEscritorioPorUsuario(ctx.user.id);
+      if (!result) throw new Error("Escritório não encontrado.");
+      await exigirPermissao(
+        ctx.user.id, "equipe", "excluir",
+        "Sem permissão para restaurar colaboradores.",
+      );
+      await restaurarColaborador(input.colaboradorId, result.escritorio.id);
       return { success: true };
     }),
 

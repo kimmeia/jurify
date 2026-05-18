@@ -14,8 +14,8 @@
 import { createLogger } from "./logger";
 const log = createLogger("email");
 
-const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://app.jurify.com.br";
-const FROM_EMAIL = process.env.FROM_EMAIL || "Jurify <noreply@jurify.com.br>";
+const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://app.juridflow.com.br";
+const FROM_EMAIL = process.env.FROM_EMAIL || "Jurify <noreply@juridflow.com.br>";
 
 interface EmailOptions {
   to: string;
@@ -138,7 +138,45 @@ async function getResendApiKey(): Promise<ResendKeyResult> {
 }
 
 export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string; logId?: number | null }> {
+  // Validações defensivas — sem isso já tivemos casos em que o Resend
+  // retornou 422 "Missing 'to' field" porque options.to chegou vazio,
+  // gastando rate-limit à toa. Falhar cedo dá erro acionável pro caller.
+  if (!options || typeof options !== "object") {
+    log.error({}, "enviarEmail chamado sem options");
+    return { success: false, error: "Email options ausente." };
+  }
   const tipo = options.tipo ?? "outro";
+  if (!options.to || typeof options.to !== "string" || !options.to.trim()) {
+    log.error({ options }, "enviarEmail chamado sem 'to' válido");
+    const erroMsg = "Destinatário (to) ausente.";
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: typeof options.to === "string" ? options.to : "(vazio)",
+      assunto: options.subject ?? "(vazio)",
+      status: "falha",
+      erro: erroMsg,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html ?? "", text: options.text },
+    });
+    return { success: false, error: erroMsg, logId };
+  }
+  if (!options.subject?.trim() || !options.html?.trim()) {
+    log.error({ subject: options.subject, hasHtml: !!options.html }, "enviarEmail sem subject/html");
+    const erroMsg = "Email sem assunto ou corpo.";
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject ?? "(vazio)",
+      status: "falha",
+      erro: erroMsg,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html ?? "", text: options.text },
+    });
+    return { success: false, error: erroMsg, logId };
+  }
+
   const { apiKey, fonte, diagnostico } = await getResendApiKey();
 
   if (!apiKey) {
@@ -180,19 +218,38 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
 
     if (!res.ok) {
       const err = await res.text();
-      log.error({ status: res.status, err }, "Resend retornou erro");
-      const erroMsg = `Erro ao enviar email: ${res.status} ${err.slice(0, 256)}`;
+      log.error(
+        { status: res.status, err, from: FROM_EMAIL, to: options.to, subject: options.subject },
+        "Resend retornou erro",
+      );
+      // Mensagem mais útil pro usuário final detectar problemas comuns.
+      let userMsg = `Erro ao enviar email (${res.status}): ${err.slice(0, 256)}`;
+      const errLower = err.toLowerCase();
+      const dominioMatch = FROM_EMAIL.match(/@([^>\s]+)/);
+      const dominio = dominioMatch ? dominioMatch[1] : FROM_EMAIL;
+      if (errLower.includes("domain") && (errLower.includes("not verified") || errLower.includes("verify") || errLower.includes("valid"))) {
+        userMsg = `Domínio "${dominio}" não está verificado no Resend. Em Resend → Domains: (1) adicione o domínio, (2) copie os registros DNS (MX/SPF/DKIM/DMARC) e cole no seu provedor de DNS, (3) volte no Resend e clique em "Verify DNS Records". A verificação só conclui quando todos os registros estiverem propagados (pode levar até 1h).`;
+      } else if (errLower.includes("missing") && errLower.includes("to")) {
+        userMsg = "Endereço de destino ausente. Verifique se o cadastro tem email válido.";
+      } else if (res.status === 401) {
+        userMsg = "API key do Resend inválida. Admin → Integrações → Resend.";
+      } else if (res.status === 403 && !errLower.includes("domain")) {
+        userMsg = "API key do Resend sem permissão. Admin → Integrações → Resend.";
+      }
+      // Log preserva a resposta crua do Resend (status + body) pra auditoria.
+      // O usuário recebe userMsg traduzida; o admin no AdminEmailLog vê o motivo real.
+      const erroLog = `${res.status} ${err.slice(0, 512)}`;
       const logId = await registrarEmailLog({
         tipo,
         destinatario: options.to,
         assunto: options.subject,
         status: "falha",
-        erro: erroMsg,
+        erro: erroLog,
         escritorioId: options.escritorioId,
         userId: options.userId,
         contexto: { html: options.html, text: options.text },
       });
-      return { success: false, error: erroMsg, logId };
+      return { success: false, error: userMsg, logId };
     }
 
     const data = await res.json();

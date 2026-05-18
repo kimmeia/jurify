@@ -252,8 +252,22 @@ export default function Configuracoes() {
   }) ?? { mutate: () => {}, isPending: false };
 
   const removerColabMut = trpc.configuracoes.removerColaborador.useMutation({
-    onSuccess: () => { toast.success("Colaborador removido."); refetchEquipe(); },
+    onSuccess: () => { toast.success("Colaborador removido."); refetchEquipe(); refetchRemovidos(); },
     onError: (e) => toast.error(e.message),
+  });
+
+  // Lista colaboradores removidos (soft delete). Pra dono/gestor poder
+  // restaurar quem foi excluído por engano.
+  const { data: removidosData, refetch: refetchRemovidos } =
+    (trpc as any).configuracoes.listarRemovidos.useQuery(undefined, { enabled: !!data, retry: false });
+  const removidos: any[] = removidosData ?? [];
+  const restaurarColabMut = (trpc as any).configuracoes.restaurarColaborador.useMutation({
+    onSuccess: () => {
+      toast.success("Colaborador restaurado!");
+      refetchEquipe();
+      refetchRemovidos();
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const atualizarColabMut = trpc.configuracoes.atualizarColaborador.useMutation({
@@ -598,6 +612,57 @@ export default function Configuracoes() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Colaboradores removidos — soft delete reversível */}
+          {removidos.length > 0 && isDono && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="text-amber-600">🗑</span>
+                  Removidos ({removidos.length})
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Colaboradores excluídos por engano podem ser restaurados aqui.
+                  O histórico (cards, comentários, atribuições) é preservado.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {removidos.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/30"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {r.userName || r.userEmail || `#${r.id}`}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {r.userEmail} · cargo: {r.cargo} ·{" "}
+                        Removido em{" "}
+                        {r.removidoEm
+                          ? new Date(r.removidoEm).toLocaleDateString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => restaurarColabMut.mutate({ colaboradorId: r.id })}
+                      disabled={restaurarColabMut.isPending}
+                    >
+                      Restaurar
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Convidar */}
           {canEdit && (

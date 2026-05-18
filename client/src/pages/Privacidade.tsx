@@ -75,7 +75,7 @@ export default function Privacidade() {
           <li>Solicitar portabilidade pra outro fornecedor.</li>
         </ul>
         <p>
-          Pra exercer: envie email pra <a href="mailto:privacidade@jurify.com.br" className="text-violet-600 hover:underline">privacidade@jurify.com.br</a>.
+          Pra exercer: envie email pra <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
           Atendemos em até 15 dias úteis.
         </p>
 
@@ -111,7 +111,7 @@ export default function Privacidade() {
         <h2 className="text-xl font-semibold pt-4">10. Encarregado de Dados (DPO)</h2>
         <p>
           Encarregado: <em>a definir</em>. Contato:{" "}
-          <a href="mailto:privacidade@jurify.com.br" className="text-violet-600 hover:underline">privacidade@jurify.com.br</a>.
+          <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
         </p>
 
         <h2 className="text-xl font-semibold pt-4">11. ANPD</h2>

@@ -100,7 +100,7 @@ function FinanceiroMockup() {
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
           </div>
           <div className="flex-1 text-center text-[10px] text-muted-foreground font-mono">
-            jurify.com.br/financeiro
+            juridflow.com.br/financeiro
           </div>
         </div>
 
