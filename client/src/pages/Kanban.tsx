@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
-  ExternalLink, ArrowRight, Tag, X, Settings, Upload,
+  ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import { LancarCobrancaCardModal, type LancarCobrancaCardCtx } from "./kanban/la
 import { ComentariosSection } from "./kanban/comentarios-section";
 import { FiltrosBar, type FiltrosKanban, FILTROS_VAZIOS } from "./kanban/filtros-bar";
 import { ImportarTrelloDialog } from "./kanban/ImportarTrelloDialog";
+import { TimelineCard } from "./kanban/timeline-card";
 
 const PRIORIDADE_COR: Record<string, string> = {
   alta: "border-l-red-500 bg-red-50/30",
@@ -60,10 +61,11 @@ export default function Kanban() {
     { funilId: funilAtivo!, ...filtros },
     {
       enabled: !!funilAtivo,
-      // Polling 15s pra refletir movimentações de outros usuários sem F5
-      // (quando atendente A move um card pro atendente B, o gestor que
-      // está olhando o quadro vê em até 15s)
-      refetchInterval: 15_000,
+      // Polling 5s pra refletir movimentações de outros usuários em
+      // quase-tempo-real (atendente A move card → gestor vê em até 5s).
+      // Reduzido de 15s pro time multi-usuário não precisar dar F5.
+      refetchInterval: 5_000,
+      refetchOnWindowFocus: true,
     },
   );
 
@@ -77,10 +79,15 @@ export default function Kanban() {
     onSuccess: () => refetchTags(),
   });
 
-  // Detalhe card
+  // Detalhe card — polling 10s pra ver edições/comentários/movimentações
+  // feitas por outros usuários enquanto o modal está aberto.
   const { data: cardDetalhe, refetch: refetchDetalhe } = (trpc as any).kanban.detalheCard.useQuery(
     { id: cardAberto! },
-    { enabled: !!cardAberto },
+    {
+      enabled: !!cardAberto,
+      refetchInterval: 10_000,
+      refetchOnWindowFocus: true,
+    },
   );
 
   const criarFunilMut = (trpc as any).kanban.criarFunil.useMutation({
@@ -333,10 +340,10 @@ export default function Kanban() {
               onDragEnd={() => setDragColunaId(null)}
               title="Arraste pra reordenar coluna"
             >
-              <div className="flex items-center gap-2">
-                <div className="h-2.5 w-2.5 rounded-full" style={{ background: col.cor || "#6b7280" }} />
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: col.cor || "#6b7280" }} />
                 <input
-                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none w-40 hover:bg-muted/50 focus:bg-white focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
+                  className="text-xs font-semibold uppercase tracking-wide bg-transparent border-none outline-none min-w-0 flex-1 hover:bg-muted/50 focus:bg-white focus:ring-1 focus:ring-primary rounded px-1 -mx-1"
                   defaultValue={col.nome}
                   onBlur={(e) => {
                     const novo = e.target.value.trim();
@@ -344,9 +351,31 @@ export default function Kanban() {
                   }}
                   onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 />
-                <Badge variant="outline" className="text-[9px] h-4 px-1">{col.cards?.length || 0}</Badge>
+                <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">{col.cards?.length || 0}</Badge>
+                {col.tipo === "conclusao" && (
+                  <Badge
+                    className="text-[9px] h-4 px-1 bg-emerald-100 text-emerald-700 border-emerald-200 shrink-0 dark:bg-emerald-950/30 dark:text-emerald-300"
+                    title="Cards nesta coluna são considerados concluídos"
+                  >
+                    ✓ conclusão
+                  </Badge>
+                )}
               </div>
               <div className="flex gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-6 w-6 p-0 ${col.tipo === "conclusao" ? "text-emerald-600" : "text-muted-foreground hover:text-emerald-600"}`}
+                  title={col.tipo === "conclusao" ? "Desmarcar como conclusão" : "Marcar como coluna de conclusão"}
+                  onClick={() =>
+                    editarColunaMut.mutate({
+                      id: col.id,
+                      tipo: col.tipo === "conclusao" ? "normal" : "conclusao",
+                    })
+                  }
+                >
+                  <CheckCircle2 className="h-3 w-3" />
+                </Button>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setNovoCardOpen(col.id)}>
                   <Plus className="h-3 w-3" />
                 </Button>
@@ -740,24 +769,8 @@ export default function Kanban() {
               {/* Comentários — autor distinto do responsável do card */}
               <ComentariosSection cardId={cardDetalhe.id} comentarios={cardDetalhe.comentarios || []} onChange={refetchDetalhe} />
 
-              {/* Histórico de movimentações com autor */}
-              {cardDetalhe.movimentacoes?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground mb-2">HISTÓRICO</p>
-                  <div className="space-y-2">
-                    {cardDetalhe.movimentacoes.map((m: any) => (
-                      <div key={m.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <ArrowRight className="h-3 w-3 shrink-0" />
-                        <span>{m.colunaOrigemNome} → {m.colunaDestinoNome}</span>
-                        {m.movidoPorNome && (
-                          <span className="text-[10px] italic">por {m.movidoPorNome}</span>
-                        )}
-                        <span className="text-[9px] ml-auto">{new Date(m.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Timeline completa (movimentações + responsáveis + comentários + conclusão) */}
+              <TimelineCard cardId={cardDetalhe.id} prazo={cardDetalhe.prazo} />
 
               <div className="text-[10px] text-muted-foreground pt-2 border-t">
                 Criado em {new Date(cardDetalhe.createdAt).toLocaleDateString("pt-BR")}

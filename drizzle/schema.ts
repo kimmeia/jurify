@@ -1840,6 +1840,11 @@ export const kanbanColunas = mysqlTable("kanban_colunas", {
   nome: varchar("nomeKC", { length: 64 }).notNull(),
   cor: varchar("corKC", { length: 16 }),
   ordem: int("ordemKC").default(0).notNull(),
+  /** 'normal' (default) ou 'conclusao'. Marcar como 'conclusao' faz o
+   *  card entrar como "concluído" pros relatórios assim que for movido
+   *  pra essa coluna. Múltiplas colunas podem ser conclusão num mesmo
+   *  funil (ex: "Ganho" + "Finalizado" + "Arquivado"). */
+  tipo: mysqlEnum("tipoKC", ["normal", "conclusao"]).default("normal").notNull(),
   createdAt: timestamp("createdAtKC").defaultNow().notNull(),
 });
 
@@ -1901,6 +1906,27 @@ export const kanbanMovimentacoes = mysqlTable("kanban_movimentacoes", {
   colunaDestinoId: int("colunaDestinoIdKMov").notNull(),
   movidoPorId: int("movidoPorIdKMov"),
   createdAt: timestamp("createdAtKMov").defaultNow().notNull(),
+});
+
+/**
+ * Log de mudanças de responsável do card.
+ *
+ * `kanban_cards.responsavelId` guarda só o responsável ATUAL. Pra histórico
+ * (quem foi quando, quem fez a mudança), gravamos uma linha aqui em cada
+ * atribuição/reatribuição. Permite construir a timeline do card.
+ *
+ * - responsavelAnteriorId NULL = primeira atribuição (criação ou definição
+ *   inicial em card que estava sem responsável)
+ * - responsavelNovoId NULL = remoção do responsável (card volta a "sem dono")
+ * - mudadoPorId NULL = mudança feita pelo sistema (ex: automação SmartFlow)
+ */
+export const kanbanResponsavelLog = mysqlTable("kanban_responsavel_log", {
+  id: int("id").autoincrement().primaryKey(),
+  cardId: int("cardIdKRespLog").notNull(),
+  responsavelAnteriorId: int("responsavelAnteriorIdKRespLog"),
+  responsavelNovoId: int("responsavelNovoIdKRespLog"),
+  mudadoPorId: int("mudadoPorIdKRespLog"),
+  createdAt: timestamp("createdAtKRespLog").defaultNow().notNull(),
 });
 
 /** Comentários nos cards do Kanban (autor != responsável do card) */
