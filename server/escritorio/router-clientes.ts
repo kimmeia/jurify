@@ -1061,6 +1061,7 @@ export const clientesRouter = router({
         createdAt: leads.createdAt,
         responsavelId: leads.responsavelId,
         responsavelNome: users.name,
+        origemLead: leads.origemLead,
       })
       .from(leads)
       .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
@@ -1074,6 +1075,7 @@ export const clientesRouter = router({
       createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
       responsavelId: r.responsavelId,
       responsavelNome: r.responsavelNome,
+      origemLead: r.origemLead,
     }));
   }),
 

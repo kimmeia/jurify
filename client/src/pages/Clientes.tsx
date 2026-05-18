@@ -1915,7 +1915,7 @@ function EditarLeadDialog({
   onOpenChange,
   onUpdated,
 }: {
-  lead: { id: number; etapaFunil: string; valorEstimado: string | null };
+  lead: { id: number; etapaFunil: string; valorEstimado: string | null; origemLead?: string | null };
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onUpdated: () => void;
@@ -1923,7 +1923,17 @@ function EditarLeadDialog({
   // Estado local — só inicializa quando o dialog abre (key dispara remount).
   const [etapa, setEtapa] = useState(lead.etapaFunil);
   const [valor, setValor] = useState(lead.valorEstimado || "");
+  const [origem, setOrigem] = useState<string>(lead.origemLead || "");
   const [confirmExcluir, setConfirmExcluir] = useState(false);
+
+  // Carrega origens cadastradas no escritório — mesma fonte do
+  // RegistrarFechamentoDialog. Inclui inativas pra preservar o valor
+  // atual do lead caso a origem tenha sido desativada (senão o select
+  // limparia silenciosamente).
+  const { data: origensDisponiveis } = (trpc as any).origensLead?.listar?.useQuery?.(
+    { incluirInativas: true },
+    { retry: false },
+  ) ?? { data: [] };
 
   const atualizarMut = (trpc as any).crm.atualizarLead.useMutation({
     onSuccess: () => {
@@ -1946,7 +1956,14 @@ function EditarLeadDialog({
   const valorNormalizado = valor.trim() ? parseValorBR(valor) : null;
   const valorMudou = (lead.valorEstimado || "") !== valor;
   const etapaMudou = lead.etapaFunil !== etapa;
-  const algoMudou = valorMudou || etapaMudou;
+  const origemAtual = lead.origemLead || "";
+  const origemMudou = origemAtual !== origem;
+  const algoMudou = valorMudou || etapaMudou || origemMudou;
+
+  // Se a origem atual não está na lista (foi desativada ou texto livre
+  // legado), mostra mesmo assim pra não sumir do select silenciosamente.
+  const origensLista: { id: number | string; nome: string; ativo?: boolean }[] = origensDisponiveis ?? [];
+  const origemAtualAusente = origemAtual && !origensLista.some((o) => o.nome === origemAtual);
 
   return (
     <>
@@ -1993,6 +2010,28 @@ function EditarLeadDialog({
                 </p>
               )}
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Origem</Label>
+              <select
+                value={origem}
+                onChange={(e) => setOrigem(e.target.value)}
+                className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                disabled={atualizarMut.isPending}
+              >
+                <option value="">— Sem origem —</option>
+                {origemAtualAusente && (
+                  <option value={origemAtual}>{origemAtual} (desativada)</option>
+                )}
+                {origensLista.map((o) => (
+                  <option key={String(o.id)} value={o.nome}>
+                    {o.nome}{o.ativo === false ? " (inativa)" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-muted-foreground">
+                Gerencie as opções em Configurações → Origens de lead.
+              </p>
+            </div>
           </div>
           <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
             <Button
@@ -2020,6 +2059,8 @@ function EditarLeadDialog({
                   id: lead.id,
                   etapaFunil: etapaMudou ? etapa : undefined,
                   valorEstimado: valorMudou ? valorParaSalvar : undefined,
+                  // null limpa a origem; string seta. Só envia se mudou.
+                  origemLead: origemMudou ? (origem.trim() ? origem.trim() : null) : undefined,
                 });
               }}
               disabled={!algoMudou || atualizarMut.isPending}
@@ -2363,6 +2404,11 @@ function ClienteDetalhe({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm">
                           {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
+                          {l.origemLead && (
+                            <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+                              · {l.origemLead}
+                            </span>
+                          )}
                         </p>
                         <LeadAtendenteInline
                           leadId={l.id}
