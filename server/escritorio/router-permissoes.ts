@@ -70,7 +70,7 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
   "Gestor": {
     dashboard: p(true, true, false, false, false),
     calculos: p(true, true, true, true, true),
-    clientes: p(true, true, true, true, false),
+    clientes: p(true, true, true, true, true),
     processos: p(true, true, true, true, false),
     atendimento: p(true, true, true, true, false),
     kanban: p(true, true, true, true, false),
@@ -80,8 +80,8 @@ const PERMISSOES_PADRAO: Record<string, Record<string, Perm>> = {
     agentesIa: p(true, true, true, true, false),
     relatorios: p(true, true, false, false, false),
     financeiro: p(true, true, true, true, false),
-    configuracoes: p(false, false, false, false, false),
-    equipe: p(true, true, false, false, false),
+    configuracoes: p(true, true, true, true, false),
+    equipe: p(true, true, true, true, false),
   },
   "Atendente": {
     dashboard: p(true, true, false, false, false),
