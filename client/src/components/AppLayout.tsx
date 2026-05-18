@@ -653,6 +653,8 @@ function AppSidebarContent({
         {(user as any)?.impersonatedBy && (
           <ImpersonationBanner targetName={user?.name || user?.email || "Usuário"} onExit={logout} />
         )}
+        {/* Banner topo: trial em andamento (Fase 3) */}
+        <TrialBanner />
         {isMobile && (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
@@ -666,6 +668,48 @@ function AppSidebarContent({
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>
     </>
+  );
+}
+
+/**
+ * Banner topo exibido enquanto cliente está em trial. Mostra dias restantes
+ * + CTA pra adicionar pagamento (vai pra /configuracoes?tab=meu-plano).
+ *
+ * Cores escalam por urgência:
+ *   - ≥ 4 dias: amarelo neutro
+ *   - 2-3 dias: laranja
+ *   - 0-1 dia: vermelho
+ */
+function TrialBanner() {
+  const [, setLocation] = useLocation();
+  const { data: subscription } = trpc.subscription.current.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const dias = (subscription as any)?.diasRestantesTrial as number | null | undefined;
+  if (subscription?.status !== "trialing" || dias == null) return null;
+
+  const cor =
+    dias >= 4 ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200" :
+    dias >= 2 ? "bg-orange-50 border-orange-200 text-orange-900 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-200" :
+                "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200";
+
+  const texto =
+    dias === 0 ? "Seu trial termina hoje." :
+    dias === 1 ? "Seu trial termina amanhã." :
+                 `Trial: ${dias} dias restantes.`;
+
+  return (
+    <div className={`border-b px-4 py-2 flex items-center justify-between gap-3 text-sm ${cor}`}>
+      <span className="font-medium">{texto}</span>
+      <button
+        onClick={() => setLocation("/configuracoes?tab=meu-plano")}
+        className="text-xs font-semibold underline underline-offset-2 hover:opacity-80"
+      >
+        Adicionar pagamento →
+      </button>
+    </div>
   );
 }
 

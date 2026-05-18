@@ -15,6 +15,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveSubscription, getActiveSubscriptionComHeranca, getUserSubscriptions, getDb } from "../db";
 import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-billing-client";
@@ -164,9 +165,19 @@ export const subscriptionRouter = router({
    * Herda do dono do escritório quando o user é colaborador sem sub
    * própria — cortesia/plano liberado no dono libera todos os
    * colaboradores (alinhado a créditos e limites, que já são por
-   * escritório). */
+   * escritório).
+   *
+   * Enriquece com `diasRestantesTrial` quando aplicável — Fase 3.
+   */
   current: protectedProcedure.query(async ({ ctx }) => {
-    return getActiveSubscriptionComHeranca(ctx.user.id);
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    if (!sub) return null;
+    let diasRestantesTrial: number | null = null;
+    if (sub.status === "trialing" && sub.trialExpiraEm != null) {
+      const msRestantes = sub.trialExpiraEm - Date.now();
+      diasRestantesTrial = Math.max(0, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
+    }
+    return { ...sub, diasRestantesTrial };
   }),
 
   /** Get all subscriptions for current user */
@@ -452,4 +463,124 @@ export const subscriptionRouter = router({
         asaasSubscriptionId: sub.id,
       };
     }),
+
+  /**
+   * Inicia trial sem cartão (Fase 3 do roadmap de Planos).
+   *
+   * Cliente que acabou de confirmar email é direcionado pra cá com o slug
+   * do plano escolhido na LP (vindo de `users.planoPretendido`). Cria
+   * subscription `status='trialing'`, trialExpiraEm=now+plano.trialDias.
+   * Não chama Asaas — Asaas só entra na conversão pra pago (`createCheckout`).
+   *
+   * Anti-abuso: 1 trial por escritório, controlado por `escritorios.jaUsouTrial`.
+   * Se o plano tem `trialDias=0`, retorna erro (cliente deve ir pro checkout
+   * normal).
+   */
+  iniciarTrial: protectedProcedure
+    .input(z.object({ planoSlug: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const { getPlanoBySlug } = await import("../billing/planos-repo");
+      const plano = await getPlanoBySlug(input.planoSlug);
+      if (!plano) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Plano não encontrado." });
+      }
+      if (plano.trialDias <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Este plano não oferece trial. Faça checkout normalmente.",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const { getEscritorioPorUsuario, criarEscritorio } = await import("../escritorio/db-escritorio");
+      const { escritorios } = await import("../../drizzle/schema");
+
+      // Garante que o escritório existe (cliente recém-confirmado pode não ter)
+      let escVinculado = await getEscritorioPorUsuario(ctx.user.id);
+      if (!escVinculado) {
+        const nome = ctx.user.name || ctx.user.email || "Meu escritório";
+        await criarEscritorio(ctx.user.id, nome, ctx.user.email ?? undefined);
+        escVinculado = await getEscritorioPorUsuario(ctx.user.id);
+      }
+      if (!escVinculado) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao criar escritório pra trial.",
+        });
+      }
+      const esc = escVinculado.escritorio;
+
+      // Apenas o dono pode iniciar trial (colaboradores herdam)
+      if (esc.ownerId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas o dono do escritório pode iniciar trial.",
+        });
+      }
+
+      if (esc.jaUsouTrial) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Este escritório já usou seu trial. Faça checkout pra continuar.",
+        });
+      }
+
+      // Já tem subscription ativa? Não duplica
+      const subExistente = await getActiveSubscription(ctx.user.id);
+      if (subExistente) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Você já tem uma assinatura ativa.",
+        });
+      }
+
+      const agora = Date.now();
+      const expiraEm = agora + plano.trialDias * 24 * 60 * 60 * 1000;
+
+      await db.insert(subscriptionsTable).values({
+        userId: ctx.user.id,
+        planId: plano.slug,
+        status: "trialing",
+        trialIniciadoEm: agora,
+        trialExpiraEm: expiraEm,
+        currentPeriodEnd: expiraEm,
+        creditsLimit: plano.limites.creditosCalculosMes,
+      });
+
+      await db.update(escritorios)
+        .set({ jaUsouTrial: true, trialUsadoEm: new Date() })
+        .where(eq(escritorios.id, esc.id));
+
+      log.info(
+        { userId: ctx.user.id, escritorioId: esc.id, planoSlug: plano.slug, trialDias: plano.trialDias },
+        "Trial iniciado",
+      );
+
+      return {
+        success: true,
+        planoSlug: plano.slug,
+        trialDias: plano.trialDias,
+        trialExpiraEm: expiraEm,
+      };
+    }),
+
+  /**
+   * Status do trial atual (dias restantes). Usado pelo banner topo do app.
+   * Retorna null se user não está em trial.
+   */
+  statusTrial: protectedProcedure.query(async ({ ctx }) => {
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    if (!sub || sub.status !== "trialing" || sub.trialExpiraEm == null) return null;
+    const agora = Date.now();
+    const msRestantes = sub.trialExpiraEm - agora;
+    const diasRestantes = Math.max(0, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
+    return {
+      emTrial: msRestantes > 0,
+      diasRestantes,
+      expiraEm: sub.trialExpiraEm,
+      planoSlug: sub.planId,
+    };
+  }),
 });

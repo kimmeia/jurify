@@ -101,21 +101,29 @@ export async function getUserByGoogleSub(googleSub: string) {
 
 /**
  * Sub é considerada com acesso ativo quando:
- *   - status é 'active' ou 'trialing', OU
- *   - cortesia=true E (cortesiaExpiraEm é null OU ainda não passou)
+ *   - cortesia=true E (cortesiaExpiraEm é null OU ainda não passou), OU
+ *   - status='active', OU
+ *   - status='trialing' E (trialExpiraEm é null OU ainda não passou)
  *
  * Cortesia tem prioridade sobre status — admin pode conceder acesso a um
  * cliente cuja assinatura está canceled/past_due no Asaas, por exemplo.
+ *
+ * Defesa em profundidade pro trial: mesmo que o cron de expiração não tenha
+ * rodado ainda (status ainda é 'trialing'), respeitamos trialExpiraEm aqui.
  */
 export function temAcessoAtivo(sub: Pick<
   typeof subscriptions.$inferSelect,
-  "status" | "cortesia" | "cortesiaExpiraEm"
+  "status" | "cortesia" | "cortesiaExpiraEm" | "trialExpiraEm"
 >): boolean {
   if (sub.cortesia) {
     if (sub.cortesiaExpiraEm == null) return true;
     return sub.cortesiaExpiraEm > Date.now();
   }
-  return sub.status === "active" || sub.status === "trialing";
+  if (sub.status === "active") return true;
+  if (sub.status === "trialing") {
+    return sub.trialExpiraEm == null || sub.trialExpiraEm > Date.now();
+  }
+  return false;
 }
 
 /**
@@ -135,13 +143,26 @@ export async function getActiveSubscription(userId: number) {
 
   // Cortesia tem prioridade — se houver, retorna ela
   const cortesia = todas.find((s) =>
-    temAcessoAtivo({ status: s.status, cortesia: s.cortesia, cortesiaExpiraEm: s.cortesiaExpiraEm })
-    && s.cortesia,
+    temAcessoAtivo({
+      status: s.status,
+      cortesia: s.cortesia,
+      cortesiaExpiraEm: s.cortesiaExpiraEm,
+      trialExpiraEm: s.trialExpiraEm,
+    }) && s.cortesia,
   );
   if (cortesia) return cortesia;
 
-  // Senão, comportamento normal: primeira active/trialing
-  const ativa = todas.find((s) => s.status === "active" || s.status === "trialing");
+  // Senão, comportamento normal: active OU trialing ainda não expirado.
+  // Usa temAcessoAtivo pra centralizar a regra (evita duplicar a checagem
+  // de trialExpiraEm aqui).
+  const ativa = todas.find((s) =>
+    temAcessoAtivo({
+      status: s.status,
+      cortesia: s.cortesia,
+      cortesiaExpiraEm: s.cortesiaExpiraEm,
+      trialExpiraEm: s.trialExpiraEm,
+    })
+  );
   return ativa ?? null;
 }
 
