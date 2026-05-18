@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { requireModulo } from "../_core/trpc-gates";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission, checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { TRPCError } from "@trpc/server";
@@ -324,7 +325,7 @@ export const agentesIaRouter = router({
       };
     }),
 
-  criar: protectedProcedure
+  criar: requireModulo("agentes_ia")
     .input(
       z.object({
         nome: z.string().min(2).max(128),
@@ -344,6 +345,15 @@ export const agentesIaRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar agentes." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+
+      // Enforce limite de agentes IA do plano (Fase 4)
+      if (perm.escritorioId) {
+        const { verificarLimite } = await import("../billing/plan-limits");
+        const limite = await verificarLimite(perm.escritorioId, ctx.user.id, "agentes_ia");
+        if (!limite.permitido) {
+          throw new TRPCError({ code: "FORBIDDEN", message: limite.mensagem });
+        }
+      }
 
       let apiKeyEncrypted: string | null = null,
         apiKeyIv: string | null = null,

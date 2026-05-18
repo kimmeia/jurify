@@ -14,7 +14,7 @@
  */
 
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveSubscription, getActiveSubscriptionComHeranca, getUserSubscriptions, getDb } from "../db";
@@ -293,35 +293,63 @@ export const subscriptionRouter = router({
         ...(successUrl ? { callback: { successUrl, autoRedirect: true } } : {}),
       });
 
-      // ─── CRIAR ROW LOCAL IMEDIATAMENTE ────────────────────────────────
-      // Antes esperávamos o webhook SUBSCRIPTION_CREATED chegar pra inserir
-      // a row local. Mas isso criava uma race condition: se o usuário
-      // pagasse rápido (PIX), o webhook PAYMENT_CONFIRMED chegava PRIMEIRO,
-      // não encontrava a row local, e apenas logava warning — a assinatura
-      // nunca era ativada.
+      // ─── CRIAR/ATUALIZAR ROW LOCAL ────────────────────────────────────
+      // Cenário A (signup novo): não tem sub local → INSERT incomplete.
+      // Cenário B (conversão trial → pago): tem sub status='trialing' →
+      //   UPDATE atualizando asaasSubscriptionId + marcando trial_convertido.
+      //   Mantém o id local pra preservar histórico (cortesia override,
+      //   créditos consumidos, etc).
       //
-      // Agora inserimos a row imediatamente com status "incomplete". Os
-      // webhooks subsequentes vão ATUALIZAR (não inserir) — o que é
-      // idempotente e sem race.
+      // Os webhooks Asaas chegando depois vão ATUALIZAR — idempotente.
       const db = await getDb();
       if (db) {
-        const existingLocal = await db
+        // Já existe row dessa subscription Asaas? (idempotente em retry)
+        const [existingByAsaas] = await db
           .select()
           .from(subscriptionsTable)
           .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
           .limit(1);
-        if (existingLocal.length === 0) {
-          await db.insert(subscriptionsTable).values({
-            userId: ctx.user.id,
-            asaasSubscriptionId: sub.id,
-            asaasCustomerId: customerId,
-            planId: input.planId,
-            status: "incomplete", // aguarda primeiro pagamento
-          });
-          log.info(
-            { userId: ctx.user.id, subId: sub.id },
-            "Row local criada como incomplete",
-          );
+
+        if (!existingByAsaas) {
+          // Procura sub em trial deste user pra fazer UPSERT
+          const [subTrial] = await db
+            .select()
+            .from(subscriptionsTable)
+            .where(and(
+              eq(subscriptionsTable.userId, ctx.user.id),
+              eq(subscriptionsTable.status, "trialing"),
+            ))
+            .limit(1);
+
+          if (subTrial) {
+            // Conversão trial → pago: atualiza in-place
+            await db.update(subscriptionsTable)
+              .set({
+                asaasSubscriptionId: sub.id,
+                asaasCustomerId: customerId,
+                planId: input.planId,
+                status: "incomplete",
+                trialConvertido: true,
+              })
+              .where(eq(subscriptionsTable.id, subTrial.id));
+            log.info(
+              { userId: ctx.user.id, subId: sub.id, subLocalId: subTrial.id },
+              "Conversão trial → pago: sub atualizada in-place",
+            );
+          } else {
+            // Signup direto sem trial — insere novo
+            await db.insert(subscriptionsTable).values({
+              userId: ctx.user.id,
+              asaasSubscriptionId: sub.id,
+              asaasCustomerId: customerId,
+              planId: input.planId,
+              status: "incomplete", // aguarda primeiro pagamento
+            });
+            log.info(
+              { userId: ctx.user.id, subId: sub.id },
+              "Row local criada como incomplete",
+            );
+          }
         }
       }
 
