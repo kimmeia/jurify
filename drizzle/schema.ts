@@ -131,6 +131,17 @@ export const subscriptions = mysqlTable("subscriptions", {
   cortesia: boolean("cortesia").default(false).notNull(),
   cortesiaMotivo: varchar("cortesiaMotivo", { length: 500 }),
   cortesiaExpiraEm: bigint("cortesiaExpiraEm", { mode: "number" }),
+  /**
+   * Trial sem cartão (Fase 3 do roadmap de Planos). Quando o plano tem
+   * `trialDias > 0` e o cliente confirma email, subscription é criada com
+   * status='trialing' + estes campos preenchidos. asaasSubscriptionId fica
+   * NULL até a conversão.
+   */
+  trialIniciadoEm: bigint("trial_iniciado_em", { mode: "number" }),
+  trialExpiraEm: bigint("trial_expira_em", { mode: "number" }),
+  trialAvisado3d: boolean("trial_avisado_3d").default(false).notNull(),
+  trialAvisado1d: boolean("trial_avisado_1d").default(false).notNull(),
+  trialConvertido: boolean("trial_convertido").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -270,6 +281,13 @@ export const escritorios = mysqlTable("escritorios", {
   suspenso: boolean("suspenso").default(false).notNull(),
   motivoSuspensao: varchar("motivoSuspensao", { length: 500 }),
   suspensoEm: timestamp("suspensoEm"),
+  /**
+   * Anti-abuso de trial (Fase 3): cada escritório só pode usar 1 trial.
+   * Setado quando subscription.iniciarTrial cria a primeira subscription
+   * trialing pra este escritório.
+   */
+  jaUsouTrial: boolean("ja_usou_trial").default(false).notNull(),
+  trialUsadoEm: timestamp("trial_usado_em"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

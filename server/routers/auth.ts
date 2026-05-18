@@ -610,11 +610,60 @@ export const authRouter = router({
 
       log.info({ userId: userRow.id, email: userRow.email }, "Email confirmado");
 
+      // Fase 3: se o cliente escolheu um plano na LP e o plano tem trial,
+      // inicia automaticamente. Best-effort — se falhar (sem trial dias,
+      // plano não existe, escritório já usou trial), só loga e segue. UI
+      // recebe `trialIniciado=false` e redireciona pra /plans normal.
+      let trialIniciado = false;
+      if (userRow.planoPretendido) {
+        try {
+          const { getPlanoBySlug } = await import("../billing/planos-repo");
+          const plano = await getPlanoBySlug(userRow.planoPretendido);
+          if (plano && plano.trialDias > 0) {
+            const { getEscritorioPorUsuario, criarEscritorio } = await import("../escritorio/db-escritorio");
+            const { escritorios } = await import("../../drizzle/schema");
+            const { subscriptions: subsTable } = await import("../../drizzle/schema");
+
+            let escVinculado = await getEscritorioPorUsuario(userRow.id);
+            if (!escVinculado) {
+              const nome = userRow.name || userRow.email || "Meu escritório";
+              await criarEscritorio(userRow.id, nome, userRow.email ?? undefined);
+              escVinculado = await getEscritorioPorUsuario(userRow.id);
+            }
+
+            if (escVinculado && !escVinculado.escritorio.jaUsouTrial) {
+              const agora = Date.now();
+              const expiraEm = agora + plano.trialDias * 24 * 60 * 60 * 1000;
+              await db.insert(subsTable).values({
+                userId: userRow.id,
+                planId: plano.slug,
+                status: "trialing",
+                trialIniciadoEm: agora,
+                trialExpiraEm: expiraEm,
+                currentPeriodEnd: expiraEm,
+                creditsLimit: plano.limites.creditosCalculosMes,
+              });
+              await db.update(escritorios)
+                .set({ jaUsouTrial: true, trialUsadoEm: new Date() })
+                .where(eq(escritorios.id, escVinculado.escritorio.id));
+              trialIniciado = true;
+              log.info(
+                { userId: userRow.id, planoSlug: plano.slug },
+                "Trial iniciado automaticamente após confirmação de email",
+              );
+            }
+          }
+        } catch (err: any) {
+          log.warn({ userId: userRow.id, err: err.message }, "Falha ao iniciar trial automaticamente");
+        }
+      }
+
       return {
         success: true,
         email: userRow.email,
         name: userRow.name,
         planoPretendido: userRow.planoPretendido,
+        trialIniciado,
       } as const;
     }),
 
