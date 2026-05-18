@@ -46,12 +46,20 @@ export function ImportarTrelloDialog({ open, onOpenChange, onSuccess }: Props) {
   });
   const importarMut = (trpc as any).kanban.importarDoTrello.useMutation({
     onSuccess: (r: any) => {
+      const partes: string[] = [
+        `${r.colunasCriadas} colunas, ${r.cardsCriados} cards`,
+      ];
+      if ((r.tagsCriadas ?? 0) > 0 || (r.tagsReusadas ?? 0) > 0) {
+        const sub: string[] = [];
+        if (r.tagsCriadas > 0) sub.push(`${r.tagsCriadas} tag(s) nova(s)`);
+        if (r.tagsReusadas > 0) sub.push(`${r.tagsReusadas} reusada(s)`);
+        partes.push(`Tags: ${sub.join(", ")}`);
+      }
+      if (r.listasIgnoradas + r.cardsIgnorados > 0) {
+        partes.push(`${r.listasIgnoradas + r.cardsIgnorados} item(ns) ignorado(s)`);
+      }
       toast.success(`Funil "${r.funilNome}" importado!`, {
-        description: `${r.colunasCriadas} colunas, ${r.cardsCriados} cards. ${
-          r.listasIgnoradas + r.cardsIgnorados > 0
-            ? `${r.listasIgnoradas + r.cardsIgnorados} item(ns) ignorado(s).`
-            : ""
-        }`,
+        description: partes.join(" · "),
       });
       onSuccess?.(r.funilId);
       handleClose();
