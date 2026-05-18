@@ -18,8 +18,6 @@ import { calculosDiversosRouter } from "./calculos/router-calculos-diversos";
 // Notificações in-app
 import { notificacoesRouter } from "./processos/router-notificacoes";
 
-// Motor próprio (Spike — staging-only, admin-only)
-import { motorProprioTesteRouter } from "./processos/router-motor-proprio-teste";
 import { cofreCredenciaisRouter } from "./escritorio/router-cofre-credenciais";
 
 // Escritório
@@ -52,6 +50,7 @@ import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
 import { adminBackupRouter } from "./admin/router-admin-backup";
+import { adminEmailLogRouter } from "./admin/router-admin-email-log";
 import { roadmapRouter } from "./router-roadmap";
 import { asaasRouter } from "./integracoes/router-asaas";
 
@@ -88,9 +87,6 @@ export const appRouter = router({
 
   // Notificações in-app
   notificacoes: notificacoesRouter,
-
-  // Motor próprio — endpoint de teste manual via UI (Spike)
-  motorProprioTeste: motorProprioTesteRouter,
 
   // Cofre de credenciais (Frente B — gerenciar OAB+senha+2FA pra acessar
   // tribunais autenticados como E-SAJ TJCE)
@@ -130,6 +126,7 @@ export const appRouter = router({
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
   adminBackup: adminBackupRouter,
+  adminEmailLog: adminEmailLogRouter,
   roadmap: roadmapRouter,
   asaas: asaasRouter,
 

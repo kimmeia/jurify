@@ -20,7 +20,7 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { cargosPersonalizados, permissoesCargo, colaboradores } from "../../drizzle/schema";
 import { eq, and, desc, or } from "drizzle-orm";
-import { limparCachePermissoes } from "./check-permission";
+import { checkPermissionAdminOuMatriz, limparCachePermissoes } from "./check-permission";
 
 // Módulos disponíveis no sistema — precisam bater com os nomes usados
 // no canSee() do AppLayout.tsx. Ao adicionar um módulo no sidebar,
@@ -389,17 +389,14 @@ export const permissoesRouter = router({
       cargoId: z.number(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "equipe", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão.");
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
 
       await db.update(colaboradores)
         .set({ cargoPersonalizadoId: input.cargoId })
-        .where(and(eq(colaboradores.id, input.colaboradorId), eq(colaboradores.escritorioId, esc.escritorio.id)));
+        .where(and(eq(colaboradores.id, input.colaboradorId), eq(colaboradores.escritorioId, perm.escritorioId)));
 
       // Invalida cache — o colaborador afetado deve usar o novo cargo imediatamente
       limparCachePermissoes();

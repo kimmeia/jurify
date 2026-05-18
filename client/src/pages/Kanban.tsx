@@ -1128,7 +1128,12 @@ export default function Kanban() {
                     {buscaCliente && (clientesBusca?.clientes || []).length > 0 && (
                       <div className="border rounded mt-1 max-h-32 overflow-y-auto divide-y">
                         {(clientesBusca.clientes).map((c: any) => (
-                          <button key={c.id} onClick={() => { editarCardMut.mutate({ id: cardDetalhe.id, clienteId: c.id }); setBuscaCliente(""); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
+                          <button
+                            key={c.id}
+                            onClick={() => { editarCardMut.mutate({ id: cardDetalhe.id, clienteId: c.id }); setBuscaCliente(""); }}
+                            disabled={editarCardMut.isPending}
+                            className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
                             <User className="h-3 w-3 text-violet-500" /><span>{c.nome}</span>
                           </button>
                         ))}

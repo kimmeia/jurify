@@ -356,6 +356,140 @@ describe("Asaas Webhook — idempotência SmartFlow", () => {
   });
 });
 
+// ─── Early-exit de retentativa (Bug #5) ───────────────────────────────────────
+
+describe("Asaas Webhook — early-exit de retentativa", () => {
+  const pagamentoRecebidoPayload = {
+    id: "pay_DEDUP",
+    customer: "cus_X",
+    billingType: "PIX",
+    value: 1000,
+    netValue: 970,
+    status: "RECEIVED",
+    dueDate: "2026-04-21",
+  };
+
+  it("retentativa de PAYMENT_RECEIVED retorna deduplicated:true e PULA o upsert", async () => {
+    pushAsaasConfig(10);
+    // 0 affectedRows = já processado (early-exit deve disparar)
+    idempotencyAffectedRowsQueue.push(0);
+
+    const r = fakeRes();
+    await handler(
+      req({
+        token: "tok",
+        body: { event: "PAYMENT_RECEIVED", payment: pagamentoRecebidoPayload },
+      }),
+      r,
+    );
+
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toMatchObject({ received: true, deduplicated: true });
+    // CRUCIAL: zero upserts em asaas_cobrancas — early-exit funcionou
+    const upserts = captured.filter(
+      (c) => c.op === "insert" && c.table === "asaas_cobrancas",
+    );
+    expect(upserts).toHaveLength(0);
+    // E zero SmartFlow
+    expect(dispararPagamentoRecebido).not.toHaveBeenCalled();
+  });
+
+  it("retentativa de PAYMENT_OVERDUE também pula upsert + dispatch", async () => {
+    pushAsaasConfig(10);
+    idempotencyAffectedRowsQueue.push(0);
+
+    const r = fakeRes();
+    await handler(
+      req({
+        token: "tok",
+        body: {
+          event: "PAYMENT_OVERDUE",
+          payment: {
+            id: "pay_OV2",
+            customer: "cus_X",
+            billingType: "BOLETO",
+            value: 200,
+            netValue: 200,
+            status: "OVERDUE",
+            dueDate: "2026-04-01",
+          },
+        },
+      }),
+      r,
+    );
+
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toMatchObject({ deduplicated: true });
+    const upserts = captured.filter(
+      (c) => c.op === "insert" && c.table === "asaas_cobrancas",
+    );
+    expect(upserts).toHaveLength(0);
+    expect(dispararPagamentoVencido).not.toHaveBeenCalled();
+  });
+
+  it("PAYMENT_CREATED (sem side-effects) NÃO entra no early-exit — sempre faz upsert", async () => {
+    // Atualizações legítimas de cobrança (vencimento mudou, valor mudou,
+    // etc) chegam como PAYMENT_CREATED/UPDATED com status PENDING e
+    // PRECISAM virar UPDATE local. Early-exit só vale pra eventos com
+    // side-effects (RECEIVED/OVERDUE).
+    pushAsaasConfig(10);
+    pushVinculo(42, 10, "cus_X");
+    // Não empilha affectedRows porque early-exit não dispara em
+    // PAYMENT_CREATED com status PENDING.
+
+    const r = fakeRes();
+    await handler(
+      req({
+        token: "tok",
+        body: {
+          event: "PAYMENT_CREATED",
+          payment: {
+            id: "pay_UP",
+            customer: "cus_X",
+            billingType: "PIX",
+            value: 1500,
+            netValue: 1500,
+            status: "PENDING",
+            dueDate: "2026-05-01",
+          },
+        },
+      }),
+      r,
+    );
+
+    expect(r.statusCode).toBe(200);
+    // Upsert acontece normal
+    const upserts = captured.filter(
+      (c) => c.op === "insert" && c.table === "asaas_cobrancas",
+    );
+    expect(upserts).toHaveLength(1);
+  });
+
+  it("primeira chegada de PAYMENT_RECEIVED faz upsert + dispatch (early-exit não bloqueia)", async () => {
+    pushAsaasConfig(10);
+    selectQueue.push([]); // vínculo do upsert
+    idempotencyAffectedRowsQueue.push(1); // primeira vez!
+
+    const r = fakeRes();
+    await handler(
+      req({
+        token: "tok",
+        body: { event: "PAYMENT_RECEIVED", payment: pagamentoRecebidoPayload },
+      }),
+      r,
+    );
+
+    expect(r.statusCode).toBe(200);
+    expect(r.body).not.toMatchObject({ deduplicated: true });
+    // Upsert + dispatch SmartFlow
+    const upserts = captured.filter(
+      (c) => c.op === "insert" && c.table === "asaas_cobrancas",
+    );
+    expect(upserts).toHaveLength(1);
+    expect(dispararPagamentoRecebido).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ─── CUSTOMER_CREATED: proteção do fix N:1 do Sprint 1 ───────────────────────
 
 describe("Asaas Webhook — CUSTOMER_CREATED não destrói N:1", () => {

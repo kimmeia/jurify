@@ -28,7 +28,7 @@ import {
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
 import {
-  aplicarConciliacaoOFXMatch,
+  aplicarConciliacaoOFXEmLote,
   atribuirCobrancasEmMassa,
   atualizarCategoriaCobranca,
   atualizarCategoriaDespesa,
@@ -1088,39 +1088,21 @@ export const financeiroRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      let despesasMarcadas = 0;
-      let cobrancasMarcadas = 0;
-      let jaImportadas = 0;
-      const erros: string[] = [];
+      // Lote tudo-ou-nada (bug #10): se algum match tem erro estrutural,
+      // nenhum é gravado. Senão, todos os válidos vão numa transação única
+      // — rollback automático se o banco falhar no meio.
+      const r = await aplicarConciliacaoOFXEmLote({
+        escritorioId: esc.escritorio.id,
+        importadoPorUserId: ctx.user.id,
+        matches: input.matches,
+      });
 
-      for (const m of input.matches) {
-        try {
-          const r = await aplicarConciliacaoOFXMatch({
-            escritorioId: esc.escritorio.id,
-            importadoPorUserId: ctx.user.id,
-            fitid: m.fitid,
-            tipo: m.tipo,
-            entidadeId: m.entidadeId,
-            valor: m.valor,
-            dataPagamento: m.dataPagamento,
-          });
-          if (r.status === "aplicado_despesa") despesasMarcadas++;
-          else if (r.status === "aplicado_cobranca") cobrancasMarcadas++;
-          else if (r.status === "ja_importada") jaImportadas++;
-          else if (r.status === "entidade_nao_encontrada") {
-            erros.push(
-              `${r.tipo === "despesa" ? "Despesa" : "Cobrança"} #${m.entidadeId} não encontrada`,
-            );
-          } else if (r.status === "cobranca_asaas_pulada") {
-            erros.push(
-              `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
-            );
-          }
-        } catch (err: any) {
-          erros.push(`${m.tipo} #${m.entidadeId}: ${err.message}`);
-        }
-      }
-
-      return { despesasMarcadas, cobrancasMarcadas, jaImportadas, erros };
+      return {
+        despesasMarcadas: r.despesasMarcadas,
+        cobrancasMarcadas: r.cobrancasMarcadas,
+        jaImportadas: r.jaImportadas,
+        erros: r.erros,
+        abortado: r.abortado,
+      };
     }),
 });

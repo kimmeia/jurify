@@ -282,3 +282,60 @@ function applyAction(perm: PermissionResult, acao: "ver" | "criar" | "editar" | 
 export function limparCachePermissoes() {
   cache.clear();
 }
+
+/**
+ * Permissão "gerencial" — preserva o legado de `cargo === "dono" || cargo === "gestor"`
+ * e ABRE para cargos personalizados que tenham a flag correspondente na matriz.
+ *
+ * Antes do fix do bug #9, procedures críticos (configurar integrações,
+ * gerenciar modelos de contrato, atribuir cargos, excluir/unificar
+ * clientes) eram travados em `cargo === "dono" || cargo === "gestor"`
+ * hardcoded — cargos personalizados criados via UI (`Cargos personalizados`)
+ * ficavam BLOQUEADOS mesmo com toda a matriz de permissões marcada. O dono
+ * ia ao painel, criava "Sócio Júnior" com "configuracoes: editar = true",
+ * e ainda assim o usuário recebia "Sem permissão".
+ *
+ * Este helper preserva o comportamento histórico (dono e gestor sempre
+ * passam) E delega cargos personalizados pra matriz oficial — usando o
+ * `modulo` + `acao` que o caller indica como mapeamento semântico.
+ *
+ * Uso típico:
+ *   const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "configuracoes", "editar");
+ *   if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+ *   // Continua usando perm.escritorioId, perm.colaboradorId, perm.cargo etc.
+ */
+export async function checkPermissionAdminOuMatriz(
+  userId: number,
+  modulo: string,
+  acao: "criar" | "editar" | "excluir" = "editar",
+): Promise<PermissionResult> {
+  // Dono/gestor: bypass legado preservado. Não chama matriz pra evitar
+  // dependência em entries específicas que podem mudar.
+  const esc = await getEscritorioPorUsuario(userId);
+  if (!esc) {
+    return {
+      allowed: false, verTodos: false, verProprios: false,
+      criar: false, editar: false, excluir: false,
+      colaboradorId: 0, escritorioId: 0, cargo: "",
+    };
+  }
+
+  const base = {
+    colaboradorId: esc.colaborador.id,
+    escritorioId: esc.escritorio.id,
+    cargo: esc.colaborador.cargo,
+  };
+
+  if (esc.colaborador.cargo === "dono" || esc.colaborador.cargo === "gestor") {
+    return {
+      allowed: true, verTodos: true, verProprios: true,
+      criar: true, editar: true, excluir: true,
+      ...base,
+    };
+  }
+
+  // Demais cargos: delega para a matriz oficial. Cargos personalizados
+  // com a flag marcada passam; cargos legados sem privilégio (atendente,
+  // estagiario, sdr) ficam bloqueados.
+  return checkPermission(userId, modulo, acao);
+}

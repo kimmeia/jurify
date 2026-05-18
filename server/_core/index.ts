@@ -128,7 +128,22 @@ async function startServer() {
   // buffer em memória — operador com upload concorrente pode estourar a RAM
   // do Node (OOM). Limite operacional na prática é o que a infra do servidor
   // aguenta, não esse número.
-  app.use(express.json({ limit: "3gb" }));
+  // O `verify` callback captura o body RAW como Buffer em `req.rawBody`
+  // apenas pra paths de webhook que precisam validar HMAC (ex: Cal.com,
+  // futuramente WhatsApp Cloud). Para o resto, `req.body` continua sendo o
+  // objeto já parsed — sem custo de memória adicional em requests
+  // normais do tRPC.
+  app.use(
+    express.json({
+      limit: "3gb",
+      verify: (req, _res, buf) => {
+        const url = (req as { url?: string }).url ?? "";
+        if (url.startsWith("/api/webhooks/")) {
+          (req as { rawBody?: Buffer }).rawBody = buf;
+        }
+      },
+    }),
+  );
   app.use(express.urlencoded({ limit: "3gb", extended: true }));
   // Serve uploaded files statically
   app.use("/uploads", express.static("./uploads"));

@@ -20,14 +20,10 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import AdminAuditoria from "./pages/admin/AdminAuditoria";
 import AdminErros from "./pages/admin/AdminErros";
+import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminBackups from "./pages/admin/AdminBackups";
-import AdminInadimplentes from "./pages/admin/AdminInadimplentes";
-import AdminPlanos from "./pages/admin/AdminPlanos";
-import AdminCupons from "./pages/admin/AdminCupons";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
-import MotorProprioTeste from "./pages/admin/MotorProprioTeste";
-import CofreCredenciais from "./pages/admin/CofreCredenciais";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
 import Imobiliario from "./pages/calculos/Imobiliario";
@@ -125,21 +121,6 @@ function Router() {
           <AdminSubscriptions />
         </AdminArea>
       </Route>
-      <Route path="/admin/inadimplentes">
-        <AdminArea>
-          <AdminInadimplentes />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/planos">
-        <AdminArea>
-          <AdminPlanos />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/cupons">
-        <AdminArea>
-          <AdminCupons />
-        </AdminArea>
-      </Route>
       <Route path="/admin/financeiro">
         <AdminArea>
           <AdminFinanceiro />
@@ -148,16 +129,6 @@ function Router() {
       <Route path="/admin/agentes-ia">
         <AdminArea>
           <AdminAgentesIA />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/motor-proprio-teste">
-        <AdminArea>
-          <MotorProprioTeste />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/cofre-credenciais">
-        <AdminArea>
-          <CofreCredenciais />
         </AdminArea>
       </Route>
       <Route path="/admin/reports">
@@ -173,6 +144,11 @@ function Router() {
       <Route path="/admin/erros">
         <AdminArea>
           <AdminErros />
+        </AdminArea>
+      </Route>
+      <Route path="/admin/email-log">
+        <AdminArea>
+          <AdminEmailLog />
         </AdminArea>
       </Route>
       <Route path="/admin/backups">

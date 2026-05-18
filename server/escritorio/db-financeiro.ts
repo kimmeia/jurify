@@ -546,3 +546,242 @@ export async function aplicarConciliacaoOFXMatch(params: {
     throw txErr;
   }
 }
+
+// ─── Conciliação OFX — Lote (tudo-ou-nada) ───────────────────────────────────
+
+/**
+ * Resultado por match dentro do lote — preserva o vocabulário do helper
+ * per-match pra UI continuar usando os mesmos textos de erro.
+ */
+export type ResultadoConciliacaoOFXLoteItem =
+  | { status: "aplicado_despesa"; entidadeId: number; fitid: string }
+  | { status: "aplicado_cobranca"; entidadeId: number; fitid: string }
+  | { status: "ja_importada"; entidadeId: number; fitid: string }
+  | { status: "entidade_nao_encontrada"; entidadeId: number; fitid: string; tipo: "despesa" | "cobranca" }
+  | { status: "cobranca_asaas_pulada"; entidadeId: number; fitid: string };
+
+export interface ResultadoConciliacaoOFXLote {
+  despesasMarcadas: number;
+  cobrancasMarcadas: number;
+  jaImportadas: number;
+  erros: string[];
+  /** True quando NADA foi gravado por causa de erros estruturais. */
+  abortado: boolean;
+  itens: ResultadoConciliacaoOFXLoteItem[];
+}
+
+/**
+ * Aplica conciliação OFX em LOTE com semântica tudo-ou-nada.
+ *
+ * Por que existe (bug #10): a procedure original (`confirmarConciliacaoOFX`)
+ * iterava chamando `aplicarConciliacaoOFXMatch` por match em transações
+ * INDEPENDENTES. Se o match #50 falhasse no meio do batch (entidade
+ * removida entre preview e confirmar, race condition, DB down), o user
+ * ficava com 1..49 gravados + 51..N não-tentados, sem maneira clara de
+ * saber em que estado o sistema estava. Re-rodar o import gerava
+ * mistura de "ja_importadas" + sucessos parciais.
+ *
+ * Esta função:
+ *  1. PRÉ-VALIDA todos os matches numa única passada: existência de
+ *     entidade, origem (asaas vs manual), e fitids já gravados.
+ *  2. Se houver QUALQUER erro estrutural (entidade inexistente ou
+ *     cobrança asaas), aborta o batch inteiro SEM gravar — UI mostra a
+ *     lista pra usuário corrigir antes de re-tentar.
+ *  3. Senão, abre UMA transação englobando todos os inserts/updates dos
+ *     matches válidos. Qualquer falha do banco aborta tudo via rollback
+ *     automático do Drizzle.
+ *  4. `jaImportadas` (fitid já registrado) é SKIP, não erro — não
+ *     bloqueia o batch.
+ *
+ * Contadores devolvidos correspondem ao que ficou gravado:
+ *  - despesasMarcadas: despesas marcadas como pagas
+ *  - cobrancasMarcadas: cobranças manuais marcadas como recebidas
+ *  - jaImportadas: matches que já tinham fitid (skipados)
+ *  - erros: textos amigáveis pra UI
+ *  - abortado: true quando erros estruturais cancelaram o batch (nada gravado)
+ */
+export async function aplicarConciliacaoOFXEmLote(params: {
+  escritorioId: number;
+  importadoPorUserId: number;
+  matches: Array<{
+    fitid: string;
+    tipo: "despesa" | "cobranca";
+    entidadeId: number;
+    valor: number;
+    dataPagamento: string;
+  }>;
+}): Promise<ResultadoConciliacaoOFXLote> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  const { escritorioId, importadoPorUserId, matches } = params;
+
+  if (matches.length === 0) {
+    return { despesasMarcadas: 0, cobrancasMarcadas: 0, jaImportadas: 0, erros: [], abortado: false, itens: [] };
+  }
+
+  // Fase 1 — pré-resolução em batch. Faz 3 queries no máximo, evita N+1.
+
+  const fitids = Array.from(new Set(matches.map((m) => m.fitid)));
+  const fitidsImportadosRows = await db
+    .select({ fitid: ofxImportacoesFitid.fitid })
+    .from(ofxImportacoesFitid)
+    .where(
+      and(
+        eq(ofxImportacoesFitid.escritorioId, escritorioId),
+        inArray(ofxImportacoesFitid.fitid, fitids),
+      ),
+    );
+  const fitidsJaImportados = new Set(fitidsImportadosRows.map((r) => r.fitid));
+
+  const despesaIds = Array.from(
+    new Set(matches.filter((m) => m.tipo === "despesa").map((m) => m.entidadeId)),
+  );
+  const cobrancaIds = Array.from(
+    new Set(matches.filter((m) => m.tipo === "cobranca").map((m) => m.entidadeId)),
+  );
+
+  const despesasMap = new Map<number, { valor: string }>();
+  if (despesaIds.length > 0) {
+    const rows = await db
+      .select({ id: despesas.id, valor: despesas.valor })
+      .from(despesas)
+      .where(and(eq(despesas.escritorioId, escritorioId), inArray(despesas.id, despesaIds)));
+    for (const r of rows) despesasMap.set(r.id, { valor: r.valor as unknown as string });
+  }
+
+  const cobrancasMap = new Map<number, { origem: string }>();
+  if (cobrancaIds.length > 0) {
+    const rows = await db
+      .select({ id: asaasCobrancas.id, origem: asaasCobrancas.origem })
+      .from(asaasCobrancas)
+      .where(and(eq(asaasCobrancas.escritorioId, escritorioId), inArray(asaasCobrancas.id, cobrancaIds)));
+    for (const r of rows) cobrancasMap.set(r.id, { origem: r.origem as unknown as string });
+  }
+
+  // Fase 2 — classificação por match.
+
+  type ItemValido =
+    | { kind: "despesa"; match: typeof matches[number]; valorDespesa: string }
+    | { kind: "cobranca"; match: typeof matches[number] };
+
+  const itens: ResultadoConciliacaoOFXLoteItem[] = [];
+  const validos: ItemValido[] = [];
+  const erros: string[] = [];
+
+  for (const m of matches) {
+    if (fitidsJaImportados.has(m.fitid)) {
+      itens.push({ status: "ja_importada", entidadeId: m.entidadeId, fitid: m.fitid });
+      continue;
+    }
+
+    if (m.tipo === "despesa") {
+      const d = despesasMap.get(m.entidadeId);
+      if (!d) {
+        erros.push(`Despesa #${m.entidadeId} não encontrada`);
+        itens.push({ status: "entidade_nao_encontrada", entidadeId: m.entidadeId, fitid: m.fitid, tipo: "despesa" });
+        continue;
+      }
+      validos.push({ kind: "despesa", match: m, valorDespesa: d.valor });
+      continue;
+    }
+
+    const c = cobrancasMap.get(m.entidadeId);
+    if (!c) {
+      erros.push(`Cobrança #${m.entidadeId} não encontrada`);
+      itens.push({ status: "entidade_nao_encontrada", entidadeId: m.entidadeId, fitid: m.fitid, tipo: "cobranca" });
+      continue;
+    }
+    if (c.origem !== "manual") {
+      erros.push(
+        `Cobrança #${m.entidadeId} é Asaas — sincroniza automaticamente via webhook (pulada)`,
+      );
+      itens.push({ status: "cobranca_asaas_pulada", entidadeId: m.entidadeId, fitid: m.fitid });
+      continue;
+    }
+    validos.push({ kind: "cobranca", match: m });
+  }
+
+  const jaImportadas = itens.filter((i) => i.status === "ja_importada").length;
+
+  // Fase 3 — abort se há erro estrutural. Nada gravado.
+
+  if (erros.length > 0) {
+    return {
+      despesasMarcadas: 0,
+      cobrancasMarcadas: 0,
+      jaImportadas: 0,
+      erros,
+      abortado: true,
+      itens,
+    };
+  }
+
+  // Fase 4 — transação única, tudo-ou-nada. Drizzle rolla automático em
+  // exceção dentro da callback.
+
+  let despesasMarcadas = 0;
+  let cobrancasMarcadas = 0;
+
+  if (validos.length > 0) {
+    await db.transaction(async (tx) => {
+      for (const v of validos) {
+        if (v.kind === "despesa") {
+          await tx.insert(ofxImportacoesFitid).values({
+            escritorioId,
+            fitid: v.match.fitid,
+            tipoEntidade: "despesa",
+            entidadeId: v.match.entidadeId,
+            valor: v.match.valor.toFixed(2),
+            dataPagamento: v.match.dataPagamento,
+            importadoPorUserId,
+          });
+          await tx
+            .update(despesas)
+            .set({
+              status: "pago",
+              dataPagamento: v.match.dataPagamento,
+              valorPago: v.valorDespesa,
+            })
+            .where(
+              and(eq(despesas.id, v.match.entidadeId), eq(despesas.escritorioId, escritorioId)),
+            );
+          continue;
+        }
+
+        await tx.insert(ofxImportacoesFitid).values({
+          escritorioId,
+          fitid: v.match.fitid,
+          tipoEntidade: "cobranca",
+          entidadeId: v.match.entidadeId,
+          valor: v.match.valor.toFixed(2),
+          dataPagamento: v.match.dataPagamento,
+          importadoPorUserId,
+        });
+        await tx
+          .update(asaasCobrancas)
+          .set({ status: "RECEIVED", dataPagamento: v.match.dataPagamento })
+          .where(eq(asaasCobrancas.id, v.match.entidadeId));
+      }
+    });
+
+    for (const v of validos) {
+      if (v.kind === "despesa") {
+        despesasMarcadas++;
+        itens.push({ status: "aplicado_despesa", entidadeId: v.match.entidadeId, fitid: v.match.fitid });
+      } else {
+        cobrancasMarcadas++;
+        itens.push({ status: "aplicado_cobranca", entidadeId: v.match.entidadeId, fitid: v.match.fitid });
+      }
+    }
+  }
+
+  return {
+    despesasMarcadas,
+    cobrancasMarcadas,
+    jaImportadas,
+    erros: [],
+    abortado: false,
+    itens,
+  };
+}

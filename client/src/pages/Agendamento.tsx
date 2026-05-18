@@ -327,7 +327,9 @@ function AgendamentoCard({ agendamento: a, onUpdated }: { agendamento: any; onUp
       <div className="flex items-center gap-1 shrink-0">
         {a.status !== "concluido" && (
           <Button variant="ghost" size="icon" className="h-7 w-7"
-            onClick={() => atualizarMut.mutate({ id: a.id, status: "concluido" })} title="Concluir">
+            onClick={() => atualizarMut.mutate({ id: a.id, status: "concluido" })}
+            disabled={atualizarMut.isPending}
+            title="Concluir">
             <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
           </Button>
         )}

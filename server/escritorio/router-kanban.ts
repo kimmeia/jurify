@@ -318,7 +318,7 @@ export const kanbanRouter = router({
     .input(z.object({
       colunaId: z.number(),
       titulo: z.string().min(1).max(255),
-      descricao: z.string().optional(),
+      descricao: z.string().max(5000).optional(),
       cnj: z.string().max(30).optional(),
       clienteId: z.number().optional(),
       responsavelId: z.number().optional(),
@@ -401,7 +401,7 @@ export const kanbanRouter = router({
     .input(z.object({
       id: z.number(),
       titulo: z.string().max(255).optional(),
-      descricao: z.string().optional(),
+      descricao: z.string().max(5000).optional(),
       cnj: z.string().max(30).optional(),
       clienteId: z.number().optional(),
       // null = remove o responsável (card fica "sem responsável")

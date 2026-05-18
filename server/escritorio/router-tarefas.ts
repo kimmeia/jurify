@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { escapeLikePattern } from "../_core/sql-helpers";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { tarefas, colaboradores, users } from "../../drizzle/schema";
@@ -66,7 +67,7 @@ export const tarefasRouter = router({
       if (input?.responsavelId) conditions.push(eq(tarefas.responsavelId, input.responsavelId));
       if (input?.prioridade) conditions.push(eq(tarefas.prioridade, input.prioridade));
       if (input?.busca) {
-        const b = `%${input.busca}%`;
+        const b = `%${escapeLikePattern(input.busca)}%`;
         conditions.push(or(like(tarefas.titulo, b), like(tarefas.descricao, b))!);
       }
       if (input?.vencimentoAte) {

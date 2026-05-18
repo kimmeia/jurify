@@ -14,8 +14,28 @@ import { smartflowExecucoes } from "../../drizzle/schema";
 import { and, eq, isNotNull, lte } from "drizzle-orm";
 import { retomarExecucao } from "./dispatcher";
 import { createLogger } from "../_core/logger";
+import { captureError } from "../_core/sentry";
 
 const log = createLogger("smartflow-scheduler");
+
+/**
+ * Reporta erros INESPERADOS escapados de `rodarCicloScheduler`. O try/catch
+ * interno da função já trata erros previsíveis e retorna `{retomadas:0,
+ * falhas:0}` — esse handler cobre rejeições que furam o try (ex: erro
+ * async no `await getDb()` antes do try-block). Sem isso, o scheduler ia
+ * parar silenciosamente em produção e o operador só descobriria horas/
+ * dias depois (via reclamação "minha automação não roda").
+ *
+ * Exportada para teste em
+ * `server/__tests__/smartflow-schedulers-error-handler.test.ts`.
+ */
+export function reportarErroInesperado(err: unknown): void {
+  log.error(
+    { err: err instanceof Error ? err.stack : String(err) },
+    "[Scheduler] Erro inesperado escapou do ciclo — verifique se há rejeição async fora do try interno",
+  );
+  captureError(err, { kind: "smartflow-scheduler" });
+}
 
 const INTERVALO_MS = 60_000; // 60s
 
@@ -68,8 +88,11 @@ export function iniciarSchedulerSmartFlow() {
   if (intervalo) return;
   log.info({ intervaloMs: INTERVALO_MS }, "[Scheduler] SmartFlow scheduler iniciado");
   // Primeira execução após 30s pra dar tempo do servidor subir
-  setTimeout(() => rodarCicloScheduler().catch(() => {}), 30_000);
-  intervalo = setInterval(() => rodarCicloScheduler().catch(() => {}), INTERVALO_MS);
+  setTimeout(() => rodarCicloScheduler().catch(reportarErroInesperado), 30_000);
+  intervalo = setInterval(
+    () => rodarCicloScheduler().catch(reportarErroInesperado),
+    INTERVALO_MS,
+  );
 }
 
 export function pararSchedulerSmartFlow() {

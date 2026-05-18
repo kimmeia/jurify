@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { checkPermissionAdminOuMatriz } from "../escritorio/check-permission";
 import { atualizarStatusCanal, registrarAudit } from "../escritorio/db-canais";
 import { getWhatsappManager } from "./whatsapp-baileys";
 import { processarMensagemRecebida } from "./whatsapp-handler";
@@ -89,11 +90,12 @@ export const whatsappRouter = router({
   iniciarSessao: protectedProcedure
     .input(z.object({ canalId: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "configuracoes", "editar");
+      if (!perm.allowed) {
+        throw new Error("Apenas donos, gestores ou cargos com permissão de editar configurações podem conectar WhatsApp.");
+      }
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Apenas donos e gestores podem conectar WhatsApp.");
-      }
 
       const info = await manager.iniciarSessao(input.canalId, esc.escritorio.id);
 
@@ -116,11 +118,10 @@ export const whatsappRouter = router({
   desconectarSessao: protectedProcedure
     .input(z.object({ canalId: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "configuracoes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão.");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
-      if (esc.colaborador.cargo !== "dono" && esc.colaborador.cargo !== "gestor") {
-        throw new Error("Sem permissão.");
-      }
 
       await manager.desconectarSessao(input.canalId);
       await atualizarStatusCanal(input.canalId, esc.escritorio.id, "desconectado");

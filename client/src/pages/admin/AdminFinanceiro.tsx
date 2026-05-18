@@ -20,12 +20,15 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   DollarSign, TrendingUp, AlertTriangle, Clock, ExternalLink, RefreshCw,
   Loader2, Wallet, Receipt, Repeat, Search, XCircle, ArrowUpRight, CheckCircle2,
-  Hourglass, Ban, Coins,
+  Hourglass, Ban, Coins, Tag, Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
+import { InadimplentesSection } from "./financeiro/InadimplentesSection";
+import { CuponsSection } from "./financeiro/CuponsSection";
+import { PlanosSection } from "./financeiro/PlanosSection";
 
 function formatBRL(cents: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -282,7 +285,7 @@ export default function AdminFinanceiro() {
         </CardContent>
       </Card>
 
-      {/* Tabs: Visão / Pagamentos / Assinaturas */}
+      {/* Tabs: Cash Flow / Pagamentos / Assinaturas / Inadimplência / Cupons / Planos */}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="visao" className="text-xs">
@@ -293,6 +296,15 @@ export default function AdminFinanceiro() {
           </TabsTrigger>
           <TabsTrigger value="assinaturas" className="text-xs">
             <Repeat className="h-3.5 w-3.5 mr-1.5" /> Assinaturas
+          </TabsTrigger>
+          <TabsTrigger value="inadimplencia" className="text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 mr-1.5" /> Inadimplência
+          </TabsTrigger>
+          <TabsTrigger value="cupons" className="text-xs">
+            <Tag className="h-3.5 w-3.5 mr-1.5" /> Cupons
+          </TabsTrigger>
+          <TabsTrigger value="planos" className="text-xs">
+            <Package className="h-3.5 w-3.5 mr-1.5" /> Planos
           </TabsTrigger>
         </TabsList>
 
@@ -523,6 +535,21 @@ export default function AdminFinanceiro() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ─── Inadimplência ─── */}
+        <TabsContent value="inadimplencia" className="mt-4">
+          <InadimplentesSection />
+        </TabsContent>
+
+        {/* ─── Cupons ─── */}
+        <TabsContent value="cupons" className="mt-4">
+          <CuponsSection />
+        </TabsContent>
+
+        {/* ─── Planos ─── */}
+        <TabsContent value="planos" className="mt-4">
+          <PlanosSection />
         </TabsContent>
       </Tabs>
 

@@ -22,6 +22,59 @@ interface EmailOptions {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Tipo do email para rastreio no log (bug #6). Padroniza por:
+   * boas_vindas, redefinir_senha, convite_colaborador, outro.
+   * Quando omitido, fica como "outro".
+   */
+  tipo?: string;
+  escritorioId?: number;
+  userId?: number;
+}
+
+/**
+ * Persiste resultado do envio no `email_log` (bug #6). Antes os erros
+ * viviam só no logger e somiam — admin não tinha como auditar nem reenviar.
+ *
+ * Best-effort: se o INSERT falhar (DB indisponível, schema fora de sync),
+ * apenas loga e continua — falha de log NÃO deve impedir o caller original
+ * de receber a resposta da chamada de email.
+ */
+async function registrarEmailLog(params: {
+  tipo: string;
+  destinatario: string;
+  assunto: string;
+  status: "sucesso" | "falha";
+  erro?: string;
+  escritorioId?: number;
+  userId?: number;
+  contexto?: { html: string; text?: string };
+}): Promise<number | null> {
+  try {
+    const { getDb } = await import("../db");
+    const { emailLog } = await import("../../drizzle/schema");
+    const db = await getDb();
+    if (!db) return null;
+
+    const contextoJson = params.contexto
+      ? JSON.stringify({ html: params.contexto.html, text: params.contexto.text })
+      : null;
+
+    const res: any = await db.insert(emailLog).values({
+      tipo: params.tipo,
+      destinatario: params.destinatario,
+      assunto: params.assunto,
+      status: params.status,
+      erro: params.erro?.slice(0, 1024) ?? null,
+      escritorioId: params.escritorioId ?? null,
+      userId: params.userId ?? null,
+      contextoJson,
+    });
+    return res?.[0]?.insertId ?? null;
+  } catch (err: any) {
+    log.warn({ err: err.message }, "Falha ao registrar email_log (best-effort, ignorado)");
+    return null;
+  }
 }
 
 type ResendKeyResult = {
@@ -84,7 +137,7 @@ async function getResendApiKey(): Promise<ResendKeyResult> {
   return { apiKey: "", fonte: "vazio", diagnostico: dbDiag };
 }
 
-export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string }> {
+export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string; logId?: number | null }> {
   // Validações defensivas — sem isso já tivemos casos em que o Resend
   // retornou 422 "Missing 'to' field" porque options.to chegou vazio,
   // gastando rate-limit à toa. Falhar cedo dá erro acionável pro caller.
@@ -92,24 +145,58 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
     log.error({}, "enviarEmail chamado sem options");
     return { success: false, error: "Email options ausente." };
   }
+  const tipo = options.tipo ?? "outro";
   if (!options.to || typeof options.to !== "string" || !options.to.trim()) {
     log.error({ options }, "enviarEmail chamado sem 'to' válido");
-    return { success: false, error: "Destinatário (to) ausente." };
+    const erroMsg = "Destinatário (to) ausente.";
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: typeof options.to === "string" ? options.to : "(vazio)",
+      assunto: options.subject ?? "(vazio)",
+      status: "falha",
+      erro: erroMsg,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html ?? "", text: options.text },
+    });
+    return { success: false, error: erroMsg, logId };
   }
   if (!options.subject?.trim() || !options.html?.trim()) {
     log.error({ subject: options.subject, hasHtml: !!options.html }, "enviarEmail sem subject/html");
-    return { success: false, error: "Email sem assunto ou corpo." };
+    const erroMsg = "Email sem assunto ou corpo.";
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject ?? "(vazio)",
+      status: "falha",
+      erro: erroMsg,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html ?? "", text: options.text },
+    });
+    return { success: false, error: erroMsg, logId };
   }
 
   const { apiKey, fonte, diagnostico } = await getResendApiKey();
+
   if (!apiKey) {
+    const erroMsg = diagnostico
+      ? `Serviço de email não configurado. ${diagnostico}. Admin → Integrações → Resend.`
+      : "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.";
     log.warn({ diagnostico }, "Resend API key não configurada — email não enviado");
-    return {
-      success: false,
-      error: diagnostico
-        ? `Serviço de email não configurado. ${diagnostico}. Admin → Integrações → Resend.`
-        : "Serviço de email não configurado. Admin deve conectar Resend em Admin → Integrações.",
-    };
+
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject,
+      status: "falha",
+      erro: erroMsg,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html, text: options.text },
+    });
+
+    return { success: false, error: erroMsg, logId };
   }
   log.debug({ fonte, to: options.to }, "Enviando email via Resend");
 
@@ -136,24 +223,60 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
         "Resend retornou erro",
       );
       // Mensagem mais útil pro usuário final detectar problemas comuns.
-      let userMsg = `Erro ao enviar email (${res.status}): ${err.slice(0, 200)}`;
+      let userMsg = `Erro ao enviar email (${res.status}): ${err.slice(0, 256)}`;
       const errLower = err.toLowerCase();
-      if (errLower.includes("domain") && (errLower.includes("verify") || errLower.includes("valid"))) {
-        userMsg = `Domínio "${FROM_EMAIL}" não está verificado no Resend. Vá em Resend → Domains e adicione os registros DNS (SPF + DKIM) do seu domínio.`;
+      const dominioMatch = FROM_EMAIL.match(/@([^>\s]+)/);
+      const dominio = dominioMatch ? dominioMatch[1] : FROM_EMAIL;
+      if (errLower.includes("domain") && (errLower.includes("not verified") || errLower.includes("verify") || errLower.includes("valid"))) {
+        userMsg = `Domínio "${dominio}" não está verificado no Resend. Em Resend → Domains: (1) adicione o domínio, (2) copie os registros DNS (MX/SPF/DKIM/DMARC) e cole no seu provedor de DNS, (3) volte no Resend e clique em "Verify DNS Records". A verificação só conclui quando todos os registros estiverem propagados (pode levar até 1h).`;
       } else if (errLower.includes("missing") && errLower.includes("to")) {
         userMsg = "Endereço de destino ausente. Verifique se o cadastro tem email válido.";
-      } else if (res.status === 401 || res.status === 403) {
-        userMsg = "API key do Resend inválida ou sem permissão. Admin → Integrações → Resend.";
+      } else if (res.status === 401) {
+        userMsg = "API key do Resend inválida. Admin → Integrações → Resend.";
+      } else if (res.status === 403 && !errLower.includes("domain")) {
+        userMsg = "API key do Resend sem permissão. Admin → Integrações → Resend.";
       }
-      return { success: false, error: userMsg };
+      // Log preserva a resposta crua do Resend (status + body) pra auditoria.
+      // O usuário recebe userMsg traduzida; o admin no AdminEmailLog vê o motivo real.
+      const erroLog = `${res.status} ${err.slice(0, 512)}`;
+      const logId = await registrarEmailLog({
+        tipo,
+        destinatario: options.to,
+        assunto: options.subject,
+        status: "falha",
+        erro: erroLog,
+        escritorioId: options.escritorioId,
+        userId: options.userId,
+        contexto: { html: options.html, text: options.text },
+      });
+      return { success: false, error: userMsg, logId };
     }
 
     const data = await res.json();
     log.info({ to: options.to, id: data.id }, "Email enviado com sucesso");
-    return { success: true };
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject,
+      status: "sucesso",
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html, text: options.text },
+    });
+    return { success: true, logId };
   } catch (err: any) {
     log.error({ err: err.message }, "Falha ao enviar email");
-    return { success: false, error: err.message };
+    const logId = await registrarEmailLog({
+      tipo,
+      destinatario: options.to,
+      assunto: options.subject,
+      status: "falha",
+      erro: err.message,
+      escritorioId: options.escritorioId,
+      userId: options.userId,
+      contexto: { html: options.html, text: options.text },
+    });
+    return { success: false, error: err.message, logId };
   }
 }
 
@@ -219,6 +342,7 @@ export async function enviarEmailConvite(params: {
     subject: `Convite para ${params.nomeEscritorio} — Jurify`,
     html,
     text,
+    tipo: "convite_colaborador",
   });
 }
 
@@ -263,7 +387,7 @@ export async function enviarEmailRedefinirSenha(params: {
 </body>
 </html>`;
   const text = `Olá ${params.nome || "Usuário"},\n\nRecebemos uma solicitação para redefinir sua senha do Jurify.\n\nAcesse o link abaixo (expira em 1h):\n${link}\n\nSe você não solicitou, ignore este email.`;
-  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — Jurify", html, text });
+  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — Jurify", html, text, tipo: "redefinir_senha" });
 }
 
 /**
@@ -304,5 +428,5 @@ export async function enviarEmailBoasVindas(params: {
 </body>
 </html>`;
   const text = `Olá ${params.nome},\n\nSua conta no Jurify foi criada com sucesso. Estamos felizes em ter você.\n\nAcesse: ${APP_URL}/dashboard\n\nEstamos em versão Beta — use o menu Roadmap dentro do app pra sugerir melhorias.`;
-  return enviarEmail({ to: params.email, subject: "Bem-vindo ao Jurify", html, text });
+  return enviarEmail({ to: params.email, subject: "Bem-vindo ao Jurify", html, text, tipo: "boas_vindas" });
 }
