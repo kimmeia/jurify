@@ -15,7 +15,7 @@ import { createLogger } from "./logger";
 const log = createLogger("email");
 
 const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://app.jurify.com.br";
-const FROM_EMAIL = process.env.FROM_EMAIL || "Jurify <noreply@jurify.com.br>";
+const FROM_EMAIL = process.env.FROM_EMAIL || "Jurify <noreply@juridflow.com.br>";
 
 interface EmailOptions {
   to: string;
