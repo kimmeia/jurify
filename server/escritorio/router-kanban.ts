@@ -1072,6 +1072,67 @@ export const kanbanRouter = router({
     }),
 
   /** Reordena colunas via drag-and-drop. Recebe array de IDs na ordem nova. */
+  /**
+   * Reordena os cards de UMA coluna. Frontend passa a lista de IDs na
+   * ordem nova (após o drag-and-drop). Backend faz UPDATE de cada ordem
+   * em sequência. Idempotente — repetir o mesmo array é no-op.
+   *
+   * Permissão: editar do módulo kanban. verProprios não bloqueia
+   * reordenação porque a operação é da coluna como um todo (visual).
+   */
+  reordenarCardsEmColuna: protectedProcedure
+    .input(z.object({
+      colunaId: z.number(),
+      idsOrdenados: z.array(z.number().int().positive()).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Valida que coluna pertence ao escritório (via JOIN com funis).
+      const [colInfo] = await db
+        .select({ id: kanbanColunas.id, funilId: kanbanColunas.funilId })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanFunis.id, kanbanColunas.funilId))
+        .where(and(
+          eq(kanbanColunas.id, input.colunaId),
+          eq(kanbanFunis.escritorioId, perm.escritorioId),
+        ))
+        .limit(1);
+      if (!colInfo) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Valida que todos os IDs pertencem ao escritório E estão nesta coluna.
+      if (input.idsOrdenados.length === 0) return { atualizados: 0 };
+      const cardsValidos = await db
+        .select({ id: kanbanCards.id })
+        .from(kanbanCards)
+        .where(and(
+          eq(kanbanCards.escritorioId, perm.escritorioId),
+          eq(kanbanCards.colunaId, input.colunaId),
+          inArray(kanbanCards.id, input.idsOrdenados),
+        ));
+      const idsValidos = new Set(cardsValidos.map((c) => c.id));
+
+      let atualizados = 0;
+      // Mantém ordem do array passado; ignora ids que não passaram na
+      // validação acima (segurança/race).
+      for (let i = 0; i < input.idsOrdenados.length; i++) {
+        const id = input.idsOrdenados[i];
+        if (!idsValidos.has(id)) continue;
+        await db
+          .update(kanbanCards)
+          .set({ ordem: i + 1 })
+          .where(and(
+            eq(kanbanCards.id, id),
+            eq(kanbanCards.escritorioId, perm.escritorioId),
+          ));
+        atualizados++;
+      }
+      return { atualizados };
+    }),
+
   reordenarColunas: protectedProcedure
     .input(z.object({ funilId: z.number(), idsOrdenados: z.array(z.number()) }))
     .mutation(async ({ ctx, input }) => {
