@@ -315,6 +315,32 @@ export function iniciarJobs() {
     }
   }, 50_000);
 
+  // A cada 24h: auto-arquiva cards do Kanban em coluna tipo='conclusao' cuja
+  // última atualização foi antes do 1º dia do mês corrente. Efeito: dia 1
+  // limpa tudo do mês passado. Resto do mês é no-op (idempotente). Diário
+  // pra tolerar app fora do ar no dia 1.
+  setInterval(async () => {
+    try {
+      const { arquivarConcluidosDoMesPassado } = await import(
+        "../escritorio/cron-arquivar-concluidos"
+      );
+      await arquivarConcluidosDoMesPassado();
+    } catch (err: any) {
+      log.error("[Cron] arquivarConcluidosDoMesPassado falhou:", err.message);
+    }
+  }, 24 * 60 * 60 * 1000);
+  // Roda 1x na partida (70s pra evitar competir com despesas-recorrentes e extrato Asaas).
+  setTimeout(async () => {
+    try {
+      const { arquivarConcluidosDoMesPassado } = await import(
+        "../escritorio/cron-arquivar-concluidos"
+      );
+      await arquivarConcluidosDoMesPassado();
+    } catch (err: any) {
+      log.error("[Cron] arquivarConcluidosDoMesPassado inicial falhou:", err.message);
+    }
+  }, 70_000);
+
   // A cada 24h: sincroniza extrato Asaas (taxas, transferências, mensalidade
   // Asaas) pra todos os escritórios com Asaas conectado. Idempotente via
   // UNIQUE INDEX (escritorioId, asaasFinTransId), então rodar puxando 3 dias
