@@ -288,7 +288,11 @@ export async function atualizarColaborador(
  * removido viram órfãs (no JOIN aparecem como "Sem responsável") — isso
  * é intencional pra não perder histórico do escritório.
  */
-export async function removerColaborador(colaboradorId: number, escritorioId: number) {
+export async function removerColaborador(
+  colaboradorId: number,
+  escritorioId: number,
+  removidoPorColaboradorId?: number,
+) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
@@ -300,28 +304,61 @@ export async function removerColaborador(colaboradorId: number, escritorioId: nu
   if (!colab) throw new Error("Colaborador não encontrado.");
   if (colab.cargo === "dono") throw new Error("O dono do escritório não pode ser removido.");
 
-  const userId = colab.userId;
+  // Soft delete: ativo=false + carimbo de remoção. Antes era hard DELETE
+  // (irrecuperável). Cards/movimentações/comentários apontando pra esse
+  // colaboradorId continuam funcionando — a UI esconde da lista de Equipe
+  // mas o histórico permanece intacto. Restaurar via restaurarColaborador
+  // reverte: ativo=true, limpa removidoEm/removidoPor.
+  await db
+    .update(colaboradores)
+    .set({
+      ativo: false,
+      removidoEm: new Date(),
+      removidoPor: removidoPorColaboradorId ?? null,
+    })
+    .where(eq(colaboradores.id, colaboradorId));
+}
 
-  // 1. Hard-delete do vínculo
-  await db.delete(colaboradores).where(eq(colaboradores.id, colaboradorId));
+export async function restaurarColaborador(
+  colaboradorId: number,
+  escritorioId: number,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
 
-  // 2. Se o usuário não tem mais NENHUM vínculo em outros escritórios,
-  //    deleta o usuário do sistema. Isso libera o email pra recadastro.
-  const outrosVinculos = await db
-    .select({ id: colaboradores.id })
-    .from(colaboradores)
-    .where(eq(colaboradores.userId, userId))
+  const [colab] = await db.select().from(colaboradores)
+    .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
     .limit(1);
+  if (!colab) throw new Error("Colaborador não encontrado.");
+  if (colab.ativo) throw new Error("Colaborador já está ativo.");
 
-  if (outrosVinculos.length === 0) {
-    try {
-      await db.delete(users).where(eq(users.id, userId));
-    } catch (err) {
-      // Se a deleção do user falhar (ex: FK constraint de outras tabelas
-      // que referenciam users.id), não bloqueia — o vínculo já foi removido.
-      // O ex-colaborador apenas não conseguirá usar o sistema.
-    }
-  }
+  await db
+    .update(colaboradores)
+    .set({ ativo: true, removidoEm: null, removidoPor: null })
+    .where(eq(colaboradores.id, colaboradorId));
+}
+
+export async function listarColaboradoresRemovidos(escritorioId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select({
+      id: colaboradores.id,
+      userId: colaboradores.userId,
+      cargo: colaboradores.cargo,
+      removidoEm: colaboradores.removidoEm,
+      removidoPor: colaboradores.removidoPor,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(colaboradores)
+    .innerJoin(users, eq(colaboradores.userId, users.id))
+    .where(and(
+      eq(colaboradores.escritorioId, escritorioId),
+      eq(colaboradores.ativo, false),
+    ))
+    .orderBy(desc(colaboradores.removidoEm));
 }
 
 // ─── Convites ────────────────────────────────────────────────────────────────

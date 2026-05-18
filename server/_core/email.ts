@@ -85,6 +85,22 @@ async function getResendApiKey(): Promise<ResendKeyResult> {
 }
 
 export async function enviarEmail(options: EmailOptions): Promise<{ success: boolean; error?: string }> {
+  // Validações defensivas — sem isso já tivemos casos em que o Resend
+  // retornou 422 "Missing 'to' field" porque options.to chegou vazio,
+  // gastando rate-limit à toa. Falhar cedo dá erro acionável pro caller.
+  if (!options || typeof options !== "object") {
+    log.error({}, "enviarEmail chamado sem options");
+    return { success: false, error: "Email options ausente." };
+  }
+  if (!options.to || typeof options.to !== "string" || !options.to.trim()) {
+    log.error({ options }, "enviarEmail chamado sem 'to' válido");
+    return { success: false, error: "Destinatário (to) ausente." };
+  }
+  if (!options.subject?.trim() || !options.html?.trim()) {
+    log.error({ subject: options.subject, hasHtml: !!options.html }, "enviarEmail sem subject/html");
+    return { success: false, error: "Email sem assunto ou corpo." };
+  }
+
   const { apiKey, fonte, diagnostico } = await getResendApiKey();
   if (!apiKey) {
     log.warn({ diagnostico }, "Resend API key não configurada — email não enviado");
@@ -115,8 +131,21 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
 
     if (!res.ok) {
       const err = await res.text();
-      log.error({ status: res.status, err }, "Resend retornou erro");
-      return { success: false, error: `Erro ao enviar email: ${res.status}` };
+      log.error(
+        { status: res.status, err, from: FROM_EMAIL, to: options.to, subject: options.subject },
+        "Resend retornou erro",
+      );
+      // Mensagem mais útil pro usuário final detectar problemas comuns.
+      let userMsg = `Erro ao enviar email (${res.status}): ${err.slice(0, 200)}`;
+      const errLower = err.toLowerCase();
+      if (errLower.includes("domain") && (errLower.includes("verify") || errLower.includes("valid"))) {
+        userMsg = `Domínio "${FROM_EMAIL}" não está verificado no Resend. Vá em Resend → Domains e adicione os registros DNS (SPF + DKIM) do seu domínio.`;
+      } else if (errLower.includes("missing") && errLower.includes("to")) {
+        userMsg = "Endereço de destino ausente. Verifique se o cadastro tem email válido.";
+      } else if (res.status === 401 || res.status === 403) {
+        userMsg = "API key do Resend inválida ou sem permissão. Admin → Integrações → Resend.";
+      }
+      return { success: false, error: userMsg };
     }
 
     const data = await res.json();

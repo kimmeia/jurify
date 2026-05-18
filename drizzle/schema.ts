@@ -269,6 +269,14 @@ export const colaboradores = mysqlTable(
      */
     metaMensal: decimal("metaMensalCol", { precision: 12, scale: 2 }),
     ativo: boolean("ativo").default(true).notNull(),
+    /** Soft delete — timestamp da remoção. Junto com ativo=false marca
+     *  como removido sem perder dados (cards/movimentações apontando
+     *  pra esse colaboradorId continuam funcionando). Restaurar zera
+     *  ambos. NULL = nunca foi removido. */
+    removidoEm: timestamp("removidoEm"),
+    /** Quem removeu (colaboradores.id). NULL pra remoções antigas
+     *  (pré-migration) ou remoções automáticas do sistema. */
+    removidoPor: int("removidoPor"),
     maxAtendimentosSimultaneos: int("maxAtendimentosSimultaneos").default(5).notNull(),
     recebeLeadsAutomaticos: boolean("recebeLeadsAutomaticos").default(true).notNull(),
     ultimaAtividade: timestamp("ultimaAtividade"),
