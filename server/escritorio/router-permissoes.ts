@@ -486,4 +486,132 @@ export const permissoesRouter = router({
 
     return { cargo: cargo.nome, cor: cargo.cor || "#6366f1", permissoes: permMap };
   }),
+
+  /**
+   * Diagnóstico de permissões efetivas de outro colaborador.
+   *
+   * Quando um colaborador reporta "não consigo editar X" e o dono vê o
+   * painel marcando "Ver todos ✓", o painel pode estar mostrando outro
+   * cargo (ou outra versão das permissões) — divergência entre cargo
+   * vinculado ao colaborador e o que está no DB. Esse endpoint expõe
+   * o estado REAL pra dono autoatender.
+   *
+   * Retorna:
+   *  - colaborador: cargo (enum), cargoPersonalizadoId, nome, email
+   *  - cargo: row de cargos_personalizados (se vinculado), ou null
+   *  - permissoesDB: rows reais de permissoes_cargo pra esse cargo
+   *  - efetiva: o que checkPermission RESOLVERIA módulo a módulo (inclui
+   *    bypass do dono)
+   *
+   * Gate: visível pra quem tem permissão em "equipe:ver".
+   */
+  diagnosticarColaborador: protectedProcedure
+    .input(z.object({ colaboradorId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const { checkPermission } = await import("./check-permission");
+      const permEquipe = await checkPermission(ctx.user.id, "equipe", "ver");
+      if (!permEquipe.allowed) throw new Error("Sem permissão para ver a equipe.");
+
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      // Carrega o colaborador alvo no mesmo escritório
+      const [alvo] = await db
+        .select({
+          id: colaboradores.id,
+          userId: colaboradores.userId,
+          cargo: colaboradores.cargo,
+          cargoPersonalizadoId: colaboradores.cargoPersonalizadoId,
+          ativo: colaboradores.ativo,
+        })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.id, input.colaboradorId),
+          eq(colaboradores.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!alvo) throw new Error("Colaborador não encontrado.");
+
+      // Resolve cargo personalizado vinculado (direto ou via nome)
+      let cargoId: number | null | undefined = alvo.cargoPersonalizadoId;
+      let viaNomeFallback = false;
+      if (!cargoId) {
+        const nomeMap: Record<string, string> = {
+          gestor: "Gestor",
+          atendente: "Atendente",
+          estagiario: "Estagiário",
+          sdr: "SDR",
+        };
+        const nomeCargo = nomeMap[alvo.cargo];
+        if (nomeCargo) {
+          const [cp] = await db
+            .select({ id: cargosPersonalizados.id })
+            .from(cargosPersonalizados)
+            .where(and(
+              eq(cargosPersonalizados.escritorioId, esc.escritorio.id),
+              eq(cargosPersonalizados.nome, nomeCargo),
+            ))
+            .limit(1);
+          cargoId = cp?.id ?? null;
+          viaNomeFallback = !!cargoId;
+        }
+      }
+
+      let cargo: { id: number; nome: string; isDefault: boolean; cor: string | null } | null = null;
+      let permissoesDB: Record<string, { verTodos: boolean; verProprios: boolean; criar: boolean; editar: boolean; excluir: boolean }> = {};
+
+      if (cargoId) {
+        const [c] = await db.select().from(cargosPersonalizados)
+          .where(eq(cargosPersonalizados.id, cargoId)).limit(1);
+        if (c) {
+          cargo = { id: c.id, nome: c.nome, isDefault: c.isDefault, cor: c.cor };
+          const rows = await db.select().from(permissoesCargo)
+            .where(eq(permissoesCargo.cargoId, cargoId));
+          for (const r of rows) {
+            permissoesDB[r.modulo] = {
+              verTodos: r.verTodos,
+              verProprios: r.verProprios,
+              criar: r.criar,
+              editar: r.editar,
+              excluir: r.excluir,
+            };
+          }
+        }
+      }
+
+      // Efetiva: o que checkPermission resolveria pra cada módulo.
+      // Roda como o user alvo (não o caller).
+      const efetiva: Record<string, { allowed: boolean; verTodos: boolean; verProprios: boolean; criar: boolean; editar: boolean; excluir: boolean }> = {};
+      for (const m of MODULOS) {
+        const r = await checkPermission(alvo.userId, m, "ver");
+        efetiva[m] = {
+          allowed: r.allowed,
+          verTodos: r.verTodos,
+          verProprios: r.verProprios,
+          criar: r.criar,
+          editar: r.editar,
+          excluir: r.excluir,
+        };
+      }
+
+      return {
+        colaborador: {
+          id: alvo.id,
+          userId: alvo.userId,
+          cargo: alvo.cargo,
+          cargoPersonalizadoId: alvo.cargoPersonalizadoId,
+          ativo: alvo.ativo,
+        },
+        cargo,
+        cargoResolvidoVia: cargoId
+          ? viaNomeFallback ? "nome-fallback" : "id-direto"
+          : "legado-sem-personalizado",
+        permissoesDB,
+        efetiva,
+        modulos: MODULOS,
+      };
+    }),
 });

@@ -443,7 +443,30 @@ export const clientesRouter = router({
         .limit(1);
       if (!contatoAtual) throw new Error("Cliente não encontrado.");
       if (!perm.verTodos && perm.verProprios && contatoAtual.responsavelId !== perm.colaboradorId) {
-        throw new Error("Sem permissão para editar este cliente.");
+        // Snapshot do estado real pra diagnóstico — sem isso, dono fica
+        // travado quando a UI mostra "Ver todos ✓" e o backend bloqueia.
+        // Aparece no AdminErros via logger error.
+        log.error(
+          {
+            userId: ctx.user.id,
+            cargo: perm.cargo,
+            colaboradorId: perm.colaboradorId,
+            permEfetiva: {
+              verTodos: perm.verTodos,
+              verProprios: perm.verProprios,
+              editar: perm.editar,
+              allowed: perm.allowed,
+            },
+            clienteId: input.id,
+            responsavelDoCliente: contatoAtual.responsavelId,
+          },
+          "clientes.atualizar bloqueado — verTodos=false e cliente alheio",
+        );
+        throw new Error(
+          `Esse cliente está atribuído a outro colaborador (responsável id ${contatoAtual.responsavelId ?? "—"}). ` +
+          `Seu cargo (${perm.cargo}) só pode editar clientes próprios. ` +
+          `Pra liberar, o dono precisa marcar "Ver todos" pro seu cargo em Configurações → Cargos → módulo Clientes, ou trocar o responsável do cliente.`,
+        );
       }
 
       // Unicidade de CPF/CNPJ: se o operador trocou pra um CPF de outro
