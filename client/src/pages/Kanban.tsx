@@ -423,15 +423,18 @@ export default function Kanban() {
             </button>
           </div>
         </div>
-        <label className="flex items-center gap-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground">
-          <input
-            type="checkbox"
-            checked={mostrarArquivados}
-            onChange={(e) => setMostrarArquivados(e.target.checked)}
-            className="cursor-pointer"
-          />
-          Mostrar arquivados
-        </label>
+        <button
+          onClick={() => setMostrarArquivados(!mostrarArquivados)}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border transition-colors ${
+            mostrarArquivados
+              ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
+              : "bg-background text-muted-foreground border-border hover:bg-muted"
+          }`}
+          title={mostrarArquivados ? "Voltar a esconder arquivados" : "Mostrar cards arquivados"}
+        >
+          <Archive className="h-3.5 w-3.5" />
+          {mostrarArquivados ? "Mostrando arquivados" : "Mostrar arquivados"}
+        </button>
       </div>
 
       {/* Colunas — altura máx 70vh com scroll INTERNO; header sticky no topo da coluna */}
