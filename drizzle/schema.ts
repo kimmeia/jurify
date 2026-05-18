@@ -256,7 +256,6 @@ export const escritorios = mysqlTable("escritorios", {
   mensagemAusencia: text("mensagemAusencia"),
   mensagemBoasVindas: text("mensagemBoasVindas"),
   ownerId: int("ownerId").notNull(), // FK → users.id
-  planoAtendimento: mysqlEnum("planoAtendimento", ["basico", "intermediario", "completo"]).default("basico").notNull(),
   /**
    * Feature flag do motor próprio de monitoramento jurídico.
    * Quando true, os monitoramentos deste escritório usam scrapers
@@ -269,8 +268,6 @@ export const escritorios = mysqlTable("escritorios", {
    * ativação acidental antes da paridade comprovada.
    */
   usarMotorProprio: boolean("usarMotorProprio").default(false).notNull(),
-  maxColaboradores: int("maxColaboradores").default(1).notNull(),
-  maxConexoesWhatsapp: int("maxConexoesWhatsapp").default(0).notNull(),
   /**
    * Suspensão administrativa do escritório (controle pelo admin do
    * Jurify, ex: inadimplência grave, violação de termos). Quando true,
@@ -1672,31 +1669,6 @@ export const planos = mysqlTable("planos", {
 
 export type PlanoRow = typeof planos.$inferSelect;
 export type InsertPlanoRow = typeof planos.$inferInsert;
-
-export const planosOverrides = mysqlTable("planos_overrides", {
-  id: int("id").autoincrement().primaryKey(),
-  /** ID do plano em PLANS (ex: "iniciante", "profissional", "escritorio") */
-  planId: varchar("planIdOverride", { length: 64 }).notNull().unique(),
-  /** Override do nome (null = usa o de PLANS) */
-  name: varchar("nameOverride", { length: 100 }),
-  /** Override da descrição */
-  description: varchar("descriptionOverride", { length: 500 }),
-  /** Override do preço mensal em centavos */
-  priceMonthly: int("priceMonthlyOverride"),
-  /** Override do preço anual em centavos */
-  priceYearly: int("priceYearlyOverride"),
-  /** Features (array JSON) — null = usa as de PLANS */
-  features: text("featuresOverride"),
-  /** Marca como popular (badge "Mais Popular") */
-  popular: boolean("popularOverride"),
-  /** Plano oculto da página /plans (mas continua válido pra subscriptions existentes) */
-  oculto: boolean("ocultoOverride").default(false),
-  updatedBy: int("updatedByOverride"),
-  updatedAt: timestamp("updatedAtOverride").defaultNow().onUpdateNow().notNull(),
-});
-
-export type PlanoOverride = typeof planosOverrides.$inferSelect;
-export type InsertPlanoOverride = typeof planosOverrides.$inferInsert;
 
 /**
  * Cupons de desconto — admin cria, cliente aplica no checkout.

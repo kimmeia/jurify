@@ -39,16 +39,13 @@ export async function criarEscritorio(userId: number, nome: string, email?: stri
   const existente = await getEscritorioPorUsuario(userId);
   if (existente) throw new Error("Você já pertence a um escritório.");
 
-  // Criar escritório. Os campos `planoAtendimento`, `maxColaboradores` e
-  // `maxConexoesWhatsapp` são deprecated (substituídos pela leitura via
-  // `subscriptions.planId` + `getPlanoBySlug` em runtime — Fase 4). Mantemos
-  // o `planoAtendimento` aqui preenchido com "basico" só pra satisfazer o
-  // NOT NULL da coluna até a migration de DROP da Fase 5+.
+  // Limites de plano são lidos em runtime via `subscriptions.planId` →
+  // `planos` (Fase 4). Os campos `planoAtendimento`, `maxColaboradores` e
+  // `maxConexoesWhatsapp` foram removidos do escritório na migration 0111.
   const [result] = await db.insert(escritorios).values({
     nome,
     email: email ?? null,
     ownerId: userId,
-    planoAtendimento: "basico",
     diasFuncionamento: JSON.stringify(["seg", "ter", "qua", "qui", "sex"]),
   });
 
