@@ -104,7 +104,12 @@ export function validarConfigCanalPorTipo(
 }
 
 export const configuracoesRouter = router({
-  /** Busca o escritório do usuário logado (ou null se não tem) */
+  /** Busca o escritório do usuário logado (ou null se não tem).
+   *
+   *  Retorna também o setor do colaborador (nome + tipo) e meta mensal.
+   *  Frontend usa isso pra decidir qual painel de Dashboard mostrar
+   *  (comercial vê fechamentos, operacional vê produção, etc).
+   */
   meuEscritorio: protectedProcedure.query(async ({ ctx }) => {
     const result = await getEscritorioPorUsuario(ctx.user.id);
     if (!result) return null;
@@ -119,11 +124,16 @@ export const configuracoesRouter = router({
     // customizados que viraram esse fallback de permissão mínima).
     let cargoPersonalizadoNome: string | null = null;
     let cargoPersonalizadoCor: string | null = null;
-    if (colaborador.cargoPersonalizadoId) {
-      const { getDb } = await import("../db");
-      const { cargosPersonalizados } = await import("../../drizzle/schema");
-      const db = await getDb();
-      if (db) {
+    let setorId: number | null = null;
+    let setorNome: string | null = null;
+    let setorTipo: "comercial" | "operacional" | "suporte" | "financeiro" | "outro" | null = null;
+    let metaMensal: string | null = null;
+
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (db) {
+      if (colaborador.cargoPersonalizadoId) {
+        const { cargosPersonalizados } = await import("../../drizzle/schema");
         const [cp] = await db
           .select({ nome: cargosPersonalizados.nome, cor: cargosPersonalizados.cor })
           .from(cargosPersonalizados)
@@ -132,6 +142,24 @@ export const configuracoesRouter = router({
         cargoPersonalizadoNome = cp?.nome ?? null;
         cargoPersonalizadoCor = cp?.cor ?? null;
       }
+
+      // Setor do colaborador — fonte da verdade pro painel do Dashboard.
+      // setorId é opcional; quando vazio cai no fallback "Geral" no frontend.
+      const colId = (colaborador as any).setorId as number | null | undefined;
+      if (colId) {
+        const { setores } = await import("../../drizzle/schema");
+        const [s] = await db
+          .select({ id: setores.id, nome: setores.nome, tipo: setores.tipo })
+          .from(setores)
+          .where(eq(setores.id, colId))
+          .limit(1);
+        if (s) {
+          setorId = s.id;
+          setorNome = s.nome;
+          setorTipo = s.tipo as "comercial" | "operacional" | "suporte" | "financeiro" | "outro";
+        }
+      }
+      metaMensal = (colaborador as any).metaMensal ?? null;
     }
 
     return {
@@ -146,6 +174,10 @@ export const configuracoesRouter = router({
         cargoPersonalizadoNome,
         cargoPersonalizadoCor,
         departamento: colaborador.departamento,
+        setorId,
+        setorNome,
+        setorTipo,
+        metaMensal,
         ativo: colaborador.ativo,
       },
     };
