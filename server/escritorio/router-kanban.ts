@@ -1124,6 +1124,50 @@ export const kanbanRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Arquiva vários cards de uma vez. Usado pelo botão "Arquivar coluna"
+   * (passa IDs de todos cards de uma coluna conclusão) e por futura UI
+   * de seleção múltipla. Permissão verProprios trava nos cards do próprio
+   * colaborador (filtro inline em vez de loop podeMexerNoCard).
+   */
+  arquivarCardsEmMassa: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number().int().positive()).min(1).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "kanban", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const conds = [
+        eq(kanbanCards.escritorioId, perm.escritorioId),
+        inArray(kanbanCards.id, input.ids),
+        eq(kanbanCards.arquivado, false),
+      ];
+      // verProprios: só arquiva cards onde sou o responsável.
+      if (!perm.verTodos && perm.verProprios) {
+        conds.push(eq(kanbanCards.responsavelId, perm.colaboradorId));
+      }
+
+      const alvos = await db
+        .select({ id: kanbanCards.id })
+        .from(kanbanCards)
+        .where(and(...conds));
+
+      if (alvos.length === 0) return { arquivados: 0 };
+
+      const idsValidos = alvos.map((a) => a.id);
+      await db
+        .update(kanbanCards)
+        .set({ arquivado: true, arquivadoEm: new Date() })
+        .where(and(
+          eq(kanbanCards.escritorioId, perm.escritorioId),
+          inArray(kanbanCards.id, idsValidos),
+        ));
+      return { arquivados: idsValidos.length };
+    }),
+
   /** Reverte arquivamento — card volta pro quadro. */
   desarquivarCard: protectedProcedure
     .input(z.object({ id: z.number() }))

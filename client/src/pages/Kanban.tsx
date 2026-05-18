@@ -18,6 +18,7 @@ import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
   ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
+  Archive,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -130,6 +131,13 @@ export default function Kanban() {
   });
   const criarCardMut = (trpc as any).kanban.criarCard.useMutation({
     onSuccess: () => { toast.success("Card criado!"); setNovoCardOpen(null); setCardForm({ titulo: "", descricao: "", cnj: "", prioridade: "media", prazo: "", tags: "", urgente: false, responsavelId: "", valorEstimado: "" }); setClienteSelecionado(null); setBuscaCliente(""); refetchFunil(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const arquivarLoteMut = (trpc as any).kanban.arquivarCardsEmMassa.useMutation({
+    onSuccess: (r: { arquivados: number }) => {
+      toast.success(`${r.arquivados} card(s) arquivado(s)`);
+      refetchFunil();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const arquivarCardMut = (trpc as any).kanban.arquivarCard.useMutation({
@@ -488,6 +496,22 @@ export default function Kanban() {
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setNovoCardOpen(col.id)}>
                   <Plus className="h-3 w-3" />
                 </Button>
+                {col.tipo === "conclusao" && (col.cards?.length ?? 0) > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-amber-600 hover:text-amber-700"
+                    title={`Arquivar todos os ${col.cards.length} cards desta coluna`}
+                    onClick={() => {
+                      const total = col.cards.length;
+                      if (confirm(`Arquivar todos os ${total} card(s) de "${col.nome}"? Eles somem do quadro mas continuam consultáveis em "Mostrar arquivados".`)) {
+                        arquivarLoteMut.mutate({ ids: col.cards.map((c: any) => c.id) });
+                      }
+                    }}
+                  >
+                    <Archive className="h-3 w-3" />
+                  </Button>
+                )}
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => { if (confirm(`Excluir coluna "${col.nome}" e seus cards?`)) deletarColunaMut.mutate({ id: col.id }); }}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
