@@ -457,6 +457,7 @@ export default function Kanban() {
           onOpenChange={setImportTrelloOpen}
           onSuccess={(funilId) => {
             refetchFunis();
+            refetchTags();
             setFunilAtivo(funilId);
           }}
         />
