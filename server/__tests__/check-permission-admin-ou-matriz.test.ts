@@ -1,45 +1,44 @@
 /**
- * Testes do bug #9 — `checkPermissionAdminOuMatriz`.
+ * Testes do `checkPermissionAdminOuMatriz`.
  *
- * Antes do fix: procedures críticos (configurar Cal.com/WhatsApp/agentes-IA,
- * gerenciar modelos de contrato, atribuir cargos, excluir/unificar clientes)
- * tinham hardcode `cargo === "dono" || cargo === "gestor"`. Cargos
- * personalizados criados via UI (`Cargos personalizados`) ficavam
- * BLOQUEADOS mesmo com a matriz toda marcada — o admin criava "Sócio
- * Júnior" com permissões completas e o usuário ainda recebia "Sem
- * permissão".
- *
- * Fix: helper que mantém o bypass legacy (dono/gestor sempre passam) E
- * delega cargos personalizados pra matriz de permissões via `checkPermission`.
+ * Histórico do helper:
+ * - Fix do bug #9: ANTES, procedures críticos (Cal.com/WhatsApp/agentes-IA,
+ *   modelos de contrato, atribuir cargos, excluir/unificar clientes) tinham
+ *   hardcode `cargo === "dono" || cargo === "gestor"`. Cargos personalizados
+ *   criados via UI ficavam BLOQUEADOS mesmo com toda a matriz marcada.
+ *   Helper passou a delegar pra matriz oficial.
+ * - Mudança Gestor-segue-matriz: bypass do Gestor removido. Agora SÓ DONO
+ *   tem bypass; Gestor e demais cargos obedecem rigorosamente à matriz.
+ *   O default do Gestor em PERMISSOES_LEGADO ganha configurações/equipe:editar
+ *   pra preservar comportamento histórico quando ninguém customizou.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const getEscritorioPorUsuarioMock = vi.fn();
-const checkPermissionMock = vi.fn();
 
 vi.mock("../escritorio/db-escritorio", () => ({
   getEscritorioPorUsuario: (...a: unknown[]) => getEscritorioPorUsuarioMock(...a),
 }));
 
-// Mock interno: precisamos espionar `checkPermission` que vive no MESMO
-// módulo da função sob teste. Vitest não permite mockar imports do mesmo
-// módulo de forma natural, então preferimos integrar via getDb retornar
-// null (sem cargo personalizado, cai no fallback legado).
+// getDb → null força fallback pra PERMISSOES_LEGADO (sem cargo personalizado).
 vi.mock("../db", () => ({
   getDb: vi.fn(async () => null),
 }));
 
-const { checkPermissionAdminOuMatriz } = await import(
+const { checkPermissionAdminOuMatriz, limparCachePermissoes } = await import(
   "../escritorio/check-permission"
 );
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // O cache de checkPermission é module-global e vaza entre testes
+  // (mesmo userId, mesma key → mesma entry). Limpa pra isolar.
+  limparCachePermissoes();
 });
 
-describe("checkPermissionAdminOuMatriz — bypass legacy", () => {
-  it("dono: SEMPRE allowed, retorna verTodos/criar/editar/excluir=true", async () => {
+describe("checkPermissionAdminOuMatriz — bypass do dono", () => {
+  it("dono: SEMPRE allowed, retorna tudo true (superuser do escritório)", async () => {
     getEscritorioPorUsuarioMock.mockResolvedValue({
       escritorio: { id: 1 },
       colaborador: { id: 10, cargo: "dono" },
@@ -57,20 +56,6 @@ describe("checkPermissionAdminOuMatriz — bypass legacy", () => {
     expect(r.cargo).toBe("dono");
   });
 
-  it("gestor: SEMPRE allowed (legado preservado, mesmo se matriz negasse)", async () => {
-    // Matriz legado pra gestor bloqueia "configuracoes" (perm 0,0,0,0,0).
-    // Mas o helper preserva o hardcode antigo → allowed=true.
-    getEscritorioPorUsuarioMock.mockResolvedValue({
-      escritorio: { id: 1 },
-      colaborador: { id: 20, cargo: "gestor" },
-    });
-
-    const r = await checkPermissionAdminOuMatriz(1, "configuracoes", "editar");
-
-    expect(r.allowed).toBe(true);
-    expect(r.cargo).toBe("gestor");
-  });
-
   it("dono: bypass funciona pra QUALQUER módulo solicitado", async () => {
     getEscritorioPorUsuarioMock.mockResolvedValue({
       escritorio: { id: 1 },
@@ -84,9 +69,67 @@ describe("checkPermissionAdminOuMatriz — bypass legacy", () => {
   });
 });
 
-describe("checkPermissionAdminOuMatriz — delegação à matriz", () => {
+describe("checkPermissionAdminOuMatriz — Gestor obedece a matriz", () => {
+  it("gestor: matriz LEGADO default agora concede configurações:editar", async () => {
+    // Sem bypass: gestor passa pela matriz. Default novo:
+    //   configuracoes: verTodos=true, verProprios=true, criar=true, editar=true, excluir=false
+    getEscritorioPorUsuarioMock.mockResolvedValue({
+      escritorio: { id: 1 },
+      colaborador: { id: 20, cargo: "gestor" },
+    });
+
+    const r = await checkPermissionAdminOuMatriz(1, "configuracoes", "editar");
+
+    expect(r.allowed).toBe(true);
+    expect(r.editar).toBe(true);
+    expect(r.cargo).toBe("gestor");
+  });
+
+  it("gestor: matriz LEGADO concede equipe:editar (atribuir cargos)", async () => {
+    getEscritorioPorUsuarioMock.mockResolvedValue({
+      escritorio: { id: 1 },
+      colaborador: { id: 20, cargo: "gestor" },
+    });
+
+    const r = await checkPermissionAdminOuMatriz(1, "equipe", "editar");
+
+    expect(r.allowed).toBe(true);
+    expect(r.editar).toBe(true);
+  });
+
+  it("gestor: matriz LEGADO concede clientes:excluir (excluir/unificar)", async () => {
+    getEscritorioPorUsuarioMock.mockResolvedValue({
+      escritorio: { id: 1 },
+      colaborador: { id: 20, cargo: "gestor" },
+    });
+
+    const r = await checkPermissionAdminOuMatriz(1, "clientes", "excluir");
+
+    expect(r.allowed).toBe(true);
+    expect(r.excluir).toBe(true);
+  });
+
+  it("gestor: matriz pode BLOQUEAR (novo comportamento — dono customizou)", async () => {
+    // Simula cargo personalizado "Gestor" onde dono desmarcou configurações.
+    // Mockamos getDb retornando um db falso com select pra esse caso.
+    // Como aqui usamos getDb=null, o teste fica no fallback legado;
+    // pra cobrir o caminho personalizado, ver permissoes-cargo.test.ts
+    // ou outro teste de integração. Aqui só validamos que se a matriz
+    // estivesse zerada, o gestor seria bloqueado — usamos um módulo
+    // que o gestor legado NÃO tem entry: 'inexistente'.
+    getEscritorioPorUsuarioMock.mockResolvedValue({
+      escritorio: { id: 1 },
+      colaborador: { id: 20, cargo: "gestor" },
+    });
+
+    const r = await checkPermissionAdminOuMatriz(1, "inexistente", "editar");
+
+    expect(r.allowed).toBe(false);
+  });
+});
+
+describe("checkPermissionAdminOuMatriz — delegação à matriz pros demais cargos", () => {
   it("atendente em 'configuracoes' editar: matriz LEGADO bloqueia", async () => {
-    // Atendente no PERMISSOES_LEGADO: configuracoes = (false,false,false,false,false)
     getEscritorioPorUsuarioMock.mockResolvedValue({
       escritorio: { id: 1 },
       colaborador: { id: 30, cargo: "atendente" },
@@ -97,7 +140,7 @@ describe("checkPermissionAdminOuMatriz — delegação à matriz", () => {
     expect(r.allowed).toBe(false);
   });
 
-  it("estagiario em 'agentesIa' editar: matriz LEGADO bloqueia (estagiario = false)", async () => {
+  it("estagiario em 'agentesIa' editar: matriz LEGADO bloqueia", async () => {
     getEscritorioPorUsuarioMock.mockResolvedValue({
       escritorio: { id: 1 },
       colaborador: { id: 40, cargo: "estagiario" },
@@ -121,29 +164,10 @@ describe("checkPermissionAdminOuMatriz — delegação à matriz", () => {
 });
 
 describe("checkPermissionAdminOuMatriz — proteção do fix #9", () => {
-  it("dono nunca quebra: configurar integração permitido independente da matriz", async () => {
-    // Cenário do bug: antes do fix, hardcode `cargo === "dono" || === "gestor"`
-    // permitia dono. O helper preserva esse direito de forma DURÁVEL —
-    // mesmo se admin mexer na matriz e quebrar a entry "configuracoes" do
-    // dono (que normalmente é true), bypass garante que dono nunca perde
-    // acesso a configurar integrações.
+  it("dono nunca quebra: bypass dura mesmo se matriz ficar inconsistente", async () => {
     getEscritorioPorUsuarioMock.mockResolvedValue({
       escritorio: { id: 5 },
       colaborador: { id: 50, cargo: "dono" },
-    });
-
-    const r = await checkPermissionAdminOuMatriz(1, "configuracoes", "editar");
-
-    expect(r.allowed).toBe(true);
-  });
-
-  it("gestor: pode configurar integrações mesmo que matriz legado bloqueie 'configuracoes'", async () => {
-    // Cenário cobertura: gestor no PERMISSOES_LEGADO tem configuracoes=false.
-    // Sem o bypass, gestor perderia acesso depois da migração — quebra
-    // comportamento histórico. Bypass preserva.
-    getEscritorioPorUsuarioMock.mockResolvedValue({
-      escritorio: { id: 5 },
-      colaborador: { id: 60, cargo: "gestor" },
     });
 
     const r = await checkPermissionAdminOuMatriz(1, "configuracoes", "editar");
