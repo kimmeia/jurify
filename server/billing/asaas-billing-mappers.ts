@@ -57,7 +57,7 @@ export function isPaymentOverdueEvent(event: string, status: string): boolean {
 /**
  * Faz parse do externalReference do Asaas no formato "userId:planId".
  *
- *   "42:profissional"  → { userId: 42, planId: "profissional" }
+ *   "42:intermediario" → { userId: 42, planId: "intermediario" }
  *   "42"               → { userId: 42, planId: null }
  *   ""                 → { userId: null, planId: null }
  *   "abc:xyz"          → { userId: null, planId: "xyz" }

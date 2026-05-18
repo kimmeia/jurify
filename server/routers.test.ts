@@ -103,9 +103,9 @@ describe("subscription.plans", () => {
     const caller = appRouter.createCaller(ctx);
     const plans = await caller.subscription.plans();
     expect(plans).toHaveLength(3);
-    expect(plans[0].id).toBe("iniciante");
-    expect(plans[1].id).toBe("profissional");
-    expect(plans[2].id).toBe("escritorio");
+    expect(plans[0].id).toBe("basico");
+    expect(plans[1].id).toBe("intermediario");
+    expect(plans[2].id).toBe("completo");
   });
 
   it("plans have required fields", async () => {
@@ -127,12 +127,12 @@ describe("subscription.plans", () => {
     }
   });
 
-  it("profissional plan is marked as popular", async () => {
+  it("intermediario plan is marked as popular", async () => {
     const { ctx } = createAnonymousContext();
     const caller = appRouter.createCaller(ctx);
     const plans = await caller.subscription.plans();
-    const profissional = plans.find((p) => p.id === "profissional");
-    expect(profissional?.popular).toBe(true);
+    const intermediario = plans.find((p) => p.id === "intermediario");
+    expect(intermediario?.popular).toBe(true);
   });
 });
 

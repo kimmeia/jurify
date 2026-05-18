@@ -17,7 +17,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { escritorioCreditos, escritorioTransacoes, subscriptions, escritorios } from "../../drizzle/schema";
-import { getPlanById } from "./products";
+import { getPlanoBySlug } from "./planos-repo";
 import { TRPCError } from "@trpc/server";
 
 export interface SaldoEscritorio {
@@ -185,8 +185,8 @@ export async function calcularCotaDoPlano(escritorioId: number): Promise<number>
   if (sub.status !== "active" && sub.status !== "trialing") return 3;
 
   if (!sub.planId) return 3;
-  const plan = getPlanById(sub.planId);
-  return plan?.creditsPerMonth ?? 3;
+  const plano = await getPlanoBySlug(sub.planId);
+  return plano?.limites.creditosCalculosMes ?? 3;
 }
 
 /**
