@@ -185,7 +185,7 @@ describe("clientes.atualizar — gate verProprios", () => {
     const caller = appRouter.createCaller(fakeCtx());
     await expect(
       caller.clientes.atualizar({ id: 60, nome: "Hack" }),
-    ).rejects.toThrow(/Sem permissão para editar este cliente/i);
+    ).rejects.toThrow(/atribuído a outro colaborador/i);
     expect(dbState.updateCalled).toBe(false);
   });
 
