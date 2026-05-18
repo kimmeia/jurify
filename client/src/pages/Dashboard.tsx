@@ -45,13 +45,14 @@ export default function Dashboard() {
   ) || { data: null, isLoading: false };
 
   // ─── Decisão: quem vê tabs (visão multi-setor)? ─────────────────────────
-  // Admin do sistema, dono do escritório, e qualquer cargo com `verTodos`
-  // na permissão "dashboard" tem acesso multi-painel.
+  // APENAS dono do escritório e admin do sistema veem todos os painéis.
+  // Gestor de um setor específico (mesmo com `verTodos` na matriz de
+  // permissões) vê APENAS o painel do próprio setor — ele continua sendo
+  // "gestor" dentro daquele painel (com ranking + visão da equipe),
+  // mas não atravessa pra outros setores.
   const isAdminSistema = user?.role === "admin";
   const isDono = meuEsc?.colaborador?.cargo === "dono";
-  const permDashboard = minhasPerms?.permissoes?.dashboard;
-  const verTodosDashboard = !!permDashboard?.verTodos;
-  const podeMultiPainel = isAdminSistema || isDono || verTodosDashboard;
+  const podeMultiPainel = isAdminSistema || isDono;
 
   // Setor do colaborador (ou null pra dono/admin sem setor)
   const setorTipo: SetorTipo | null = meuEsc?.colaborador?.setorTipo ?? null;
