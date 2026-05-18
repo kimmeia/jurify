@@ -92,8 +92,8 @@ describe("enviarEmail — persistência de log", () => {
   it("falha HTTP não-2xx: grava status='falha' com erro do Resend", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
-      status: 422,
-      text: async () => "Domain not verified",
+      status: 500,
+      text: async () => "Internal server error",
     });
 
     const r = await enviarEmail({
@@ -104,12 +104,36 @@ describe("enviarEmail — persistência de log", () => {
     });
 
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/422/);
+    expect(r.error).toMatch(/500/);
     expect(insertCalls).toHaveLength(1);
     expect(insertCalls[0].status).toBe("falha");
-    expect(insertCalls[0].erro).toMatch(/422/);
-    expect(insertCalls[0].erro).toMatch(/Domain not verified/);
+    expect(insertCalls[0].erro).toMatch(/500/);
+    expect(insertCalls[0].erro).toMatch(/Internal server error/);
     expect(insertCalls[0].tipo).toBe("boas_vindas");
+  });
+
+  it("falha 403 'domain not verified': erro retornado é amigável, log preserva raw response", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => '{"statusCode":403,"message":"The jurify.com.br domain is not verified. Please, add and verify your domain on https://resend.com/domains","name":"validation_error"}',
+    });
+
+    const r = await enviarEmail({
+      to: "user@example.com",
+      subject: "Test",
+      html: "<p>hi</p>",
+      tipo: "boas_vindas",
+    });
+
+    expect(r.success).toBe(false);
+    // Mensagem traduzida pro usuário aponta passo-a-passo
+    expect(r.error).toMatch(/não está verificado/i);
+    expect(r.error).toMatch(/Verify DNS Records/);
+    // Log preserva o motivo real pro admin auditar
+    expect(insertCalls[0].status).toBe("falha");
+    expect(insertCalls[0].erro).toMatch(/403/);
+    expect(insertCalls[0].erro).toMatch(/domain is not verified/);
   });
 
   it("network error: grava status='falha' com mensagem do fetch", async () => {
