@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Filter, X } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarIcon, Filter, X } from "lucide-react";
 
 export type FiltrosKanban = {
   responsavelId?: number;
   prioridade?: "baixa" | "media" | "alta";
-  tag?: string;
   prazoFiltro?: "vencidos" | "hoje" | "7dias" | "sem_prazo";
   dataInicio?: string;
   dataFim?: string;
@@ -28,11 +33,17 @@ function temFiltro(f: FiltrosKanban): boolean {
   return !!(
     f.responsavelId ||
     f.prioridade ||
-    f.tag ||
     f.prazoFiltro ||
     f.dataInicio ||
     f.dataFim
   );
+}
+
+/** Formata "YYYY-MM-DD" → "DD/MM" pra label do botão Período. */
+function formatDataCurta(iso: string): string {
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}`;
 }
 
 export function FiltrosBar({
@@ -49,6 +60,21 @@ export function FiltrosBar({
     ) ?? { data: undefined };
 
   const colabs: Array<{ id: number; nome: string }> = colabsList || [];
+
+  // Popover de período (Criado de/até). Inputs locais até "Aplicar".
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [deLocal, setDeLocal] = useState(filtros.dataInicio || "");
+  const [ateLocal, setAteLocal] = useState(filtros.dataFim || "");
+
+  const periodoAtivo = !!(filtros.dataInicio || filtros.dataFim);
+  const periodoLabel = (() => {
+    if (filtros.dataInicio && filtros.dataFim) {
+      return `${formatDataCurta(filtros.dataInicio)} — ${formatDataCurta(filtros.dataFim)}`;
+    }
+    if (filtros.dataInicio) return `desde ${formatDataCurta(filtros.dataInicio)}`;
+    if (filtros.dataFim) return `até ${formatDataCurta(filtros.dataFim)}`;
+    return "Período…";
+  })();
 
   return (
     <div className="rounded-lg border bg-card p-3 flex flex-wrap items-end gap-2">
@@ -121,33 +147,82 @@ export function FiltrosBar({
       </div>
 
       <div className="flex flex-col gap-1">
-        <Label className="text-[10px] text-muted-foreground">Tag</Label>
-        <Input
-          value={filtros.tag || ""}
-          onChange={(e) => setFiltros({ ...filtros, tag: e.target.value || undefined })}
-          placeholder="ex: vip"
-          className="h-8 text-xs w-[120px]"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <Label className="text-[10px] text-muted-foreground">Criado de</Label>
-        <Input
-          type="date"
-          value={filtros.dataInicio || ""}
-          onChange={(e) => setFiltros({ ...filtros, dataInicio: e.target.value || undefined })}
-          className="h-8 text-xs w-[140px]"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <Label className="text-[10px] text-muted-foreground">Criado até</Label>
-        <Input
-          type="date"
-          value={filtros.dataFim || ""}
-          onChange={(e) => setFiltros({ ...filtros, dataFim: e.target.value || undefined })}
-          className="h-8 text-xs w-[140px]"
-        />
+        <Label className="text-[10px] text-muted-foreground">Criado em</Label>
+        <Popover
+          open={popoverOpen}
+          onOpenChange={(o) => {
+            setPopoverOpen(o);
+            // Hidrata inputs locais com o estado atual ao abrir.
+            if (o) {
+              setDeLocal(filtros.dataInicio || "");
+              setAteLocal(filtros.dataFim || "");
+            }
+          }}
+        >
+          <PopoverTrigger asChild>
+            <Button
+              variant={periodoAtivo ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs gap-1.5 min-w-[140px] justify-start"
+            >
+              <CalendarIcon className="h-3.5 w-3.5" />
+              <span>{periodoLabel}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 space-y-2">
+            <p className="text-xs font-semibold">Período de criação</p>
+            <div className="space-y-1">
+              <Label className="text-[10px]">De</Label>
+              <Input
+                type="date"
+                value={deLocal}
+                onChange={(e) => setDeLocal(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px]">Até</Label>
+              <Input
+                type="date"
+                value={ateLocal}
+                onChange={(e) => setAteLocal(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              {periodoAtivo && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="flex-1 h-8 text-xs"
+                  onClick={() => {
+                    setDeLocal("");
+                    setAteLocal("");
+                    setFiltros({ ...filtros, dataInicio: undefined, dataFim: undefined });
+                    setPopoverOpen(false);
+                  }}
+                >
+                  Limpar
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="flex-1 h-8 text-xs"
+                disabled={!!(deLocal && ateLocal && deLocal > ateLocal)}
+                onClick={() => {
+                  setFiltros({
+                    ...filtros,
+                    dataInicio: deLocal || undefined,
+                    dataFim: ateLocal || undefined,
+                  });
+                  setPopoverOpen(false);
+                }}
+              >
+                Aplicar
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {temFiltro(filtros) && (
