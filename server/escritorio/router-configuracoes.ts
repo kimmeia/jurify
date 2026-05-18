@@ -38,7 +38,7 @@ import {
 } from "./db-canais";
 import { checkPermission } from "./check-permission";
 import type { CargoColaborador } from "../../shared/escritorio-types";
-import { PLANO_LIMITES, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
+import { CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS_VALIDOS } from "../../shared/escritorio-types";
 
 /**
  * Checa permissão no módulo `configuracoes` ou `equipe` respeitando o
@@ -371,6 +371,16 @@ export const configuracoesRouter = router({
         "Sem permissão para convidar colaboradores.",
       );
 
+      // Enforce de limite de usuários do plano (Fase 4). Conta ativos +
+      // convites pendentes pra dar feedback antes da pessoa aceitar.
+      const { verificarLimite } = await import("../billing/plan-limits");
+      const limiteUsuarios = await verificarLimite(
+        result.escritorio.id, ctx.user.id, "colaboradores",
+      );
+      if (!limiteUsuarios.permitido) {
+        throw new Error(limiteUsuarios.mensagem);
+      }
+
       // Validação do cargo: ou é default OU é cargo personalizado existente
       // daquele escritório. Evita aceitar strings arbitrárias.
       const CARGOS_DEFAULT = new Set(["gestor", "atendente", "estagiario", "sdr"]);
@@ -608,14 +618,30 @@ export const configuracoesRouter = router({
       // funciona ao disparar mensagens.
       validarConfigCanalPorTipo(input.tipo, input.config);
 
-      // Verificar limite de WhatsApp (DESATIVADO PARA TESTES)
-      // if (input.tipo === "whatsapp_qr" || input.tipo === "whatsapp_api") {
-      //   const contagem = await contarCanaisPorTipo(esc.escritorio.id);
-      //   const whatsappAtual = contagem["whatsapp"] || 0;
-      //   if (whatsappAtual >= esc.escritorio.maxConexoesWhatsapp) {
-      //     throw new Error(`Limite de ${esc.escritorio.maxConexoesWhatsapp} conexão(ões) WhatsApp atingido. Faça upgrade do plano.`);
-      //   }
-      // }
+      // Enforce de limite de conexões WhatsApp do plano (Fase 4 — antes
+      // estava comentado). Lê `maxConexoesWhatsapp` do plano via cortesia/
+      // resolver de subscription (não do campo stale em escritorios).
+      if (input.tipo === "whatsapp_qr" || input.tipo === "whatsapp_api") {
+        const { getActiveSubscriptionComHeranca } = await import("../db");
+        const { getPlanoBySlug } = await import("../billing/planos-repo");
+
+        const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+        // Cortesia ignora limite (admin override)
+        const cortesiaAtiva = !!sub?.cortesia;
+        if (!cortesiaAtiva) {
+          const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
+          const limite = plano?.limites.maxConexoesWhatsapp ?? 0;
+          if (limite < 999999) {
+            const contagem = await contarCanaisPorTipo(esc.escritorio.id);
+            const whatsappAtual = contagem["whatsapp"] || 0;
+            if (whatsappAtual >= limite) {
+              throw new Error(
+                `Limite de ${limite} conexão(ões) WhatsApp atingido no plano "${plano?.nome ?? "atual"}". Faça upgrade pra adicionar mais.`,
+              );
+            }
+          }
+        }
+      }
 
       const id = await criarCanal({
         escritorioId: esc.escritorio.id,

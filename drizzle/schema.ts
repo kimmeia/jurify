@@ -50,10 +50,43 @@ export const users = mysqlTable("users", {
    * (TODO frontend).
    */
   aceitouTermosEm: timestamp("aceitouTermosEm"),
+  /**
+   * Confirmação de email (Fase 2 do roadmap de Planos).
+   * Signup novo: false até clicar no link enviado por Resend.
+   * Login Google: marca true automaticamente (Google já valida).
+   * Legacy (criados antes da migration 0109): backfill marcou true.
+   */
+  emailVerificado: boolean("email_verificado").default(false).notNull(),
+  emailVerificadoEm: timestamp("email_verificado_em"),
+  /**
+   * Slug do plano que o cliente escolheu na LP (sessionStorage do Pricing.tsx
+   * é passado pro signup). A Fase 3 consome esse valor pra iniciar trial
+   * automaticamente após `confirmarEmail`. Null = não escolheu.
+   */
+  planoPretendido: varchar("plano_pretendido", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
+
+/**
+ * Tokens de confirmação de email no signup. Geração: `randomBytes(32).hex`
+ * (256 bits). Validade: 24h. `used_at != null` = token consumido (não usa
+ * de novo).
+ */
+export const emailConfirmationTokens = mysqlTable("email_confirmation_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  idxToken: index("idx_email_conf_token").on(t.token),
+  idxUser: index("idx_email_conf_user").on(t.userId),
+}));
+
+export type EmailConfirmationToken = typeof emailConfirmationTokens.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -98,6 +131,17 @@ export const subscriptions = mysqlTable("subscriptions", {
   cortesia: boolean("cortesia").default(false).notNull(),
   cortesiaMotivo: varchar("cortesiaMotivo", { length: 500 }),
   cortesiaExpiraEm: bigint("cortesiaExpiraEm", { mode: "number" }),
+  /**
+   * Trial sem cartão (Fase 3 do roadmap de Planos). Quando o plano tem
+   * `trialDias > 0` e o cliente confirma email, subscription é criada com
+   * status='trialing' + estes campos preenchidos. asaasSubscriptionId fica
+   * NULL até a conversão.
+   */
+  trialIniciadoEm: bigint("trial_iniciado_em", { mode: "number" }),
+  trialExpiraEm: bigint("trial_expira_em", { mode: "number" }),
+  trialAvisado3d: boolean("trial_avisado_3d").default(false).notNull(),
+  trialAvisado1d: boolean("trial_avisado_1d").default(false).notNull(),
+  trialConvertido: boolean("trial_convertido").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -237,6 +281,13 @@ export const escritorios = mysqlTable("escritorios", {
   suspenso: boolean("suspenso").default(false).notNull(),
   motivoSuspensao: varchar("motivoSuspensao", { length: 500 }),
   suspensoEm: timestamp("suspensoEm"),
+  /**
+   * Anti-abuso de trial (Fase 3): cada escritório só pode usar 1 trial.
+   * Setado quando subscription.iniciarTrial cria a primeira subscription
+   * trialing pra este escritório.
+   */
+  jaUsouTrial: boolean("ja_usou_trial").default(false).notNull(),
+  trialUsadoEm: timestamp("trial_usado_em"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1577,7 +1628,51 @@ export type InsertAuditLog = typeof auditLog.$inferInsert;
  *
  * Cada linha referencia um planId (que precisa existir em PLANS).
  * Campos null = mantém valor do hardcoded. Campos não-null sobrescrevem.
+ *
+ * NOTA: tabela substituída por `planos` (migration 0108) — mantida apenas
+ * pra rollback. Será removida em PR futuro.
  */
+export const planos = mysqlTable("planos", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  descricao: varchar("descricao", { length: 255 }),
+  publicoAlvo: varchar("publico_alvo", { length: 255 }),
+
+  precoMensalCentavos: int("preco_mensal_centavos").notNull().default(0),
+  precoAnualCentavos: int("preco_anual_centavos"),
+
+  trialDias: int("trial_dias").notNull().default(0),
+
+  maxUsuarios: int("max_usuarios").notNull().default(1),
+  maxArmazenamentoMb: int("max_armazenamento_mb").notNull().default(100),
+  maxClientes: int("max_clientes"),
+  maxConexoesWhatsapp: int("max_conexoes_whatsapp").notNull().default(0),
+  maxAgentesIa: int("max_agentes_ia").notNull().default(0),
+  maxMonitoramentosProcessos: int("max_monitoramentos_processos"),
+  creditosCalculosMes: int("creditos_calculos_mes").notNull().default(0),
+
+  /** JSON array de slugs de módulos liberados (ver shared/modulos-app.ts). */
+  modulosLiberados: json("modulos_liberados").notNull(),
+  /** JSON array de strings — bullets que aparecem na LP e em /plans. */
+  features: json("features").notNull(),
+
+  popular: boolean("popular").notNull().default(false),
+  oculto: boolean("oculto").notNull().default(false),
+  ordem: int("ordem").notNull().default(0),
+
+  criadoPor: int("criado_por"),
+  criadoEm: timestamp("criado_em").defaultNow().notNull(),
+  atualizadoPor: int("atualizado_por"),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  idxOculto: index("idx_planos_oculto").on(t.oculto),
+  idxOrdem: index("idx_planos_ordem").on(t.ordem),
+}));
+
+export type PlanoRow = typeof planos.$inferSelect;
+export type InsertPlanoRow = typeof planos.$inferInsert;
+
 export const planosOverrides = mysqlTable("planos_overrides", {
   id: int("id").autoincrement().primaryKey(),
   /** ID do plano em PLANS (ex: "iniciante", "profissional", "escritorio") */

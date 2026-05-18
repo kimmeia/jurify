@@ -381,6 +381,25 @@ export function iniciarJobs() {
     }
   }, 6 * 60 * 60 * 1000);
 
+  // A cada 1h: processa trials próximos da expiração + expira os vencidos.
+  // Idempotente — flags `trial_avisado_3d/1d` impedem reenvio do mesmo email.
+  // Roda de hora em hora pra dar precisão de até 1h no momento dos avisos
+  // (sem rodar muito frequente pra não onerar o DB).
+  setInterval(async () => {
+    try {
+      const { processarTrials } = await import("../billing/trial-cron");
+      const r = await processarTrials();
+      if (r.avisos3d > 0 || r.avisos1d > 0 || r.expirados > 0) {
+        log.info(
+          { avisos3d: r.avisos3d, avisos1d: r.avisos1d, expirados: r.expirados },
+          "[Cron] processarTrials concluído",
+        );
+      }
+    } catch (err: any) {
+      log.error("[Cron] processarTrials falhou:", err.message);
+    }
+  }, 60 * 60 * 1000);
+
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
 

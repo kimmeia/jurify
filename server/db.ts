@@ -101,21 +101,29 @@ export async function getUserByGoogleSub(googleSub: string) {
 
 /**
  * Sub é considerada com acesso ativo quando:
- *   - status é 'active' ou 'trialing', OU
- *   - cortesia=true E (cortesiaExpiraEm é null OU ainda não passou)
+ *   - cortesia=true E (cortesiaExpiraEm é null OU ainda não passou), OU
+ *   - status='active', OU
+ *   - status='trialing' E (trialExpiraEm é null OU ainda não passou)
  *
  * Cortesia tem prioridade sobre status — admin pode conceder acesso a um
  * cliente cuja assinatura está canceled/past_due no Asaas, por exemplo.
+ *
+ * Defesa em profundidade pro trial: mesmo que o cron de expiração não tenha
+ * rodado ainda (status ainda é 'trialing'), respeitamos trialExpiraEm aqui.
  */
 export function temAcessoAtivo(sub: Pick<
   typeof subscriptions.$inferSelect,
-  "status" | "cortesia" | "cortesiaExpiraEm"
+  "status" | "cortesia" | "cortesiaExpiraEm" | "trialExpiraEm"
 >): boolean {
   if (sub.cortesia) {
     if (sub.cortesiaExpiraEm == null) return true;
     return sub.cortesiaExpiraEm > Date.now();
   }
-  return sub.status === "active" || sub.status === "trialing";
+  if (sub.status === "active") return true;
+  if (sub.status === "trialing") {
+    return sub.trialExpiraEm == null || sub.trialExpiraEm > Date.now();
+  }
+  return false;
 }
 
 /**
@@ -135,13 +143,26 @@ export async function getActiveSubscription(userId: number) {
 
   // Cortesia tem prioridade — se houver, retorna ela
   const cortesia = todas.find((s) =>
-    temAcessoAtivo({ status: s.status, cortesia: s.cortesia, cortesiaExpiraEm: s.cortesiaExpiraEm })
-    && s.cortesia,
+    temAcessoAtivo({
+      status: s.status,
+      cortesia: s.cortesia,
+      cortesiaExpiraEm: s.cortesiaExpiraEm,
+      trialExpiraEm: s.trialExpiraEm,
+    }) && s.cortesia,
   );
   if (cortesia) return cortesia;
 
-  // Senão, comportamento normal: primeira active/trialing
-  const ativa = todas.find((s) => s.status === "active" || s.status === "trialing");
+  // Senão, comportamento normal: active OU trialing ainda não expirado.
+  // Usa temAcessoAtivo pra centralizar a regra (evita duplicar a checagem
+  // de trialExpiraEm aqui).
+  const ativa = todas.find((s) =>
+    temAcessoAtivo({
+      status: s.status,
+      cortesia: s.cortesia,
+      cortesiaExpiraEm: s.cortesiaExpiraEm,
+      trialExpiraEm: s.trialExpiraEm,
+    })
+  );
   return ativa ?? null;
 }
 
@@ -576,7 +597,7 @@ export async function getAdminStats() {
       mrr: 0,
       conversionRate: 0,
       newClientsThisMonth: 0,
-      planBreakdown: { iniciante: 0, profissional: 0, escritorio: 0 },
+      planBreakdown: { basico: 0, intermediario: 0, completo: 0 },
     };
   }
 
@@ -608,21 +629,21 @@ export async function getAdminStats() {
   const trialingSubscriptions = trialingSubs.length;
 
   let mrr = 0;
-  const planBreakdown = { iniciante: 0, profissional: 0, escritorio: 0 };
+  const planBreakdown = { basico: 0, intermediario: 0, completo: 0 };
 
   const allActiveSubs = activeSubs.concat(trialingSubs);
   for (const sub of allActiveSubs) {
-    const pid = sub.planId || "iniciante";
+    const pid = sub.planId || "basico";
     const plan = PLANS.find((p) => p.id === pid);
     if (plan) {
       mrr += plan.priceMonthly;
     } else {
-      mrr += 9900;
+      mrr += 9700;
     }
-    if (pid === "iniciante") planBreakdown.iniciante++;
-    else if (pid === "profissional") planBreakdown.profissional++;
-    else if (pid === "escritorio") planBreakdown.escritorio++;
-    else planBreakdown.iniciante++;
+    if (pid === "basico") planBreakdown.basico++;
+    else if (pid === "intermediario") planBreakdown.intermediario++;
+    else if (pid === "completo") planBreakdown.completo++;
+    else planBreakdown.basico++;
   }
 
   const now = new Date();

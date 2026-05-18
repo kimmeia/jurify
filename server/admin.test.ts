@@ -65,9 +65,9 @@ describe("admin.stats", () => {
     expect(stats).toHaveProperty("conversionRate");
     expect(stats).toHaveProperty("newClientsThisMonth");
     expect(stats).toHaveProperty("planBreakdown");
-    expect(stats.planBreakdown).toHaveProperty("iniciante");
-    expect(stats.planBreakdown).toHaveProperty("profissional");
-    expect(stats.planBreakdown).toHaveProperty("escritorio");
+    expect(stats.planBreakdown).toHaveProperty("basico");
+    expect(stats.planBreakdown).toHaveProperty("intermediario");
+    expect(stats.planBreakdown).toHaveProperty("completo");
     expect(typeof stats.totalClients).toBe("number");
     expect(typeof stats.mrr).toBe("number");
     expect(typeof stats.conversionRate).toBe("number");

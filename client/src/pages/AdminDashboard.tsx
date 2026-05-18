@@ -159,12 +159,12 @@ export default function AdminDashboard() {
                 <UserCheck className="h-5 w-5 text-emerald-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Plano Iniciante</p>
+                <p className="text-sm text-muted-foreground">Plano Básico</p>
                 {statsLoading ? (
                   <Skeleton className="h-6 w-10 mt-1" />
                 ) : (
                   <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.iniciante ?? 0}
+                    {stats?.planBreakdown?.basico ?? 0}
                   </p>
                 )}
               </div>
@@ -179,12 +179,12 @@ export default function AdminDashboard() {
                 <UserPlus className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Plano Profissional</p>
+                <p className="text-sm text-muted-foreground">Plano Intermediário</p>
                 {statsLoading ? (
                   <Skeleton className="h-6 w-10 mt-1" />
                 ) : (
                   <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.profissional ?? 0}
+                    {stats?.planBreakdown?.intermediario ?? 0}
                   </p>
                 )}
               </div>
@@ -199,12 +199,12 @@ export default function AdminDashboard() {
                 <DollarSign className="h-5 w-5 text-violet-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Plano Escritório</p>
+                <p className="text-sm text-muted-foreground">Plano Completo</p>
                 {statsLoading ? (
                   <Skeleton className="h-6 w-10 mt-1" />
                 ) : (
                   <p className="text-xl font-bold text-foreground">
-                    {stats?.planBreakdown?.escritorio ?? 0}
+                    {stats?.planBreakdown?.completo ?? 0}
                   </p>
                 )}
               </div>

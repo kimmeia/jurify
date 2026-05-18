@@ -27,16 +27,17 @@ export interface LimitesPlano {
 }
 
 /**
- * Limites por plano. Os IDs aqui DEVEM bater com os IDs em
- * `server/billing/products.ts`. Se você adicionar/remover um plano lá,
- * adicione/remova aqui também.
+ * Limites por plano.
  *
- * O plano "free" é o estado de quem ainda não assinou (trial). Ele NÃO
- * aparece em /plans, mas existe aqui para servir de fallback no
- * `verificarLimite`.
+ * @deprecated Os limites canônicos agora estão na tabela `planos` (migration
+ * 0108). Esta constante é mantida como fallback pra fluxo `verificarLimite`
+ * enquanto refatoramos pra ler do DB (PR futuro). Os IDs (`basico`,
+ * `intermediario`, `completo`) batem com os slugs da tabela.
+ *
+ * O plano "free" também existe na tabela; aqui é só fallback se a query
+ * falhar.
  */
 const LIMITES: Record<string, LimitesPlano> = {
-  // Sem plano (trial — usuário criou conta mas ainda não assinou)
   free: {
     maxClientes: 10,
     maxColaboradores: 1,
@@ -46,43 +47,43 @@ const LIMITES: Record<string, LimitesPlano> = {
     maxAgentesIa: 0,
     maxMonitoramentosJudit: 0,
     maxCobrancasAsaas: 0,
-    modulosPermitidos: ["calculos", "processos"],
+    modulosPermitidos: ["calculos", "clientes", "contratos"],
   },
 
-  iniciante: {
-    maxClientes: 50,
-    maxColaboradores: 2,
+  basico: {
+    maxClientes: 100,
+    maxColaboradores: 1,
     maxConversasAtivas: 20,
     maxArmazenamentoMB: 5000,
     maxLeads: 50,
     maxAgentesIa: 0,
     maxMonitoramentosJudit: 0,
     maxCobrancasAsaas: 50,
-    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "financeiro"],
+    modulosPermitidos: ["calculos", "clientes", "contratos", "financeiro"],
   },
 
-  profissional: {
-    maxClientes: 500,
+  intermediario: {
+    maxClientes: 999999,
     maxColaboradores: 5,
     maxConversasAtivas: 100,
-    maxArmazenamentoMB: 20000,
+    maxArmazenamentoMB: 20480,
     maxLeads: 500,
-    maxAgentesIa: 1,
-    maxMonitoramentosJudit: 50,
+    maxAgentesIa: 0,
+    maxMonitoramentosJudit: 0,
     maxCobrancasAsaas: 500,
-    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "agendamento", "monitoramento_judit", "financeiro"],
+    modulosPermitidos: ["calculos", "clientes", "contratos", "financeiro", "atendimento", "kanban", "agenda", "smartflow", "comissoes"],
   },
 
-  escritorio: {
+  completo: {
     maxClientes: 999999,
     maxColaboradores: 999999,
     maxConversasAtivas: 999999,
-    maxArmazenamentoMB: 100000,
+    maxArmazenamentoMB: 102400,
     maxLeads: 999999,
-    maxAgentesIa: 999999,
+    maxAgentesIa: 5,
     maxMonitoramentosJudit: 999999,
     maxCobrancasAsaas: 999999,
-    modulosPermitidos: ["calculos", "processos", "clientes", "atendimento", "pipeline", "agendamento", "relatorios", "configuracoes", "equipe", "monitoramento_judit", "financeiro", "agentes_ia"],
+    modulosPermitidos: ["calculos", "clientes", "contratos", "financeiro", "atendimento", "kanban", "agenda", "smartflow", "comissoes", "agentes_ia", "processos", "relatorios", "backups"],
   },
 };
 

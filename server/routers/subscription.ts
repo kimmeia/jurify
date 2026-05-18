@@ -14,7 +14,8 @@
  */
 
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getActiveSubscription, getActiveSubscriptionComHeranca, getUserSubscriptions, getDb } from "../db";
 import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-billing-client";
@@ -164,9 +165,19 @@ export const subscriptionRouter = router({
    * Herda do dono do escritório quando o user é colaborador sem sub
    * própria — cortesia/plano liberado no dono libera todos os
    * colaboradores (alinhado a créditos e limites, que já são por
-   * escritório). */
+   * escritório).
+   *
+   * Enriquece com `diasRestantesTrial` quando aplicável — Fase 3.
+   */
   current: protectedProcedure.query(async ({ ctx }) => {
-    return getActiveSubscriptionComHeranca(ctx.user.id);
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    if (!sub) return null;
+    let diasRestantesTrial: number | null = null;
+    if (sub.status === "trialing" && sub.trialExpiraEm != null) {
+      const msRestantes = sub.trialExpiraEm - Date.now();
+      diasRestantesTrial = Math.max(0, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
+    }
+    return { ...sub, diasRestantesTrial };
   }),
 
   /** Get all subscriptions for current user */
@@ -174,18 +185,57 @@ export const subscriptionRouter = router({
     return getUserSubscriptions(ctx.user.id);
   }),
 
-  /** Get available plans (todos recorrentes — não tem mais avulso) */
+  /**
+   * Lista planos visíveis na LP/checkout. Lê da tabela `planos` (fonte de
+   * verdade) com shape rico — slug+nome+limites+módulos+trial.
+   *
+   * Mantém campos legados (id/name/priceMonthly/priceYearly) como aliases pra
+   * não quebrar callers existentes (Plans.tsx, CheckoutSuccess, etc).
+   */
   plans: publicProcedure.query(async () => {
-    const plans = await getPlansResolved(false); // só os visíveis
-    return plans.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
+    const { getPlanosVisiveis } = await import("../billing/planos-repo");
+    const planos = await getPlanosVisiveis();
+
+    if (planos.length === 0) {
+      // Fallback estático (DB vazio ou migration não rodou) — mantém compat
+      const fallback = await getPlansResolved(false);
+      return fallback.map((p) => ({
+        id: p.id,
+        slug: p.id,
+        name: p.name,
+        nome: p.name,
+        description: p.description,
+        descricao: p.description,
+        publicoAlvo: null as string | null,
+        features: p.features,
+        priceMonthly: p.priceMonthly,
+        precoMensalCentavos: p.priceMonthly,
+        priceYearly: p.priceYearly,
+        precoAnualCentavos: p.priceYearly,
+        currency: p.currency,
+        popular: p.popular ?? false,
+        trialDias: 0,
+        modulosLiberados: [] as string[],
+      }));
+    }
+
+    return planos.map((p) => ({
+      id: p.slug,
+      slug: p.slug,
+      name: p.nome,
+      nome: p.nome,
+      description: p.descricao ?? "",
+      descricao: p.descricao,
+      publicoAlvo: p.publicoAlvo,
       features: p.features,
-      priceMonthly: p.priceMonthly,
-      priceYearly: p.priceYearly,
-      currency: p.currency,
-      popular: p.popular ?? false,
+      priceMonthly: p.precoMensalCentavos,
+      precoMensalCentavos: p.precoMensalCentavos,
+      priceYearly: p.precoAnualCentavos ?? p.precoMensalCentavos * 12,
+      precoAnualCentavos: p.precoAnualCentavos,
+      currency: "brl",
+      popular: p.popular,
+      trialDias: p.trialDias,
+      modulosLiberados: p.modulosLiberados,
     }));
   }),
 
@@ -243,35 +293,63 @@ export const subscriptionRouter = router({
         ...(successUrl ? { callback: { successUrl, autoRedirect: true } } : {}),
       });
 
-      // ─── CRIAR ROW LOCAL IMEDIATAMENTE ────────────────────────────────
-      // Antes esperávamos o webhook SUBSCRIPTION_CREATED chegar pra inserir
-      // a row local. Mas isso criava uma race condition: se o usuário
-      // pagasse rápido (PIX), o webhook PAYMENT_CONFIRMED chegava PRIMEIRO,
-      // não encontrava a row local, e apenas logava warning — a assinatura
-      // nunca era ativada.
+      // ─── CRIAR/ATUALIZAR ROW LOCAL ────────────────────────────────────
+      // Cenário A (signup novo): não tem sub local → INSERT incomplete.
+      // Cenário B (conversão trial → pago): tem sub status='trialing' →
+      //   UPDATE atualizando asaasSubscriptionId + marcando trial_convertido.
+      //   Mantém o id local pra preservar histórico (cortesia override,
+      //   créditos consumidos, etc).
       //
-      // Agora inserimos a row imediatamente com status "incomplete". Os
-      // webhooks subsequentes vão ATUALIZAR (não inserir) — o que é
-      // idempotente e sem race.
+      // Os webhooks Asaas chegando depois vão ATUALIZAR — idempotente.
       const db = await getDb();
       if (db) {
-        const existingLocal = await db
+        // Já existe row dessa subscription Asaas? (idempotente em retry)
+        const [existingByAsaas] = await db
           .select()
           .from(subscriptionsTable)
           .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
           .limit(1);
-        if (existingLocal.length === 0) {
-          await db.insert(subscriptionsTable).values({
-            userId: ctx.user.id,
-            asaasSubscriptionId: sub.id,
-            asaasCustomerId: customerId,
-            planId: input.planId,
-            status: "incomplete", // aguarda primeiro pagamento
-          });
-          log.info(
-            { userId: ctx.user.id, subId: sub.id },
-            "Row local criada como incomplete",
-          );
+
+        if (!existingByAsaas) {
+          // Procura sub em trial deste user pra fazer UPSERT
+          const [subTrial] = await db
+            .select()
+            .from(subscriptionsTable)
+            .where(and(
+              eq(subscriptionsTable.userId, ctx.user.id),
+              eq(subscriptionsTable.status, "trialing"),
+            ))
+            .limit(1);
+
+          if (subTrial) {
+            // Conversão trial → pago: atualiza in-place
+            await db.update(subscriptionsTable)
+              .set({
+                asaasSubscriptionId: sub.id,
+                asaasCustomerId: customerId,
+                planId: input.planId,
+                status: "incomplete",
+                trialConvertido: true,
+              })
+              .where(eq(subscriptionsTable.id, subTrial.id));
+            log.info(
+              { userId: ctx.user.id, subId: sub.id, subLocalId: subTrial.id },
+              "Conversão trial → pago: sub atualizada in-place",
+            );
+          } else {
+            // Signup direto sem trial — insere novo
+            await db.insert(subscriptionsTable).values({
+              userId: ctx.user.id,
+              asaasSubscriptionId: sub.id,
+              asaasCustomerId: customerId,
+              planId: input.planId,
+              status: "incomplete", // aguarda primeiro pagamento
+            });
+            log.info(
+              { userId: ctx.user.id, subId: sub.id },
+              "Row local criada como incomplete",
+            );
+          }
         }
       }
 
@@ -413,4 +491,124 @@ export const subscriptionRouter = router({
         asaasSubscriptionId: sub.id,
       };
     }),
+
+  /**
+   * Inicia trial sem cartão (Fase 3 do roadmap de Planos).
+   *
+   * Cliente que acabou de confirmar email é direcionado pra cá com o slug
+   * do plano escolhido na LP (vindo de `users.planoPretendido`). Cria
+   * subscription `status='trialing'`, trialExpiraEm=now+plano.trialDias.
+   * Não chama Asaas — Asaas só entra na conversão pra pago (`createCheckout`).
+   *
+   * Anti-abuso: 1 trial por escritório, controlado por `escritorios.jaUsouTrial`.
+   * Se o plano tem `trialDias=0`, retorna erro (cliente deve ir pro checkout
+   * normal).
+   */
+  iniciarTrial: protectedProcedure
+    .input(z.object({ planoSlug: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const { getPlanoBySlug } = await import("../billing/planos-repo");
+      const plano = await getPlanoBySlug(input.planoSlug);
+      if (!plano) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Plano não encontrado." });
+      }
+      if (plano.trialDias <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Este plano não oferece trial. Faça checkout normalmente.",
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const { getEscritorioPorUsuario, criarEscritorio } = await import("../escritorio/db-escritorio");
+      const { escritorios } = await import("../../drizzle/schema");
+
+      // Garante que o escritório existe (cliente recém-confirmado pode não ter)
+      let escVinculado = await getEscritorioPorUsuario(ctx.user.id);
+      if (!escVinculado) {
+        const nome = ctx.user.name || ctx.user.email || "Meu escritório";
+        await criarEscritorio(ctx.user.id, nome, ctx.user.email ?? undefined);
+        escVinculado = await getEscritorioPorUsuario(ctx.user.id);
+      }
+      if (!escVinculado) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao criar escritório pra trial.",
+        });
+      }
+      const esc = escVinculado.escritorio;
+
+      // Apenas o dono pode iniciar trial (colaboradores herdam)
+      if (esc.ownerId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas o dono do escritório pode iniciar trial.",
+        });
+      }
+
+      if (esc.jaUsouTrial) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Este escritório já usou seu trial. Faça checkout pra continuar.",
+        });
+      }
+
+      // Já tem subscription ativa? Não duplica
+      const subExistente = await getActiveSubscription(ctx.user.id);
+      if (subExistente) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Você já tem uma assinatura ativa.",
+        });
+      }
+
+      const agora = Date.now();
+      const expiraEm = agora + plano.trialDias * 24 * 60 * 60 * 1000;
+
+      await db.insert(subscriptionsTable).values({
+        userId: ctx.user.id,
+        planId: plano.slug,
+        status: "trialing",
+        trialIniciadoEm: agora,
+        trialExpiraEm: expiraEm,
+        currentPeriodEnd: expiraEm,
+        creditsLimit: plano.limites.creditosCalculosMes,
+      });
+
+      await db.update(escritorios)
+        .set({ jaUsouTrial: true, trialUsadoEm: new Date() })
+        .where(eq(escritorios.id, esc.id));
+
+      log.info(
+        { userId: ctx.user.id, escritorioId: esc.id, planoSlug: plano.slug, trialDias: plano.trialDias },
+        "Trial iniciado",
+      );
+
+      return {
+        success: true,
+        planoSlug: plano.slug,
+        trialDias: plano.trialDias,
+        trialExpiraEm: expiraEm,
+      };
+    }),
+
+  /**
+   * Status do trial atual (dias restantes). Usado pelo banner topo do app.
+   * Retorna null se user não está em trial.
+   */
+  statusTrial: protectedProcedure.query(async ({ ctx }) => {
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    if (!sub || sub.status !== "trialing" || sub.trialExpiraEm == null) return null;
+    const agora = Date.now();
+    const msRestantes = sub.trialExpiraEm - agora;
+    const diasRestantes = Math.max(0, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
+    return {
+      emTrial: msRestantes > 0,
+      diasRestantes,
+      expiraEm: sub.trialExpiraEm,
+      planoSlug: sub.planId,
+    };
+  }),
 });
