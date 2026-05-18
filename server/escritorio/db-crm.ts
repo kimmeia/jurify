@@ -653,6 +653,10 @@ export async function atualizarLead(id: number, escritorioId: number, dados: Rec
   if (dados.probabilidade !== undefined) updateData.probabilidade = dados.probabilidade;
   if (dados.motivoPerda !== undefined) updateData.motivoPerda = dados.motivoPerda || null;
   if (dados.observacoes !== undefined) updateData.observacoes = dados.observacoes || null;
+  if (dados.origemLead !== undefined) {
+    const v = typeof dados.origemLead === "string" ? dados.origemLead.trim() : dados.origemLead;
+    updateData.origemLead = v ? v : null;
+  }
   if (Object.keys(updateData).length === 0) return;
   await db.update(leads).set(updateData)
     .where(and(eq(leads.id, id), eq(leads.escritorioId, escritorioId)));

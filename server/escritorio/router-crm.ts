@@ -434,6 +434,7 @@ export const crmRouter = router({
       probabilidade: z.number().min(0).max(100).optional(),
       motivoPerda: z.string().max(255).optional(),
       observacoes: z.string().max(2000).optional(),
+      origemLead: z.string().max(128).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "pipeline", "editar");
