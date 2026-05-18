@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { requireModulo } from "../_core/trpc-gates";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { getDb } from "../db";
@@ -212,7 +213,7 @@ export const smartflowRouter = router({
     }),
 
   /** Cria cenário com passos */
-  criar: protectedProcedure
+  criar: requireModulo("smartflow")
     .input(z.object({
       nome: z.string().min(2).max(128),
       descricao: z.string().max(512).optional(),
