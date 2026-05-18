@@ -6,7 +6,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
+import { kanbanFunis, kanbanColunas, kanbanCards, kanbanMovimentacoes, kanbanComentarios, kanbanResponsavelLog, kanbanTags, contatos, colaboradores, clienteProcessos, users } from "../../drizzle/schema";
 import { eq, and, desc, asc, or, like, gte, lte, lt, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
@@ -128,13 +128,19 @@ export const kanbanRouter = router({
     }),
 
   editarColuna: protectedProcedure
-    .input(z.object({ id: z.number(), nome: z.string().max(64).optional(), cor: z.string().max(16).optional() }))
+    .input(z.object({
+      id: z.number(),
+      nome: z.string().max(64).optional(),
+      cor: z.string().max(16).optional(),
+      tipo: z.enum(["normal", "conclusao"]).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const update: any = {};
       if (input.nome) update.nome = input.nome;
       if (input.cor !== undefined) update.cor = input.cor;
+      if (input.tipo !== undefined) update.tipo = input.tipo;
       await db.update(kanbanColunas).set(update).where(eq(kanbanColunas.id, input.id));
       return { success: true };
     }),
@@ -403,6 +409,9 @@ export const kanbanRouter = router({
       // esse campo.
       let novoResponsavelParaNotificar: number | null = null;
       let tituloAtual = update.titulo || "";
+      // Captura responsável anterior pra log de mudança (timeline).
+      let responsavelAnterior: number | null = null;
+      let responsavelMudou = false;
       if (update.responsavelId !== undefined) {
         const [antes] = await db
           .select({ atual: kanbanCards.responsavelId, titulo: kanbanCards.titulo })
@@ -410,14 +419,30 @@ export const kanbanRouter = router({
           .where(and(eq(kanbanCards.id, id), eq(kanbanCards.escritorioId, perm.escritorioId)))
           .limit(1);
         if (antes && antes.atual !== update.responsavelId) {
-          novoResponsavelParaNotificar = update.responsavelId;
-          tituloAtual = update.titulo || antes.titulo;
+          responsavelAnterior = antes.atual ?? null;
+          responsavelMudou = true;
+          if (update.responsavelId !== null) {
+            novoResponsavelParaNotificar = update.responsavelId;
+            tituloAtual = update.titulo || antes.titulo;
+          }
         }
       }
 
       // Garantir o filtro escritorioId no UPDATE — antes só filtrava por id (vazamento entre escritórios)
       await db.update(kanbanCards).set(setData)
         .where(and(eq(kanbanCards.id, id), eq(kanbanCards.escritorioId, perm.escritorioId)));
+
+      // Log de mudança de responsável (timeline). Só insere quando o campo
+      // realmente mudou — não polui o log com "edição de descrição" que não
+      // tocou no responsável.
+      if (responsavelMudou) {
+        await db.insert(kanbanResponsavelLog).values({
+          cardId: id,
+          responsavelAnteriorId: responsavelAnterior,
+          responsavelNovoId: update.responsavelId ?? null,
+          mudadoPorId: perm.colaboradorId,
+        });
+      }
 
       if (novoResponsavelParaNotificar !== null) {
         const { notificarCardAtribuido } = await import("./notificar-card-kanban");
@@ -1018,6 +1043,196 @@ export const kanbanRouter = router({
           .where(eq(kanbanColunas.id, input.idsOrdenados[i]));
       }
       return { success: true };
+    }),
+
+  // ─── HISTÓRICO DO CARD (timeline) ─────────────────────────────────────────
+
+  /**
+   * Retorna timeline cronológica do card: criação, movimentações entre
+   * colunas, mudanças de responsável, comentários, conclusão.
+   *
+   * Agrega 4 fontes (kanban_movimentacoes, kanban_responsavel_log,
+   * kanban_comentarios, kanban_cards.createdAt) e ordena por timestamp.
+   * Frontend renderiza cada item com ícone/cor conforme tipo.
+   *
+   * Inclui dados pra mostrar "concluído em atraso" — quando o card foi
+   * movido pra coluna com tipo='conclusao', compara createdAt da movimentação
+   * com card.prazo.
+   */
+  historicoCard: protectedProcedure
+    .input(z.object({ cardId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [card] = await db
+        .select({
+          id: kanbanCards.id,
+          titulo: kanbanCards.titulo,
+          colunaId: kanbanCards.colunaId,
+          prazo: kanbanCards.prazo,
+          createdAt: kanbanCards.createdAt,
+          responsavelId: kanbanCards.responsavelId,
+        })
+        .from(kanbanCards)
+        .where(and(
+          eq(kanbanCards.id, input.cardId),
+          eq(kanbanCards.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!card) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Map dos colaboradores → nome (uma query, depois lookup local).
+      const colabsRows = await db
+        .select({
+          id: colaboradores.id,
+          nome: users.name,
+        })
+        .from(colaboradores)
+        .innerJoin(users, eq(colaboradores.userId, users.id))
+        .where(eq(colaboradores.escritorioId, esc.escritorio.id));
+      const nomeColab = new Map<number, string>();
+      for (const c of colabsRows) {
+        if (c.id != null) nomeColab.set(c.id, c.nome ?? `Colab #${c.id}`);
+      }
+
+      // Map colunas → {nome, tipo} (mesmo lookup local).
+      const colunasRows = await db
+        .select({
+          id: kanbanColunas.id,
+          nome: kanbanColunas.nome,
+          tipo: kanbanColunas.tipo,
+          funilId: kanbanColunas.funilId,
+        })
+        .from(kanbanColunas)
+        .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
+        .where(eq(kanbanFunis.escritorioId, esc.escritorio.id));
+      const infoColuna = new Map<number, { nome: string; tipo: string }>();
+      for (const c of colunasRows) {
+        infoColuna.set(c.id, { nome: c.nome, tipo: c.tipo });
+      }
+
+      // Movimentações entre colunas
+      const movs = await db
+        .select()
+        .from(kanbanMovimentacoes)
+        .where(eq(kanbanMovimentacoes.cardId, input.cardId))
+        .orderBy(asc(kanbanMovimentacoes.createdAt));
+
+      // Comentários
+      const coms = await db
+        .select()
+        .from(kanbanComentarios)
+        .where(eq(kanbanComentarios.cardId, input.cardId))
+        .orderBy(asc(kanbanComentarios.createdAt));
+
+      // Mudanças de responsável
+      const resps = await db
+        .select()
+        .from(kanbanResponsavelLog)
+        .where(eq(kanbanResponsavelLog.cardId, input.cardId))
+        .orderBy(asc(kanbanResponsavelLog.createdAt));
+
+      type Evento =
+        | { tipo: "criado"; createdAt: Date }
+        | {
+            tipo: "movimentacao";
+            createdAt: Date;
+            origemNome: string;
+            destinoNome: string;
+            destinoTipo: string;
+            porNome: string | null;
+            concluidoEmAtraso: boolean | null;
+          }
+        | {
+            tipo: "responsavel";
+            createdAt: Date;
+            anteriorNome: string | null;
+            novoNome: string | null;
+            porNome: string | null;
+          }
+        | {
+            tipo: "comentario";
+            createdAt: Date;
+            texto: string;
+            autorNome: string | null;
+          };
+
+      const eventos: Evento[] = [];
+      eventos.push({ tipo: "criado", createdAt: card.createdAt });
+
+      for (const m of movs) {
+        const destino = infoColuna.get(m.colunaDestinoId);
+        const origem = infoColuna.get(m.colunaOrigemId);
+        const ehConclusao = destino?.tipo === "conclusao";
+        let concluidoEmAtraso: boolean | null = null;
+        if (ehConclusao && card.prazo) {
+          concluidoEmAtraso = m.createdAt.getTime() > card.prazo.getTime();
+        }
+        eventos.push({
+          tipo: "movimentacao",
+          createdAt: m.createdAt,
+          origemNome: origem?.nome ?? "(coluna removida)",
+          destinoNome: destino?.nome ?? "(coluna removida)",
+          destinoTipo: destino?.tipo ?? "normal",
+          porNome: m.movidoPorId != null ? nomeColab.get(m.movidoPorId) ?? null : null,
+          concluidoEmAtraso,
+        });
+      }
+
+      for (const r of resps) {
+        eventos.push({
+          tipo: "responsavel",
+          createdAt: r.createdAt,
+          anteriorNome:
+            r.responsavelAnteriorId != null
+              ? nomeColab.get(r.responsavelAnteriorId) ?? null
+              : null,
+          novoNome:
+            r.responsavelNovoId != null
+              ? nomeColab.get(r.responsavelNovoId) ?? null
+              : null,
+          porNome: r.mudadoPorId != null ? nomeColab.get(r.mudadoPorId) ?? null : null,
+        });
+      }
+
+      for (const c of coms) {
+        eventos.push({
+          tipo: "comentario",
+          createdAt: c.createdAt,
+          texto: c.texto,
+          autorNome: nomeColab.get(c.autorId) ?? null,
+        });
+      }
+
+      // Ordem cronológica decrescente (mais recente em cima).
+      eventos.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      // Status agregado da conclusão atual (se está numa coluna concluido).
+      const colunaAtual = infoColuna.get(card.colunaId);
+      const concluido = colunaAtual?.tipo === "conclusao";
+      let concluidoEmAtraso: boolean | null = null;
+      if (concluido && card.prazo) {
+        // Pega a movimentação mais recente pra coluna concluida.
+        const ultimaMovConclusao = movs
+          .filter((m) => infoColuna.get(m.colunaDestinoId)?.tipo === "conclusao")
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        if (ultimaMovConclusao) {
+          concluidoEmAtraso =
+            ultimaMovConclusao.createdAt.getTime() > card.prazo.getTime();
+        }
+      }
+
+      return {
+        cardId: card.id,
+        titulo: card.titulo,
+        concluido,
+        concluidoEmAtraso,
+        prazo: card.prazo,
+        eventos,
+      };
     }),
 
   // ─── IMPORT DO TRELLO ─────────────────────────────────────────────────────
