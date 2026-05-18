@@ -3,7 +3,7 @@
  * Funis customizáveis com colunas e cards arrastáveis.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
   ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
-  Archive,
+  Archive, Search,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -50,6 +50,10 @@ export default function Kanban() {
     try { localStorage.setItem("kanban:modoCompacto", v ? "1" : "0"); } catch { /* localStorage indisponível, ignora */ }
   };
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
+  // Busca textual client-side. Filtra por título, nome do cliente OU tags
+  // (case-insensitive). Tudo já vem enriquecido em obterFunil, então é
+  // instantâneo sem precisar mexer no backend.
+  const [buscaTexto, setBuscaTexto] = useState("");
   // Default: cada coluna mostra 5 cards. Usuário expande pra ver todos.
   const CARDS_INICIAIS = 5;
   const [colunasExpandidas, setColunasExpandidas] = useState<Set<number>>(new Set());
@@ -237,7 +241,31 @@ export default function Kanban() {
   });
 
   const listaFunis = funis || [];
-  const colunas = funilData?.colunas || [];
+  const colunasBase = funilData?.colunas || [];
+  // Aplica busca textual client-side: titulo / clienteNome / tags.
+  // Mantém a ESTRUTURA de colunas (não esconde a coluna se vazia após filtro;
+  // só mostra os cards que casam). Quando busca está vazia, retorna idêntico.
+  const colunas = useMemo(() => {
+    const q = buscaTexto.trim().toLowerCase();
+    if (!q) return colunasBase;
+    return colunasBase.map((col: any) => ({
+      ...col,
+      cards: (col.cards || []).filter((c: any) => {
+        const titulo = (c.titulo || "").toLowerCase();
+        const cliente = (c.clienteNome || "").toLowerCase();
+        const tags = (c.tags || "").toLowerCase();
+        return titulo.includes(q) || cliente.includes(q) || tags.includes(q);
+      }),
+    }));
+  }, [colunasBase, buscaTexto]);
+  const totalCardsBase = colunasBase.reduce(
+    (acc: number, col: any) => acc + (col.cards?.length || 0),
+    0,
+  );
+  const totalCardsFiltrados = colunas.reduce(
+    (acc: number, col: any) => acc + (col.cards?.length || 0),
+    0,
+  );
 
   // Drag state — cards e colunas usam estados separados pra não interferir.
   const [dragCardId, setDragCardId] = useState<number | null>(null);
@@ -518,6 +546,33 @@ export default function Kanban() {
           <Archive className="h-3.5 w-3.5" />
           {mostrarArquivados ? "Mostrando arquivados" : "Mostrar arquivados"}
         </button>
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            value={buscaTexto}
+            onChange={(e) => setBuscaTexto(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") setBuscaTexto(""); }}
+            placeholder="Buscar título, cliente, tag…"
+            className="pl-7 pr-7 h-8 text-xs"
+          />
+          {buscaTexto && (
+            <button
+              onClick={() => setBuscaTexto("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              title="Limpar busca"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        {buscaTexto.trim() && (
+          <span className="text-[11px] text-muted-foreground">
+            <b className="text-foreground tabular-nums">{totalCardsFiltrados}</b>
+            {" de "}
+            <b className="tabular-nums">{totalCardsBase}</b>
+            {" card(s)"}
+          </span>
+        )}
       </div>
 
       {/* Colunas — altura máx 70vh com scroll INTERNO; header sticky no topo da coluna */}
