@@ -224,7 +224,14 @@ export const configuracoesRouter = router({
 
     const lista = await listarColaboradores(result.escritorio.id);
     const ativos = lista.filter(c => c.ativo).length;
-    const limite = result.escritorio.maxColaboradores;
+
+    // Limite vem do plano do dono (Fase 4 — antes era cópia stale em
+    // escritorios.maxColaboradores, removida na migration 0111).
+    const { getActiveSubscriptionComHeranca } = await import("../db");
+    const { getPlanoBySlug } = await import("../billing/planos-repo");
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
+    const limite = sub?.cortesia ? 999999 : (plano?.limites.maxUsuarios ?? 1);
     const extras = Math.max(0, ativos - limite);
 
     return {
@@ -579,9 +586,18 @@ export const configuracoesRouter = router({
     if (!esc) return { canais: [], limiteWhatsapp: 0, usadosWhatsapp: 0 };
     const canais = await listarCanais(esc.escritorio.id);
     const contagem = await contarCanaisPorTipo(esc.escritorio.id);
+
+    // Limite WhatsApp vem do plano (Fase 4 — antes era cópia stale em
+    // escritorios.maxConexoesWhatsapp, removida na migration 0111).
+    const { getActiveSubscriptionComHeranca } = await import("../db");
+    const { getPlanoBySlug } = await import("../billing/planos-repo");
+    const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
+    const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
+    const limiteWhatsapp = sub?.cortesia ? 999999 : (plano?.limites.maxConexoesWhatsapp ?? 0);
+
     return {
       canais,
-      limiteWhatsapp: esc.escritorio.maxConexoesWhatsapp,
+      limiteWhatsapp,
       usadosWhatsapp: contagem["whatsapp"] || 0,
     };
   }),
