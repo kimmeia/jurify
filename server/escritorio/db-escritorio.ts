@@ -379,7 +379,16 @@ export async function criarConvite(
     const [colabExistente] = await db.select().from(colaboradores)
       .where(and(eq(colaboradores.escritorioId, escritorioId), eq(colaboradores.userId, userExistente.id), eq(colaboradores.ativo, true)))
       .limit(1);
-    if (colabExistente) throw new Error(`${email} já é colaborador deste escritório.`);
+    if (colabExistente) {
+      // Mensagem orienta o passo concreto: o usuário provavelmente confundiu
+      // "excluir convite" (que tira de convites_colaborador) com "remover
+      // colaborador" (que tira de colaboradores). Se o weslley aceitou um
+      // convite anterior, virou colaborador — e excluir o convite depois não
+      // remove o vínculo.
+      throw new Error(
+        `${email} já é colaborador deste escritório. Pra recadastrar, remova ele primeiro em Configurações → Equipe (botão de remover ao lado do nome) e tente convidar de novo.`,
+      );
+    }
   }
 
   const token = gerarTokenConvite();
