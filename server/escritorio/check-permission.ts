@@ -44,7 +44,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
   gestor: {
     dashboard: perm(true, true, false, false, false),
     calculos: perm(true, true, true, true, true),
-    clientes: perm(true, true, true, true, false),
+    clientes: perm(true, true, true, true, true),
     processos: perm(true, true, true, true, false),
     atendimento: perm(true, true, true, true, false),
     kanban: perm(true, true, true, true, false),
@@ -54,8 +54,8 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     agentesIa: perm(true, true, true, true, false),
     relatorios: perm(true, true, false, false, false),
     financeiro: perm(true, true, true, true, false),
-    configuracoes: perm(false, false, false, false, false),
-    equipe: perm(true, true, false, false, false),
+    configuracoes: perm(true, true, true, true, false),
+    equipe: perm(true, true, true, true, false),
     // legados mantidos por retrocompat com dados antigos
     pipeline: perm(true, true, true, true, false),
     agendamento: perm(true, true, true, true, false),
@@ -284,33 +284,29 @@ export function limparCachePermissoes() {
 }
 
 /**
- * Permissão "gerencial" — preserva o legado de `cargo === "dono" || cargo === "gestor"`
- * e ABRE para cargos personalizados que tenham a flag correspondente na matriz.
+ * Permissão "gerencial" — preserva o bypass legado pra DONO e delega
+ * todo o resto pra matriz oficial.
  *
- * Antes do fix do bug #9, procedures críticos (configurar integrações,
- * gerenciar modelos de contrato, atribuir cargos, excluir/unificar
- * clientes) eram travados em `cargo === "dono" || cargo === "gestor"`
- * hardcoded — cargos personalizados criados via UI (`Cargos personalizados`)
- * ficavam BLOQUEADOS mesmo com toda a matriz de permissões marcada. O dono
- * ia ao painel, criava "Sócio Júnior" com "configuracoes: editar = true",
- * e ainda assim o usuário recebia "Sem permissão".
+ * Histórico: antes do fix do bug #9, procedures críticos (configurar
+ * integrações, gerenciar modelos de contrato, atribuir cargos,
+ * excluir/unificar clientes) eram travados em `cargo === "dono" || cargo === "gestor"`
+ * hardcoded — cargos personalizados criados via UI ficavam BLOQUEADOS
+ * mesmo com toda a matriz marcada.
  *
- * Este helper preserva o comportamento histórico (dono e gestor sempre
- * passam) E delega cargos personalizados pra matriz oficial — usando o
- * `modulo` + `acao` que o caller indica como mapeamento semântico.
- *
- * Uso típico:
- *   const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "configuracoes", "editar");
- *   if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
- *   // Continua usando perm.escritorioId, perm.colaboradorId, perm.cargo etc.
+ * Versão inicial do helper preservava bypass pra dono+gestor. Agora
+ * Gestor também passa a obedecer a matriz rigorosamente — dono pode
+ * remover acessos do gestor pelo painel de Cargos. Default do Gestor
+ * em PERMISSOES_LEGADO e em PERMISSOES_PADRAO foi atualizado pra
+ * conceder configuracoes/equipe:editar/clientes:excluir, então o
+ * comportamento histórico fica preservado se ninguém mexeu — e
+ * migração `0112_gestor_segue_matriz` faz o backfill em escritórios
+ * existentes.
  */
 export async function checkPermissionAdminOuMatriz(
   userId: number,
   modulo: string,
   acao: "criar" | "editar" | "excluir" = "editar",
 ): Promise<PermissionResult> {
-  // Dono/gestor: bypass legado preservado. Não chama matriz pra evitar
-  // dependência em entries específicas que podem mudar.
   const esc = await getEscritorioPorUsuario(userId);
   if (!esc) {
     return {
@@ -326,7 +322,9 @@ export async function checkPermissionAdminOuMatriz(
     cargo: esc.colaborador.cargo,
   };
 
-  if (esc.colaborador.cargo === "dono" || esc.colaborador.cargo === "gestor") {
+  // Bypass APENAS para dono — superuser do escritório. Gestor e demais
+  // cargos seguem a matriz oficial.
+  if (esc.colaborador.cargo === "dono") {
     return {
       allowed: true, verTodos: true, verProprios: true,
       criar: true, editar: true, excluir: true,
@@ -334,8 +332,6 @@ export async function checkPermissionAdminOuMatriz(
     };
   }
 
-  // Demais cargos: delega para a matriz oficial. Cargos personalizados
-  // com a flag marcada passam; cargos legados sem privilégio (atendente,
-  // estagiario, sdr) ficam bloqueados.
+  // Demais cargos (incluindo Gestor): delega pra matriz.
   return checkPermission(userId, modulo, acao);
 }
