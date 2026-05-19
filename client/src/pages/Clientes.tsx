@@ -30,7 +30,9 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
+  MapPin, AlertTriangle, Briefcase,
 } from "lucide-react";
+import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -283,33 +285,37 @@ function exportClientesCSV(clientes: any[]) {
 
 // ─── Segmentação (chips) ─────────────────────────────────────────────────────
 
-type Segmento = "todos" | "vip" | "inativo" | "novos" | "com_email" | "com_telefone" | "aguardando_docs";
+type Segmento =
+  | "todos"
+  | "vip"
+  | "inativo"
+  | "novos"
+  | "com_email"
+  | "com_telefone"
+  | "aguardando_docs"
+  | "com_debito";
 
-const SEGMENTOS: { id: Segmento; label: string; icon: any; color: string }[] = [
-  { id: "todos", label: "Todos", icon: Users, color: "text-muted-foreground" },
-  { id: "aguardando_docs", label: "Aguardando docs", icon: FileText, color: "text-orange-600" },
-  { id: "vip", label: "VIP", icon: Star, color: "text-amber-600" },
-  { id: "novos", label: "Novos (7d)", icon: Plus, color: "text-emerald-600" },
-  { id: "inativo", label: "Inativos (30d+)", icon: Calendar, color: "text-gray-500" },
-  { id: "com_email", label: "Com e-mail", icon: Mail, color: "text-blue-600" },
-  { id: "com_telefone", label: "Com telefone", icon: Phone, color: "text-violet-600" },
-];
-
-function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
+/** Resumo financeiro batch retorna `{ vencido: number, ... }` por contatoId.
+ *  `com_debito` filtra client-side em cima desse mapa — não há índice de
+ *  vencido no procedure `listar` do backend, então a checagem mora aqui. */
+function aplicarSegmento(
+  clientes: any[],
+  seg: Segmento,
+  resumoFin?: Record<number, { vencido?: number }> | null,
+): any[] {
   if (seg === "todos") return clientes;
   if (seg === "com_email") return clientes.filter((c) => !!c.email);
   if (seg === "com_telefone") return clientes.filter((c) => !!c.telefone);
   if (seg === "aguardando_docs") return clientes.filter((c) => !!c.documentacaoPendente);
+  if (seg === "com_debito") {
+    if (!resumoFin) return [];
+    return clientes.filter((c) => Number(resumoFin[c.id]?.vencido ?? 0) > 0);
+  }
   if (seg === "novos") {
     const seteDias = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return clientes.filter((c) => new Date(c.createdAt).getTime() >= seteDias);
   }
   if (seg === "inativo") {
-    // "Inativo" = sem conversa nos últimos 30d. updatedAt era a referência
-    // antiga mas webhooks (sync Asaas, tags) tocam a coluna, deixando o
-    // filtro sempre vazio. ultimaConversaAt vem do backend (MAX por contato);
-    // quando null (nunca conversou), usa createdAt — cliente cadastrado há
-    // 30+d sem interação também é inativo.
     const trintaDias = Date.now() - 30 * 24 * 60 * 60 * 1000;
     return clientes.filter((c) => {
       const ref = c.ultimaConversaAt || c.createdAt;
@@ -320,6 +326,14 @@ function aplicarSegmento(clientes: any[], seg: Segmento): any[] {
     return clientes.filter((c) => (c.tags || "").toLowerCase().includes("vip"));
   }
   return clientes;
+}
+
+/** Heurística "inativo há quantos dias" — usado nas pills do row. */
+function diasInativo(c: any): number | null {
+  const ref = c.ultimaConversaAt || c.createdAt;
+  if (!ref) return null;
+  const dias = Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24));
+  return dias >= 30 ? dias : null;
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -402,14 +416,15 @@ export default function Clientes() {
   }, [selId, segmento]);
 
   const { data: stats } = trpc.clientes.estatisticas.useQuery();
+  // `com_debito` precisa de dado do Asaas (resumoPorContatos) que só carrega
+  // pra IDs visíveis — então no backend pedimos "todos" e filtramos
+  // client-side. Demais segmentos vão direto pro backend (filtro server-side).
+  const segmentoBackend = segmento === "com_debito" ? "todos" : segmento;
   const { data, refetch } = trpc.clientes.listar.useQuery({
     busca: buscaDebounced || undefined,
     pagina,
     limite: 50,
-    // Segmento aplicado no servidor — antes era filtro client-side em
-    // cima dos 50 da página atual, resultando em listas parciais (VIP
-    // com 200 clientes mostrava só os entre os 50 mais recentes).
-    segmento,
+    segmento: segmentoBackend,
   });
 
   // Permissões pra mostrar/esconder ícone de excluir na row.
@@ -431,36 +446,31 @@ export default function Clientes() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Filtragem agora é 100% server-side via input.segmento — `aplicarSegmento`
-  // local ficou só pra retrocompat caso o backend pre-deploy ainda não
-  // reconheça o input (devolve a lista crua). Em escritórios > 50 clientes,
-  // o filtro client-side seria parcial (só os da página atual).
-  const clientesFiltrados = useMemo(() => {
-    const base = data?.clientes || [];
-    // Idempotente em segmento="todos"; nos outros, o backend já filtrou,
-    // então re-aplicar não muda a lista (só protege rollout).
-    return aplicarSegmento(base, segmento);
-  }, [data, segmento]);
-
-  const totalPaginas = (data as any)?.totalPaginas || 1;
-
-  // Batch financeiro: 1 query pra todos os contatos visíveis em vez de
-  // N queries (uma por FinanceiroBadge no loop). asaas.resumoPorContatos
-  // devolve Record<contatoId, ResumoBadge>; o badge pega resumo[id] como
-  // resumoPreCarregado e pula o fetch individual.
-  const idsVisiveis = useMemo(
-    () => clientesFiltrados.map((c: any) => c.id),
-    [clientesFiltrados],
+  // Resumo financeiro batch — carrega ANTES da filtragem pra suportar
+  // segmento "com_debito" (filtro client-side em cima do resumo).
+  // Antes batch dependia de clientesFiltrados (ciclo); agora usa base crua.
+  const idsBase = useMemo(
+    () => (data?.clientes || []).map((c: any) => c.id),
+    [data],
   );
   const { data: asaasStatusList } = (trpc as any).asaas?.status?.useQuery?.(undefined, { retry: false }) || { data: null };
   const { data: resumoFinanceiroBatch } = (trpc as any).asaas?.resumoPorContatos?.useQuery?.(
-    { contatoIds: idsVisiveis },
+    { contatoIds: idsBase },
     {
-      enabled: !!asaasStatusList?.conectado && idsVisiveis.length > 0,
+      enabled: !!asaasStatusList?.conectado && idsBase.length > 0,
       retry: false,
       staleTime: 5 * 60_000,
     },
   ) || { data: null };
+
+  // Filtragem: para segmentos server-side é idempotente (backend já filtrou).
+  // Para "com_debito", filtra em cima do resumoFinanceiroBatch.
+  const clientesFiltrados = useMemo(() => {
+    const base = data?.clientes || [];
+    return aplicarSegmento(base, segmento, resumoFinanceiroBatch ?? null);
+  }, [data, segmento, resumoFinanceiroBatch]);
+
+  const totalPaginas = (data as any)?.totalPaginas || 1;
 
   const toggleSelecionado = (id: number) => {
     setSelecionados((prev) => {
@@ -507,270 +517,296 @@ export default function Clientes() {
     [clientesFiltrados, selecionados],
   );
 
+  // Contadores pros chips (server-side traz só do segmento atual; pra
+  // mostrar contagem precisa de estatistica geral OU fallback do data crudo)
+  const totalDoEscritorio = stats?.total ?? data?.totalPaginas ? (data as any)?.totalRegistros : null;
+  const clientesComDebito = useMemo(() => {
+    if (!resumoFinanceiroBatch) return 0;
+    return (data?.clientes || []).filter(
+      (c: any) => Number(resumoFinanceiroBatch[c.id]?.vencido ?? 0) > 0,
+    ).length;
+  }, [data, resumoFinanceiroBatch]);
+
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-          <Users className="h-6 w-6 text-violet-600" />
-        </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            Cadastro, histórico e documentos
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => exportarDuplicatasMut.mutate()}
-            disabled={exportarDuplicatasMut.isPending}
-            title="Baixa um PDF com clientes que compartilham o mesmo CPF/CNPJ"
-          >
-            {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
-          </Button>
-          <Button size="sm" onClick={() => setShowNovo(true)}>
-            <Plus className="h-4 w-4 mr-1.5" /> Novo Cliente
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats — só na lista; no detalhe os 5 cards do cliente já bastam */}
-      {!selId && stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            { v: stats.total, l: "Total", c: "" },
-            { v: stats.novosHoje, l: "Novos hoje", c: "text-emerald-600" },
-            { v: stats.comTelefone, l: "Com telefone", c: "text-blue-600" },
-            { v: stats.comEmail, l: "Com email", c: "text-violet-600" },
-          ].map((k, i) => (
-            <div key={i} className="rounded-lg border bg-card px-3 py-2 text-center">
-              <p className={`text-lg font-bold leading-tight ${k.c}`}>{k.v}</p>
-              <p className="text-[10px] text-muted-foreground">{k.l}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
+    <div className="space-y-6 max-w-7xl mx-auto">
       {selId ? (
         <ClienteDetalhe id={selId} onVoltar={() => setSelId(null)} onUpdate={refetch} />
       ) : (
-        <>
-          {/* Busca + Segmentação */}
-          <Card>
-            <CardHeader className="pb-3 space-y-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nome, telefone, email ou CPF..."
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  className="h-9 pl-9"
-                />
-              </div>
-
-              {/* Chips de segmentação */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                {SEGMENTOS.map((s) => {
-                  const Icon = s.icon;
-                  const active = segmento === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setSegmento(s.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                        active
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted hover:bg-muted/80 text-muted-foreground"
-                      }`}
-                    >
-                      <Icon className={`h-3 w-3 ${active ? "" : s.color}`} />
-                      {s.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              {/* Bulk actions bar */}
-              {selecionados.size > 0 && (
-                <div className="flex items-center gap-3 p-3 mb-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <span className="text-sm font-medium text-blue-900">
-                    {selecionados.size} cliente(s) selecionado(s)
-                  </span>
-                  <div className="flex-1" />
-                  <Button size="sm" variant="outline" onClick={handleExport}>
-                    <Download className="h-3.5 w-3.5 mr-1" /> Exportar
-                  </Button>
-                  {selecionadosComTelefone > 0 && (
-                    <Button size="sm" variant="outline" onClick={handleBulkInbox}>
-                      <MessageCircle className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Inbox
-                    </Button>
-                  )}
+        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-violet-50/20 p-6 space-y-5">
+          {/* ═══════════ HERO ═══════════ */}
+          <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
+            <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+            <div className="relative">
+              <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <PulseDot />
+                    <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                      Clientes
+                    </p>
+                  </div>
+                  <p className="text-xs text-white/70">
+                    Cadastro · histórico · documentos · financeiro
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setSelecionados(new Set())}
+                    onClick={() => exportarDuplicatasMut.mutate()}
+                    disabled={exportarDuplicatasMut.isPending}
+                    className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
                   >
-                    Limpar
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowNovo(true)}
+                    className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Novo cliente
                   </Button>
                 </div>
-              )}
+              </div>
 
-              {/* Lista */}
-              {!clientesFiltrados.length ? (
-                <div className="text-center py-16">
-                  <Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {segmento !== "todos"
-                      ? `Nenhum cliente no segmento "${SEGMENTOS.find((s) => s.id === segmento)?.label}".`
-                      : "Nenhum cliente encontrado."}
-                  </p>
-                  {segmento === "todos" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => setShowNovo(true)}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Cadastrar
-                    </Button>
+              <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                <div className="lg:col-span-6">
+                  <p className="text-sm font-medium text-white/85 mb-1">Total de clientes</p>
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
+                      {stats?.total ?? "—"}
+                    </span>
+                    {stats?.novosHoje ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                        <Plus className="w-3 h-3" />
+                        {stats.novosHoje} hoje
+                      </span>
+                    ) : null}
+                  </div>
+                  {stats && (
+                    <p className="text-xs text-white/65 mt-2 tabular-nums">
+                      <b className="text-white">{stats.comTelefone}</b> com telefone ·{" "}
+                      <b className="text-white">{stats.comEmail}</b> com e-mail
+                    </p>
                   )}
                 </div>
-              ) : (
-                <div className="space-y-1">
-                  {/* Header com select all */}
-                  <div className="flex items-center gap-3 px-3 py-2 border-b text-xs text-muted-foreground">
-                    <Checkbox
-                      checked={
-                        selecionados.size > 0 &&
-                        selecionados.size === clientesFiltrados.length
-                      }
-                      onCheckedChange={toggleTodos}
-                    />
-                    <span className="flex-1">
-                      Nome ({clientesFiltrados.length})
-                    </span>
-                    <span className="w-32 text-right">Financeiro</span>
-                    <span className="w-16 text-right">Origem</span>
-                    <span className="w-12 text-right">Cadastrado</span>
-                  </div>
 
-                  {clientesFiltrados.map((c: any) => (
-                    <div
-                      key={c.id}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/40 transition-colors text-left group cursor-pointer"
-                      onClick={(e) => {
-                        // Linha inteira clicável — abre detalhe. Cliques em
-                        // controles internos (checkbox, botões) chamam
-                        // stopPropagation pra não interferir.
-                        if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
-                        setSelId(c.id);
-                      }}
-                    >
-                      <div data-stop-row-click onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selecionados.has(c.id)}
-                          onCheckedChange={() => toggleSelecionado(c.id)}
-                        />
-                      </div>
-                      <div className="flex-1 flex items-center gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-200 to-purple-100 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0">
-                          {initials(c.nome || "?")}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium truncate">{c.nome}</p>
-                            {(c.tags || "").toLowerCase().includes("vip") && (
-                              <Star className="h-3 w-3 text-amber-500 shrink-0" />
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            {c.telefone && (
-                              <span className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" /> {c.telefone}
-                              </span>
-                            )}
-                            {c.email && (
-                              <span className="flex items-center gap-1 truncate">
-                                <Mail className="h-3 w-3" /> {c.email}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="w-32 text-right">
-                        <FinanceiroBadge
-                          contatoId={c.id}
-                          resumoPreCarregado={resumoFinanceiroBatch?.[c.id] ?? null}
-                        />
-                      </div>
-                      <Badge variant="outline" className="text-[10px] shrink-0 w-16 justify-center">
-                        {c.origem}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground shrink-0 w-12 text-right">
-                        {timeAgo(c.createdAt)}
-                      </span>
-                      {/* Ações que aparecem só no hover */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Ver/Editar cliente"
-                          onClick={(e) => { e.stopPropagation(); setSelId(c.id); }}
-                        >
-                          <PenLine className="h-3.5 w-3.5" />
-                        </Button>
-                        {podeExcluirCliente && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 hover:bg-red-500/10 hover:text-red-600"
-                            title="Excluir cliente"
-                            onClick={(e) => { e.stopPropagation(); setExcluirAlvo({ id: c.id, nome: c.nome }); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
+                {/* Mini stats à direita */}
+                <div className="lg:col-span-6">
+                  <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Aguardando docs</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-amber-200">
+                        {stats?.aguardandoDocumentacao ?? 0}
+                      </p>
                     </div>
-                  ))}
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Com débito</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-rose-200">
+                        {clientesComDebito || "—"}
+                      </p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Sem telefone</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-slate-200">
+                        {stats ? stats.total - stats.comTelefone : "—"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+          </div>
 
-          {/* Paginação */}
-          {totalPaginas > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                disabled={pagina <= 1}
-                onClick={() => setPagina((p) => p - 1)}
-              >
-                Anterior
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Página {pagina} de {totalPaginas}
+          {/* ═══════════ BUSCA + CHIPS ═══════════ */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[260px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Buscar por nome, telefone, e-mail ou CPF..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="pl-10 h-10 bg-white"
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <ChipSegmento ativo={segmento === "todos"} onClick={() => setSegmento("todos")}>
+                Todos
+                <CountPill ativo={segmento === "todos"}>{stats?.total ?? "—"}</CountPill>
+              </ChipSegmento>
+              {(stats?.aguardandoDocumentacao ?? 0) > 0 && (
+                <ChipSegmento
+                  ativo={segmento === "aguardando_docs"}
+                  onClick={() => setSegmento("aguardando_docs")}
+                  destaque="amber"
+                >
+                  ⚠ Aguardando docs
+                  <CountPill ativo={segmento === "aguardando_docs"} tom="amber">
+                    {stats?.aguardandoDocumentacao}
+                  </CountPill>
+                </ChipSegmento>
+              )}
+              {clientesComDebito > 0 && (
+                <ChipSegmento
+                  ativo={segmento === "com_debito"}
+                  onClick={() => setSegmento("com_debito")}
+                  destaque="rose"
+                >
+                  ⚠ Com débito
+                  <CountPill ativo={segmento === "com_debito"} tom="rose">
+                    {clientesComDebito}
+                  </CountPill>
+                </ChipSegmento>
+              )}
+              <ChipSegmento ativo={segmento === "vip"} onClick={() => setSegmento("vip")}>
+                <Star className="h-3 w-3 text-amber-500" />
+                VIP
+              </ChipSegmento>
+              <ChipSegmento ativo={segmento === "novos"} onClick={() => setSegmento("novos")}>
+                Novos (7d)
+              </ChipSegmento>
+              <ChipSegmento ativo={segmento === "inativo"} onClick={() => setSegmento("inativo")}>
+                Inativos (30d+)
+              </ChipSegmento>
+            </div>
+          </div>
+
+          {/* ═══════════ BULK ACTION BAR ═══════════ */}
+          {selecionados.size > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900">
+              <CheckSquare className="h-4 w-4" />
+              <span className="text-sm font-semibold">
+                {selecionados.size} cliente{selecionados.size !== 1 ? "s" : ""} selecionado{selecionados.size !== 1 ? "s" : ""}
               </span>
+              <div className="flex-1" />
+              <Button size="sm" variant="outline" className="bg-white hover:bg-indigo-100 border-indigo-200 h-8 text-xs" onClick={handleExport}>
+                <Download className="h-3 w-3 mr-1" /> Exportar CSV
+              </Button>
+              {selecionadosComTelefone > 0 && (
+                <Button size="sm" variant="outline" className="bg-white hover:bg-indigo-100 border-indigo-200 h-8 text-xs" onClick={handleBulkInbox}>
+                  <MessageCircle className="h-3 w-3 mr-1 text-emerald-600" /> Inbox
+                </Button>
+              )}
               <Button
-                variant="outline"
                 size="sm"
-                className="h-7 text-xs"
-                disabled={pagina >= totalPaginas}
-                onClick={() => setPagina((p) => p + 1)}
+                variant="ghost"
+                onClick={() => setSelecionados(new Set())}
+                className="text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 h-8 text-xs"
               >
-                Próxima
+                Limpar
               </Button>
             </div>
           )}
-        </>
+
+          {/* ═══════════ LISTA ═══════════ */}
+          {!clientesFiltrados.length ? (
+            <Card>
+              <CardContent className="py-16 text-center">
+                <Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  {segmento !== "todos"
+                    ? `Nenhum cliente neste filtro.`
+                    : "Nenhum cliente encontrado."}
+                </p>
+                {segmento === "todos" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => setShowNovo(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Cadastrar
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 text-xs"
+                    onClick={() => {
+                      setBusca("");
+                      setSegmento("todos");
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              {/* Header */}
+              <div className="grid grid-cols-[24px_48px_1fr_180px_140px_100px_40px] gap-[14px] items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                <Checkbox
+                  checked={
+                    selecionados.size > 0 &&
+                    selecionados.size === clientesFiltrados.length
+                  }
+                  onCheckedChange={toggleTodos}
+                />
+                <div></div>
+                <div>
+                  Nome
+                  <span className="text-slate-400 normal-case font-normal">
+                    {" "}· {clientesFiltrados.length} cliente{clientesFiltrados.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="text-right">Financeiro</div>
+                <div className="text-right">Última interação</div>
+                <div className="text-right">Origem</div>
+                <div></div>
+              </div>
+
+              {/* Rows */}
+              {clientesFiltrados.map((c: any) => (
+                <LinhaCliente
+                  key={c.id}
+                  cliente={c}
+                  selecionado={selecionados.has(c.id)}
+                  resumoFin={resumoFinanceiroBatch?.[c.id] ?? null}
+                  podeExcluir={podeExcluirCliente}
+                  onToggle={() => toggleSelecionado(c.id)}
+                  onAbrir={() => setSelId(c.id)}
+                  onExcluir={() => setExcluirAlvo({ id: c.id, nome: c.nome })}
+                />
+              ))}
+
+              {/* Paginação */}
+              {totalPaginas > 1 && (
+                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                  <span>
+                    Mostrando <b>{clientesFiltrados.length}</b> de{" "}
+                    <b>{stats?.total ?? "—"}</b> clientes
+                  </span>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs"
+                      disabled={pagina <= 1}
+                      onClick={() => setPagina((p) => p - 1)}
+                    >
+                      ‹
+                    </Button>
+                    <span className="px-2.5 py-1 rounded bg-slate-900 text-white text-xs flex items-center">
+                      {pagina}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs"
+                      disabled={pagina >= totalPaginas}
+                      onClick={() => setPagina((p) => p + 1)}
+                    >
+                      ›
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       <NovoClienteDialog open={showNovo} onOpenChange={setShowNovo} onSuccess={() => refetch()} />
@@ -802,6 +838,243 @@ export default function Clientes() {
       </AlertDialog>
     </div>
   );
+}
+
+// ─── Sub-componentes da lista ────────────────────────────────────────────────
+
+function ChipSegmento({
+  ativo,
+  onClick,
+  children,
+  destaque,
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  destaque?: "amber" | "rose";
+}) {
+  const base =
+    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all";
+  if (ativo) {
+    return (
+      <button onClick={onClick} className={`${base} bg-slate-900 text-white border-slate-900`}>
+        {children}
+      </button>
+    );
+  }
+  if (destaque === "amber") {
+    return (
+      <button
+        onClick={onClick}
+        className={`${base} bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100`}
+      >
+        {children}
+      </button>
+    );
+  }
+  if (destaque === "rose") {
+    return (
+      <button
+        onClick={onClick}
+        className={`${base} bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100`}
+      >
+        {children}
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={onClick}
+      className={`${base} bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CountPill({
+  children,
+  ativo,
+  tom,
+}: {
+  children: React.ReactNode;
+  ativo: boolean;
+  tom?: "amber" | "rose";
+}) {
+  if (ativo)
+    return <span className="bg-white/20 px-1.5 rounded-full text-[10px] tabular-nums">{children}</span>;
+  if (tom === "amber")
+    return (
+      <span className="bg-amber-100 text-amber-700 px-1.5 rounded-full text-[10px] tabular-nums">
+        {children}
+      </span>
+    );
+  if (tom === "rose")
+    return (
+      <span className="bg-rose-100 text-rose-700 px-1.5 rounded-full text-[10px] tabular-nums">
+        {children}
+      </span>
+    );
+  return (
+    <span className="bg-slate-100 text-slate-600 px-1.5 rounded-full text-[10px] tabular-nums">
+      {children}
+    </span>
+  );
+}
+
+function LinhaCliente({
+  cliente: c,
+  selecionado,
+  resumoFin,
+  podeExcluir,
+  onToggle,
+  onAbrir,
+  onExcluir,
+}: {
+  cliente: any;
+  selecionado: boolean;
+  resumoFin: any;
+  podeExcluir: boolean;
+  onToggle: () => void;
+  onAbrir: () => void;
+  onExcluir: () => void;
+}) {
+  const isVip = (c.tags || "").toLowerCase().includes("vip");
+  const inativoDias = diasInativo(c);
+  const vencido = Number(resumoFin?.vencido ?? 0);
+  const recebido = Number(resumoFin?.recebido ?? 0);
+  const pendente = Number(resumoFin?.pendente ?? 0);
+
+  return (
+    <div
+      className="grid grid-cols-[24px_48px_1fr_180px_140px_100px_40px] gap-[14px] items-center px-4 py-3 border-t border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-colors group"
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("[data-stop-row-click]")) return;
+        onAbrir();
+      }}
+    >
+      <div data-stop-row-click onClick={(e) => e.stopPropagation()}>
+        <Checkbox checked={selecionado} onCheckedChange={onToggle} />
+      </div>
+      <div
+        className={`w-10 h-10 rounded-full bg-gradient-to-br ${gradientAvatar(c.nome || "?")} text-white flex items-center justify-center font-semibold text-[13px] tracking-tight shadow-sm`}
+      >
+        {gerarIniciais(c.nome || "?")}
+      </div>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+          <p className={`text-sm font-semibold truncate ${inativoDias != null ? "text-slate-600" : ""}`}>
+            {c.nome}
+          </p>
+          {isVip && <Star className="h-3.5 w-3.5 text-amber-500 shrink-0 fill-amber-500" />}
+          {c.documentacaoPendente && (
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+              ⚠ Aguardando docs
+            </span>
+          )}
+          {vencido > 0 && (
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 tabular-nums">
+              ⚠ {fmtBRLShort(vencido)} vencido
+            </span>
+          )}
+          {inativoDias != null && (
+            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+              Inativo {inativoDias}d
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-slate-500">
+          {c.telefone && (
+            <span className="flex items-center gap-1">
+              <Phone className="h-3 w-3" /> {c.telefone}
+            </span>
+          )}
+          {c.email && (
+            <span className="flex items-center gap-1 truncate">
+              <Mail className="h-3 w-3" /> {c.email}
+            </span>
+          )}
+          {!c.telefone && !c.email && c.cpfCnpj && (
+            <span className="flex items-center gap-1">
+              <User className="h-3 w-3" /> {c.cpfCnpj}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Financeiro com cor semântica */}
+      <div className="text-right">
+        {vencido > 0 ? (
+          <>
+            <p className="text-sm font-semibold text-rose-600 tabular-nums">{fmtBRLShort(vencido)}</p>
+            <p className="text-[10px] text-rose-500">vencido</p>
+          </>
+        ) : pendente > 0 ? (
+          <>
+            <p className="text-sm font-semibold text-amber-600 tabular-nums">{fmtBRLShort(pendente)}</p>
+            <p className="text-[10px] text-amber-500">pendente</p>
+          </>
+        ) : recebido > 0 ? (
+          <>
+            <p className="text-sm font-semibold text-emerald-600 tabular-nums">{fmtBRLShort(recebido)}</p>
+            <p className="text-[10px] text-muted-foreground">recebido</p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-slate-400">—</p>
+            <p className="text-[10px] text-slate-400">sem cobrança</p>
+          </>
+        )}
+      </div>
+
+      <div className="text-right text-xs">
+        <p className="text-slate-700">{timeAgo(c.ultimaConversaAt || c.createdAt)}</p>
+        <p className="text-[10px] text-slate-400">
+          {c.ultimaConversaAt ? "conversa" : "cadastro"}
+        </p>
+      </div>
+
+      <div className="text-right">
+        <Badge variant="outline" className="text-[10px] font-normal">{c.origem}</Badge>
+      </div>
+
+      {/* Menu de ações no hover */}
+      <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="Ver/Editar cliente"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAbrir();
+          }}
+        >
+          <PenLine className="h-3.5 w-3.5" />
+        </Button>
+        {podeExcluir && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 hover:bg-rose-50 hover:text-rose-600"
+            title="Excluir"
+            onClick={(e) => {
+              e.stopPropagation();
+              onExcluir();
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function fmtBRLShort(v: number): string {
+  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(1)}k`;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
 // ─── Financeiro do Cliente — cobranças Asaas ────────────────────────────────
@@ -2142,86 +2415,156 @@ function ClienteDetalhe({
         </div>
       )}
 
-      {/* Header do cliente */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={onVoltar}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-        </Button>
-        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-200 to-purple-100 flex items-center justify-center text-sm font-bold text-violet-700">
-          {initials(cliente.nome || "?")}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold">{cliente.nome}</h2>
-            {isVip && <Star className="h-4 w-4 text-amber-500" />}
+      {/* Botão "Voltar" externo ao hero pra ficar discreto */}
+      <button
+        onClick={onVoltar}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Voltar para lista
+      </button>
+
+      {/* ═══════════ HERO DO CLIENTE ═══════════ */}
+      <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
+        <Users className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+        <div className="relative">
+          <div className="flex items-start gap-5 mb-5 flex-wrap">
+            {/* Avatar grande */}
+            <div
+              className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${gradientAvatar(cliente.nome || "?")} text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight`}
+            >
+              {gerarIniciais(cliente.nome || "?")}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <h2 className="text-2xl font-bold tracking-tight">{cliente.nome}</h2>
+                {isVip && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
+                    <Star className="w-3 h-3 fill-current" /> VIP
+                  </span>
+                )}
+                {cliente.documentacaoPendente && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-50 border border-amber-300/30">
+                    <AlertTriangle className="w-3 h-3" /> Docs pendentes
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-white/75 flex-wrap">
+                {cliente.telefone && (
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5" />
+                    {cliente.telefone}
+                  </span>
+                )}
+                {(cliente as any).telefonesSecundarios?.length > 0 && (
+                  <span className="text-white/60">
+                    +{(cliente as any).telefonesSecundarios.length} tel
+                  </span>
+                )}
+                {cliente.email && (
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5" />
+                    {cliente.email}
+                  </span>
+                )}
+                {cliente.cpfCnpj && (
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" />
+                    {cliente.cpfCnpj}
+                  </span>
+                )}
+                {(cliente as any).cidade && (
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {(cliente as any).cidade}
+                    {(cliente as any).uf ? `, ${(cliente as any).uf}` : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+              {cliente.telefone && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
+                  className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 mr-1" />
+                  Inbox
+                </Button>
+              )}
+              {cliente.cpfCnpj && (
+                <MonitorarProcessosButton
+                  cpfCnpj={cliente.cpfCnpj}
+                  nome={cliente.nome || cliente.cpfCnpj}
+                />
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setGerarContratoOpen(true)}
+                className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+              >
+                <FileText className="w-3.5 h-3.5 mr-1" />
+                Gerar contrato
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFechamentoOpen(true)}
+                title="Marca conversão (fechado_ganho)"
+                className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                Fechamento
+              </Button>
+              {podeExcluirCliente && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-200 hover:text-white hover:bg-rose-500/30 border border-white/20 h-8 w-8 p-0"
+                  onClick={() => setExcluirConfirmAlvo(true)}
+                  title="Excluir cliente"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-            {cliente.telefone && (
-              <span className="flex items-center gap-1">
-                <Phone className="h-3 w-3" /> {cliente.telefone}
-              </span>
-            )}
-            {(cliente as any).telefonesSecundarios?.length > 0 && (
-              <span className="flex items-center gap-1 text-muted-foreground">
-                +{(cliente as any).telefonesSecundarios.length} tel
-              </span>
-            )}
-            {cliente.email && (
-              <span className="flex items-center gap-1">
-                <Mail className="h-3 w-3" /> {cliente.email}
-              </span>
-            )}
-            {cliente.cpfCnpj && (
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3" /> {cliente.cpfCnpj}
-              </span>
-            )}
+
+          {/* Mini KPIs do cliente */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <KPIClienteHero
+              label="Recebido"
+              value={fmtBRLShort(Number((cliente as any).asaasResumo?.recebido ?? 0))}
+              tone="emerald"
+            />
+            <KPIClienteHero
+              label="A receber"
+              value={fmtBRLShort(Number((cliente as any).asaasResumo?.pendente ?? 0))}
+              tone={Number((cliente as any).asaasResumo?.pendente ?? 0) > 0 ? "amber" : "neutral"}
+            />
+            <KPIClienteHero
+              label="Vencido"
+              value={fmtBRLShort(Number((cliente as any).asaasResumo?.vencido ?? 0))}
+              tone={Number((cliente as any).asaasResumo?.vencido ?? 0) > 0 ? "rose" : "neutral"}
+            />
+            <KPIClienteHero
+              label="Cadastrado em"
+              value={fmtData(cliente.createdAt as any) || "—"}
+              tone="neutral"
+              small
+            />
+          </div>
+
+          {/* Botão financeiro popover (mantém pra manter UX existente) */}
+          <div className="mt-3 flex justify-end">
+            <FinanceiroPopover contatoId={id} />
           </div>
         </div>
-        {cliente.telefone && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
-          >
-            <MessageCircle className="h-4 w-4 mr-1 text-emerald-600" />
-            Inbox
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setGerarContratoOpen(true)}
-        >
-          <FileText className="h-4 w-4 mr-1 text-info" />
-          Gerar contrato
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setFechamentoOpen(true)}
-          title="Marca conversão (fechado_ganho) — usa quando esqueceu de marcar 'já fechou' no cadastro ou quando o cliente fechou outro contrato"
-        >
-          <CheckCircle2 className="h-4 w-4 mr-1 text-emerald-600" />
-          Registrar fechamento
-        </Button>
-        {cliente.cpfCnpj && (
-          <MonitorarProcessosButton
-            cpfCnpj={cliente.cpfCnpj}
-            nome={cliente.nome || cliente.cpfCnpj}
-          />
-        )}
-        <FinanceiroPopover contatoId={id} />
-        {podeExcluirCliente && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive"
-            onClick={() => setExcluirConfirmAlvo(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
       </div>
 
       <AlertDialog open={excluirConfirmAlvo} onOpenChange={setExcluirConfirmAlvo}>
@@ -2250,28 +2593,48 @@ function ClienteDetalhe({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 6 abas consolidadas */}
+      {/* 6 abas consolidadas — pill style igual Dashboard */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-6 h-9">
-          <TabsTrigger value="visao-geral" className="text-xs gap-1">
-            <User className="h-3 w-3" /> Visão Geral
-          </TabsTrigger>
-          <TabsTrigger value="processos" className="text-xs gap-1">
-            <Scale className="h-3 w-3" /> Processos
-          </TabsTrigger>
-          <TabsTrigger value="kanban" className="text-xs gap-1">
-            <Trello className="h-3 w-3" /> Kanban
-          </TabsTrigger>
-          <TabsTrigger value="financeiro" className="text-xs gap-1">
-            <DollarSign className="h-3 w-3" /> Financeiro
-          </TabsTrigger>
-          <TabsTrigger value="historico" className="text-xs gap-1">
-            <MessageCircle className="h-3 w-3" /> Histórico
-          </TabsTrigger>
-          <TabsTrigger value="documentos" className="text-xs gap-1">
-            <FileText className="h-3 w-3" /> Documentos
-          </TabsTrigger>
-        </TabsList>
+        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+          <TabsList className="bg-transparent gap-1 p-0 h-auto">
+            <TabsTrigger
+              value="visao-geral"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <User className="h-3.5 w-3.5" /> Visão Geral
+            </TabsTrigger>
+            <TabsTrigger
+              value="processos"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <Scale className="h-3.5 w-3.5" /> Processos
+            </TabsTrigger>
+            <TabsTrigger
+              value="kanban"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <Trello className="h-3.5 w-3.5" /> Kanban
+            </TabsTrigger>
+            <TabsTrigger
+              value="financeiro"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <DollarSign className="h-3.5 w-3.5" /> Financeiro
+            </TabsTrigger>
+            <TabsTrigger
+              value="historico"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> Histórico
+            </TabsTrigger>
+            <TabsTrigger
+              value="documentos"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <FileText className="h-3.5 w-3.5" /> Documentos
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Aba 1: Visão Geral (dados + tarefas) */}
         <TabsContent value="visao-geral" className="mt-4 space-y-4">
@@ -2447,3 +2810,37 @@ function ClienteDetalhe({
     </div>
   );
 }
+
+// ─── Mini-KPI pro hero do detalhe do cliente ────────────────────────────────
+
+function KPIClienteHero({
+  label,
+  value,
+  tone,
+  small,
+}: {
+  label: string;
+  value: string;
+  tone: "emerald" | "amber" | "rose" | "neutral";
+  small?: boolean;
+}) {
+  const numColor =
+    tone === "emerald"
+      ? "text-emerald-200"
+      : tone === "amber"
+        ? "text-amber-200"
+        : tone === "rose"
+          ? "text-rose-200"
+          : "text-white";
+  return (
+    <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
+      <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">{label}</p>
+      <p
+        className={`${small ? "text-sm" : "text-xl"} font-bold tabular-nums leading-none ${numColor}`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
