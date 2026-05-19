@@ -295,9 +295,10 @@ type Segmento =
   | "aguardando_docs"
   | "com_debito";
 
-/** Resumo financeiro batch retorna `{ vencido: number, ... }` por contatoId.
- *  `com_debito` filtra client-side em cima desse mapa — não há índice de
- *  vencido no procedure `listar` do backend, então a checagem mora aqui. */
+/** Backend agora filtra todos os segmentos no servidor (incluindo
+ *  com_debito via subquery em asaas_cobrancas). Esta função mantém
+ *  fallback client-side defensivo caso o backend devolva mais que
+ *  o esperado pra algum segmento — não deveria acontecer. */
 function aplicarSegmento(
   clientes: any[],
   seg: Segmento,
@@ -308,7 +309,9 @@ function aplicarSegmento(
   if (seg === "com_telefone") return clientes.filter((c) => !!c.telefone);
   if (seg === "aguardando_docs") return clientes.filter((c) => !!c.documentacaoPendente);
   if (seg === "com_debito") {
-    if (!resumoFin) return [];
+    // Backend já filtrou. Se resumoFin disponível, refina; senão devolve
+    // a lista do servidor (que já tá filtrada por SQL).
+    if (!resumoFin) return clientes;
     return clientes.filter((c) => Number(resumoFin[c.id]?.vencido ?? 0) > 0);
   }
   if (seg === "novos") {
@@ -416,15 +419,14 @@ export default function Clientes() {
   }, [selId, segmento]);
 
   const { data: stats } = trpc.clientes.estatisticas.useQuery();
-  // `com_debito` precisa de dado do Asaas (resumoPorContatos) que só carrega
-  // pra IDs visíveis — então no backend pedimos "todos" e filtramos
-  // client-side. Demais segmentos vão direto pro backend (filtro server-side).
-  const segmentoBackend = segmento === "com_debito" ? "todos" : segmento;
+  // Todos os segmentos (incluindo com_debito) filtram no servidor — antes
+  // o com_debito filtrava client-side em cima dos 50 da página, resultando
+  // em lista vazia quando os inadimplentes estavam em outras páginas.
   const { data, refetch } = trpc.clientes.listar.useQuery({
     busca: buscaDebounced || undefined,
     pagina,
     limite: 50,
-    segmento: segmentoBackend,
+    segmento,
   });
 
   // Permissões pra mostrar/esconder ícone de excluir na row.
