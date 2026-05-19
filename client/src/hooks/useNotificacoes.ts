@@ -52,22 +52,36 @@ export function useNotificacoes(userId: number | undefined) {
         // Ignorar heartbeats e conexão
         if (data.tipo === "conectado") return;
 
-        // Adicionar à lista
-        setNotificacoes(prev => [data, ...prev].slice(0, 50));
-        setNaoLidas(prev => prev + 1);
+        // Eventos de "atualizacao_progresso" são puramente informativos
+        // (alimentam o drawer "Atualizando…") — não viram toast nem entram
+        // na contagem de não-lidas. Frontend ouve via `window` event abaixo.
+        const ehProgresso = data.dados?.kind === "atualizacao_progresso";
 
-        // Exibir toast
-        const icone = ICONES_TIPO[data.tipo] || "🔔";
-        toast(`${icone} ${data.titulo}`, {
-          description: data.mensagem,
-          duration: 5000,
-          action: data.tipo === "nova_mensagem" ? {
-            label: "Ver",
-            onClick: () => {
-              window.location.href = "/atendimento";
-            },
-          } : undefined,
-        });
+        if (!ehProgresso) {
+          setNotificacoes(prev => [data, ...prev].slice(0, 50));
+          setNaoLidas(prev => prev + 1);
+
+          const icone = ICONES_TIPO[data.tipo] || "🔔";
+          toast(`${icone} ${data.titulo}`, {
+            description: data.mensagem,
+            duration: 5000,
+            action: data.tipo === "nova_mensagem" ? {
+              label: "Ver",
+              onClick: () => {
+                window.location.href = "/atendimento";
+              },
+            } : undefined,
+          });
+        }
+
+        // Window event pra outros componentes (ex: Processos) ouvirem
+        // sem abrir SSE próprio. Página específica decide o que fazer:
+        // invalidar queries, atualizar contadores, mostrar progresso, etc.
+        try {
+          window.dispatchEvent(new CustomEvent("jurify:notif", { detail: data }));
+        } catch {
+          /* ignore */
+        }
       } catch {
         // Ignorar mensagens inválidas
       }
