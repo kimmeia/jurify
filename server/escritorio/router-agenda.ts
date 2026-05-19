@@ -14,7 +14,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "./db-escritorio";
-import { agendamentos, agendamentoLembretes, tarefas, contatos, users, colaboradores, escritorios } from "../../drizzle/schema";
+import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, or, like, asc, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
@@ -83,6 +83,7 @@ interface EventoUnificado {
   responsavelNome?: string;
   contatoId?: number | null;
   contatoNome?: string;
+  contatoTelefone?: string | null;
   processoId?: number | null;
   cor: string;
   createdAt: string;
@@ -232,7 +233,8 @@ export const agendaRouter = router({
             prioridade: ag.prioridade,
             responsavelId: ag.responsavelId,
             responsavelNome: getColabName(ag.responsavelId),
-            contatoId: null,
+            contatoId: ag.contatoId,
+            contatoTelefone: ag.contatoTelefone,
             processoId: ag.processoId,
             cor: ag.corHex || CORES_TIPO[ag.tipo] || "#3b82f6",
             createdAt: (ag.createdAt as Date).toISOString(),
@@ -573,6 +575,7 @@ export const agendaRouter = router({
       prioridade: z.enum(["baixa", "normal", "alta", "critica"]).optional(),
       responsavelId: z.number().optional(),
       contatoId: z.number().optional(),
+      contatoTelefone: z.string().max(64).optional(),
       processoId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -607,6 +610,7 @@ export const agendaRouter = router({
         local: input.local,
         prioridade: input.prioridade ?? "normal",
         contatoId: input.contatoId,
+        contatoTelefone: input.contatoTelefone,
         processoId: input.processoId,
         corHex: CORES_TIPO[input.tipo] || "#3b82f6",
       }).$returningId();
@@ -736,6 +740,7 @@ export const agendaRouter = router({
       local: z.string().max(512).nullable().optional(),
       prioridade: z.enum(["baixa", "normal", "alta", "critica", "urgente"]).optional(),
       contatoId: z.number().nullable().optional(),
+      contatoTelefone: z.string().max(64).nullable().optional(),
       processoId: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -775,6 +780,7 @@ export const agendaRouter = router({
         if (input.local !== undefined) updates.local = input.local;
         if (input.prioridade !== undefined && input.prioridade !== "urgente") updates.prioridade = input.prioridade;
         if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
+        if (input.contatoTelefone !== undefined) updates.contatoTelefone = input.contatoTelefone;
         if (input.processoId !== undefined) updates.processoId = input.processoId;
         if (Object.keys(updates).length > 0) {
           await db.update(agendamentos).set(updates).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)));
@@ -921,6 +927,77 @@ export const agendaRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await db.delete(agendamentoLembretes).where(eq(agendamentoLembretes.id, input.id));
+      return { ok: true };
+    }),
+
+  // ───────────────────────────────────────────────────────────────────────
+  // ANEXOS — arquivos vinculados ao agendamento (PDFs/imagens/docs)
+  // Reusam o uploadRouter pra storage; aqui só guardamos metadata.
+  // ───────────────────────────────────────────────────────────────────────
+
+  /** Lista anexos de um agendamento. */
+  listarAnexos: protectedProcedure
+    .input(z.object({ agendamentoId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+      if (!perm.allowed) return [];
+      const db = await getDb();
+      if (!db) return [];
+
+      const rows = await db
+        .select()
+        .from(agendamentoAnexos)
+        .where(and(eq(agendamentoAnexos.agendamentoId, input.agendamentoId), eq(agendamentoAnexos.escritorioId, perm.escritorioId)))
+        .orderBy(desc(agendamentoAnexos.createdAt));
+      return rows;
+    }),
+
+  /** Adiciona anexo. URL deve ter sido obtida via uploadRouter.enviar. */
+  adicionarAnexo: protectedProcedure
+    .input(z.object({
+      agendamentoId: z.number(),
+      url: z.string().min(1).max(512),
+      nome: z.string().min(1).max(255),
+      mimeType: z.string().min(1).max(128),
+      tamanho: z.number().int().min(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Valida que o agendamento pertence ao escritório
+      const [ag] = await db.select({ id: agendamentos.id })
+        .from(agendamentos)
+        .where(and(eq(agendamentos.id, input.agendamentoId), eq(agendamentos.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!ag) throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+
+      const [r] = await db.insert(agendamentoAnexos).values({
+        agendamentoId: input.agendamentoId,
+        escritorioId: perm.escritorioId,
+        url: input.url,
+        nome: input.nome,
+        mimeType: input.mimeType,
+        tamanho: input.tamanho,
+        uploadedById: perm.colaboradorId,
+      }).$returningId();
+
+      return { id: r.id };
+    }),
+
+  /** Remove anexo. */
+  removerAnexo: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db.delete(agendamentoAnexos)
+        .where(and(eq(agendamentoAnexos.id, input.id), eq(agendamentoAnexos.escritorioId, perm.escritorioId)));
       return { ok: true };
     }),
 

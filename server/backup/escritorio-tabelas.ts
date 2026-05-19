@@ -44,6 +44,7 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   { nomeBanco: "conversas", colunaEscritorio: "escritorioIdConv", categoria: "dados" },
   { nomeBanco: "leads", colunaEscritorio: "escritorioIdLead", categoria: "dados" },
   { nomeBanco: "agendamentos", colunaEscritorio: "escritorioId", categoria: "dados" },
+  { nomeBanco: "agendamento_anexos", colunaEscritorio: "escritorioId", categoria: "dados" },
   { nomeBanco: "tarefas", colunaEscritorio: "escritorioIdTarefa", categoria: "dados" },
   { nomeBanco: "kanban_funis", colunaEscritorio: "escritorioIdKF", categoria: "dados" },
   { nomeBanco: "kanban_cards", colunaEscritorio: "escritorioIdKCard", categoria: "dados" },
@@ -237,6 +238,7 @@ export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
   "cliente_processos",
   "eventos_processo", // FK opcional pra judit_monitoramentos (raiz)
   "agendamento_lembretes",
+  "agendamento_anexos",
   "mensagens",
   "kanban_cards",
   "comissoes_fechadas_itens",
