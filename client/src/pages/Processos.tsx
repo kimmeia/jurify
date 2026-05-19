@@ -902,6 +902,32 @@ function MonitoramentoCard({
   const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
   const passivos = partes.filter((p: any) => p.side === "Passive").slice(0, 5);
 
+  // ─── Capa cacheada pelo cron (capa_json / partes_json) ──────────────────
+  // Sem custo: o cron já populou esses fields a cada sync. Frontend mostra
+  // título do processo (classe + assunto) e partes no card colapsado.
+  // Shape: { classe, assuntos: string[], orgaoJulgador, valorCausaCentavos,
+  //   dataDistribuicao, partes: [{nome, polo: "ativo"|"passivo"}], ... }
+  const capa = (mon as any).capa;
+  const partesCacheadas: any[] = Array.isArray((mon as any).partes) ? (mon as any).partes : [];
+  const polosAtivosNomes: string[] = partesCacheadas
+    .filter((p: any) => String(p?.polo || "").toLowerCase() === "ativo")
+    .map((p: any) => p?.nome)
+    .filter(Boolean);
+  const polosPassivosNomes: string[] = partesCacheadas
+    .filter((p: any) => String(p?.polo || "").toLowerCase() === "passivo")
+    .map((p: any) => p?.nome)
+    .filter(Boolean);
+  const classeProcesso = capa?.classe ?? null;
+  const assuntoPrincipal = Array.isArray(capa?.assuntos) && capa.assuntos.length > 0 ? capa.assuntos[0] : null;
+  const orgaoJulgador = capa?.orgaoJulgador ?? null;
+  const valorCausaCentavos = typeof capa?.valorCausaCentavos === "number" ? capa.valorCausaCentavos : null;
+  const valorCausaBRL = valorCausaCentavos != null && valorCausaCentavos > 0
+    ? formatBRL(valorCausaCentavos / 100)
+    : null;
+  const temCapa = !!(classeProcesso || assuntoPrincipal || polosAtivosNomes.length > 0 || polosPassivosNomes.length > 0 || valorCausaBRL || orgaoJulgador);
+  // Aguardando 1ª sync = monitor de CNJ sem capa AINDA (sem erro)
+  const aguardandoCapa = searchType === "lawsuit_cnj" && !temCapa && !(mon as any).ultimoErro;
+
   // Cor de borda lateral baseada no status — espelha o health-dot
   const temErro = !!(mon as any).ultimoErro || status === "erro";
   const pausado = status === "paused" || status === "pausado";
@@ -977,15 +1003,89 @@ function MonitoramentoCard({
                   {mon.apelido}
                 </span>
               )}
+              {aguardandoCapa && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                  Aguardando 1ª sync
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2.5 text-[11px] text-slate-500 mt-1.5 flex-wrap">
+
+            {/* Linha "Título do processo" (classe + 1º assunto) — quando capa disponível */}
+            {(classeProcesso || assuntoPrincipal) && (
+              <p className="text-[13px] font-bold tracking-tight text-slate-900 mt-1.5 leading-snug truncate">
+                {classeProcesso}
+                {classeProcesso && assuntoPrincipal && <span className="font-normal text-slate-600"> · </span>}
+                {assuntoPrincipal && <span className="font-normal text-slate-600">{assuntoPrincipal}</span>}
+              </p>
+            )}
+
+            {/* Linha "Partes" — 1º ativo → 1º passivo com mini-avatares */}
+            {(polosAtivosNomes.length > 0 || polosPassivosNomes.length > 0) && (
+              <div className="flex items-center gap-2 mt-1.5 text-[11.5px] flex-wrap">
+                {polosAtivosNomes.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(polosAtivosNomes[0])}`}>
+                      {gerarIniciais(polosAtivosNomes[0])}
+                    </span>
+                    <span className="font-medium text-blue-700 truncate max-w-[180px]" title={polosAtivosNomes[0]}>
+                      {polosAtivosNomes[0]}
+                    </span>
+                    {polosAtivosNomes.length > 1 && (
+                      <span className="text-[10px] text-slate-400">+{polosAtivosNomes.length - 1}</span>
+                    )}
+                  </span>
+                )}
+                {polosAtivosNomes.length > 0 && polosPassivosNomes.length > 0 && (
+                  <svg className="w-3 h-3 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14m-7-7l7 7-7 7" />
+                  </svg>
+                )}
+                {polosPassivosNomes.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(polosPassivosNomes[0])}`}>
+                      {gerarIniciais(polosPassivosNomes[0])}
+                    </span>
+                    <span className="font-medium text-rose-700 truncate max-w-[180px]" title={polosPassivosNomes[0]}>
+                      {polosPassivosNomes[0]}
+                    </span>
+                    {polosPassivosNomes.length > 1 && (
+                      <span className="text-[10px] text-slate-400">+{polosPassivosNomes.length - 1}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* "Aguardando 1ª sync" — explicação quando não tem capa ainda */}
+            {aguardandoCapa && (
+              <p className="text-[11px] text-slate-500 italic mt-1.5">
+                Detalhes do processo serão exibidos após a primeira sincronização do tribunal.
+              </p>
+            )}
+
+            <div className="flex items-center gap-2.5 text-[11px] text-slate-500 mt-2 flex-wrap">
+              {valorCausaBRL && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold tabular-nums">
+                  <CircleDollarSign className="h-3 w-3" />
+                  {valorCausaBRL}
+                </span>
+              )}
+              {orgaoJulgador && (
+                <span className="inline-flex items-center gap-1 truncate max-w-[260px]" title={orgaoJulgador}>
+                  <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                  {orgaoJulgador}
+                </span>
+              )}
+              {(valorCausaBRL || orgaoJulgador) && tempoRelativo && (
+                <span className="text-slate-300">·</span>
+              )}
               {tempoRelativo && (
                 <span className="inline-flex items-center gap-1">
                   <span className={`h-1.5 w-1.5 rounded-full ${temErro ? "bg-rose-500" : pausado ? "bg-slate-400" : "bg-emerald-500"}`} />
                   Última mov. <b className="font-semibold text-slate-700">{tempoRelativo}</b>
                 </span>
               )}
-              <span className="text-slate-300">·</span>
+              {tempoRelativo && <span className="text-slate-300">·</span>}
               <span className="tabular-nums">{mon.totalAtualizacoes || 0} atualização{mon.totalAtualizacoes === 1 ? "" : "ões"}</span>
               {(mon as any).ultimoErro && (
                 <>

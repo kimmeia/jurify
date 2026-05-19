@@ -76,6 +76,31 @@ function safeParse(json: string): unknown {
 }
 
 /**
+ * Adiciona `capa` e `partes` parseados ao monitoramento.
+ *
+ * O cron de monitoramento já popula `capaJson` (classe, assuntos[],
+ * orgaoJulgador, valorCausaCentavos, dataDistribuicao) e `partesJson`
+ * (array de {nome, polo, advogados}) — antes voltavam só como string TEXT
+ * crua, o que forçava o frontend a parsear cada vez. Agora o backend
+ * deserializa uma vez e devolve um objeto pronto pra MonitoramentoCard
+ * mostrar título do processo + partes sem custo extra de crédito.
+ *
+ * Mantém os campos originais (capaJson/partesJson string) pra retrocompat
+ * com callers antigos que ainda esperam o shape bruto.
+ */
+function enriquecerMonitorComCapa<T extends { capaJson?: string | null; partesJson?: string | null }>(
+  mon: T,
+): T & { capa: any | null; partes: any[] | null } {
+  const capa = mon.capaJson ? safeParse(mon.capaJson) : null;
+  const partesParsed = mon.partesJson ? safeParse(mon.partesJson) : null;
+  return {
+    ...mon,
+    capa: capa ?? null,
+    partes: Array.isArray(partesParsed) ? partesParsed : null,
+  };
+}
+
+/**
  * Converte ResultadoScraper (motor próprio) para o shape "lawsuit"
  * que o frontend MonitoramentoCard espera (legado Judit). Mantém
  * compat até refator profundo do componente.
@@ -1039,7 +1064,7 @@ export const processosRouter = router({
           )
           .where(and(...filtros))
           .orderBy(desc(motorMonitoramentos.createdAt));
-        return rows.map((r) => r.mon);
+        return rows.map((r) => enriquecerMonitorComCapa(r.mon));
       }
 
       // Gestor/dono: tudo do escritório
@@ -1048,7 +1073,7 @@ export const processosRouter = router({
         .from(motorMonitoramentos)
         .where(and(...filtros))
         .orderBy(desc(motorMonitoramentos.createdAt));
-      return rows;
+      return rows.map((r) => enriquecerMonitorComCapa(r));
     }),
 
   criarMonitoramento: protectedProcedure
