@@ -156,10 +156,11 @@ function tempoRelativoAgenda(iso: string): { texto: string; urgencia: "agora" | 
 // CARD DE EVENTO
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function EventoCard({ ev, onStatusChange, onDelete }: {
+function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
   ev: any;
   onStatusChange: (id: number, fonte: string, status: string) => void;
   onDelete: (id: number, fonte: string) => void;
+  onEdit?: (ev: any) => void;
 }) {
   const overdue = isOverdue(ev.dataInicio, ev.status);
   const concluido = ev.status === "concluido" || ev.status === "concluida";
@@ -354,6 +355,19 @@ function EventoCard({ ev, onStatusChange, onDelete }: {
             >
               <Check className="h-3 w-3 mr-1" />
               Concluir
+            </Button>
+          )}
+          {onEdit && !concluido && !cancelado && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[10.5px] rounded-lg border-slate-200 hover:bg-slate-50 px-2.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(ev);
+              }}
+            >
+              Editar
             </Button>
           )}
           <Button
@@ -672,9 +686,10 @@ function CalendarioMensal({ eventos, onCriarEvento }: {
 // VIEW: HOJE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function HojeView({ onStatusChange, onDelete }: {
+function HojeView({ onStatusChange, onDelete, onEdit }: {
   onStatusChange: (id: number, fonte: string, status: string) => void;
   onDelete: (id: number, fonte: string) => void;
+  onEdit?: (ev: any) => void;
 }) {
   const { data, isLoading } = trpc.agenda.hoje.useQuery(undefined, { refetchInterval: 30000 });
 
@@ -685,18 +700,34 @@ function HojeView({ onStatusChange, onDelete }: {
   const amanha = data?.amanha || [];
   const total = atrasados.length + hoje.length + amanha.length;
 
+  // Próximo evento pendente (ignora atrasados — esses ficam na seção própria)
+  const proximoEvento = (() => {
+    const candidatos = [...hoje, ...amanha]
+      .filter((e: any) => {
+        if (e.diaInteiro) return false;
+        if (["concluido", "concluida", "cancelado", "cancelada"].includes(e.status)) return false;
+        return new Date(e.dataInicio).getTime() > Date.now();
+      })
+      .sort((a: any, b: any) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime());
+    return candidatos[0] || null;
+  })();
+
   if (total === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-        <Sun className="h-10 w-10 opacity-30" />
-        <p className="font-medium text-foreground">Dia tranquilo</p>
-        <p className="text-sm">Nenhum compromisso ou tarefa para hoje e amanhã.</p>
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50/30 py-16 text-center space-y-2">
+        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
+          <Sun className="h-7 w-7 text-amber-500/70" />
+        </div>
+        <p className="font-semibold text-slate-700">Dia tranquilo</p>
+        <p className="text-sm text-slate-500">Nenhum compromisso ou tarefa para hoje e amanhã.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {proximoEvento && <ProximoEventoHero ev={proximoEvento} onStatusChange={onStatusChange} onEdit={onEdit} />}
+
       {atrasados.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold flex items-center gap-2 text-rose-600">
@@ -705,7 +736,7 @@ function HojeView({ onStatusChange, onDelete }: {
           </h3>
           <div className="space-y-2">
             {atrasados.map(ev => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} />
+              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} />
             ))}
           </div>
         </div>
@@ -723,7 +754,7 @@ function HojeView({ onStatusChange, onDelete }: {
           </h3>
           <div className="space-y-2">
             {hoje.filter((ev: any) => ev.diaInteiro).map((ev: any) => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} />
+              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} />
             ))}
           </div>
         </div>
@@ -737,11 +768,127 @@ function HojeView({ onStatusChange, onDelete }: {
           </h3>
           <div className="space-y-2">
             {amanha.map(ev => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} />
+              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} />
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Card destacado do "Próximo evento" — countdown vivo + ações rápidas. */
+function ProximoEventoHero({ ev, onStatusChange, onEdit }: {
+  ev: any;
+  onStatusChange: (id: number, fonte: string, status: string) => void;
+  onEdit?: (ev: any) => void;
+}) {
+  // Atualiza countdown a cada minuto
+  const [agora, setAgora] = useState(Date.now());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => {
+    const t = setInterval(() => setAgora(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const targetMs = new Date(ev.dataInicio).getTime();
+  const diffMin = Math.max(0, Math.round((targetMs - agora) / 60000));
+  const horas = Math.floor(diffMin / 60);
+  const minutos = diffMin % 60;
+  const countdownTxt = diffMin === 0
+    ? "Agora!"
+    : horas > 0
+      ? `em ${horas}h ${minutos}min`
+      : `em ${minutos}min`;
+
+  const inicio = new Date(ev.dataInicio);
+  const horaStr = `${String(inicio.getHours()).padStart(2, "0")}:${String(inicio.getMinutes()).padStart(2, "0")}`;
+  const cor = corDoEvento(ev);
+  const tipoLabel = ev.fonte === "tarefa" ? "Tarefa" : TIPO_LABELS[ev.tipo] || ev.tipo;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border-2 p-5 bg-gradient-to-br from-orange-50 via-amber-50/60 to-white shadow-[0_4px_20px_-4px_rgb(249,115,22,0.18)]"
+      style={{ borderColor: cor }}
+    >
+      <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-orange-200/30 blur-3xl" />
+      <div className="relative flex items-start gap-4 flex-wrap">
+        <div className="flex flex-col">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-700 mb-1">Próximo evento</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-3xl font-extrabold text-slate-900 tabular-nums leading-none tracking-tight">{horaStr}</p>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-600 text-white text-[10px] font-bold animate-pulse">
+              ⏳ {countdownTxt}
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-white"
+              style={{ background: cor }}
+            >
+              {tipoLabel}
+            </span>
+            {ev.prioridade && ev.prioridade !== "normal" && (
+              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PRIOR_BADGE[ev.prioridade] || PRIOR_BADGE.normal}`}>
+                {PRIOR_LABEL[ev.prioridade] || ev.prioridade}
+              </span>
+            )}
+          </div>
+          <p className="text-base font-bold tracking-tight text-slate-900">{ev.titulo}</p>
+          <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-slate-600 flex-wrap">
+            {ev.contatoNome && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.contatoNome)}`}>
+                  {gerarIniciais(ev.contatoNome)}
+                </span>
+                {ev.contatoNome}
+              </span>
+            )}
+            {ev.local && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-slate-400" />
+                  {ev.local}
+                </span>
+              </>
+            )}
+            {ev.responsavelNome && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.responsavelNome)}`}>
+                    {gerarIniciais(ev.responsavelNome)}
+                  </span>
+                  {ev.responsavelNome}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <Button
+            size="sm"
+            className="h-8 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+            onClick={() => onStatusChange(ev.id, ev.fonte, "concluido")}
+          >
+            <Check className="h-3 w-3 mr-1" />
+            Cheguei / Concluir
+          </Button>
+          {onEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs rounded-lg border-slate-200 bg-white"
+              onClick={() => onEdit(ev)}
+            >
+              Editar
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -870,12 +1017,237 @@ function TimelineHorariaHoje({ eventos }: { eventos: any[] }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DIALOG: CRIAR EVENTO
+// VIEW: LISTA (com filter chips + agrupamento por períodos)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
-  open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void;
+const TIPO_FILTRO_OPTS: Array<{ id: string; label: string; cor: string }> = [
+  { id: "todos", label: "Todos", cor: "slate" },
+  { id: "audiencia", label: "Audiências", cor: "violet" },
+  { id: "prazo_processual", label: "Prazos", cor: "rose" },
+  { id: "tarefa", label: "Tarefas", cor: "amber" },
+  { id: "reuniao_comercial", label: "Reuniões", cor: "emerald" },
+  { id: "follow_up", label: "Follow-up", cor: "cyan" },
+];
+
+function ListaView({
+  busca, setBusca,
+  filtroFonte, setFiltroFonte,
+  filtroTipo, setFiltroTipo,
+  filtroStatus, setFiltroStatus,
+  eventos, isLoading,
+  onStatusChange, onDelete, onEdit,
+}: {
+  busca: string; setBusca: (s: string) => void;
+  filtroFonte: string; setFiltroFonte: (s: string) => void;
+  filtroTipo: string; setFiltroTipo: (s: string) => void;
+  filtroStatus: string; setFiltroStatus: (s: string) => void;
+  eventos: any[] | undefined; isLoading: boolean;
+  onStatusChange: (id: number, fonte: string, status: string) => void;
+  onDelete: (id: number, fonte: string) => void;
+  onEdit?: (ev: any) => void;
 }) {
+  // Filtra por tipo no client (backend filtra por fonte/status; tipo é mais específico)
+  const eventosFiltrados = useMemo(() => {
+    const arr = eventos || [];
+    if (filtroTipo === "todos") return arr;
+    if (filtroTipo === "tarefa") return arr.filter((e: any) => e.fonte === "tarefa");
+    return arr.filter((e: any) => e.tipo === filtroTipo);
+  }, [eventos, filtroTipo]);
+
+  // Agrupa por período: Atrasado / Hoje / Amanhã / Esta semana / Próxima semana / Mais tarde
+  const grupos = useMemo(() => {
+    const now = new Date();
+    const hojeIni = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const amanhaIni = new Date(hojeIni); amanhaIni.setDate(hojeIni.getDate() + 1);
+    const depoisAmanhaIni = new Date(hojeIni); depoisAmanhaIni.setDate(hojeIni.getDate() + 2);
+    const proxSemIni = new Date(hojeIni); proxSemIni.setDate(hojeIni.getDate() + 7);
+    const proxSem2Ini = new Date(hojeIni); proxSem2Ini.setDate(hojeIni.getDate() + 14);
+
+    const buckets: Record<string, any[]> = {
+      atrasado: [], hoje: [], amanha: [], semana: [], proximaSemana: [], maisTarde: [],
+    };
+
+    for (const ev of eventosFiltrados) {
+      const dt = new Date(ev.dataInicio);
+      const isPendente = ["pendente", "em_andamento"].includes(ev.status);
+      if (dt < hojeIni && isPendente) buckets.atrasado.push(ev);
+      else if (dt < amanhaIni) buckets.hoje.push(ev);
+      else if (dt < depoisAmanhaIni) buckets.amanha.push(ev);
+      else if (dt < proxSemIni) buckets.semana.push(ev);
+      else if (dt < proxSem2Ini) buckets.proximaSemana.push(ev);
+      else buckets.maisTarde.push(ev);
+    }
+
+    for (const key of Object.keys(buckets)) {
+      buckets[key].sort((a, b) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime());
+    }
+    return buckets;
+  }, [eventosFiltrados]);
+
+  const totalFiltrado = eventosFiltrados.length;
+
+  return (
+    <div className="space-y-4">
+      {/* Barra de busca + select fonte (compromisso vs tarefa) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[260px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Buscar por título, cliente, descrição…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="pl-10 h-10 bg-white rounded-lg"
+          />
+        </div>
+        <Select value={filtroFonte} onValueChange={setFiltroFonte}>
+          <SelectTrigger className="w-36 h-10 text-xs bg-white rounded-lg"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="compromisso">Compromissos</SelectItem>
+            <SelectItem value="tarefa">Tarefas</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Chips: tipo + status */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {TIPO_FILTRO_OPTS.map((opt) => {
+          const active = filtroTipo === opt.id;
+          const ativoCls: Record<string, string> = {
+            slate: "bg-slate-900 text-white border-slate-900 shadow-sm",
+            violet: "bg-violet-600 text-white border-violet-600 shadow-sm",
+            rose: "bg-rose-600 text-white border-rose-600 shadow-sm",
+            amber: "bg-amber-500 text-white border-amber-500 shadow-sm",
+            emerald: "bg-emerald-600 text-white border-emerald-600 shadow-sm",
+            cyan: "bg-cyan-600 text-white border-cyan-600 shadow-sm",
+          };
+          const inativoDot: Record<string, string> = {
+            slate: "bg-slate-400", violet: "bg-violet-500", rose: "bg-rose-500",
+            amber: "bg-amber-500", emerald: "bg-emerald-500", cyan: "bg-cyan-500",
+          };
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setFiltroTipo(opt.id)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                active ? ativoCls[opt.cor] : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {opt.id !== "todos" && (
+                <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white/85" : inativoDot[opt.cor]}`} />
+              )}
+              {opt.label}
+            </button>
+          );
+        })}
+        <span className="text-slate-300 mx-1">·</span>
+        {[
+          { id: "pendentes", label: "Pendentes" },
+          { id: "todos_status", label: "Todos status" },
+          { id: "concluidos", label: "Concluídos" },
+        ].map((opt) => {
+          const active = filtroStatus === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setFiltroStatus(opt.id)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                active ? "bg-slate-900 text-white border-slate-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Contador */}
+      <p className="text-[11px] text-slate-500">
+        <b className="font-semibold text-slate-700 tabular-nums">{totalFiltrado}</b> {totalFiltrado === 1 ? "evento" : "eventos"}
+        {grupos.atrasado.length > 0 && (
+          <> · <b className="font-semibold text-rose-600 tabular-nums">{grupos.atrasado.length}</b> atrasado{grupos.atrasado.length === 1 ? "" : "s"}</>
+        )}
+      </p>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : totalFiltrado === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
+            <CalendarClock className="h-7 w-7 text-amber-500/70" />
+          </div>
+          <p className="font-semibold text-slate-700">Nenhum evento com este filtro</p>
+          <p className="text-xs text-slate-500">Tente trocar o filtro ou criar um novo evento.</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {[
+            { key: "atrasado", titulo: "Atrasados", icon: AlertTriangle, color: "text-rose-600" },
+            { key: "hoje", titulo: "Hoje", icon: Sun, color: "text-orange-600" },
+            { key: "amanha", titulo: "Amanhã", icon: Clock, color: "text-blue-600" },
+            { key: "semana", titulo: "Esta semana", icon: CalendarDays, color: "text-violet-600" },
+            { key: "proximaSemana", titulo: "Próxima semana", icon: CalendarDays, color: "text-slate-600" },
+            { key: "maisTarde", titulo: "Mais tarde", icon: CalendarDays, color: "text-slate-500" },
+          ].map((secao) => {
+            const lista = grupos[secao.key];
+            if (!lista || lista.length === 0) return null;
+            const Icon = secao.icon;
+            return (
+              <div key={secao.key} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${secao.color}`} />
+                  <h3 className={`text-sm font-semibold tracking-tight ${secao.color}`}>{secao.titulo}</h3>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold tabular-nums">
+                    {lista.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {lista.map((ev: any) => (
+                    <EventoCard
+                      key={`${ev.fonte}-${ev.id}`}
+                      ev={ev}
+                      onStatusChange={onStatusChange}
+                      onDelete={onDelete}
+                      onEdit={onEdit}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIALOG: CRIAR / EDITAR EVENTO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PRESETS_LEMBRETE = [
+  { id: 15, label: "15min antes" },
+  { id: 30, label: "30min antes" },
+  { id: 60, label: "1h antes" },
+  { id: 60 * 24, label: "1 dia antes" },
+];
+const CANAIS_LEMBRETE: Array<{ id: "notificacao_app" | "email" | "whatsapp"; label: string; icon: string }> = [
+  { id: "notificacao_app", label: "Push", icon: "📱" },
+  { id: "email", label: "Email", icon: "📧" },
+  { id: "whatsapp", label: "WhatsApp", icon: "💬" },
+];
+
+function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
+  open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void;
+  eventoEdit?: any | null;
+}) {
+  const isEdit = !!eventoEdit;
   const [tipoEvento, setTipoEvento] = useState<"compromisso" | "tarefa">("compromisso");
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -884,9 +1256,123 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
   const [tipo, setTipo] = useState("reuniao_comercial");
   const [prioridade, setPrioridade] = useState("normal");
   const [local, setLocal] = useState("");
+  const [contatoId, setContatoId] = useState<number | null>(null);
+  const [contatoNome, setContatoNome] = useState<string>("");
+  const [contatoBusca, setContatoBusca] = useState("");
+  const [contatoMenuOpen, setContatoMenuOpen] = useState(false);
+  const [processoId, setProcessoId] = useState<number | null>(null);
+  const [processoLabel, setProcessoLabel] = useState<string>("");
+  const [processoBusca, setProcessoBusca] = useState("");
+  const [processoMenuOpen, setProcessoMenuOpen] = useState(false);
+  // Lembretes: state local (só pra compromissos — tarefas não suportam)
+  const [lembreteMinutos, setLembreteMinutos] = useState<number[]>([30]);
+  const [lembreteCanais, setLembreteCanais] = useState<Array<"notificacao_app" | "email" | "whatsapp">>(["notificacao_app"]);
+  const [lembreteDestinatarios, setLembreteDestinatarios] = useState<number[]>([]);
+
+  // Quando o dialog abre em modo EDIT, hidrata campos
+  useMemo(() => {
+    if (!open) return;
+    if (eventoEdit) {
+      setTipoEvento((eventoEdit.fonte as any) || "compromisso");
+      setTitulo(eventoEdit.titulo || "");
+      setDescricao(eventoEdit.descricao || "");
+      const dt = new Date(eventoEdit.dataInicio);
+      setDataInicio(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`);
+      if (!eventoEdit.diaInteiro) {
+        setHoraInicio(`${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`);
+      } else {
+        setHoraInicio("");
+      }
+      setTipo(eventoEdit.tipo || "reuniao_comercial");
+      setPrioridade(eventoEdit.prioridade || "normal");
+      setLocal(eventoEdit.local || "");
+      setContatoId(eventoEdit.contatoId ?? null);
+      setContatoNome(eventoEdit.contatoNome || "");
+      setProcessoId(eventoEdit.processoId ?? null);
+      setProcessoLabel(eventoEdit.cnj || "");
+    } else {
+      setTipoEvento("compromisso");
+      setTitulo(""); setDescricao(""); setDataInicio(""); setHoraInicio("");
+      setTipo("reuniao_comercial"); setPrioridade("normal"); setLocal("");
+      setContatoId(null); setContatoNome(""); setContatoBusca("");
+      setProcessoId(null); setProcessoLabel(""); setProcessoBusca("");
+    }
+  }, [open, eventoEdit?.id]);
+
+  // Busca de clientes (somente quando dropdown aberto + busca >= 2 chars)
+  const { data: clientesData } = trpc.clientes.listar.useQuery(
+    { busca: contatoBusca || undefined, limite: 10 },
+    { enabled: contatoMenuOpen && contatoBusca.length >= 2 },
+  );
+  const clientesOptions = clientesData?.clientes || [];
+
+  // Busca de monitoramentos (processos) — usa listarParaSelecao
+  const { data: monsData } = trpc.processos.meusMonitoramentos.useQuery(
+    { tipoMonitoramento: "movimentacoes" },
+    { enabled: processoMenuOpen, retry: false },
+  );
+
+  // Colaboradores pro picker de destinatários
+  const { data: colaboradoresData } = (trpc.agenda as any).listarColaboradores?.useQuery?.(
+    undefined,
+    { enabled: open && tipoEvento === "compromisso", retry: false },
+  ) ?? { data: undefined };
+  const colaboradores = (colaboradoresData || []) as Array<{ id: number; nome: string; cargo: string | null }>;
+
+  // Lembretes existentes (modo edit) — pra hidratar state
+  const { data: lembretesExistentes } = (trpc.agenda as any).listarLembretes?.useQuery?.(
+    { agendamentoId: eventoEdit?.id },
+    { enabled: isEdit && eventoEdit?.fonte === "compromisso" && !!eventoEdit?.id, retry: false },
+  ) ?? { data: undefined };
+  useMemo(() => {
+    if (!isEdit || !lembretesExistentes || lembretesExistentes.length === 0) return;
+    const mins = Array.from(new Set(lembretesExistentes.map((l: any) => l.minutosAntes)));
+    setLembreteMinutos(mins as number[]);
+    const canais = new Set<string>();
+    const dests = new Set<number>();
+    for (const l of lembretesExistentes) {
+      const ch = Array.isArray(l.canais) ? l.canais : [l.tipo];
+      for (const c of ch) canais.add(c);
+      const ds = Array.isArray(l.destinatarioIds) ? l.destinatarioIds : [];
+      for (const d of ds) dests.add(d);
+    }
+    if (canais.size > 0) setLembreteCanais(Array.from(canais) as any);
+    if (dests.size > 0) setLembreteDestinatarios(Array.from(dests));
+  }, [lembretesExistentes, isEdit]);
+  const processosOptions = useMemo(() => {
+    const arr = (monsData || []) as any[];
+    if (!processoBusca) return arr.slice(0, 10);
+    const lower = processoBusca.toLowerCase().replace(/\D/g, "");
+    return arr.filter((m: any) => {
+      const key = String(m.searchKey || "").replace(/\D/g, "");
+      const apelido = (m.apelido || "").toLowerCase();
+      return key.includes(lower) || apelido.includes(processoBusca.toLowerCase());
+    }).slice(0, 10);
+  }, [monsData, processoBusca]);
+
+  const salvarLembretesMut = (trpc.agenda as any).salvarLembretes?.useMutation?.({
+    onError: (err: any) => toast.error("Lembretes não salvos: " + err.message),
+  }) ?? { mutate: () => {} };
+
+  const dispararLembretesPara = (agendamentoId: number) => {
+    if (tipoEvento !== "compromisso") return;
+    const lembretes = lembreteMinutos.length > 0 && lembreteCanais.length > 0 && lembreteDestinatarios.length > 0
+      ? lembreteMinutos.map((m) => ({
+          minutosAntes: m,
+          destinatarioIds: lembreteDestinatarios,
+          canais: lembreteCanais,
+        }))
+      : [];
+    (salvarLembretesMut.mutate as any)({ agendamentoId, lembretes });
+  };
 
   const criarCompMut = trpc.agenda.criarCompromisso.useMutation({
-    onSuccess: () => { toast.success("Compromisso criado"); reset(); onSuccess(); },
+    onSuccess: (data) => {
+      toast.success("Compromisso criado");
+      if (data?.id) dispararLembretesPara(data.id);
+      reset();
+      onSuccess();
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -895,17 +1381,51 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
     onError: (err) => toast.error(err.message),
   });
 
-  const isPending = criarCompMut.isPending || criarTarefaMut.isPending;
+  const atualizarMut = (trpc.agenda as any).atualizar.useMutation({
+    onSuccess: () => {
+      toast.success("Evento atualizado");
+      if (eventoEdit?.id && eventoEdit?.fonte === "compromisso") {
+        dispararLembretesPara(eventoEdit.id);
+      }
+      reset();
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const isPending = criarCompMut.isPending || criarTarefaMut.isPending || atualizarMut.isPending;
 
   const reset = () => {
     setTitulo(""); setDescricao(""); setDataInicio(""); setHoraInicio("");
     setTipo("reuniao_comercial"); setPrioridade("normal"); setLocal("");
+    setContatoId(null); setContatoNome(""); setContatoBusca("");
+    setProcessoId(null); setProcessoLabel(""); setProcessoBusca("");
     onOpenChange(false);
   };
 
-  const handleCriar = () => {
+  const handleSubmit = () => {
+    const dateTimeStr = tipoEvento === "compromisso"
+      ? (horaInicio ? `${dataInicio}T${horaInicio}:00` : `${dataInicio}T09:00:00`)
+      : (dataInicio ? `${dataInicio}T23:59:00` : "");
+
+    if (isEdit && eventoEdit) {
+      atualizarMut.mutate({
+        id: eventoEdit.id,
+        fonte: eventoEdit.fonte,
+        titulo,
+        descricao: descricao || null,
+        dataInicio: dateTimeStr,
+        diaInteiro: tipoEvento === "compromisso" ? !horaInicio : undefined,
+        tipo: tipoEvento === "compromisso" ? (tipo as any) : undefined,
+        local: tipoEvento === "compromisso" ? (local || null) : undefined,
+        prioridade: prioridade as any,
+        contatoId,
+        processoId,
+      });
+      return;
+    }
+
     if (tipoEvento === "compromisso") {
-      const dateTimeStr = horaInicio ? `${dataInicio}T${horaInicio}:00` : `${dataInicio}T09:00:00`;
       criarCompMut.mutate({
         tipo: tipo as any,
         titulo,
@@ -914,6 +1434,8 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
         local: local || undefined,
         prioridade: prioridade as any,
         diaInteiro: !horaInicio,
+        contatoId: contatoId ?? undefined,
+        processoId: processoId ?? undefined,
       });
     } else {
       criarTarefaMut.mutate({
@@ -921,29 +1443,33 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
         descricao: descricao || undefined,
         dataVencimento: dataInicio ? `${dataInicio}T23:59:00` : undefined,
         prioridade: prioridade as any,
+        contatoId: contatoId ?? undefined,
+        processoId: processoId ?? undefined,
       });
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo evento</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar evento" : "Novo evento"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
-          {/* Tipo de evento */}
-          <div className="flex gap-2">
-            <Button variant={tipoEvento === "compromisso" ? "default" : "outline"} size="sm" className="flex-1 text-xs"
-              onClick={() => setTipoEvento("compromisso")}>
-              <CalendarDays className="h-3.5 w-3.5 mr-1" /> Compromisso
-            </Button>
-            <Button variant={tipoEvento === "tarefa" ? "default" : "outline"} size="sm" className="flex-1 text-xs"
-              onClick={() => setTipoEvento("tarefa")}>
-              <ListTodo className="h-3.5 w-3.5 mr-1" /> Tarefa
-            </Button>
-          </div>
+          {/* Tipo de evento — só na criação, edit mantém o tipo */}
+          {!isEdit && (
+            <div className="flex gap-2">
+              <Button variant={tipoEvento === "compromisso" ? "default" : "outline"} size="sm" className="flex-1 text-xs"
+                onClick={() => setTipoEvento("compromisso")}>
+                <CalendarDays className="h-3.5 w-3.5 mr-1" /> Compromisso
+              </Button>
+              <Button variant={tipoEvento === "tarefa" ? "default" : "outline"} size="sm" className="flex-1 text-xs"
+                onClick={() => setTipoEvento("tarefa")}>
+                <ListTodo className="h-3.5 w-3.5 mr-1" /> Tarefa
+              </Button>
+            </div>
+          )}
 
           <div>
             <Label className="text-xs">Título</Label>
@@ -999,6 +1525,222 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
             </div>
           )}
 
+          {/* LEMBRETES — só pra compromissos */}
+          {tipoEvento === "compromisso" && (
+            <div className="rounded-xl bg-gradient-to-br from-blue-50/60 to-indigo-50/40 border border-blue-200/70 p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                  <Bell className="h-3 w-3 text-white" />
+                </div>
+                <p className="text-xs font-bold text-blue-900 tracking-tight">Lembretes</p>
+                {lembreteMinutos.length > 0 && lembreteDestinatarios.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                    {lembreteMinutos.length} ativo{lembreteMinutos.length === 1 ? "" : "s"}
+                  </span>
+                )}
+              </div>
+
+              {/* Quando avisar (toggle) */}
+              <div>
+                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">Quando avisar</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {PRESETS_LEMBRETE.map((p) => {
+                    const ativo = lembreteMinutos.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setLembreteMinutos(ativo ? lembreteMinutos.filter((m) => m !== p.id) : [...lembreteMinutos, p.id])}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quem avisar */}
+              <div>
+                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">
+                  Quem avisar {lembreteDestinatarios.length > 0 && <span className="text-blue-600 normal-case font-bold">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>}
+                </p>
+                {colaboradores.length === 0 ? (
+                  <p className="text-[10.5px] text-slate-500 italic">Carregando colaboradores…</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                    {colaboradores.map((col) => {
+                      const ativo = lembreteDestinatarios.includes(col.id);
+                      return (
+                        <label
+                          key={col.id}
+                          className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer text-[11px] transition-colors ${
+                            ativo ? "bg-blue-100 border border-blue-300" : "bg-white border border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={ativo}
+                            onChange={() => setLembreteDestinatarios(
+                              ativo ? lembreteDestinatarios.filter((d) => d !== col.id) : [...lembreteDestinatarios, col.id],
+                            )}
+                            className="w-3 h-3"
+                          />
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
+                            {gerarIniciais(col.nome)}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate" title={col.nome}>{col.nome}</p>
+                            {col.cargo && <p className="text-[9px] text-slate-500 truncate">{col.cargo}</p>}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Canais */}
+              <div>
+                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">Canais</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {CANAIS_LEMBRETE.map((c) => {
+                    const ativo = lembreteCanais.includes(c.id);
+                    const disabled = c.id !== "notificacao_app"; // Email/WhatsApp ainda não dispatcheados
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => !disabled && setLembreteCanais(ativo ? lembreteCanais.filter((k) => k !== c.id) : [...lembreteCanais, c.id])}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                          ativo
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : disabled
+                              ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                        }`}
+                        title={disabled ? "Em breve" : ""}
+                      >
+                        <span className="mr-1">{c.icon}</span>
+                        {c.label}
+                        {disabled && <span className="ml-1 text-[8px] opacity-75">soon</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {lembreteMinutos.length > 0 && lembreteDestinatarios.length === 0 && (
+                <p className="text-[10px] text-amber-600 italic">Selecione pelo menos 1 destinatário pra ativar os lembretes.</p>
+              )}
+            </div>
+          )}
+
+          {/* Cliente / contato */}
+          <div className="relative">
+            <Label className="text-xs">Cliente / contato (opcional)</Label>
+            {contatoId && contatoNome ? (
+              <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-violet-50 border border-violet-200 rounded-lg">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(contatoNome)}`}>
+                  {gerarIniciais(contatoNome)}
+                </span>
+                <span className="flex-1 text-xs font-semibold truncate" title={contatoNome}>{contatoNome}</span>
+                <button
+                  type="button"
+                  onClick={() => { setContatoId(null); setContatoNome(""); setContatoBusca(""); }}
+                  className="text-[10px] text-violet-600 hover:underline"
+                >
+                  Trocar
+                </button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  className="mt-1"
+                  placeholder="Buscar cliente por nome ou CPF/CNPJ…"
+                  value={contatoBusca}
+                  onChange={(e) => { setContatoBusca(e.target.value); setContatoMenuOpen(true); }}
+                  onFocus={() => setContatoMenuOpen(true)}
+                  onBlur={() => setTimeout(() => setContatoMenuOpen(false), 200)}
+                />
+                {contatoMenuOpen && contatoBusca.length >= 2 && clientesOptions.length > 0 && (
+                  <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg divide-y">
+                    {clientesOptions.map((c: any) => (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => { setContatoId(c.id); setContatoNome(c.nome); setContatoMenuOpen(false); }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-violet-50 text-left"
+                      >
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(c.nome)}`}>
+                          {gerarIniciais(c.nome)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{c.nome}</p>
+                          {c.cpfCnpj && <p className="text-[10px] text-slate-500 font-mono">{c.cpfCnpj}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Processo monitorado */}
+          <div className="relative">
+            <Label className="text-xs">Processo vinculado (opcional)</Label>
+            {processoId && processoLabel ? (
+              <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <Scale className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span className="flex-1 text-xs font-mono font-bold text-indigo-700 truncate">{processoLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => { setProcessoId(null); setProcessoLabel(""); setProcessoBusca(""); }}
+                  className="text-[10px] text-indigo-600 hover:underline"
+                >
+                  Trocar
+                </button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  className="mt-1"
+                  placeholder="Buscar por CNJ ou apelido…"
+                  value={processoBusca}
+                  onChange={(e) => { setProcessoBusca(e.target.value); setProcessoMenuOpen(true); }}
+                  onFocus={() => setProcessoMenuOpen(true)}
+                  onBlur={() => setTimeout(() => setProcessoMenuOpen(false), 200)}
+                />
+                {processoMenuOpen && processosOptions.length > 0 && (
+                  <div className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg divide-y">
+                    {processosOptions.map((m: any) => (
+                      <button
+                        type="button"
+                        key={m.id}
+                        onClick={() => {
+                          setProcessoId(m.id);
+                          setProcessoLabel(m.searchKey || m.apelido || `#${m.id}`);
+                          setProcessoMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-indigo-50 text-left"
+                      >
+                        <Scale className="h-4 w-4 text-indigo-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-mono font-bold truncate">{m.searchKey}</p>
+                          {m.apelido && <p className="text-[10px] text-slate-500 truncate">{m.apelido}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           <div>
             <Label className="text-xs">Descrição</Label>
             <Textarea placeholder="Detalhes..." value={descricao} onChange={e => setDescricao(e.target.value)} rows={2} className="mt-1" />
@@ -1007,9 +1749,9 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess }: {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleCriar} disabled={isPending || !titulo || !dataInicio}>
-            {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-            Criar
+          <Button onClick={handleSubmit} disabled={isPending || !titulo || !dataInicio}>
+            {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : isEdit ? <Check className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+            {isEdit ? "Salvar alterações" : "Criar"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1025,7 +1767,9 @@ export default function Agenda() {
   const { user } = useAuth();
   const [tab, setTab] = useState("hoje");
   const [criarOpen, setCriarOpen] = useState(false);
+  const [editEvento, setEditEvento] = useState<any | null>(null);
   const [filtroFonte, setFiltroFonte] = useState("todos");
+  const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroStatus, setFiltroStatus] = useState("pendentes");
   const [busca, setBusca] = useState("");
 
@@ -1165,64 +1909,26 @@ export default function Agenda() {
 
         {/* HOJE */}
         <TabsContent value="hoje" className="mt-5">
-          <HojeView onStatusChange={handleStatus} onDelete={handleDelete} />
+          <HojeView onStatusChange={handleStatus} onDelete={handleDelete} onEdit={(ev) => setEditEvento(ev)} />
         </TabsContent>
 
         {/* LISTA */}
         <TabsContent value="lista" className="mt-5 space-y-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[260px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Buscar por título, cliente, descrição..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-10 h-10 bg-white"
-              />
-            </div>
-            <Select value={filtroFonte} onValueChange={setFiltroFonte}>
-              <SelectTrigger className="w-36 h-10 text-xs bg-white"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="compromisso">Compromissos</SelectItem>
-                <SelectItem value="tarefa">Tarefas</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-              <SelectTrigger className="w-36 h-10 text-xs bg-white"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pendentes">Pendentes</SelectItem>
-                <SelectItem value="todos_status">Todos status</SelectItem>
-                <SelectItem value="concluidos">Concluídos</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          ) : eventos && eventos.length > 0 ? (
-            <div className="space-y-2">
-              {eventos.map((ev: any) => (
-                <EventoCard
-                  key={`${ev.fonte}-${ev.id}`}
-                  ev={ev}
-                  onStatusChange={handleStatus}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-16 text-center">
-                <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-sm text-muted-foreground">Nenhum evento encontrado.</p>
-              </CardContent>
-            </Card>
-          )}
+          <ListaView
+            busca={busca}
+            setBusca={setBusca}
+            filtroFonte={filtroFonte}
+            setFiltroFonte={setFiltroFonte}
+            filtroTipo={filtroTipo}
+            setFiltroTipo={setFiltroTipo}
+            filtroStatus={filtroStatus}
+            setFiltroStatus={setFiltroStatus}
+            eventos={eventos}
+            isLoading={isLoading}
+            onStatusChange={handleStatus}
+            onDelete={handleDelete}
+            onEdit={(ev) => setEditEvento(ev)}
+          />
         </TabsContent>
 
         {/* CALENDÁRIO */}
@@ -1234,7 +1940,15 @@ export default function Agenda() {
         </TabsContent>
       </Tabs>
 
-      <CriarEventoDialog open={criarOpen} onOpenChange={setCriarOpen} onSuccess={refetch} />
+      <CriarEventoDialog
+        open={criarOpen || !!editEvento}
+        onOpenChange={(o) => {
+          if (!o) { setCriarOpen(false); setEditEvento(null); }
+          else setCriarOpen(true);
+        }}
+        eventoEdit={editEvento}
+        onSuccess={() => { refetch(); setEditEvento(null); }}
+      />
     </div>
   );
 }

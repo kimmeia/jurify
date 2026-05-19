@@ -20,8 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { marked } from "marked";
 import {
   SearchHistorySidebar,
   KeywordAlertsButton,
@@ -757,6 +758,77 @@ function ConsultarTab() {
 // CARD DE MONITORAMENTO (expansível — mostra timeline de movimentações)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Renderiza o resumo IA — markdown estruturado em 4 seções
+ * (situação, análise, ações, mensagem ao cliente).
+ *
+ * A última seção (💬 Mensagem pronta pro cliente) é destacada e ganha
+ * botão "Copiar mensagem" — o user pode mandar direto pro WhatsApp.
+ */
+function ResumoIABloco({ texto }: { texto: string }) {
+  // Tenta isolar a seção "💬 Mensagem pronta pro cliente" pra render
+  // diferenciado + botão copiar. Regex matches o cabeçalho e captura
+  // tudo até próximo H3 ou fim do texto.
+  const matchMsg = texto.match(/###\s*💬[^\n]*Mensagem[^\n]*\n([\s\S]*?)(?=\n###|\n##|$)/i);
+  const mensagemCliente = matchMsg?.[1]?.trim() ?? null;
+  const resto = mensagemCliente
+    ? texto.slice(0, matchMsg!.index!).trim()
+    : texto;
+
+  const copiarMensagem = async () => {
+    if (!mensagemCliente) return;
+    // Remove markdown básico (negrito, itálico) antes de copiar
+    const limpo = mensagemCliente
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
+      .replace(/^>\s*/gm, "")
+      .trim();
+    try {
+      await navigator.clipboard.writeText(limpo);
+      toast.success("Mensagem copiada — cole no WhatsApp do cliente");
+    } catch {
+      toast.error("Falha ao copiar — copie manualmente");
+    }
+  };
+
+  return (
+    <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3 space-y-3">
+      <p className="text-[10px] font-semibold text-violet-600 flex items-center gap-1">
+        <FileText className="h-3 w-3" /> ANÁLISE ESTRATÉGICA IA
+      </p>
+      <div
+        className="prose prose-sm dark:prose-invert max-w-none text-xs text-violet-900 dark:text-violet-100
+          prose-headings:text-violet-700 dark:prose-headings:text-violet-200 prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1.5
+          prose-h3:text-sm prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5
+          prose-strong:text-violet-900 dark:prose-strong:text-violet-100"
+        dangerouslySetInnerHTML={{ __html: marked.parse(resto, { async: false }) as string }}
+      />
+      {mensagemCliente && (
+        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+              💬 MENSAGEM PRONTA PRO CLIENTE
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] border-emerald-300"
+              onClick={copiarMensagem}
+            >
+              <Copy className="h-3 w-3 mr-1" />
+              Copiar
+            </Button>
+          </div>
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none text-xs text-emerald-900 dark:text-emerald-100 prose-p:my-1"
+            dangerouslySetInnerHTML={{ __html: marked.parse(mensagemCliente, { async: false }) as string }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MonitoramentoCard({
   mon,
   onPausar,
@@ -1046,16 +1118,7 @@ function MonitoramentoCard({
         {aberto && (
           <div className="mt-3 pt-3 border-t space-y-4">
             {/* Resumo IA */}
-            {resumoIA && (
-              <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3">
-                <p className="text-[10px] font-semibold text-violet-600 mb-1.5 flex items-center gap-1">
-                  <FileText className="h-3 w-3" /> RESUMO IA
-                </p>
-                <div className="text-xs leading-relaxed whitespace-pre-line text-violet-900 dark:text-violet-100">
-                  {resumoIA}
-                </div>
-              </div>
-            )}
+            {resumoIA && <ResumoIABloco texto={resumoIA} />}
 
             {loadingHist ? (
               <div className="space-y-2">
