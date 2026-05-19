@@ -64,6 +64,7 @@ import { whatsappCoexRouter } from "./routers/whatsapp-coex";
 import { metaChannelsRouter } from "./routers/meta-channels";
 import { customer360Router } from "./routers/customer360";
 import { processosRouter } from "./routers/processos";
+import { prazosSugeridosRouter } from "./routers/router-prazos-sugeridos";
 import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
@@ -132,6 +133,7 @@ export const appRouter = router({
 
   // Motor próprio (substituiu Judit em 08/05/2026)
   processos: processosRouter,
+  prazosSugeridos: prazosSugeridosRouter,
 
   // Dashboard do utilizador
   dashboard: dashboardRouter,

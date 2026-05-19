@@ -418,6 +418,52 @@ export type Agendamento = typeof agendamentos.$inferSelect;
 export type InsertAgendamento = typeof agendamentos.$inferInsert;
 
 /**
+ * Sugestões de prazos/audiências detectadas automaticamente em
+ * movimentações processuais. O cron de monitoramento roda um detector
+ * heurístico (regex pra padrões como "Audiência designada para
+ * DD/MM/AAAA" ou "Prazo de X dias") em cada nova movimentação. Quando
+ * encontra, cria entrada aqui com status='pendente'. Usuário aprova
+ * (vira `agendamentos`) ou descarta na UI.
+ *
+ * `evento_id` é UNIQUE — uma sugestão por movimentação, idempotente.
+ */
+export const prazosSugeridos = mysqlTable(
+  "prazos_sugeridos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorio_id").notNull(),
+    eventoId: int("evento_id").notNull(),
+    monitoramentoId: int("monitoramento_id"),
+    tipo: mysqlEnum("tipo", ["audiencia", "prazo_processual"]).notNull(),
+    titulo: varchar("titulo", { length: 255 }).notNull(),
+    /** Data sugerida (já calculada quando possível). Pode ser NULL se a
+     *  movimentação só dá "X dias úteis" e precisa de cálculo na UI. */
+    dataSugerida: timestamp("data_sugerida"),
+    /** Dias originais do prazo (pra exibir "prazo de 15 dias") */
+    prazoDias: int("prazo_dias"),
+    prazoUteis: boolean("prazo_uteis").default(false).notNull(),
+    motivo: text("motivo"),
+    /** Trecho original da movimentação (pra contexto na UI) */
+    trechoOrigem: text("trecho_origem"),
+    status: mysqlEnum("status", ["pendente", "aprovado", "descartado"]).default("pendente").notNull(),
+    agendamentoId: int("agendamento_id"),
+    cnjAfetado: varchar("cnj_afetado", { length: 64 }),
+    criadoEm: timestamp("criado_em").defaultNow().notNull(),
+    aprovadoEm: timestamp("aprovado_em"),
+    descartadoEm: timestamp("descartado_em"),
+  },
+  (t) => ({
+    uniqEvento: uniqueIndex("uniq_evento").on(t.eventoId),
+    idxEscrStatus: index("idx_escr_status_prazo").on(t.escritorioId, t.status),
+    idxMonitoramento: index("idx_monitoramento_prazo").on(t.monitoramentoId),
+    idxDataSugerida: index("idx_data_sugerida").on(t.dataSugerida),
+  }),
+);
+
+export type PrazoSugerido = typeof prazosSugeridos.$inferSelect;
+export type InsertPrazoSugerido = typeof prazosSugeridos.$inferInsert;
+
+/**
  * Lembretes de agendamentos — notificações antes do compromisso.
  */
 export const agendamentoLembretes = mysqlTable("agendamento_lembretes", {
