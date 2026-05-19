@@ -453,28 +453,77 @@ export const processosRouter = router({
           const parsed = m.conteudoJson ? safeParse(m.conteudoJson) : null;
           const data = (parsed as any)?.data ?? m.dataEvento;
           const texto = (parsed as any)?.texto ?? m.conteudo ?? "";
-          return `${i + 1}. [${data instanceof Date ? data.toISOString().slice(0, 10) : data}] ${texto.slice(0, 300)}`;
+          return `${i + 1}. [${data instanceof Date ? data.toISOString().slice(0, 10) : data}] ${texto.slice(0, 700)}`;
         })
         .join("\n");
 
-      const promptSystem =
-        "Você é um assistente jurídico especializado. Resuma o processo de forma estruturada, " +
-        "objetiva e profissional em português brasileiro. Use markdown leve (negrito, listas). " +
-        "Identifique partes, objeto da ação, valor, estado atual, próximos passos prováveis. " +
-        "Não invente informações — só use o que está nos dados fornecidos.";
+      // Calcula contexto temporal — IA usa pra dimensionar urgência e
+      // sugerir o tom certo da mensagem ao cliente ("aguardando", "estagnado").
+      const hoje = new Date();
+      const diasDesdeDistribuicao = capaTyped.dataDistribuicao
+        ? Math.floor((hoje.getTime() - new Date(capaTyped.dataDistribuicao).getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      const ultimaMovData = movs[0]?.dataEvento ? new Date(movs[0].dataEvento) : null;
+      const diasDesdeUltimaMov = ultimaMovData
+        ? Math.floor((hoje.getTime() - ultimaMovData.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      const promptSystem = [
+        "Você é um advogado sênior brasileiro experiente, atuando como consultor estratégico de outro advogado que precisa orientar o cliente dele.",
+        "Sua resposta vai direto pra UI do escritório — o destinatário é o advogado, não o cliente final.",
+        "",
+        "REGRAS DURAS:",
+        "1. Use APENAS as informações fornecidas. NÃO invente fatos, valores, datas, prazos ou jurisprudência.",
+        "2. Se faltar dado essencial, diga explicitamente ('Sem mais movimentações pra análise — recomenda-se atualizar consulta').",
+        "3. Tom: objetivo, técnico mas direto. Sem juridiquês desnecessário, sem floreios.",
+        "4. Formato: markdown com as 4 SEÇÕES OBRIGATÓRIAS abaixo. Mantenha SEMPRE essa estrutura, mesmo se alguma seção ficar curta.",
+        "",
+        "ESTRUTURA OBRIGATÓRIA (use os emojis exatos como cabeçalho de cada seção):",
+        "",
+        "### 📍 Situação atual",
+        "1-3 frases dizendo em que fase o processo está e quem fez a última mov relevante. Cite data se ajuda.",
+        "",
+        "### 🎯 Análise estratégica",
+        "Bullets curtos (3-5) com:",
+        "- Pontos críticos detectados (prazos correndo, decisões pendentes, riscos processuais)",
+        "- Oportunidades táticas (recurso cabível, acordo viável, prescrição próxima, etc)",
+        "- Pontos de atenção (estagnação suspeita, partes em revelia, etc)",
+        "Se nada estratégico se destaca, diga isso explicitamente: 'Processo em curso regular, sem pontos críticos imediatos.'",
+        "",
+        "### ✅ Próximas ações recomendadas",
+        "Lista numerada e accionable (3-5 itens). Cada item deve ser uma AÇÃO concreta com prazo/urgência quando aplicável.",
+        "Exemplo: '1. Protocolar réplica até DD/MM (prazo de X dias correndo desde a contestação).'",
+        "Se não há ação imediata, escreva: 'Aguardar próxima movimentação. Reavaliar em N dias se nada mudar.'",
+        "",
+        "### 💬 Mensagem pronta pro cliente",
+        "Parágrafo único (3-6 frases) em linguagem LEIGA e tranquilizadora, pronto pra copiar/colar no WhatsApp do cliente.",
+        "Não use jargão jurídico. Explique o que aconteceu e qual o próximo passo de forma compreensível.",
+        "Comece com 'Oi, [nome do cliente],' ou 'Bom dia, [nome do cliente],' (literal — o advogado completa).",
+        "Termine com algo proativo: 'Qualquer dúvida, estou aqui.' ou similar.",
+      ].join("\n");
 
       const promptUser = [
-        `CNJ: ${mon.searchKey}`,
-        `Tribunal: ${(mon.tribunal || "").toUpperCase()}`,
-        capaTyped.classe ? `Classe: ${capaTyped.classe}` : null,
-        capaTyped.valorCausaCentavos ? `Valor da causa: R$ ${(capaTyped.valorCausaCentavos / 100).toFixed(2)}` : null,
-        capaTyped.dataDistribuicao ? `Distribuído em: ${capaTyped.dataDistribuicao}` : null,
-        capaTyped.juiz ? `Juiz: ${capaTyped.juiz}` : null,
-        capaTyped.comarca ? `Comarca: ${capaTyped.comarca}` : null,
-        capaTyped.partes && Array.isArray(capaTyped.partes)
-          ? `\nPartes:\n${capaTyped.partes.map((p: any) => `- ${p.nome} (${p.polo || "?"})`).join("\n")}`
+        `## Dados do processo`,
+        `- CNJ: ${mon.searchKey}`,
+        `- Tribunal: ${(mon.tribunal || "").toUpperCase()}`,
+        capaTyped.classe ? `- Classe: ${capaTyped.classe}` : null,
+        capaTyped.assunto ? `- Assunto: ${capaTyped.assunto}` : null,
+        capaTyped.valorCausaCentavos
+          ? `- Valor da causa: R$ ${(capaTyped.valorCausaCentavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
           : null,
-        movs.length > 0 ? `\nÚltimas movimentações (${movs.length}):\n${movsTexto}` : null,
+        capaTyped.dataDistribuicao
+          ? `- Distribuído em: ${capaTyped.dataDistribuicao}${diasDesdeDistribuicao !== null ? ` (há ${diasDesdeDistribuicao} dias)` : ""}`
+          : null,
+        capaTyped.juiz ? `- Juiz: ${capaTyped.juiz}` : null,
+        capaTyped.vara ? `- Vara: ${capaTyped.vara}` : null,
+        capaTyped.comarca ? `- Comarca: ${capaTyped.comarca}` : null,
+        diasDesdeUltimaMov !== null ? `- Última movimentação: há ${diasDesdeUltimaMov} dias` : null,
+        capaTyped.partes && Array.isArray(capaTyped.partes) && capaTyped.partes.length > 0
+          ? `\n## Partes\n${capaTyped.partes.map((p: any) => `- **${p.polo || "?"}**: ${p.nome}${p.advogados ? ` (adv: ${Array.isArray(p.advogados) ? p.advogados.map((a: any) => a.nome ?? a).join(", ") : p.advogados})` : ""}`).join("\n")}`
+          : null,
+        movs.length > 0
+          ? `\n## Últimas ${movs.length} movimentações (mais recentes primeiro)\n${movsTexto}`
+          : `\n## Movimentações\nNenhuma movimentação registrada ainda — processo recém-monitorado ou sem atividade.`,
       ]
         .filter(Boolean)
         .join("\n");
@@ -493,8 +542,8 @@ export const processosRouter = router({
               model: "claude-opus-4-7",
               system: promptSystem,
               messages: [{ role: "user", content: promptUser }],
-              max_tokens: 800,
-              temperature: 0.3,
+              max_tokens: 2200,
+              temperature: 0.4,
             }),
             signal: AbortSignal.timeout(30000),
           });
@@ -512,13 +561,13 @@ export const processosRouter = router({
               Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-              model: "gpt-4o-mini",
+              model: "gpt-4o",
               messages: [
                 { role: "system", content: promptSystem },
                 { role: "user", content: promptUser },
               ],
-              max_tokens: 800,
-              temperature: 0.3,
+              max_tokens: 2200,
+              temperature: 0.4,
             }),
             signal: AbortSignal.timeout(30000),
           });
