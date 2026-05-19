@@ -10,36 +10,24 @@
  * vez só.
  */
 
-import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   TrendingUp,
   Clock,
-  Zap,
   ArrowRight,
   DollarSign,
-  Users,
   MessageCircle,
   CheckSquare,
-  Scale,
   Gavel,
   Sun,
   AlertTriangle,
   Activity,
   Sparkles,
   CalendarDays,
-  Landmark,
-  Briefcase,
-  ShieldCheck,
-  Headphones,
-  Settings,
-  Calculator,
-  FileText,
   Target,
 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -57,7 +45,6 @@ import {
   PainelSection,
   KPICard,
   PulseDot,
-  MetaPill,
   formatBRL,
   formatBRLShort,
   formatPercent,
@@ -101,7 +88,13 @@ const ACTIVITY_ICONS: Record<string, { icon: any; color: string; bg: string }> =
 export default function DashboardGeral() {
   const { user } = useAuth();
   const [, nav] = useLocation();
-  const [periodo, setPeriodo] = useState<7 | 30 | 90>(30);
+
+  // Dashboard mostra SEMPRE o mês civil corrente (dia 1 até hoje). Pra ver
+  // outros períodos, o usuário vai em /relatorios — esta tela é "visão do
+  // mês" e não tem seletor de range. Calculamos `days` como o nº de dias
+  // decorridos no mês.
+  const hojeData = new Date();
+  const diasDoMesAteHoje = hojeData.getDate();
 
   const { data: credits } = trpc.dashboard.credits.useQuery(undefined, {
     enabled: !!user,
@@ -119,7 +112,7 @@ export default function DashboardGeral() {
     refetchInterval: 60_000,
   });
   const { data: cashFlow } = trpc.dashboard.cashFlow.useQuery(
-    { days: periodo },
+    { days: diasDoMesAteHoje },
     { enabled: !!user, retry: false, refetchInterval: 120_000 },
   );
   const { data: feed } = trpc.dashboard.activityFeed.useQuery(
@@ -143,10 +136,12 @@ export default function DashboardGeral() {
   // supera inadimplência, negativa caso contrário. Não é variação MoM
   // (precisaria de segunda query) — fica como sinalizador grosseiro.
   const saldoLiquido = recebido - vencido;
-  const ehMesAtual = periodo === 30;
   const taxaInadimplencia = recebido + vencido > 0
     ? +((vencido / (recebido + vencido)) * 100).toFixed(1)
     : 0;
+  const nomeMesAtual = new Intl.DateTimeFormat("pt-BR", { month: "long" })
+    .format(hojeData)
+    .replace(/^./, (c) => c.toUpperCase());
 
   const nomeUser = user?.name?.split(" ")[0] || "Usuário";
   const dataInicio = cashFlow?.pontos[0]?.data;
@@ -181,7 +176,7 @@ export default function DashboardGeral() {
               <div className="flex items-center gap-2 mb-1">
                 <PulseDot />
                 <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
-                  Painel Geral
+                  Painel Geral — {nomeMesAtual}
                 </p>
               </div>
               {dataInicio && dataFim && (
@@ -190,28 +185,14 @@ export default function DashboardGeral() {
                 </p>
               )}
             </div>
-            <Tabs value={String(periodo)} onValueChange={(v) => setPeriodo(Number(v) as 7 | 30 | 90)}>
-              <TabsList className="h-8 bg-white/15 border border-white/20 backdrop-blur-sm">
-                <TabsTrigger
-                  value="7"
-                  className="text-[11px] px-3 text-white/80 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-md"
-                >
-                  7d
-                </TabsTrigger>
-                <TabsTrigger
-                  value="30"
-                  className="text-[11px] px-3 text-white/80 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-md"
-                >
-                  30d
-                </TabsTrigger>
-                <TabsTrigger
-                  value="90"
-                  className="text-[11px] px-3 text-white/80 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-md"
-                >
-                  90d
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => nav("/relatorios")}
+              className="text-[11px] h-8 text-white/85 hover:text-white hover:bg-white/15 border border-white/20"
+            >
+              Ver outros períodos →
+            </Button>
           </div>
 
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
@@ -220,7 +201,7 @@ export default function DashboardGeral() {
                 Olá, {nomeUser}
               </p>
               <p className="text-xs text-white/65 mb-3">
-                Receita {ehMesAtual ? "do mês" : `dos últimos ${periodo} dias`}
+                Receita do mês
               </p>
               <div className="flex items-baseline gap-3 flex-wrap">
                 <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
@@ -493,43 +474,6 @@ export default function DashboardGeral() {
           />
         </div>
       )}
-
-      {/* ═══════════ ACESSO RÁPIDO ═══════════ */}
-      <Card className="border-slate-200">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Zap className="h-4 w-4 text-amber-500" />
-            Acesso rápido
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { icon: Scale, label: "Processos", path: "/processos", color: "text-indigo-600", bg: "bg-indigo-50", slug: "processos" },
-              { icon: CalendarDays, label: "Agenda", path: "/agenda", color: "text-orange-600", bg: "bg-orange-50", slug: "agenda" },
-              { icon: Headphones, label: "Atendimento", path: "/atendimento", color: "text-sky-600", bg: "bg-sky-50", slug: "atendimento" },
-              { icon: DollarSign, label: "Financeiro", path: "/financeiro", color: "text-emerald-600", bg: "bg-emerald-50", slug: "financeiro" },
-              { icon: Landmark, label: "Bancário", path: "/calculos/bancario", color: "text-blue-600", bg: "bg-blue-50", slug: "calculos" },
-              { icon: Briefcase, label: "Trabalhista", path: "/calculos/trabalhista", color: "text-amber-600", bg: "bg-amber-50", slug: "calculos" },
-              { icon: ShieldCheck, label: "Previdenciário", path: "/calculos/previdenciario", color: "text-rose-600", bg: "bg-rose-50", slug: "calculos" },
-              { icon: Settings, label: "Configurações", path: "/configuracoes", color: "text-gray-600", bg: "bg-gray-50", slug: "configuracoes" },
-            ]
-              .filter((m) => !moduloOcultoNoMenu(m.slug))
-              .map((m) => (
-                <button
-                  key={m.path}
-                  onClick={() => nav(m.path)}
-                  className="group flex flex-col items-start gap-2 p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-left"
-                >
-                  <div className={`w-10 h-10 rounded-lg ${m.bg} flex items-center justify-center group-hover:scale-105 transition-transform`}>
-                    <m.icon className={`h-5 w-5 ${m.color}`} />
-                  </div>
-                  <span className="text-sm font-medium text-slate-900">{m.label}</span>
-                </button>
-              ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* ═══════════ 2 COLUNAS: AGENDA + ATIVIDADE ═══════════ */}
       <div className="grid gap-4 lg:grid-cols-3">
