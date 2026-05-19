@@ -26,11 +26,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  DollarSign, TrendingUp, AlertTriangle, Clock, Plus, ExternalLink, Copy,
+  DollarSign, TrendingUp, TrendingDown, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
-  Paperclip, FileUp, Percent, MoreVertical,
+  Paperclip, FileUp, Percent, MoreVertical, CalendarDays, CircleDollarSign,
 } from "lucide-react";
+import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -371,29 +372,93 @@ export default function Financeiro() {
   // CTA inline. Banner global avisa se está desconectado.
   const conectado = !!statusAsaas?.conectado;
 
+  // ─── Derivações pro hero (top devedores, receita prevista 7d) ─────────────
+  // Calculadas a partir da lista de cobranças já carregada, sem query extra.
+  // Top devedores: agrupa OVERDUE por contato, soma valor, pega top 3.
+  const topDevedores = useMemo(() => {
+    const lista: any[] = (cobrancas as any)?.items || [];
+    const grupos = new Map<string, { nome: string; valor: number; qtd: number; maxDias: number }>();
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    for (const c of lista) {
+      if (c.status !== "OVERDUE") continue;
+      const nome = (c as any).nomeContato || "—";
+      const valor = parseFloat(c.valor) || 0;
+      const venc = c.vencimento ? new Date(c.vencimento + "T12:00:00") : null;
+      const dias = venc ? Math.floor((hoje.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      const atual = grupos.get(nome) ?? { nome, valor: 0, qtd: 0, maxDias: 0 };
+      atual.valor += valor;
+      atual.qtd += 1;
+      atual.maxDias = Math.max(atual.maxDias, dias);
+      grupos.set(nome, atual);
+    }
+    return Array.from(grupos.values()).sort((a, b) => b.valor - a.valor).slice(0, 3);
+  }, [cobrancas]);
+
+  // Receita prevista nos próximos 7 dias: PENDING com vencimento entre hoje e +7d
+  const receitaPrevista7d = useMemo(() => {
+    const lista: any[] = (cobrancas as any)?.items || [];
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const limite = new Date(hoje); limite.setDate(limite.getDate() + 7);
+    return lista
+      .filter((c: any) => {
+        if (c.status !== "PENDING") return false;
+        if (!c.vencimento) return false;
+        const v = new Date(c.vencimento + "T12:00:00");
+        return v >= hoje && v <= limite;
+      })
+      .map((c: any) => ({
+        id: c.id,
+        nome: c.nomeContato || "—",
+        valor: parseFloat(c.valor) || 0,
+        forma: c.formaPagamento || "UNDEFINED",
+        vencimento: c.vencimento,
+        diasAte: Math.max(0, Math.ceil((new Date(c.vencimento + "T12:00:00").getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24))),
+      }))
+      .sort((a: any, b: any) => a.diasAte - b.diasAte)
+      .slice(0, 3);
+  }, [cobrancas]);
+  const totalReceitaPrevista7d = receitaPrevista7d.reduce((a: number, b: any) => a + b.valor, 0);
+
+  // % inadimplência derivado dos KPIs
+  const pctInadimplencia = useMemo(() => {
+    const venc = kpis?.vencido ?? 0;
+    const pend = kpis?.pendente ?? 0;
+    const recVenc = kpis?.recebidoComVencimentoNoPeriodo ?? 0;
+    const totalEsperado = venc + pend + recVenc;
+    if (totalEsperado <= 0) return null;
+    return +((venc / totalEsperado) * 100).toFixed(1);
+  }, [kpis]);
+
+  // Pontos do sparkline (cashflow mensal) — pega só recebido
+  const sparkPontos = (cashFlow?.pontos || []).map((p: any) => Number(p.recebido || 0));
+
   return (
-    <div className="space-y-6">
-      {/* ─── Header ─── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
-          <div className="flex items-center gap-2 mt-1">
+    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5">
+      {/* ═══════════ STATUS BAR ═══════════ */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full">
             {conectado ? (
-              <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px] font-normal">
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-                Asaas {statusAsaas.modo === "sandbox" ? "Sandbox" : "Produção"}
-              </Badge>
+              <>
+                <PulseDot />
+                <span className="text-xs font-semibold text-slate-900">Asaas {statusAsaas?.modo === "sandbox" ? "Sandbox" : "conectado"}</span>
+              </>
             ) : (
-              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-                Asaas desconectado
-              </Badge>
-            )}
-            {conectado && saldo && (
-              <span className="text-xs text-muted-foreground">
-                Saldo: <strong className="text-foreground">{formatBRL(saldo.balance)}</strong>
-              </span>
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                <span className="text-xs font-medium text-slate-500">Asaas desconectado</span>
+              </>
             )}
           </div>
+          {conectado && saldo && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full">
+              <CircleDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="text-xs text-slate-500">Saldo Asaas</span>
+              <span className="text-xs font-bold tabular-nums text-slate-900">
+                {formatBRL(saldo.balance)}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {conectado ? (
@@ -402,7 +467,8 @@ export default function Financeiro() {
               size="sm"
               onClick={() => syncMut.mutate()}
               disabled={syncMut.isPending}
-              title="Atualiza status/pagamento das cobranças que já estão no sistema. Pra puxar cobranças novas do Asaas, use 'Importar histórico' em Configurações."
+              className="h-9"
+              title="Atualiza status/pagamento das cobranças. Pra importar cobranças novas, use 'Importar histórico' em Configurações."
             >
               {syncMut.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -415,6 +481,7 @@ export default function Financeiro() {
             <Button
               variant="outline"
               size="sm"
+              className="h-9"
               onClick={() => (window.location.href = "/configuracoes")}
             >
               <Settings className="h-3.5 w-3.5 mr-1.5" />
@@ -425,6 +492,7 @@ export default function Financeiro() {
             <Button
               size="sm"
               onClick={() => setNovaCobrancaOpen(true)}
+              className="h-9 bg-slate-900 text-white hover:bg-slate-800 font-semibold"
               title={!conectado ? "Asaas desconectado: você pode registrar cobrança manual (dinheiro/transferência)" : undefined}
             >
               <Plus className="h-4 w-4 mr-1.5" />
@@ -434,7 +502,7 @@ export default function Financeiro() {
           {(perms.podeEditar || perms.podeExcluir) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="px-2" title="Mais ações">
+                <Button size="sm" variant="outline" className="px-2 h-9" title="Mais ações">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -459,7 +527,7 @@ export default function Financeiro() {
                 )}
                 <DropdownMenuItem
                   onClick={() => setDiagOpen(true)}
-                  title="Diagnostica possíveis pagamentos duplicados (read-only, não altera nada)"
+                  title="Diagnostica possíveis pagamentos duplicados (read-only)"
                 >
                   <Search className="h-4 w-4 mr-2" />
                   Diagnosticar duplicidades
@@ -470,6 +538,25 @@ export default function Financeiro() {
         </div>
       </div>
 
+      {/* ═══════════ HERO COMANDO CENTRAL ═══════════ */}
+      <HeroFinanceiro
+        kpis={kpis}
+        saldo={saldo}
+        sparkPontos={sparkPontos}
+        periodo={periodo}
+        rangeCustom={rangeCustom}
+        onPeriodoChange={(v) => { setRangeCustom(null); setPeriodo(v); }}
+      />
+
+      {/* ═══════════ LINHA DE ATENÇÃO ═══════════ */}
+      {conectado && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <CardInadimplencia pct={pctInadimplencia} vencido={kpis?.vencido ?? 0} />
+          <CardTopDevedores devedores={topDevedores} />
+          <CardReceitaPrevista lista={receitaPrevista7d} total={totalReceitaPrevista7d} />
+        </div>
+      )}
+
       {/* ─── Tabs principais ─── */}
       {/*
         TabsList é sticky pra continuar acessível ao rolar — antes ficava
@@ -479,33 +566,38 @@ export default function Financeiro() {
         próprios — total comissionável, sem decisão, próximo lançamento).
       */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="sticky top-0 z-20 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <TabsList className="bg-transparent p-0 h-auto w-full justify-start gap-6 border-b rounded-none overflow-x-auto">
-            <TabsTrigger
-              value="cobrancas"
-              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none gap-1.5"
-            >
-              Cobranças
-              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 rounded tabular-nums">
-                {kpis?.totalCobrancas ?? 0}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="clientes"
-              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none gap-1.5"
-            >
-              Clientes
-              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 rounded tabular-nums">
-                {clientesVinculados?.length ?? 0}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="despesas"
-              className="bg-transparent rounded-none border-0 border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none text-muted-foreground data-[state=active]:text-foreground px-0 py-2.5 h-auto flex-none"
-            >
-              Despesas
-            </TabsTrigger>
-          </TabsList>
+        <div className="sticky top-0 z-20 py-2 bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 backdrop-blur-sm">
+          <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-1.5 inline-flex gap-1">
+            <TabsList className="bg-transparent gap-1 p-0 h-auto">
+              <TabsTrigger
+                value="cobrancas"
+                className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              >
+                <Receipt className="h-3.5 w-3.5" />
+                Cobranças
+                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded-full tabular-nums">
+                  {kpis?.totalCobrancas ?? 0}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="clientes"
+                className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              >
+                <Users className="h-3.5 w-3.5" />
+                Clientes
+                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded-full tabular-nums">
+                  {clientesVinculados?.length ?? 0}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="despesas"
+                className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+              >
+                <TrendingDown className="h-3.5 w-3.5" />
+                Despesas
+              </TabsTrigger>
+            </TabsList>
+          </div>
         </div>
 
         {/* ─── Aba: Cobranças ─── */}
@@ -736,60 +828,6 @@ export default function Financeiro() {
           </Card>
 
           {/* KPIs */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <KPICard
-              icon={TrendingUp}
-              label="Recebido (líquido)"
-              value={formatBRL(kpis?.recebidoLiquido ?? 0)}
-              subValue={
-                kpis && kpis.recebidoLiquido !== kpis.recebido
-                  ? `${formatBRL(kpis.recebido)} bruto`
-                  : undefined
-              }
-              color="emerald"
-            />
-            <KPICard
-              icon={Clock}
-              label="A receber"
-              value={formatBRL(kpis?.pendente ?? 0)}
-              color="amber"
-            />
-            <KPICard
-              icon={AlertTriangle}
-              label="Vencido"
-              value={formatBRL(kpis?.vencido ?? 0)}
-              color="red"
-            />
-            {(() => {
-              // Inadimplência exata: do que devia ter sido pago no período,
-              // quanto está em aberto vencido. Numerador e denominador usam
-              // o MESMO filtro de vencimento, evitando o viés de comparar
-              // "pago em X" com "venceu em X" (que misturava recortes).
-              const venc = kpis?.vencido ?? 0;
-              const pend = kpis?.pendente ?? 0;
-              const recVenc = kpis?.recebidoComVencimentoNoPeriodo ?? 0;
-              const totalEsperado = venc + pend + recVenc;
-              const pctInadimp = totalEsperado > 0
-                ? (venc / totalEsperado) * 100
-                : null;
-              const cor: "emerald" | "amber" | "red" = pctInadimp == null
-                ? "emerald"
-                : pctInadimp >= 15 ? "red"
-                : pctInadimp >= 5 ? "amber"
-                : "emerald";
-              return (
-                <KPICard
-                  icon={Percent}
-                  label="Inadimplência"
-                  value={pctInadimp == null ? "—" : `${pctInadimp.toFixed(1).replace(".", ",")}%`}
-                  subValue={pctInadimp != null
-                    ? `${formatBRL(venc)} de ${formatBRL(totalEsperado)}`
-                    : "sem vencimentos no período"}
-                  color={cor}
-                />
-              );
-            })()}
-          </div>
             </>
           )}
 
@@ -1557,6 +1595,371 @@ function AsaasDisconnectedCta({ titulo, descricao }: { titulo: string; descricao
           <Settings className="h-4 w-4 mr-2" />
           Conectar Asaas
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Hero "Comando Central" — gradient emerald/teal com 4 KPIs + sparkline
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function HeroFinanceiro({
+  kpis,
+  saldo,
+  sparkPontos,
+  periodo,
+  rangeCustom,
+  onPeriodoChange,
+}: {
+  kpis: any;
+  saldo: any;
+  sparkPontos: number[];
+  periodo: 3 | 6 | 12 | null;
+  rangeCustom: { inicio: string; fim: string } | null;
+  onPeriodoChange: (v: 3 | 6 | 12) => void;
+}) {
+  const recebido = kpis?.recebidoLiquido ?? 0;
+  const pendente = kpis?.pendente ?? 0;
+  const vencido = kpis?.vencido ?? 0;
+  const saldoAtual = saldo?.balance ?? 0;
+  const totalCobrancas = kpis?.totalCobrancas ?? 0;
+  const totalReceitaPeriodo = sparkPontos.reduce((a, b) => a + b, 0);
+
+  // Calcula path do sparkline (normaliza pontos pra altura)
+  const max = Math.max(1, ...sparkPontos);
+  const sparkPath = useMemo(() => {
+    if (sparkPontos.length === 0) return "";
+    const w = 400;
+    const h = 100;
+    const stepX = w / Math.max(1, sparkPontos.length - 1);
+    const pts = sparkPontos.map((v, i) => [i * stepX, h - (v / max) * h * 0.85 - 10]);
+    return pts.map(([x, y], i) => (i === 0 ? `M${x},${y}` : `L${x},${y}`)).join(" ");
+  }, [sparkPontos, max]);
+  const sparkFillPath = sparkPath ? `${sparkPath} L400,120 L0,120 Z` : "";
+
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-800 p-7 text-white relative overflow-hidden shadow-xl">
+      <CircleDollarSign
+        className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10"
+        strokeWidth={1.2}
+      />
+      <div className="relative">
+        <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider mb-1">
+              Painel Financeiro
+            </p>
+            <p className="text-xs text-white/70">
+              {rangeCustom
+                ? `${rangeCustom.inicio.split("-").reverse().join("/")} → ${rangeCustom.fim.split("-").reverse().join("/")}`
+                : `Últimos ${periodo ?? 6} meses`}
+            </p>
+          </div>
+          <div className="inline-flex bg-white/15 border border-white/20 rounded-lg overflow-hidden">
+            {([3, 6, 12] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => onPeriodoChange(m)}
+                className={`px-3 py-1 text-[11px] font-medium transition-colors ${
+                  !rangeCustom && periodo === m
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-white/80 hover:text-white"
+                }`}
+              >
+                {m}m
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          {/* 4 KPIs em grid 2x2 (esquerda) */}
+          <div className="lg:col-span-6 grid grid-cols-2 gap-3">
+            <KPIHero
+              label="Recebido"
+              value={formatBRLShort(recebido)}
+              hint={recebido !== (kpis?.recebido ?? 0) ? `${formatBRLShort(kpis?.recebido ?? 0)} bruto` : undefined}
+              icon={CheckCircle2}
+              tone="emerald"
+            />
+            <KPIHero
+              label="A receber"
+              value={formatBRLShort(pendente)}
+              hint={`${totalCobrancas} cobrança(s)`}
+              icon={Clock}
+              tone="blue"
+            />
+            <KPIHero
+              label="Vencido"
+              value={formatBRLShort(vencido)}
+              icon={AlertTriangle}
+              tone="rose"
+              alert={vencido > 0}
+            />
+            <KPIHero
+              label="Saldo Asaas"
+              value={formatBRLShort(saldoAtual)}
+              hint="Disponível pra saque"
+              icon={Wallet}
+              tone="neutral"
+            />
+          </div>
+
+          {/* Sparkline (direita) */}
+          <div className="lg:col-span-6">
+            <div className="flex items-baseline justify-between mb-2">
+              <div>
+                <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">
+                  Tendência · período
+                </p>
+                <p className="text-xl font-bold tabular-nums leading-none">
+                  {formatBRLShort(totalReceitaPeriodo)}
+                  <span className="text-xs text-white/70 font-normal ml-1">total recebido</span>
+                </p>
+              </div>
+            </div>
+            {sparkPontos.length > 0 ? (
+              <svg viewBox="0 0 400 120" className="w-full h-28">
+                <defs>
+                  <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="white" stopOpacity="0.45" />
+                    <stop offset="100%" stopColor="white" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <line x1="0" y1="30" x2="400" y2="30" stroke="rgba(255,255,255,0.08)" strokeDasharray="3,3" />
+                <line x1="0" y1="60" x2="400" y2="60" stroke="rgba(255,255,255,0.08)" strokeDasharray="3,3" />
+                <line x1="0" y1="90" x2="400" y2="90" stroke="rgba(255,255,255,0.08)" strokeDasharray="3,3" />
+                <path d={sparkFillPath} fill="url(#sparkGrad)" />
+                <path
+                  d={sparkPath}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {sparkPontos.length > 0 && (() => {
+                  const w = 400;
+                  const stepX = w / Math.max(1, sparkPontos.length - 1);
+                  const lastIdx = sparkPontos.length - 1;
+                  const lastY = 120 - (sparkPontos[lastIdx]! / max) * 100 * 0.85 - 10;
+                  return (
+                    <circle
+                      cx={lastIdx * stepX}
+                      cy={lastY}
+                      r={4.5}
+                      fill="rgb(110 231 183)"
+                      stroke="white"
+                      strokeWidth={2}
+                    />
+                  );
+                })()}
+              </svg>
+            ) : (
+              <div className="h-28 flex items-center justify-center text-xs text-white/50">
+                Sem dados no período.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KPIHero({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone,
+  alert,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  icon: any;
+  tone: "emerald" | "blue" | "rose" | "neutral";
+  alert?: boolean;
+}) {
+  const numColor =
+    tone === "emerald" ? "text-emerald-100"
+    : tone === "blue" ? "text-blue-200"
+    : tone === "rose" ? "text-rose-200"
+    : "text-white";
+  return (
+    <div className={`bg-white/10 rounded-xl p-4 border border-white/15 ${alert ? "ring-1 ring-rose-300/30" : ""}`}>
+      <div className="flex items-center gap-1.5 mb-2 text-[10px] text-white/65 uppercase tracking-wider font-semibold">
+        <Icon className="w-3 h-3" />
+        {label}
+      </div>
+      <p className={`text-2xl font-bold tabular-nums leading-none ${numColor}`}>{value}</p>
+      {hint && <p className="text-[11px] text-white/65 mt-1 tabular-nums">{hint}</p>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Linha de Atenção: 3 cards (Inadimplência ring + Top devedores + Receita 7d)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function CardInadimplencia({ pct, vencido }: { pct: number | null; vencido: number }) {
+  const valor = pct ?? 0;
+  const dash = 263.9;
+  const offset = dash - (Math.min(100, valor) / 100) * dash;
+  const cor = pct == null
+    ? "#94a3b8"
+    : pct >= 15 ? "#f43f5e"
+    : pct >= 5 ? "#f59e0b"
+    : "#10b981";
+
+  return (
+    <Card className="border-slate-200 relative overflow-hidden">
+      <div className="absolute -right-6 -top-6 w-32 h-32 bg-rose-100 rounded-full opacity-40" />
+      <CardContent className="pt-5 pb-5 relative">
+        <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500 mb-3">
+          Inadimplência
+        </h3>
+        <div className="flex items-center gap-4">
+          <div className="relative w-24 h-24 shrink-0">
+            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#fee2e2" strokeWidth="9" />
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke={cor}
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeDasharray={dash}
+                strokeDashoffset={offset}
+                style={{ transition: "stroke-dashoffset 0.6s ease" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <p className="text-2xl font-bold tabular-nums leading-none" style={{ color: cor }}>
+                {pct != null ? pct.toFixed(1) : "—"}
+                <span className="text-sm">%</span>
+              </p>
+              <p className="text-[9px] text-slate-500 uppercase tracking-wider">por valor</p>
+            </div>
+          </div>
+          <div className="flex-1 space-y-1.5">
+            <p className="text-[11px] text-slate-500">
+              Total em aberto
+            </p>
+            <p className="text-lg font-bold text-rose-600 tabular-nums">{formatBRL(vencido)}</p>
+            <p className="text-[10px] text-slate-400">
+              {pct == null
+                ? "Sem cobranças no período"
+                : pct >= 15
+                  ? "Alerta — taxa elevada"
+                  : pct >= 5
+                    ? "Atenção"
+                    : "Sob controle"}
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CardTopDevedores({ devedores }: { devedores: Array<{ nome: string; valor: number; qtd: number; maxDias: number }> }) {
+  return (
+    <Card className="border-slate-200">
+      <CardContent className="pt-5 pb-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
+            Top devedores
+          </h3>
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700">
+            {devedores.length} {devedores.length === 1 ? "ativo" : "ativos"}
+          </span>
+        </div>
+        {devedores.length === 0 ? (
+          <p className="text-xs text-slate-400 italic py-4 text-center">
+            Nenhum cliente em atraso.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {devedores.map((d) => (
+              <div key={d.nome} className="flex items-center gap-2.5">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white shrink-0 bg-gradient-to-br ${gradientAvatar(d.nome)}`}
+                >
+                  {gerarIniciais(d.nome)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{d.nome}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {d.qtd} vencida{d.qtd !== 1 ? "s" : ""} · {d.maxDias}d atraso
+                  </p>
+                </div>
+                <p className="text-sm font-bold text-rose-600 tabular-nums">
+                  {formatBRLShort(d.valor)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CardReceitaPrevista({
+  lista,
+  total,
+}: {
+  lista: Array<{ id: number; nome: string; valor: number; forma: string; vencimento: string; diasAte: number }>;
+  total: number;
+}) {
+  return (
+    <Card className="border-slate-200">
+      <CardContent className="pt-5 pb-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
+            Receita esperada (7d)
+          </h3>
+          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 tabular-nums">
+            {formatBRLShort(total)}
+          </span>
+        </div>
+        {lista.length === 0 ? (
+          <p className="text-xs text-slate-400 italic py-4 text-center">
+            Nenhuma cobrança nos próximos 7 dias.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {lista.map((c) => {
+              const venc = c.vencimento ? new Date(c.vencimento + "T12:00:00") : null;
+              const diaCurto = venc
+                ? `${String(venc.getDate()).padStart(2, "0")}${"\n"}${venc.toLocaleDateString("pt-BR", { month: "short" }).toUpperCase()}`
+                : "—";
+              return (
+                <div key={c.id} className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-[9px] font-bold text-emerald-700 tabular-nums leading-tight whitespace-pre text-center shrink-0">
+                    {diaCurto}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate">{c.nome}</p>
+                    <p className="text-[10px] text-slate-500">
+                      {c.forma === "PIX" ? "PIX" : c.forma === "BOLETO" ? "Boleto" : c.forma === "CREDIT_CARD" ? "Cartão" : "—"}
+                      {" · "}
+                      {c.diasAte === 0 ? "vence hoje" : c.diasAte === 1 ? "vence amanhã" : `vence em ${c.diasAte}d`}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-emerald-600 tabular-nums">
+                    {formatBRLShort(c.valor)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

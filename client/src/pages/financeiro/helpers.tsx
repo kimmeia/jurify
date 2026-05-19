@@ -3,6 +3,8 @@
  */
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
+import { Check, Clock, AlertTriangle, RotateCcw, XCircle, Zap, CreditCard, Receipt, HelpCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /**
  * Hook que retorna as permissões do usuário atual no módulo Financeiro.
@@ -73,27 +75,97 @@ export function formatDiaCompleto(iso: string): string {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
+/**
+ * Pill com gradient sutil + ícone semântico. Mais "executivo" que o
+ * Badge padrão — usado nas linhas da tabela de cobranças/despesas.
+ */
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    PENDING: { label: "Pendente", cls: "bg-amber-500/15 text-amber-700 border-amber-500/25" },
-    RECEIVED: { label: "Recebido", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25" },
-    CONFIRMED: { label: "Confirmado", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25" },
-    RECEIVED_IN_CASH: { label: "Em dinheiro", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25" },
-    OVERDUE: { label: "Vencido", cls: "bg-red-500/15 text-red-700 border-red-500/25" },
-    REFUNDED: { label: "Estornado", cls: "bg-gray-500/15 text-gray-600 border-gray-500/25" },
-    CANCELLED: { label: "Cancelado", cls: "bg-gray-500/15 text-gray-600 border-gray-500/25" },
-    ACTIVE: { label: "Ativa", cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25" },
-    INACTIVE: { label: "Inativa", cls: "bg-gray-500/15 text-gray-600 border-gray-500/25" },
-    EXPIRED: { label: "Expirada", cls: "bg-red-500/15 text-red-700 border-red-500/25" },
+  const map: Record<string, { label: string; cls: string; icon: LucideIcon }> = {
+    PENDING: {
+      label: "Pendente",
+      cls: "bg-gradient-to-br from-amber-100 to-amber-200 text-amber-800 border-amber-300",
+      icon: Clock,
+    },
+    RECEIVED: {
+      label: "Recebido",
+      cls: "bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-800 border-emerald-300",
+      icon: Check,
+    },
+    CONFIRMED: {
+      label: "Confirmado",
+      cls: "bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-800 border-emerald-300",
+      icon: Check,
+    },
+    RECEIVED_IN_CASH: {
+      label: "Em dinheiro",
+      cls: "bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-800 border-emerald-300",
+      icon: Check,
+    },
+    OVERDUE: {
+      label: "Vencido",
+      cls: "bg-gradient-to-br from-rose-100 to-rose-200 text-rose-800 border-rose-300",
+      icon: AlertTriangle,
+    },
+    REFUNDED: {
+      label: "Estornado",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+      icon: RotateCcw,
+    },
+    CANCELLED: {
+      label: "Cancelado",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+      icon: XCircle,
+    },
+    ACTIVE: {
+      label: "Ativa",
+      cls: "bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-800 border-emerald-300",
+      icon: Check,
+    },
+    INACTIVE: {
+      label: "Inativa",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+      icon: XCircle,
+    },
+    EXPIRED: {
+      label: "Expirada",
+      cls: "bg-gradient-to-br from-rose-100 to-rose-200 text-rose-800 border-rose-300",
+      icon: AlertTriangle,
+    },
   };
-  const cfg = map[status] || { label: status, cls: "" };
-  return <Badge className={`${cfg.cls} hover:${cfg.cls} text-[10px] font-normal`}>{cfg.label}</Badge>;
+  const cfg = map[status] || { label: status, cls: "bg-slate-100 text-slate-600 border-slate-200", icon: HelpCircle };
+  const Icon = cfg.icon;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${cfg.cls}`}
+    >
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
 }
 
+/**
+ * Forma de pagamento como ícone colorido + label.
+ * Ícone bate com o canal (raio pra PIX, recibo pra boleto, etc.) —
+ * mais rápido de bater olho na tabela do que letra abreviada.
+ */
 export function FormaBadge({ forma }: { forma: string }) {
-  const icons: Record<string, string> = { BOLETO: "B", PIX: "P", CREDIT_CARD: "C", UNDEFINED: "?" };
-  const labels: Record<string, string> = { BOLETO: "Boleto", PIX: "Pix", CREDIT_CARD: "Cartão", UNDEFINED: "Indef." };
-  return <span className="text-xs text-muted-foreground">{icons[forma] || "?"} {labels[forma] || forma}</span>;
+  const map: Record<string, { label: string; icon: LucideIcon; color: string; bg: string }> = {
+    PIX: { label: "PIX", icon: Zap, color: "text-cyan-600", bg: "bg-cyan-50" },
+    BOLETO: { label: "Boleto", icon: Receipt, color: "text-amber-600", bg: "bg-amber-50" },
+    CREDIT_CARD: { label: "Cartão", icon: CreditCard, color: "text-violet-600", bg: "bg-violet-50" },
+    UNDEFINED: { label: "—", icon: HelpCircle, color: "text-slate-400", bg: "bg-slate-50" },
+  };
+  const cfg = map[forma] || { label: forma, icon: HelpCircle, color: "text-slate-400", bg: "bg-slate-50" };
+  const Icon = cfg.icon;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`w-5 h-5 rounded ${cfg.bg} flex items-center justify-center shrink-0`}>
+        <Icon className={`w-3 h-3 ${cfg.color}`} />
+      </span>
+      <span className="text-xs text-slate-700 font-medium">{cfg.label}</span>
+    </span>
+  );
 }
 
 export const CICLO_LABELS: Record<string, string> = {

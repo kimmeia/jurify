@@ -1408,7 +1408,7 @@ export default function Processos() {
   const tabInicial = (() => {
     if (typeof window === "undefined") return "consultar";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "movimentacoes" || t === "novas-acoes" || t === "cofre"
+    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre"
       ? t
       : "consultar";
   })();
@@ -1448,7 +1448,7 @@ export default function Processos() {
       {saldo < 5 && (<div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5"><AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /><span className="text-sm text-amber-700">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span></div>)}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className={`grid w-full ${podeCofre ? "grid-cols-4" : "grid-cols-3"} h-auto`}>
+        <TabsList className={`grid w-full ${podeCofre ? "grid-cols-5" : "grid-cols-4"} h-auto`}>
           <TabsTrigger value="consultar" className="gap-1.5 text-xs py-2">
             <Search className="h-3.5 w-3.5" />Consultar
           </TabsTrigger>
@@ -1458,6 +1458,10 @@ export default function Processos() {
           <TabsTrigger value="novas-acoes" className="gap-1.5 text-xs py-2 relative">
             <Siren className="h-3.5 w-3.5" />Novas Ações
             <NovasAcoesBadge />
+          </TabsTrigger>
+          <TabsTrigger value="alertas" className="gap-1.5 text-xs py-2 relative">
+            <Bell className="h-3.5 w-3.5" />Alertas
+            <AlertasBadge />
           </TabsTrigger>
           {podeCofre && (
             <TabsTrigger value="cofre" className="gap-1.5 text-xs py-2">
@@ -1469,6 +1473,7 @@ export default function Processos() {
         <TabsContent value="consultar" className="mt-4"><ConsultarTab /></TabsContent>
         <TabsContent value="movimentacoes" className="mt-4"><MonitorarTab /></TabsContent>
         <TabsContent value="novas-acoes" className="mt-4"><NovasAcoesTab /></TabsContent>
+        <TabsContent value="alertas" className="mt-4"><AlertasTab /></TabsContent>
         {podeCofre && <TabsContent value="cofre" className="mt-4"><CofreTab /></TabsContent>}
       </Tabs>
     </div>
@@ -1479,6 +1484,223 @@ export default function Processos() {
 // BADGE DE NOVAS AÇÕES NÃO LIDAS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: ALERTAS — Prazos sugeridos detectados em movimentações
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function AlertasTab() {
+  const [aprovarTarget, setAprovarTarget] = useState<any | null>(null);
+  const [ajusteTitulo, setAjusteTitulo] = useState("");
+  const [ajusteData, setAjusteData] = useState("");
+  const utils = trpc.useUtils();
+
+  const { data: sugestoes, refetch, isLoading } = (trpc as any).prazosSugeridos?.listar?.useQuery?.(
+    { status: "pendente", limite: 100 },
+    { retry: false, refetchInterval: 30000 },
+  ) ?? { data: undefined, refetch: () => {}, isLoading: false };
+
+  const aprovarMut = (trpc as any).prazosSugeridos?.aprovar?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Prazo criado na agenda!");
+      setAprovarTarget(null);
+      refetch();
+      try { (utils as any).prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
+    },
+    onError: (e: any) => toast.error("Erro ao criar prazo", { description: e.message }),
+  });
+
+  const descartarMut = (trpc as any).prazosSugeridos?.descartar?.useMutation?.({
+    onSuccess: () => {
+      toast.success("Sugestão descartada");
+      refetch();
+      try { (utils as any).prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
+    },
+    onError: (e: any) => toast.error("Erro", { description: e.message }),
+  });
+
+  const abrirAprovar = (sug: any) => {
+    setAprovarTarget(sug);
+    setAjusteTitulo(sug.titulo);
+    const dataLocal = sug.dataSugerida
+      ? new Date(sug.dataSugerida).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16);
+    setAjusteData(dataLocal);
+  };
+
+  const confirmarAprovar = () => {
+    if (!aprovarTarget) return;
+    aprovarMut.mutate({
+      id: aprovarTarget.id,
+      ajustes: {
+        titulo: ajusteTitulo,
+        dataInicio: new Date(ajusteData).toISOString(),
+      },
+    });
+  };
+
+  const lista = sugestoes ?? [];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+              <Bell className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Alertas detectados nas movimentações</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Sistema detecta automaticamente audiências, intimações, prazos de réplica/contestação/recurso etc.
+                Aprove pra criar agendamento direto na agenda — ou descarte se for falso positivo.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : lista.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-12 text-center">
+            <Bell className="h-10 w-10 text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium">Nenhum alerta pendente</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md">
+              Quando o cron detectar prazos ou audiências em movimentações dos seus processos monitorados,
+              vão aparecer aqui pra você aprovar ou descartar com 1 click.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {lista.map((sug: any) => {
+            const corTipo = sug.tipo === "audiencia"
+              ? "bg-violet-500/15 text-violet-700 border-violet-500/30"
+              : "bg-amber-500/15 text-amber-700 border-amber-500/30";
+            const iconeTipo = sug.tipo === "audiencia" ? Gavel : Clock;
+            const Icon = iconeTipo;
+            return (
+              <Card key={sug.id} className="border-amber-200/40">
+                <CardContent className="pt-3 pb-3">
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                      <Icon className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold">{sug.titulo}</p>
+                        <Badge className={`${corTipo} text-[9px]`}>{sug.tipo === "audiencia" ? "Audiência" : "Prazo"}</Badge>
+                        {sug.tribunal && <Badge variant="outline" className="text-[9px]">{sug.tribunal}</Badge>}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        <span className="font-medium">{sug.apelidoProcesso}</span>
+                        {sug.cnj && <span className="font-mono"> · {sug.cnj}</span>}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1.5 text-[11px] flex-wrap">
+                        {sug.dataSugerida && (
+                          <span className="flex items-center gap-1 text-blue-700 font-medium">
+                            <Clock className="h-3 w-3" />
+                            {new Date(sug.dataSugerida).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                          </span>
+                        )}
+                        {sug.prazoDias && (
+                          <span className="text-muted-foreground">
+                            {sug.prazoDias} dias{sug.prazoUteis ? " úteis" : ""}
+                          </span>
+                        )}
+                      </div>
+                      {sug.motivo && (
+                        <p className="text-[10px] text-muted-foreground mt-1 italic">{sug.motivo}</p>
+                      )}
+                      {sug.trechoOrigem && (
+                        <details className="mt-1">
+                          <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                            Ver trecho original
+                          </summary>
+                          <p className="text-[10px] text-muted-foreground mt-1 bg-muted/40 rounded p-2">
+                            {sug.trechoOrigem}
+                          </p>
+                        </details>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-[10px]"
+                        onClick={() => abrirAprovar(sug)}
+                        disabled={aprovarMut.isPending || descartarMut.isPending}
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Aprovar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px]"
+                        onClick={() => descartarMut.mutate({ id: sug.id })}
+                        disabled={aprovarMut.isPending || descartarMut.isPending}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Descartar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal de aprovação com ajustes */}
+      <Dialog open={!!aprovarTarget} onOpenChange={(open) => !open && setAprovarTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar prazo na agenda</DialogTitle>
+            <DialogDescription>
+              Confirme os dados antes de criar o agendamento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="alerta-titulo">Título</Label>
+              <Input
+                id="alerta-titulo"
+                value={ajusteTitulo}
+                onChange={(e) => setAjusteTitulo(e.target.value)}
+                maxLength={255}
+              />
+            </div>
+            <div>
+              <Label htmlFor="alerta-data">Data e hora</Label>
+              <Input
+                id="alerta-data"
+                type="datetime-local"
+                value={ajusteData}
+                onChange={(e) => setAjusteData(e.target.value)}
+              />
+            </div>
+            {aprovarTarget?.motivo && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">Detectado:</span> {aprovarTarget.motivo}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAprovarTarget(null)}>Cancelar</Button>
+            <Button onClick={confirmarAprovar} disabled={aprovarMut.isPending}>
+              {aprovarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
+              Criar agendamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function NovasAcoesBadge() {
   const { data } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas: true, limite: 1 },
@@ -1488,6 +1710,20 @@ function NovasAcoesBadge() {
   if (count === 0) return null;
   return (
     <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+function AlertasBadge() {
+  const { data } = (trpc as any).prazosSugeridos?.contador?.useQuery?.(undefined, {
+    retry: false,
+    refetchInterval: 60000,
+  }) ?? { data: undefined };
+  const count = data?.pendentes ?? 0;
+  if (count === 0) return null;
+  return (
+    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">
       {count > 9 ? "9+" : count}
     </span>
   );

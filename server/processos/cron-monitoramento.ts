@@ -25,12 +25,14 @@ import {
   motorCreditos,
   motorTransacoes,
   notificacoes,
+  prazosSugeridos,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
+import { detectarSugestaoPrazo } from "./detector-prazos";
 
 const log = createLogger("motor-cron");
 
@@ -214,6 +216,44 @@ export async function pollarUmMonitoramentoMovs(
           });
           const eventoId = (result as { insertId: number }).insertId;
           movsNovas.push({ mov, eventoId });
+
+          // Detecta sugestão de prazo na mov (audiência/prazo
+          // processual). UNIQUE em evento_id garante idempotência —
+          // se cron re-rodar, INSERT falha silenciosamente.
+          const sugestao = detectarSugestaoPrazo(mov.texto, {
+            dataEvento: new Date(mov.data),
+          });
+          if (sugestao) {
+            try {
+              await db.insert(prazosSugeridos).values({
+                escritorioId: mon.escritorioId,
+                eventoId,
+                monitoramentoId: mon.id,
+                tipo: sugestao.tipo,
+                titulo: sugestao.titulo,
+                dataSugerida: sugestao.dataSugerida,
+                prazoDias: sugestao.prazoDias,
+                prazoUteis: sugestao.prazoUteis ?? false,
+                motivo: sugestao.motivo,
+                trechoOrigem: sugestao.trechoOrigem,
+                cnjAfetado: mon.searchKey,
+                status: "pendente",
+              });
+              log.info(
+                { monId: mon.id, eventoId, tipo: sugestao.tipo, titulo: sugestao.titulo },
+                "[motor-cron] sugestão de prazo detectada",
+              );
+            } catch (errSug) {
+              const errAny = errSug as any;
+              const isDup = errAny?.cause?.code === "ER_DUP_ENTRY" || errAny?.cause?.errno === 1062;
+              if (!isDup) {
+                log.warn(
+                  { eventoId, err: errSug instanceof Error ? errSug.message : String(errSug) },
+                  "[motor-cron] INSERT prazo sugerido falhou (não-dedup)",
+                );
+              }
+            }
+          }
         } catch (err) {
           const errAny = err as any;
           const isDedup =
