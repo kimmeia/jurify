@@ -6,7 +6,7 @@
  * causando erro tRPC ao clicar.
  */
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import type { TrpcContext } from "../_core/context";
 
 // ─── Mock crypto-utils ──────────────────────────────────────────────────────
@@ -19,9 +19,18 @@ vi.mock("../escritorio/crypto-utils", () => ({
 }));
 
 // ─── Mock fetch para chamadas IA ────────────────────────────────────────────
+// CRÍTICO: vitest compartilha workers entre arquivos. Se mutarmos
+// `globalThis.fetch` sem restaurar, testes subsequentes em outros arquivos
+// que dependem de fetch real (ou de outros mocks) quebram. Salva e
+// restaura em beforeAll/afterAll.
 const originalFetch = globalThis.fetch;
 const fetchMock = vi.fn();
-globalThis.fetch = fetchMock as any;
+beforeAll(() => {
+  globalThis.fetch = fetchMock as any;
+});
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 // ─── Mock consumirCreditos ──────────────────────────────────────────────────
 const consumirCreditosEscritorio = vi.fn();

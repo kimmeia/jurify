@@ -20,11 +20,6 @@ import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
 import {
-  inicioDoDiaNoFuso,
-  dataHojeBR,
-  FUSO_HORARIO_PADRAO,
-} from "../../shared/escritorio-types";
-import {
   FUSO_HORARIO_PADRAO,
   inicioDoDiaNoFuso,
   fimDoDiaNoFuso,
