@@ -410,12 +410,35 @@ export const agendamentos = mysqlTable("agendamentos", {
    *  Deletar processo preserva agendamento/prazo do usuário com link nulo. */
   processoId: int("processoIdAgend").references(() => clienteProcessos.id, { onDelete: "set null" }),
   corHex: varchar("corHex", { length: 7 }).default("#3b82f6").notNull(),
+  /** Telefone/WhatsApp/IM do contato da reunião — campo livre, não vinculado
+   *  a contato CRM. Útil pra "telefonema rápido antes da audiência". */
+  contatoTelefone: varchar("contatoTelefone", { length: 64 }),
   createdAt: timestamp("createdAtAgend").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgend").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Agendamento = typeof agendamentos.$inferSelect;
 export type InsertAgendamento = typeof agendamentos.$inferInsert;
+
+/**
+ * Anexos do agendamento — arquivos pra ter à mão na reunião (PDFs, imagens,
+ * docs). Storage é o disco do server (uploadRouter.enviar devolve url
+ * `/uploads/escritorio_X/...`). Guarda só metadata aqui.
+ */
+export const agendamentoAnexos = mysqlTable("agendamento_anexos", {
+  id: int("id").autoincrement().primaryKey(),
+  agendamentoId: int("agendamentoId").notNull(),
+  escritorioId: int("escritorioId").notNull(),
+  url: varchar("url", { length: 512 }).notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 128 }).notNull(),
+  tamanho: int("tamanho").default(0).notNull(),
+  uploadedById: int("uploadedById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AgendamentoAnexo = typeof agendamentoAnexos.$inferSelect;
+export type InsertAgendamentoAnexo = typeof agendamentoAnexos.$inferInsert;
 
 /**
  * Sugestões de prazos/audiências detectadas automaticamente em

@@ -282,7 +282,7 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
           </p>
 
           {/* Linha 2: cliente + processo */}
-          {(contato || cnj || ev.local) && (
+          {(contato || cnj || ev.local || ev.contatoTelefone) && (
             <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-600 flex-wrap">
               {contato && (
                 <span className="inline-flex items-center gap-1.5">
@@ -296,9 +296,25 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
                   </span>
                 </span>
               )}
-              {cnj && (
+              {ev.contatoTelefone && (
                 <>
                   {contato && <span className="text-slate-300">·</span>}
+                  <a
+                    href={`https://wa.me/55${String(ev.contatoTelefone).replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-emerald-700 hover:underline font-medium"
+                    title="Abrir WhatsApp"
+                  >
+                    <PhoneCall className="w-3 h-3" />
+                    {ev.contatoTelefone}
+                  </a>
+                </>
+              )}
+              {cnj && (
+                <>
+                  {(contato || ev.contatoTelefone) && <span className="text-slate-300">·</span>}
                   <span className="inline-flex items-center gap-1">
                     <Scale className="w-3 h-3 text-indigo-500" />
                     <span className="font-mono text-indigo-700 text-[10.5px]">{cnj}</span>
@@ -308,7 +324,7 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
               )}
               {ev.local && (
                 <>
-                  {(contato || cnj) && <span className="text-slate-300">·</span>}
+                  {(contato || ev.contatoTelefone || cnj) && <span className="text-slate-300">·</span>}
                   <span className="inline-flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-slate-400" />
                     <span className="truncate max-w-[160px]">{ev.local}</span>
@@ -1260,6 +1276,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   const [contatoNome, setContatoNome] = useState<string>("");
   const [contatoBusca, setContatoBusca] = useState("");
   const [contatoMenuOpen, setContatoMenuOpen] = useState(false);
+  const [contatoTelefone, setContatoTelefone] = useState("");
   const [processoId, setProcessoId] = useState<number | null>(null);
   const [processoLabel, setProcessoLabel] = useState<string>("");
   const [processoBusca, setProcessoBusca] = useState("");
@@ -1268,6 +1285,10 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   const [lembreteMinutos, setLembreteMinutos] = useState<number[]>([30]);
   const [lembreteCanais, setLembreteCanais] = useState<Array<"notificacao_app" | "email" | "whatsapp">>(["notificacao_app"]);
   const [lembreteDestinatarios, setLembreteDestinatarios] = useState<number[]>([]);
+  const [destinatariosBusca, setDestinatariosBusca] = useState("");
+  // Anexos
+  const [anexos, setAnexos] = useState<Array<{ id?: number; url: string; nome: string; mimeType: string; tamanho: number }>>([]);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
 
   // Quando o dialog abre em modo EDIT, hidrata campos
   useMemo(() => {
@@ -1288,14 +1309,18 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
       setLocal(eventoEdit.local || "");
       setContatoId(eventoEdit.contatoId ?? null);
       setContatoNome(eventoEdit.contatoNome || "");
+      setContatoTelefone(eventoEdit.contatoTelefone || "");
       setProcessoId(eventoEdit.processoId ?? null);
       setProcessoLabel(eventoEdit.cnj || "");
+      setAnexos([]); // será carregado da query listarAnexos abaixo
     } else {
       setTipoEvento("compromisso");
       setTitulo(""); setDescricao(""); setDataInicio(""); setHoraInicio("");
       setTipo("reuniao_comercial"); setPrioridade("normal"); setLocal("");
-      setContatoId(null); setContatoNome(""); setContatoBusca("");
+      setContatoId(null); setContatoNome(""); setContatoBusca(""); setContatoTelefone("");
       setProcessoId(null); setProcessoLabel(""); setProcessoBusca("");
+      setAnexos([]);
+      setDestinatariosBusca("");
     }
   }, [open, eventoEdit?.id]);
 
@@ -1324,6 +1349,21 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
     { agendamentoId: eventoEdit?.id },
     { enabled: isEdit && eventoEdit?.fonte === "compromisso" && !!eventoEdit?.id, retry: false },
   ) ?? { data: undefined };
+
+  // Anexos existentes (modo edit)
+  const { data: anexosExistentes } = (trpc.agenda as any).listarAnexos?.useQuery?.(
+    { agendamentoId: eventoEdit?.id },
+    { enabled: isEdit && eventoEdit?.fonte === "compromisso" && !!eventoEdit?.id, retry: false },
+  ) ?? { data: undefined };
+  useMemo(() => {
+    if (!isEdit || !anexosExistentes) return;
+    setAnexos((anexosExistentes as any[]).map((a) => ({ id: a.id, url: a.url, nome: a.nome, mimeType: a.mimeType, tamanho: a.tamanho })));
+  }, [anexosExistentes, isEdit]);
+
+  // Upload via uploadRouter (já existe) — devolve url+nome+tipo+tamanho
+  const uploadMut = (trpc as any).upload.enviar.useMutation();
+  const adicionarAnexoMut = (trpc.agenda as any).adicionarAnexo.useMutation();
+  const removerAnexoMut = (trpc.agenda as any).removerAnexo.useMutation();
   useMemo(() => {
     if (!isEdit || !lembretesExistentes || lembretesExistentes.length === 0) return;
     const mins = Array.from(new Set(lembretesExistentes.map((l: any) => l.minutosAntes)));
@@ -1367,9 +1407,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   };
 
   const criarCompMut = trpc.agenda.criarCompromisso.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success("Compromisso criado");
-      if (data?.id) dispararLembretesPara(data.id);
+      if (data?.id) {
+        dispararLembretesPara(data.id);
+        await persistirAnexosPara(data.id);
+      }
       reset();
       onSuccess();
     },
@@ -1382,10 +1425,11 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   });
 
   const atualizarMut = (trpc.agenda as any).atualizar.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Evento atualizado");
       if (eventoEdit?.id && eventoEdit?.fonte === "compromisso") {
         dispararLembretesPara(eventoEdit.id);
+        await persistirAnexosPara(eventoEdit.id);
       }
       reset();
       onSuccess();
@@ -1403,10 +1447,23 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
     onOpenChange(false);
   };
 
+  // Constrói ISO com timezone correta. `new Date("2026-05-17T14:30:00")` no
+  // browser usa o TZ local (BRT por ex.), então .toISOString() devolve em UTC
+  // — o que o backend interpreta corretamente independente do TZ do server.
+  // Sem isso, ficava ambíguo e o horário pulava 3h pra frente/trás no DB.
+  const isoLocalParaUTC = (dia: string, hora: string): string => {
+    const horaParts = hora.split(":");
+    const h = Number(horaParts[0] || "0");
+    const m = Number(horaParts[1] || "0");
+    const [y, mo, d] = dia.split("-").map(Number);
+    const dt = new Date(y, (mo || 1) - 1, d || 1, h, m, 0, 0);
+    return dt.toISOString();
+  };
+
   const handleSubmit = () => {
     const dateTimeStr = tipoEvento === "compromisso"
-      ? (horaInicio ? `${dataInicio}T${horaInicio}:00` : `${dataInicio}T09:00:00`)
-      : (dataInicio ? `${dataInicio}T23:59:00` : "");
+      ? isoLocalParaUTC(dataInicio, horaInicio || "09:00")
+      : (dataInicio ? isoLocalParaUTC(dataInicio, "23:59") : "");
 
     if (isEdit && eventoEdit) {
       atualizarMut.mutate({
@@ -1420,6 +1477,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
         local: tipoEvento === "compromisso" ? (local || null) : undefined,
         prioridade: prioridade as any,
         contatoId,
+        contatoTelefone: contatoTelefone || null,
         processoId,
       });
       return;
@@ -1435,18 +1493,77 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
         prioridade: prioridade as any,
         diaInteiro: !horaInicio,
         contatoId: contatoId ?? undefined,
+        contatoTelefone: contatoTelefone || undefined,
         processoId: processoId ?? undefined,
       });
     } else {
       criarTarefaMut.mutate({
         titulo,
         descricao: descricao || undefined,
-        dataVencimento: dataInicio ? `${dataInicio}T23:59:00` : undefined,
+        dataVencimento: dataInicio ? isoLocalParaUTC(dataInicio, "23:59") : undefined,
         prioridade: prioridade as any,
         contatoId: contatoId ?? undefined,
         processoId: processoId ?? undefined,
       });
     }
+  };
+
+  const persistirAnexosPara = async (agendamentoId: number) => {
+    // Insere os anexos novos (sem id) — anexos existentes (com id) ficam intactos
+    const novos = anexos.filter((a) => !a.id);
+    for (const a of novos) {
+      try {
+        await (adicionarAnexoMut.mutateAsync as any)({
+          agendamentoId,
+          url: a.url,
+          nome: a.nome,
+          mimeType: a.mimeType,
+          tamanho: a.tamanho,
+        });
+      } catch (err: any) {
+        toast.error(`Falha ao salvar anexo ${a.nome}: ${err.message}`);
+      }
+    }
+  };
+
+  const handleUploadArquivo = async (file: File) => {
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 50MB).");
+      return;
+    }
+    setUploadingAnexo(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const result = await (uploadMut.mutateAsync as any)({
+        nome: file.name,
+        tipo: file.type || "application/octet-stream",
+        base64,
+        tamanho: file.size,
+      });
+      setAnexos((prev) => [...prev, {
+        url: result.url,
+        nome: result.nome,
+        mimeType: result.tipo,
+        tamanho: result.tamanho,
+      }]);
+      toast.success(`${file.name} anexado`);
+    } catch (err: any) {
+      toast.error(`Falha no upload: ${err.message}`);
+    } finally {
+      setUploadingAnexo(false);
+    }
+  };
+
+  const handleRemoverAnexo = (anexo: { id?: number; url: string }) => {
+    if (anexo.id) {
+      (removerAnexoMut.mutate as any)({ id: anexo.id });
+    }
+    setAnexos((prev) => prev.filter((a) => a.url !== anexo.url));
   };
 
   return (
@@ -1562,42 +1679,101 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 </div>
               </div>
 
-              {/* Quem avisar */}
+              {/* Quem avisar — seletor melhorado */}
               <div>
-                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">
-                  Quem avisar {lembreteDestinatarios.length > 0 && <span className="text-blue-600 normal-case font-bold">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>}
-                </p>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] font-semibold text-blue-700/85 uppercase tracking-wider">
+                    Quem avisar
+                    {lembreteDestinatarios.length > 0 && (
+                      <span className="text-blue-600 normal-case font-bold ml-1">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>
+                    )}
+                  </p>
+                  <div className="flex gap-1.5 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setLembreteDestinatarios(colaboradores.map((c) => c.id))}
+                      className="text-blue-600 hover:underline font-medium"
+                    >
+                      Todos
+                    </button>
+                    <span className="text-slate-300">·</span>
+                    <button
+                      type="button"
+                      onClick={() => setLembreteDestinatarios([])}
+                      className="text-slate-500 hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chips dos selecionados — visualização rápida */}
+                {lembreteDestinatarios.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {lembreteDestinatarios.map((id) => {
+                      const col = colaboradores.find((c) => c.id === id);
+                      if (!col) return null;
+                      return (
+                        <span
+                          key={id}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-medium"
+                        >
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
+                            {gerarIniciais(col.nome)}
+                          </span>
+                          <span className="truncate max-w-[100px]">{col.nome.split(" ")[0]}</span>
+                          <button
+                            type="button"
+                            onClick={() => setLembreteDestinatarios(lembreteDestinatarios.filter((d) => d !== id))}
+                            className="hover:text-rose-200"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Busca + lista */}
+                <Input
+                  placeholder="Buscar colaborador por nome…"
+                  value={destinatariosBusca}
+                  onChange={(e) => setDestinatariosBusca(e.target.value)}
+                  className="h-8 text-xs bg-white rounded-lg mb-1.5"
+                />
                 {colaboradores.length === 0 ? (
                   <p className="text-[10.5px] text-slate-500 italic">Carregando colaboradores…</p>
                 ) : (
-                  <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
-                    {colaboradores.map((col) => {
-                      const ativo = lembreteDestinatarios.includes(col.id);
-                      return (
-                        <label
-                          key={col.id}
-                          className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer text-[11px] transition-colors ${
-                            ativo ? "bg-blue-100 border border-blue-300" : "bg-white border border-slate-200 hover:bg-slate-50"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={ativo}
-                            onChange={() => setLembreteDestinatarios(
+                  <div className="max-h-40 overflow-y-auto bg-white rounded-lg border border-blue-200/50 divide-y divide-slate-100">
+                    {colaboradores
+                      .filter((c) => !destinatariosBusca || c.nome.toLowerCase().includes(destinatariosBusca.toLowerCase()))
+                      .map((col) => {
+                        const ativo = lembreteDestinatarios.includes(col.id);
+                        return (
+                          <button
+                            type="button"
+                            key={col.id}
+                            onClick={() => setLembreteDestinatarios(
                               ativo ? lembreteDestinatarios.filter((d) => d !== col.id) : [...lembreteDestinatarios, col.id],
                             )}
-                            className="w-3 h-3"
-                          />
-                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
-                            {gerarIniciais(col.nome)}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate" title={col.nome}>{col.nome}</p>
-                            {col.cargo && <p className="text-[9px] text-slate-500 truncate">{col.cargo}</p>}
-                          </div>
-                        </label>
-                      );
-                    })}
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 text-left transition-colors ${
+                              ativo ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}>
+                              {gerarIniciais(col.nome)}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-semibold truncate" title={col.nome}>{col.nome}</p>
+                              {col.cargo && <p className="text-[9.5px] text-slate-500 truncate">{col.cargo}</p>}
+                            </div>
+                            {ativo && (
+                              <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -1690,6 +1866,32 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
             )}
           </div>
 
+          {/* Telefone/WhatsApp livre (independente do contato CRM) */}
+          <div>
+            <Label className="text-xs">Telefone / WhatsApp do contato (opcional)</Label>
+            <div className="mt-1 relative">
+              <PhoneCall className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder="(85) 9 9999-0000"
+                value={contatoTelefone}
+                onChange={(e) => setContatoTelefone(e.target.value)}
+                className="pl-9 h-9"
+              />
+              {contatoTelefone && contatoTelefone.replace(/\D/g, "").length >= 10 && (
+                <a
+                  href={`https://wa.me/55${contatoTelefone.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1"
+                  title="Abrir no WhatsApp"
+                >
+                  💬 wa.me
+                </a>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">Útil pra contato rápido antes/durante a reunião — não vincula contato do CRM.</p>
+          </div>
+
           {/* Processo monitorado */}
           <div className="relative">
             <Label className="text-xs">Processo vinculado (opcional)</Label>
@@ -1745,6 +1947,75 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
             <Label className="text-xs">Descrição</Label>
             <Textarea placeholder="Detalhes..." value={descricao} onChange={e => setDescricao(e.target.value)} rows={2} className="mt-1" />
           </div>
+
+          {/* ANEXOS — só pra compromissos */}
+          {tipoEvento === "compromisso" && (
+            <div className="rounded-xl bg-gradient-to-br from-violet-50/60 to-fuchsia-50/40 border border-violet-200/70 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shrink-0">
+                    <Briefcase className="h-3 w-3 text-white" />
+                  </div>
+                  <p className="text-xs font-bold text-violet-900 tracking-tight">Arquivos da reunião</p>
+                  {anexos.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                      {anexos.length}
+                    </span>
+                  )}
+                </div>
+                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-600 text-white text-[10.5px] font-semibold cursor-pointer hover:bg-violet-700 transition-colors">
+                  {uploadingAnexo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  {uploadingAnexo ? "Enviando…" : "Adicionar"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingAnexo}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadArquivo(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              {anexos.length === 0 ? (
+                <p className="text-[10.5px] text-violet-700/70 italic">PDF, imagens ou documentos pra ter à mão durante a reunião.</p>
+              ) : (
+                <div className="space-y-1">
+                  {anexos.map((a, i) => {
+                    const isImg = a.mimeType.startsWith("image/");
+                    const sizeKB = a.tamanho < 1024 * 1024 ? `${Math.round(a.tamanho / 1024)} KB` : `${(a.tamanho / 1024 / 1024).toFixed(1)} MB`;
+                    return (
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 bg-white border border-violet-200/60 rounded-lg">
+                        <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType.includes("pdf") ? "📄" : "📎"}</span>
+                        <div className="flex-1 min-w-0">
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-medium text-violet-700 hover:underline truncate block"
+                            title={a.nome}
+                          >
+                            {a.nome}
+                          </a>
+                          <p className="text-[9.5px] text-slate-500">{sizeKB}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverAnexo(a)}
+                          className="text-slate-400 hover:text-rose-600 p-1"
+                          title="Remover"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
