@@ -427,11 +427,16 @@ export function iniciarJobs() {
   // A cada 60 minutos: revalida credenciais ativas do cofre.
   // Sessões TJCE expiram em 90min — revalidamos a cada 75min pra
   // garantir sessão fresca antes do cron de monitoramento usar.
-  // Inicia 90 segundos após boot pra não competir com outros jobs.
+  //
+  // 1ª chamada (90s após boot) usa `force: true`: ignora o filtro de
+  // idade pra cobrir o cenário de deploy. Sessões válidas no DB podem
+  // ter caído no tribunal durante o downtime; revalidar tudo garante
+  // que a primeira ação do usuário pós-deploy não falhe com "sessão
+  // expirada".
   setTimeout(async () => {
     try {
       const { revalidarCofreCredenciais } = await import("../escritorio/cron-revalidar-cofre");
-      await revalidarCofreCredenciais();
+      await revalidarCofreCredenciais({ force: true });
     } catch (err) {
       log.error({ err: err instanceof Error ? err.message : err }, "[Cron] revalidarCofreCredenciais primeira falhou");
     }

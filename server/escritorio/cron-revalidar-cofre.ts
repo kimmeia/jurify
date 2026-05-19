@@ -24,7 +24,9 @@ const log = createLogger("cron-revalidar-cofre");
 /** Idade máxima de uma sessão antes de revalidar (75 min — abaixo dos 90 do PJE). */
 const IDADE_MAXIMA_MS = 75 * 60 * 1000;
 
-export async function revalidarCofreCredenciais(): Promise<{
+export async function revalidarCofreCredenciais(
+  options: { force?: boolean } = {},
+): Promise<{
   total: number;
   revalidadas: number;
   okeis: number;
@@ -44,24 +46,41 @@ export async function revalidarCofreCredenciais(): Promise<{
   // no sucesso). Se a senha mudou de fato, a credencial fica em "erro"
   // (warning logado) até intervenção manual — mas reabre tentativa
   // toda hora. Status "removida" continua sendo excluído.
+  //
+  // `force: true` ignora o filtro de idade — usado no boot pós-deploy
+  // pra garantir que TODAS as sessões PJe TJCE são renovadas, mesmo as
+  // validadas há <75min (que podem ter caído durante o downtime do deploy).
+  const filtroIdade = options.force
+    ? undefined
+    : or(
+        isNull(cofreCredenciais.ultimoLoginTentativaEm),
+        lt(cofreCredenciais.ultimoLoginTentativaEm, corte),
+      );
+
   const candidatas = await db
     .select()
     .from(cofreCredenciais)
     .where(
-      and(
-        or(
-          eq(cofreCredenciais.status, "ativa"),
-          eq(cofreCredenciais.status, "validando"),
-          eq(cofreCredenciais.status, "erro"),
-        ),
-        or(
-          isNull(cofreCredenciais.ultimoLoginTentativaEm),
-          lt(cofreCredenciais.ultimoLoginTentativaEm, corte),
-        ),
-      ),
+      filtroIdade
+        ? and(
+            or(
+              eq(cofreCredenciais.status, "ativa"),
+              eq(cofreCredenciais.status, "validando"),
+              eq(cofreCredenciais.status, "erro"),
+            ),
+            filtroIdade,
+          )
+        : or(
+            eq(cofreCredenciais.status, "ativa"),
+            eq(cofreCredenciais.status, "validando"),
+            eq(cofreCredenciais.status, "erro"),
+          ),
     );
 
-  log.info({ candidatas: candidatas.length, corte: corte.toISOString() }, "[cron-cofre] iniciando revalidação");
+  log.info(
+    { candidatas: candidatas.length, corte: corte.toISOString(), force: !!options.force },
+    "[cron-cofre] iniciando revalidação",
+  );
 
   let revalidadas = 0;
   let okeis = 0;
