@@ -1543,6 +1543,14 @@ export const motorMonitoramentos = mysqlTable(
     partesJson: text("partes_json"),
     ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
     ultimoErro: text("ultimo_erro"),
+    /**
+     * "Desde quando alertar" — usado em monitoramentos `novas_acoes`.
+     * Normalmente = `contatos.createdAt` (data em que o cliente foi
+     * cadastrado). CNJs ajuizados ANTES dessa data não viram alerta
+     * (filtrados como baseline silencioso). Se NULL, todos os CNJs
+     * detectados são candidatos a alerta (comportamento antigo).
+     */
+    dataReferenciaCadastro: timestamp("data_referencia_cadastro"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
   },

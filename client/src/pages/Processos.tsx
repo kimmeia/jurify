@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1039,6 +1040,12 @@ function MonitorarTab() {
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
   const [deletarTarget, setDeletarTarget] = useState<{ id: number; nome: string } | null>(null);
 
+  // Estado pra "Atualizar todos" — drawer com lista + progress. ID da
+  // operação fica no state pra suportar "user fecha drawer e reabre"
+  // sem perder progresso (operação roda server-side independente).
+  const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
+  const [atualDrawerOpen, setAtualDrawerOpen] = useState(false);
+
   // Suporte a deep-link de Clientes.tsx: ?abrirMonitor=1&cnj=...
   // abre o modal já preenchido com o CNJ vindo do vínculo de processo
   // do cliente, evitando re-digitação. Limpa os params após consumir
@@ -1092,6 +1099,71 @@ function MonitorarTab() {
 
   const semCredenciais = !credsAtivas || credsAtivas.length === 0;
 
+  // "Atualizar todos" — mutation + polling do progresso
+  const atualizarTodosMut = (trpc.processos as any).atualizarTodosMonitoramentos.useMutation({
+    onSuccess: (d: any) => {
+      setAtualOperacaoId(d.operacaoId);
+      setAtualDrawerOpen(true);
+      toast.success(`Atualizando ${d.total} monitoramento(s)…`);
+    },
+    onError: (e: any) => toast.error("Falha ao iniciar atualização", { description: e.message }),
+  });
+
+  const { data: progresso } = (trpc.processos as any).progressoAtualizacao.useQuery(
+    { operacaoId: atualOperacaoId },
+    {
+      enabled: !!atualOperacaoId,
+      // Refetch a cada 2s enquanto rodando. Quando 'concluido', backend
+      // continua devolvendo até TTL expirar — refetchInterval=false desliga
+      // o poll, mas o data ainda fica disponível.
+      refetchInterval: (q: any) => {
+        const d = q?.state?.data;
+        if (!d || d.status === "rodando") return 2000;
+        return false;
+      },
+      retry: false,
+    },
+  );
+
+  // Quando uma operação termina, recarrega a lista de monitoramentos
+  // (alguns podem ter ultimoErro/movs novas etc — refresh do badge).
+  useEffect(() => {
+    if (progresso?.status === "concluido") {
+      refetch();
+    }
+  }, [progresso?.status, refetch]);
+
+  // Retomar operações em andamento quando user volta pra página.
+  // operacoesPendentes lê o runner em memória do servidor.
+  const { data: pendentes } = (trpc.processos as any).operacoesPendentes.useQuery(undefined, {
+    enabled: !atualOperacaoId,
+    retry: false,
+  });
+  useEffect(() => {
+    if (!atualOperacaoId && pendentes && pendentes.length > 0) {
+      // Pega a mais recente pra retomar exibição
+      setAtualOperacaoId(pendentes[0].operacaoId);
+      setAtualDrawerOpen(true);
+    }
+  }, [pendentes, atualOperacaoId]);
+
+  // SSE: invalida queries quando nova movimentação/ação detectada em tempo
+  // real. Listener vai pro window event dispatchado pelo useNotificacoes.
+  useEffect(() => {
+    const onNotif = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail;
+      if (!detail) return;
+      // Eventos relevantes pra MonitorarTab
+      if (detail.tipo === "movimentacao_processo" || detail.tipo === "nova_acao") {
+        refetch();
+      }
+    };
+    window.addEventListener("jurify:notif", onNotif);
+    return () => window.removeEventListener("jurify:notif", onNotif);
+  }, [refetch]);
+
+  const totalAtualizaveis = listaMons.filter((m: any) => m.status === "ativo").length;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -1104,12 +1176,100 @@ function MonitorarTab() {
                 Requer credencial OAB cadastrada no Cofre.
               </p>
             </div>
-            <Button size="sm" onClick={() => setNovoOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1" />Novo
-            </Button>
+            <div className="flex items-center gap-2">
+              {totalAtualizaveis > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+                  onClick={() => atualizarTodosMut.mutate({})}
+                  title="Roda os polls de todos os monitoramentos ativos em paralelo (limit 3). Sem custo de créditos."
+                >
+                  {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Atualizar todos
+                </Button>
+              )}
+              <Button size="sm" onClick={() => setNovoOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" />Novo
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Drawer de progresso da atualização em lote */}
+      <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {progresso?.status === "concluido"
+                ? "Atualização concluída"
+                : "Atualizando monitoramentos…"}
+            </DialogTitle>
+            <DialogDescription>
+              {progresso
+                ? `${progresso.processados}/${progresso.total} processados — ${progresso.ok} ok, ${progresso.erro} erro${progresso.detectadasTotal > 0 ? `, ${progresso.detectadasTotal} novidade(s)` : ""}`
+                : "Preparando…"}
+            </DialogDescription>
+          </DialogHeader>
+          {progresso && (
+            <>
+              <Progress
+                value={progresso.total > 0 ? (progresso.processados / progresso.total) * 100 : 0}
+                className="h-2"
+              />
+              <div className="space-y-1 max-h-[50vh] overflow-y-auto mt-3">
+                {progresso.monitores.map((m: any) => (
+                  <div key={m.monitoramentoId} className="flex items-center gap-2 text-xs py-1.5 border-b border-dashed last:border-0">
+                    <div className="w-6 shrink-0 text-center">
+                      {m.status === "pendente" && <span className="text-muted-foreground">⏳</span>}
+                      {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-blue-500 inline" />}
+                      {m.status === "ok" && <span className="text-emerald-600">✓</span>}
+                      {m.status === "erro" && <span className="text-red-600">✗</span>}
+                    </div>
+                    <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
+                    <Badge variant="outline" className="text-[9px] shrink-0">
+                      {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
+                    </Badge>
+                    {m.status === "ok" && m.baseline && (
+                      <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
+                    )}
+                    {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
+                      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                    )}
+                    {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
+                      <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
+                    )}
+                    {m.status === "erro" && (
+                      <span
+                        className="text-[9px] text-red-600 shrink-0 max-w-[180px] truncate"
+                        title={m.erro}
+                      >
+                        {m.erro}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <DialogFooter>
+            <Button
+              variant={progresso?.status === "concluido" ? "default" : "outline"}
+              onClick={() => {
+                setAtualDrawerOpen(false);
+                if (progresso?.status === "concluido") setAtualOperacaoId(null);
+              }}
+            >
+              {progresso?.status === "concluido" ? "Fechar" : "Continuar em segundo plano"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {semCredenciais && (
         <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 flex items-start gap-3">
