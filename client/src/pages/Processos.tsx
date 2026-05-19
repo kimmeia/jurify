@@ -102,6 +102,11 @@ function MonitorHealthDot({
     );
   }
 
+  // Sem ultimoErro: vermelho NUNCA aparece por tempo decorrido. Cron de
+  // monitoramento marca `ultimoErro` quando falha de fato — usar isso é
+  // mais honesto que assumir falha por silêncio (pode ser só que o cron
+  // não rodou ainda pra esse monitor). Amarelo segue como "atenção"
+  // para >7 dias sem update.
   if (horasDesdeUpdate <= 168) { // 7 dias
     return (
       <span className="relative flex h-3 w-3 shrink-0" title={`Atenção — sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias`}>
@@ -111,8 +116,8 @@ function MonitorHealthDot({
   }
 
   return (
-    <span className="relative flex h-3 w-3 shrink-0" title={`ALERTA — sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias. Possível falha de conexão.`}>
-      <span className="animate-pulse h-3 w-3 rounded-full bg-red-500" />
+    <span className="relative flex h-3 w-3 shrink-0" title={`Sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias — cron pode ter pulado, mas sem erro registrado`}>
+      <span className="h-3 w-3 rounded-full bg-amber-500/70" />
     </span>
   );
 }
