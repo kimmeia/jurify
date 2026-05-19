@@ -8,10 +8,9 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { escapeLikePattern } from "../_core/sql-helpers";
-import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
-import { tarefas, colaboradores, users } from "../../drizzle/schema";
-import { eq, and, desc, or, sql, gte, lte, like } from "drizzle-orm";
+import { tarefas, colaboradores, users, contatos } from "../../drizzle/schema";
+import { eq, and, desc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { TRPCError } from "@trpc/server";
 
@@ -201,24 +200,64 @@ export const tarefasRouter = router({
       return { success: true };
     }),
 
-  /** Contadores rápidos para badges */
+  /**
+   * Contadores rápidos para badges (Pendentes / Vencidas / Minhas).
+   *
+   * Respeita permissões: atendentes (verProprios) só contam tarefas que
+   * são responsáveis, criaram OU cujos clientes são responsabilidade
+   * deles. Dono e cargos com verTodos contam o escritório inteiro.
+   */
   contadores: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return { pendentes: 0, vencidas: 0, minhas: 0 };
+    const perm = await checkPermission(ctx.user.id, "tarefas", "ver", { fallbackModulo: "agenda" });
+    if (!perm.allowed) return { pendentes: 0, vencidas: 0, minhas: 0 };
+
     const db = await getDb();
     if (!db) return { pendentes: 0, vencidas: 0, minhas: 0 };
 
-    const eid = esc.escritorio.id;
-    const cid = esc.colaborador.id;
+    const eid = perm.escritorioId;
+    const cid = perm.colaboradorId;
+    const filtrarProprios = !perm.verTodos && perm.verProprios;
+
+    // verProprios: tarefas onde EU sou responsável OU EU criei OU
+    // o cliente atrelado é meu (responsavelId do contato = eu).
+    let clientesDoColab: number[] = [];
+    if (filtrarProprios) {
+      const rows = await db
+        .select({ id: contatos.id })
+        .from(contatos)
+        .where(and(eq(contatos.escritorioId, eid), eq(contatos.responsavelId, cid)));
+      clientesDoColab = rows.map((r) => r.id);
+    }
+
+    const ownFilter = filtrarProprios
+      ? [or(
+          eq(tarefas.responsavelId, cid),
+          eq(tarefas.criadoPor, cid),
+          ...(clientesDoColab.length > 0 ? [inArray(tarefas.contatoId, clientesDoColab)] : []),
+        )!]
+      : [];
 
     const [pend] = await db.select({ count: sql<number>`COUNT(*)` }).from(tarefas)
-      .where(and(eq(tarefas.escritorioId, eid), or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))));
+      .where(and(
+        eq(tarefas.escritorioId, eid),
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        ...ownFilter,
+      ));
 
     const [venc] = await db.select({ count: sql<number>`COUNT(*)` }).from(tarefas)
-      .where(and(eq(tarefas.escritorioId, eid), or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")), sql`dataVencimento < NOW() AND dataVencimento IS NOT NULL`));
+      .where(and(
+        eq(tarefas.escritorioId, eid),
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+        sql`dataVencimento < NOW() AND dataVencimento IS NOT NULL`,
+        ...ownFilter,
+      ));
 
     const [minhas] = await db.select({ count: sql<number>`COUNT(*)` }).from(tarefas)
-      .where(and(eq(tarefas.escritorioId, eid), eq(tarefas.responsavelId, cid), or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento"))));
+      .where(and(
+        eq(tarefas.escritorioId, eid),
+        eq(tarefas.responsavelId, cid),
+        or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+      ));
 
     return {
       pendentes: Number((pend as { count: number } | undefined)?.count || 0),

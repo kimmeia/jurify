@@ -20,6 +20,11 @@ import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
 import {
+  inicioDoDiaNoFuso,
+  dataHojeBR,
+  FUSO_HORARIO_PADRAO,
+} from "../../shared/escritorio-types";
+import {
   FUSO_HORARIO_PADRAO,
   inicioDoDiaNoFuso,
   fimDoDiaNoFuso,
@@ -489,8 +494,18 @@ export const agendaRouter = router({
         )!]
       : [];
 
-    const now = new Date();
-    const hojeInicio = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // "Hoje" precisa ser calculado no fuso do escritório — servidor Railway
+    // roda em UTC, então `new Date(now.getFullYear(), ...)` produzia o dia
+    // ERRADO após 21h BRT (já era dia+1 em UTC). Usuários paulistas viam
+    // badge "Hoje: 0" às 22h enquanto tinham 5 compromissos pra amanhã ainda.
+    const [esc] = await db
+      .select({ fusoHorario: escritorios.fusoHorario })
+      .from(escritorios)
+      .where(eq(escritorios.id, escritorioId))
+      .limit(1);
+    const fuso = esc?.fusoHorario || FUSO_HORARIO_PADRAO;
+    const hojeStr = dataHojeBR(fuso);
+    const hojeInicio = inicioDoDiaNoFuso(hojeStr, fuso);
     const hojeFim = new Date(hojeInicio.getTime() + 86400000);
 
     const agHoje = await db.select({ id: agendamentos.id }).from(agendamentos)
