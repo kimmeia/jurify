@@ -1147,10 +1147,41 @@ export const dashboardRouter = router({
         };
       }
 
-      // Modo gestor: agrega do escritório + ranking por colaborador.
+      // Modo gestor: agrega APENAS dos colaboradores do setor operacional
+      // do escritório. Antes pegava do escritório inteiro — gestor operacional
+      // via tarefas/agenda de comerciais, financeiros, etc. Agora o ranking
+      // e os totais da "equipe" refletem só quem é do setor operacional.
+
+      // 1) IDs dos colaboradores ativos com setor tipo='operacional'.
+      const operacionaisRows = await db
+        .select({
+          id: colaboradores.id,
+          userName: users.name,
+          setorNome: setores.nome,
+          setorTipo: setores.tipo,
+        })
+        .from(colaboradores)
+        .innerJoin(users, eq(colaboradores.userId, users.id))
+        .leftJoin(setores, eq(colaboradores.setorId, setores.id))
+        .where(and(
+          eq(colaboradores.escritorioId, eid),
+          eq(colaboradores.ativo, true),
+          eq(setores.tipo, "operacional"),
+        ));
+      const idsOperacionais = operacionaisRows.map((c) => c.id);
+
+      // 2) Totais da equipe — filtrando responsavelId IN (idsOperacionais).
+      // Quando idsOperacionais vazio, retorna 0 (inArray com [] = false).
+      const filtroEquipeTar = idsOperacionais.length > 0
+        ? [inArray(tarefas.responsavelId, idsOperacionais)]
+        : [sql`1=0`];
+      const filtroEquipeAg = idsOperacionais.length > 0
+        ? [inArray(agendamentos.responsavelId, idsOperacionais)]
+        : [sql`1=0`];
+
       const [equipeTarefas, equipeAgenda] = await Promise.all([
-        buildTarefasAgg([]),
-        buildAgendaAgg([]),
+        buildTarefasAgg(filtroEquipeTar),
+        buildAgendaAgg(filtroEquipeAg),
       ]);
       const equipeTaxa = taxaConclusaoNoPrazo(
         equipeTarefas.concluidasNoPrazo,
@@ -1162,10 +1193,16 @@ export const dashboardRouter = router({
         taxaNoPrazo: equipeTaxa,
       };
 
-      // Ranking: 1 row por colaborador. Faz 2 group-bys (tarefas, agenda) e
-      // combina por colaboradorId. Mesma semântica do `buildTarefasAgg`:
-      // pendentes/atrasadas são "agora", concluídas filtradas por concluidaAt
-      // no range.
+      // 3) Group-by por colaborador — também restrito ao setor operacional.
+      // Quando vazio, drizzle/sql aceita inArray com array vazio (gera
+      // sempre false), retornando 0 rows.
+      const filtroSetorTar = idsOperacionais.length > 0
+        ? inArray(tarefas.responsavelId, idsOperacionais)
+        : sql`1=0`;
+      const filtroSetorAg = idsOperacionais.length > 0
+        ? inArray(agendamentos.responsavelId, idsOperacionais)
+        : sql`1=0`;
+
       const tarefasPorColab = await db
         .select({
           responsavelId: tarefas.responsavelId,
@@ -1188,7 +1225,7 @@ export const dashboardRouter = router({
             THEN 1 ELSE 0 END)`,
         })
         .from(tarefas)
-        .where(eq(tarefas.escritorioId, eid))
+        .where(and(eq(tarefas.escritorioId, eid), filtroSetorTar))
         .groupBy(tarefas.responsavelId);
 
       const agendaPorColab = await db
@@ -1203,25 +1240,12 @@ export const dashboardRouter = router({
             THEN 1 ELSE 0 END)`,
         })
         .from(agendamentos)
-        .where(eq(agendamentos.escritorioId, eid))
+        .where(and(eq(agendamentos.escritorioId, eid), filtroSetorAg))
         .groupBy(agendamentos.responsavelId);
 
-      // Lista de colaboradores do escritório (ativos) pra preencher o ranking
-      // mesmo com 0 atividade.
-      const colabs = await db
-        .select({
-          id: colaboradores.id,
-          userName: users.name,
-          setorNome: setores.nome,
-          setorTipo: setores.tipo,
-        })
-        .from(colaboradores)
-        .innerJoin(users, eq(colaboradores.userId, users.id))
-        .leftJoin(setores, eq(colaboradores.setorId, setores.id))
-        .where(and(
-          eq(colaboradores.escritorioId, eid),
-          eq(colaboradores.ativo, true),
-        ));
+      // 4) Lista de colaboradores DO SETOR pra montar ranking — quem não
+      // teve atividade aparece com zeros (não some).
+      const colabs = operacionaisRows;
 
       const mapaTar = new Map<number, { noPrazo: number; atrasadas: number; concluidasNoPrazo: number; concluidasFora: number }>();
       for (const r of tarefasPorColab) {
