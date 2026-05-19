@@ -517,15 +517,11 @@ export default function Clientes() {
     [clientesFiltrados, selecionados],
   );
 
-  // Contadores pros chips (server-side traz só do segmento atual; pra
-  // mostrar contagem precisa de estatistica geral OU fallback do data crudo)
-  const totalDoEscritorio = stats?.total ?? data?.totalPaginas ? (data as any)?.totalRegistros : null;
-  const clientesComDebito = useMemo(() => {
-    if (!resumoFinanceiroBatch) return 0;
-    return (data?.clientes || []).filter(
-      (c: any) => Number(resumoFinanceiroBatch[c.id]?.vencido ?? 0) > 0,
-    ).length;
-  }, [data, resumoFinanceiroBatch]);
+  // Total de inadimplentes do ESCRITÓRIO inteiro — vem do procedure
+  // estatisticas (COUNT DISTINCT contatos com cobrança vencida).
+  // Antes calculávamos client-side só com os 50 da página atual,
+  // resultando em contagem falsa pra escritórios com mais clientes.
+  const clientesComDebito: number = (stats as any)?.inadimplentes ?? 0;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
