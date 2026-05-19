@@ -354,19 +354,42 @@ export default function Financeiro() {
     setConfirmBulkCancel(false);
   };
 
-  // ─── Derivações pro hero (top devedores, receita prevista 7d) ─────────────
-  // Hooks DEVEM vir antes de qualquer early return (regra dos hooks).
-  // Sem isso, React error #310: "Rendered more hooks than during the
-  // previous render" quando `loadStatus` muda de true→false.
-  //
-  // Calculadas a partir da lista de cobranças já carregada, sem query extra.
+  // ─── Queries dedicadas pra cards de atenção ───────────────────────────────
+  // ANTES: calculávamos de `cobrancas.items` (página atual filtrada por
+  // range/status), o que escondia OVERDUE antigas e PENDING futuras.
+  // AGORA: 2 queries dedicadas — uma pra todos os OVERDUE do escritório
+  // e outra pros PENDING dos próximos 7 dias. Cache de 5min (mesmo que
+  // a lista principal).
+  const hoje7d = useMemo(() => {
+    const h = new Date();
+    h.setHours(0, 0, 0, 0);
+    const hojeStr = h.toISOString().slice(0, 10);
+    const sete = new Date(h);
+    sete.setDate(sete.getDate() + 7);
+    return { hojeStr, fimStr: sete.toISOString().slice(0, 10) };
+  }, []);
+
+  const { data: cobrancasVencidas } = trpc.asaas.listarCobrancas.useQuery(
+    { status: ["OVERDUE"], limit: 100 },
+    { retry: false, refetchInterval: REFRESH_MS, enabled: !!statusAsaas?.conectado },
+  );
+
+  const { data: cobrancasProximas7d } = trpc.asaas.listarCobrancas.useQuery(
+    {
+      status: ["PENDING"],
+      vencimentoInicio: hoje7d.hojeStr,
+      vencimentoFim: hoje7d.fimStr,
+      limit: 100,
+    },
+    { retry: false, refetchInterval: REFRESH_MS, enabled: !!statusAsaas?.conectado },
+  );
+
   // Top devedores: agrupa OVERDUE por contato, soma valor, pega top 3.
   const topDevedores = useMemo(() => {
-    const lista: any[] = (cobrancas as any)?.items || [];
+    const lista: any[] = (cobrancasVencidas as any)?.items || [];
     const grupos = new Map<string, { nome: string; valor: number; qtd: number; maxDias: number }>();
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     for (const c of lista) {
-      if (c.status !== "OVERDUE") continue;
       const nome = (c as any).nomeContato || "—";
       const valor = parseFloat(c.valor) || 0;
       const venc = c.vencimento ? new Date(c.vencimento + "T12:00:00") : null;
@@ -378,31 +401,26 @@ export default function Financeiro() {
       grupos.set(nome, atual);
     }
     return Array.from(grupos.values()).sort((a, b) => b.valor - a.valor).slice(0, 3);
-  }, [cobrancas]);
+  }, [cobrancasVencidas]);
 
-  // Receita prevista nos próximos 7 dias: PENDING com vencimento entre hoje e +7d
+  // Receita prevista nos próximos 7 dias (já vem filtrada do backend)
   const receitaPrevista7d = useMemo(() => {
-    const lista: any[] = (cobrancas as any)?.items || [];
+    const lista: any[] = (cobrancasProximas7d as any)?.items || [];
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const limite = new Date(hoje); limite.setDate(limite.getDate() + 7);
     return lista
-      .filter((c: any) => {
-        if (c.status !== "PENDING") return false;
-        if (!c.vencimento) return false;
-        const v = new Date(c.vencimento + "T12:00:00");
-        return v >= hoje && v <= limite;
-      })
       .map((c: any) => ({
         id: c.id,
         nome: c.nomeContato || "—",
         valor: parseFloat(c.valor) || 0,
         forma: c.formaPagamento || "UNDEFINED",
         vencimento: c.vencimento,
-        diasAte: Math.max(0, Math.ceil((new Date(c.vencimento + "T12:00:00").getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24))),
+        diasAte: c.vencimento
+          ? Math.max(0, Math.ceil((new Date(c.vencimento + "T12:00:00").getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)))
+          : 0,
       }))
       .sort((a: any, b: any) => a.diasAte - b.diasAte)
-      .slice(0, 3);
-  }, [cobrancas]);
+      .slice(0, 5);
+  }, [cobrancasProximas7d]);
   const totalReceitaPrevista7d = receitaPrevista7d.reduce((a: number, b: any) => a + b.valor, 0);
 
   // % inadimplência derivado dos KPIs
@@ -573,38 +591,36 @@ export default function Financeiro() {
         próprios — total comissionável, sem decisão, próximo lançamento).
       */}
       <Tabs value={tab} onValueChange={setTab}>
-        <div className="sticky top-0 z-20 py-2 bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 backdrop-blur-sm">
-          <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-1.5 inline-flex gap-1">
-            <TabsList className="bg-transparent gap-1 p-0 h-auto">
-              <TabsTrigger
-                value="cobrancas"
-                className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-              >
-                <Receipt className="h-3.5 w-3.5" />
-                Cobranças
-                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded-full tabular-nums">
-                  {kpis?.totalCobrancas ?? 0}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="clientes"
-                className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-              >
-                <Users className="h-3.5 w-3.5" />
-                Clientes
-                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded-full tabular-nums">
-                  {clientesVinculados?.length ?? 0}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="despesas"
-                className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-              >
-                <TrendingDown className="h-3.5 w-3.5" />
-                Despesas
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <div className="sticky top-0 z-20 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-gradient-to-br from-slate-50/95 to-white/95 backdrop-blur-md">
+          <TabsList className="!bg-slate-100 !h-auto !p-1.5 inline-flex gap-1 rounded-xl border border-slate-200 shadow-sm">
+            <TabsTrigger
+              value="cobrancas"
+              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 hover:!text-slate-900 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm transition-all"
+            >
+              <Receipt className="h-3.5 w-3.5" />
+              Cobranças
+              <span className="ml-1 text-[10px] bg-slate-200/70 text-slate-600 px-1.5 rounded-full tabular-nums font-semibold">
+                {kpis?.totalCobrancas ?? 0}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="clientes"
+              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 hover:!text-slate-900 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm transition-all"
+            >
+              <Users className="h-3.5 w-3.5" />
+              Clientes
+              <span className="ml-1 text-[10px] bg-slate-200/70 text-slate-600 px-1.5 rounded-full tabular-nums font-semibold">
+                {clientesVinculados?.length ?? 0}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="despesas"
+              className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-slate-600 hover:!text-slate-900 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm transition-all"
+            >
+              <TrendingDown className="h-3.5 w-3.5" />
+              Despesas
+            </TabsTrigger>
+          </TabsList>
         </div>
 
         {/* ─── Aba: Cobranças ─── */}
