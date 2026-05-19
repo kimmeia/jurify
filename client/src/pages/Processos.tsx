@@ -1909,12 +1909,22 @@ function CofreTab() {
                         ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
                         : c.status === "erro"
                         ? "bg-red-500/15 text-red-700 border-red-500/30"
+                        : c.status === "expirada"
+                        ? "bg-orange-500/15 text-orange-700 border-orange-500/30"
                         : c.status === "validando"
                         ? "bg-blue-500/15 text-blue-700 border-blue-500/30"
                         : "bg-amber-500/15 text-amber-700 border-amber-500/30"
                     }`}
                   >
-                    {c.status === "validando" ? "⏳ Validando" : c.status === "ativa" ? "✓ Ativa" : c.status === "erro" ? "✗ Erro" : c.status}
+                    {c.status === "validando"
+                      ? "⏳ Validando"
+                      : c.status === "ativa"
+                      ? "✓ Ativa"
+                      : c.status === "erro"
+                      ? "✗ Erro"
+                      : c.status === "expirada"
+                      ? "⚠ Expirada"
+                      : c.status}
                   </Badge>
                 </div>
                 <div className="mt-2 space-y-1 text-xs">
@@ -1928,20 +1938,26 @@ function CofreTab() {
                       <span>2FA ativado</span>
                     </div>
                   )}
+                  {c.ultimoLoginSucessoEm && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Última validação: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    </div>
+                  )}
                   {(c.ultimoErro || c.mensagemErro) && (
-                    <p className={`text-[10px] ${c.status === "erro" ? "text-red-600" : "text-blue-600"}`}>{c.ultimoErro || c.mensagemErro}</p>
+                    <p className={`text-[10px] ${c.status === "erro" || c.status === "expirada" ? "text-red-600" : "text-blue-600"}`}>{c.ultimoErro || c.mensagemErro}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 pt-2 mt-2 border-t">
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
+                    variant={c.status === "ativa" ? "outline" : "default"}
+                    className={`h-7 text-xs ${c.status !== "ativa" ? "flex-1 animate-pulse" : ""}`}
                     onClick={() => validarMut.mutate({ id: c.id })}
                     disabled={validarMut.isPending}
                   >
                     <RefreshCcw className={`h-3 w-3 mr-1 ${validarMut.isPending ? "animate-spin" : ""}`} />
-                    Validar
+                    {c.status === "ativa" ? "Validar" : "Validar agora"}
                   </Button>
                   <Button
                     size="sm"
