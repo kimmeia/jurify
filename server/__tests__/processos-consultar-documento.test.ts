@@ -163,12 +163,15 @@ describe("processos.consultarDocumento — sucesso", () => {
     expect(result.requestId).toMatch(/^motor:/);
     expect(result.status).toBe("running");
 
-    // Limpou máscara antes de passar ao adapter
+    // Limpou máscara antes de passar ao adapter + passa credencialId
+    // (5º arg, opcional) pro runner conseguir marcar credencial como
+    // expirada se o scrape falhar por sessão caída.
     expect(iniciarConsultaDocumentoMotorProprio).toHaveBeenCalledWith(
       "cpf",
       "12345678901",
       "storage-state-json",
       "tjce",
+      expect.any(Number),
     );
 
     // Cobrou exatamente 3 créditos (CUSTOS.consulta_documento)
@@ -199,6 +202,7 @@ describe("processos.consultarDocumento — sucesso", () => {
       "12345678000190",
       "storage-state-json",
       "tjce",
+      expect.any(Number),
     );
   });
 
@@ -215,6 +219,7 @@ describe("processos.consultarDocumento — sucesso", () => {
       credencialId: 5,
     });
 
-    expect(recuperarSessao).toHaveBeenCalledWith(5);
+    // 2º arg `{ tentarRelogin: true }` faz auto-recovery se sessão caiu.
+    expect(recuperarSessao).toHaveBeenCalledWith(5, { tentarRelogin: true });
   });
 });

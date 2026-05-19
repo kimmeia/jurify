@@ -178,8 +178,19 @@ export async function salvarSessao(
  *
  * Atualiza `ultimoUsoEm` pra que o dashboard de saúde mostre quando a
  * sessão foi efetivamente usada (vs. só capturada).
+ *
+ * Quando `tentarRelogin=true` e a sessão expirou, tenta refazer o
+ * login automaticamente (hoje só PJe TJCE, único adapter implementado).
+ * Útil pra fluxos onde o usuário está esperando — em vez de devolver
+ * null e exigir "vá em Cofre → Validar", o sistema renova a sessão
+ * sozinho. Cofre+adapter precisa: senha + 2FA conhecidos. Se a credencial
+ * tem 2FA externo (TOTP secret salvo), funciona; se não tem, falha
+ * silenciosamente e devolve null como antes.
  */
-export async function recuperarSessao(credencialId: number): Promise<string | null> {
+export async function recuperarSessao(
+  credencialId: number,
+  options: { tentarRelogin?: boolean } = {},
+): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -189,28 +200,124 @@ export async function recuperarSessao(credencialId: number): Promise<string | nu
     .where(eq(cofreSessoes.credencialId, credencialId))
     .limit(1);
 
-  if (!row) return null;
+  // Sessão presente e não expirada — caminho feliz
+  if (row && (!row.expiraEmEstimado || new Date(row.expiraEmEstimado) >= new Date())) {
+    try {
+      const json = decrypt(row.cookiesEnc, row.cookiesIv, row.cookiesTag);
+      await db
+        .update(cofreSessoes)
+        .set({ ultimoUsoEm: new Date() })
+        .where(eq(cofreSessoes.id, row.id));
+      return json;
+    } catch (err) {
+      log.error(
+        { credencialId, err: err instanceof Error ? err.message : String(err) },
+        "[cofre] falha ao decriptar sessão — possível mudança de ENCRYPTION_KEY",
+      );
+      return null;
+    }
+  }
 
-  // Se sessão tem prazo estimado e já passou, deleta e retorna null —
-  // evita usar cookies expirados que vão dar erro 401 no tribunal.
-  if (row.expiraEmEstimado && new Date(row.expiraEmEstimado) < new Date()) {
+  // Sessão expirada — remove e (opcional) tenta relogin
+  if (row) {
     await db.delete(cofreSessoes).where(eq(cofreSessoes.id, row.id));
     log.info({ credencialId }, "[cofre] sessão expirada removida");
+  }
+
+  if (!options.tentarRelogin) return null;
+
+  return await tentarReloginAutomatico(credencialId);
+}
+
+/**
+ * Tenta relogin automático pra renovar sessão expirada.
+ *
+ * Só funciona pra PJe TJCE hoje (único adapter). Se sucesso, salva nova
+ * sessão e marca credencial como "ativa". Se falha, marca "expirada" pra
+ * UI sinalizar que precisa de ação manual.
+ */
+async function tentarReloginAutomatico(credencialId: number): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [cred] = await db
+    .select()
+    .from(cofreCredenciais)
+    .where(eq(cofreCredenciais.id, credencialId))
+    .limit(1);
+  if (!cred) return null;
+
+  // Hoje só PJe TJCE tem adapter de testarLogin
+  if (cred.sistema !== "pje_tjce") {
+    log.info(
+      { credencialId, sistema: cred.sistema },
+      "[cofre] relogin automático não disponível pra esse sistema",
+    );
     return null;
   }
 
   try {
-    const json = decrypt(row.cookiesEnc, row.cookiesIv, row.cookiesTag);
-    await db
-      .update(cofreSessoes)
-      .set({ ultimoUsoEm: new Date() })
-      .where(eq(cofreSessoes.id, row.id));
-    return json;
-  } catch (err) {
-    log.error(
-      { credencialId, err: err instanceof Error ? err.message : String(err) },
-      "[cofre] falha ao decriptar sessão — possível mudança de ENCRYPTION_KEY",
+    const decriptada = await buscarCredencialDecriptada(credencialId);
+    if (!decriptada) {
+      await marcarCredencialExpirada(credencialId, "Credencial não pôde ser decriptada");
+      return null;
+    }
+
+    const { PjeTjceScraper } = await import(
+      "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
     );
+    const scraper = new PjeTjceScraper({
+      username: decriptada.username,
+      password: decriptada.password,
+      totpSecret: decriptada.totpSecret,
+    });
+
+    const resultado = await scraper.testarLogin();
+
+    if (resultado.ok && resultado.storageStateJson) {
+      const expira = new Date(Date.now() + 90 * 60 * 1000);
+      await salvarSessao(credencialId, resultado.storageStateJson, expira);
+      await atualizarStatusAposLogin(credencialId, { ok: true });
+      log.info({ credencialId }, "[cofre] relogin automático sucesso — sessão renovada");
+      return resultado.storageStateJson;
+    }
+
+    await marcarCredencialExpirada(
+      credencialId,
+      `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
+    );
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error({ credencialId, err: msg }, "[cofre] relogin automático crashed");
+    await marcarCredencialExpirada(credencialId, `Erro técnico: ${msg.slice(0, 200)}`);
     return null;
   }
 }
+
+/**
+ * Marca uma credencial como "expirada" no DB.
+ *
+ * Diferente de `status="erro"` (login validado falhou), `expirada` é
+ * usado quando a sessão estava ativa mas caiu durante uso (cookies
+ * expiraram, tribunal forçou relogin, etc). UI mostra com mesma cor
+ * vermelha que erro, mas mensagem distinta convidando a renovar.
+ */
+export async function marcarCredencialExpirada(
+  credencialId: number,
+  motivo: string,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(cofreCredenciais)
+    .set({
+      status: "expirada",
+      ultimoLoginTentativaEm: new Date(),
+      ultimoErro: motivo.slice(0, 1000),
+    })
+    .where(eq(cofreCredenciais.id, credencialId));
+  log.warn({ credencialId, motivo: motivo.slice(0, 200) }, "[cofre] credencial marcada como expirada");
+}
+
+// `buscarCredencialDecriptada` é definida mais abaixo no arquivo

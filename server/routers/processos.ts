@@ -269,7 +269,7 @@ export const processosRouter = router({
       }
 
       const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId);
+      const storageState = await recuperarSessao(credId, { tentarRelogin: true });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -288,7 +288,7 @@ export const processosRouter = router({
         `CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
       );
 
-      const { requestId, status } = iniciarConsultaMotorProprio(input.cnj, storageState);
+      const { requestId, status } = iniciarConsultaMotorProprio(input.cnj, storageState, credId);
       log.info(
         { cnj: input.cnj, requestId, tribunal: tribunal.codigoTribunal, credId },
         "[motor-proprio] consulta iniciada",
@@ -654,7 +654,7 @@ export const processosRouter = router({
         });
       }
 
-      const storageState = await recuperarSessao(cred.id);
+      const storageState = await recuperarSessao(cred.id, { tentarRelogin: true });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -678,6 +678,7 @@ export const processosRouter = router({
         docLimpo,
         storageState,
         codigoTribunal,
+        cred.id,
       );
       log.info(
         { tipo: input.tipo, requestId, tribunal: codigoTribunal },
@@ -773,7 +774,7 @@ export const processosRouter = router({
       }
 
       const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId);
+      const storageState = await recuperarSessao(credId, { tentarRelogin: true });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -1355,7 +1356,7 @@ export const processosRouter = router({
         return { encontrado: false, mensagem: "Monitoramento sem credencial vinculada" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId);
+      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
       if (!sessao) {
         return {
           encontrado: false,
@@ -1764,7 +1765,7 @@ export const processosRouter = router({
         return { ok: false, mensagem: "Credencial não vinculada" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId);
+      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
       if (!sessao) {
         return {
           ok: false,

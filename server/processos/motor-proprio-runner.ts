@@ -14,6 +14,45 @@ import { parseCnjTribunal } from "./cnj-parser";
 import type { ResultadoScraper } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { createLogger } from "../_core/logger";
 
+/**
+ * Heurística: detecta se um erro de scraper sugere sessão caída.
+ *
+ * Como o adapter PJe TJCE atual não retorna `categoriaErro: "sessao"`
+ * distinto, inferimos pelo texto da mensagem. Quando o cookie expira,
+ * o tribunal redireciona pra tela de login e o scraper bate em selectors
+ * inexistentes — mensagem típica menciona "login", "401", "Você precisa
+ * fazer login" ou "sessão". Pra falsos positivos (raros), o pior caso é
+ * marcar credencial como expirada quando o problema era outro — usuário
+ * pode revalidar manualmente.
+ */
+function erroSugereSessaoCaida(mensagemErro: string | null | undefined): boolean {
+  if (!mensagemErro) return false;
+  return /login|sess[aã]o|autentica|401|unauthor|sign.?in|n[aã]o autenticad|expir(ad|ou)/i.test(
+    mensagemErro,
+  );
+}
+
+async function marcarSessaoSeNecessario(
+  credencialId: number | undefined,
+  ok: boolean,
+  mensagemErro: string | null | undefined,
+): Promise<void> {
+  if (!credencialId || ok) return;
+  if (!erroSugereSessaoCaida(mensagemErro)) return;
+  try {
+    const { marcarCredencialExpirada } = await import("../escritorio/cofre-helpers");
+    await marcarCredencialExpirada(
+      credencialId,
+      `Sessão caiu durante consulta: ${(mensagemErro || "").slice(0, 200)}`,
+    );
+  } catch (err) {
+    log.error(
+      { credencialId, err: err instanceof Error ? err.message : String(err) },
+      "[motor-proprio-runner] falha ao marcar credencial como expirada",
+    );
+  }
+}
+
 const log = createLogger("motor-proprio-runner");
 
 export type StatusMotorProprio = "running" | "completed" | "error";
@@ -60,6 +99,9 @@ export function ehRequestMotorProprio(requestId: string): boolean {
 export function iniciarConsultaMotorProprio(
   cnj: string,
   storageStateJson: string,
+  /** Quando informado, runner marca credencial como "expirada" se scrape
+   *  falhar por motivo de sessão (heurística em `erroSugereSessaoCaida`). */
+  credencialId?: number,
 ): { requestId: string; status: StatusMotorProprio } {
   limparExpirados();
 
@@ -83,7 +125,7 @@ export function iniciarConsultaMotorProprio(
     expiraEm: inicio + TTL_CACHE_MS,
   });
 
-  void executarConsulta(requestId, cnj, storageStateJson, tribunal.codigoTribunal);
+  void executarConsulta(requestId, cnj, storageStateJson, tribunal.codigoTribunal, credencialId);
 
   return { requestId, status: "running" };
 }
@@ -99,6 +141,7 @@ export function iniciarConsultaDocumentoMotorProprio(
   valor: string,
   storageStateJson: string,
   codigoTribunal: string,
+  credencialId?: number,
 ): { requestId: string; status: StatusMotorProprio } {
   limparExpirados();
 
@@ -116,7 +159,7 @@ export function iniciarConsultaDocumentoMotorProprio(
     expiraEm: inicio + TTL_CACHE_MS,
   });
 
-  void executarConsultaDocumento(requestId, tipo, valor, storageStateJson, codigoTribunal);
+  void executarConsultaDocumento(requestId, tipo, valor, storageStateJson, codigoTribunal, credencialId);
 
   return { requestId, status: "running" };
 }
@@ -127,6 +170,7 @@ async function executarConsultaDocumento(
   valor: string,
   storageStateJson: string,
   codigoTribunal: string,
+  credencialId?: number,
 ): Promise<void> {
   const inicio = Date.now();
   try {
@@ -155,12 +199,15 @@ async function executarConsultaDocumento(
       "[motor-proprio-runner] consulta documento finalizada",
     );
 
+    await marcarSessaoSeNecessario(credencialId, resultado.ok, resultado.mensagemErro);
+
     const entrada = cache.get(requestId);
     if (!entrada) return;
     cache.set(requestId, { ...entrada, status: "completed", resultado });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ tipo, valor: valor.slice(0, 3) + "***", codigoTribunal, err: msg }, "[motor-proprio-runner] consulta documento falhou");
+    await marcarSessaoSeNecessario(credencialId, false, msg);
     const entrada = cache.get(requestId);
     if (!entrada) return;
     cache.set(requestId, {
@@ -182,6 +229,7 @@ async function executarConsulta(
   cnj: string,
   storageStateJson: string,
   codigoTribunal: string,
+  credencialId?: number,
 ): Promise<void> {
   try {
     let resultado: ResultadoScraper;
@@ -200,26 +248,23 @@ async function executarConsulta(
         dataDistribuicao: resultado.capa?.dataDistribuicao ?? null,
         movsCount: resultado.movimentacoes.length,
         latenciaMs: resultado.latenciaMs,
-        // Quando ok=false, mensagemErro é a chave do diagnóstico
         mensagemErro: resultado.ok ? null : resultado.mensagemErro,
         categoriaErro: resultado.ok ? null : resultado.categoriaErro,
       },
       "[motor-proprio-runner] consulta finalizada",
     );
 
+    await marcarSessaoSeNecessario(credencialId, resultado.ok, resultado.mensagemErro);
+
     cache.set(requestId, {
       ...(cache.get(requestId) as EntradaCache),
-      // "completed" mesmo quando ok=false: o adapter terminou normalmente
-      // mas com erro de domínio (ex: tribunal indisponível, captcha,
-      // credencial faltando). Frontend chama `resultados` e vê
-      // `application_error` no payload. Status "error" é reservado pra
-      // exceções no catch abaixo (Playwright crash, timeout duro, etc).
       status: "completed",
       resultado,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ cnj, codigoTribunal, err: msg }, "[motor-proprio-runner] consulta falhou");
+    await marcarSessaoSeNecessario(credencialId, false, msg);
     cache.set(requestId, {
       ...(cache.get(requestId) as EntradaCache),
       status: "error",
