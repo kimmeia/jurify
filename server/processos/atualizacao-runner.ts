@@ -89,14 +89,19 @@ export async function iniciarAtualizacaoTodos(
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
 
-  // Busca monitoramentos ativos do escritório — todos os tipos
+  // Busca monitoramentos do escritório — todos os tipos
   // (movimentacoes + novas_acoes). User pode ter restringido por id.
-  const conds = [
-    eq(motorMonitoramentos.escritorioId, escritorioId),
-    eq(motorMonitoramentos.status, "ativo"),
-  ];
+  //
+  // Quando `monitoramentoIds` está presente, o user escolheu o subset
+  // explicitamente — não filtra por status="ativo" (senão pausados/erro
+  // são silenciosamente pulados e o user vê "1 atualizou" quando pediu
+  // pra atualizar N). Quando não há filtro, mantém só ativos pra evitar
+  // varrer monitoramentos desligados num "atualizar tudo" global.
+  const conds = [eq(motorMonitoramentos.escritorioId, escritorioId)];
   if (filtro?.monitoramentoIds && filtro.monitoramentoIds.length > 0) {
     conds.push(inArray(motorMonitoramentos.id, filtro.monitoramentoIds));
+  } else {
+    conds.push(eq(motorMonitoramentos.status, "ativo"));
   }
 
   const monitoramentos = await db
@@ -105,7 +110,7 @@ export async function iniciarAtualizacaoTodos(
     .where(and(...conds));
 
   if (monitoramentos.length === 0) {
-    throw new Error("Nenhum monitoramento ativo pra atualizar");
+    throw new Error("Nenhum monitoramento pra atualizar");
   }
 
   const operacaoId = `atualiz:${randomUUID()}`;
