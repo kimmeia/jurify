@@ -143,35 +143,49 @@ function DashboardComTabs({
   return (
     <div className="space-y-4">
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)} className="w-full">
-        <TabsList className="grid grid-cols-4 max-w-2xl">
-          <TabsTrigger value="geral" className="text-xs gap-1.5">
-            <LayoutDashboard className="h-3.5 w-3.5" />
-            Geral
-          </TabsTrigger>
-          <TabsTrigger value="comercial" className="text-xs gap-1.5">
-            <Handshake className="h-3.5 w-3.5" />
-            Comercial
-          </TabsTrigger>
-          <TabsTrigger value="operacional" className="text-xs gap-1.5">
-            <Briefcase className="h-3.5 w-3.5" />
-            Operacional
-          </TabsTrigger>
-          <TabsTrigger value="financeiro" className="text-xs gap-1.5">
-            <Wallet className="h-3.5 w-3.5" />
-            Financeiro
-          </TabsTrigger>
-        </TabsList>
+        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+          <TabsList className="bg-transparent gap-1 p-0 h-auto">
+            <TabsTrigger
+              value="geral"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              Geral
+            </TabsTrigger>
+            <TabsTrigger
+              value="comercial"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <Handshake className="h-3.5 w-3.5" />
+              Comercial
+            </TabsTrigger>
+            <TabsTrigger
+              value="operacional"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <Briefcase className="h-3.5 w-3.5" />
+              Operacional
+            </TabsTrigger>
+            <TabsTrigger
+              value="financeiro"
+              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
+            >
+              <Wallet className="h-3.5 w-3.5" />
+              Financeiro
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="geral" className="mt-4">
+        <TabsContent value="geral" className="mt-5">
           <DashboardGeral />
         </TabsContent>
-        <TabsContent value="comercial" className="mt-4">
+        <TabsContent value="comercial" className="mt-5">
           <DashboardComercial />
         </TabsContent>
-        <TabsContent value="operacional" className="mt-4">
+        <TabsContent value="operacional" className="mt-5">
           <DashboardOperacional />
         </TabsContent>
-        <TabsContent value="financeiro" className="mt-4">
+        <TabsContent value="financeiro" className="mt-5">
           <DashboardFinanceiro />
         </TabsContent>
       </Tabs>
