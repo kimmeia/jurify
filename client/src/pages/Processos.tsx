@@ -2112,6 +2112,7 @@ function NovasAcoesTab() {
   const [deletarMonTarget, setDeletarMonTarget] = useState<{ id: number; nome: string } | null>(null);
   const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
   const [atualDrawerOpen, setAtualDrawerOpen] = useState(false);
+  const [buscaTexto, setBuscaTexto] = useState("");
   const utils = trpc.useUtils();
 
   const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
@@ -2245,12 +2246,36 @@ function NovasAcoesTab() {
     }
   }, [progresso?.status]);
 
-  const acoes = acoesAcumuladas;
-  const monitoramentos = data?.monitoramentos || [];
+  const acoesRaw = acoesAcumuladas;
+  const monitoramentosRaw = data?.monitoramentos || [];
   const hasMore = data?.hasMore ?? false;
+  const idsNovasAcoes = (monitoramentosRaw as any[]).map((m: any) => m.id);
+  const totalAtualizaveisNovas = (monitoramentosRaw as any[]).filter((m: any) => m.statusJudit === "ativo" || m.status === "ativo" || m.statusJudit === "created" || m.statusJudit === "updated").length;
+
+  // Normalização Unicode-segura (acentos + pontuação) — mesma lógica do
+  // MonitorarTab. CPF "123.456.789-00" bate com "12345678900".
+  const normalizar = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]/g, "");
+  const buscaNormalizada = normalizar(buscaTexto);
+  const monitoramentos = !buscaNormalizada
+    ? monitoramentosRaw
+    : (monitoramentosRaw as any[]).filter((m: any) => {
+        const campos = [m.apelido, m.searchKey].filter(Boolean).map((c: string) => normalizar(String(c)));
+        return campos.some((c: string) => c.includes(buscaNormalizada));
+      });
+  const acoes = !buscaNormalizada
+    ? acoesRaw
+    : acoesRaw.filter((a: any) => {
+        const campos = [a.cnj, a.clienteApelido, a.clienteSearchKey, a.tribunal]
+          .filter(Boolean)
+          .map((c: string) => normalizar(String(c)));
+        return campos.some((c: string) => c.includes(buscaNormalizada));
+      });
   const naoLidasAcumuladas = acoes.filter((a: any) => !a.lido).length;
-  const idsNovasAcoes = (monitoramentos as any[]).map((m: any) => m.id);
-  const totalAtualizaveisNovas = (monitoramentos as any[]).filter((m: any) => m.statusJudit === "ativo" || m.status === "ativo" || m.statusJudit === "created" || m.statusJudit === "updated").length;
 
   return (
     <div className="space-y-4">
@@ -2433,20 +2458,40 @@ function NovasAcoesTab() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Input
+            placeholder="Buscar por nome, CPF, CNPJ ou CNJ…"
+            value={buscaTexto}
+            onChange={(e) => setBuscaTexto(e.target.value)}
+            className="pl-8 h-8 rounded-lg border-slate-200 bg-white text-xs focus-visible:ring-rose-400"
+          />
+          {buscaTexto && (
+            <button
+              type="button"
+              onClick={() => setBuscaTexto("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              title="Limpar"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 shrink-0">
           {acoes.length}
-          {hasMore ? "+" : ""}{" "}
-          {acoes.length === 1 ? "nova ação" : "novas ações"} carregada{acoes.length === 1 ? "" : "s"}
+          {hasMore && !buscaNormalizada ? "+" : ""}{" "}
+          {acoes.length === 1 ? "nova ação" : "novas ações"}
           {naoLidasAcumuladas ? ` (${naoLidasAcumuladas} não lidas)` : ""}
         </p>
         <Button
           size="sm"
           variant={apenasNaoLidas ? "default" : "outline"}
+          className="h-8 rounded-lg"
           onClick={() => setApenasNaoLidas(!apenasNaoLidas)}
         >
           <Bell className="h-3 w-3 mr-1" />
-          {apenasNaoLidas ? "Mostrando só não lidas" : "Filtrar não lidas"}
+          {apenasNaoLidas ? "Só não lidas" : "Filtrar não lidas"}
         </Button>
       </div>
 
