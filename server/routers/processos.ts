@@ -686,6 +686,201 @@ export const processosRouter = router({
       return { requestId, status };
     }),
 
+  /**
+   * Consulta CNJ síncrona — sem polling.
+   *
+   * Existe pra alimentar o "Carregar detalhes" de cards de busca por
+   * CPF/CNPJ: a busca por documento retorna só lista de CNJs (sem
+   * capa/movs pra economizar créditos). Quando o user clica num card
+   * pra ver detalhes, frontend chama essa procedure e espera o
+   * scraper terminar (~10-30s).
+   *
+   * Cobra 1 cred (mesma tarifa de `consultarCNJ`). Retorna lawsuit
+   * shape direto pronto pro `ProcessoCard` renderizar (sem o boilerplate
+   * de page_data).
+   *
+   * Timeout: 60s. Se o scraper demorar mais, frontend recebe erro e
+   * o crédito JÁ foi debitado (mesma política de `resumoIA`).
+   */
+  consultarCNJSincrono: protectedProcedure
+    .input(z.object({
+      cnj: z.string().min(15).max(30),
+      credencialId: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const tribunal = parseCnjTribunal(input.cnj);
+      if (!tribunal) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "CNJ inválido — verifique o formato",
+        });
+      }
+      if (!tribunal.temMotorProprio) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Consulta direta pra ${tribunal.siglaTribunal} ainda não disponível.`,
+        });
+      }
+
+      const sistemaCofre = sistemaCofrePorTribunal(tribunal.codigoTribunal);
+      if (!sistemaCofre) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Sistema cofre pra ${tribunal.siglaTribunal} ainda não mapeado`,
+        });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Mesma lógica de resolução de credencial de `consultarCNJ`.
+      let credencial: typeof cofreCredenciais.$inferSelect[] = [];
+      if (input.credencialId) {
+        credencial = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.id, input.credencialId),
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.sistema, sistemaCofre),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
+      }
+      if (credencial.length === 0) {
+        credencial = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.sistema, sistemaCofre),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
+      }
+      if (credencial.length === 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Cadastre uma credencial OAB-${tribunal.uf ?? ""} no Cofre.`,
+        });
+      }
+
+      const credId = credencial[0].id;
+      const storageState = await recuperarSessao(credId);
+      if (!storageState) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Sessão expirou. Vá no Cofre → Validar.`,
+        });
+      }
+
+      await consumirCreditos(
+        esc.escritorio.id,
+        ctx.user.id,
+        CUSTOS.consulta_cnj,
+        "consulta_cnj",
+        `Detalhe CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
+      );
+
+      let resultado;
+      try {
+        resultado = await consultarTjce(input.cnj, storageState);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error({ cnj: input.cnj, err: msg }, "[consultarCNJSincrono] scraper crashed");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Falha no scraper: ${msg.slice(0, 200)}. Crédito foi debitado.`,
+        });
+      }
+
+      if (!resultado.ok) {
+        // Erro de domínio (captcha, processo sigiloso, etc) — devolve o
+        // motivo pro frontend mostrar mensagem específica, mas mantém
+        // crédito debitado (caller já pagou pela tentativa).
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: resultado.mensagemErro ?? "Erro desconhecido",
+          cause: { categoria: resultado.categoriaErro },
+        });
+      }
+
+      // Adapta `ResultadoScraper.capa+movimentacoes` pro mesmo shape
+      // que `obterResultadoMotorProprio` produz pro frontend (JuditLawsuit).
+      // Sem reuso direto pq aquela função usa o cache do runner — aqui
+      // já temos `resultado` em mãos.
+      const capa = resultado.capa;
+      const lawsuit = capa
+        ? {
+            code: capa.cnj,
+            instance: 1,
+            name: capa.classe ?? capa.cnj,
+            tribunal_acronym: resultado.tribunal.toUpperCase(),
+            county: capa.comarca ?? "",
+            city: capa.comarca ?? "",
+            state: capa.uf ?? "",
+            distribution_date: capa.dataDistribuicao ?? "",
+            status: capa.status ?? undefined,
+            judge: capa.juiz ?? undefined,
+            amount: capa.valorCausaCentavos != null
+              ? capa.valorCausaCentavos / 100
+              : undefined,
+            last_step: resultado.movimentacoes[0]
+              ? {
+                  step_id: `motor:${resultado.movimentacoes[0].data}`,
+                  step_date: resultado.movimentacoes[0].data,
+                  content: resultado.movimentacoes[0].texto,
+                  steps_count: resultado.movimentacoes.length,
+                }
+              : undefined,
+            subjects: capa.assuntos.map((a, idx) => ({
+              code: `motor-${idx}`,
+              name: a,
+            })),
+            classifications: capa.classe
+              ? [{ code: "main", name: capa.classe }]
+              : [],
+            parties: capa.partes.map((p) => ({
+              name: p.nome,
+              side: (p.polo === "passivo" ? "Passive" : "Active") as
+                | "Active"
+                | "Passive",
+              person_type:
+                p.tipo === "juridica"
+                  ? "Legal Entity"
+                  : p.tipo === "fisica"
+                    ? "Natural Person"
+                    : "Unknown",
+              main_document: p.documento ?? undefined,
+              lawyers: p.advogados.map((a) => ({
+                name: a.nome,
+                main_document: a.oab ?? undefined,
+              })),
+            })),
+            steps: resultado.movimentacoes.map((m) => ({
+              step_id: `motor:${m.data}:${m.texto.slice(0, 16)}`,
+              step_date: m.data,
+              content: m.texto,
+              step_type: m.tipo ?? undefined,
+            })),
+          }
+        : null;
+
+      log.info(
+        { cnj: input.cnj, tribunal: tribunal.codigoTribunal, capaPresente: !!capa, movsCount: resultado.movimentacoes.length },
+        "[consultarCNJSincrono] ok",
+      );
+
+      return { lawsuit };
+    }),
+
   /** Verifica status de uma consulta em andamento */
   statusConsulta: protectedProcedure
     .input(z.object({ requestId: z.string() }))
