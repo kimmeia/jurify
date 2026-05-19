@@ -403,6 +403,17 @@ export function iniciarJobs() {
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
 
+  // A cada 1 minuto: dispara lembretes pré-evento (15min/30min/1h/1d antes).
+  // Granularidade fina pra não atrasar o "30min antes" que o usuário configurou.
+  setInterval(async () => {
+    try {
+      const { dispararLembretesAgenda } = await import("../escritorio/cron-disparar-lembretes");
+      await dispararLembretesAgenda();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] dispararLembretesAgenda falhou");
+    }
+  }, 60 * 1000);
+
   // ─── Motor próprio (Sprint 2 — 08/05/2026) ─────────────────────────────
   // A cada 1h: poll de monitoramentos de movimentações (recurrence default 6h)
   setInterval(async () => {

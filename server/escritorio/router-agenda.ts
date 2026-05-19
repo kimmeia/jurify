@@ -840,4 +840,113 @@ export const agendaRouter = router({
 
       return { success: true };
     }),
+
+  // ───────────────────────────────────────────────────────────────────────
+  // LEMBRETES — gerenciados separadamente do agendamento principal
+  // ───────────────────────────────────────────────────────────────────────
+
+  /** Lista os lembretes de um agendamento (não suportado pra tarefas hoje). */
+  listarLembretes: protectedProcedure
+    .input(z.object({ agendamentoId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+      if (!perm.allowed) return [];
+      const db = await getDb();
+      if (!db) return [];
+
+      const rows = await db
+        .select()
+        .from(agendamentoLembretes)
+        .where(eq(agendamentoLembretes.agendamentoId, input.agendamentoId))
+        .orderBy(asc(agendamentoLembretes.minutosAntes));
+
+      return rows;
+    }),
+
+  /** Salva os lembretes de um agendamento — substitui tudo (deleta antigos + insere novos).
+   *  Pra UX simplificada: usuário escolhe presets de minutos + destinatários + canais. */
+  salvarLembretes: protectedProcedure
+    .input(z.object({
+      agendamentoId: z.number(),
+      lembretes: z.array(z.object({
+        minutosAntes: z.number().int().positive().max(60 * 24 * 30), // 30 dias antes max
+        destinatarioIds: z.array(z.number().int().positive()).min(1),
+        canais: z.array(z.enum(["notificacao_app", "email", "whatsapp"])).min(1),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Busca dataInicio do agendamento pra calcular dispararEm de cada lembrete
+      const [ag] = await db.select({ dataInicio: agendamentos.dataInicio, escritorioId: agendamentos.escritorioId })
+        .from(agendamentos)
+        .where(eq(agendamentos.id, input.agendamentoId))
+        .limit(1);
+      if (!ag || ag.escritorioId !== perm.escritorioId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agendamento não encontrado." });
+      }
+
+      // Apaga lembretes existentes e insere novos. Mais simples que diff.
+      await db.delete(agendamentoLembretes).where(eq(agendamentoLembretes.agendamentoId, input.agendamentoId));
+
+      if (input.lembretes.length === 0) return { ok: true, criados: 0 };
+
+      const inicio = new Date(ag.dataInicio).getTime();
+      const inserts = input.lembretes.map((l) => ({
+        agendamentoId: input.agendamentoId,
+        // `tipo` permanece pelo legado — usa o 1º canal
+        tipo: l.canais[0] as "notificacao_app" | "email" | "whatsapp",
+        minutosAntes: l.minutosAntes,
+        destinatarioIds: l.destinatarioIds,
+        canais: l.canais,
+        dispararEm: new Date(inicio - l.minutosAntes * 60_000),
+        enviado: false,
+      }));
+
+      await db.insert(agendamentoLembretes).values(inserts);
+
+      return { ok: true, criados: inserts.length };
+    }),
+
+  /** Remove um lembrete específico. */
+  removerLembrete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db.delete(agendamentoLembretes).where(eq(agendamentoLembretes.id, input.id));
+      return { ok: true };
+    }),
+
+  /** Lista colaboradores do escritório com cargo (pra o picker de destinatários). */
+  listarColaboradores: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "agenda", "ver");
+    if (!perm.allowed) return [];
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db
+      .select({
+        id: colaboradores.id,
+        nome: users.name,
+        email: users.email,
+        cargo: colaboradores.cargo,
+      })
+      .from(colaboradores)
+      .leftJoin(users, eq(users.id, colaboradores.userId))
+      .where(and(eq(colaboradores.escritorioId, perm.escritorioId), eq(colaboradores.ativo, true)))
+      .orderBy(asc(users.name));
+
+    return rows.map((r) => ({
+      id: r.id,
+      nome: r.nome || r.email || `Colaborador #${r.id}`,
+      cargo: r.cargo || null,
+    }));
+  }),
 });

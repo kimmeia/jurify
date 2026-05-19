@@ -1231,6 +1231,18 @@ function ListaView({
 // DIALOG: CRIAR / EDITAR EVENTO
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const PRESETS_LEMBRETE = [
+  { id: 15, label: "15min antes" },
+  { id: 30, label: "30min antes" },
+  { id: 60, label: "1h antes" },
+  { id: 60 * 24, label: "1 dia antes" },
+];
+const CANAIS_LEMBRETE: Array<{ id: "notificacao_app" | "email" | "whatsapp"; label: string; icon: string }> = [
+  { id: "notificacao_app", label: "Push", icon: "📱" },
+  { id: "email", label: "Email", icon: "📧" },
+  { id: "whatsapp", label: "WhatsApp", icon: "💬" },
+];
+
 function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void;
   eventoEdit?: any | null;
@@ -1252,6 +1264,10 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   const [processoLabel, setProcessoLabel] = useState<string>("");
   const [processoBusca, setProcessoBusca] = useState("");
   const [processoMenuOpen, setProcessoMenuOpen] = useState(false);
+  // Lembretes: state local (só pra compromissos — tarefas não suportam)
+  const [lembreteMinutos, setLembreteMinutos] = useState<number[]>([30]);
+  const [lembreteCanais, setLembreteCanais] = useState<Array<"notificacao_app" | "email" | "whatsapp">>(["notificacao_app"]);
+  const [lembreteDestinatarios, setLembreteDestinatarios] = useState<number[]>([]);
 
   // Quando o dialog abre em modo EDIT, hidrata campos
   useMemo(() => {
@@ -1295,6 +1311,34 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
     { tipoMonitoramento: "movimentacoes" },
     { enabled: processoMenuOpen, retry: false },
   );
+
+  // Colaboradores pro picker de destinatários
+  const { data: colaboradoresData } = (trpc.agenda as any).listarColaboradores?.useQuery?.(
+    undefined,
+    { enabled: open && tipoEvento === "compromisso", retry: false },
+  ) ?? { data: undefined };
+  const colaboradores = (colaboradoresData || []) as Array<{ id: number; nome: string; cargo: string | null }>;
+
+  // Lembretes existentes (modo edit) — pra hidratar state
+  const { data: lembretesExistentes } = (trpc.agenda as any).listarLembretes?.useQuery?.(
+    { agendamentoId: eventoEdit?.id },
+    { enabled: isEdit && eventoEdit?.fonte === "compromisso" && !!eventoEdit?.id, retry: false },
+  ) ?? { data: undefined };
+  useMemo(() => {
+    if (!isEdit || !lembretesExistentes || lembretesExistentes.length === 0) return;
+    const mins = Array.from(new Set(lembretesExistentes.map((l: any) => l.minutosAntes)));
+    setLembreteMinutos(mins as number[]);
+    const canais = new Set<string>();
+    const dests = new Set<number>();
+    for (const l of lembretesExistentes) {
+      const ch = Array.isArray(l.canais) ? l.canais : [l.tipo];
+      for (const c of ch) canais.add(c);
+      const ds = Array.isArray(l.destinatarioIds) ? l.destinatarioIds : [];
+      for (const d of ds) dests.add(d);
+    }
+    if (canais.size > 0) setLembreteCanais(Array.from(canais) as any);
+    if (dests.size > 0) setLembreteDestinatarios(Array.from(dests));
+  }, [lembretesExistentes, isEdit]);
   const processosOptions = useMemo(() => {
     const arr = (monsData || []) as any[];
     if (!processoBusca) return arr.slice(0, 10);
@@ -1306,8 +1350,29 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
     }).slice(0, 10);
   }, [monsData, processoBusca]);
 
+  const salvarLembretesMut = (trpc.agenda as any).salvarLembretes?.useMutation?.({
+    onError: (err: any) => toast.error("Lembretes não salvos: " + err.message),
+  }) ?? { mutate: () => {} };
+
+  const dispararLembretesPara = (agendamentoId: number) => {
+    if (tipoEvento !== "compromisso") return;
+    const lembretes = lembreteMinutos.length > 0 && lembreteCanais.length > 0 && lembreteDestinatarios.length > 0
+      ? lembreteMinutos.map((m) => ({
+          minutosAntes: m,
+          destinatarioIds: lembreteDestinatarios,
+          canais: lembreteCanais,
+        }))
+      : [];
+    (salvarLembretesMut.mutate as any)({ agendamentoId, lembretes });
+  };
+
   const criarCompMut = trpc.agenda.criarCompromisso.useMutation({
-    onSuccess: () => { toast.success("Compromisso criado"); reset(); onSuccess(); },
+    onSuccess: (data) => {
+      toast.success("Compromisso criado");
+      if (data?.id) dispararLembretesPara(data.id);
+      reset();
+      onSuccess();
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -1317,7 +1382,14 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
   });
 
   const atualizarMut = (trpc.agenda as any).atualizar.useMutation({
-    onSuccess: () => { toast.success("Evento atualizado"); reset(); onSuccess(); },
+    onSuccess: () => {
+      toast.success("Evento atualizado");
+      if (eventoEdit?.id && eventoEdit?.fonte === "compromisso") {
+        dispararLembretesPara(eventoEdit.id);
+      }
+      reset();
+      onSuccess();
+    },
     onError: (err: any) => toast.error(err.message),
   });
 
@@ -1450,6 +1522,120 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 <Label className="text-xs">Local</Label>
                 <Input placeholder="Fórum, Zoom, etc." value={local} onChange={e => setLocal(e.target.value)} className="mt-1" />
               </div>
+            </div>
+          )}
+
+          {/* LEMBRETES — só pra compromissos */}
+          {tipoEvento === "compromisso" && (
+            <div className="rounded-xl bg-gradient-to-br from-blue-50/60 to-indigo-50/40 border border-blue-200/70 p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                  <Bell className="h-3 w-3 text-white" />
+                </div>
+                <p className="text-xs font-bold text-blue-900 tracking-tight">Lembretes</p>
+                {lembreteMinutos.length > 0 && lembreteDestinatarios.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                    {lembreteMinutos.length} ativo{lembreteMinutos.length === 1 ? "" : "s"}
+                  </span>
+                )}
+              </div>
+
+              {/* Quando avisar (toggle) */}
+              <div>
+                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">Quando avisar</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {PRESETS_LEMBRETE.map((p) => {
+                    const ativo = lembreteMinutos.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setLembreteMinutos(ativo ? lembreteMinutos.filter((m) => m !== p.id) : [...lembreteMinutos, p.id])}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                          ativo ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quem avisar */}
+              <div>
+                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">
+                  Quem avisar {lembreteDestinatarios.length > 0 && <span className="text-blue-600 normal-case font-bold">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>}
+                </p>
+                {colaboradores.length === 0 ? (
+                  <p className="text-[10.5px] text-slate-500 italic">Carregando colaboradores…</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                    {colaboradores.map((col) => {
+                      const ativo = lembreteDestinatarios.includes(col.id);
+                      return (
+                        <label
+                          key={col.id}
+                          className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer text-[11px] transition-colors ${
+                            ativo ? "bg-blue-100 border border-blue-300" : "bg-white border border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={ativo}
+                            onChange={() => setLembreteDestinatarios(
+                              ativo ? lembreteDestinatarios.filter((d) => d !== col.id) : [...lembreteDestinatarios, col.id],
+                            )}
+                            className="w-3 h-3"
+                          />
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
+                            {gerarIniciais(col.nome)}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate" title={col.nome}>{col.nome}</p>
+                            {col.cargo && <p className="text-[9px] text-slate-500 truncate">{col.cargo}</p>}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Canais */}
+              <div>
+                <p className="text-[10px] font-semibold text-blue-700/85 mb-1.5 uppercase tracking-wider">Canais</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {CANAIS_LEMBRETE.map((c) => {
+                    const ativo = lembreteCanais.includes(c.id);
+                    const disabled = c.id !== "notificacao_app"; // Email/WhatsApp ainda não dispatcheados
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => !disabled && setLembreteCanais(ativo ? lembreteCanais.filter((k) => k !== c.id) : [...lembreteCanais, c.id])}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                          ativo
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : disabled
+                              ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                        }`}
+                        title={disabled ? "Em breve" : ""}
+                      >
+                        <span className="mr-1">{c.icon}</span>
+                        {c.label}
+                        {disabled && <span className="ml-1 text-[8px] opacity-75">soon</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {lembreteMinutos.length > 0 && lembreteDestinatarios.length === 0 && (
+                <p className="text-[10px] text-amber-600 italic">Selecione pelo menos 1 destinatário pra ativar os lembretes.</p>
+              )}
             </div>
           )}
 
