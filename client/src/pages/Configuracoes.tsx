@@ -363,38 +363,117 @@ export default function Configuracoes() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center gap-4">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-gray-100 to-slate-200 dark:from-gray-800 dark:to-slate-700 shadow-sm">
-          <Settings className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+    <div className="space-y-5">
+      {/* ─── HERO ─────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
+           style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4338ca 100%)" }}>
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-70 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <p className="text-[11px] font-semibold tracking-[0.18em] text-white/85 uppercase">Configurações</p>
+            </div>
+            <h1 className="text-xl font-bold tracking-tight">{escritorio.nome}</h1>
+            <p className="text-[11px] text-white/80 mt-1">
+              {escritorio.cnpj && <>CNPJ {escritorio.cnpj} · </>}
+              {escritorio.endereco && <>{escritorio.endereco.split(",")[0]} · </>}
+              Fuso {escritorio.fusoHorario}
+            </p>
+          </div>
+          <CargoBadge
+            cargo={colaborador.cargo as CargoColaborador}
+            nomePersonalizado={(colaborador as any).cargoPersonalizadoNome}
+            cor={(colaborador as any).cargoPersonalizadoCor}
+          />
         </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-          <p className="text-sm text-muted-foreground">{escritorio.nome}</p>
-        </div>
-        <CargoBadge
-          cargo={colaborador.cargo as CargoColaborador}
-          nomePersonalizado={(colaborador as any).cargoPersonalizadoNome}
-          cor={(colaborador as any).cargoPersonalizadoCor}
-        />
       </div>
 
       <Tabs value={tabAtiva} onValueChange={setTabAtiva}>
-        <TabsList className={`grid w-full ${podeVerMeuPlano ? "grid-cols-9" : "grid-cols-8"} h-10`}>
-          <TabsTrigger value="perfil" className="gap-1.5 text-xs"><Building2 className="h-3.5 w-3.5" /> Escritório</TabsTrigger>
-          <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
-          <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
-          <TabsTrigger value="tags" className="gap-1.5 text-xs"><TagIcon className="h-3.5 w-3.5" /> Tags</TabsTrigger>
-          <TabsTrigger value="origens" className="gap-1.5 text-xs"><Megaphone className="h-3.5 w-3.5" /> Origens</TabsTrigger>
-          <TabsTrigger value="campos" className="gap-1.5 text-xs"><Sparkles className="h-3.5 w-3.5" /> Campos</TabsTrigger>
-          <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
-          <TabsTrigger value="financeiro" className="gap-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
-          <TabsTrigger value="integracoes" className="gap-1.5 text-xs"><Link2 className="h-3.5 w-3.5" /> Integrações</TabsTrigger>
-          {podeVerMeuPlano && (
-            <TabsTrigger value="meu-plano" className="gap-1.5 text-xs"><CreditCardIcon className="h-3.5 w-3.5" /> Meu Plano</TabsTrigger>
-          )}
-        </TabsList>
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5">
 
+          {/* ─── SIDEBAR LATERAL VERTICAL ─────────────────────────────── */}
+          <aside className="lg:sticky lg:top-4 lg:self-start">
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] p-2">
+              <TabsList className="!flex !flex-col !gap-0.5 !h-auto !bg-transparent !p-0 !w-full">
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 self-start">Geral</p>
+                <TabsTrigger
+                  value="perfil"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Building2 className="h-4 w-4" /> <span className="flex-1 text-left">Escritório</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="equipe"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Users className="h-4 w-4" /> <span className="flex-1 text-left">Equipe</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="permissoes"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Shield className="h-4 w-4" /> <span className="flex-1 text-left">Permissões</span>
+                </TabsTrigger>
+
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Cadastros</p>
+                <TabsTrigger
+                  value="tags"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <TagIcon className="h-4 w-4" /> <span className="flex-1 text-left">Tags</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="origens"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Megaphone className="h-4 w-4" /> <span className="flex-1 text-left">Origens de leads</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="campos"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Sparkles className="h-4 w-4" /> <span className="flex-1 text-left">Campos de cliente</span>
+                </TabsTrigger>
+
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Integrações</p>
+                <TabsTrigger
+                  value="canais"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <MessageCircle className="h-4 w-4" /> <span className="flex-1 text-left">Canais</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="integracoes"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Plug className="h-4 w-4" /> <span className="flex-1 text-left">Apps externos</span>
+                </TabsTrigger>
+
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Operação</p>
+                <TabsTrigger
+                  value="financeiro"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <DollarSign className="h-4 w-4" /> <span className="flex-1 text-left">Financeiro</span>
+                </TabsTrigger>
+                {podeVerMeuPlano && (
+                  <TabsTrigger
+                    value="meu-plano"
+                    className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  >
+                    <CreditCardIcon className="h-4 w-4" /> <span className="flex-1 text-left">Meu plano</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
+          </aside>
+
+          {/* ─── CONTEÚDO DAS ABAS ────────────────────────────────────── */}
+          <div className="min-w-0">
         {/* ─── Perfil ────────────────────────────────────────────────── */}
         <TabsContent value="perfil" className="space-y-4">
           <Card>
@@ -926,6 +1005,8 @@ export default function Configuracoes() {
           </TabsContent>
         )}
 
+          </div>{/* fim do conteúdo das abas */}
+        </div>{/* fim do grid sidebar+content */}
       </Tabs>
 
       <BackupDialog open={backupDialogOpen} onOpenChange={setBackupDialogOpen} />
