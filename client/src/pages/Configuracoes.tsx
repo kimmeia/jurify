@@ -1586,10 +1586,25 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     },
   ];
 
+  const totalCanaisConectados = canaisPrincipais.filter((c) => c.conectado).length;
+  const totalCanaisErro = canaisPrincipais.filter((c) => c.comErro).length;
+
   return (
     <>
+      {/* Header da aba */}
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>
+          <p className="text-[11px] text-slate-500">
+            {canaisPrincipais.length} canais disponíveis ·
+            <b className="text-emerald-700 ml-1">{totalCanaisConectados} conectados</b>
+            {totalCanaisErro > 0 && <> · <b className="text-rose-700">{totalCanaisErro} com erro</b></>}
+          </p>
+        </div>
+      </div>
+
       {/* Banner explicativo */}
-      <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-4 mb-4">
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 p-4 mb-4">
         <div className="flex items-start gap-3">
           <div className="h-8 w-8 rounded-lg bg-[#1877F2] flex items-center justify-center text-white shrink-0">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1597,11 +1612,11 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+            <p className="text-sm font-semibold text-blue-900">
               Conexão simplificada via Facebook
             </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-              WhatsApp, Instagram e Messenger agora se conectam com 1 clique. Sem precisar copiar
+            <p className="text-xs text-blue-700 mt-1">
+              WhatsApp, Instagram e Messenger se conectam com 1 clique. Sem precisar copiar
               tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
             </p>
           </div>
@@ -1769,69 +1784,108 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
     {
       id: "asaas",
       nome: "Asaas",
-      descricao: "Cobranças por boleto, Pix e cartão. Veja status financeiro dos clientes no CRM.",
+      descricao: "Cobranças por boleto, Pix e cartão",
+      categoria: "Financeiro",
       logo: "💰",
-      cor: "from-emerald-500 to-green-600",
+      bgIcon: "bg-cyan-50 border-cyan-200",
       conectado: asaasStatus?.conectado || false,
     },
     {
       id: "calcom",
       nome: "Cal.com",
-      descricao: "Agendamento online integrado ao CRM. Permita que clientes marquem reuniões automaticamente.",
+      descricao: "Agendamento online integrado ao CRM",
+      categoria: "Calendário",
       logo: "📅",
-      cor: "from-blue-500 to-sky-600",
+      bgIcon: "bg-blue-50 border-blue-200",
       conectado: calcomCanal?.status === "conectado",
     },
     {
       id: "chatgpt",
       nome: "ChatGPT",
-      descricao: "OpenAI para agentes de IA. Modelos: GPT-4o, GPT-4o-mini.",
+      descricao: "OpenAI · GPT-4o · GPT-4o-mini",
+      categoria: "IA",
       logo: "🤖",
-      cor: "from-green-500 to-teal-600",
+      bgIcon: "bg-emerald-50 border-emerald-200",
       conectado: chatgptCanal?.status === "conectado",
     },
     {
       id: "claude",
       nome: "Claude",
-      descricao: "Anthropic para agentes de IA. Modelos: Claude Sonnet, Claude Haiku.",
-      logo: "🧠",
-      cor: "from-amber-500 to-orange-600",
+      descricao: "Anthropic · Claude Sonnet / Haiku",
+      categoria: "IA",
+      logo: "🦾",
+      bgIcon: "bg-amber-50 border-amber-200",
       conectado: claudeCanal?.status === "conectado",
     },
     {
       id: "twilio",
       nome: "Twilio VoIP",
-      descricao: "Faça e receba ligações telefônicas diretamente pelo sistema. Ideal para equipe comercial.",
+      descricao: "Ligações telefônicas pelo sistema",
+      categoria: "Mensageria",
       logo: "📞",
-      cor: "from-purple-500 to-violet-600",
+      bgIcon: "bg-violet-50 border-violet-200",
       conectado: twilioCanal?.status === "conectado",
     },
   ];
 
+  const totalConectadas = integracoes.filter((i) => i.conectado).length;
+
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-bold tracking-tight">Apps externos</h3>
+          <p className="text-[11px] text-slate-500">
+            {integracoes.length} integrações disponíveis ·
+            <b className="text-emerald-700 ml-1">{totalConectadas} conectadas</b>
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {integracoes.map((integ) => (
-          <Card key={integ.id} className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${integ.conectado ? "border-emerald-300" : "border-transparent hover:border-primary/20"}`}
-            onClick={() => setOpenDialog(integ.id)}>
-            <CardContent className="p-5">
-              <div className="flex flex-col items-center text-center gap-3">
-                <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${integ.cor} flex items-center justify-center text-3xl shadow-md`}>
-                  {integ.logo}
-                </div>
-                <div>
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm">{integ.nome}</h3>
-                    {integ.conectado && <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"><Wifi className="h-3 w-3 mr-1" />Ativo</Badge>}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">{integ.descricao}</p>
-                </div>
-                <Button variant={integ.conectado ? "outline" : "default"} size="sm" className="text-xs w-full">
-                  {integ.conectado ? "Gerenciar" : "Configurar"}
-                </Button>
+          <div
+            key={integ.id}
+            onClick={() => setOpenDialog(integ.id)}
+            className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${
+              integ.conectado ? "border-l-emerald-500" : "border-l-slate-300"
+            } hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`w-12 h-12 rounded-xl ${integ.bgIcon} border flex items-center justify-center text-2xl shrink-0`}>
+                {integ.logo}
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-bold">{integ.nome}</p>
+                  {integ.conectado ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold">
+                      <span className="w-1 h-1 rounded-full bg-emerald-500" /> Conectada
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold">
+                      <span className="w-1 h-1 rounded-full bg-slate-400" /> Não configurada
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-0.5">{integ.descricao}</p>
+                <p className="text-[9.5px] text-slate-400 mt-1 uppercase tracking-wider font-semibold">{integ.categoria}</p>
+              </div>
+            </div>
+            <div className="flex gap-1.5 mt-3 pt-3 border-t border-slate-100">
+              <Button
+                variant={integ.conectado ? "outline" : "default"}
+                size="sm"
+                className={`flex-1 h-7 text-[10.5px] rounded-md ${
+                  integ.conectado
+                    ? "border-slate-200 hover:bg-slate-50"
+                    : "bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+                }`}
+                onClick={(e) => { e.stopPropagation(); setOpenDialog(integ.id); }}
+              >
+                {integ.conectado ? "⚙ Gerenciar" : "+ Conectar"}
+              </Button>
+            </div>
+          </div>
         ))}
       </div>
 
