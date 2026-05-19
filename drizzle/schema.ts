@@ -473,6 +473,12 @@ export const agendamentoLembretes = mysqlTable("agendamento_lembretes", {
   minutosAntes: int("minutosAntes").notNull(),
   enviado: boolean("enviado").default(false).notNull(),
   enviadoAt: timestamp("enviadoAt"),
+  /** JSON array de colaborador.id que recebem o lembrete. Null = só responsável (legado). */
+  destinatarioIds: json("destinatarioIds").$type<number[] | null>(),
+  /** JSON array de canais [notificacao_app, email, whatsapp]. Null cai no campo `tipo`. */
+  canais: json("canais").$type<string[] | null>(),
+  /** Momento em que o cron deve disparar (dataInicio - minutosAntes). Indexed. */
+  dispararEm: timestamp("dispararEm"),
 });
 
 export type AgendamentoLembrete = typeof agendamentoLembretes.$inferSelect;
