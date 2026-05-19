@@ -30,14 +30,59 @@ async function podeMexerNoCard(
 export const kanbanRouter = router({
   // ─── FUNIS ────────────────────────────────────────────────────────────────
 
+  /**
+   * Lista funis do escritório com estatísticas agregadas para a tela
+   * seletora: emProducao, concluidos, atrasados, totalColunas. Tudo
+   * em 1 query JOIN+GROUP BY (não dispara N+1 mesmo com 50 funis).
+   *
+   * Card arquivado NÃO conta em nenhuma estatística.
+   */
   listarFunis: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(kanbanFunis)
+
+    const rows = await db
+      .select({
+        id: kanbanFunis.id,
+        nome: kanbanFunis.nome,
+        descricao: kanbanFunis.descricao,
+        cor: kanbanFunis.cor,
+        prazoPadraoDias: kanbanFunis.prazoPadraoDias,
+        createdAt: kanbanFunis.createdAt,
+        updatedAt: kanbanFunis.updatedAt,
+        criadoPor: kanbanFunis.criadoPor,
+        // Stats — todas filtram arquivado=false
+        totalColunas: sql<number>`COUNT(DISTINCT ${kanbanColunas.id})`,
+        emProducao: sql<number>`COUNT(DISTINCT CASE
+          WHEN ${kanbanCards.arquivado} = FALSE
+            AND ${kanbanColunas.tipo} != 'conclusao'
+          THEN ${kanbanCards.id} END)`,
+        concluidos: sql<number>`COUNT(DISTINCT CASE
+          WHEN ${kanbanCards.arquivado} = FALSE
+            AND ${kanbanColunas.tipo} = 'conclusao'
+          THEN ${kanbanCards.id} END)`,
+        atrasados: sql<number>`COUNT(DISTINCT CASE
+          WHEN ${kanbanCards.arquivado} = FALSE
+            AND ${kanbanCards.atrasado} = TRUE
+          THEN ${kanbanCards.id} END)`,
+      })
+      .from(kanbanFunis)
+      .leftJoin(kanbanColunas, eq(kanbanColunas.funilId, kanbanFunis.id))
+      .leftJoin(kanbanCards, eq(kanbanCards.colunaId, kanbanColunas.id))
       .where(eq(kanbanFunis.escritorioId, esc.escritorio.id))
+      .groupBy(kanbanFunis.id)
       .orderBy(asc(kanbanFunis.createdAt));
+
+    return rows.map((r) => ({
+      ...r,
+      totalColunas: Number(r.totalColunas ?? 0),
+      emProducao: Number(r.emProducao ?? 0),
+      concluidos: Number(r.concluidos ?? 0),
+      atrasados: Number(r.atrasados ?? 0),
+      totalCards: Number(r.emProducao ?? 0) + Number(r.concluidos ?? 0),
+    }));
   }),
 
   criarFunil: protectedProcedure

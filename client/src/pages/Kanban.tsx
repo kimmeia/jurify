@@ -18,8 +18,10 @@ import {
   LayoutGrid, Plus, Trash2, Loader2, GripVertical, Calendar,
   User, AlertTriangle, Clock, ChevronLeft, Edit, Scale,
   ExternalLink, ArrowRight, Tag, X, Settings, Upload, CheckCircle2,
-  Archive, Search,
+  Archive, Search, Briefcase, MessageSquare, Paperclip, AlertCircle,
+  Wallet,
 } from "lucide-react";
+import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { ResponsavelAvatar } from "./kanban/responsavel-avatar";
@@ -418,48 +420,136 @@ export default function Kanban() {
 
   // ─── SELETOR DE FUNIL ──────────────────────────────────────────────────
   if (!funilAtivo) {
+    // Agregados pro hero — soma das stats individuais dos funis
+    const totaisEscritorio = listaFunis.reduce(
+      (acc: any, f: any) => ({
+        emProducao: acc.emProducao + (f.emProducao ?? 0),
+        concluidos: acc.concluidos + (f.concluidos ?? 0),
+        atrasados: acc.atrasados + (f.atrasados ?? 0),
+      }),
+      { emProducao: 0, concluidos: 0, atrasados: 0 },
+    );
+    const totalFunisAtivos = listaFunis.filter(
+      (f: any) => (f.emProducao ?? 0) + (f.concluidos ?? 0) > 0,
+    ).length;
+
     return (
-      <div className="space-y-5 max-w-4xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-100 dark:from-indigo-900/40 dark:to-blue-900/40">
-            <LayoutGrid className="h-6 w-6 text-indigo-600" />
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-indigo-50/20 p-6 space-y-5 max-w-7xl mx-auto">
+        {/* ═══════════ HERO ═══════════ */}
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-700 via-blue-700 to-cyan-700 p-7 text-white relative overflow-hidden shadow-lg">
+          <LayoutGrid className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+          <div className="relative">
+            <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <PulseDot />
+                  <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Kanban</p>
+                </div>
+                <p className="text-xs text-white/70">Gestão visual de processos em produção</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setImportTrelloOpen(true)}
+                  className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Importar do Trello
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setNovoFunilOpen(true)}
+                  className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Novo funil
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+              <div className="lg:col-span-6">
+                <p className="text-sm font-medium text-white/85 mb-1">Funis ativos</p>
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
+                    {totalFunisAtivos}
+                  </span>
+                  {totaisEscritorio.emProducao > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
+                      {totaisEscritorio.emProducao} cards em produção
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-white/65 mt-2 tabular-nums">
+                  <b className="text-white">{totaisEscritorio.concluidos}</b> concluídos
+                  {totaisEscritorio.atrasados > 0 && (
+                    <>
+                      {" · "}
+                      <span className="text-amber-200 font-medium">
+                        {totaisEscritorio.atrasados} atrasado{totaisEscritorio.atrasados !== 1 ? "s" : ""}
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {listaFunis.length > 0 && (
+                <div className="lg:col-span-6">
+                  <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Atrasados</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-rose-200">
+                        {totaisEscritorio.atrasados}
+                      </p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Funis vazios</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-slate-200">
+                        {listaFunis.length - totalFunisAtivos}
+                      </p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Total funis</p>
+                      <p className="text-2xl font-bold tabular-nums leading-none text-white">
+                        {listaFunis.length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight">Kanban</h1>
-            <p className="text-sm text-muted-foreground">Gestão visual de processos em produção</p>
-          </div>
-          <Button variant="outline" onClick={() => setImportTrelloOpen(true)}>
-            <Upload className="h-4 w-4 mr-1.5" /> Importar do Trello
-          </Button>
-          <Button onClick={() => setNovoFunilOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Novo funil</Button>
         </div>
 
+        {/* ═══════════ LISTA ═══════════ */}
         {listaFunis.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center py-16 text-center">
               <LayoutGrid className="h-12 w-12 text-muted-foreground/20 mb-4" />
               <h3 className="text-lg font-semibold">Nenhum funil criado</h3>
-              <p className="text-sm text-muted-foreground mt-1">Crie seu primeiro funil para organizar os processos do escritório.</p>
-              <Button className="mt-4" onClick={() => setNovoFunilOpen(true)}><Plus className="h-4 w-4 mr-1.5" /> Criar funil</Button>
+              <p className="text-sm text-muted-foreground mt-1">
+                Crie seu primeiro funil para organizar os processos do escritório.
+              </p>
+              <Button className="mt-4" onClick={() => setNovoFunilOpen(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Criar funil
+              </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {listaFunis.map((f: any) => (
-              <Card key={f.id} className="cursor-pointer hover:shadow-md transition-all" onClick={() => setFunilAtivo(f.id)}>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: f.cor || "#6366f1" }}>
-                      {f.nome[0]}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold">{f.nome}</p>
-                      {f.descricao && <p className="text-xs text-muted-foreground truncate">{f.descricao}</p>}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <FunilCard key={f.id} funil={f} onAbrir={() => setFunilAtivo(f.id)} />
             ))}
+            <button
+              onClick={() => setNovoFunilOpen(true)}
+              className="rounded-2xl border-2 border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 transition-all p-5 flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-slate-700 min-h-[220px]"
+            >
+              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+                <Plus className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold">Criar novo funil</p>
+              <p className="text-xs text-slate-400">Personalize colunas, cores e tags</p>
+            </button>
           </div>
         )}
 
@@ -471,11 +561,21 @@ export default function Kanban() {
               <DialogDescription>Crie um quadro kanban para organizar processos.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
-              <div><Label className="text-xs">Nome *</Label><Input value={novoFunilNome} onChange={(e) => setNovoFunilNome(e.target.value)} placeholder="Ex: Processos Cíveis" /></div>
+              <div>
+                <Label className="text-xs">Nome *</Label>
+                <Input
+                  value={novoFunilNome}
+                  onChange={(e) => setNovoFunilNome(e.target.value)}
+                  placeholder="Ex: Processos Cíveis"
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setNovoFunilOpen(false)}>Cancelar</Button>
-              <Button onClick={() => criarFunilMut.mutate({ nome: novoFunilNome, comColunasPadrao: true })} disabled={!novoFunilNome || criarFunilMut.isPending}>
+              <Button
+                onClick={() => criarFunilMut.mutate({ nome: novoFunilNome, comColunasPadrao: true })}
+                disabled={!novoFunilNome || criarFunilMut.isPending}
+              >
                 {criarFunilMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Criar
               </Button>
             </DialogFooter>
@@ -496,85 +596,184 @@ export default function Kanban() {
   }
 
   // ─── BOARD DO FUNIL ──────────────────────────────────────────────────────
+  // Stats em tempo real baseadas nas colunas carregadas (atualiza com polling)
+  const totalCardsAtivos = colunas.reduce((acc: number, c: any) => acc + (c.cards?.length || 0), 0);
+  const totalAtrasados = colunas.reduce(
+    (acc: number, c: any) => acc + (c.cards?.filter((k: any) => k.atrasado).length || 0),
+    0,
+  );
+  const totalEmProducao = colunas.reduce(
+    (acc: number, c: any) => acc + (c.tipo !== "conclusao" ? c.cards?.length || 0 : 0),
+    0,
+  );
+  const totalConcluidos = colunas.reduce(
+    (acc: number, c: any) => acc + (c.tipo === "conclusao" ? c.cards?.length || 0 : 0),
+    0,
+  );
+
+  const funilNome = funilData?.funil?.nome || "Carregando…";
+  const funilCor = funilData?.funil?.cor || "#6366f1";
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-2">
-        <Button variant="ghost" size="sm" onClick={() => setFunilAtivo(null)}>
-          <ChevronLeft className="h-4 w-4 mr-1" /> Funis
-        </Button>
-        <h2 className="text-lg font-bold flex-1">{funilData?.funil?.nome || "Carregando..."}</h2>
-        <Button size="sm" variant="outline" onClick={() => setNovaTagOpen(true)}>
-          <Tag className="h-3.5 w-3.5 mr-1" /> Tags
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setNovaColunaOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Coluna
-        </Button>
-        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { if (confirm("Excluir funil e todos os cards?")) deletarFunilMut.mutate({ id: funilAtivo }); }}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+    <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-indigo-50/20 p-6 space-y-5">
+      {/* Botão voltar externo ao hero */}
+      <button
+        onClick={() => setFunilAtivo(null)}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" /> Voltar para funis
+      </button>
 
-      <FiltrosBar filtros={filtros} setFiltros={setFiltros} />
+      {/* ═══════════ HERO COMPACTO ═══════════ */}
+      <div className="rounded-2xl bg-gradient-to-br from-indigo-700 via-blue-700 to-cyan-700 p-6 text-white relative overflow-hidden shadow-lg">
+        <div className="relative">
+          <div className="flex items-start gap-5 mb-4 flex-wrap">
+            <div
+              className="w-14 h-14 rounded-2xl text-white flex items-center justify-center text-xl font-bold shrink-0 shadow-lg ring-4 ring-white/20"
+              style={{ background: `linear-gradient(135deg, ${funilCor} 0%, #6366f1 100%)` }}
+            >
+              {funilNome[0]?.toUpperCase() || "K"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <h2 className="text-xl font-bold tracking-tight">{funilNome}</h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
+                  {colunas.length} coluna{colunas.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <p className="text-xs text-white/65">
+                Funil ativo · Atualizado em tempo real
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setNovaTagOpen(true)}
+                className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+              >
+                <Tag className="h-3.5 w-3.5 mr-1" /> Tags
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setNovaColunaOpen(true)}
+                className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Coluna
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-rose-200 hover:text-white hover:bg-rose-500/30 border border-white/20 h-8 w-8 p-0"
+                onClick={() => {
+                  if (confirm("Excluir funil e todos os cards?"))
+                    deletarFunilMut.mutate({ id: funilAtivo });
+                }}
+                title="Excluir funil"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
 
-      {/* Toggle modo compacto + mostrar arquivados */}
-      <div className="flex items-center gap-3 text-xs px-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Cards:</span>
-          <div className="inline-flex rounded-md border bg-background">
-            <button
-              onClick={() => setModoCompacto(false)}
-              className={`px-2.5 py-1 text-xs rounded-l-md ${!modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
-            >
-              Normal
-            </button>
-            <button
-              onClick={() => setModoCompacto(true)}
-              className={`px-2.5 py-1 text-xs rounded-r-md border-l ${modoCompacto ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
-            >
-              Compacto
-            </button>
+          {/* 4 KPIs do funil */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
+              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Total cards</p>
+              <p className="text-2xl font-bold tabular-nums leading-none">{totalCardsAtivos}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
+              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Em produção</p>
+              <p className="text-2xl font-bold tabular-nums leading-none text-blue-200">
+                {totalEmProducao}
+              </p>
+            </div>
+            <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
+              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">⚠ Atrasados</p>
+              <p
+                className={`text-2xl font-bold tabular-nums leading-none ${totalAtrasados > 0 ? "text-rose-200" : ""}`}
+              >
+                {totalAtrasados}
+              </p>
+            </div>
+            <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
+              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Concluídos</p>
+              <p className="text-2xl font-bold tabular-nums leading-none text-emerald-200">
+                {totalConcluidos}
+              </p>
+            </div>
           </div>
         </div>
-        <button
-          onClick={() => setMostrarArquivados(!mostrarArquivados)}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border transition-colors ${
-            mostrarArquivados
-              ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
-              : "bg-background text-muted-foreground border-border hover:bg-muted"
-          }`}
-          title={mostrarArquivados ? "Voltar a esconder arquivados" : "Mostrar cards arquivados"}
-        >
-          <Archive className="h-3.5 w-3.5" />
-          {mostrarArquivados ? "Mostrando arquivados" : "Mostrar arquivados"}
-        </button>
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            value={buscaTexto}
-            onChange={(e) => setBuscaTexto(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") setBuscaTexto(""); }}
-            placeholder="Buscar título, cliente, tag…"
-            className="pl-7 pr-7 h-8 text-xs"
-          />
-          {buscaTexto && (
+      </div>
+
+      {/* ═══════════ FILTROS + BUSCA ═══════════ */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <Input
+              value={buscaTexto}
+              onChange={(e) => setBuscaTexto(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setBuscaTexto("");
+              }}
+              placeholder="Buscar por título, cliente, tag..."
+              className="pl-10 pr-9 h-10 bg-white"
+            />
+            {buscaTexto && (
+              <button
+                onClick={() => setBuscaTexto("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                title="Limpar busca"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Toggle Normal/Compacto */}
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white overflow-hidden">
+              <button
+                onClick={() => setModoCompacto(false)}
+                className={`px-3 py-1.5 text-xs font-medium ${!modoCompacto ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}
+              >
+                Normal
+              </button>
+              <button
+                onClick={() => setModoCompacto(true)}
+                className={`px-3 py-1.5 text-xs font-medium ${modoCompacto ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}
+              >
+                Compacto
+              </button>
+            </div>
+
+            {/* Mostrar arquivados */}
             <button
-              onClick={() => setBuscaTexto("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              title="Limpar busca"
+              onClick={() => setMostrarArquivados(!mostrarArquivados)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                mostrarArquivados
+                  ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                  : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+              }`}
+              title={mostrarArquivados ? "Esconder arquivados" : "Mostrar arquivados"}
             >
-              <X className="h-3.5 w-3.5" />
+              <Archive className="h-3 w-3" />
+              {mostrarArquivados ? "Mostrando arquivados" : "Arquivados"}
             </button>
+          </div>
+
+          {buscaTexto.trim() && (
+            <span className="text-[11px] text-muted-foreground">
+              <b className="text-foreground tabular-nums">{totalCardsFiltrados}</b>
+              {" de "}
+              <b className="tabular-nums">{totalCardsBase}</b> card(s)
+            </span>
           )}
         </div>
-        {buscaTexto.trim() && (
-          <span className="text-[11px] text-muted-foreground">
-            <b className="text-foreground tabular-nums">{totalCardsFiltrados}</b>
-            {" de "}
-            <b className="tabular-nums">{totalCardsBase}</b>
-            {" card(s)"}
-          </span>
-        )}
+
+        <FiltrosBar filtros={filtros} setFiltros={setFiltros} />
       </div>
 
       {/* Colunas — altura máx 70vh com scroll INTERNO; header sticky no topo da coluna */}
@@ -711,69 +910,130 @@ export default function Kanban() {
                     handleDropOnCard(card.id, col.id);
                   }}
                   onClick={() => setCardAberto(card.id)}
-                  className={`group rounded-lg border border-l-4 bg-card shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${
-                    modoCompacto ? "px-2 py-1.5" : "p-3"
-                  } ${PRIORIDADE_COR[card.prioridade] || ""} ${
+                  className={`group relative bg-white rounded-xl border shadow-sm hover:shadow-md cursor-pointer active:cursor-grabbing transition-all ${
+                    modoCompacto ? "px-2.5 py-2" : "p-3"
+                  } ${
+                    isAtrasado
+                      ? "border-rose-300 bg-gradient-to-r from-rose-50/60 to-white"
+                      : col.tipo === "conclusao" && !card.asaasPaymentId
+                        ? "border-emerald-300 bg-gradient-to-br from-emerald-50/60 to-white"
+                        : "border-slate-200 hover:border-slate-400"
+                  } ${
                     dragOverCardId === card.id && dragCardId && dragCardId !== card.id
                       ? "ring-2 ring-primary ring-offset-1"
                       : ""
                   }`}
                   title={modoCompacto ? card.titulo : undefined}
                 >
-                  <div className="flex items-start justify-between gap-1">
+                  {modoCompacto ? (
                     <div className="flex items-center gap-1.5">
-                      {card.prioridade === "alta" && (
-                        <span className="relative flex h-2.5 w-2.5 shrink-0" title="Prioridade alta">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-                        </span>
+                      <PrioDot prioridade={card.prioridade} />
+                      <p className="text-xs font-semibold leading-tight truncate flex-1">
+                        {card.titulo}
+                      </p>
+                      {(card as any).responsavelNome && (
+                        <AvatarResp nome={(card as any).responsavelNome} />
                       )}
-                      {isAtrasado && !card.prioridade?.includes("alta") && (
-                        <span className="relative flex h-2.5 w-2.5 shrink-0" title="Atrasado!">
-                          <span className="animate-pulse h-2.5 w-2.5 rounded-full bg-amber-500" />
-                        </span>
-                      )}
-                      <p className="text-xs font-semibold leading-tight">{card.titulo}</p>
                     </div>
-                    <Button variant="ghost" size="sm" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive"
-                      onClick={(e) => { e.stopPropagation(); deletarCardMut.mutate({ id: card.id }); }}>
-                      <Trash2 className="h-2.5 w-2.5" />
-                    </Button>
-                  </div>
-                  {!modoCompacto && card.cnj && <p className="text-[10px] font-mono text-muted-foreground mt-1">{card.cnj}</p>}
-                  {!modoCompacto && (
-                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    {card.clienteNome && (
-                      <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground"><User className="h-2.5 w-2.5" />{card.clienteNome}</span>
-                    )}
-                    {(card as any).responsavelNome && (
-                      <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
-                        <ResponsavelAvatar nome={(card as any).responsavelNome} tamanho="sm" />
-                        {(card as any).responsavelNome}
-                      </span>
-                    )}
-                    {(card as any).acaoApelido && (
-                      <span className="rounded border border-blue-200 bg-blue-50 px-1 py-0 text-[9px] text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300" title="Ação vinculada">
-                        {(card as any).acaoApelido}
-                      </span>
-                    )}
-                    {card.prazo && (
-                      <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${isAtrasado ? "bg-red-100 text-red-700 font-bold" : "bg-blue-50 text-blue-700 font-medium"}`}>
-                        <Clock className="h-3 w-3" />
-                        {new Date(card.prazo).toLocaleDateString("pt-BR")}
-                        {isAtrasado && " — ATRASADO"}
-                      </span>
-                    )}
-                    {cardTags.map((tagNome: string, i: number) => {
-                      const tagObj = tagsList.find((t: any) => t.nome === tagNome);
-                      return (
-                        <span key={i} className="text-[8px] px-1.5 py-0.5 rounded-full text-white font-medium" style={{ background: tagObj?.cor || "#6b7280" }}>
-                          {tagNome}
-                        </span>
-                      );
-                    })}
-                  </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-2 mb-2">
+                        <PrioDot
+                          prioridade={card.prioridade}
+                          title={`Prioridade ${PRIORIDADE_LABEL[card.prioridade] || "?"}`}
+                          mt
+                        />
+                        <p className="text-sm font-semibold leading-snug flex-1 break-words">
+                          {card.titulo}
+                        </p>
+                        {(card as any).responsavelNome && (
+                          <AvatarResp nome={(card as any).responsavelNome} />
+                        )}
+                      </div>
+
+                      {/* Cliente */}
+                      {card.clienteNome && (
+                        <div className="flex items-center gap-1.5 mb-2 text-[11px] text-slate-700">
+                          <Briefcase className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="font-medium truncate">{card.clienteNome}</span>
+                        </div>
+                      )}
+                      {(card as any).acaoApelido && (
+                        <div className="flex items-center gap-1.5 mb-2 text-[10px] text-blue-700">
+                          <Scale className="w-3 h-3 text-blue-500 shrink-0" />
+                          <span className="font-medium truncate">{(card as any).acaoApelido}</span>
+                        </div>
+                      )}
+                      {card.cnj && !(card as any).acaoApelido && (
+                        <p className="text-[10px] font-mono text-slate-500 mb-2 truncate">{card.cnj}</p>
+                      )}
+
+                      {/* Tags outline */}
+                      {cardTags.length > 0 && (
+                        <div className="flex items-center gap-1 mb-2 flex-wrap">
+                          {cardTags.slice(0, 3).map((tagNome: string, i: number) => {
+                            const tagObj = tagsList.find((t: any) => t.nome === tagNome);
+                            const cor = tagObj?.cor || "#6b7280";
+                            return (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-white"
+                                style={{ color: cor, borderColor: cor }}
+                              >
+                                <span className="inline-block w-1 h-1 rounded-full" style={{ background: cor }} />
+                                {tagNome}
+                              </span>
+                            );
+                          })}
+                          {cardTags.length > 3 && (
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              +{cardTags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Rodapé: prazo/status + tempo na coluna */}
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        {isAtrasado ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                            ⚠ Atrasado
+                          </span>
+                        ) : col.tipo === "conclusao" && !card.asaasPaymentId ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            <Wallet className="w-2.5 h-2.5" /> Lançar cobrança
+                          </span>
+                        ) : col.tipo === "conclusao" && card.asaasPaymentId ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> Cobrança lançada
+                          </span>
+                        ) : card.prazo ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                            <Calendar className="w-2.5 h-2.5" />
+                            {new Date(card.prazo).toLocaleDateString("pt-BR", {
+                              day: "2-digit",
+                              month: "short",
+                            })}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Sem prazo</span>
+                        )}
+                        <TempoColuna updatedAt={card.updatedAt} createdAt={card.createdAt} />
+                      </div>
+                    </>
                   )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute top-1 right-1 h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:bg-rose-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deletarCardMut.mutate({ id: card.id });
+                    }}
+                  >
+                    <Trash2 className="h-2.5 w-2.5" />
+                  </Button>
                 </div>
               );
             })}
@@ -1165,5 +1425,164 @@ export default function Kanban() {
         onConcluido={() => { setModalCobranca(null); refetchFunil(); }}
       />
     </div>
+  );
+}
+
+// ─── Sub-componentes do redesign ───────────────────────────────────────────
+
+/** Card de funil na tela seletora — com mini-stats agregadas. */
+function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
+  const cor = funil.cor || "#6366f1";
+  const totalCards = funil.totalCards ?? 0;
+  const concluidos = funil.concluidos ?? 0;
+  const emProducao = funil.emProducao ?? 0;
+  const atrasados = funil.atrasados ?? 0;
+  const totalParaProgresso = emProducao + concluidos;
+  const progresso = totalParaProgresso > 0 ? (concluidos / totalParaProgresso) * 100 : 0;
+
+  const status =
+    atrasados > 0
+      ? { label: `⚠ ${atrasados} atraso${atrasados !== 1 ? "s" : ""}`, cls: "bg-rose-50 text-rose-700" }
+      : totalCards === 0
+        ? { label: "Vazio", cls: "bg-slate-100 text-slate-500" }
+        : { label: "Ativo", cls: "bg-emerald-50 text-emerald-700" };
+
+  return (
+    <button
+      onClick={onAbrir}
+      className={`relative overflow-hidden bg-white rounded-2xl border border-slate-200 text-left transition-all hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300 ${
+        totalCards === 0 ? "opacity-80" : ""
+      }`}
+    >
+      {/* Faixa colorida no topo */}
+      <div
+        className="h-1.5 w-full"
+        style={{ background: `linear-gradient(90deg, ${cor} 0%, #6366f1 100%)` }}
+      />
+      <div className="p-5">
+        <div className="flex items-start gap-3 mb-4">
+          <div
+            className="w-11 h-11 rounded-xl text-white flex items-center justify-center font-bold shadow-sm"
+            style={{ background: `linear-gradient(135deg, ${cor} 0%, #6366f1 100%)` }}
+          >
+            {funil.nome[0]?.toUpperCase() || "K"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold truncate">{funil.nome}</p>
+            <p className="text-[11px] text-slate-500 truncate">
+              {funil.totalColunas ?? 0} coluna{funil.totalColunas !== 1 ? "s" : ""}
+              {funil.descricao ? ` · ${funil.descricao}` : ""}
+            </p>
+          </div>
+          <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${status.cls}`}>
+            {status.label}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="rounded-lg p-2 bg-slate-50">
+            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-indigo-600">
+              {emProducao}
+            </p>
+            <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1">Em produção</p>
+          </div>
+          <div className="rounded-lg p-2 bg-slate-50">
+            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-emerald-600">
+              {concluidos}
+            </p>
+            <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-1">Concluídos</p>
+          </div>
+          <div className={`rounded-lg p-2 ${atrasados > 0 ? "bg-rose-50 ring-1 ring-rose-200" : "bg-slate-50"}`}>
+            <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-rose-600">
+              {atrasados}
+            </p>
+            <p className={`text-[9px] uppercase tracking-wider mt-1 ${atrasados > 0 ? "text-rose-700 font-semibold" : "text-slate-500"}`}>
+              Atrasados
+            </p>
+          </div>
+        </div>
+
+        {totalParaProgresso > 0 && (
+          <>
+            <div className="mb-1 flex justify-between text-[10px] text-slate-500">
+              <span>Progresso geral</span>
+              <span className="font-semibold text-slate-700">{progresso.toFixed(0)}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${progresso}%`,
+                  background: `linear-gradient(90deg, ${cor} 0%, #6366f1 100%)`,
+                }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/** Dot de prioridade pequeno com halo pulsante na "alta". */
+function PrioDot({
+  prioridade,
+  title,
+  mt,
+}: {
+  prioridade: string;
+  title?: string;
+  mt?: boolean;
+}) {
+  const cls =
+    prioridade === "alta"
+      ? "bg-rose-500 shadow-[0_0_0_3px_rgb(244_63_94_/_0.15)]"
+      : prioridade === "media"
+        ? "bg-amber-500"
+        : "bg-slate-400";
+  return (
+    <span
+      className={`w-1.5 h-1.5 rounded-full shrink-0 ${cls} ${mt ? "mt-1.5" : ""}`}
+      title={title}
+    />
+  );
+}
+
+/** Avatar do responsável (26px com ring branco). */
+function AvatarResp({ nome }: { nome: string }) {
+  return (
+    <span
+      className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-[0_0_0_2px_white] shrink-0 bg-gradient-to-br ${gradientAvatar(nome)}`}
+      title={nome}
+    >
+      {gerarIniciais(nome)}
+    </span>
+  );
+}
+
+/** Tempo na coluna (proxy via updatedAt). Vira laranja quando > 7d. */
+function TempoColuna({
+  updatedAt,
+  createdAt,
+}: {
+  updatedAt: string | Date | null;
+  createdAt: string | Date | null;
+}) {
+  const ref = updatedAt || createdAt;
+  if (!ref) return null;
+  const dias = Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24));
+  if (dias < 1) return <span className="ml-auto text-[10px] text-slate-400">hoje</span>;
+  if (dias === 1) return <span className="ml-auto text-[10px] text-slate-400">há 1d</span>;
+  const quente = dias > 7;
+  const texto = dias < 7 ? `há ${dias}d` : dias < 30 ? `há ${Math.floor(dias / 7)}sem` : `há ${Math.floor(dias / 30)}mês`;
+  return (
+    <span
+      className={`ml-auto text-[10px] tabular-nums ${
+        quente ? "text-orange-600 font-semibold" : "text-slate-400"
+      }`}
+      title={`Última atividade ${new Date(ref).toLocaleString("pt-BR")}`}
+    >
+      {texto}
+    </span>
   );
 }
