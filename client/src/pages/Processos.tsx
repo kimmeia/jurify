@@ -39,6 +39,43 @@ function ehErroSessaoCofre(e: { message?: string } | null | undefined): boolean 
   const msg = e?.message || "";
   return /sess[aã]o.*expir|Cofre.*Validar|credencial.*expir|credencial.*ca[ií]/i.test(msg);
 }
+
+/** Hash determinístico → paleta de gradient pra avatar do cliente. Mesmo
+ *  nome sempre gera a mesma cor (consistência entre módulos). */
+const PALETA_GRADIENT = [
+  "from-indigo-500 to-violet-600",
+  "from-pink-500 to-rose-600",
+  "from-amber-500 to-orange-600",
+  "from-emerald-500 to-teal-600",
+  "from-cyan-500 to-blue-600",
+  "from-fuchsia-500 to-purple-600",
+  "from-rose-500 to-red-600",
+  "from-sky-500 to-indigo-600",
+  "from-lime-500 to-emerald-600",
+];
+function gradientAvatar(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return PALETA_GRADIENT[Math.abs(h) % PALETA_GRADIENT.length];
+}
+function gerarIniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
+function tempoRelativoBR(iso: string | Date | null | undefined): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(typeof iso === "string" ? iso : iso.toISOString()).getTime();
+  const horas = Math.floor(ms / (1000 * 60 * 60));
+  if (horas < 1) return "agora há pouco";
+  if (horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return "há 1 dia";
+  if (dias < 30) return `há ${dias} dias`;
+  const meses = Math.floor(dias / 30);
+  return `há ${meses} ${meses === 1 ? "mês" : "meses"}`;
+}
 const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", name: "Nome" };
 // "ativo" / "pausado" / "erro" são os 3 valores do enum atual em motor_monitoramentos.
 // Legado Judit (created/updating/updated/paused) mantido pra cards antigos.
@@ -2113,6 +2150,10 @@ function NovasAcoesTab() {
   const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
   const [atualDrawerOpen, setAtualDrawerOpen] = useState(false);
   const [buscaTexto, setBuscaTexto] = useState("");
+  // Detalhes enriquecidos por nova ação (on-demand via consultarCNJSincrono — 1 cred/cnj).
+  // Cards chegam só com cnj+tribunal+data; partes/assunto/valor não são persistidos.
+  const [detalhesPorAcaoId, setDetalhesPorAcaoId] = useState<Record<number, any>>({});
+  const [carregandoAcaoId, setCarregandoAcaoId] = useState<number | null>(null);
   const utils = trpc.useUtils();
 
   const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
@@ -2177,6 +2218,32 @@ function NovasAcoesTab() {
       setAcoesAcumuladas((prev) => prev.map((a) => (a.id === id ? { ...a, lido: true } : a)));
     },
   });
+
+  const carregarDetalhesMut = (trpc.processos as any).consultarCNJSincrono.useMutation({
+    onSuccess: (d: any, vars: { cnj: string; acaoId: number }) => {
+      if (d?.lawsuit) {
+        setDetalhesPorAcaoId((prev) => ({ ...prev, [vars.acaoId]: d.lawsuit }));
+        toast.success("Detalhes carregados (1 cred)");
+      } else {
+        toast.warning("Tribunal não retornou detalhes pra esse CNJ");
+      }
+      setCarregandoAcaoId(null);
+    },
+    onError: (e: any) => {
+      toast.error("Falha ao carregar detalhes", { description: e.message });
+      setCarregandoAcaoId(null);
+      if (ehErroSessaoCofre(e)) {
+        utils.cofreCredenciais.listarMinhas.invalidate();
+        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+      }
+    },
+  });
+
+  const carregarDetalhes = (acaoId: number, cnj: string, credIdMon?: number | null) => {
+    if (carregandoAcaoId !== null) return;
+    setCarregandoAcaoId(acaoId);
+    (carregarDetalhesMut.mutate as any)({ cnj, credencialId: credIdMon ?? undefined, acaoId });
+  };
 
   const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
     onSuccess: (r: any) => {
@@ -2513,55 +2580,162 @@ function NovasAcoesTab() {
       ) : (
         <div className="space-y-2">
           {acoes.map((a: any) => {
+            const detalhes = detalhesPorAcaoId[a.id];
+            const carregando = carregandoAcaoId === a.id;
+            const ativos = (detalhes?.parties || []).filter((p: any) => p.side === "Active").slice(0, 3);
+            const passivos = (detalhes?.parties || []).filter((p: any) => p.side === "Passive").slice(0, 3);
+            const advogados = (detalhes?.parties || [])
+              .flatMap((p: any) => (p.lawyers || []).map((l: any) => l.name))
+              .slice(0, 3);
+            const assunto = detalhes?.classifications?.[0]?.name || detalhes?.subjects?.[0]?.name;
+            const valor = detalhes?.amount;
+            const corte = detalhes?.courts?.[0]?.name;
+            const clienteNome = a.clienteApelido || a.clienteSearchKey || "Cliente";
+            const seed = clienteNome + (a.id || "");
+            const iniciais = gerarIniciais(clienteNome);
+            const corteBorda = !a.lido ? "border-l-rose-500" : "border-l-transparent";
+            const tempoRel = tempoRelativoBR(a.dataDistribuicao || a.createdAt);
+
             return (
-              <Card
+              <div
                 key={a.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${!a.lido ? "border-red-500/40 bg-red-50/30 dark:bg-red-950/10" : ""} ${marcarLidaMut.isPending ? "pointer-events-none opacity-70" : ""}`}
-                onClick={() => { if (!a.lido && !marcarLidaMut.isPending) marcarLidaMut.mutate({ id: a.id }); }}
+                className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-rose-50/30 to-white" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${marcarLidaMut.isPending ? "pointer-events-none opacity-70" : ""}`}
               >
-                <CardContent className="pt-3 pb-3">
+                <div className="px-4 py-3.5">
                   <div className="flex items-start gap-3">
-                    <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${!a.lido ? "bg-red-500/15" : "bg-slate-500/10"}`}>
-                      {!a.lido ? (
-                        <Siren className="h-4 w-4 text-red-600 animate-pulse" />
-                      ) : (
-                        <Scale className="h-4 w-4 text-slate-500" />
-                      )}
+                    {/* Avatar gradient com iniciais do cliente */}
+                    <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${gradientAvatar(seed)} flex items-center justify-center shrink-0 shadow-sm`}>
+                      <span className="text-white font-bold text-sm tracking-tight">{iniciais}</span>
                     </div>
+
                     <div className="flex-1 min-w-0">
+                      {/* Header: nome do cliente em destaque */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-bold font-mono">{a.cnj}</p>
-                        {a.tribunal && <Badge variant="outline" className="text-[9px]">{a.tribunal.toUpperCase()}</Badge>}
+                        <p className="text-sm font-bold tracking-tight truncate" title={clienteNome}>
+                          {clienteNome}
+                        </p>
                         {!a.lido && (
-                          <Badge className="bg-red-500 text-white text-[9px]">NOVO</Badge>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                            <Siren className="h-2.5 w-2.5" />
+                            Novo
+                          </span>
+                        )}
+                        {a.clienteSearchType && a.clienteSearchKey && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono">
+                            {a.clienteSearchType.toUpperCase()} {a.clienteSearchKey}
+                          </span>
                         )}
                       </div>
-                      {(a.clienteApelido || a.clienteSearchKey) && (
-                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-violet-700 dark:text-violet-400">
-                          <User className="h-3 w-3" />
-                          <span className="font-medium">Cliente monitorado:</span>
-                          <span className="font-semibold truncate" title={a.clienteApelido || a.clienteSearchKey}>
-                            {a.clienteApelido || a.clienteSearchKey}
+
+                      {/* Detectado há X / em Y tribunal */}
+                      <div className="flex items-center gap-2 text-[10.5px] text-slate-500 mt-1 flex-wrap">
+                        {tempoRel && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Detectado <b className="font-semibold text-slate-700">{tempoRel}</b>
                           </span>
-                          {a.clienteApelido && a.clienteSearchKey && (
-                            <span className="font-mono text-muted-foreground">
-                              ({(a.clienteSearchType || "").toUpperCase()}: {a.clienteSearchKey})
+                        )}
+                        {a.tribunal && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-[9.5px]">
+                              {a.tribunal.toUpperCase()}
+                            </span>
+                          </>
+                        )}
+                        {detalhes?.instance && (
+                          <span className="text-slate-500">{detalhes.instance}ª inst.</span>
+                        )}
+                      </div>
+
+                      {/* Box do processo */}
+                      <div className="mt-3 rounded-lg bg-slate-50/70 border border-slate-200/70 p-3 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-bold font-mono text-slate-900">{a.cnj}</p>
+                          {valor != null && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9.5px] font-semibold tabular-nums">
+                              <CircleDollarSign className="h-2.5 w-2.5" />
+                              {formatBRL(valor)}
+                            </span>
+                          )}
+                          {detalhes?.distribution_date && (
+                            <span className="text-[10px] text-slate-500">
+                              Dist. {new Date(detalhes.distribution_date).toLocaleDateString("pt-BR")}
                             </span>
                           )}
                         </div>
-                      )}
-                      <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
-                        {a.dataDistribuicao && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            Detectado em {new Date(a.dataDistribuicao).toLocaleDateString("pt-BR")}
-                          </span>
+                        {assunto && (
+                          <p className="text-xs text-slate-700 leading-snug">{assunto}</p>
+                        )}
+                        {corte && (
+                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1">
+                            <MapPin className="h-2.5 w-2.5" />
+                            {corte}
+                          </p>
+                        )}
+                        {detalhes && (ativos.length > 0 || passivos.length > 0) && (
+                          <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-slate-200/70">
+                            {ativos.length > 0 && (
+                              <div>
+                                <p className="text-[9px] font-bold text-blue-700 mb-1 tracking-wider">POLO ATIVO</p>
+                                {ativos.map((p: any, i: number) => (
+                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.name}>{p.name}</p>
+                                ))}
+                              </div>
+                            )}
+                            {passivos.length > 0 && (
+                              <div>
+                                <p className="text-[9px] font-bold text-rose-700 mb-1 tracking-wider">POLO PASSIVO</p>
+                                {passivos.map((p: any, i: number) => (
+                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.name}>{p.name}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {advogados.length > 0 && (
+                          <div className="pt-1.5 mt-1 border-t border-slate-200/70">
+                            <p className="text-[9px] font-bold text-violet-700 mb-0.5 tracking-wider">ADVOGADOS</p>
+                            <p className="text-[10.5px] text-slate-600 truncate">{advogados.join(" · ")}</p>
+                          </div>
+                        )}
+                        {!detalhes && (
+                          <div className="pt-2 mt-1 border-t border-slate-200/70 flex items-center justify-between gap-2 flex-wrap">
+                            <p className="text-[10.5px] text-slate-500 italic">
+                              Partes, advogados, assunto e valor não carregados ainda.
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10.5px] rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
+                              disabled={carregando || carregandoAcaoId !== null}
+                              onClick={() => carregarDetalhes(a.id, a.cnj)}
+                            >
+                              {carregando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
+                              Carregar detalhes <span className="ml-1 text-[9.5px] text-indigo-500">1 cred</span>
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Ações */}
+                    <div className="flex flex-col gap-1 shrink-0">
+                      {!a.lido && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-[10.5px] rounded-lg text-slate-600 hover:bg-slate-100"
+                          onClick={() => marcarLidaMut.mutate({ id: a.id })}
+                        >
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Marcar lida
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
           {hasMore && (
