@@ -31,6 +31,14 @@ import {
 } from "./processos/search-history";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
+
+/** Detecta erro de "sessão expirou" / "credencial caiu" nas mensagens do
+ *  backend. Quando rola, o badge "ativa" do cofre fica stale na UI até
+ *  refresh manual — caller deve invalidar a query do cofre. */
+function ehErroSessaoCofre(e: { message?: string } | null | undefined): boolean {
+  const msg = e?.message || "";
+  return /sess[aã]o.*expir|Cofre.*Validar|credencial.*expir|credencial.*ca[ií]/i.test(msg);
+}
 const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cnpj: "CNPJ", name: "Nome" };
 // "ativo" / "pausado" / "erro" são os 3 valores do enum atual em motor_monitoramentos.
 // Legado Judit (created/updating/updated/paused) mantido pra cards antigos.
@@ -731,6 +739,7 @@ function MonitoramentoCard({
   const searchKey = mon.searchKey || mon.search?.search_key || "-";
 
   const [processoCompleto, setProcessoCompleto] = useState<any>(null);
+  const utils = trpc.useUtils();
 
   const resumoMut = (trpc.processos as any).resumoIA.useMutation({
     onSuccess: (data: any) => {
@@ -774,9 +783,19 @@ function MonitoramentoCard({
         if (mon.id) refetchHist();
       } else {
         toast.error(data.mensagem || "Processo não encontrado");
+        if (ehErroSessaoCofre({ message: data.mensagem })) {
+          utils.cofreCredenciais.listarMinhas.invalidate();
+          (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        }
       }
     },
-    onError: (e: any) => toast.error("Erro ao buscar", { description: e.message }),
+    onError: (e: any) => {
+      toast.error("Erro ao buscar", { description: e.message });
+      if (ehErroSessaoCofre(e)) {
+        utils.cofreCredenciais.listarMinhas.invalidate();
+        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+      }
+    },
     onSettled: () => {
       buscarLockRef.current = false;
     },
@@ -846,29 +865,99 @@ function MonitoramentoCard({
   const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
   const passivos = partes.filter((p: any) => p.side === "Passive").slice(0, 5);
 
+  // Cor de borda lateral baseada no status — espelha o health-dot
+  const temErro = !!(mon as any).ultimoErro || status === "erro";
+  const pausado = status === "paused" || status === "pausado";
+  const corLateral = temErro
+    ? "border-l-rose-500"
+    : pausado
+      ? "border-l-slate-400"
+      : "border-l-emerald-500";
+
+  // Estilo do avatar/ícone — pausado vira cinza, erro vira gradient rose
+  const avatarStyle = temErro
+    ? "bg-gradient-to-br from-rose-500 to-pink-600"
+    : pausado
+      ? "bg-slate-200"
+      : "bg-gradient-to-br from-indigo-500 to-violet-600";
+  const avatarIconColor = pausado ? "text-slate-500" : "text-white";
+
+  // Tempo relativo "há X" pra última atualização
+  const tempoRelativo = (() => {
+    const ref = mon.updatedAt || mon.createdAt;
+    if (!ref) return null;
+    const ms = Date.now() - new Date(typeof ref === "string" ? ref : (ref as Date).toISOString()).getTime();
+    const horas = Math.floor(ms / (1000 * 60 * 60));
+    if (horas < 1) return "agora há pouco";
+    if (horas < 24) return `há ${horas}h`;
+    const dias = Math.floor(horas / 24);
+    if (dias === 1) return "há 1 dia";
+    if (dias < 30) return `há ${dias} dias`;
+    const meses = Math.floor(dias / 30);
+    return `há ${meses} ${meses === 1 ? "mês" : "meses"}`;
+  })();
+
+  // Card "erro" tem bg sutil rose
+  const cardBg = temErro
+    ? "bg-gradient-to-r from-rose-50/40 to-white"
+    : pausado
+      ? "bg-slate-50/40"
+      : "bg-white";
+
   return (
     <>
-    <Card className="transition-all hover:shadow-sm">
-      <CardContent className="pt-3 pb-3">
+    <div className={`rounded-xl ${cardBg} border border-slate-200 border-l-[3px] ${corLateral} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${pausado ? "opacity-75" : ""}`}>
+      <div className="px-4 py-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
-          <MonitorHealthDot
-            statusJudit={status}
-            updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
-            createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
-            ultimoErro={(mon as any).ultimoErro}
-          />
-          <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
-            {searchType === "lawsuit_cnj" ? <Scale className="h-4 w-4 text-indigo-500" /> : <Users className="h-4 w-4 text-indigo-500" />}
+          <div className={`h-11 w-11 rounded-xl ${avatarStyle} flex items-center justify-center shrink-0 shadow-sm`}>
+            {searchType === "lawsuit_cnj" ? <Scale className={`h-5 w-5 ${avatarIconColor}`} /> : <Users className={`h-5 w-5 ${avatarIconColor}`} />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-mono font-medium truncate" title={mon.apelido || searchKey}>{mon.apelido || searchKey}</p>
-              <Badge variant="outline" className="text-[9px] shrink-0">{TIPO_LABELS[searchType] || searchType}</Badge>
-              <Badge variant="outline" className={`text-[9px] shrink-0 ${st.cor}`}>{st.label}</Badge>
+              <MonitorHealthDot
+                statusJudit={status}
+                updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
+                createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
+                ultimoErro={(mon as any).ultimoErro}
+              />
+              <p className="text-sm font-bold font-mono truncate" title={searchKey}>{searchKey}</p>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-50 text-indigo-700">
+                {TIPO_LABELS[searchType] || searchType}
+              </span>
+              {temErro && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-rose-100 text-rose-800 animate-pulse">
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  Credencial expirada
+                </span>
+              )}
+              {pausado && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-slate-200 text-slate-600">
+                  Pausado
+                </span>
+              )}
+              {!temErro && !pausado && mon.apelido && mon.apelido !== searchKey && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-violet-100 text-violet-800 max-w-[180px] truncate" title={mon.apelido}>
+                  {mon.apelido}
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
-              <span className="font-mono">{searchKey}</span>
-              <span>{mon.totalAtualizacoes || 0} atualização(ões)</span>
+            <div className="flex items-center gap-2.5 text-[11px] text-slate-500 mt-1.5 flex-wrap">
+              {tempoRelativo && (
+                <span className="inline-flex items-center gap-1">
+                  <span className={`h-1.5 w-1.5 rounded-full ${temErro ? "bg-rose-500" : pausado ? "bg-slate-400" : "bg-emerald-500"}`} />
+                  Última mov. <b className="font-semibold text-slate-700">{tempoRelativo}</b>
+                </span>
+              )}
+              <span className="text-slate-300">·</span>
+              <span className="tabular-nums">{mon.totalAtualizacoes || 0} atualização{mon.totalAtualizacoes === 1 ? "" : "ões"}</span>
+              {(mon as any).ultimoErro && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-rose-600 truncate max-w-[260px]" title={(mon as any).ultimoErro}>
+                    "{(mon as any).ultimoErro}"
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -877,7 +966,7 @@ function MonitoramentoCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-[10px] text-indigo-600"
+                  className="h-7 text-[10px] text-indigo-600 hover:bg-indigo-50 rounded-lg"
                   title="Atualizar processo agora — consulta tribunal (1 crédito)"
                   disabled={buscarCompletoMut.isPending}
                   onClick={clickHistorico}
@@ -888,7 +977,7 @@ function MonitoramentoCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-[10px] text-violet-600"
+                  className="h-7 text-[10px] text-violet-600 hover:bg-violet-50 rounded-lg"
                   title="Gerar resumo IA detalhado (1 crédito)"
                   disabled={resumoMut.isPending}
                   onClick={() => setConfirmResumoOpen(true)}
@@ -1035,8 +1124,8 @@ function MonitoramentoCard({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
 
     <AlertDialog open={confirmResumoOpen} onOpenChange={setConfirmResumoOpen}>
       <AlertDialogContent>
@@ -1077,6 +1166,8 @@ function MonitorarTab() {
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
   const [deletarTarget, setDeletarTarget] = useState<{ id: number; nome: string } | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "pausado" | "erro">("todos");
+  const [buscaTexto, setBuscaTexto] = useState("");
+  const utils = trpc.useUtils();
 
   // Estado pra "Atualizar todos" — drawer com lista + progress. ID da
   // operação fica no state pra suportar "user fecha drawer e reabre"
@@ -1168,8 +1259,17 @@ function MonitorarTab() {
   useEffect(() => {
     if (progresso?.status === "concluido") {
       refetch();
+      // Se algum monitor caiu por sessão expirada, atualiza badge do cofre
+      // pra refletir o "expirada" que o backend já gravou no DB.
+      const teveErroSessao = (progresso.monitores || []).some((m: any) =>
+        m.status === "erro" && ehErroSessaoCofre({ message: m.erro }),
+      );
+      if (teveErroSessao) {
+        utils.cofreCredenciais.listarMinhas.invalidate();
+        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+      }
     }
-  }, [progresso?.status, refetch]);
+  }, [progresso?.status, refetch, utils, progresso]);
 
   // Retomar operações em andamento quando user volta pra página.
   // operacoesPendentes lê o runner em memória do servidor.
@@ -1207,15 +1307,31 @@ function MonitorarTab() {
     pausado: listaMons.filter((m: any) => (m.statusJudit || m.status) === "pausado" || (m.statusJudit || m.status) === "paused").length,
     erro: listaMons.filter((m: any) => (m.statusJudit || m.status) === "erro" || !!(m as any).ultimoErro).length,
   };
-  const listaMonsFiltrada = filtroStatus === "todos"
-    ? listaMons
-    : listaMons.filter((m: any) => {
-        const st = m.statusJudit || m.status;
-        if (filtroStatus === "ativo") return st === "ativo" || st === "created" || st === "updated";
-        if (filtroStatus === "pausado") return st === "pausado" || st === "paused";
-        if (filtroStatus === "erro") return st === "erro" || !!(m as any).ultimoErro;
-        return true;
-      });
+  // Normaliza string pra busca: trim, lowercase, remove acentos e
+  // não-alfanuméricos. Faz CPF "123.456.789-00" bater com "12345678900".
+  const normalizarBusca = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]/g, "");
+  const buscaNormalizada = normalizarBusca(buscaTexto);
+  const listaMonsFiltrada = listaMons
+    .filter((m: any) => {
+      if (filtroStatus === "todos") return true;
+      const st = m.statusJudit || m.status;
+      if (filtroStatus === "ativo") return st === "ativo" || st === "created" || st === "updated";
+      if (filtroStatus === "pausado") return st === "pausado" || st === "paused";
+      if (filtroStatus === "erro") return st === "erro" || !!(m as any).ultimoErro;
+      return true;
+    })
+    .filter((m: any) => {
+      if (!buscaNormalizada) return true;
+      const campos = [m.apelido, m.searchKey, m.cnj]
+        .filter(Boolean)
+        .map((c: string) => normalizarBusca(String(c)));
+      return campos.some((c: string) => c.includes(buscaNormalizada));
+    });
 
   return (
     <div className="space-y-4">
@@ -1260,9 +1376,28 @@ function MonitorarTab() {
           </div>
         </div>
 
-        {/* Filtros (chips) */}
+        {/* Busca + Filtros (chips) */}
         {listaMons.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-4 flex-wrap">
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder="Buscar por nome, CPF ou número do processo…"
+                value={buscaTexto}
+                onChange={(e) => setBuscaTexto(e.target.value)}
+                className="pl-8 h-8 rounded-lg border-slate-200 bg-white text-xs focus-visible:ring-indigo-400"
+              />
+              {buscaTexto && (
+                <button
+                  type="button"
+                  onClick={() => setBuscaTexto("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                  title="Limpar"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             {[
               { id: "todos", label: "Todos", count: contaPorStatus.todos, cor: "indigo" },
               { id: "ativo", label: "Ativos", count: contaPorStatus.ativo, cor: "emerald" },
@@ -1633,17 +1768,18 @@ export default function Processos() {
             className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
           >
             <Radar className="h-3.5 w-3.5" />Movimentações
+            <MonitoramentosCount />
           </TabsTrigger>
           <TabsTrigger
             value="novas-acoes"
-            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium relative"
+            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
           >
             <Siren className="h-3.5 w-3.5" />Novas Ações
             <NovasAcoesBadge />
           </TabsTrigger>
           <TabsTrigger
             value="alertas"
-            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium relative"
+            className="gap-1.5 text-xs py-2 px-3.5 !rounded-lg !text-slate-600 data-[state=active]:!bg-white data-[state=active]:!text-slate-900 data-[state=active]:!shadow-sm font-medium"
           >
             <Bell className="h-3.5 w-3.5" />Alertas
             <AlertasBadge />
@@ -1921,6 +2057,20 @@ function AlertasTab() {
   );
 }
 
+function MonitoramentosCount() {
+  const { data } = trpc.processos.meusMonitoramentos.useQuery(
+    { tipoMonitoramento: "movimentacoes" },
+    { retry: false, refetchOnWindowFocus: false },
+  );
+  const count = (data || []).length;
+  if (count === 0) return null;
+  return (
+    <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 rounded-full tabular-nums font-semibold">
+      {count}
+    </span>
+  );
+}
+
 function NovasAcoesBadge() {
   const { data } = (trpc.processos as any).listarNovasAcoes.useQuery(
     { apenasNaoLidas: true, limite: 1 },
@@ -1929,8 +2079,8 @@ function NovasAcoesBadge() {
   const count = data?.totalNaoLidas ?? 0;
   if (count === 0) return null;
   return (
-    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-      {count > 9 ? "9+" : count}
+    <span className="ml-1 text-[10px] bg-rose-100 text-rose-700 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+      {count}
     </span>
   );
 }
@@ -1943,8 +2093,8 @@ function AlertasBadge() {
   const count = data?.pendentes ?? 0;
   if (count === 0) return null;
   return (
-    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">
-      {count > 9 ? "9+" : count}
+    <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+      {count}
     </span>
   );
 }
@@ -1960,6 +2110,9 @@ function NovasAcoesTab() {
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [credencialId, setCredencialId] = useState<string>("");
   const [deletarMonTarget, setDeletarMonTarget] = useState<{ id: number; nome: string } | null>(null);
+  const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
+  const [atualDrawerOpen, setAtualDrawerOpen] = useState(false);
+  const utils = trpc.useUtils();
 
   const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
@@ -2028,6 +2181,10 @@ function NovasAcoesTab() {
     onSuccess: (r: any) => {
       if (!r.ok) {
         toast.error("Falha na busca", { description: r.mensagem ?? "Erro desconhecido", duration: 8000 });
+        if (ehErroSessaoCofre({ message: r.mensagem })) {
+          utils.cofreCredenciais.listarMinhas.invalidate();
+          (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        }
         return;
       }
       if (r.baseline) {
@@ -2042,7 +2199,13 @@ function NovasAcoesTab() {
       }
       recarregarDoTopo();
     },
-    onError: (e: any) => toast.error("Erro ao atualizar", { description: e.message }),
+    onError: (e: any) => {
+      toast.error("Erro ao atualizar", { description: e.message });
+      if (ehErroSessaoCofre(e)) {
+        utils.cofreCredenciais.listarMinhas.invalidate();
+        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+      }
+    },
   });
 
   const deletarMonMut = trpc.processos.deletarMonitoramento.useMutation({
@@ -2054,10 +2217,40 @@ function NovasAcoesTab() {
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
   });
 
+  const atualizarTodosMut = (trpc.processos as any).atualizarTodosMonitoramentos.useMutation({
+    onSuccess: (d: any) => {
+      setAtualOperacaoId(d.operacaoId);
+      setAtualDrawerOpen(true);
+      toast.success(`Atualizando ${d.total} monitoramento(s) de novas ações…`);
+    },
+    onError: (e: any) => toast.error("Falha ao iniciar atualização", { description: e.message }),
+  });
+
+  const { data: progresso } = (trpc.processos as any).progressoAtualizacao.useQuery(
+    { operacaoId: atualOperacaoId },
+    {
+      enabled: !!atualOperacaoId,
+      refetchInterval: (q: any) => {
+        const d = q?.state?.data;
+        if (!d || d.status === "rodando") return 2000;
+        return false;
+      },
+      retry: false,
+    },
+  );
+
+  useEffect(() => {
+    if (progresso?.status === "concluido") {
+      recarregarDoTopo();
+    }
+  }, [progresso?.status]);
+
   const acoes = acoesAcumuladas;
   const monitoramentos = data?.monitoramentos || [];
   const hasMore = data?.hasMore ?? false;
   const naoLidasAcumuladas = acoes.filter((a: any) => !a.lido).length;
+  const idsNovasAcoes = (monitoramentos as any[]).map((m: any) => m.id);
+  const totalAtualizaveisNovas = (monitoramentos as any[]).filter((m: any) => m.statusJudit === "ativo" || m.status === "ativo" || m.statusJudit === "created" || m.statusJudit === "updated").length;
 
   return (
     <div className="space-y-4">
@@ -2082,15 +2275,100 @@ function NovasAcoesTab() {
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            className="h-9 rounded-lg bg-gradient-to-br from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 shadow-sm shrink-0"
-            onClick={() => setNovoOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />Novo monitoramento
-          </Button>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {totalAtualizaveisNovas > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
+                disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+                onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
+                title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
+              >
+                {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+                )}
+                Atualizar todos
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="h-9 rounded-lg bg-gradient-to-br from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 shadow-sm"
+              onClick={() => setNovoOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />Novo monitoramento
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={atualDrawerOpen} onOpenChange={setAtualDrawerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {progresso?.status === "concluido"
+                ? "Atualização concluída"
+                : "Atualizando monitoramentos…"}
+            </DialogTitle>
+            <DialogDescription>
+              {progresso
+                ? `${progresso.processados}/${progresso.total} processados — ${progresso.ok} ok, ${progresso.erro} erro${progresso.detectadasTotal > 0 ? `, ${progresso.detectadasTotal} novidade(s)` : ""}`
+                : "Preparando…"}
+            </DialogDescription>
+          </DialogHeader>
+          {progresso && (
+            <>
+              <Progress
+                value={progresso.total > 0 ? (progresso.processados / progresso.total) * 100 : 0}
+                className="h-2"
+              />
+              <div className="space-y-1 max-h-[50vh] overflow-y-auto mt-3">
+                {progresso.monitores.map((m: any) => (
+                  <div key={m.monitoramentoId} className="flex items-center gap-2 text-xs py-1.5 border-b border-dashed last:border-0">
+                    <div className="w-6 shrink-0 text-center">
+                      {m.status === "pendente" && <span className="text-muted-foreground">⏳</span>}
+                      {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-blue-500 inline" />}
+                      {m.status === "ok" && <span className="text-emerald-600">✓</span>}
+                      {m.status === "erro" && <span className="text-red-600">✗</span>}
+                    </div>
+                    <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
+                    <Badge variant="outline" className="text-[9px] shrink-0">
+                      {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
+                    </Badge>
+                    {m.status === "ok" && m.baseline && (
+                      <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
+                    )}
+                    {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
+                      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                    )}
+                    {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
+                      <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
+                    )}
+                    {m.status === "erro" && (
+                      <span className="text-[9px] text-red-600 shrink-0 max-w-[180px] truncate" title={m.erro}>
+                        {m.erro}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <DialogFooter>
+            <Button
+              variant={progresso?.status === "concluido" ? "default" : "outline"}
+              onClick={() => {
+                setAtualDrawerOpen(false);
+                if (progresso?.status === "concluido") setAtualOperacaoId(null);
+              }}
+            >
+              {progresso?.status === "concluido" ? "Fechar" : "Continuar em segundo plano"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cards dos clientes sendo monitorados (contexto) */}
       {monitoramentos.length > 0 && (
