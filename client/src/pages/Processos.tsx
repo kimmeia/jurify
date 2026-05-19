@@ -829,6 +829,47 @@ function ResumoIABloco({ texto }: { texto: string }) {
   );
 }
 
+/**
+ * Parseia `partesJson` do monitor pra array de partes. Retorna [] se
+ * vazio/inválido. Tolerante a JSON malformado (não joga).
+ */
+function parsePartes(partesJson: string | null | undefined): Array<{
+  nome: string;
+  polo?: string;
+  tipo?: string;
+  documento?: string | null;
+}> {
+  if (!partesJson) return [];
+  try {
+    const parsed = JSON.parse(partesJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extrai o melhor identificador visual pra exibir como título do card.
+ * Prioridade: apelido > primeira parte do polo passivo > primeira parte
+ * ativo > primeira parte qualquer > CNJ/searchKey (fallback).
+ *
+ * Polo passivo é geralmente o adversário do escritório (o cliente é o
+ * autor na maioria dos casos), então mostrar o nome do réu ajuda a
+ * identificar rapidamente "qual processo é esse". Se for inverso
+ * (cliente é réu), o user pode usar o `apelido` pra customizar.
+ */
+function identificadorPrincipal(mon: any): string {
+  if (mon.apelido && mon.apelido.trim()) return mon.apelido.trim();
+  const partes = parsePartes(mon.partesJson);
+  if (partes.length > 0) {
+    const passivo = partes.find((p) => p.polo === "passivo");
+    const ativo = partes.find((p) => p.polo === "ativo");
+    const escolhida = passivo ?? ativo ?? partes[0];
+    if (escolhida?.nome) return escolhida.nome;
+  }
+  return mon.searchKey;
+}
+
 function MonitoramentoCard({
   mon,
   onPausar,
@@ -1029,7 +1070,12 @@ function MonitoramentoCard({
                 createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
                 ultimoErro={(mon as any).ultimoErro}
               />
-              <p className="text-sm font-bold font-mono truncate" title={searchKey}>{searchKey}</p>
+              <p
+                className="text-sm font-bold truncate max-w-[320px]"
+                title={identificadorPrincipal(mon)}
+              >
+                {identificadorPrincipal(mon)}
+              </p>
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-50 text-indigo-700">
                 {TIPO_LABELS[searchType] || searchType}
               </span>
@@ -1044,12 +1090,15 @@ function MonitoramentoCard({
                   Pausado
                 </span>
               )}
-              {!temErro && !pausado && mon.apelido && mon.apelido !== searchKey && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-violet-100 text-violet-800 max-w-[180px] truncate" title={mon.apelido}>
-                  {mon.apelido}
-                </span>
-              )}
             </div>
+            {/* CNJ sempre visível como linha secundária — identificação
+                oficial do processo, complementar ao nome da parte. */}
+            <p
+              className="text-[10px] font-mono text-muted-foreground mt-0.5 truncate"
+              title={searchKey}
+            >
+              {searchKey}
+            </p>
             <div className="flex items-center gap-2.5 text-[11px] text-slate-500 mt-1.5 flex-wrap">
               {tempoRelativo && (
                 <span className="inline-flex items-center gap-1">
@@ -1427,9 +1476,15 @@ function MonitorarTab() {
     })
     .filter((m: any) => {
       if (!buscaNormalizada) return true;
-      const campos = [m.apelido, m.searchKey, m.cnj]
+      // Busca em: apelido, CNJ/searchKey, nome de qualquer parte
+      // (autor, réu, terceiros), e documento (CPF/CNPJ) das partes.
+      // normalizarBusca remove pontuação, então "123.456.789-00" bate
+      // com "12345678900" e "Silva, João" bate com "silvajoao".
+      const partes = parsePartes(m.partesJson);
+      const camposPartes = partes.flatMap((p) => [p.nome, p.documento].filter(Boolean));
+      const campos = [m.apelido, m.searchKey, m.cnj, ...camposPartes]
         .filter(Boolean)
-        .map((c: string) => normalizarBusca(String(c)));
+        .map((c: any) => normalizarBusca(String(c)));
       return campos.some((c: string) => c.includes(buscaNormalizada));
     });
 
