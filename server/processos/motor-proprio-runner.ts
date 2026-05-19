@@ -9,7 +9,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { consultarTjce } from "./adapters/pje-tjce";
+import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
 import { parseCnjTribunal } from "./cnj-parser";
 import type { ResultadoScraper } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { createLogger } from "../_core/logger";
@@ -18,10 +18,25 @@ const log = createLogger("motor-proprio-runner");
 
 export type StatusMotorProprio = "running" | "completed" | "error";
 
+type ResultadoCpfShape = {
+  ok: boolean;
+  cnjs: string[];
+  latenciaMs?: number;
+  mensagemErro?: string | null;
+  categoriaErro?: string | null;
+};
+
 type EntradaCache = {
   status: StatusMotorProprio;
-  resultado: ResultadoScraper | null;
-  cnj: string;
+  /** Tipo da consulta — adapta `resultado` ao shape correto. */
+  tipo: "cnj" | "documento";
+  resultado: ResultadoScraper | ResultadoCpfShape | null;
+  /** Chave da busca: CNJ pra tipo='cnj', CPF/CNPJ pra tipo='documento'. */
+  chave: string;
+  /** Só pra tipo='documento': "cpf" ou "cnpj". */
+  documentoTipo?: "cpf" | "cnpj";
+  /** Tribunal usado na consulta. */
+  tribunal: string;
   criadoEm: number;
   expiraEm: number;
 };
@@ -60,8 +75,10 @@ export function iniciarConsultaMotorProprio(
 
   cache.set(requestId, {
     status: "running",
+    tipo: "cnj",
     resultado: null,
-    cnj,
+    chave: cnj,
+    tribunal: tribunal.codigoTribunal,
     criadoEm: inicio,
     expiraEm: inicio + TTL_CACHE_MS,
   });
@@ -69,6 +86,95 @@ export function iniciarConsultaMotorProprio(
   void executarConsulta(requestId, cnj, storageStateJson, tribunal.codigoTribunal);
 
   return { requestId, status: "running" };
+}
+
+/**
+ * Inicia consulta por documento (CPF/CNPJ) no motor próprio.
+ *
+ * Hoje só funciona pro TJCE (único tribunal com adapter de CPF implementado
+ * via `consultarTjcePorCpf`). Cobrança do crédito é responsabilidade do caller.
+ */
+export function iniciarConsultaDocumentoMotorProprio(
+  tipo: "cpf" | "cnpj",
+  valor: string,
+  storageStateJson: string,
+  codigoTribunal: string,
+): { requestId: string; status: StatusMotorProprio } {
+  limparExpirados();
+
+  const requestId = `${PREFIXO_REQUEST_ID}${codigoTribunal}:doc:${randomUUID()}`;
+  const inicio = Date.now();
+
+  cache.set(requestId, {
+    status: "running",
+    tipo: "documento",
+    resultado: null,
+    chave: valor,
+    documentoTipo: tipo,
+    tribunal: codigoTribunal,
+    criadoEm: inicio,
+    expiraEm: inicio + TTL_CACHE_MS,
+  });
+
+  void executarConsultaDocumento(requestId, tipo, valor, storageStateJson, codigoTribunal);
+
+  return { requestId, status: "running" };
+}
+
+async function executarConsultaDocumento(
+  requestId: string,
+  tipo: "cpf" | "cnpj",
+  valor: string,
+  storageStateJson: string,
+  codigoTribunal: string,
+): Promise<void> {
+  const inicio = Date.now();
+  try {
+    let resultado: ResultadoCpfShape;
+    if (codigoTribunal === "tjce") {
+      const r = await consultarTjcePorCpf(valor, storageStateJson);
+      resultado = {
+        ok: r.ok,
+        cnjs: r.ok ? r.cnjs : [],
+        latenciaMs: Date.now() - inicio,
+        mensagemErro: r.ok ? null : (r as { mensagemErro?: string }).mensagemErro ?? "Erro desconhecido",
+        categoriaErro: r.ok ? null : (r as { categoriaErro?: string }).categoriaErro ?? "outro",
+      };
+    } else {
+      throw new Error(`Adapter de documento pra ${codigoTribunal} não implementado`);
+    }
+
+    log.info(
+      {
+        tipo,
+        codigoTribunal,
+        ok: resultado.ok,
+        cnjsCount: resultado.cnjs.length,
+        latenciaMs: resultado.latenciaMs,
+      },
+      "[motor-proprio-runner] consulta documento finalizada",
+    );
+
+    const entrada = cache.get(requestId);
+    if (!entrada) return;
+    cache.set(requestId, { ...entrada, status: "completed", resultado });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error({ tipo, valor: valor.slice(0, 3) + "***", codigoTribunal, err: msg }, "[motor-proprio-runner] consulta documento falhou");
+    const entrada = cache.get(requestId);
+    if (!entrada) return;
+    cache.set(requestId, {
+      ...entrada,
+      status: "error",
+      resultado: {
+        ok: false,
+        cnjs: [],
+        latenciaMs: Date.now() - inicio,
+        mensagemErro: msg,
+        categoriaErro: "outro",
+      },
+    });
+  }
 }
 
 async function executarConsulta(
@@ -225,14 +331,51 @@ export function obterResultadoMotorProprio(requestId: string): {
     };
   }
 
-  // Sucesso: bridge ResultadoScraper → JuditLawsuit shape
-  const capa = r.capa;
+  // Consulta por documento (CPF/CNPJ): retorna lista de CNJs como
+  // `lawsuit` summary cada — frontend (ProcessoCard) só renderiza `code`
+  // quando os outros campos estão ausentes, então o user vê uma lista
+  // limpa "0001234-12.2024.8.06.0001 — TJCE" pra cada CNJ. Pra ver detalhes,
+  // clica em "Monitorar" que cria o monitoramento (e o Histórico carrega
+  // capa+movs sob demanda — 1 cred cada).
+  if (entrada.tipo === "documento") {
+    const rCpf = r as ResultadoCpfShape;
+    const cnjs = rCpf.cnjs ?? [];
+    return {
+      request_status: "completed",
+      page: 1,
+      page_count: cnjs.length,
+      all_pages_count: cnjs.length,
+      all_count: cnjs.length,
+      page_data: cnjs.map((cnj, idx) => ({
+        request_id: requestId,
+        response_id: `${requestId}:${idx}`,
+        response_type: "lawsuit",
+        response_data: {
+          code: cnj,
+          tribunal_acronym: entrada.tribunal.toUpperCase(),
+          // Demais campos ficam undefined — ProcessoCard mostra só CNJ
+          // + sigla. User clica "Monitorar" pra puxar detalhes depois.
+          parties: [],
+          subjects: [],
+          steps: [],
+          classifications: [],
+        },
+        user_id: "motor-proprio",
+        created_at: new Date(entrada.criadoEm).toISOString(),
+        tags: { source: "motor-proprio" },
+      })),
+    };
+  }
+
+  // Sucesso (consulta CNJ): bridge ResultadoScraper → JuditLawsuit shape
+  const rCnj = r as ResultadoScraper;
+  const capa = rCnj.capa;
   const lawsuit = capa
     ? {
         code: capa.cnj,
         instance: 1,
         name: capa.classe ?? capa.cnj,
-        tribunal_acronym: r.tribunal.toUpperCase(),
+        tribunal_acronym: rCnj.tribunal.toUpperCase(),
         county: capa.comarca ?? "",
         city: capa.comarca ?? "",
         state: capa.uf ?? "",
@@ -244,12 +387,12 @@ export function obterResultadoMotorProprio(requestId: string): {
         amount: capa.valorCausaCentavos != null
           ? capa.valorCausaCentavos / 100
           : undefined,
-        last_step: r.movimentacoes[0]
+        last_step: rCnj.movimentacoes[0]
           ? {
-              step_id: `motor:${r.movimentacoes[0].data}`,
-              step_date: r.movimentacoes[0].data,
-              content: r.movimentacoes[0].texto,
-              steps_count: r.movimentacoes.length,
+              step_id: `motor:${rCnj.movimentacoes[0].data}`,
+              step_date: rCnj.movimentacoes[0].data,
+              content: rCnj.movimentacoes[0].texto,
+              steps_count: rCnj.movimentacoes.length,
             }
           : undefined,
         subjects: capa.assuntos.map((a, idx) => ({
@@ -276,7 +419,7 @@ export function obterResultadoMotorProprio(requestId: string): {
             main_document: a.oab ?? undefined,
           })),
         })),
-        steps: r.movimentacoes.map((m) => ({
+        steps: rCnj.movimentacoes.map((m) => ({
           step_id: `motor:${m.data}:${m.texto.slice(0, 16)}`,
           step_date: m.data,
           content: m.texto,
