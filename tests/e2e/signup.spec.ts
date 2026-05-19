@@ -3,7 +3,7 @@ import { E2E_PREFIX } from "./fixtures/users";
 
 test("cadastro de nova conta cria user e leva pro onboarding", async ({ page }) => {
   // Email único por run — evita colisão.
-  const email = `${E2E_PREFIX.replace(/[\[\]]/g, "")}-${Date.now()}@jurify.com.br`.toLowerCase();
+  const email = `${E2E_PREFIX.replace(/[\[\]]/g, "")}-${Date.now()}@juridflow.com.br`.toLowerCase();
   const senha = "Smoke123!";
 
   await page.goto("/");
@@ -29,12 +29,10 @@ test("cadastro de nova conta cria user e leva pro onboarding", async ({ page }) 
 
   await dialog.getByRole("button", { name: /^criar conta$/i }).click();
 
-  // Após signup, app vai pro dashboard ou pro fluxo de assinatura. A
-  // rota /plans foi unificada em /configuracoes?tab=meu-plano (#167),
-  // mas o destino exato depende do estado do user (sem subscription
-  // → meu-plano). Aceita qualquer área autenticada.
-  await expect(page).toHaveURL(
-    /dashboard|onboarding|plans|configuracoes/,
-    { timeout: 15_000 },
-  );
+  // Fase 2 do email confirmation: signup NÃO cria sessão imediatamente.
+  // Em vez disso, mostra tela "Verifique seu email" dentro do mesmo dialog
+  // com botão de reenvio. URL não muda — usuário precisa clicar no link
+  // no email pra completar o fluxo (testado separado em testes do servidor).
+  await expect(dialog.getByText(/verifique seu email/i)).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.getByText(email)).toBeVisible();
 });

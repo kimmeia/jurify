@@ -3,7 +3,7 @@
  * `listarTodasAssinaturasPaginado` do AsaasClient.
  *
  * Bug original: admin-financeiro pegava `limit: 100` na 1ª página
- * apenas. MRR/receita zeravam quando o Jurify cresceu além de 100
+ * apenas. MRR/receita zeravam quando o JuridFlow cresceu além de 100
  * assinaturas/cobranças no período.
  *
  * Helpers paginados percorrem hasMore=true até esgotar (ou até o cap

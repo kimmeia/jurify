@@ -329,7 +329,7 @@ export default function Configuracoes() {
   const podeVerMeuPlano = isDono || user?.role === "admin";
   // Espelha `exigirDonoOuAdmin` do servidor (router-backup.ts). Frontend
   // gating tem que aceitar os mesmos 4 caminhos pra não esconder o botão
-  // de quem o backend deixaria passar — admin Jurify, admin impersonando,
+  // de quem o backend deixaria passar — admin JuridFlow, admin impersonando,
   // dono via FK ownerId (mesmo com cargo customizado) ou cargo canônico.
   const podeFazerBackup =
     user?.role === "admin" ||

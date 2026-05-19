@@ -1,5 +1,5 @@
 /**
- * Audit log helper — registra ações sensíveis do admin do Jurify.
+ * Audit log helper — registra ações sensíveis do admin do JuridFlow.
  *
  * Uso:
  *   import { registrarAuditoria } from "../_core/audit";

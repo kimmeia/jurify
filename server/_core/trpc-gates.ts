@@ -11,7 +11,7 @@
  * (admin override). Trial em andamento usa os módulos do plano em trial
  * normalmente.
  *
- * Bypass de admin: usuário com `role='admin'` (admin do Jurify, não dono
+ * Bypass de admin: usuário com `role='admin'` (admin do JuridFlow, não dono
  * de escritório) sempre passa, pra evitar bloquear suporte/diagnóstico.
  */
 
@@ -22,7 +22,7 @@ import { MODULOS_APP_OBRIGATORIOS } from "@shared/modulos-app";
 
 export function requireModulo(modulo: ModuloAppId) {
   return protectedProcedure.use(async ({ ctx, next }) => {
-    // Admin do Jurify sempre passa
+    // Admin do JuridFlow sempre passa
     if (ctx.user.role === "admin") return next();
 
     // Módulos obrigatórios (dashboard, configurações) — sempre liberados

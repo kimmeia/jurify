@@ -166,8 +166,12 @@ export default function AceitarConvite({ token }: { token: string }) {
               <AuthForms
                 defaultTab="signup"
                 initialEmail={convite.email}
+                conviteToken={token}
                 onSuccess={() => {
-                  // Após login bem sucedido, o useEffect detectará user e chamará aceitarMut
+                  // Após login/signup bem sucedido, o useEffect detectará user
+                  // e chamará aceitarMut. No caso de signup com conviteToken,
+                  // o backend já aceitou — aceitarMut bate na idempotência
+                  // (já é colaborador), retorna sucesso e seguimos pra dashboard.
                   setStatus("loading");
                 }}
               />

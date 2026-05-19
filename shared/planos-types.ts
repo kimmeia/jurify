@@ -1,5 +1,5 @@
 /**
- * Tipos compartilhados — Planos do Jurify SaaS.
+ * Tipos compartilhados — Planos do JuridFlow SaaS.
  *
  * Fonte de verdade: tabela `planos` no banco. Esses tipos espelham o
  * schema e são usados em client e server.

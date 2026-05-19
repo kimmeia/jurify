@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Configuração do robô E2E.
  *
- * baseURL é resolvido por env: PLAYWRIGHT_BASE_URL (ex: staging.jurify.com.br)
+ * baseURL é resolvido por env: PLAYWRIGHT_BASE_URL (ex: staging.juridflow.com.br)
  * — fallback pra http://localhost:3000 que é onde o `pnpm dev` sobe.
  *
  * Os specs assumem que existe seed de staging rodado (admin/dono/etc com

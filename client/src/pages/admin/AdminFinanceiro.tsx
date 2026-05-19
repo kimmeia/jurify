@@ -162,7 +162,7 @@ export default function AdminFinanceiro() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Financeiro SaaS</h1>
             <p className="text-muted-foreground mt-1">
-              Gestão da cobrança dos escritórios assinantes do Jurify.
+              Gestão da cobrança dos escritórios assinantes do JuridFlow.
             </p>
           </div>
         </div>
@@ -198,7 +198,7 @@ export default function AdminFinanceiro() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Financeiro SaaS</h1>
             <p className="text-muted-foreground mt-1">
-              Gestão da cobrança dos escritórios assinantes do Jurify.
+              Gestão da cobrança dos escritórios assinantes do JuridFlow.
             </p>
           </div>
         </div>

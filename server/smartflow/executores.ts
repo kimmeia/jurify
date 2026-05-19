@@ -182,7 +182,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           eventTypeId: eventTypes[0].id,
           start: horario,
           name: nome || "Cliente",
-          email: email || "cliente@jurify.com.br",
+          email: email || "cliente@juridflow.com.br",
         });
 
         if (!booking) throw new Error("Falha ao criar agendamento no Cal.com");

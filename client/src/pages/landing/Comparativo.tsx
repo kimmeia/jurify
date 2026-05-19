@@ -1,8 +1,8 @@
 /**
- * Comparativo — 3 razões pra trocar Astrea/Aurum/Excel pelo Jurify.
+ * Comparativo — 3 razões pra trocar Astrea/Aurum/Excel pelo JuridFlow.
  *
  * Sem desmoralizar concorrente diretamente (anti-padrão de marketing
- * jurídico) — fala dos diferenciais técnicos do Jurify que outros
+ * jurídico) — fala dos diferenciais técnicos do JuridFlow que outros
  * não têm.
  */
 
@@ -54,7 +54,7 @@ export function Comparativo() {
           </h2>
           <p className="text-muted-foreground mt-4 text-lg">
             Software jurídico tradicional foca em CRM ou peticionamento. O
-            Jurify foi construído pra ser o sistema operacional inteiro.
+            JuridFlow foi construído pra ser o sistema operacional inteiro.
           </p>
         </div>
 

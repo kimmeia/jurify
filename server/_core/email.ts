@@ -14,8 +14,8 @@
 import { createLogger } from "./logger";
 const log = createLogger("email");
 
-const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://app.juridflow.com.br";
-const FROM_EMAIL = process.env.FROM_EMAIL || "Jurify <noreply@juridflow.com.br>";
+const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://juridflow.com.br";
+const FROM_EMAIL = process.env.FROM_EMAIL || "JuridFlow <noreply@juridflow.com.br>";
 
 interface EmailOptions {
   to: string;
@@ -303,7 +303,7 @@ export async function enviarEmailConvite(params: {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
   <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
     <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">Jurify</h1>
+      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">JuridFlow</h1>
       <p style="color: #6b7280; font-size: 14px; margin-top: 4px;">Plataforma Jurídica</p>
     </div>
 
@@ -339,7 +339,7 @@ export async function enviarEmailConvite(params: {
 
   return enviarEmail({
     to: params.email,
-    subject: `Convite para ${params.nomeEscritorio} — Jurify`,
+    subject: `Convite para ${params.nomeEscritorio} — JuridFlow`,
     html,
     text,
     tipo: "convite_colaborador",
@@ -361,12 +361,12 @@ export async function enviarEmailRedefinirSenha(params: {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
   <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
     <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">Jurify</h1>
+      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">JuridFlow</h1>
     </div>
     <h2 style="font-size: 20px; color: #111827; margin-bottom: 8px;">Redefinir sua senha</h2>
     <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Olá ${params.nome || "Usuário"},</p>
     <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">
-      Recebemos uma solicitação para redefinir sua senha do Jurify. Clique no botão abaixo pra escolher uma nova senha:
+      Recebemos uma solicitação para redefinir sua senha do JuridFlow. Clique no botão abaixo pra escolher uma nova senha:
     </p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="${link}" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
@@ -382,12 +382,12 @@ export async function enviarEmailRedefinirSenha(params: {
       Se você não solicitou, ignore este email — sua senha continua a mesma.
     </p>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">JuridFlow — Plataforma Jurídica</p>
   </div>
 </body>
 </html>`;
-  const text = `Olá ${params.nome || "Usuário"},\n\nRecebemos uma solicitação para redefinir sua senha do Jurify.\n\nAcesse o link abaixo (expira em 1h):\n${link}\n\nSe você não solicitou, ignore este email.`;
-  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — Jurify", html, text, tipo: "redefinir_senha" });
+  const text = `Olá ${params.nome || "Usuário"},\n\nRecebemos uma solicitação para redefinir sua senha do JuridFlow.\n\nAcesse o link abaixo (expira em 1h):\n${link}\n\nSe você não solicitou, ignore este email.`;
+  return enviarEmail({ to: params.email, subject: "Redefinir sua senha — JuridFlow", html, text, tipo: "redefinir_senha" });
 }
 
 /**
@@ -408,12 +408,12 @@ export async function enviarEmailConfirmacao(params: {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
   <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
     <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">Jurify</h1>
+      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">JuridFlow</h1>
     </div>
     <h2 style="font-size: 20px; color: #111827; margin-bottom: 8px;">Confirme seu email</h2>
     <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Olá ${params.nome || "Usuário"},</p>
     <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">
-      Bem-vindo ao Jurify! Pra ativar sua conta e começar a usar a plataforma, clique no botão abaixo:
+      Bem-vindo ao JuridFlow! Pra ativar sua conta e começar a usar a plataforma, clique no botão abaixo:
     </p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="${link}" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
@@ -429,14 +429,14 @@ export async function enviarEmailConfirmacao(params: {
       Se você não criou esta conta, ignore este email.
     </p>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">JuridFlow — Plataforma Jurídica</p>
   </div>
 </body>
 </html>`;
-  const text = `Olá ${params.nome || "Usuário"},\n\nBem-vindo ao Jurify!\n\nConfirme seu email pra ativar sua conta (link válido por 24h):\n${link}\n\nSe você não criou esta conta, ignore este email.`;
+  const text = `Olá ${params.nome || "Usuário"},\n\nBem-vindo ao JuridFlow!\n\nConfirme seu email pra ativar sua conta (link válido por 24h):\n${link}\n\nSe você não criou esta conta, ignore este email.`;
   return enviarEmail({
     to: params.email,
-    subject: "Confirme seu email — Jurify",
+    subject: "Confirme seu email — JuridFlow",
     html,
     text,
     tipo: "confirmacao_email",
@@ -461,7 +461,7 @@ function templateTrialBase(opts: {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
   <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
     <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">Jurify</h1>
+      <h1 style="font-size: 24px; color: #7c3aed; margin: 0;">JuridFlow</h1>
     </div>
     <h2 style="font-size: 20px; color: #111827; margin-bottom: 8px;">${opts.titulo}</h2>
     <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">${opts.saudacao}</p>
@@ -473,7 +473,7 @@ function templateTrialBase(opts: {
     </div>
     ${opts.rodape ? `<p style="color: #6b7280; font-size: 13px; line-height: 1.5;">${opts.rodape}</p>` : ""}
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">JuridFlow — Plataforma Jurídica</p>
   </div>
 </body></html>`;
 }
@@ -487,7 +487,7 @@ export async function enviarEmailTrialFaltam3Dias(params: {
   const html = templateTrialBase({
     titulo: "Seu trial termina em 3 dias",
     saudacao: `Olá ${params.nome || "Usuário"},`,
-    corpo: `Seu trial do plano <strong>${params.planoNome}</strong> termina em 3 dias. Adicione uma forma de pagamento agora pra continuar usando o Jurify sem interrupção.`,
+    corpo: `Seu trial do plano <strong>${params.planoNome}</strong> termina em 3 dias. Adicione uma forma de pagamento agora pra continuar usando o JuridFlow sem interrupção.`,
     ctaLabel: "Adicionar pagamento",
     ctaUrl: link,
     rodape: "Se preferir não continuar, é só ignorar este email — sua conta será automaticamente desativada no fim do período.",
@@ -495,7 +495,7 @@ export async function enviarEmailTrialFaltam3Dias(params: {
   const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} termina em 3 dias.\n\nAdicione forma de pagamento: ${link}`;
   return enviarEmail({
     to: params.email,
-    subject: "Seu trial Jurify termina em 3 dias",
+    subject: "Seu trial JuridFlow termina em 3 dias",
     html,
     text,
     tipo: "trial_3dias",
@@ -518,7 +518,7 @@ export async function enviarEmailTrialFaltam1Dia(params: {
   const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} termina amanhã.\n\nContinuar: ${link}`;
   return enviarEmail({
     to: params.email,
-    subject: "Seu trial Jurify termina amanhã",
+    subject: "Seu trial JuridFlow termina amanhã",
     html,
     text,
     tipo: "trial_1dia",
@@ -534,7 +534,7 @@ export async function enviarEmailTrialExpirou(params: {
   const html = templateTrialBase({
     titulo: "Seu trial expirou",
     saudacao: `Olá ${params.nome || "Usuário"},`,
-    corpo: `Seu trial do plano <strong>${params.planoNome}</strong> expirou. Pra continuar usando o Jurify, assine um plano agora.`,
+    corpo: `Seu trial do plano <strong>${params.planoNome}</strong> expirou. Pra continuar usando o JuridFlow, assine um plano agora.`,
     ctaLabel: "Assinar plano",
     ctaUrl: link,
     rodape: "Seus dados continuam guardados — você pode voltar a qualquer momento.",
@@ -542,7 +542,7 @@ export async function enviarEmailTrialExpirou(params: {
   const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} expirou.\n\nAssinar: ${link}`;
   return enviarEmail({
     to: params.email,
-    subject: "Seu trial Jurify expirou",
+    subject: "Seu trial JuridFlow expirou",
     html,
     text,
     tipo: "trial_expirou",
@@ -562,7 +562,7 @@ export async function enviarEmailBoasVindas(params: {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb;">
   <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
     <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="font-size: 28px; color: #7c3aed; margin: 0;">Bem-vindo ao Jurify!</h1>
+      <h1 style="font-size: 28px; color: #7c3aed; margin: 0;">Bem-vindo ao JuridFlow!</h1>
     </div>
     <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">Olá <strong>${params.nome}</strong>,</p>
     <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">Sua conta foi criada com sucesso. Estamos felizes em ter você.</p>
@@ -574,7 +574,7 @@ export async function enviarEmailBoasVindas(params: {
     </ul>
     <div style="text-align: center; margin: 32px 0;">
       <a href="${APP_URL}/dashboard" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-        Acessar o Jurify
+        Acessar o JuridFlow
       </a>
     </div>
     <p style="color: #9ca3af; font-size: 13px; text-align: center; margin-top: 24px;">
@@ -582,10 +582,10 @@ export async function enviarEmailBoasVindas(params: {
       Use o menu <strong>Roadmap</strong> dentro do app pra sugerir melhorias.
     </p>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-    <p style="color: #9ca3af; font-size: 11px; text-align: center;">Jurify — Plataforma Jurídica</p>
+    <p style="color: #9ca3af; font-size: 11px; text-align: center;">JuridFlow — Plataforma Jurídica</p>
   </div>
 </body>
 </html>`;
-  const text = `Olá ${params.nome},\n\nSua conta no Jurify foi criada com sucesso. Estamos felizes em ter você.\n\nAcesse: ${APP_URL}/dashboard\n\nEstamos em versão Beta — use o menu Roadmap dentro do app pra sugerir melhorias.`;
-  return enviarEmail({ to: params.email, subject: "Bem-vindo ao Jurify", html, text, tipo: "boas_vindas" });
+  const text = `Olá ${params.nome},\n\nSua conta no JuridFlow foi criada com sucesso. Estamos felizes em ter você.\n\nAcesse: ${APP_URL}/dashboard\n\nEstamos em versão Beta — use o menu Roadmap dentro do app pra sugerir melhorias.`;
+  return enviarEmail({ to: params.email, subject: "Bem-vindo ao JuridFlow", html, text, tipo: "boas_vindas" });
 }

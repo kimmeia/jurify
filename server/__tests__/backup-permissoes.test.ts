@@ -7,7 +7,7 @@
  *  1. cargo "dono" canônico → passa (compat com check antigo).
  *  2. cargo customizado mas é dono via ownerId → passa.
  *  3. cargo customizado E não é ownerId → falha 403.
- *  4. impersonatedBy presente (admin Jurify impersonando) → passa.
+ *  4. impersonatedBy presente (admin JuridFlow impersonando) → passa.
  *  5. role "admin" direto (sem impersonação) → passa.
  *
  * Função é stateless — testes diretos sem mock de DB.
@@ -42,7 +42,7 @@ describe("exigirDonoOuAdmin", () => {
     ).not.toThrow();
   });
 
-  it("aceita admin Jurify impersonando (impersonatedBy presente)", () => {
+  it("aceita admin JuridFlow impersonando (impersonatedBy presente)", () => {
     // Caso reportado no bug: admin abre /admin → impersona cliente Rafael
     // Rocha → ctx.user vira o user-alvo (Rafael), mas ctx.user.impersonatedBy
     // tem o openId do admin original. Mesmo se o cargo do impersonado não
@@ -59,7 +59,7 @@ describe("exigirDonoOuAdmin", () => {
     ).not.toThrow();
   });
 
-  it("aceita admin Jurify acessando direto (role admin, sem impersonação)", () => {
+  it("aceita admin JuridFlow acessando direto (role admin, sem impersonação)", () => {
     expect(() =>
       exigirDonoOuAdmin(
         { id: 1, role: "admin" },

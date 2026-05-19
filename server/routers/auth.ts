@@ -185,6 +185,17 @@ export const authRouter = router({
         }),
         /** Slug do plano escolhido na LP (sessionStorage do Pricing.tsx). */
         planoSlug: z.string().max(64).optional(),
+        /**
+         * Token de convite quando o signup veio de `/convite/:token`.
+         * Quando presente e válido + email confere com o convite:
+         *  - user é criado com emailVerificado=true (convite já é prova de
+         *    posse do email — o dono validou ao convidar)
+         *  - pula geração/envio do email de confirmação
+         *  - aceita o convite e cria sessão direto
+         *  - retorna `needsConfirmation: false` pro frontend ir pro dashboard
+         * Convidado é colaborador — nunca passa por /plans (não escolhe plano).
+         */
+        conviteToken: z.string().min(16).max(128).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -199,6 +210,36 @@ export const authRouter = router({
       }
 
       const email = input.email.trim().toLowerCase();
+
+      // Se veio com conviteToken, valida ANTES de criar user — assim falhamos
+      // cedo sem deixar conta órfã quando o link do convite está quebrado.
+      let conviteValido:
+        | { id: number; escritorioId: number; email: string }
+        | null = null;
+      if (input.conviteToken) {
+        const dbConv = await getDb();
+        if (!dbConv) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+        const { convitesColaborador } = await import("../../drizzle/schema");
+        const [conv] = await dbConv
+          .select()
+          .from(convitesColaborador)
+          .where(eq(convitesColaborador.token, input.conviteToken))
+          .limit(1);
+        if (!conv) throw new TRPCError({ code: "BAD_REQUEST", message: "Convite não encontrado." });
+        if (conv.status !== "pendente") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Convite já foi ${conv.status}.` });
+        }
+        if (new Date(conv.expiresAt) < new Date()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Convite expirado." });
+        }
+        if (conv.email.toLowerCase() !== email) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Este convite é para ${conv.email}. Cadastre-se usando esse email.`,
+          });
+        }
+        conviteValido = { id: conv.id, escritorioId: conv.escritorioId, email: conv.email };
+      }
 
       // Verifica se já existe
       const existing = await getUserByEmail(email);
@@ -262,6 +303,41 @@ export const authRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      // ─── Fluxo de signup via CONVITE ─────────────────────────────────────
+      // Convidado não passa pelo email de confirmação — o dono já validou
+      // o email ao mandar o convite. Marca verificado, aceita o convite e
+      // cria sessão. Convidado nunca vai pra /plans (não escolhe plano).
+      if (conviteValido) {
+        await db.update(users)
+          .set({ emailVerificado: true, emailVerificadoEm: new Date() })
+          .where(eq(users.id, userCriado.id));
+
+        try {
+          const { aceitarConvite } = await import("../escritorio/db-escritorio");
+          await aceitarConvite(input.conviteToken!, userCriado.id);
+        } catch (err: any) {
+          log.error({ userId: userCriado.id, err: err.message }, "Falha ao aceitar convite no signup");
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: err.message || "Falha ao aceitar convite. Tente novamente.",
+          });
+        }
+
+        await setSessionCookie(ctx, openId, input.name);
+
+        log.info({ email, escritorioId: conviteValido.escritorioId }, "Cadastro via convite — confirmação pulada, convite aceito");
+
+        return {
+          success: true,
+          email,
+          name: input.name,
+          needsConfirmation: false,
+          conviteAceito: true,
+        } as const;
+      }
+
+      // ─── Fluxo de signup PADRÃO (dono de novo escritório) ────────────────
 
       // Persiste plano escolhido (se veio da LP) pra Fase 3 consumir.
       // emailVerificado já é false por default da migration.

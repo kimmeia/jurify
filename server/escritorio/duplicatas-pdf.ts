@@ -36,8 +36,8 @@ export async function gerarDuplicatasPDF(
         margin: 50,
         info: {
           Title: `Duplicatas de CPF/CNPJ — ${nomeEscritorio}`,
-          Author: "Jurify",
-          Creator: "Jurify",
+          Author: "JuridFlow",
+          Creator: "JuridFlow",
         },
       });
       const chunks: Buffer[] = [];

@@ -20,8 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { marked } from "marked";
 import {
   SearchHistorySidebar,
   KeywordAlertsButton,
@@ -757,6 +758,118 @@ function ConsultarTab() {
 // CARD DE MONITORAMENTO (expansível — mostra timeline de movimentações)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Renderiza o resumo IA — markdown estruturado em 4 seções
+ * (situação, análise, ações, mensagem ao cliente).
+ *
+ * A última seção (💬 Mensagem pronta pro cliente) é destacada e ganha
+ * botão "Copiar mensagem" — o user pode mandar direto pro WhatsApp.
+ */
+function ResumoIABloco({ texto }: { texto: string }) {
+  // Tenta isolar a seção "💬 Mensagem pronta pro cliente" pra render
+  // diferenciado + botão copiar. Regex matches o cabeçalho e captura
+  // tudo até próximo H3 ou fim do texto.
+  const matchMsg = texto.match(/###\s*💬[^\n]*Mensagem[^\n]*\n([\s\S]*?)(?=\n###|\n##|$)/i);
+  const mensagemCliente = matchMsg?.[1]?.trim() ?? null;
+  const resto = mensagemCliente
+    ? texto.slice(0, matchMsg!.index!).trim()
+    : texto;
+
+  const copiarMensagem = async () => {
+    if (!mensagemCliente) return;
+    // Remove markdown básico (negrito, itálico) antes de copiar
+    const limpo = mensagemCliente
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/\*(.*?)\*/g, "$1")
+      .replace(/^>\s*/gm, "")
+      .trim();
+    try {
+      await navigator.clipboard.writeText(limpo);
+      toast.success("Mensagem copiada — cole no WhatsApp do cliente");
+    } catch {
+      toast.error("Falha ao copiar — copie manualmente");
+    }
+  };
+
+  return (
+    <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3 space-y-3">
+      <p className="text-[10px] font-semibold text-violet-600 flex items-center gap-1">
+        <FileText className="h-3 w-3" /> ANÁLISE ESTRATÉGICA IA
+      </p>
+      <div
+        className="prose prose-sm dark:prose-invert max-w-none text-xs text-violet-900 dark:text-violet-100
+          prose-headings:text-violet-700 dark:prose-headings:text-violet-200 prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1.5
+          prose-h3:text-sm prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5
+          prose-strong:text-violet-900 dark:prose-strong:text-violet-100"
+        dangerouslySetInnerHTML={{ __html: marked.parse(resto, { async: false }) as string }}
+      />
+      {mensagemCliente && (
+        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+              💬 MENSAGEM PRONTA PRO CLIENTE
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] border-emerald-300"
+              onClick={copiarMensagem}
+            >
+              <Copy className="h-3 w-3 mr-1" />
+              Copiar
+            </Button>
+          </div>
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none text-xs text-emerald-900 dark:text-emerald-100 prose-p:my-1"
+            dangerouslySetInnerHTML={{ __html: marked.parse(mensagemCliente, { async: false }) as string }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Parseia `partesJson` do monitor pra array de partes. Retorna [] se
+ * vazio/inválido. Tolerante a JSON malformado (não joga).
+ */
+function parsePartes(partesJson: string | null | undefined): Array<{
+  nome: string;
+  polo?: string;
+  tipo?: string;
+  documento?: string | null;
+}> {
+  if (!partesJson) return [];
+  try {
+    const parsed = JSON.parse(partesJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extrai o melhor identificador visual pra exibir como título do card.
+ * Prioridade: apelido > primeira parte do polo passivo > primeira parte
+ * ativo > primeira parte qualquer > CNJ/searchKey (fallback).
+ *
+ * Polo passivo é geralmente o adversário do escritório (o cliente é o
+ * autor na maioria dos casos), então mostrar o nome do réu ajuda a
+ * identificar rapidamente "qual processo é esse". Se for inverso
+ * (cliente é réu), o user pode usar o `apelido` pra customizar.
+ */
+function identificadorPrincipal(mon: any): string {
+  if (mon.apelido && mon.apelido.trim()) return mon.apelido.trim();
+  const partes = parsePartes(mon.partesJson);
+  if (partes.length > 0) {
+    const passivo = partes.find((p) => p.polo === "passivo");
+    const ativo = partes.find((p) => p.polo === "ativo");
+    const escolhida = passivo ?? ativo ?? partes[0];
+    if (escolhida?.nome) return escolhida.nome;
+  }
+  return mon.searchKey;
+}
+
 function MonitoramentoCard({
   mon,
   onPausar,
@@ -983,7 +1096,12 @@ function MonitoramentoCard({
                 createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
                 ultimoErro={(mon as any).ultimoErro}
               />
-              <p className="text-sm font-bold font-mono truncate" title={searchKey}>{searchKey}</p>
+              <p
+                className="text-sm font-bold truncate max-w-[320px]"
+                title={identificadorPrincipal(mon)}
+              >
+                {identificadorPrincipal(mon)}
+              </p>
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-50 text-indigo-700">
                 {TIPO_LABELS[searchType] || searchType}
               </span>
@@ -1146,16 +1264,7 @@ function MonitoramentoCard({
         {aberto && (
           <div className="mt-3 pt-3 border-t space-y-4">
             {/* Resumo IA */}
-            {resumoIA && (
-              <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3">
-                <p className="text-[10px] font-semibold text-violet-600 mb-1.5 flex items-center gap-1">
-                  <FileText className="h-3 w-3" /> RESUMO IA
-                </p>
-                <div className="text-xs leading-relaxed whitespace-pre-line text-violet-900 dark:text-violet-100">
-                  {resumoIA}
-                </div>
-              </div>
-            )}
+            {resumoIA && <ResumoIABloco texto={resumoIA} />}
 
             {loadingHist ? (
               <div className="space-y-2">
@@ -1464,9 +1573,15 @@ function MonitorarTab() {
     })
     .filter((m: any) => {
       if (!buscaNormalizada) return true;
-      const campos = [m.apelido, m.searchKey, m.cnj]
+      // Busca em: apelido, CNJ/searchKey, nome de qualquer parte
+      // (autor, réu, terceiros), e documento (CPF/CNPJ) das partes.
+      // normalizarBusca remove pontuação, então "123.456.789-00" bate
+      // com "12345678900" e "Silva, João" bate com "silvajoao".
+      const partes = parsePartes(m.partesJson);
+      const camposPartes = partes.flatMap((p) => [p.nome, p.documento].filter(Boolean));
+      const campos = [m.apelido, m.searchKey, m.cnj, ...camposPartes]
         .filter(Boolean)
-        .map((c: string) => normalizarBusca(String(c)));
+        .map((c: any) => normalizarBusca(String(c)));
       return campos.some((c: string) => c.includes(buscaNormalizada));
     });
 

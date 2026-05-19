@@ -431,7 +431,7 @@ function IntegracaoCard({
                   onClick={handleConfigWebhook}
                   disabled={isConfigWebhook}
                   className="text-[10px] h-7 px-2"
-                  title="Cadastra automaticamente o webhook do Jurify no painel do Asaas"
+                  title="Cadastra automaticamente o webhook do JuridFlow no painel do Asaas"
                 >
                   {isConfigWebhook ? (
                     <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />

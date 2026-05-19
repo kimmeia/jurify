@@ -1,5 +1,5 @@
 /**
- * Router admin — Agentes de IA globais do Jurify.
+ * Router admin — Agentes de IA globais do JuridFlow.
  *
  * CRUD de agentes (que serão usados pelos módulos de Atendimento e
  * futuros) + upload de documentos de treinamento.
