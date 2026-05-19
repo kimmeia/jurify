@@ -719,6 +719,83 @@ export const agendaRouter = router({
     }),
 
   /**
+   * Atualiza um evento existente (título, data, tipo, local, descrição,
+   * prioridade, cliente, processo). Compatível com compromissos E tarefas
+   * — campos não suportados pela tarefa são ignorados.
+   */
+  atualizar: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      fonte: z.enum(["compromisso", "tarefa"]),
+      titulo: z.string().min(1).max(255).optional(),
+      descricao: z.string().max(2000).nullable().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().nullable().optional(),
+      diaInteiro: z.boolean().optional(),
+      tipo: z.enum(["prazo_processual", "audiencia", "reuniao_comercial", "follow_up", "outro"]).optional(),
+      local: z.string().max(512).nullable().optional(),
+      prioridade: z.enum(["baixa", "normal", "alta", "critica", "urgente"]).optional(),
+      contatoId: z.number().nullable().optional(),
+      processoId: z.number().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agenda", "editar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Ownership check pra quem só pode editar próprios
+      if (!perm.verTodos) {
+        if (input.fonte === "compromisso") {
+          const [r] = await db.select({ responsavelId: agendamentos.responsavelId })
+            .from(agendamentos).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId))).limit(1);
+          if (!r || r.responsavelId !== perm.colaboradorId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios compromissos." });
+          }
+        } else {
+          const [r] = await db.select({ responsavelId: tarefas.responsavelId })
+            .from(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId))).limit(1);
+          if (!r || r.responsavelId !== perm.colaboradorId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar suas próprias tarefas." });
+          }
+        }
+      }
+
+      if (input.fonte === "compromisso") {
+        const updates: Record<string, unknown> = {};
+        if (input.titulo !== undefined) updates.titulo = input.titulo;
+        if (input.descricao !== undefined) updates.descricao = input.descricao;
+        if (input.dataInicio !== undefined) updates.dataInicio = new Date(input.dataInicio);
+        if (input.dataFim !== undefined) updates.dataFim = input.dataFim ? new Date(input.dataFim) : null;
+        if (input.diaInteiro !== undefined) updates.diaInteiro = input.diaInteiro;
+        if (input.tipo !== undefined) {
+          updates.tipo = input.tipo;
+          updates.corHex = CORES_TIPO[input.tipo] || "#3b82f6";
+        }
+        if (input.local !== undefined) updates.local = input.local;
+        if (input.prioridade !== undefined && input.prioridade !== "urgente") updates.prioridade = input.prioridade;
+        if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
+        if (input.processoId !== undefined) updates.processoId = input.processoId;
+        if (Object.keys(updates).length > 0) {
+          await db.update(agendamentos).set(updates).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId)));
+        }
+      } else {
+        const updates: Record<string, unknown> = {};
+        if (input.titulo !== undefined) updates.titulo = input.titulo;
+        if (input.descricao !== undefined) updates.descricao = input.descricao;
+        if (input.dataInicio !== undefined) updates.dataVencimento = new Date(input.dataInicio);
+        if (input.prioridade !== undefined && input.prioridade !== "critica") updates.prioridade = input.prioridade;
+        if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
+        if (input.processoId !== undefined) updates.processoId = input.processoId;
+        if (Object.keys(updates).length > 0) {
+          await db.update(tarefas).set(updates).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId)));
+        }
+      }
+
+      return { success: true };
+    }),
+
+  /**
    * Exclui um evento.
    */
   excluir: protectedProcedure
