@@ -2282,6 +2282,33 @@ function NovasAcoesTab() {
     },
   });
 
+  const removerAcaoMut = (trpc.processos as any).removerNovaAcao.useMutation({
+    onMutate: ({ id }: { id: number }) => {
+      setAcoesAcumuladas((prev) => prev.filter((a) => a.id !== id));
+    },
+    onSuccess: () => toast.success("Card removido"),
+    onError: (e: any) => {
+      toast.error("Erro ao remover", { description: e.message });
+      recarregarDoTopo();
+    },
+  });
+
+  const monitorarMut = (trpc.processos.criarMonitoramento as any).useMutation({
+    onSuccess: (d: any) => {
+      toast.success(`Processo agora monitorado (${d?.custoCred ?? 2} cred/mês)`, {
+        description: "As próximas movimentações vão aparecer na aba Movimentações.",
+        duration: 6000,
+      });
+    },
+    onError: (e: any) => {
+      toast.error("Falha ao monitorar", { description: e.message });
+      if (ehErroSessaoCofre(e)) {
+        utils.cofreCredenciais.listarMinhas.invalidate();
+        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+      }
+    },
+  });
+
   const carregarDetalhesMut = (trpc.processos as any).consultarCNJSincrono.useMutation({
     onSuccess: (d: any, vars: { cnj: string; acaoId: number }) => {
       if (d?.lawsuit) {
@@ -2306,6 +2333,33 @@ function NovasAcoesTab() {
     if (carregandoAcaoId !== null) return;
     setCarregandoAcaoId(acaoId);
     (carregarDetalhesMut.mutate as any)({ cnj, credencialId: credIdMon ?? undefined, acaoId });
+  };
+
+  /** Pega credencialId do monitoramento parent (do cliente). Cada nova ação
+   *  está vinculada a um monitoramento de novas-ações, que tem credencialId
+   *  pra acessar segredo de justiça. */
+  const credencialIdDoMonitor = (monitoramentoIdParent: number | undefined): number | undefined => {
+    if (!monitoramentoIdParent) return undefined;
+    const mon = (data?.monitoramentos || []).find((m: any) => m.id === monitoramentoIdParent);
+    return mon?.credencialId ?? undefined;
+  };
+
+  const handleMonitorarAcao = (a: any) => {
+    const credId = credencialIdDoMonitor(a.monitoramentoId);
+    if (!credId) {
+      toast.error("Sem credencial OAB associada", {
+        description: "Cadastre/valide uma credencial no Cofre antes de monitorar.",
+        duration: 8000,
+      });
+      return;
+    }
+    monitorarMut.mutate({ numeroCnj: a.cnj, credencialId: credId });
+  };
+
+  const handleRemoverAcao = (id: number) => {
+    if (confirm("Marcar este card como FALSO POSITIVO e remover? Isso não pode ser desfeito.")) {
+      removerAcaoMut.mutate({ id });
+    }
   };
 
   const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
@@ -2526,64 +2580,120 @@ function NovasAcoesTab() {
       </Dialog>
 
       {/* Cards dos clientes sendo monitorados (contexto) */}
-      {monitoramentos.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-            Monitorando {monitoramentos.length} {monitoramentos.length === 1 ? "cliente" : "clientes"}
-          </p>
+      {monitoramentosRaw.length > 0 && (
+        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                <Users className="h-3.5 w-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-bold tracking-tight text-slate-900">
+                  Monitorando {monitoramentosRaw.length} {monitoramentosRaw.length === 1 ? "cliente" : "clientes"}
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  {monitoramentosRaw.filter((m: any) => (m.statusJudit || m.status) === "ativo").length} ativos · {monitoramentosRaw.filter((m: any) => !!(m as any).ultimoErro).length} com erro
+                </p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              {monitoramentos.length !== monitoramentosRaw.length && (
+                <>Mostrando <b className="text-slate-700">{monitoramentos.length}</b> de {monitoramentosRaw.length}</>
+              )}
+            </p>
+          </div>
+
+          {/* Grid de cards — mais altos com info enriquecida */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {monitoramentos.map((m: any) => (
-              <Card key={m.id} className="group hover:shadow-sm transition-all">
-                <CardContent className="pt-3 pb-3">
-                  <div className="flex items-center gap-2">
-                    <MonitorHealthDot
-                      statusJudit={m.statusJudit}
-                      updatedAt={m.updatedAt}
-                      createdAt={m.createdAt}
-                      ultimoErro={m.ultimoErro}
-                    />
-                    <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                      <User className="h-3.5 w-3.5 text-violet-600" />
+            {monitoramentos.length === 0 ? (
+              <p className="col-span-full text-center text-[11px] text-slate-400 italic py-4">
+                Nenhum cliente bate com a busca acima.
+              </p>
+            ) : (
+              monitoramentos.map((m: any) => {
+                const status = m.statusJudit || m.status;
+                const temErro = !!(m as any).ultimoErro;
+                const pausado = status === "paused" || status === "pausado";
+                const nome = m.apelido || m.searchKey || "Cliente";
+                const corteBorda = temErro
+                  ? "border-l-rose-500"
+                  : pausado
+                    ? "border-l-slate-400"
+                    : "border-l-emerald-500";
+                return (
+                  <div
+                    key={m.id}
+                    className={`group relative rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all overflow-hidden`}
+                  >
+                    <div className="p-3">
+                      <div className="flex items-start gap-2.5">
+                        <span
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow-sm bg-gradient-to-br ${gradientAvatar(nome)}`}
+                        >
+                          {gerarIniciais(nome)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <MonitorHealthDot
+                              statusJudit={status}
+                              updatedAt={m.updatedAt}
+                              createdAt={m.createdAt}
+                              ultimoErro={m.ultimoErro}
+                            />
+                            <p className="text-xs font-bold tracking-tight truncate" title={nome}>
+                              {nome}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono font-semibold">
+                              {(m.searchType || "").toUpperCase()}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono truncate">{m.searchKey}</span>
+                          </div>
+                          {(m.totalNovasAcoes ?? 0) > 0 && (
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[9.5px] font-bold mt-1.5">
+                              <Siren className="h-2.5 w-2.5" />
+                              {m.totalNovasAcoes} {m.totalNovasAcoes === 1 ? "ação nova" : "ações novas"}
+                            </div>
+                          )}
+                          {temErro && (
+                            <p className="text-[9.5px] text-rose-600 mt-1 truncate" title={(m as any).ultimoErro}>
+                              ⚠ {(m as any).ultimoErro}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] rounded-md text-indigo-600 hover:bg-indigo-50 px-2"
+                          title="Atualizar agora — força consulta imediata (sem custo extra)"
+                          onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
+                          disabled={atualizarAgoraMut.isPending}
+                        >
+                          {atualizarAgoraMut.isPending && atualizarAgoraMut.variables?.monitoramentoId === m.id
+                            ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            : <RefreshCcw className="h-3 w-3 mr-1" />}
+                          Atualizar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] rounded-md text-rose-600 hover:bg-rose-50 px-2"
+                          title="Remover monitoramento"
+                          onClick={() => setDeletarMonTarget({ id: m.id, nome: m.apelido || m.searchKey || "cliente" })}
+                          disabled={deletarMonMut.isPending}
+                        >
+                          {deletarMonMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Trash2 className="h-3 w-3 mr-1" />}
+                          Remover
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate" title={m.apelido || m.searchKey}>
-                        {m.apelido || m.searchKey}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground font-mono truncate" title={`${(m.searchType || "").toUpperCase()}: ${m.searchKey}`}>
-                        {(m.searchType || "").toUpperCase()}: {m.searchKey}
-                      </p>
-                    </div>
-                    {m.totalNovasAcoes > 0 && (
-                      <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[9px] shrink-0">
-                        {m.totalNovasAcoes}
-                      </Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      title="Atualizar agora — força consulta imediata (sem custo extra)"
-                      onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
-                      disabled={atualizarAgoraMut.isPending}
-                    >
-                      {atualizarAgoraMut.isPending && atualizarAgoraMut.variables?.monitoramentoId === m.id
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <RefreshCcw className="h-3.5 w-3.5" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      title="Remover monitoramento"
-                      onClick={() => setDeletarMonTarget({ id: m.id, nome: m.apelido || m.searchKey || "cliente" })}
-                      disabled={deletarMonMut.isPending}
-                    >
-                      {deletarMonMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -2762,17 +2872,46 @@ function NovasAcoesTab() {
                             <p className="text-[10.5px] text-slate-600 truncate">{advogados.join(" · ")}</p>
                           </div>
                         )}
+                        {/* Timeline de movimentações (quando detalhes carregados) */}
+                        {detalhes?.steps && detalhes.steps.length > 0 && (
+                          <div className="pt-2 mt-1 border-t border-slate-200/70">
+                            <p className="text-[9px] font-bold text-indigo-700 mb-1.5 tracking-wider">
+                              MOVIMENTAÇÕES ({detalhes.steps.length})
+                            </p>
+                            <div className="relative space-y-2 max-h-52 overflow-y-auto pl-3">
+                              <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200" />
+                              {detalhes.steps.slice(0, 10).map((s: any, i: number) => (
+                                <div key={i} className="relative">
+                                  <div className="absolute -left-[9px] top-1 h-1.5 w-1.5 rounded-full bg-indigo-400 ring-2 ring-white" />
+                                  <div className="text-[10.5px] pl-2">
+                                    {s.step_date && (
+                                      <span className="text-[9.5px] text-slate-400 font-mono">
+                                        {new Date(s.step_date).toLocaleDateString("pt-BR")}
+                                      </span>
+                                    )}
+                                    <p className="text-slate-700 leading-snug">{s.content}</p>
+                                  </div>
+                                </div>
+                              ))}
+                              {detalhes.steps.length > 10 && (
+                                <p className="text-[9.5px] text-slate-400 italic pl-2 mt-1">
+                                  +{detalhes.steps.length - 10} movimentações mais antigas
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         {!detalhes && (
                           <div className="pt-2 mt-1 border-t border-slate-200/70 flex items-center justify-between gap-2 flex-wrap">
                             <p className="text-[10.5px] text-slate-500 italic">
-                              Partes, advogados, assunto e valor não carregados ainda.
+                              Partes, advogados, assunto, valor e movimentações não carregados ainda.
                             </p>
                             <Button
                               size="sm"
                               variant="outline"
                               className="h-7 text-[10.5px] rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
                               disabled={carregando || carregandoAcaoId !== null}
-                              onClick={() => carregarDetalhes(a.id, a.cnj)}
+                              onClick={() => carregarDetalhes(a.id, a.cnj, credencialIdDoMonitor(a.monitoramentoId))}
                             >
                               {carregando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
                               Carregar detalhes <span className="ml-1 text-[9.5px] text-indigo-500">1 cred</span>
@@ -2782,8 +2921,20 @@ function NovasAcoesTab() {
                       </div>
                     </div>
 
-                    {/* Ações */}
+                    {/* Ações — empilhadas à direita */}
                     <div className="flex flex-col gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        className="h-7 text-[10.5px] rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-sm"
+                        title="Monitorar movimentações deste processo (2 cred/mês)"
+                        disabled={monitorarMut.isPending}
+                        onClick={() => handleMonitorarAcao(a)}
+                      >
+                        {monitorarMut.isPending && monitorarMut.variables?.numeroCnj === a.cnj
+                          ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          : <Radar className="h-3 w-3 mr-1" />}
+                        Monitorar
+                      </Button>
                       {!a.lido && (
                         <Button
                           size="sm"
@@ -2795,6 +2946,17 @@ function NovasAcoesTab() {
                           Marcar lida
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-[10.5px] rounded-lg text-rose-600 hover:bg-rose-50"
+                        title="Marcar como falso positivo e remover"
+                        disabled={removerAcaoMut.isPending}
+                        onClick={() => handleRemoverAcao(a.id)}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Falso
+                      </Button>
                     </div>
                   </div>
                 </div>

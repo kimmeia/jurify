@@ -1803,6 +1803,28 @@ export const processosRouter = router({
       return { ok: true };
     }),
 
+  /** Remove uma nova ação detectada (hard delete). Usado quando o usuário
+   *  identifica falso positivo — vamos sumir com o card. Filtra por
+   *  escritorioId pra evitar deletar registro de outro escritório. */
+  removerNovaAcao: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      await db
+        .delete(eventosProcesso)
+        .where(
+          and(
+            eq(eventosProcesso.id, input.id),
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { ok: true };
+    }),
+
   /**
    * Força polling sob demanda de UM monitoramento de novas ações.
    * Não cobra crédito (já está na mensalidade de 15 cred/mês).
