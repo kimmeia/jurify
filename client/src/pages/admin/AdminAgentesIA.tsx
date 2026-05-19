@@ -187,7 +187,7 @@ function AgenteFormDialog({
         <DialogHeader>
           <DialogTitle>{agenteId ? "Editar Agente" : "Novo Agente de IA"}</DialogTitle>
           <DialogDescription>
-            Configure um agente que será usado pelos módulos do Jurify (Atendimento, Resumos, etc).
+            Configure um agente que será usado pelos módulos do JuridFlow (Atendimento, Resumos, etc).
           </DialogDescription>
         </DialogHeader>
 
@@ -739,7 +739,7 @@ export default function AdminAgentesIA() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agentes de IA</h1>
             <p className="text-muted-foreground mt-1">
-              Crie agentes treináveis que serão usados pelos módulos do Jurify (Atendimento, Resumos, etc).
+              Crie agentes treináveis que serão usados pelos módulos do JuridFlow (Atendimento, Resumos, etc).
             </p>
           </div>
         </div>
@@ -797,7 +797,7 @@ export default function AdminAgentesIA() {
             <Bot className="h-12 w-12 mb-4 opacity-30" />
             <p className="text-lg font-medium text-foreground mb-2">Nenhum agente criado ainda</p>
             <p className="text-sm text-center max-w-md mb-4">
-              Crie agentes especializados que serão usados pelos módulos do Jurify
+              Crie agentes especializados que serão usados pelos módulos do JuridFlow
               pra responder clientes, resumir conversas, analisar processos e muito mais.
             </p>
             <Button onClick={() => { setEditandoId(null); setNovoOpen(true); }}>

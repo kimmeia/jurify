@@ -253,7 +253,7 @@ function getPlanPrice(planId: string | null): number {
  * Get all users with subscription status (admin).
  *
  * Distingue 3 tipos de usuário pra UI do painel admin:
- *   - "admin": staff Jurify (users.role === "admin")
+ *   - "admin": staff JuridFlow (users.role === "admin")
  *   - "cliente": dono de escritório (escritorios.ownerId === user.id)
  *   - "colaborador": membro de escritório de outro user (linha em
  *     `colaboradores` ativa, mas NÃO é dono de escritório)

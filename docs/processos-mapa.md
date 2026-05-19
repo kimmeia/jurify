@@ -198,7 +198,7 @@ Acompanhado de zerar `motor_monitoramentos.total_novas_acoes` proporcionalmente,
 | 4 | `statusConsulta` (`:250`) | `protectedProcedure` | **nenhuma** | **não valida que requestId pertence ao escritório** | não |
 | 5 | `resultados` (`:267`) | `protectedProcedure` | **nenhuma** | idem | não |
 | 6 | `transacoes` (`:284`) | `protectedProcedure` | — | `escritorioId` | não |
-| 7 | `adicionarCreditos` (`:300`) | `adminProcedure` | role admin Jurify | aceita qualquer `escritorioId` | não |
+| 7 | `adicionarCreditos` (`:300`) | `adminProcedure` | role admin JuridFlow | aceita qualquer `escritorioId` | não |
 | 8 | `meusMonitoramentos` (`:360`) | `protectedProcedure` | `checkPermission("processos","ver")` + JOIN com contatos se `verProprios` | `escritorioId` | não |
 | 9 | `criarMonitoramento` (`:418`) | `protectedProcedure` | **nenhuma** | confere `credencial.escritorioId` | sim |
 | 10 | `pausarMonitoramento` (`:499`) | `protectedProcedure` | **nenhuma** | `id+escritorioId` | não |

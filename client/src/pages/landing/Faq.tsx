@@ -14,8 +14,8 @@ import {
 
 const perguntas = [
   {
-    q: "O Jurify substitui o Astrea / Aurum / Projuris?",
-    a: "Em quase tudo, sim. Na parte de peticionamento profundo (geração automática de petições com cálculos embutidos no PDF), continuamos focando em modelos editáveis em DOCX, não em geradores fechados. Pra CRM, atendimento, financeiro e cobrança, o Jurify cobre o que esses concorrentes fazem e mais.",
+    q: "O JuridFlow substitui o Astrea / Aurum / Projuris?",
+    a: "Em quase tudo, sim. Na parte de peticionamento profundo (geração automática de petições com cálculos embutidos no PDF), continuamos focando em modelos editáveis em DOCX, não em geradores fechados. Pra CRM, atendimento, financeiro e cobrança, o JuridFlow cobre o que esses concorrentes fazem e mais.",
   },
   {
     q: "Como migro do meu sistema atual?",

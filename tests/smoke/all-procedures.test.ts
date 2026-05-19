@@ -44,7 +44,7 @@ function adminContext(): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
     openId: "smoke-admin",
-    email: "admin-smoke@jurify.com.br",
+    email: "admin-smoke@juridflow.com.br",
     name: "Admin Smoke",
     loginMethod: "email",
     role: "admin",

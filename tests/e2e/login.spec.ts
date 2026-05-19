@@ -43,7 +43,7 @@ test.describe("Login com email e senha", () => {
 
   test("11 logins errados ativam rate limit", async ({ page, request }) => {
     // Usa um email único pra não interferir com outros testes em paralelo
-    const fakeEmail = `noexists-${Date.now()}@jurify.com.br`;
+    const fakeEmail = `noexists-${Date.now()}@juridflow.com.br`;
     let blocked = false;
 
     for (let i = 0; i < 12; i++) {

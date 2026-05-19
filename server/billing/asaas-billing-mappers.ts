@@ -1,5 +1,5 @@
 /**
- * Funções puras de mapeamento Asaas → Jurify.
+ * Funções puras de mapeamento Asaas → JuridFlow.
  *
  * Separadas em módulo próprio porque são testáveis sem precisar de DB,
  * banco de teste ou mock — apenas entrada e saída.

@@ -116,7 +116,7 @@ describe("enviarEmail — persistência de log", () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 403,
-      text: async () => '{"statusCode":403,"message":"The jurify.com.br domain is not verified. Please, add and verify your domain on https://resend.com/domains","name":"validation_error"}',
+      text: async () => '{"statusCode":403,"message":"The juridflow.com.br domain is not verified. Please, add and verify your domain on https://resend.com/domains","name":"validation_error"}',
     });
 
     const r = await enviarEmail({

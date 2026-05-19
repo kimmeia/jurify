@@ -714,7 +714,7 @@ function TrialBanner() {
 
 /**
  * Banner amarelo persistente no topo do app indicando que o admin do
- * Jurify está vendo a conta de outro usuário (impersonation). Botão
+ * JuridFlow está vendo a conta de outro usuário (impersonation). Botão
  * "Sair" faz logout (que limpa o cookie de impersonation).
  */
 function ImpersonationBanner({ targetName, onExit }: { targetName: string; onExit: () => void }) {

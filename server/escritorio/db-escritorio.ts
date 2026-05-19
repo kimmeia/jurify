@@ -496,16 +496,12 @@ export async function aceitarConvite(token: string, userId: number) {
     .limit(1);
 
   if (!convite) throw new Error("Convite não encontrado.");
-  if (convite.status !== "pendente") throw new Error(`Convite já foi ${convite.status}.`);
-  if (new Date(convite.expiresAt) < new Date()) {
-    await db.update(convitesColaborador).set({ status: "expirado" }).where(eq(convitesColaborador.id, convite.id));
-    throw new Error("Convite expirado.");
-  }
 
-  // Idempotência: se o usuário já é colaborador deste escritório (ex:
-  // aceitou em outra aba milissegundos antes), tratamos como sucesso
-  // em vez de explodir. UNIQUE(escritorioId, userId) no banco garante
-  // que só existe 1 linha mesmo em race.
+  // Idempotência prioritária: se o usuário já é colaborador deste escritório
+  // (ex: aceitou em outra aba milissegundos antes, OU signup via convite que
+  // aceita inline depois e o frontend reenvia aceitar pela página /convite),
+  // tratamos como sucesso. Check vai ANTES do status do convite — porque
+  // pode estar "aceito" justamente porque o signup acabou de aceitar.
   const [jaColab] = await db
     .select()
     .from(colaboradores)
@@ -517,11 +513,19 @@ export async function aceitarConvite(token: string, userId: number) {
     )
     .limit(1);
   if (jaColab) {
-    await db
-      .update(convitesColaborador)
-      .set({ status: "aceito", aceitoPorUserId: userId })
-      .where(eq(convitesColaborador.id, convite.id));
+    if (convite.status !== "aceito") {
+      await db
+        .update(convitesColaborador)
+        .set({ status: "aceito", aceitoPorUserId: userId })
+        .where(eq(convitesColaborador.id, convite.id));
+    }
     return { escritorioId: convite.escritorioId, cargo: jaColab.cargo };
+  }
+
+  if (convite.status !== "pendente") throw new Error(`Convite já foi ${convite.status}.`);
+  if (new Date(convite.expiresAt) < new Date()) {
+    await db.update(convitesColaborador).set({ status: "expirado" }).where(eq(convitesColaborador.id, convite.id));
+    throw new Error("Convite expirado.");
   }
 
   // Verificar se já pertence a outro escritório

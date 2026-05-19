@@ -13,7 +13,7 @@
  * A API key do OpenAI pode ser:
  *   1. Individual por agente (campo openaiApiKey criptografado)
  *   2. Global do escritório (via primeiro agente com key definida)
- *   3. Fallback pra key admin do Jurify (admin_integracoes.openai)
+ *   3. Fallback pra key admin do JuridFlow (admin_integracoes.openai)
  */
 
 import { z } from "zod";

@@ -245,7 +245,7 @@ export function FinanceiroPopover({ contatoId }: { contatoId: number }) {
           },
           cpf_em_outro_contato: {
             titulo: "CPF já vinculado a outro cliente",
-            desc: "Este CPF está em uso por outro contato no Jurify. Verifique duplicatas em Clientes.",
+            desc: "Este CPF está em uso por outro contato no JuridFlow. Verifique duplicatas em Clientes.",
           },
         };
         const m = data.motivoVazio ? mensagens[data.motivoVazio] : null;

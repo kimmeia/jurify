@@ -5,7 +5,7 @@
  *   - INCLUIR: faz parte do backup (dados ou configs sem segredo).
  *   - EXCLUIR_SEGREDO: contém chaves criptografadas, tokens, senhas
  *     compartilhadas. Restore manual via reconfiguração das integrações.
- *   - EXCLUIR_NAO_RELEVANTE: auditoria, métricas internas Jurify, ou
+ *   - EXCLUIR_NAO_RELEVANTE: auditoria, métricas internas JuridFlow, ou
  *     dados que não fazem sentido no backup do escritório.
  *
  * O teste em `__tests__/backup-allowlist.test.ts` falha se aparecer
@@ -100,13 +100,13 @@ export const EXCLUIR_SEGREDO: ReadonlyArray<{ nomeBanco: string; motivo: string 
 
 /**
  * Tabelas com `escritorioId` que não entram no backup por não fazerem
- * sentido pro dono (auditoria de webhook, financeiro interno Jurify).
+ * sentido pro dono (auditoria de webhook, financeiro interno JuridFlow).
  */
 export const EXCLUIR_NAO_RELEVANTE: ReadonlyArray<{ nomeBanco: string; motivo: string }> = [
   { nomeBanco: "integracao_audit_log", motivo: "Auditoria de integrações — log interno" },
   { nomeBanco: "asaas_webhook_eventos", motivo: "Idempotency log de webhooks — não tem valor pro dono" },
-  { nomeBanco: "escritorio_creditos", motivo: "Saldo único de créditos do escritório — financeiro Jurify" },
-  { nomeBanco: "escritorio_transacoes", motivo: "Histórico de uso de créditos — financeiro Jurify" },
+  { nomeBanco: "escritorio_creditos", motivo: "Saldo único de créditos do escritório — financeiro JuridFlow" },
+  { nomeBanco: "escritorio_transacoes", motivo: "Histórico de uso de créditos — financeiro JuridFlow" },
 ];
 
 /**

@@ -17,7 +17,7 @@ export default function Privacidade() {
 
       <section className="prose prose-sm dark:prose-invert max-w-none space-y-6">
         <p>
-          Esta Política descreve como o Jurify (&ldquo;nós&rdquo;) trata seus
+          Esta Política descreve como o JuridFlow (&ldquo;nós&rdquo;) trata seus
           dados pessoais, em conformidade com a Lei Geral de Proteção de
           Dados (Lei 13.709/2018 &mdash; LGPD).
         </p>

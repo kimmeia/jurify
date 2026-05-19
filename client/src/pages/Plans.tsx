@@ -81,7 +81,7 @@ export default function Plans() {
   useEffect(() => {
     if (awaitingPayment && currentSub && currentSub.status === "active") {
       setAwaitingPayment(false);
-      toast.success("Pagamento confirmado! Bem-vindo ao Jurify 🎉", {
+      toast.success("Pagamento confirmado! Bem-vindo ao JuridFlow 🎉", {
         duration: 5000,
       });
       // Delay curto pra o usuário ver o toast

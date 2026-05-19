@@ -1,5 +1,5 @@
 /**
- * Importa um board do Trello (JSON exportado) pro Kanban do Jurify.
+ * Importa um board do Trello (JSON exportado) pro Kanban do JuridFlow.
  *
  * Trello permite "Print and Export → Export as JSON" — o usuário cola
  * esse JSON aqui. Mapeamos:
@@ -37,7 +37,7 @@ const MAX_COLUNAS = 50;
 const MAX_CARDS = 1500;
 const CHUNK_INSERT_CARDS = 200;
 
-/** Cor do Trello → hex usado pelo Jurify em kanbanTags.cor. Cobre variantes
+/** Cor do Trello → hex usado pelo JuridFlow em kanbanTags.cor. Cobre variantes
  *  light/dark. Trello pode mandar null/undefined (label sem cor) → cinza. */
 const COR_TRELLO_HEX: Record<string, string> = {
   red: "#ef4444",

@@ -284,7 +284,7 @@ export const subscriptionRouter = router({
         value: value / 100, // Asaas usa BRL, não centavos
         nextDueDate: dataVencimentoPadrao(),
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
-        description: `${plan.name} — Jurify SaaS`,
+        description: `${plan.name} — JuridFlow SaaS`,
         externalReference: `${ctx.user.id}:${input.planId}`,
         // Redirect automático após pagamento (PIX/cartão). Boleto não
         // redireciona porque a confirmação é assíncrona.
@@ -452,7 +452,7 @@ export const subscriptionRouter = router({
         value: value / 100,
         nextDueDate: dataVencimentoPadrao(),
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
-        description: `${newPlan.name} — Jurify SaaS`,
+        description: `${newPlan.name} — JuridFlow SaaS`,
         externalReference: `${ctx.user.id}:${input.newPlanId}`,
         ...(successUrl ? { callback: { successUrl, autoRedirect: true } } : {}),
       });

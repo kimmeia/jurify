@@ -14,7 +14,7 @@ test("auth.loginEmail com user inexistente NÃO retorna 5xx (schema OK)", async 
   // sincronizado, a query SELECT roda e retorna user=undefined → o tRPC
   // responde com erro de "credenciais inválidas" (4xx). Se a query falhar
   // por coluna inexistente, retorna 5xx — isso é o que queremos detectar.
-  const fakeEmail = `nonexistent-${Date.now()}@nada-jurify.com.br`;
+  const fakeEmail = `nonexistent-${Date.now()}@nada-juridflow.com.br`;
 
   const resp = await request.post("/api/trpc/auth.loginEmail?batch=1", {
     data: {
