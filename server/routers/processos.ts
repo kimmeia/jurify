@@ -490,7 +490,7 @@ export const processosRouter = router({
               "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify({
-              model: "claude-haiku-4-5-20251001",
+              model: "claude-opus-4-7",
               system: promptSystem,
               messages: [{ role: "user", content: promptUser }],
               max_tokens: 800,
@@ -1593,6 +1593,24 @@ export const processosRouter = router({
         `Monitor ${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
       );
 
+      // "Desde quando alertar": busca um contato no escritório com o
+      // mesmo CPF/CNPJ. Se achar, usa `createdAt` dele — só CNJs ajuizados
+      // a partir da data de cadastro do cliente viram alerta. Se não há
+      // contato (busca solta), fica NULL e comportamento volta ao antigo.
+      const { contatos: tabelaContatos } = await import("../../drizzle/schema");
+      const { sql: sqlOp } = await import("drizzle-orm");
+      const cnjQuery = await db
+        .select({ id: tabelaContatos.id, createdAt: tabelaContatos.createdAt })
+        .from(tabelaContatos)
+        .where(
+          and(
+            eq(tabelaContatos.escritorioId, esc.escritorio.id),
+            sqlOp`REPLACE(REPLACE(REPLACE(REPLACE(${tabelaContatos.cpfCnpj}, '.', ''), '-', ''), '/', ''), ' ', '') = ${docLimpo}`,
+          ),
+        )
+        .limit(1);
+      const dataReferenciaCadastro = cnjQuery[0]?.createdAt ?? null;
+
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
         criadoPor: ctx.user.id,
@@ -1606,6 +1624,7 @@ export const processosRouter = router({
         recurrenceHoras: input.recurrenceHoras,
         cnjsConhecidos: "[]",
         ultimaCobrancaEm: new Date(),
+        dataReferenciaCadastro,
       });
       const insertId =
         (result as unknown as { insertId: number }[])[0]?.insertId ??
@@ -1740,6 +1759,86 @@ export const processosRouter = router({
    * Não cobra crédito (já está na mensalidade de 15 cred/mês).
    * Útil pra validar adapter sem esperar cron de 1h.
    */
+
+  /**
+   * Inicia atualização em lote de TODOS os monitoramentos ativos do
+   * escritório. Não cobra créditos (já estão na mensalidade).
+   *
+   * Retorna `operacaoId` imediatamente. Frontend pode acompanhar via
+   * `progressoAtualizacao(operacaoId)` ou ouvir SSE `info` com
+   * `dados.kind === "atualizacao_progresso"`.
+   *
+   * Operação roda em background — se user sair da página e voltar,
+   * pode chamar `operacoesPendentes` pra retomar exibição.
+   */
+  atualizarTodosMonitoramentos: protectedProcedure
+    .input(
+      z.object({
+        // Opcional: restringir a um subset. Sem isso, atualiza tudo.
+        monitoramentoIds: z.array(z.number().int().positive()).max(200).optional(),
+      }).optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const { iniciarAtualizacaoTodos } = await import("../processos/atualizacao-runner");
+      try {
+        const { operacaoId, total } = await iniciarAtualizacaoTodos(
+          ctx.user.id,
+          esc.escritorio.id,
+          { monitoramentoIds: input?.monitoramentoIds },
+        );
+        return { operacaoId, total };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new TRPCError({ code: "BAD_REQUEST", message: msg });
+      }
+    }),
+
+  /** Lê progresso de uma operação de atualização em andamento. */
+  progressoAtualizacao: protectedProcedure
+    .input(z.object({ operacaoId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { obterProgressoAtualizacao } = await import("../processos/atualizacao-runner");
+      const op = obterProgressoAtualizacao(input.operacaoId, ctx.user.id);
+      if (!op) {
+        // Pode ser que TTL expirou ou usuário errado — retorna null
+        // (UI sabe que perdeu a operação e pode oferecer reiniciar).
+        return null;
+      }
+      return {
+        operacaoId: op.id,
+        status: op.status,
+        iniciadoEm: new Date(op.iniciadoEm).toISOString(),
+        finalizadoEm: op.finalizadoEm ? new Date(op.finalizadoEm).toISOString() : null,
+        total: op.total,
+        processados: op.processados,
+        ok: op.ok,
+        erro: op.erro,
+        detectadasTotal: op.detectadasTotal,
+        monitores: op.monitores,
+      };
+    }),
+
+  /**
+   * Lista operações de atualização em curso pelo user. Frontend chama
+   * ao montar a página: se houver operação pendente, retoma o drawer
+   * "Atualizando…" sem o user perder o progresso por mudança de aba.
+   */
+  operacoesPendentes: protectedProcedure.query(async ({ ctx }) => {
+    const { listarOperacoesPendentes } = await import("../processos/atualizacao-runner");
+    return listarOperacoesPendentes(ctx.user.id).map((op) => ({
+      operacaoId: op.id,
+      status: op.status,
+      total: op.total,
+      processados: op.processados,
+      ok: op.ok,
+      erro: op.erro,
+      iniciadoEm: new Date(op.iniciadoEm).toISOString(),
+    }));
+  }),
+
   atualizarNovasAcoesAgora: protectedProcedure
     .input(z.object({ monitoramentoId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
