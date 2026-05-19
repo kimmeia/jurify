@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, ShoppingCart, History, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, ExternalLink, RefreshCcw } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   SearchHistorySidebar,
@@ -42,8 +42,6 @@ const STATUS_MON: Record<string, { label: string; cor: string }> = {
   updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" },
   paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
 };
-const CUSTO_LABELS: Record<string, string> = { consulta_cnj: "Consulta por CNJ", consulta_historica: "Consulta CPF/CNPJ/Nome", consulta_sintetica: "Consulta sintetica", monitorar_processo: "Monitorar processo", monitorar_pessoa: "Monitorar pessoa/empresa", resumo_ia: "Resumo IA", anexos: "Baixar anexos" };
-
 /**
  * Indicador de saúde do monitoramento baseado na última atualização.
  * - vermelho pulsante: ultimoErro presente (sessão expirada, captcha, etc)
@@ -279,7 +277,7 @@ function ConsultarTab() {
   const todosClientes = clientesData?.clientes || [];
 
   const monitorarMut = (trpc.processos.criarMonitoramento as any).useMutation({
-    onSuccess: () => toast.success("Processo adicionado às Movimentações (5 cred/mês)"),
+    onSuccess: (d: any) => toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`),
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
 
@@ -337,16 +335,6 @@ function ConsultarTab() {
   const resultadosMut = trpc.processos.resultados.useMutation({
     onSuccess: (data: any) => {
       setResultados(data);
-      if (data?.custoExtraCobrado && data.custoExtraCobrado > 0) {
-        toast.success(
-          `${data.totalProcessosEncontrados} processos encontrados. Cobrado: ${data.custoExtraCobrado} créditos adicionais.`,
-        );
-      } else if (data?.custoExtraErro) {
-        toast.error(
-          `Resultados parciais: créditos insuficientes pra cobrar o custo variável (${data.custoExtraNecessario}). Compre mais créditos pra ver tudo.`,
-          { duration: 10000 },
-        );
-      }
     },
     onError: (e: any) => { toast.error("Erro ao buscar resultados: " + e.message); setBuscando(false); setPolling(false); },
   });
@@ -935,7 +923,7 @@ function MonitoramentoCard({
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();
-              resumoMut.mutate({ cnj: searchKey });
+              resumoMut.mutate({ cnj: searchKey, monitoramentoId: mon.id });
             }}
             disabled={resumoMut.isPending}
           >
@@ -1002,9 +990,8 @@ function MonitorarTab() {
   const pausarMut = trpc.processos.pausarMonitoramento.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
   const reativarMut = trpc.processos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
   const deletarMut = trpc.processos.deletarMonitoramento.useMutation({
-    onSuccess: (r: any) => {
-      if (r?.juditErro) toast.warning("Removido localmente", { description: `Falha ao avisar o motor: ${r.juditErro}` });
-      else toast.success("Monitoramento removido");
+    onSuccess: () => {
+      toast.success("Monitoramento removido");
       setDeletarTarget(null);
       refetch();
     },
@@ -1107,7 +1094,7 @@ function MonitorarTab() {
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
                   O monitoramento de movimentações requer credencial OAB para garantir que apenas
-                  advogados habilitados acessem dados processuais. Custo: 5 créditos/mês.
+                  advogados habilitados acessem dados processuais. Custo: 2 créditos/mês.
                 </p>
               </div>
             </div>
@@ -1160,69 +1147,6 @@ function MonitorarTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ABA: CREDITOS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function CreditosTab() {
-  const { data: saldoData, refetch } = trpc.processos.saldo.useQuery(undefined, { retry: false });
-  const { data: txs } = (trpc.processos.transacoes.useQuery as any)({ limit: 30 }, { retry: false });
-  const { data: pacotesData } = trpc.processos.pacotes.useQuery(undefined, { retry: false });
-  const comprarMut = (trpc.processos.adicionarCreditos.useMutation as any)({ onSuccess: (d: any) => { toast.success(`+${d.adicionados} creditos adicionados!`); refetch(); }, onError: (e: any) => toast.error(e.message) });
-
-  const saldo = saldoData?.saldo ?? 0;
-  const pacotes = pacotesData?.pacotes ?? [];
-  const custos = pacotesData?.custos ?? {};
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card><CardContent className="pt-5 pb-4"><div className="flex items-center gap-3"><Coins className="h-6 w-6 text-indigo-500" /><div><p className="text-2xl font-bold">{saldo}</p><p className="text-xs text-muted-foreground">Saldo atual</p></div></div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="flex items-center gap-3"><ShoppingCart className="h-6 w-6 text-emerald-500" /><div><p className="text-2xl font-bold text-emerald-600">{saldoData?.totalComprado ?? 0}</p><p className="text-xs text-muted-foreground">Total comprado</p></div></div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="flex items-center gap-3"><History className="h-6 w-6 text-amber-500" /><div><p className="text-2xl font-bold text-amber-600">{saldoData?.totalConsumido ?? 0}</p><p className="text-xs text-muted-foreground">Total consumido</p></div></div></CardContent></Card>
-      </div>
-
-      <div><h3 className="text-sm font-semibold mb-3">Comprar creditos</h3>
-        <div className="grid gap-3 sm:grid-cols-4">
-          {pacotes.map((p: any) => (
-            <Card key={p.id} className={`cursor-pointer hover:shadow-md transition-all ${p.popular ? "border-indigo-300 ring-1 ring-indigo-200" : ""}`}>
-              <CardContent className="pt-4 pb-4 text-center">
-                {p.popular && <Badge className="bg-indigo-500 text-white text-[9px] mb-2">Popular</Badge>}
-                <p className="text-2xl font-bold">{p.creditos}</p>
-                <p className="text-xs text-muted-foreground mb-1">creditos</p>
-                <p className="text-sm font-semibold text-indigo-600">{formatBRL(p.preco)}</p>
-                <p className="text-[10px] text-muted-foreground mb-2">{formatBRL(p.preco / p.creditos)}/credito</p>
-                <Button size="sm" className="w-full text-xs" variant={p.popular ? "default" : "outline"} onClick={() => (comprarMut.mutate as any)({ pacoteId: p.id })} disabled={comprarMut.isPending}>Comprar</Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Tabela de custos</CardTitle></CardHeader><CardContent><div className="space-y-1.5">{Object.entries(custos).map(([op, custo]) => (<div key={op} className="flex justify-between text-xs py-1 border-b border-dashed last:border-0"><span>{CUSTO_LABELS[op] || op}</span><span className="font-mono font-medium">{String(custo)} cred.</span></div>))}</div></CardContent></Card>
-
-      {txs && txs.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Historico recente</CardTitle></CardHeader>
-          <CardContent>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {txs.map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between text-xs py-1.5 border-b border-dashed last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className={t.tipo === "consumo" ? "text-red-500 font-medium" : "text-emerald-500 font-medium"}>{t.tipo === "consumo" ? "-" : "+"}{t.quantidade}</span>
-                    <span className="text-muted-foreground truncate max-w-[200px]">{t.detalhes || t.operacao}</span>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">{t.createdAt ? new Date(t.createdAt).toLocaleDateString("pt-BR") : ""}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // PAGINA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1232,7 +1156,7 @@ export default function Processos() {
   const tabInicial = (() => {
     if (typeof window === "undefined") return "consultar";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "movimentacoes" || t === "novas-acoes" || t === "cofre" || t === "creditos"
+    return t === "movimentacoes" || t === "novas-acoes" || t === "cofre"
       ? t
       : "consultar";
   })();
@@ -1266,11 +1190,10 @@ export default function Processos() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"><Coins className="h-4 w-4 text-indigo-500" /><span className="text-sm font-bold text-indigo-700">{saldo}</span><span className="text-[10px] text-indigo-500">cred.</span></div>
-          <Button variant="outline" size="sm" onClick={() => setTab("creditos")}><ShoppingCart className="h-3.5 w-3.5 mr-1" />Comprar</Button>
         </div>
       </div>
 
-      {saldo < 5 && (<div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5"><AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /><span className="text-sm text-amber-700">Saldo baixo. Compre creditos para consultar e monitorar processos.</span><Button size="sm" variant="outline" className="ml-auto text-xs" onClick={() => setTab("creditos")}>Comprar</Button></div>)}
+      {saldo < 5 && (<div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5"><AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /><span className="text-sm text-amber-700">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span></div>)}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className={`grid w-full ${podeCofre ? "grid-cols-4" : "grid-cols-3"} h-auto`}>
@@ -1321,20 +1244,6 @@ function NovasAcoesBadge() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: NOVAS AÇÕES
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const AREA_CORES: Record<string, string> = {
-  Trabalhista: "bg-amber-500/15 text-amber-700 border-amber-500/30",
-  Tributário: "bg-indigo-500/15 text-indigo-700 border-indigo-500/30",
-  Previdenciário: "bg-sky-500/15 text-sky-700 border-sky-500/30",
-  Consumidor: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
-  Bancário: "bg-violet-500/15 text-violet-700 border-violet-500/30",
-  Família: "bg-pink-500/15 text-pink-700 border-pink-500/30",
-  Civil: "bg-blue-500/15 text-blue-700 border-blue-500/30",
-  Penal: "bg-red-500/15 text-red-700 border-red-500/30",
-  Empresarial: "bg-purple-500/15 text-purple-700 border-purple-500/30",
-  Imobiliário: "bg-orange-500/15 text-orange-700 border-orange-500/30",
-  Outros: "bg-slate-500/15 text-slate-700 border-slate-500/30",
-};
 
 function NovasAcoesTab() {
   const [apenasNaoLidas, setApenasNaoLidas] = useState(false);
@@ -1429,12 +1338,8 @@ function NovasAcoesTab() {
   });
 
   const deletarMonMut = trpc.processos.deletarMonitoramento.useMutation({
-    onSuccess: (r: any) => {
-      if (r?.juditErro) {
-        toast.warning("Removido localmente", { description: `Falha ao avisar o motor: ${r.juditErro}. A cobrança mensal foi interrompida.` });
-      } else {
-        toast.success("Monitoramento removido", { description: "A cobrança mensal foi interrompida." });
-      }
+    onSuccess: () => {
+      toast.success("Monitoramento removido", { description: "A cobrança mensal foi interrompida." });
       setDeletarMonTarget(null);
       recarregarDoTopo();
     },
@@ -1569,7 +1474,6 @@ function NovasAcoesTab() {
       ) : (
         <div className="space-y-2">
           {acoes.map((a: any) => {
-            const areaColor = AREA_CORES[a.areaDireito || "Outros"] || AREA_CORES.Outros;
             return (
               <Card
                 key={a.id}
@@ -1588,15 +1492,11 @@ function NovasAcoesTab() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold font-mono">{a.cnj}</p>
-                        {a.tribunal && <Badge variant="outline" className="text-[9px]">{a.tribunal}</Badge>}
-                        {a.areaDireito && (
-                          <Badge className={`${areaColor} text-[9px]`}>{a.areaDireito}</Badge>
-                        )}
+                        {a.tribunal && <Badge variant="outline" className="text-[9px]">{a.tribunal.toUpperCase()}</Badge>}
                         {!a.lido && (
                           <Badge className="bg-red-500 text-white text-[9px]">NOVO</Badge>
                         )}
                       </div>
-                      {/* Contexto do cliente monitorado */}
                       {(a.clienteApelido || a.clienteSearchKey) && (
                         <div className="flex items-center gap-1.5 mt-1 text-[10px] text-violet-700 dark:text-violet-400">
                           <User className="h-3 w-3" />
@@ -1611,43 +1511,14 @@ function NovasAcoesTab() {
                           )}
                         </div>
                       )}
-                      {a.classeProcesso && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate" title={a.classeProcesso}>{a.classeProcesso}</p>
-                      )}
                       <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                         {a.dataDistribuicao && (
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {new Date(a.dataDistribuicao).toLocaleDateString("pt-BR")}
-                          </span>
-                        )}
-                        {a.valorCausa && (
-                          <span className="flex items-center gap-1 text-emerald-600 font-medium">
-                            <CircleDollarSign className="h-3 w-3" />
-                            {formatBRL(a.valorCausa / 100)}
+                            Detectado em {new Date(a.dataDistribuicao).toLocaleDateString("pt-BR")}
                           </span>
                         )}
                       </div>
-                      {(a.poloAtivo?.length > 0 || a.poloPassivo?.length > 0) && (
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                          {a.poloAtivo?.length > 0 && (
-                            <div>
-                              <p className="text-[9px] font-semibold text-blue-600">POLO ATIVO</p>
-                              {a.poloAtivo.slice(0, 2).map((p: any, i: number) => (
-                                <p key={i} className="truncate text-[11px]">{p.name}</p>
-                              ))}
-                            </div>
-                          )}
-                          {a.poloPassivo?.length > 0 && (
-                            <div>
-                              <p className="text-[9px] font-semibold text-red-600">POLO PASSIVO</p>
-                              {a.poloPassivo.slice(0, 2).map((p: any, i: number) => (
-                                <p key={i} className="truncate text-[11px]">{p.name}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </CardContent>

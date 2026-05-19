@@ -26,7 +26,9 @@ import {
   cofreCredenciais,
   motorMonitoramentos,
   eventosProcesso,
+  adminIntegracoes,
 } from "../../drizzle/schema";
+import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
@@ -34,6 +36,7 @@ import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-moto
 import {
   ehRequestMotorProprio,
   iniciarConsultaMotorProprio,
+  iniciarConsultaDocumentoMotorProprio,
   obterStatusMotorProprio,
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
@@ -54,6 +57,14 @@ export const CUSTOS = {
   consulta_cnj: 1,
   monitorar_processo_mes: 2,    // ANTES: Judit cobrava 5
   monitorar_pessoa_mes: 15,     // ANTES: Judit cobrava 35
+  /**
+   * Busca por CPF/CNPJ sob demanda — retorna lista de CNJs encontrados
+   * sem detalhes (capa/movs). Cobra flat 3 cred independente do número
+   * de resultados (motor próprio TJCE custa só servidor, sem cobrança
+   * externa por resultado como na Judit). User pode clicar nos CNJs
+   * pra detalhar (1 cred cada via `consultarCNJ`).
+   */
+  consulta_documento: 3,
 } as const;
 
 function safeParse(json: string): unknown {
@@ -159,7 +170,17 @@ export const processosRouter = router({
    * adapter / etc).
    */
   consultarCNJ: protectedProcedure
-    .input(z.object({ cnj: z.string().min(15).max(30) }))
+    .input(z.object({
+      cnj: z.string().min(15).max(30),
+      /**
+       * Opcional: id de uma credencial específica do cofre. Quando
+       * informada, usa essa credencial em vez de pegar a primeira ativa
+       * — usuário pode ter múltiplas OABs (ex: 2 advogados, 1 banca)
+       * e escolhe qual usar (necessário pra processos em segredo de
+       * justiça onde só a OAB de quem peticionou consegue ver).
+       */
+      credencialId: z.number().int().positive().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
@@ -195,27 +216,56 @@ export const processosRouter = router({
 
       // Cofre é compartilhado pelo escritório: qualquer membro
       // (dono ou colaborador) usa as credenciais cadastradas no escritório.
-      const credencial = await db
-        .select()
-        .from(cofreCredenciais)
-        .where(
-          and(
-            eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-            eq(cofreCredenciais.sistema, sistemaCofre),
-            eq(cofreCredenciais.status, "ativa"),
-          ),
-        )
-        .limit(1);
+      // Se `credencialId` foi informado, exige que ela seja do escritório,
+      // compatível com o tribunal e ativa — caso contrário pega a primeira
+      // ativa do sistema correto.
+      let credencial: typeof cofreCredenciais.$inferSelect[] = [];
+      if (input.credencialId) {
+        credencial = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.id, input.credencialId),
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.sistema, sistemaCofre),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
 
-      if (credencial.length === 0) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            `Pra consultar processos do ${tribunal.siglaTribunal}, ` +
-            `cadastre sua credencial OAB-${tribunal.uf ?? ""} no Cofre. ` +
-            `→ /processos?tab=cofre`,
-          cause: { motivo: "credencial_ausente", tribunal: tribunal.codigoTribunal },
-        });
+        if (credencial.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              `Credencial selecionada não existe, expirou ou não é compatível com ` +
+              `${tribunal.siglaTribunal}. Selecione outra ou cadastre uma nova no Cofre.`,
+            cause: { motivo: "credencial_invalida", credencialId: input.credencialId },
+          });
+        }
+      } else {
+        credencial = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.sistema, sistemaCofre),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
+
+        if (credencial.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              `Pra consultar processos do ${tribunal.siglaTribunal}, ` +
+              `cadastre sua credencial OAB-${tribunal.uf ?? ""} no Cofre. ` +
+              `→ /processos?tab=cofre`,
+            cause: { motivo: "credencial_ausente", tribunal: tribunal.codigoTribunal },
+          });
+        }
       }
 
       const credId = credencial[0].id;
@@ -240,8 +290,398 @@ export const processosRouter = router({
 
       const { requestId, status } = iniciarConsultaMotorProprio(input.cnj, storageState);
       log.info(
-        { cnj: input.cnj, requestId, tribunal: tribunal.codigoTribunal },
+        { cnj: input.cnj, requestId, tribunal: tribunal.codigoTribunal, credId },
         "[motor-proprio] consulta iniciada",
+      );
+      return { requestId, status };
+    }),
+
+  /**
+   * Gera resumo executivo de um processo usando IA (OpenAI/Anthropic).
+   *
+   * Lê capa + últimas movimentações do `motorMonitoramentos.capaJson` +
+   * `eventosProcesso` (dados já cacheados no DB pelos polls). Não consulta
+   * tribunal — se não tem dados, sugere clicar "Histórico" antes (que
+   * persiste capa+movs).
+   *
+   * API key vem de `admin_integracoes` (provedor "openai" ou "anthropic",
+   * gerenciado pelo admin global do Jurify).
+   *
+   * Cobra 1 crédito.
+   */
+  resumoIA: protectedProcedure
+    .input(
+      z.object({
+        cnj: z.string().min(15).max(30),
+        monitoramentoId: z.number().int().positive().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Acha o monitoramento por id ou (escritório+searchKey). searchKey
+      // está em formato mascarado (`mascararCnj`), então normaliza antes.
+      const cnjMascarado = mascararCnj(input.cnj);
+      let mon: typeof motorMonitoramentos.$inferSelect | undefined;
+      if (input.monitoramentoId) {
+        [mon] = await db
+          .select()
+          .from(motorMonitoramentos)
+          .where(
+            and(
+              eq(motorMonitoramentos.id, input.monitoramentoId),
+              eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
+      } else {
+        [mon] = await db
+          .select()
+          .from(motorMonitoramentos)
+          .where(
+            and(
+              eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
+              eq(motorMonitoramentos.searchKey, cnjMascarado),
+              eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
+            ),
+          )
+          .limit(1);
+      }
+
+      if (!mon) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Monitoramento não encontrado pra esse CNJ. Crie o monitoramento primeiro.",
+        });
+      }
+
+      // Capa + partes vêm do DB (persistidos pelo cron e pela busca sob
+      // demanda). Se vazio, user precisa clicar "Histórico" antes — sem
+      // dados não há o que resumir.
+      const capa = mon.capaJson ? safeParse(mon.capaJson) : null;
+      if (!capa) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Sem dados do processo ainda. Clique em 'Histórico' antes pra puxar capa + movimentações do tribunal.",
+        });
+      }
+
+      // Pega as 20 movs mais recentes do escritório (mesmo padrão do
+      // historicoMonitoramento — por cnjAfetado, não monitoramentoId, pra
+      // pegar movs que sobraram de monitoramentos antigos recriados).
+      const movs = await db
+        .select({
+          conteudo: eventosProcesso.conteudo,
+          conteudoJson: eventosProcesso.conteudoJson,
+          dataEvento: eventosProcesso.dataEvento,
+        })
+        .from(eventosProcesso)
+        .where(
+          and(
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+            eq(eventosProcesso.cnjAfetado, mon.searchKey),
+            eq(eventosProcesso.tipo, "movimentacao"),
+          ),
+        )
+        .orderBy(desc(eventosProcesso.dataEvento))
+        .limit(20);
+
+      // Resolve API key — preferência OpenAI primeiro, depois Anthropic
+      const [openaiReg] = await db
+        .select()
+        .from(adminIntegracoes)
+        .where(
+          and(
+            eq(adminIntegracoes.provedor, "openai"),
+            eq(adminIntegracoes.status, "conectado"),
+          ),
+        )
+        .limit(1);
+      const [anthropicReg] = await db
+        .select()
+        .from(adminIntegracoes)
+        .where(
+          and(
+            eq(adminIntegracoes.provedor, "anthropic"),
+            eq(adminIntegracoes.status, "conectado"),
+          ),
+        )
+        .limit(1);
+
+      let provider: "openai" | "anthropic" | null = null;
+      let apiKey: string | null = null;
+      if (openaiReg?.apiKeyEncrypted && openaiReg.apiKeyIv && openaiReg.apiKeyTag) {
+        try {
+          apiKey = adminDecrypt(openaiReg.apiKeyEncrypted, openaiReg.apiKeyIv, openaiReg.apiKeyTag);
+          provider = "openai";
+        } catch { /* ignore, tenta anthropic */ }
+      }
+      if (!apiKey && anthropicReg?.apiKeyEncrypted && anthropicReg.apiKeyIv && anthropicReg.apiKeyTag) {
+        try {
+          apiKey = adminDecrypt(anthropicReg.apiKeyEncrypted, anthropicReg.apiKeyIv, anthropicReg.apiKeyTag);
+          provider = "anthropic";
+        } catch { /* ignore */ }
+      }
+
+      if (!apiKey || !provider) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Integração com IA não configurada. Peça ao administrador do Jurify pra configurar OpenAI ou Anthropic em Admin → Integrações.",
+        });
+      }
+
+      // Cobra antes do gasto externo (mesmo padrão de consultarCNJ).
+      // Se IA falhar depois, o crédito já foi debitado — preferimos
+      // "cobrança consistente" vs "evitar 1 cred perdido em raros falhas".
+      await consumirCreditos(
+        esc.escritorio.id,
+        ctx.user.id,
+        1,
+        "resumo_ia",
+        `Resumo IA: ${mon.searchKey}`,
+      );
+
+      const capaTyped = capa as Record<string, any>;
+      const movsTexto = movs
+        .map((m, i) => {
+          const parsed = m.conteudoJson ? safeParse(m.conteudoJson) : null;
+          const data = (parsed as any)?.data ?? m.dataEvento;
+          const texto = (parsed as any)?.texto ?? m.conteudo ?? "";
+          return `${i + 1}. [${data instanceof Date ? data.toISOString().slice(0, 10) : data}] ${texto.slice(0, 300)}`;
+        })
+        .join("\n");
+
+      const promptSystem =
+        "Você é um assistente jurídico especializado. Resuma o processo de forma estruturada, " +
+        "objetiva e profissional em português brasileiro. Use markdown leve (negrito, listas). " +
+        "Identifique partes, objeto da ação, valor, estado atual, próximos passos prováveis. " +
+        "Não invente informações — só use o que está nos dados fornecidos.";
+
+      const promptUser = [
+        `CNJ: ${mon.searchKey}`,
+        `Tribunal: ${(mon.tribunal || "").toUpperCase()}`,
+        capaTyped.classe ? `Classe: ${capaTyped.classe}` : null,
+        capaTyped.valorCausaCentavos ? `Valor da causa: R$ ${(capaTyped.valorCausaCentavos / 100).toFixed(2)}` : null,
+        capaTyped.dataDistribuicao ? `Distribuído em: ${capaTyped.dataDistribuicao}` : null,
+        capaTyped.juiz ? `Juiz: ${capaTyped.juiz}` : null,
+        capaTyped.comarca ? `Comarca: ${capaTyped.comarca}` : null,
+        capaTyped.partes && Array.isArray(capaTyped.partes)
+          ? `\nPartes:\n${capaTyped.partes.map((p: any) => `- ${p.nome} (${p.polo || "?"})`).join("\n")}`
+          : null,
+        movs.length > 0 ? `\nÚltimas movimentações (${movs.length}):\n${movsTexto}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      let resumo: string;
+      try {
+        if (provider === "anthropic") {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              system: promptSystem,
+              messages: [{ role: "user", content: promptUser }],
+              max_tokens: 800,
+              temperature: 0.3,
+            }),
+            signal: AbortSignal.timeout(30000),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Anthropic ${res.status}: ${text.slice(0, 200)}`);
+          }
+          const data = (await res.json()) as { content?: Array<{ text?: string }> };
+          resumo = (data.content?.[0]?.text || "").trim();
+        } else {
+          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages: [
+                { role: "system", content: promptSystem },
+                { role: "user", content: promptUser },
+              ],
+              max_tokens: 800,
+              temperature: 0.3,
+            }),
+            signal: AbortSignal.timeout(30000),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`OpenAI ${res.status}: ${text.slice(0, 200)}`);
+          }
+          const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+          resumo = (data.choices?.[0]?.message?.content || "").trim();
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error({ err: msg, cnj: mon.searchKey, provider }, "[resumoIA] chamada à IA falhou");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Falha ao gerar resumo: ${msg.slice(0, 200)}. Crédito foi debitado — entre em contato com o suporte se precisar de reembolso.`,
+        });
+      }
+
+      if (!resumo) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "IA retornou resposta vazia. Tente novamente em alguns minutos.",
+        });
+      }
+
+      // Bridge `capa` → JuditLawsuit shape pro frontend setar processoCompleto
+      const processo = adaptarParaJuditShape(
+        {
+          capa: capaTyped,
+          movimentacoes: movs.map((m) => {
+            const parsed = m.conteudoJson ? safeParse(m.conteudoJson) : null;
+            return {
+              data: (parsed as any)?.data ?? (m.dataEvento instanceof Date ? m.dataEvento.toISOString() : m.dataEvento),
+              texto: (parsed as any)?.texto ?? m.conteudo ?? "",
+            };
+          }),
+          tribunal: mon.tribunal,
+        },
+        mon.searchKey,
+      );
+
+      log.info(
+        { monId: mon.id, cnj: mon.searchKey, provider, resumoLen: resumo.length },
+        "[resumoIA] gerado",
+      );
+
+      return { resumo, processo, fonte: "ia" };
+    }),
+
+  /**
+   * Busca processos por CPF ou CNPJ — retorna lista de CNJs encontrados
+   * onde a pessoa aparece como parte. Não traz detalhes (capa/movs);
+   * pra ver detalhes user clica num resultado e cai em `consultarCNJ`.
+   *
+   * Cobra 3 créditos flat (não varia com número de resultados).
+   *
+   * Hoje só funciona pra TJCE (único tribunal com adapter de CPF).
+   * Outros tribunais retornam NOT_IMPLEMENTED.
+   */
+  consultarDocumento: protectedProcedure
+    .input(
+      z.object({
+        tipo: z.enum(["cpf", "cnpj"]),
+        valor: z.string().min(11).max(20),
+        credencialId: z.number().int().positive().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const docLimpo = input.valor.replace(/\D/g, "");
+      if (input.tipo === "cpf" && docLimpo.length !== 11) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "CPF deve ter 11 dígitos" });
+      }
+      if (input.tipo === "cnpj" && docLimpo.length !== 14) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ deve ter 14 dígitos" });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Resolve credencial: selecionada ou primeira ativa do escritório
+      // (preferindo pje_tjce, fallback esaj_tjce). Mesma lógica de
+      // `criarMonitoramentoNovasAcoes`.
+      let cred: typeof cofreCredenciais.$inferSelect | undefined;
+      if (input.credencialId) {
+        [cred] = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.id, input.credencialId),
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          )
+          .limit(1);
+      } else {
+        const todas = await db
+          .select()
+          .from(cofreCredenciais)
+          .where(
+            and(
+              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
+              eq(cofreCredenciais.status, "ativa"),
+            ),
+          );
+        const suportadas = todas.filter(
+          (c) => c.sistema === "pje_tjce" || c.sistema === "esaj_tjce",
+        );
+        cred = suportadas.find((c) => c.sistema === "pje_tjce") ?? suportadas[0];
+      }
+
+      if (!cred) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Pra buscar processos por CPF/CNPJ, cadastre sua credencial OAB no Cofre. " +
+            "→ /processos?tab=cofre",
+          cause: { motivo: "credencial_ausente" },
+        });
+      }
+
+      // Mapeia sistema → tribunal (hoje só TJCE)
+      const codigoTribunal =
+        cred.sistema === "pje_tjce" || cred.sistema === "esaj_tjce" ? "tjce" : null;
+      if (!codigoTribunal) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Busca por CPF/CNPJ ainda só funciona pra TJCE. Sistema ${cred.sistema} entra em sprint futura.`,
+        });
+      }
+
+      const storageState = await recuperarSessao(cred.id);
+      if (!storageState) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            `Sua credencial ${cred.apelido} expirou. ` +
+            `Vá em Cofre de Credenciais → Validar pra renovar.`,
+          cause: { motivo: "sessao_expirada", credencialId: cred.id },
+        });
+      }
+
+      await consumirCreditos(
+        esc.escritorio.id,
+        ctx.user.id,
+        CUSTOS.consulta_documento,
+        "consulta_documento",
+        `${input.tipo.toUpperCase()}: ${docLimpo.slice(0, 3)}*** (${codigoTribunal.toUpperCase()})`,
+      );
+
+      const { requestId, status } = iniciarConsultaDocumentoMotorProprio(
+        input.tipo,
+        docLimpo,
+        storageState,
+        codigoTribunal,
+      );
+      log.info(
+        { tipo: input.tipo, requestId, tribunal: codigoTribunal },
+        "[motor-proprio] consulta documento iniciada",
       );
       return { requestId, status };
     }),
