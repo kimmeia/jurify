@@ -38,6 +38,8 @@ import {
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
 import { TagsTab } from "./configuracoes/tags-tab";
+import { gradientAvatar, gerarIniciais } from "./dashboards/common";
+import { Search as SearchIcon } from "lucide-react";
 import { OrigensLeadTab } from "./configuracoes/OrigensLeadTab";
 import { CamposClienteTab } from "./configuracoes/campos-cliente-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
@@ -194,6 +196,10 @@ export default function Configuracoes() {
 
   const { data: cargosList } = trpc.permissoes.listarCargos.useQuery(undefined, { retry: false });
   const { data: setoresList, refetch: refetchSetores } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
+
+  // Busca + filtro pra aba Equipe
+  const [buscaEquipe, setBuscaEquipe] = useState("");
+  const [filtroEquipe, setFiltroEquipe] = useState<"todos" | "ativos" | "convites" | "inativos">("todos");
 
   const [conviteEmail, setConviteEmail] = useState("");
   // Cargo do convite — pode ser default ("gestor"|"atendente"|"estagiario")
@@ -474,239 +480,395 @@ export default function Configuracoes() {
 
           {/* ─── CONTEÚDO DAS ABAS ────────────────────────────────────── */}
           <div className="min-w-0">
-        {/* ─── Perfil ────────────────────────────────────────────────── */}
-        <TabsContent value="perfil" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2"><Building2 className="h-4 w-4" /> Dados do Escritório</CardTitle>
-                <CardDescription>Informações básicas da sua empresa</CardDescription>
-              </div>
-              {canEdit && !editMode && <Button variant="outline" size="sm" onClick={initPerfilForm}>Editar</Button>}
-            </CardHeader>
-            <CardContent>
-              {editMode ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Nome *</Label>
-                      <Input value={formPerfil.nome} onChange={(e) => setFormPerfil({ ...formPerfil, nome: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>CNPJ</Label>
-                      <Input placeholder="00.000.000/0001-00" value={formPerfil.cnpj} onChange={(e) => setFormPerfil({ ...formPerfil, cnpj: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Telefone</Label>
-                      <Input placeholder="(85) 99999-0000" value={formPerfil.telefone} onChange={(e) => setFormPerfil({ ...formPerfil, telefone: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Email</Label>
-                      <Input type="email" value={formPerfil.email} onChange={(e) => setFormPerfil({ ...formPerfil, email: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Endereço</Label>
-                    <Input value={formPerfil.endereco} onChange={(e) => setFormPerfil({ ...formPerfil, endereco: e.target.value })} />
-                  </div>
+        {/* ─── Perfil — sections collapsibles ───────────────────────── */}
+        <TabsContent value="perfil" className="space-y-3">
+          {canEdit && !editMode && (
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={initPerfilForm}>
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar dados
+              </Button>
+            </div>
+          )}
 
-                  <Separator />
-                  <p className="text-sm font-medium">Horário de Funcionamento</p>
+          {/* Section 1: Dados básicos */}
+          <details open className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Dados básicos</p>
+                  <p className="text-[10.5px] text-slate-500">Nome, CNPJ, telefone, email, endereço</p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5">
+              {editMode ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label className="text-[11px]">Nome *</Label><Input value={formPerfil.nome} onChange={(e) => setFormPerfil({ ...formPerfil, nome: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">CNPJ</Label><Input placeholder="00.000.000/0001-00" value={formPerfil.cnpj} onChange={(e) => setFormPerfil({ ...formPerfil, cnpj: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Telefone</Label><Input placeholder="(85) 99999-0000" value={formPerfil.telefone} onChange={(e) => setFormPerfil({ ...formPerfil, telefone: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Email</Label><Input type="email" value={formPerfil.email} onChange={(e) => setFormPerfil({ ...formPerfil, email: e.target.value })} /></div>
+                  <div className="space-y-1.5 sm:col-span-2"><Label className="text-[11px]">Endereço</Label><Input value={formPerfil.endereco} onChange={(e) => setFormPerfil({ ...formPerfil, endereco: e.target.value })} /></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Nome</p><p className="font-semibold mt-0.5">{escritorio.nome}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CNPJ</p><p className="font-mono mt-0.5">{escritorio.cnpj || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Telefone</p><p className="font-mono mt-0.5">{escritorio.telefone || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Email</p><p className="mt-0.5">{escritorio.email || "—"}</p></div>
+                  {escritorio.endereco && <div className="rounded-lg bg-slate-50 p-3 col-span-2"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Endereço</p><p className="mt-0.5">{escritorio.endereco}</p></div>}
+                </div>
+              )}
+            </div>
+          </details>
+
+          {/* Section 2: Horários */}
+          <details open className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center"><Clock className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Horários de atendimento</p>
+                  <p className="text-[10.5px] text-slate-500">
+                    {escritorio.horarioAbertura}–{escritorio.horarioFechamento} · {(escritorio.diasFuncionamento || []).length} dias/sem · {escritorio.fusoHorario}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5 space-y-4">
+              {editMode ? (
+                <>
                   <div className="space-y-1.5">
-                    <Label>Fuso horário</Label>
-                    <Select
-                      value={formPerfil.fusoHorario || FUSO_HORARIO_PADRAO}
-                      onValueChange={(v) => setFormPerfil({ ...formPerfil, fusoHorario: v })}
-                    >
+                    <Label className="text-[11px]">Fuso horário</Label>
+                    <Select value={formPerfil.fusoHorario || FUSO_HORARIO_PADRAO} onValueChange={(v) => setFormPerfil({ ...formPerfil, fusoHorario: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {FUSOS_HORARIOS.map((f) => (
-                          <SelectItem key={f.valor} value={f.valor}>
-                            <span className="font-medium">{f.utc}</span>
-                            <span className="text-muted-foreground"> — {f.label}</span>
-                          </SelectItem>
-                        ))}
+                        {FUSOS_HORARIOS.map((f) => (<SelectItem key={f.valor} value={f.valor}><span className="font-medium">{f.utc}</span><span className="text-muted-foreground"> — {f.label}</span></SelectItem>))}
                       </SelectContent>
                     </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Usado nos gatilhos com horário (SmartFlow Asaas, lembretes Cal.com).
-                    </p>
+                    <p className="text-[10.5px] text-slate-500">Usado nos gatilhos com horário (SmartFlow Asaas, lembretes Cal.com).</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Abertura</Label>
-                      <Input type="time" value={formPerfil.horarioAbertura} onChange={(e) => setFormPerfil({ ...formPerfil, horarioAbertura: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Fechamento</Label>
-                      <Input type="time" value={formPerfil.horarioFechamento} onChange={(e) => setFormPerfil({ ...formPerfil, horarioFechamento: e.target.value })} />
-                    </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><Label className="text-[11px]">Abertura</Label><Input type="time" value={formPerfil.horarioAbertura} onChange={(e) => setFormPerfil({ ...formPerfil, horarioAbertura: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label className="text-[11px]">Fechamento</Label><Input type="time" value={formPerfil.horarioFechamento} onChange={(e) => setFormPerfil({ ...formPerfil, horarioFechamento: e.target.value })} /></div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Dias de funcionamento</Label>
-                    <div className="flex gap-2">
+                    <Label className="text-[11px]">Dias de funcionamento</Label>
+                    <div className="flex gap-1.5 flex-wrap">
                       {DIAS_SEMANA.map((d) => (
-                        <button key={d.key} onClick={() => toggleDia(d.key)}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${formPerfil.diasFuncionamento?.includes(d.key) ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"}`}>
-                          {d.label}
-                        </button>
+                        <button key={d.key} type="button" onClick={() => toggleDia(d.key)} className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${formPerfil.diasFuncionamento?.includes(d.key) ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"}`}>{d.label}</button>
                       ))}
                     </div>
                   </div>
-
-                  <Separator />
-                  <p className="text-sm font-medium">Mensagens Automáticas</p>
-                  <div className="space-y-1.5">
-                    <Label>Mensagem de boas-vindas (primeiro contato)</Label>
-                    <Textarea placeholder="Olá! Bem-vindo ao escritório..." rows={3} value={formPerfil.mensagemBoasVindas} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemBoasVindas: e.target.value })} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Mensagem de ausência (fora do horário)</Label>
-                    <Textarea placeholder="No momento estamos fora do horário..." rows={3} value={formPerfil.mensagemAusencia} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemAusencia: e.target.value })} />
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Button onClick={() => atualizarMut.mutate(formPerfil)} disabled={atualizarMut.isPending}>
-                      {atualizarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null} Salvar
-                    </Button>
-                    <Button variant="ghost" onClick={() => setEditMode(false)}>Cancelar</Button>
-                  </div>
-                </div>
+                </>
               ) : (
-                <div className="space-y-4 text-sm">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Nome</p><p className="font-semibold">{escritorio.nome}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">CNPJ</p><p>{escritorio.cnpj || "—"}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Telefone</p><p>{escritorio.telefone || "—"}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Email</p><p>{escritorio.email || "—"}</p></div>
-                  </div>
-                  {escritorio.endereco && <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Endereço</p><p>{escritorio.endereco}</p></div>}
-                  <Separator />
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Horário</p><p className="font-medium">{escritorio.horarioAbertura} — {escritorio.horarioFechamento}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dias</p><p>{(escritorio.diasFuncionamento || []).join(", ")}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Fuso</p><p>{escritorio.fusoHorario}</p></div>
-                  </div>
-
-                  {podeFazerBackup && (
-                    <>
-                      <Separator />
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-medium flex items-center gap-1.5">
-                            <Database className="h-4 w-4" /> Backup e import
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Exporta ou restaura todos os dados do escritório.
-                          </p>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {DIAS_SEMANA.map((d) => {
+                    const ativo = (escritorio.diasFuncionamento || []).includes(d.key);
+                    return (
+                      <div key={d.key} className="text-center">
+                        <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase">{d.label}</p>
+                        <div className={`rounded-lg p-2 ${ativo ? "bg-emerald-100 border border-emerald-200" : "bg-slate-100 border border-slate-200"}`}>
+                          {ativo ? (
+                            <>
+                              <p className="text-[11px] font-bold tabular-nums">{escritorio.horarioAbertura}</p>
+                              <p className="text-[9px] text-slate-400">–</p>
+                              <p className="text-[11px] font-bold tabular-nums">{escritorio.horarioFechamento}</p>
+                            </>
+                          ) : (
+                            <p className="text-[10px] text-slate-400 py-1">Fechado</p>
+                          )}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBackupDialogOpen(true)}
-                        >
-                          Abrir
-                        </Button>
                       </div>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </details>
 
-        {/* ─── Equipe ───────────────────────────────────────────────── */}
-        <TabsContent value="equipe" className="space-y-4">
-          {/* Resumo */}
-          {equipeData && (
-            <Card>
-              <CardContent className="pt-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div><p className="text-xs text-muted-foreground">Colaboradores ativos</p><p className="text-2xl font-bold">{equipeData.total}</p></div>
-                    <Separator orientation="vertical" className="h-10" />
-                    <div><p className="text-xs text-muted-foreground">Limite do plano</p><p className="text-2xl font-bold">{equipeData.limite}</p></div>
-                    {equipeData.extras > 0 && (
-                      <>
-                        <Separator orientation="vertical" className="h-10" />
-                        <div><p className="text-xs text-amber-600">Extras</p><p className="text-lg font-bold text-amber-600">{equipeData.extras} × R$ {CUSTO_COLABORADOR_EXTRA.toFixed(2)}</p></div>
-                      </>
-                    )}
+          {/* Section 3: Mensagens automáticas */}
+          <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><MessageCircle className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Mensagens automáticas</p>
+                  <p className="text-[10.5px] text-slate-500">Boas-vindas e fora do horário</p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5 space-y-3">
+              {editMode ? (
+                <>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de boas-vindas (primeiro contato)</Label><Textarea placeholder="Olá! Bem-vindo ao escritório..." rows={3} value={formPerfil.mensagemBoasVindas} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemBoasVindas: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de ausência (fora do horário)</Label><Textarea placeholder="No momento estamos fora do horário..." rows={3} value={formPerfil.mensagemAusencia} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemAusencia: e.target.value })} /></div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">📨 Boas-vindas</p>
+                    <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemBoasVindas || "Sem mensagem configurada"}"</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">🌙 Fora do horário</p>
+                    <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemAusencia || "Sem mensagem configurada"}"</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
+
+          {/* Section 4: Backup */}
+          {podeFazerBackup && (
+            <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+              <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"><Database className="h-4 w-4" /></span>
+                  <div>
+                    <p className="text-sm font-bold tracking-tight">Backup e importação</p>
+                    <p className="text-[10.5px] text-slate-500">Exporte ou restaure todos os dados do escritório</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+              </summary>
+              <div className="p-5">
+                <Button variant="outline" onClick={() => setBackupDialogOpen(true)}>
+                  <Database className="h-3.5 w-3.5 mr-1.5" /> Abrir backup
+                </Button>
+              </div>
+            </details>
           )}
 
-          {/* Lista de colaboradores */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Membros da Equipe</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {equipeData?.colaboradores.map((c) => (
-                  <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors hover:bg-muted/30 ${!c.ativo ? "opacity-40 bg-muted/20" : ""}`}>
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                      {(c.userName || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{c.userName || "Sem nome"}</p>
-                        <CargoBadge
-                          cargo={c.cargo as CargoColaborador}
-                          nomePersonalizado={(c as any).cargoPersonalizadoNome}
-                          cor={(c as any).cargoPersonalizadoCor}
-                        />
-                        {!c.ativo && <Badge variant="secondary" className="text-xs">Inativo</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {c.userEmail || "—"}
-                        {(c.setorNome || c.departamento) ? ` · ${c.setorNome || c.departamento}` : ""}
+          {/* Save/cancel sticky em edit mode */}
+          {editMode && (
+            <div className="flex gap-2 sticky bottom-4 bg-white p-3 rounded-xl border border-slate-200 shadow-md">
+              <Button onClick={() => atualizarMut.mutate(formPerfil)} disabled={atualizarMut.isPending}>
+                {atualizarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />} Salvar alterações
+              </Button>
+              <Button variant="ghost" onClick={() => setEditMode(false)}>Cancelar</Button>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── Equipe — busca + chips + cards ricos ─────────────────── */}
+        <TabsContent value="equipe" className="space-y-4">
+          {(() => {
+            const colaboradoresAtivos = equipeData?.colaboradores || [];
+            const inativos = removidos.length;
+            const todos = colaboradoresAtivos.length + inativos;
+            // Filtro client-side (a lista cabe inteira) + busca normalizada
+            const normalizar = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+            const buscaN = normalizar(buscaEquipe);
+            const listaFiltrada = colaboradoresAtivos.filter((c: any) => {
+              if (filtroEquipe === "inativos") return false; // inativos só aparecem na seção separada
+              if (filtroEquipe === "convites") return false; // convites são outra seção
+              if (filtroEquipe === "ativos" && !c.ativo) return false;
+              if (!buscaN) return true;
+              return [c.userName, c.userEmail, c.cargo, c.setorNome, c.departamento].some(
+                (v) => v && normalizar(String(v)).includes(buscaN),
+              );
+            });
+            return (
+              <>
+                {/* Header: contagem + botão Convidar */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <h3 className="text-base font-bold tracking-tight">Equipe</h3>
+                    <p className="text-[11px] text-slate-500">
+                      <b className="text-slate-700">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
+                      {(equipeData?.extras ?? 0) > 0 && (
+                        <> · <b className="text-amber-700">{equipeData?.extras}</b> extras × R$ {CUSTO_COLABORADOR_EXTRA.toFixed(2)}</>
+                      )}
+                      {inativos > 0 && <> · <b className="text-slate-500">{inativos}</b> removidos</>}
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm"
+                      onClick={() => {
+                        // foca o input do email — já tem form de convite mais abaixo
+                        const el = document.getElementById("convite-email-input");
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        (el as HTMLInputElement | null)?.focus();
+                      }}
+                    >
+                      <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Convidar colaborador
+                    </Button>
+                  )}
+                </div>
+
+                {/* Busca + chips */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[240px] max-w-md">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      placeholder="Buscar por nome, email, cargo…"
+                      value={buscaEquipe}
+                      onChange={(e) => setBuscaEquipe(e.target.value)}
+                      className="pl-9 h-9 bg-white"
+                    />
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { id: "todos", label: "Todos", count: todos },
+                      { id: "ativos", label: "Ativos", count: colaboradoresAtivos.filter((c: any) => c.ativo).length },
+                      { id: "convites", label: "Convites", count: 0, color: "amber" },
+                      { id: "inativos", label: "Removidos", count: inativos },
+                    ].map((chip) => {
+                      const active = filtroEquipe === chip.id;
+                      const isAmber = (chip as any).color === "amber";
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setFiltroEquipe(chip.id as any)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                            active
+                              ? isAmber
+                                ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                                : "bg-slate-900 text-white border-slate-900 shadow-sm"
+                              : isAmber
+                                ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          {chip.label}
+                          <span className={`tabular-nums ${active ? "text-white/85" : "text-slate-400"}`}>
+                            {chip.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Grid de cards */}
+                {filtroEquipe === "inativos" ? null : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {listaFiltrada.length === 0 ? (
+                      <p className="col-span-full text-center text-[12px] text-slate-400 italic py-6">
+                        Nenhum colaborador bate com a busca.
                       </p>
-                    </div>
-                    <div className="text-xs text-muted-foreground text-right shrink-0">
-                      <p>Max: {c.maxAtendimentosSimultaneos} atend.</p>
-                      <p>{c.recebeLeadsAutomaticos ? "Recebe leads" : "Sem leads auto"}</p>
-                    </div>
-                    {canEdit && c.cargo !== "dono" && c.ativo && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        title="Editar cargo, setor e atendimento"
-                        onClick={() => abrirEditColab(c)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {isDono && c.ativo && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        title="Ver permissões efetivas (diagnóstico)"
-                        onClick={() => setDiagColabId(c.id)}
-                      >
-                        <Stethoscope className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {isDono && c.cargo !== "dono" && c.ativo && (
-                      <Button variant="ghost" size="sm" className="text-destructive shrink-0" onClick={() => {
-                        if (confirm(`Remover ${c.userName}?`)) removerColabMut.mutate({ colaboradorId: c.id });
-                      }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    ) : (
+                      listaFiltrada.map((c: any) => {
+                        const nome = c.userName || c.userEmail || "Colaborador";
+                        const isDono2 = c.cargo === "dono";
+                        const corBorda = isDono2
+                          ? "border-l-violet-500"
+                          : c.cargo === "gestor"
+                            ? "border-l-indigo-500"
+                            : c.cargo === "atendente"
+                              ? "border-l-cyan-500"
+                              : c.cargo === "sdr"
+                                ? "border-l-amber-500"
+                                : "border-l-slate-300";
+                        return (
+                          <div
+                            key={c.id}
+                            className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${!c.ativo ? "opacity-65" : ""}`}
+                          >
+                            <div className="p-3">
+                              <div className="flex items-start gap-2.5">
+                                <span className={`w-11 h-11 rounded-full flex items-center justify-center text-[12px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(nome)}`}>
+                                  {gerarIniciais(nome)}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-bold truncate" title={nome}>{nome}</p>
+                                    {c.ativo && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Ativo" />}
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 truncate" title={c.userEmail}>{c.userEmail || "—"}</p>
+                                  <div className="mt-1.5">
+                                    <CargoBadge
+                                      cargo={c.cargo as CargoColaborador}
+                                      nomePersonalizado={(c as any).cargoPersonalizadoNome}
+                                      cor={(c as any).cargoPersonalizadoCor}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Métricas inline */}
+                              <div className="grid grid-cols-3 gap-1 mt-3 pt-3 border-t border-slate-100 text-[10px]">
+                                <div>
+                                  <p className="text-slate-400 uppercase tracking-wider text-[9px]">Setor</p>
+                                  <p className="font-semibold truncate" title={c.setorNome || c.departamento || "Todos"}>{c.setorNome || c.departamento || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400 uppercase tracking-wider text-[9px]">Max atend.</p>
+                                  <p className="font-semibold tabular-nums">{c.maxAtendimentosSimultaneos ?? "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400 uppercase tracking-wider text-[9px]">Leads auto</p>
+                                  <p className={`font-semibold ${c.recebeLeadsAutomaticos ? "text-emerald-600" : "text-slate-400"}`}>
+                                    {c.recebeLeadsAutomaticos ? "Sim" : "Não"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Ações */}
+                              {(canEdit || isDono) && c.ativo && (
+                                <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                                  {canEdit && c.cargo !== "dono" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-[10px] rounded-md text-violet-600 hover:bg-violet-50 px-2"
+                                      title="Editar cargo, setor e atendimento"
+                                      onClick={() => abrirEditColab(c)}
+                                    >
+                                      <Pencil className="h-3 w-3 mr-1" />Editar
+                                    </Button>
+                                  )}
+                                  {isDono && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-[10px] rounded-md text-blue-600 hover:bg-blue-50 px-2"
+                                      title="Diagnóstico de permissões"
+                                      onClick={() => setDiagColabId(c.id)}
+                                    >
+                                      <Stethoscope className="h-3 w-3 mr-1" />Permissões
+                                    </Button>
+                                  )}
+                                  {isDono && c.cargo !== "dono" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-[10px] rounded-md text-rose-600 hover:bg-rose-50 px-2"
+                                      onClick={() => {
+                                        if (confirm(`Remover ${nome}?`)) removerColabMut.mutate({ colaboradorId: c.id });
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />Remover
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
-                ))}
-                {(!equipeData?.colaboradores || equipeData.colaboradores.length === 0) && (
-                  <p className="text-center text-sm text-muted-foreground py-6">Nenhum colaborador encontrado.</p>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+
+                {filtroEquipe === "convites" && (
+                  <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/40 p-6 text-center">
+                    <p className="text-[12px] text-amber-700 font-semibold">📨 Convites pendentes</p>
+                    <p className="text-[10.5px] text-amber-600/85 mt-1">
+                      Use o formulário abaixo pra convidar. Convites enviados via link ficam ativos até serem aceitos.
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Colaboradores removidos — soft delete reversível */}
           {removidos.length > 0 && isDono && (
@@ -770,7 +932,7 @@ export default function Configuracoes() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label>Email *</Label>
-                    <Input type="email" placeholder="colaborador@email.com" value={conviteEmail} onChange={(e) => setConviteEmail(e.target.value)} />
+                    <Input id="convite-email-input" type="email" placeholder="colaborador@email.com" value={conviteEmail} onChange={(e) => setConviteEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Cargo *</Label>
