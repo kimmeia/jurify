@@ -15,7 +15,7 @@ import {
 import {
   CalendarDays, Plus, Loader2, Clock, CheckCircle, ChevronLeft, ChevronRight,
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
-  Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin,
+  Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -63,21 +63,39 @@ const PRIOR_BADGE: Record<string, string> = {
 
 /** Cor da faixa lateral do EventoCard por tipo. Tarefas sempre violet. */
 const COR_TIPO: Record<string, string> = {
-  prazo_processual: "#f59e0b",
-  audiencia: "#f43f5e",
-  reuniao_comercial: "#3b82f6",
-  tarefa: "#8b5cf6",
-  follow_up: "#10b981",
+  prazo_processual: "#f43f5e",
+  audiencia: "#8b5cf6",
+  reuniao_comercial: "#10b981",
+  tarefa: "#f59e0b",
+  follow_up: "#06b6d4",
   outro: "#64748b",
 };
 
+/** Paleta do hora-block colorido à esquerda do card — mesma família que a faixa lateral. */
+const HORA_BLOCK_BG: Record<string, string> = {
+  prazo_processual: "from-rose-50 to-rose-100 border-rose-300",
+  audiencia: "from-violet-50 to-violet-100 border-violet-300",
+  reuniao_comercial: "from-emerald-50 to-emerald-100 border-emerald-300",
+  tarefa: "from-amber-50 to-amber-100 border-amber-300",
+  follow_up: "from-cyan-50 to-cyan-100 border-cyan-300",
+  outro: "from-slate-50 to-slate-100 border-slate-300",
+};
+const HORA_BLOCK_TEXT: Record<string, string> = {
+  prazo_processual: "text-rose-700",
+  audiencia: "text-violet-700",
+  reuniao_comercial: "text-emerald-700",
+  tarefa: "text-amber-700",
+  follow_up: "text-cyan-700",
+  outro: "text-slate-700",
+};
+
 const TIPO_BADGE: Record<string, string> = {
-  prazo_processual: "bg-amber-50 text-amber-700",
-  audiencia: "bg-rose-50 text-rose-700",
-  reuniao_comercial: "bg-blue-50 text-blue-700",
-  tarefa: "bg-violet-50 text-violet-700",
-  follow_up: "bg-emerald-50 text-emerald-700",
-  outro: "bg-slate-100 text-slate-600",
+  prazo_processual: "bg-rose-50 text-rose-700 border-rose-200",
+  audiencia: "bg-violet-50 text-violet-700 border-violet-200",
+  reuniao_comercial: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  tarefa: "bg-amber-50 text-amber-700 border-amber-200",
+  follow_up: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  outro: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
 function corDoEvento(ev: any): string {
@@ -114,6 +132,26 @@ function isOverdue(dataInicio: string, status: string) {
   return new Date(dataInicio) < new Date() && ["pendente", "em_andamento"].includes(status);
 }
 
+/** Retorna texto curto de "tempo até / atrás" relativo a agora.
+ *  Ex: "em 23min", "em 2h", "amanhã 9h", "atrasado 3h", "há 2 dias". */
+function tempoRelativoAgenda(iso: string): { texto: string; urgencia: "agora" | "atrasado" | "futuro" | "longe" } {
+  const target = new Date(iso).getTime();
+  const now = Date.now();
+  const diffMs = target - now;
+  const diffMin = Math.round(diffMs / 60000);
+  const diffH = Math.round(diffMs / 3600000);
+  const diffDia = Math.round(diffMs / 86400000);
+
+  if (diffMin < -60 * 24) return { texto: `há ${Math.abs(diffDia)}d`, urgencia: "atrasado" };
+  if (diffMin < -60) return { texto: `atrasado ${Math.abs(diffH)}h`, urgencia: "atrasado" };
+  if (diffMin < 0) return { texto: `atrasado ${Math.abs(diffMin)}min`, urgencia: "atrasado" };
+  if (diffMin < 60) return { texto: `em ${diffMin}min`, urgencia: "agora" };
+  if (diffH < 24) return { texto: `em ${diffH}h`, urgencia: "futuro" };
+  if (diffDia === 1) return { texto: `amanhã ${new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, urgencia: "futuro" };
+  if (diffDia < 7) return { texto: `em ${diffDia}d`, urgencia: "futuro" };
+  return { texto: `em ${diffDia}d`, urgencia: "longe" };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CARD DE EVENTO
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -127,132 +165,210 @@ function EventoCard({ ev, onStatusChange, onDelete }: {
   const concluido = ev.status === "concluido" || ev.status === "concluida";
   const cancelado = ev.status === "cancelado" || ev.status === "cancelada";
   const cor = corDoEvento(ev);
+  const tipoKey = ev.fonte === "tarefa" ? "tarefa" : (ev.tipo as string) || "outro";
   const tipoLabel = ev.fonte === "tarefa" ? "Tarefa" : TIPO_LABELS[ev.tipo] || ev.tipo;
   const prioridade = ev.prioridade || "normal";
 
   const inicio = new Date(ev.dataInicio);
   const hh = String(inicio.getHours()).padStart(2, "0");
   const mm = String(inicio.getMinutes()).padStart(2, "0");
-  const horaInicio = `${hh}:${mm}`;
   const horaFim = ev.dataFim
     ? `${String(new Date(ev.dataFim).getHours()).padStart(2, "0")}:${String(new Date(ev.dataFim).getMinutes()).padStart(2, "0")}`
     : null;
 
   const responsavel = ev.responsavelNome;
+  const contato = ev.contatoNome;
+  const cnj = ev.cnj || null;
+  const tribunal = ev.tribunal || null;
+
+  // Tempo relativo só pra eventos pendentes (não vale pra concluído/cancelado)
+  const rel = !concluido && !cancelado && !ev.diaInteiro
+    ? tempoRelativoAgenda(ev.dataInicio)
+    : null;
+
+  // Hora-block: cores por tipo. Quando atrasado, força paleta rose.
+  const horaBlockCls = overdue
+    ? "from-rose-50 to-rose-100 border-rose-300"
+    : rel?.urgencia === "agora"
+      ? "from-orange-50 to-orange-100 border-orange-300"
+      : HORA_BLOCK_BG[tipoKey] || HORA_BLOCK_BG.outro;
+  const horaTextCls = overdue
+    ? "text-rose-700"
+    : rel?.urgencia === "agora"
+      ? "text-orange-700"
+      : HORA_BLOCK_TEXT[tipoKey] || HORA_BLOCK_TEXT.outro;
+
+  // Bg do card por estado
+  const cardBg = concluido
+    ? "bg-slate-50"
+    : overdue
+      ? "bg-gradient-to-r from-rose-50/60 to-white"
+      : rel?.urgencia === "agora"
+        ? "bg-gradient-to-r from-orange-50/40 to-white"
+        : "bg-white";
+
+  const cardBorder = overdue
+    ? "border-rose-200"
+    : rel?.urgencia === "agora"
+      ? "border-orange-200 ring-2 ring-orange-100"
+      : "border-slate-200";
+
+  // Badge de status/tempo
+  const statusBadge = (() => {
+    if (concluido) return { txt: `✓ Concluído${ev.dataConclusao ? " " + formatTime(ev.dataConclusao) : ""}`, cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+    if (cancelado) return { txt: "Cancelado", cls: "bg-slate-100 text-slate-500 border-slate-200" };
+    if (!rel) return null;
+    if (rel.urgencia === "atrasado") return { txt: `⚠ ${rel.texto}`, cls: "bg-rose-100 text-rose-700 border-rose-200 animate-pulse" };
+    if (rel.urgencia === "agora") return { txt: `⏳ ${rel.texto}`, cls: "bg-orange-100 text-orange-700 border-orange-200 animate-pulse" };
+    if (rel.urgencia === "futuro") return { txt: rel.texto, cls: "bg-blue-50 text-blue-700 border-blue-200" };
+    return { txt: rel.texto, cls: "bg-slate-100 text-slate-600 border-slate-200" };
+  })();
 
   return (
     <div
-      className={`group relative grid grid-cols-[64px_1fr_auto] gap-3 items-stretch bg-white border rounded-xl overflow-hidden transition-all hover:shadow-md hover:-translate-y-px ${
-        overdue
-          ? "border-rose-300 bg-gradient-to-r from-rose-50/60 to-white"
-          : "border-slate-200 hover:border-slate-300"
-      } ${concluido ? "opacity-60" : ""}`}
+      className={`group relative ${cardBg} ${cardBorder} border rounded-xl transition-all hover:shadow-[0_6px_20px_-6px_rgb(0_0_0_/_0.10)] hover:-translate-y-px ${concluido ? "opacity-65" : ""}`}
+      style={{ borderLeft: `4px solid ${cor}` }}
     >
-      {/* Faixa lateral colorida por tipo */}
-      <div className="w-[5px] shrink-0" style={{ background: cor }} />
+      <div className="flex items-start gap-3 p-3">
+        {/* Hora-block colorida à esquerda */}
+        <div
+          className={`flex flex-col items-center justify-center w-[64px] min-h-[64px] py-1.5 rounded-xl bg-gradient-to-br ${horaBlockCls} border shrink-0`}
+        >
+          {ev.diaInteiro ? (
+            <>
+              <p className={`text-[10px] font-bold leading-none tracking-wider ${horaTextCls}`}>DIA</p>
+              <p className={`text-[10px] font-bold leading-none tracking-wider mt-1 ${horaTextCls}`}>INTEIRO</p>
+            </>
+          ) : (
+            <>
+              <p className={`text-xl font-extrabold leading-none tabular-nums tracking-tight ${horaTextCls}`}>{hh}</p>
+              <p className={`text-[11px] font-bold leading-none mt-0.5 tabular-nums ${horaTextCls} opacity-80`}>{mm}</p>
+              {horaFim && (
+                <p className={`text-[8.5px] font-semibold leading-none mt-1.5 tabular-nums ${horaTextCls} opacity-60`}>
+                  → {horaFim}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
-      {/* Hora em destaque */}
-      <div className="flex flex-col items-center justify-center py-2.5 min-w-[60px] border-r border-slate-100 -ml-3">
-        {ev.diaInteiro ? (
-          <p className="text-[9px] font-bold text-slate-500 tracking-wider text-center leading-tight">
-            DIA<br />INTEIRO
-          </p>
-        ) : (
-          <>
-            <p className="text-lg font-bold text-slate-900 leading-none tabular-nums">{horaInicio}</p>
-            {horaFim && (
-              <p className="text-[11px] text-slate-500 mt-1 tabular-nums">{horaFim}</p>
+        {/* Conteúdo */}
+        <div className="flex-1 min-w-0">
+          {/* Linha 1: badges de status/tipo/prioridade */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {statusBadge && (
+              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusBadge.cls}`}>
+                {statusBadge.txt}
+              </span>
             )}
-          </>
-        )}
-      </div>
+            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${TIPO_BADGE[tipoKey] || TIPO_BADGE.outro}`}>
+              {tipoLabel}
+            </span>
+            {prioridade !== "normal" && (
+              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal}`}>
+                {PRIOR_LABEL[prioridade] || prioridade}
+              </span>
+            )}
+          </div>
 
-      {/* Conteúdo */}
-      <div className="py-3 pr-2 min-w-0 flex flex-col justify-center">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
+          {/* Título */}
           <p
-            className={`text-sm font-semibold leading-tight ${
-              concluido ? "line-through text-slate-400" : cancelado ? "text-slate-400" : ""
+            className={`text-sm font-bold tracking-tight leading-snug mt-1.5 ${
+              concluido ? "line-through text-slate-400" : cancelado ? "text-slate-400" : "text-slate-900"
             }`}
           >
             {ev.titulo}
           </p>
-          {overdue && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700">
-              ⚠ Atrasado
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
-          {ev.contatoNome && (
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              <span className="font-medium truncate max-w-[180px]">{ev.contatoNome}</span>
-            </span>
-          )}
-          {ev.tipo && (
-            <span
-              className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                ev.fonte === "tarefa" ? TIPO_BADGE.tarefa : TIPO_BADGE[ev.tipo] || TIPO_BADGE.outro
-              }`}
-            >
-              {tipoLabel}
-            </span>
-          )}
-          {prioridade !== "normal" && (
-            <span
-              className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal
-              }`}
-            >
-              {PRIOR_LABEL[prioridade] || prioridade}
-            </span>
-          )}
-          {ev.local && (
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              <span className="truncate max-w-[140px]">{ev.local}</span>
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* Avatar + ações */}
-      <div className="flex items-center pr-3 gap-1.5">
-        {responsavel && (
-          <span
-            className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 shadow-[0_0_0_2px_white] bg-gradient-to-br ${gradientAvatar(responsavel)}`}
-            title={responsavel}
-          >
-            {gerarIniciais(responsavel)}
-          </span>
-        )}
-        {!concluido && !cancelado && (
+          {/* Linha 2: cliente + processo */}
+          {(contato || cnj || ev.local) && (
+            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-600 flex-wrap">
+              {contato && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(contato)}`}
+                  >
+                    {gerarIniciais(contato)}
+                  </span>
+                  <span className="font-medium truncate max-w-[200px]" title={contato}>
+                    {contato}
+                  </span>
+                </span>
+              )}
+              {cnj && (
+                <>
+                  {contato && <span className="text-slate-300">·</span>}
+                  <span className="inline-flex items-center gap-1">
+                    <Scale className="w-3 h-3 text-indigo-500" />
+                    <span className="font-mono text-indigo-700 text-[10.5px]">{cnj}</span>
+                    {tribunal && <span className="text-slate-400 text-[10px] uppercase">{tribunal}</span>}
+                  </span>
+                </>
+              )}
+              {ev.local && (
+                <>
+                  {(contato || cnj) && <span className="text-slate-300">·</span>}
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <span className="truncate max-w-[160px]">{ev.local}</span>
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Linha 3: responsável + lembretes (quando houver) */}
+          {(responsavel || (ev.lembretes && ev.lembretes.length > 0)) && (
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {responsavel && (
+                <span className="inline-flex items-center gap-1.5 text-[10.5px] text-slate-500">
+                  <span
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(responsavel)}`}
+                    title={responsavel}
+                  >
+                    {gerarIniciais(responsavel)}
+                  </span>
+                  <span>{responsavel}</span>
+                </span>
+              )}
+              {ev.lembretes && ev.lembretes.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-medium">
+                  <Bell className="w-2.5 h-2.5" />
+                  {ev.lembretes.length} lembrete{ev.lembretes.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Ações */}
+        <div className="flex flex-col gap-1 shrink-0 self-start">
+          {!concluido && !cancelado && (
+            <Button
+              size="sm"
+              className="h-7 text-[10.5px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm px-2.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(ev.id, ev.fonte, "concluido");
+              }}
+            >
+              <Check className="h-3 w-3 mr-1" />
+              Concluir
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-emerald-600 hover:bg-emerald-50"
-            title="Concluir"
+            className="h-7 text-[10.5px] rounded-lg text-slate-500 hover:bg-slate-100 px-2.5"
             onClick={(e) => {
               e.stopPropagation();
-              onStatusChange(ev.id, ev.fonte, "concluido");
+              if (confirm("Excluir este evento?")) onDelete(ev.id, ev.fonte);
             }}
           >
-            <Check className="h-3.5 w-3.5" />
+            <Trash2 className="h-3 w-3 mr-1" />
+            Excluir
           </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-rose-600 hover:bg-rose-50"
-          title="Excluir"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm("Excluir este evento?")) onDelete(ev.id, ev.fonte);
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        </div>
       </div>
     </div>
   );
