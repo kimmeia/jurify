@@ -121,15 +121,40 @@ function MonitorHealthDot({
 // CARD DE PROCESSO (resultado expandivel)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: (cnj: string) => void }) {
+function ProcessoCard({
+  processo,
+  onMonitorar,
+  detalhe,
+  onCarregarDetalhes,
+  carregandoDetalhes,
+}: {
+  processo: any;
+  onMonitorar?: (cnj: string) => void;
+  /** Dados enriquecidos vindos de `consultarCNJSincrono` (mescla com `processo.response_data`). */
+  detalhe?: any;
+  /** Handler que carrega detalhes pra esse CNJ (custa 1 cred). Quando definido, mostra botão se card vazio. */
+  onCarregarDetalhes?: (cnj: string) => void;
+  carregandoDetalhes?: boolean;
+}) {
   const [aberto, setAberto] = useState(false);
   const { items: alerts } = useKeywordAlerts();
-  const d = processo.response_data || processo;
+  // `detalhe` (vindo de busca sob demanda) tem precedência sobre `response_data`
+  // (vindo da listagem CPF/CNPJ que retorna só CNJs).
+  const d = detalhe || processo.response_data || processo;
   const ativos = (d.parties || []).filter((p: any) => p.side === "Active").slice(0, 5);
   const passivos = (d.parties || []).filter((p: any) => p.side === "Passive").slice(0, 5);
   const movs = (d.steps || []).slice(0, 10);
   const advs: any[] = [];
   (d.parties || []).forEach((p: any) => { (p.lawyers || []).forEach((l: any) => { if (advs.length < 5) advs.push(l); }); });
+
+  // Heurística "card sem dados": chegou só CNJ + tribunal (caso CPF/CNPJ).
+  // Detecta pela ausência de classificações, partes E movimentações —
+  // qualquer um destes presente significa que a capa veio.
+  const cardVazio =
+    !detalhe &&
+    (!d.classifications || d.classifications.length === 0) &&
+    (!d.parties || d.parties.length === 0) &&
+    (!d.steps || d.steps.length === 0);
 
   // Contar movimentações que acionam algum alerta
   const movsComAlerta = (d.steps || []).filter((m: any) => checkKeywords(m.content || "", alerts).length > 0).length;
@@ -158,6 +183,20 @@ function ProcessoCard({ processo, onMonitorar }: { processo: any; onMonitorar?: 
                 <Bell className="h-2.5 w-2.5" />
                 {movsComAlerta}
               </Badge>
+            )}
+            {cardVazio && onCarregarDetalhes && d.code && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px]"
+                disabled={carregandoDetalhes}
+                onClick={() => onCarregarDetalhes(d.code)}
+              >
+                {carregandoDetalhes
+                  ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  : <Search className="h-3 w-3 mr-1" />}
+                {carregandoDetalhes ? "Carregando…" : "Carregar detalhes"}
+              </Button>
             )}
             {onMonitorar && d.code && <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => onMonitorar(d.code)}><Radar className="h-3 w-3 mr-1" />Monitorar</Button>}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAberto(!aberto)}>{aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
@@ -236,7 +275,33 @@ function ConsultarTab() {
   const [tentativas, setTentativas] = useState(0);
   const [credencialId, setCredencialId] = useState<string>("");
   const [vincularDialog, setVincularDialog] = useState<{ cnj: string; clientes: any[] } | null>(null);
+  // Detalhes enriquecidos por CNJ. Cards de busca por CPF/CNPJ chegam só
+  // com `code`+`tribunal_acronym`. Quando user clica "Carregar detalhes",
+  // o resultado de `consultarCNJSincrono` cai aqui e o ProcessoCard usa.
+  const [detalhesPorCnj, setDetalhesPorCnj] = useState<Record<string, any>>({});
+  const [carregandoCnj, setCarregandoCnj] = useState<string | null>(null);
   const history = useSearchHistory();
+
+  const carregarDetalhesMut = (trpc.processos as any).consultarCNJSincrono.useMutation({
+    onSuccess: (d: any, vars: { cnj: string }) => {
+      if (d?.lawsuit) {
+        setDetalhesPorCnj((prev) => ({ ...prev, [vars.cnj]: d.lawsuit }));
+        toast.success("Detalhes carregados (1 cred)");
+      }
+      setCarregandoCnj(null);
+    },
+    onError: (e: any) => {
+      toast.error("Falha ao carregar detalhes", { description: e.message });
+      setCarregandoCnj(null);
+    },
+  });
+
+  const carregarDetalhes = (cnj: string) => {
+    if (carregandoCnj) return;
+    setCarregandoCnj(cnj);
+    const credId = credencialId ? Number(credencialId) : undefined;
+    (carregarDetalhesMut.mutate as any)({ cnj, credencialId: credId });
+  };
 
   // Credenciais do cofre para segredo de justiça
   // listarParaSelecao em vez de listarMinhas: dropdown precisa funcionar
@@ -507,12 +572,34 @@ function ConsultarTab() {
                 typeof item.response_data === "object" &&
                 (item.response_data.code || item.response_data.name),
             );
+            // Busca por CPF/CNPJ chega só com `code`+`tribunal_acronym`.
+            // Detectamos olhando se a maioria está vazia.
+            const ehListaCpf = processos.length > 0 && processos.every(
+              (p: any) => !p.response_data?.classifications?.length && !p.response_data?.steps?.length,
+            );
             return (
               <>
-                <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
-                {processos.map((item: any, i: number) => (
-                  <ProcessoCard key={item.response_id || i} processo={item} onMonitorar={(cnj) => handleMonitorar(cnj, item)} />
-                ))}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
+                  {ehListaCpf && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Clique em <span className="font-semibold">Carregar detalhes</span> em cada card pra ver capa, partes e movimentações (1 cred cada).
+                    </p>
+                  )}
+                </div>
+                {processos.map((item: any, i: number) => {
+                  const cnj = item.response_data?.code;
+                  return (
+                    <ProcessoCard
+                      key={item.response_id || i}
+                      processo={item}
+                      onMonitorar={(c) => handleMonitorar(c, item)}
+                      detalhe={cnj ? detalhesPorCnj[cnj] : undefined}
+                      onCarregarDetalhes={cnj ? carregarDetalhes : undefined}
+                      carregandoDetalhes={carregandoCnj === cnj}
+                    />
+                  );
+                })}
               </>
             );
           })()}
