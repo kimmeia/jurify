@@ -76,6 +76,11 @@ async function seed() {
       role: s.role,
       loginMethod: "email",
       passwordHash,
+      // Seed precisa pular o gate da Fase 2 (login bloqueia user com
+      // emailVerificado=false). Conta seed nunca passa pelo fluxo de
+      // confirmação por email — é criada direto pelo script.
+      emailVerificado: true,
+      emailVerificadoEm: new Date(),
     });
     const id = (inserido as { insertId: number }).insertId;
     userIds[s.email] = id;
