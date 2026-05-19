@@ -1,30 +1,71 @@
+/**
+ * Dashboard GERAL — visão consolidada pra dono/admin.
+ *
+ * Aplica o mesmo padrão visual dos painéis setoriais (hero card com
+ * gradient, KPI cards modernos, avatares no feed) mas com tema "geral"
+ * (slate executive) e dados agregados do escritório inteiro.
+ *
+ * Diferente dos painéis setoriais, aqui mostramos VALORES (R$ recebido,
+ * vencido, pipeline) pra que o dono enxergue a saúde financeira de uma
+ * vez só.
+ */
+
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Calculator, TrendingUp, Clock, Zap, ArrowRight, DollarSign, Users,
-  MessageCircle, CheckSquare, Wallet, Scale, Gavel, Sun,
-  AlertTriangle, Activity, Sparkles, ArrowUpRight, CalendarDays,
-  Landmark, Briefcase, ShieldCheck, Headphones, Settings,
+  TrendingUp,
+  Clock,
+  Zap,
+  ArrowRight,
+  DollarSign,
+  Users,
+  MessageCircle,
+  CheckSquare,
+  Scale,
+  Gavel,
+  Sun,
+  AlertTriangle,
+  Activity,
+  Sparkles,
+  CalendarDays,
+  Landmark,
+  Briefcase,
+  ShieldCheck,
+  Headphones,
+  Settings,
+  Calculator,
+  FileText,
+  Target,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
 } from "recharts";
+import {
+  PainelSection,
+  KPICard,
+  PulseDot,
+  MetaPill,
+  formatBRL,
+  formatBRLShort,
+  formatPercent,
+  formatDataCurta,
+} from "./common";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Rota com fallback (módulos podem estar ocultos) ─────────────────────────
 
-/**
- * Resolve destino quando módulo pode estar oculto. Mantém o card visível
- * (a métrica vem do backend e pode ser útil mesmo com a aba escondida),
- * mas direciona o clique pra uma rota acessível em vez de quebrar.
- */
 function rotaSegura(rotaOriginal: string, fallback: string): string {
   if (rotaOriginal.startsWith("/atendimento") && moduloOcultoNoMenu("atendimento")) return fallback;
   if (rotaOriginal.startsWith("/calculos") && moduloOcultoNoMenu("calculos")) return fallback;
@@ -33,17 +74,6 @@ function rotaSegura(rotaOriginal: string, fallback: string): string {
   return rotaOriginal;
 }
 
-function formatBRL(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-function formatBRLShort(v: number) {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1)}k`;
-  return formatBRL(v);
-}
-function formatDateShort(d: Date | string) {
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-}
 function formatRelative(ts: string) {
   const diff = Date.now() - new Date(ts).getTime();
   const s = Math.floor(diff / 1000);
@@ -68,20 +98,21 @@ const ACTIVITY_ICONS: Record<string, { icon: any; color: string; bg: string }> =
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
-export default function Dashboard() {
+export default function DashboardGeral() {
   const { user } = useAuth();
   const [, nav] = useLocation();
   const [periodo, setPeriodo] = useState<7 | 30 | 90>(30);
 
-  const { data: subscription } = trpc.subscription.current.useQuery(undefined, { enabled: !!user, retry: false });
-  const { data: credits } = trpc.dashboard.credits.useQuery(undefined, { enabled: !!user, retry: false });
-  // Contagem de clientes aguardando envio de documentação. Click no card
-  // navega pra `/clientes?aguardandoDocs=1` que abre a lista filtrada.
+  const { data: credits } = trpc.dashboard.credits.useQuery(undefined, {
+    enabled: !!user,
+    retry: false,
+  });
   const { data: clientesStats } = (trpc as any).clientes?.estatisticas?.useQuery?.(
     undefined,
     { enabled: !!user, retry: false, refetchInterval: 60_000 },
   ) || { data: null };
   const aguardandoDocs: number = clientesStats?.aguardandoDocumentacao ?? 0;
+
   const { data: r } = trpc.dashboard.resumoEscritorio.useQuery(undefined, {
     enabled: !!user,
     retry: false,
@@ -103,34 +134,182 @@ export default function Dashboard() {
   const ok = !!r;
 
   const totalHoje = ok ? r.agenda.compromissosHoje.length + r.agenda.tarefasHoje.length : 0;
-  const saldoMes = cashFlow ? cashFlow.totalRecebido - cashFlow.totalVencido : 0;
+
+  const recebido = cashFlow?.totalRecebido ?? 0;
+  const pendente = cashFlow?.totalPendente ?? 0;
+  const vencido = cashFlow?.totalVencido ?? 0;
+
+  // Variação aproximada: saldo (recebido - vencido). Positiva se receita
+  // supera inadimplência, negativa caso contrário. Não é variação MoM
+  // (precisaria de segunda query) — fica como sinalizador grosseiro.
+  const saldoLiquido = recebido - vencido;
+  const ehMesAtual = periodo === 30;
+  const taxaInadimplencia = recebido + vencido > 0
+    ? +((vencido / (recebido + vencido)) * 100).toFixed(1)
+    : 0;
+
+  const nomeUser = user?.name?.split(" ")[0] || "Usuário";
+  const dataInicio = cashFlow?.pontos[0]?.data;
+  const dataFim = cashFlow?.pontos[cashFlow.pontos.length - 1]?.data;
 
   return (
-    <div className="space-y-6">
-      {/* ───────────────── Header ───────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Olá, {user?.name?.split(" ")[0] || "Usuário"}
-          </h1>
-          <p className="text-muted-foreground mt-1 flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            Atualizado agora
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {subscription && (
-            <Badge
-              variant={subscription.status === "active" ? "default" : "secondary"}
-              className="text-xs"
-            >
-              {subscription.status === "active" ? "Plano Ativo" : subscription.status}
-            </Badge>
-          )}
+    <PainelSection tema="geral">
+      {/* ═══════════ HERO GERAL ═══════════ */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-7 text-white shadow-lg">
+        {/* Decoração */}
+        <svg
+          className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <path d="M3 3v18h18" />
+          <path d="M7 14l4-4 4 4 6-6" />
+        </svg>
+        <svg
+          className="absolute right-12 top-6 w-20 h-20 opacity-10"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+
+        <div className="relative">
+          <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <PulseDot />
+                <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                  Painel Geral
+                </p>
+              </div>
+              {dataInicio && dataFim && (
+                <p className="text-xs text-white/70 tabular-nums">
+                  {formatDataCurta(dataInicio)} — {formatDataCurta(dataFim)}
+                </p>
+              )}
+            </div>
+            <Tabs value={String(periodo)} onValueChange={(v) => setPeriodo(Number(v) as 7 | 30 | 90)}>
+              <TabsList className="h-8 bg-white/15 border border-white/20 backdrop-blur-sm">
+                <TabsTrigger
+                  value="7"
+                  className="text-[11px] px-3 text-white/80 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-md"
+                >
+                  7d
+                </TabsTrigger>
+                <TabsTrigger
+                  value="30"
+                  className="text-[11px] px-3 text-white/80 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-md"
+                >
+                  30d
+                </TabsTrigger>
+                <TabsTrigger
+                  value="90"
+                  className="text-[11px] px-3 text-white/80 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm rounded-md"
+                >
+                  90d
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+            <div className="lg:col-span-6">
+              <p className="text-sm font-medium text-white/85 mb-1">
+                Olá, {nomeUser}
+              </p>
+              <p className="text-xs text-white/65 mb-3">
+                Receita {ehMesAtual ? "do mês" : `dos últimos ${periodo} dias`}
+              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
+                  {formatBRL(recebido)}
+                </span>
+                {saldoLiquido >= 0 ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                    <TrendingUp className="w-3 h-3" />
+                    Saldo positivo
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-400/30 text-rose-50 border border-rose-300/40">
+                    <AlertTriangle className="w-3 h-3" />
+                    Saldo negativo
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-white/65 mt-2 tabular-nums">
+                {formatBRLShort(pendente)} pendente
+                {vencido > 0 && (
+                  <>
+                    {" · "}
+                    <b className="text-rose-200">{formatBRLShort(vencido)} vencido</b>
+                    {" · "}
+                    {formatPercent(taxaInadimplencia)} inadimplência
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Gráfico embutido no hero */}
+            <div className="lg:col-span-6 h-32 -mx-2">
+              {cashFlow && cashFlow.pontos.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={cashFlow.pontos}
+                    margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="heroRec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#fff" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="#fff" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                    <XAxis
+                      dataKey="data"
+                      tick={{ fontSize: 9, fill: "rgba(255,255,255,0.6)" }}
+                      tickFormatter={(d) => formatDataCurta(d)}
+                      stroke="rgba(255,255,255,0.15)"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 9, fill: "rgba(255,255,255,0.6)" }}
+                      tickFormatter={(v) => formatBRLShort(v)}
+                      stroke="rgba(255,255,255,0.15)"
+                      width={50}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "rgba(15,23,42,0.95)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                        color: "white",
+                      }}
+                      labelFormatter={(d) => formatDataCurta(d)}
+                      formatter={(v: number) => formatBRL(v)}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="recebido"
+                      stroke="#fff"
+                      strokeWidth={2}
+                      fill="url(#heroRec)"
+                      name="Recebido"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-white/50">
+                  Sem dados no período.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ───────────────── Alertas urgentes ───────────────── */}
+      {/* ═══════════ ALERTAS URGENTES ═══════════ */}
       {ok &&
         (r.agenda.atrasados > 0 ||
           r.crm.conversasAguardando > 0 ||
@@ -140,7 +319,7 @@ export default function Dashboard() {
             {r.processos.movimentacoesNaoLidas > 0 && (
               <AlertChip
                 icon={Gavel}
-                color="blue"
+                tom="blue"
                 label={`${r.processos.movimentacoesNaoLidas} movimentação(ões) nova(s)`}
                 onClick={() => nav("/processos?tab=movimentacoes")}
               />
@@ -148,7 +327,7 @@ export default function Dashboard() {
             {r.agenda.atrasados > 0 && (
               <AlertChip
                 icon={AlertTriangle}
-                color="red"
+                tom="rose"
                 label={`${r.agenda.atrasados} atrasado(s)`}
                 onClick={() => nav("/agenda")}
               />
@@ -156,7 +335,7 @@ export default function Dashboard() {
             {r.crm.conversasAguardando > 0 && (
               <AlertChip
                 icon={MessageCircle}
-                color="amber"
+                tom="amber"
                 label={`${r.crm.conversasAguardando} conversa(s) aguardando`}
                 onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
               />
@@ -164,7 +343,7 @@ export default function Dashboard() {
             {r.financeiro.vencido > 0 && (
               <AlertChip
                 icon={DollarSign}
-                color="red"
+                tom="rose"
                 label={`${formatBRL(r.financeiro.vencido)} vencido`}
                 onClick={() => nav("/financeiro")}
               />
@@ -172,265 +351,195 @@ export default function Dashboard() {
           </div>
         )}
 
-      {/* ───────────────── Hero: Receita + Gráfico + Período ───────────────── */}
-      <Card className="overflow-hidden">
-        <CardContent className="pt-6">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
-            <div>
-              <p className="text-sm text-muted-foreground font-medium">
-                Receita do período
-              </p>
-              <div className="flex items-baseline gap-3 mt-1">
-                <h2 className="text-4xl font-bold tracking-tight">
-                  {formatBRL(cashFlow?.totalRecebido ?? 0)}
-                </h2>
-                {saldoMes >= 0 ? (
-                  <span className="flex items-center gap-1 text-sm text-emerald-600 font-medium">
-                    <ArrowUpRight className="h-4 w-4" />
-                    {formatBRLShort(cashFlow?.totalPendente ?? 0)} pendente
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {cashFlow?.totalVencido
-                  ? `${formatBRL(cashFlow.totalVencido)} vencido · `
-                  : ""}
-                Últimos {periodo} dias
-              </p>
-            </div>
-            <Tabs
-              value={String(periodo)}
-              onValueChange={(v) => setPeriodo(Number(v) as 7 | 30 | 90)}
-            >
-              <TabsList className="h-8">
-                <TabsTrigger value="7" className="text-xs px-3">7d</TabsTrigger>
-                <TabsTrigger value="30" className="text-xs px-3">30d</TabsTrigger>
-                <TabsTrigger value="90" className="text-xs px-3">90d</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+      {/* ═══════════ 4 KPI CARDS ═══════════ */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KPICard
+          label="Recebido no período"
+          value={formatBRLShort(recebido)}
+          valueColor="text-emerald-600"
+          icon={DollarSign}
+          iconBg="bg-emerald-50"
+          iconFg="text-emerald-600"
+          hint={formatBRL(recebido)}
+        />
+        <KPICard
+          label="A receber (em dia)"
+          value={formatBRLShort(pendente)}
+          valueColor="text-blue-600"
+          icon={Clock}
+          iconBg="bg-blue-50"
+          iconFg="text-blue-600"
+          hint={formatBRL(pendente)}
+        />
+        <KPICard
+          label="Vencido"
+          value={formatBRLShort(vencido)}
+          valueColor="text-rose-600"
+          icon={AlertTriangle}
+          iconBg="bg-rose-50"
+          iconFg="text-rose-600"
+          badge={
+            vencido > 0 ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700">
+                {formatPercent(taxaInadimplencia, 0)}
+              </span>
+            ) : undefined
+          }
+        />
+        <KPICard
+          label="Pipeline aberto"
+          value={ok ? formatBRLShort(r.pipeline.valorPipeline) : "—"}
+          valueColor="text-violet-600"
+          icon={Target}
+          iconBg="bg-violet-50"
+          iconFg="text-violet-600"
+          hint={ok ? `${r.pipeline.leadsAbertos} leads em negociação` : undefined}
+        />
+      </div>
 
-          {/* Gráfico de área */}
-          <div className="h-40 -mx-2">
-            {cashFlow && cashFlow.pontos.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={cashFlow.pontos} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRecebido" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorPendente" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.25} />
-                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis
-                    dataKey="data"
-                    tick={{ fontSize: 10, fill: "#9ca3af" }}
-                    tickFormatter={(d) => formatDateShort(d)}
-                    stroke="#e5e7eb"
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#9ca3af" }}
-                    tickFormatter={(v) => formatBRLShort(v)}
-                    stroke="#e5e7eb"
-                    width={60}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    labelFormatter={(d) => formatDateShort(d)}
-                    formatter={(v: number) => formatBRL(v)}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="recebido"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    fill="url(#colorRecebido)"
-                    name="Recebido"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="pendente"
-                    stroke="#f59e0b"
-                    strokeWidth={2}
-                    fill="url(#colorPendente)"
-                    name="Pendente"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                Sem dados financeiros no período.
-              </div>
-            )}
+      {/* ═══════════ 3 CARDS CONTEXTUAIS ═══════════ */}
+      {ok && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <CardContexto
+            titulo="Hoje precisa atenção"
+            icone={Sun}
+            iconBg="bg-amber-50"
+            iconFg="text-amber-500"
+            itens={[
+              {
+                value: totalHoje,
+                label: "Compromissos",
+                color: "text-amber-600",
+                onClick: () => nav("/agenda"),
+              },
+              {
+                value: r.crm.conversasAguardando,
+                label: "Aguardando",
+                color: "text-blue-600",
+                onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
+              },
+              {
+                value: r.processos.movimentacoesNaoLidas,
+                label: "Mov. novas",
+                color: "text-indigo-600",
+                onClick: () => nav("/processos?tab=movimentacoes"),
+              },
+              ...(aguardandoDocs > 0
+                ? [
+                    {
+                      value: aguardandoDocs,
+                      label: "Aguard. docs",
+                      color: "text-orange-600",
+                      onClick: () => nav("/clientes?aguardandoDocs=1"),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+          <CardContexto
+            titulo="Pipeline"
+            icone={TrendingUp}
+            iconBg="bg-violet-50"
+            iconFg="text-violet-500"
+            itens={[
+              {
+                value: r.pipeline.leadsAbertos,
+                label: "Leads",
+                color: "text-violet-600",
+                onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
+              },
+              {
+                value: formatBRLShort(r.pipeline.valorPipeline),
+                label: "Potencial",
+                color: "text-emerald-600",
+                onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
+                isString: true,
+              },
+              {
+                value: formatBRLShort(r.financeiro.pendente),
+                label: "A receber",
+                color: "text-amber-600",
+                onClick: () => nav("/financeiro"),
+                isString: true,
+              },
+            ]}
+          />
+          <CardContexto
+            titulo="Escritório"
+            icone={Activity}
+            iconBg="bg-emerald-50"
+            iconFg="text-emerald-500"
+            itens={[
+              {
+                value: r.processos.ativos,
+                label: "Processos",
+                color: "text-indigo-600",
+                onClick: () => nav("/processos"),
+              },
+              {
+                value: r.crm.totalContatos,
+                label: "Clientes",
+                color: "text-blue-600",
+                onClick: () => nav("/clientes"),
+              },
+              {
+                value: formatBRLShort(r.financeiro.recebido),
+                label: "Recebido total",
+                color: "text-emerald-600",
+                onClick: () => nav("/financeiro"),
+                isString: true,
+              },
+            ]}
+          />
+        </div>
+      )}
+
+      {/* ═══════════ ACESSO RÁPIDO ═══════════ */}
+      <Card className="border-slate-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Zap className="h-4 w-4 text-amber-500" />
+            Acesso rápido
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { icon: Scale, label: "Processos", path: "/processos", color: "text-indigo-600", bg: "bg-indigo-50", slug: "processos" },
+              { icon: CalendarDays, label: "Agenda", path: "/agenda", color: "text-orange-600", bg: "bg-orange-50", slug: "agenda" },
+              { icon: Headphones, label: "Atendimento", path: "/atendimento", color: "text-sky-600", bg: "bg-sky-50", slug: "atendimento" },
+              { icon: DollarSign, label: "Financeiro", path: "/financeiro", color: "text-emerald-600", bg: "bg-emerald-50", slug: "financeiro" },
+              { icon: Landmark, label: "Bancário", path: "/calculos/bancario", color: "text-blue-600", bg: "bg-blue-50", slug: "calculos" },
+              { icon: Briefcase, label: "Trabalhista", path: "/calculos/trabalhista", color: "text-amber-600", bg: "bg-amber-50", slug: "calculos" },
+              { icon: ShieldCheck, label: "Previdenciário", path: "/calculos/previdenciario", color: "text-rose-600", bg: "bg-rose-50", slug: "calculos" },
+              { icon: Settings, label: "Configurações", path: "/configuracoes", color: "text-gray-600", bg: "bg-gray-50", slug: "configuracoes" },
+            ]
+              .filter((m) => !moduloOcultoNoMenu(m.slug))
+              .map((m) => (
+                <button
+                  key={m.path}
+                  onClick={() => nav(m.path)}
+                  className="group flex flex-col items-start gap-2 p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-left"
+                >
+                  <div className={`w-10 h-10 rounded-lg ${m.bg} flex items-center justify-center group-hover:scale-105 transition-transform`}>
+                    <m.icon className={`h-5 w-5 ${m.color}`} />
+                  </div>
+                  <span className="text-sm font-medium text-slate-900">{m.label}</span>
+                </button>
+              ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* ───────────────── Sub-métricas organizadas por contexto ───────────────── */}
-      {ok && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Hoje precisa atenção */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Sun className="h-4 w-4 text-amber-500" />
-                Hoje precisa atenção
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`grid gap-3 ${aguardandoDocs > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
-                <SubMetric
-                  value={totalHoje}
-                  label="Compromissos"
-                  color="text-amber-600"
-                  onClick={() => nav("/agenda")}
-                />
-                <SubMetric
-                  value={r.crm.conversasAguardando}
-                  label="Aguardando"
-                  color="text-blue-600"
-                  onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
-                />
-                <SubMetric
-                  value={r.processos.movimentacoesNaoLidas}
-                  label="Mov. novas"
-                  color="text-indigo-600"
-                  onClick={() => nav("/processos?tab=movimentacoes")}
-                />
-                {aguardandoDocs > 0 && (
-                  <SubMetric
-                    value={aguardandoDocs}
-                    label="Aguardando docs"
-                    color="text-orange-600"
-                    onClick={() => nav("/clientes?aguardandoDocs=1")}
-                  />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Pipeline (futuro) */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-violet-500" />
-                Pipeline
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                <SubMetric
-                  value={r.pipeline.leadsAbertos}
-                  label="Leads"
-                  color="text-violet-600"
-                  onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
-                />
-                <SubMetric
-                  value={formatBRLShort(r.pipeline.valorPipeline)}
-                  label="Potencial"
-                  color="text-emerald-600"
-                  onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
-                  isString
-                />
-                <SubMetric
-                  value={formatBRLShort(r.financeiro.pendente)}
-                  label="A receber"
-                  color="text-amber-600"
-                  onClick={() => nav("/financeiro")}
-                  isString
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Resultado (passado) */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4 text-emerald-500" />
-                Escritório
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                <SubMetric
-                  value={r.processos.ativos}
-                  label="Processos"
-                  color="text-indigo-600"
-                  onClick={() => nav("/processos")}
-                />
-                <SubMetric
-                  value={r.crm.totalContatos}
-                  label="Clientes"
-                  color="text-blue-600"
-                  onClick={() => nav("/clientes")}
-                />
-                <SubMetric
-                  value={formatBRLShort(r.financeiro.recebido)}
-                  label="Recebido"
-                  color="text-emerald-600"
-                  onClick={() => nav("/financeiro")}
-                  isString
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ───────────────── 2 colunas: Agenda+Créditos | Activity Feed ───────────────── */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Coluna esquerda: Agenda + Créditos + Atalhos */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* Atalhos rápidos */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Zap className="h-4 w-4 text-muted-foreground" />
-                Acesso rápido
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { icon: Scale, label: "Processos", path: "/processos", color: "text-indigo-600", slug: "processos" },
-                  { icon: CalendarDays, label: "Agenda", path: "/agenda", color: "text-orange-600", slug: "agenda" },
-                  { icon: Headphones, label: "Atendimento", path: "/atendimento", color: "text-sky-600", slug: "atendimento" },
-                  { icon: DollarSign, label: "Financeiro", path: "/financeiro", color: "text-emerald-600", slug: "financeiro" },
-                  { icon: Landmark, label: "Bancário", path: "/calculos/bancario", color: "text-blue-600", slug: "calculos" },
-                  { icon: Briefcase, label: "Trabalhista", path: "/calculos/trabalhista", color: "text-amber-600", slug: "calculos" },
-                  { icon: ShieldCheck, label: "Previdenciário", path: "/calculos/previdenciario", color: "text-rose-600", slug: "calculos" },
-                  { icon: Settings, label: "Configurações", path: "/configuracoes", color: "text-gray-600", slug: "configuracoes" },
-                ].filter((m) => !moduloOcultoNoMenu(m.slug)).map((m) => (
-                  <Button
-                    key={m.path}
-                    variant="outline"
-                    className="h-auto py-3 justify-start gap-2 text-left"
-                    onClick={() => nav(m.path)}
-                  >
-                    <m.icon className={`h-4 w-4 ${m.color} shrink-0`} />
-                    <span className="text-xs font-medium truncate">{m.label}</span>
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
+      {/* ═══════════ 2 COLUNAS: AGENDA + ATIVIDADE ═══════════ */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-4">
           {/* Agenda de hoje */}
           {ok && (
-            <Card>
+            <Card className="border-slate-200">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <CalendarDays className="h-4 w-4 text-amber-500" />
                     Agenda de hoje
                   </CardTitle>
@@ -440,30 +549,29 @@ export default function Dashboard() {
                     className="h-7 text-xs"
                     onClick={() => nav("/agenda")}
                   >
-                    Ver tudo
-                    <ArrowRight className="h-3 w-3 ml-1" />
+                    Ver tudo <ArrowRight className="h-3 w-3 ml-1" />
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {totalHoje === 0 ? (
-                  <div className="text-center py-6">
+                  <div className="text-center py-8">
                     <Sun className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
                     <p className="text-xs text-muted-foreground">Dia tranquilo.</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {r.agenda.compromissosHoje.map((c: any) => (
                       <div
                         key={`c-${c.id}`}
-                        className="flex items-center gap-3 py-2 px-2 -mx-2 rounded hover:bg-muted/50 cursor-pointer"
                         onClick={() => nav("/agenda")}
+                        className="flex items-center gap-3 py-2 px-3 -mx-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
                       >
                         <div
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm"
                           style={{ backgroundColor: c.cor || "#3b82f6" }}
                         />
-                        <span className="text-xs font-mono text-muted-foreground w-12 shrink-0">
+                        <span className="text-xs font-mono text-muted-foreground w-14 shrink-0 tabular-nums">
                           {c.hora}
                         </span>
                         <span className="text-sm truncate flex-1">{c.titulo}</span>
@@ -472,11 +580,13 @@ export default function Dashboard() {
                     {r.agenda.tarefasHoje.map((t: any) => (
                       <div
                         key={`t-${t.id}`}
-                        className="flex items-center gap-3 py-2 px-2 -mx-2 rounded hover:bg-muted/50 cursor-pointer"
                         onClick={() => nav("/tarefas")}
+                        className="flex items-center gap-3 py-2 px-3 -mx-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
                       >
-                        <CheckSquare className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="text-xs text-muted-foreground w-12 shrink-0">Tarefa</span>
+                        <div className="h-6 w-6 rounded-md bg-violet-50 flex items-center justify-center shrink-0">
+                          <CheckSquare className="h-3 w-3 text-violet-600" />
+                        </div>
+                        <span className="text-xs text-muted-foreground w-14 shrink-0">Tarefa</span>
                         <span className="text-sm truncate flex-1">{t.titulo}</span>
                       </div>
                     ))}
@@ -487,28 +597,33 @@ export default function Dashboard() {
           )}
 
           {/* Créditos */}
-          <Card>
+          <Card className="border-slate-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-violet-500" />
                 Créditos de cálculo
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {isUnlimited ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div className="h-2 w-full rounded-full bg-emerald-100">
-                    <div className="h-2 rounded-full bg-emerald-500 w-full" />
+                    <div className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 w-full" />
                   </div>
-                  <span className="text-xs text-emerald-600 font-medium">Ilimitado</span>
+                  <span className="text-xs text-emerald-600 font-semibold whitespace-nowrap">
+                    ∞ Ilimitado
+                  </span>
                 </div>
               ) : (
                 <>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>
-                      {creditsUsed}/{creditsTotal} usados
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground tabular-nums">
+                      <b className="text-slate-900">{creditsUsed}</b> usados de{" "}
+                      <b className="text-slate-900">{creditsTotal}</b>
                     </span>
-                    <span>{creditsRemaining} restante(s)</span>
+                    <span className="text-muted-foreground tabular-nums">
+                      <b className="text-slate-900">{creditsRemaining}</b> restante(s)
+                    </span>
                   </div>
                   <Progress
                     value={
@@ -524,15 +639,15 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Coluna direita: Activity Feed */}
-        <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] flex flex-col">
+        {/* Coluna direita: Activity feed */}
+        <Card className="border-slate-200 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Activity className="h-4 w-4 text-slate-600" />
                 Atividade recente
               </CardTitle>
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <PulseDot />
             </div>
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 pr-2">
@@ -549,20 +664,20 @@ export default function Dashboard() {
                   return (
                     <div
                       key={item.id}
-                      className="flex items-start gap-3 group cursor-pointer"
                       onClick={() => item.link && nav(item.link)}
+                      className="flex items-start gap-3 group cursor-pointer"
                     >
-                      <div className={`h-8 w-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                      <div className={`h-9 w-9 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
                         <Icon className={`h-4 w-4 ${cfg.color}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate group-hover:text-primary">
+                        <p className="text-xs font-semibold truncate group-hover:text-primary">
                           {item.titulo}
                         </p>
                         <p className="text-[11px] text-muted-foreground truncate">
                           {item.descricao}
                         </p>
-                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5 tabular-nums">
                           {formatRelative(item.timestamp)}
                         </p>
                       </div>
@@ -574,7 +689,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PainelSection>
   );
 }
 
@@ -582,54 +697,81 @@ export default function Dashboard() {
 
 function AlertChip({
   icon: Icon,
-  color,
+  tom,
   label,
   onClick,
 }: {
   icon: any;
-  color: "red" | "amber" | "blue";
+  tom: "rose" | "amber" | "blue";
   label: string;
   onClick: () => void;
 }) {
-  const colors = {
-    red: "bg-red-50 border-red-200 text-red-700 hover:bg-red-100",
+  const cores = {
+    rose: "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100",
     amber: "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
     blue: "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100",
   };
   return (
-    <div
-      className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${colors[color]}`}
+    <button
       onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${cores[tom]}`}
     >
       <Icon className="h-4 w-4" />
       <span className="text-sm font-medium">{label}</span>
       <ArrowRight className="h-3 w-3 opacity-60" />
-    </div>
+    </button>
   );
 }
 
-function SubMetric({
-  value,
-  label,
-  color,
-  onClick,
-  isString = false,
+function CardContexto({
+  titulo,
+  icone: Icone,
+  iconBg,
+  iconFg,
+  itens,
 }: {
-  value: number | string;
-  label: string;
-  color: string;
-  onClick: () => void;
-  isString?: boolean;
+  titulo: string;
+  icone: typeof Sun;
+  iconBg: string;
+  iconFg: string;
+  itens: Array<{
+    value: number | string;
+    label: string;
+    color: string;
+    onClick: () => void;
+    isString?: boolean;
+  }>;
 }) {
   return (
-    <button
-      className="text-center p-2 rounded-lg hover:bg-muted/50 transition-colors"
-      onClick={onClick}
-    >
-      <p className={`${isString ? "text-base" : "text-2xl"} font-bold ${color}`}>
-        {value}
-      </p>
-      <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
-    </button>
+    <Card className="border-slate-200">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <span className={`w-7 h-7 rounded-lg ${iconBg} flex items-center justify-center`}>
+            <Icone className={`h-4 w-4 ${iconFg}`} />
+          </span>
+          {titulo}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className={`grid gap-3 grid-cols-${Math.min(4, itens.length)}`}>
+          {itens.map((item, i) => (
+            <button
+              key={i}
+              onClick={item.onClick}
+              className="text-center p-2 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              <p
+                className={`${item.isString ? "text-base" : "text-2xl"} font-bold tracking-tight tabular-nums ${item.color}`}
+              >
+                {item.value}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">
+                {item.label}
+              </p>
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

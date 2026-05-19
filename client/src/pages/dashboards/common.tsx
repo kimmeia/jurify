@@ -36,7 +36,7 @@ export function formatDataCurta(d: string | Date): string {
 
 // ─── Utils de cor ────────────────────────────────────────────────────────────
 
-export type SetorTema = "comercial" | "operacional" | "financeiro";
+export type SetorTema = "comercial" | "operacional" | "financeiro" | "geral";
 
 export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: string; ring: string }> = {
   comercial: {
@@ -56,6 +56,15 @@ export const TEMA: Record<SetorTema, { gradient: string; bg: string; accent: str
     bg: "bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/30",
     accent: "text-emerald-600",
     ring: "ring-emerald-200",
+  },
+  geral: {
+    // Tom "executivo" — slate escuro com toque de blue/indigo. Visualmente
+    // mais sóbrio que os painéis setoriais (que são coloridos/temáticos).
+    // Sinaliza "visão consolidada" pra Dono/Admin.
+    gradient: "bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700",
+    bg: "bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20",
+    accent: "text-slate-700",
+    ring: "ring-slate-200",
   },
 };
 
