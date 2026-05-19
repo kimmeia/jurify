@@ -8,11 +8,11 @@
  *
  * Diferenças vs Cal.com (`./calcom-signature.ts`):
  *  - Header com prefixo `sha256=` (Meta) vs hex puro (Cal.com).
- *  - Secret é GLOBAL no Jurify: vem da config admin
+ *  - Secret é GLOBAL no JuridFlow: vem da config admin
  *    (`admin_integracoes.config.appSecret`), não por canal — Meta App
  *    é único pro tenant e atende todos os escritórios.
  *
- * Política do Jurify:
+ * Política do JuridFlow:
  *  - `appSecret` configurado em admin_integracoes → header obrigatório,
  *    HMAC tem que bater (timing-safe). Inválido = 401.
  *  - `appSecret` ausente (legado, integração ainda não foi configurada)

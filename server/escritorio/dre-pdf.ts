@@ -45,8 +45,8 @@ export async function gerarDREPDF(
         margin: 50,
         info: {
           Title: `DRE — ${nomeEscritorio}`,
-          Author: "Jurify",
-          Creator: "Jurify",
+          Author: "JuridFlow",
+          Creator: "JuridFlow",
         },
       });
 

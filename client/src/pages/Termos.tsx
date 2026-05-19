@@ -17,9 +17,9 @@ export default function Termos() {
 
       <section className="prose prose-sm dark:prose-invert max-w-none space-y-6">
         <p>
-          Bem-vindo ao Jurify. Estes Termos de Uso (&ldquo;Termos&rdquo;) regulam o
-          acesso e uso da plataforma Jurify (&ldquo;Plataforma&rdquo;), oferecida
-          por <strong>Jurify Tecnologia Ltda.</strong> (&ldquo;Jurify&rdquo;,
+          Bem-vindo ao JuridFlow. Estes Termos de Uso (&ldquo;Termos&rdquo;) regulam o
+          acesso e uso da plataforma JuridFlow (&ldquo;Plataforma&rdquo;), oferecida
+          por <strong>JuridFlow Tecnologia Ltda.</strong> (&ldquo;JuridFlow&rdquo;,
           &ldquo;nós&rdquo;). Ao criar uma conta ou usar a Plataforma, você
           (&ldquo;Usuário&rdquo;) declara ter lido, entendido e concordado com estes
           Termos e com a Política de Privacidade.
@@ -27,7 +27,7 @@ export default function Termos() {
 
         <h2 className="text-xl font-semibold pt-4">1. Sobre a Plataforma</h2>
         <p>
-          O Jurify é uma plataforma SaaS destinada a escritórios de advocacia,
+          O JuridFlow é uma plataforma SaaS destinada a escritórios de advocacia,
           oferecendo ferramentas de gestão de clientes, processos, finanças,
           tarefas, atendimento e cálculos jurídicos. A Plataforma <strong>não
           presta consultoria jurídica</strong> nem substitui o julgamento do
@@ -62,7 +62,7 @@ export default function Termos() {
         <h2 className="text-xl font-semibold pt-4">5. Propriedade dos dados</h2>
         <p>
           Os dados inseridos por você (clientes, processos, documentos, etc.)
-          pertencem a você. O Jurify atua apenas como operador desses dados,
+          pertencem a você. O JuridFlow atua apenas como operador desses dados,
           conforme a LGPD. Você pode exportar seus dados a qualquer momento
           através do suporte. Após cancelamento, seus dados ficam disponíveis
           por 60 dias para exportação e em seguida são excluídos.
@@ -78,10 +78,10 @@ export default function Termos() {
 
         <h2 className="text-xl font-semibold pt-4">7. Limitação de responsabilidade</h2>
         <p>
-          O Jurify não se responsabiliza por: (i) perdas decorrentes de
+          O JuridFlow não se responsabiliza por: (i) perdas decorrentes de
           decisões jurídicas tomadas com base em informações da Plataforma; (ii)
           interrupções temporárias de serviço; (iii) ações de terceiros (gateway,
-          provedores de email, etc.). A responsabilidade total do Jurify, em
+          provedores de email, etc.). A responsabilidade total do JuridFlow, em
           qualquer hipótese, fica limitada ao valor pago pelo Usuário nos
           últimos 12 meses.
         </p>
@@ -89,7 +89,7 @@ export default function Termos() {
         <h2 className="text-xl font-semibold pt-4">8. Encerramento</h2>
         <p>
           Você pode cancelar sua conta a qualquer momento em
-          Configurações &gt; Meu Plano. O Jurify pode encerrar contas que
+          Configurações &gt; Meu Plano. O JuridFlow pode encerrar contas que
           violem estes Termos, com aviso prévio quando possível.
         </p>
 

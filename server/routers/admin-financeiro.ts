@@ -1,8 +1,8 @@
 /**
- * Router de Financeiro Admin — gestão da cobrança SaaS Jurify.
+ * Router de Financeiro Admin — gestão da cobrança SaaS JuridFlow.
  *
  * Diferente do financeiro do cliente (escritório cobrando seus clientes),
- * este módulo é o Jurify cobrando os escritórios assinantes. Usa a API
+ * este módulo é o JuridFlow cobrando os escritórios assinantes. Usa a API
  * key admin do Asaas (via getAdminAsaasClient) pra operar.
  *
  * Operações:
@@ -67,7 +67,7 @@ export const adminFinanceiroRouter = router({
     const client = await getClient();
 
     // Paginado: antes pegava `limit: 100` (primeira página apenas), o
-    // que zerava MRR/receita30d quando Jurify cresceu além de 100
+    // que zerava MRR/receita30d quando JuridFlow cresceu além de 100
     // assinaturas ou 100 cobranças recentes. Agora itera todas as
     // páginas (cap em 100 páginas × 100 itens = 10k registros).
     const cobs = await client.listarTodasCobrancasPaginado();
@@ -144,7 +144,7 @@ export const adminFinanceiroRouter = router({
         limit: params.limit,
       });
 
-      // Enriquecer com dados do user Jurify via externalReference ou customerId
+      // Enriquecer com dados do user JuridFlow via externalReference ou customerId
       const db = await getDb();
       let userMap = new Map<string, { id: number; name: string | null; email: string | null }>();
       if (db) {
@@ -232,7 +232,7 @@ export const adminFinanceiroRouter = router({
     .query(async ({ input }) => {
       const client = await getClient();
       // Paginado: antes pegava `limit: 200` e perdia meses inteiros
-      // quando Jurify acumulava muitos pagamentos no período.
+      // quando JuridFlow acumulava muitos pagamentos no período.
       const cobs = await client.listarTodasCobrancasPaginado();
 
       // Inicializa meses com zero

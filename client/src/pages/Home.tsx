@@ -1,5 +1,5 @@
 /**
- * Landing Page do Jurify.
+ * Landing Page do JuridFlow.
  *
  * Monta as 8 seções em ordem (Hero → Problemas → Pilares → Demo →
  * Comparativo → Pricing → FAQ → CTA Final) + Navbar fixa no topo +
@@ -130,7 +130,7 @@ function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
           <div className="h-9 w-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
             <Scale className="h-5 w-5" />
           </div>
-          <span className="font-bold text-lg tracking-tight">Jurify</span>
+          <span className="font-bold text-lg tracking-tight">JuridFlow</span>
         </div>
 
         <div className="flex items-center gap-2">

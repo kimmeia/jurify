@@ -167,7 +167,7 @@ export default function CalcomConfig({ canalId, status }: CalcomConfigProps) {
             <p className="text-xs text-muted-foreground mt-1">
               No painel Cal.com, vá em Settings → Webhooks, cadastre a URL{" "}
               <code className="text-xs bg-muted px-1 rounded">/api/webhooks/calcom</code>{" "}
-              e copie o "Webhook Secret" gerado. Sem isso, o Jurify aceita
+              e copie o "Webhook Secret" gerado. Sem isso, o JuridFlow aceita
               qualquer POST nesse endpoint — qualquer um pode forjar
               agendamentos no seu escritório.
             </p>

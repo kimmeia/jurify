@@ -324,7 +324,7 @@ export const adminRouter = router({
       if (user.length === 0) throw new Error("Utilizador não encontrado");
 
       // Saldo: prefere fonte real (escritório). Fallback pra userCredits
-      // legacy só se user não tem escritório (admin Jurify, onboarding).
+      // legacy só se user não tem escritório (admin JuridFlow, onboarding).
       const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
       const { getSaldoEscritorio } = await import("../billing/escritorio-creditos");
       const esc = await getEscritorioPorUsuario(input.userId);
@@ -423,7 +423,7 @@ export const adminRouter = router({
           input.motivo ?? "Concedido manualmente pelo admin",
         );
       } else {
-        // User sem escritório (admin Jurify, ou cliente em onboarding)
+        // User sem escritório (admin JuridFlow, ou cliente em onboarding)
         await addCreditsToUser(input.userId, input.quantidade);
       }
 

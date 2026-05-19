@@ -5,7 +5,7 @@
 
 ## Por que existe
 
-Hoje o Jurify tem integração Judit funcional (ainda não em produção real). O objetivo é construir motor próprio que substitua Judit + Jusbrasil — captura de movimentações em tempo real, monitoramento de novas ações por CPF/CNPJ, publicações DJE, mandados — sem depender de API de terceiro.
+Hoje o JuridFlow tem integração Judit funcional (ainda não em produção real). O objetivo é construir motor próprio que substitua Judit + Jusbrasil — captura de movimentações em tempo real, monitoramento de novas ações por CPF/CNPJ, publicações DJE, mandados — sem depender de API de terceiro.
 
 Antes de comprometer 5-6 meses construindo, este Spike prova (ou refuta) que cada peça crítica é viável. Saída: relatório técnico honesto com 🟢/🟡/🔴 por componente.
 

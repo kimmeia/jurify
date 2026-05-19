@@ -305,7 +305,7 @@ export const processosRouter = router({
    * persiste capa+movs).
    *
    * API key vem de `admin_integracoes` (provedor "openai" ou "anthropic",
-   * gerenciado pelo admin global do Jurify).
+   * gerenciado pelo admin global do JuridFlow).
    *
    * Cobra 1 crédito.
    */
@@ -432,7 +432,7 @@ export const processosRouter = router({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message:
-            "Integração com IA não configurada. Peça ao administrador do Jurify pra configurar OpenAI ou Anthropic em Admin → Integrações.",
+            "Integração com IA não configurada. Peça ao administrador do JuridFlow pra configurar OpenAI ou Anthropic em Admin → Integrações.",
         });
       }
 

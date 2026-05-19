@@ -1,8 +1,8 @@
 /**
- * Asaas Billing — cliente de pagamento para a mensalidade do SaaS Jurify.
+ * Asaas Billing — cliente de pagamento para a mensalidade do SaaS JuridFlow.
  *
  * Este módulo é a "ponta admin" do Asaas. Enquanto cada escritório usa
- * o Asaas para cobrar SEUS clientes (router-asaas), aqui o Jurify usa
+ * o Asaas para cobrar SEUS clientes (router-asaas), aqui o JuridFlow usa
  * o Asaas para cobrar OS PRÓPRIOS escritórios (assinatura SaaS).
  *
  * A API key fica em `admin_integracoes` (provedor = "asaas"), criptografada
@@ -10,7 +10,7 @@
  *
  * SEPARAÇÃO IMPORTANTE:
  *   - asaasClient (para escritórios)         → server/integracoes/asaas-client.ts
- *   - asaasBillingClient (para o Jurify SaaS) → este arquivo
+ *   - asaasBillingClient (para o JuridFlow SaaS) → este arquivo
  *   - Tabelas: subscriptions (SaaS) ≠ asaas_cobrancas (escritórios)
  */
 

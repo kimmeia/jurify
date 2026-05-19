@@ -153,7 +153,7 @@ export function InadimplentesSection() {
                               className="h-7 text-xs"
                               asChild
                             >
-                              <a href={`mailto:${i.userEmail}?subject=Pagamento%20pendente%20Jurify`}>
+                              <a href={`mailto:${i.userEmail}?subject=Pagamento%20pendente%20JuridFlow`}>
                                 <Mail className="h-3 w-3 mr-1" />
                                 Email
                               </a>

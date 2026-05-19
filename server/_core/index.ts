@@ -169,7 +169,7 @@ async function startServer() {
   registerCalcomWebhook(app);
   // Asaas webhook (escritório → seus clientes)
   registerAsaasWebhook(app);
-  // Asaas webhook (Jurify → mensalidades dos escritórios)
+  // Asaas webhook (JuridFlow → mensalidades dos escritórios)
   registerAsaasBillingWebhook(app);
   // WhatsApp Cloud API (CoEx) webhook
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");

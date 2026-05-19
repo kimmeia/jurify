@@ -1,6 +1,6 @@
 # Plano — Robô de Testes Automatizado End-to-End
 
-> Objetivo: construir uma suíte que simule uso humano do Jurify pra **descobrir bugs que ninguém testou ainda**, validar UX, e mapear comportamento real do sistema. Não substitui CI atual (910+ vitest verdes), complementa.
+> Objetivo: construir uma suíte que simule uso humano do JuridFlow pra **descobrir bugs que ninguém testou ainda**, validar UX, e mapear comportamento real do sistema. Não substitui CI atual (910+ vitest verdes), complementa.
 
 ## 1. O que queremos achar
 

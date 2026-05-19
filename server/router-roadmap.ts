@@ -355,7 +355,7 @@ export const roadmapRouter = router({
         void notificarUsers(
           [...ids],
           "Sua sugestão foi lançada!",
-          `"${antes.titulo}" agora está disponível no Jurify.`,
+          `"${antes.titulo}" agora está disponível no JuridFlow.`,
         );
       }
 

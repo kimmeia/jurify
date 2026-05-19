@@ -14,7 +14,7 @@ export function LandingFooter() {
               <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
                 <Scale className="h-4 w-4" />
               </div>
-              <span className="font-bold text-lg">Jurify</span>
+              <span className="font-bold text-lg">JuridFlow</span>
             </div>
             <p className="text-sm text-muted-foreground">
               O sistema operacional do escritório de advocacia moderno.
@@ -71,7 +71,7 @@ export function LandingFooter() {
         </div>
 
         <div className="border-t pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} Jurify. Todos os direitos reservados.</span>
+          <span>© {new Date().getFullYear()} JuridFlow. Todos os direitos reservados.</span>
           <span>Feito com ❤️ pra advogados que detestam Excel.</span>
         </div>
       </div>
