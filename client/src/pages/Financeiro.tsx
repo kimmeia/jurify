@@ -354,25 +354,11 @@ export default function Financeiro() {
     setConfirmBulkCancel(false);
   };
 
-  if (loadStatus) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  // Estado desconectado — card grande convidando a conectar
-  // Antes havia early return aqui que escondia o módulo inteiro quando
-  // Asaas não estava conectado. Mas Despesas e Comissões são dados
-  // locais (não dependem do Asaas), então passaram a ficar inacessíveis
-  // sem motivo. Agora destravamos: as abas funcionam sempre, e cada aba
-  // que precisa de Asaas (Cobranças/Assinaturas/Clientes/Saldo) mostra
-  // CTA inline. Banner global avisa se está desconectado.
-  const conectado = !!statusAsaas?.conectado;
-
   // ─── Derivações pro hero (top devedores, receita prevista 7d) ─────────────
+  // Hooks DEVEM vir antes de qualquer early return (regra dos hooks).
+  // Sem isso, React error #310: "Rendered more hooks than during the
+  // previous render" quando `loadStatus` muda de true→false.
+  //
   // Calculadas a partir da lista de cobranças já carregada, sem query extra.
   // Top devedores: agrupa OVERDUE por contato, soma valor, pega top 3.
   const topDevedores = useMemo(() => {
@@ -430,7 +416,28 @@ export default function Financeiro() {
   }, [kpis]);
 
   // Pontos do sparkline (cashflow mensal) — pega só recebido
-  const sparkPontos = (cashFlow?.pontos || []).map((p: any) => Number(p.recebido || 0));
+  const sparkPontos = useMemo(
+    () => (cashFlow?.pontos || []).map((p: any) => Number(p.recebido || 0)),
+    [cashFlow],
+  );
+
+  if (loadStatus) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  // Estado desconectado — card grande convidando a conectar
+  // Antes havia early return aqui que escondia o módulo inteiro quando
+  // Asaas não estava conectado. Mas Despesas e Comissões são dados
+  // locais (não dependem do Asaas), então passaram a ficar inacessíveis
+  // sem motivo. Agora destravamos: as abas funcionam sempre, e cada aba
+  // que precisa de Asaas (Cobranças/Assinaturas/Clientes/Saldo) mostra
+  // CTA inline. Banner global avisa se está desconectado.
+  const conectado = !!statusAsaas?.conectado;
 
   return (
     <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5">
