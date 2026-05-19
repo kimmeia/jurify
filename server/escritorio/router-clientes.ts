@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
-import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios } from "../../drizzle/schema";
+import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios, asaasCobrancas } from "../../drizzle/schema";
 import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
@@ -1080,10 +1080,18 @@ export const clientesRouter = router({
   }),
 
   estatisticas: protectedProcedure.query(async ({ ctx }) => {
+    const ZERO = {
+      total: 0,
+      novosHoje: 0,
+      comTelefone: 0,
+      comEmail: 0,
+      aguardandoDocumentacao: 0,
+      inadimplentes: 0,
+    };
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
-    if (!perm.allowed) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
+    if (!perm.allowed) return ZERO;
     const db = await getDb();
-    if (!db) return { total: 0, novosHoje: 0, comTelefone: 0, comEmail: 0, aguardandoDocumentacao: 0 };
+    if (!db) return ZERO;
 
     // "Hoje" no fuso do escritório (não no fuso do MySQL). Antes do fix,
     // CURDATE() respondia em UTC em produção — cadastro às 22h horário
@@ -1091,6 +1099,7 @@ export const clientesRouter = router({
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     const fuso = esc?.escritorio.fusoHorario || "America/Sao_Paulo";
     const { inicio: inicioHoje, fim: fimHoje } = diaAtualEmTz(fuso);
+    const hojeStr = dataHojeBR();
 
     // verProprios: atendente vê só estatísticas de seus clientes. Sem
     // isso, dashboard exibia número global do escritório pra qualquer
@@ -1115,12 +1124,46 @@ export const clientesRouter = router({
       .from(contatos)
       .where(where);
 
+    // Inadimplentes: COUNT DISTINCT de contatos com cobrança vencida.
+    // Definição alinhada ao card "Inadimplência" do módulo Financeiro:
+    //   status = OVERDUE OU (status = PENDING + vencimento < hoje).
+    // Query separada (não dá pra fazer subselect dentro do agregado acima
+    // sem reescrever o SELECT inteiro). Quando Asaas não está integrado
+    // a tabela existe mas vazia → COUNT retorna 0.
+    let inadimplentes = 0;
+    try {
+      const condsAsaas = [eq(asaasCobrancas.escritorioId, perm.escritorioId)];
+      const [agg] = await db
+        .select({ total: sql<number>`COUNT(DISTINCT ${asaasCobrancas.contatoId})` })
+        .from(asaasCobrancas)
+        // INNER JOIN com contatos é necessário pra aplicar filtro verProprios
+        // por responsavelId (que mora em contatos, não em asaas_cobrancas).
+        .innerJoin(contatos, eq(asaasCobrancas.contatoId, contatos.id))
+        .where(and(
+          ...condsAsaas,
+          ...(perm.verProprios && !perm.verTodos
+            ? [eq(contatos.responsavelId, perm.colaboradorId)]
+            : []),
+          or(
+            eq(asaasCobrancas.status, "OVERDUE"),
+            and(
+              eq(asaasCobrancas.status, "PENDING"),
+              lt(asaasCobrancas.vencimento, hojeStr),
+            )!,
+          )!,
+        ));
+      inadimplentes = Number(agg?.total ?? 0);
+    } catch {
+      /* sem integração asaas → 0 */
+    }
+
     return {
       total: Number(stats?.total ?? 0),
       novosHoje: Number(stats?.novosHoje ?? 0),
       comTelefone: Number(stats?.comTelefone ?? 0),
       comEmail: Number(stats?.comEmail ?? 0),
       aguardandoDocumentacao: Number(stats?.aguardandoDocumentacao ?? 0),
+      inadimplentes,
     };
   }),
 
