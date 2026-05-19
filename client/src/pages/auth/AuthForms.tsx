@@ -25,6 +25,13 @@ interface AuthFormsProps {
   defaultTab?: "login" | "signup";
   /** Email pré-preenchido (útil em fluxo de aceitar convite). */
   initialEmail?: string;
+  /**
+   * Token de convite quando este AuthForms está dentro do fluxo
+   * `/convite/:token`. Quando presente, signup pula o email de confirmação
+   * (o convite já é prova de posse do email) e aceita o convite junto
+   * no mesmo procedure backend.
+   */
+  conviteToken?: string;
 }
 
 // Tipo do Google Identity Services (não declaramos `window.google` global pra
@@ -51,7 +58,7 @@ function getGoogleGIS(): GoogleAccountsId | null {
 let gisInitialized = false;
 let gisCallback: ((response: { credential: string }) => void) | null = null;
 
-export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: AuthFormsProps) {
+export function AuthForms({ onSuccess, defaultTab = "login", initialEmail, conviteToken }: AuthFormsProps) {
   const [tab, setTab] = useState<"login" | "signup">(defaultTab);
   const utils = trpc.useUtils();
 
@@ -218,6 +225,7 @@ export function AuthForms({ onSuccess, defaultTab = "login", initialEmail }: Aut
       password: signupPassword,
       aceitouTermos: true,
       planoSlug,
+      conviteToken,
     });
   };
 

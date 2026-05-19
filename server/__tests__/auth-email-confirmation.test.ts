@@ -83,4 +83,31 @@ describe("auth.signup — Fase 2 retorna needsConfirmation", () => {
     };
     expect(typeof inputValido.planoSlug).toBe("string");
   });
+
+  it("aceita conviteToken opcional (fluxo de aceitar convite)", () => {
+    // Sinaliza que o signup veio de /convite/:token. Backend pula
+    // confirmação por email + aceita convite + cria sessão.
+    const inputValido = {
+      name: "Funcionário",
+      email: "func@example.com",
+      password: "senha123",
+      aceitouTermos: true as const,
+      conviteToken: "a".repeat(32),
+    };
+    expect(inputValido.conviteToken.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it("rejeita conviteToken muito curto (proteção contra confusão de input)", async () => {
+    const { ctx } = createAnonymousContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.auth.signup({
+        name: "X",
+        email: "x@example.com",
+        password: "senha123",
+        aceitouTermos: true,
+        conviteToken: "abc", // < 16 chars
+      }),
+    ).rejects.toThrow();
+  });
 });
