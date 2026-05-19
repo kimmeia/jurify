@@ -9,13 +9,14 @@ test.describe("Módulo Clientes (MVP)", () => {
     await expect(page).toHaveURL(/\/clientes/);
   });
 
-  test("badge Beta aparece na sidebar do cliente", async ({ page }) => {
-    // Sidebar tem item "Clientes" com badge "Beta"
+  test("item Clientes aparece na sidebar", async ({ page }) => {
+    // Clientes não tem badge "Beta" — só verificamos que o item aparece
+    // pra dono autenticado. (Badge Beta foi removida de Processos/Kanban/
+    // Financeiro em 05/2026; Atendimento/Agentes IA/SmartFlow continuam
+    // beta mas estão ocultos no menu — então não há "Beta" visível.)
     const sidebar = page.locator('[data-sidebar]').first();
     const itemClientes = sidebar.getByText(/^clientes$/i).first();
     await expect(itemClientes).toBeVisible();
-    // Badge "Beta" deve estar próximo
-    await expect(sidebar.getByText(/beta/i).first()).toBeVisible();
   });
 
   test.fixme("criar cliente, listar, buscar e excluir — formulário expandiu", async () => {
