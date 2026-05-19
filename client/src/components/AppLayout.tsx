@@ -458,7 +458,6 @@ function AppSidebarContent({
                     className={`h-4 w-4 ${location === "/processos" ? "text-primary" : ""}`}
                   />
                   <span>Processos</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -500,7 +499,6 @@ function AppSidebarContent({
                 >
                   <LayoutGrid className={`h-4 w-4 ${location === "/kanban" ? "text-primary" : ""}`} />
                   <span className="flex-1">Kanban</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -541,7 +539,6 @@ function AppSidebarContent({
                 >
                   <DollarSign className={`h-4 w-4 ${location === "/financeiro" ? "text-primary" : ""}`} />
                   <span className="flex-1">Financeiro</span>
-                  <BetaBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
