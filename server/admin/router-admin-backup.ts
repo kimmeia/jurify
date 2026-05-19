@@ -1,5 +1,5 @@
 /**
- * Router tRPC — Backup global do banco (admin Jurify).
+ * Router tRPC — Backup global do banco (admin JuridFlow).
  *
  * Lista os dumps existentes em S3 (gerados pelo cron diário ou sob
  * demanda), gera um novo backup sob demanda, e gera URL pré-assinada

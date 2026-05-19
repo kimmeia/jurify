@@ -10,24 +10,24 @@ export const SEED_PASSWORD = "Smoke123!";
 
 export const SEED_USERS = {
   admin: {
-    email: "admin-smoke@jurify.com.br",
+    email: "admin-smoke@juridflow.com.br",
     name: "Admin Smoke",
     role: "admin" as const,
   },
   dono: {
-    email: "dono-smoke@jurify.com.br",
+    email: "dono-smoke@juridflow.com.br",
     name: "Dono Smoke",
     role: "user" as const,
     cargo: "dono" as const,
   },
   gestor: {
-    email: "gestor-smoke@jurify.com.br",
+    email: "gestor-smoke@juridflow.com.br",
     name: "Gestor Smoke",
     role: "user" as const,
     cargo: "gestor" as const,
   },
   atendente: {
-    email: "atendente-smoke@jurify.com.br",
+    email: "atendente-smoke@juridflow.com.br",
     name: "Atendente Smoke",
     role: "user" as const,
     cargo: "atendente" as const,

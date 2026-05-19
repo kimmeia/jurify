@@ -1548,7 +1548,7 @@ export class PjeTjceScraper {
       // Campo opcional "Nome do dispositivo" — preenche pra deixar
       // identificável quando o usuário olhar lista de devices no Keycloak
       if (await inputUserLabel.isVisible({ timeout: 500 }).catch(() => false)) {
-        await inputUserLabel.fill("Jurify Motor Próprio (auto-configurado)");
+        await inputUserLabel.fill("JuridFlow Motor Próprio (auto-configurado)");
       }
 
       const botaoSave = page

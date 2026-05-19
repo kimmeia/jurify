@@ -37,7 +37,7 @@ export function registerCalcomWebhook(app: Express) {
       if (!canalInfo) {
         // Sem canal correspondente: nada a disparar. Não é erro — Cal.com
         // pode enviar evento de booking que não pertence a nenhum
-        // escritório do Jurify (multi-tenant, conta em outro app, etc).
+        // escritório do JuridFlow (multi-tenant, conta em outro app, etc).
         log.debug(
           { organizerEmail, evento: payload.triggerEvent },
           "[Cal.com Webhook] Booking sem canal correspondente — ignorando",

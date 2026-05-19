@@ -3,7 +3,7 @@
  * próprio do motor de monitoramento jurídico.
  *
  * O cofre armazena credenciais (CPF/OAB + senha + 2FA) que advogados/escritórios
- * autorizam o Jurify a usar para acessar sistemas de tribunal autenticados
+ * autorizam o JuridFlow a usar para acessar sistemas de tribunal autenticados
  * (E-SAJ TJSP, PJe restrito, Eproc) e capturar processos em segredo de justiça
  * ou que exigem login.
  *

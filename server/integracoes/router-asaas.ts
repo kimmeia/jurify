@@ -2337,7 +2337,7 @@ export const asaasRouter = router({
       contatoId: z.number(),
       /**
        * Quando true, ignora o filtro de customers já linkados a outro
-       * contato Jurify — migra o customer Asaas pra ESTE contato. Operador
+       * contato JuridFlow — migra o customer Asaas pra ESTE contato. Operador
        * confirma na UI (toast oferece o botão "Mover pra cá") quando o
        * primeiro sync detecta `motivoVazio="cpf_em_outro_contato"`.
        */
@@ -2395,7 +2395,7 @@ export const asaasRouter = router({
             if (input.forcarMigracao) {
               // Modo migração: ignora filtro, vai usar TODOS os candidatos.
               // Antes de inserir, remove vínculos antigos desses customers
-              // (estavam em outros contatos no Jurify). Cobranças órfãs serão
+              // (estavam em outros contatos no JuridFlow). Cobranças órfãs serão
               // re-adotadas pelo loop de adopção em syncTodasCobrancasDoContato.
               await db.delete(asaasClientes).where(and(
                 eq(asaasClientes.escritorioId, esc.escritorio.id),
@@ -2411,7 +2411,7 @@ export const asaasRouter = router({
               novos = candidatos.filter((c) => disponiveisIds.has(c.id));
 
               // Se TODOS os candidatos retornados pelo Asaas já estão linkados
-              // a outro contato no Jurify (e este contato não tem vínculo
+              // a outro contato no JuridFlow (e este contato não tem vínculo
               // próprio), avisa o user pra confirmar migração.
               if (novos.length === 0 && vinculosExistentes.length === 0) {
                 motivoVazio = "cpf_em_outro_contato";

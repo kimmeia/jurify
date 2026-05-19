@@ -27,10 +27,10 @@ import {
 const SENHA_PADRAO = "Smoke123!";
 
 const SEEDS = [
-  { email: "admin-smoke@jurify.com.br",  name: "Admin Smoke",   role: "admin" as const, cargo: null },
-  { email: "dono-smoke@jurify.com.br",   name: "Dono Smoke",    role: "user"  as const, cargo: "dono" as const },
-  { email: "gestor-smoke@jurify.com.br", name: "Gestor Smoke",  role: "user"  as const, cargo: "gestor" as const },
-  { email: "atendente-smoke@jurify.com.br", name: "Atendente Smoke", role: "user" as const, cargo: "atendente" as const },
+  { email: "admin-smoke@juridflow.com.br",  name: "Admin Smoke",   role: "admin" as const, cargo: null },
+  { email: "dono-smoke@juridflow.com.br",   name: "Dono Smoke",    role: "user"  as const, cargo: "dono" as const },
+  { email: "gestor-smoke@juridflow.com.br", name: "Gestor Smoke",  role: "user"  as const, cargo: "gestor" as const },
+  { email: "atendente-smoke@juridflow.com.br", name: "Atendente Smoke", role: "user" as const, cargo: "atendente" as const },
 ];
 
 const CLIENTES_SEED = [
@@ -83,7 +83,7 @@ async function seed() {
   }
 
   // 2. Escritório — 1 só, owner = dono-smoke.
-  const ownerId = userIds["dono-smoke@jurify.com.br"];
+  const ownerId = userIds["dono-smoke@juridflow.com.br"];
   if (!ownerId) throw new Error("Owner do escritório não foi criado.");
 
   let [escritorio] = await db
@@ -95,7 +95,7 @@ async function seed() {
   if (!escritorio) {
     const [inserido] = await db.insert(escritorios).values({
       nome: "Escritório Smoke",
-      email: "contato-smoke@jurify.com.br",
+      email: "contato-smoke@juridflow.com.br",
       ownerId,
       maxColaboradores: 5,
     });

@@ -5,7 +5,7 @@
  * (Settings → Webhooks → Webhook Secret). O header `X-Cal-Signature-256`
  * contém o hex SHA-256 HMAC do body raw da request.
  *
- * Política do Jurify:
+ * Política do JuridFlow:
  *  - canal Cal.com COM `webhookSecret` configurado → header obrigatório,
  *    HMAC tem que bater (timing-safe). Inválido = 401.
  *  - canal Cal.com SEM `webhookSecret` (legado) → aceita sem validar mas

@@ -1,4 +1,4 @@
-# Jurify — guia rápido para sessões Claude Code
+# JuridFlow — guia rápido para sessões Claude Code
 
 ## Comandos essenciais
 

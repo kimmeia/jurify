@@ -41,7 +41,7 @@ type CtxUser = { id: number; role?: string | null; impersonatedBy?: string };
 
 /**
  * Backup do escritório exige privilégio de Dono. Aceita também:
- * - admin Jurify (`role === "admin"`) — debug/suporte direto;
+ * - admin JuridFlow (`role === "admin"`) — debug/suporte direto;
  * - admin impersonando (`impersonatedBy` presente) — propaga privilégio
  *   do admin original (já passou pelo gate em `/admin`); ações ficam
  *   logadas em nome do admin original conforme banner de impersonação;
@@ -61,7 +61,7 @@ export function exigirDonoOuAdmin(
     code: "FORBIDDEN",
     message:
       "Apenas o dono do escritório pode gerar/importar backup. " +
-      "Peça ao dono pra rodar, ou peça ao admin Jurify pra ajudar.",
+      "Peça ao dono pra rodar, ou peça ao admin JuridFlow pra ajudar.",
   });
 }
 
@@ -204,7 +204,7 @@ export const backupRouter = router({
     if (!cfg) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
-        message: "Bucket S3 não configurado — peça ao admin Jurify pra configurar.",
+        message: "Bucket S3 não configurado — peça ao admin JuridFlow pra configurar.",
       });
     }
     const s3 = montarS3Client(cfg);

@@ -499,7 +499,7 @@ export const adminIntegracoesRouter = router({
    *
    * Em vez do admin ter que abrir o painel do Asaas, ir em
    * Configurações → Webhooks e colar a URL e o token, este endpoint
-   * faz a chamada via API do Asaas, registrando o webhook do Jurify
+   * faz a chamada via API do Asaas, registrando o webhook do JuridFlow
    * com o webhookSecret armazenado.
    *
    * Idempotente: chamar de novo apenas atualiza a configuração.
@@ -528,7 +528,7 @@ export const adminIntegracoesRouter = router({
       const apiKey = decrypt(reg.apiKeyEncrypted, reg.apiKeyIv, reg.apiKeyTag);
       const client = new AsaasClient(apiKey);
 
-      // Monta a URL completa do webhook do Jurify
+      // Monta a URL completa do webhook do JuridFlow
       const webhookUrl = `${input.baseUrl.replace(/\/$/, "")}/api/webhooks/asaas-billing`;
 
       try {

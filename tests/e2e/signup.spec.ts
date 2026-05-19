@@ -3,7 +3,7 @@ import { E2E_PREFIX } from "./fixtures/users";
 
 test("cadastro de nova conta cria user e leva pro onboarding", async ({ page }) => {
   // Email único por run — evita colisão.
-  const email = `${E2E_PREFIX.replace(/[\[\]]/g, "")}-${Date.now()}@jurify.com.br`.toLowerCase();
+  const email = `${E2E_PREFIX.replace(/[\[\]]/g, "")}-${Date.now()}@juridflow.com.br`.toLowerCase();
   const senha = "Smoke123!";
 
   await page.goto("/");

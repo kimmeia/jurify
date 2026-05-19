@@ -30,10 +30,10 @@ export const users = mysqlTable("users", {
   /** Método de login: 'email', 'google', 'demo' (pode conter valores legados em contas antigas) */
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  /** ID do customer no Asaas (cobrança SaaS Jurify). Substituiu stripeCustomerId. */
+  /** ID do customer no Asaas (cobrança SaaS JuridFlow). Substituiu stripeCustomerId. */
   asaasCustomerId: varchar("asaasCustomerId", { length: 255 }),
   /**
-   * Conta bloqueada pelo admin do Jurify. Quando true, o usuário não
+   * Conta bloqueada pelo admin do JuridFlow. Quando true, o usuário não
    * consegue mais autenticar (verificado em authenticateRequest).
    * Diferente de role: bloqueio é uma ação punitiva/de suporte, role
    * é o nível de permissão.
@@ -92,7 +92,7 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Subscriptions table — assinaturas SaaS Jurify (uma por usuário-dono).
+ * Subscriptions table — assinaturas SaaS JuridFlow (uma por usuário-dono).
  *
  * Migrado de Stripe para Asaas. Os IDs do Asaas substituem os antigos
  * stripeSubscriptionId/stripePriceId. O `planId` continua mapeando para
@@ -121,7 +121,7 @@ export const subscriptions = mysqlTable("subscriptions", {
   creditsUsed: int("creditsUsed").default(0).notNull(),
   creditsLimit: int("creditsLimit").default(0).notNull(),
   /**
-   * Cortesia: acesso liberado manualmente pelo admin do Jurify (cliente
+   * Cortesia: acesso liberado manualmente pelo admin do JuridFlow (cliente
    * piloto, isenção pontual). Quando true, `temAcessoAtivo(sub)` retorna
    * true mesmo se `status` não for 'active' — não interage com Asaas.
    *
@@ -270,7 +270,7 @@ export const escritorios = mysqlTable("escritorios", {
   usarMotorProprio: boolean("usarMotorProprio").default(false).notNull(),
   /**
    * Suspensão administrativa do escritório (controle pelo admin do
-   * Jurify, ex: inadimplência grave, violação de termos). Quando true,
+   * JuridFlow, ex: inadimplência grave, violação de termos). Quando true,
    * todos os usuários do escritório recebem 403 nas chamadas tRPC
    * que dependem do contexto do escritório. Diferente do bloqueio
    * individual em users.bloqueado: este é organizacional.
@@ -1634,7 +1634,7 @@ export type ClienteNotaAdmin = typeof clienteNotasAdmin.$inferSelect;
 export type InsertClienteNotaAdmin = typeof clienteNotasAdmin.$inferInsert;
 
 /**
- * Audit log — toda ação sensível executada por admin do Jurify ou via
+ * Audit log — toda ação sensível executada por admin do JuridFlow ou via
  * impersonation deve ser registrada aqui. Imutável (apenas INSERTs).
  *
  * Compliance + troubleshooting: "quem promoveu fulano a admin?",
@@ -1762,14 +1762,14 @@ export type Cupom = typeof cupons.$inferSelect;
 export type InsertCupom = typeof cupons.$inferInsert;
 
 /**
- * Agentes de IA globais (admin-level) — criados pelo dono do Jurify
+ * Agentes de IA globais (admin-level) — criados pelo dono do JuridFlow
  * pra serem usados por todos os módulos (atendimento, futuros).
  *
  * Diferente de `agentes_ia` (tabela por escritório), estes agentes são
  * da plataforma inteira. Cada agente tem:
  *   - Prompt e modelo (GPT-4o, etc)
  *   - Ativo/inativo
- *   - Área de conhecimento (ex: "Direito Trabalhista", "FAQ Jurify")
+ *   - Área de conhecimento (ex: "Direito Trabalhista", "FAQ JuridFlow")
  *   - Documentos de treinamento (via tabela agente_documentos)
  *
  * A API key do OpenAI é puxada da integração `openai` em admin_integracoes

@@ -2,7 +2,7 @@
  * Migração one-shot: userCredits (legacy) → escritorio_creditos.
  *
  * Por que existe: o sistema tinha 2 fontes de saldo desencontradas. Admin
- * Jurify e webhooks antigos creditavam em `userCredits.userId` (individual),
+ * JuridFlow e webhooks antigos creditavam em `userCredits.userId` (individual),
  * mas todos os fluxos de cobrança real (`consumirCredito` em db.ts:530,
  * `consumirCreditos` em processos.ts:100) já liam de `escritorio_creditos`.
  *

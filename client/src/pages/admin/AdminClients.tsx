@@ -30,7 +30,7 @@ import { toast } from "sonner";
  * Badge de tipo de usuário no painel admin.
  *
  * 3 estados:
- *   - admin: staff Jurify (azul)
+ *   - admin: staff JuridFlow (azul)
  *   - cliente: dono de escritório pagante (cinza)
  *   - colaborador: membro de escritório de outro user (verde)
  *     mostra tooltip com escritório vinculado e cargo
@@ -637,7 +637,7 @@ function ClienteDetalheDialog({
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Libera acesso ao Jurify sem cobrança via Asaas. Útil pra cliente piloto
+                    Libera acesso ao JuridFlow sem cobrança via Asaas. Útil pra cliente piloto
                     ou isenção pontual. {!sub && (
                       <span className="block mt-1">
                         Cliente ainda não tem assinatura — vou criar uma virtual marcada como cortesia.
@@ -982,7 +982,7 @@ function ClienteDetalheDialog({
             <AlertDialogDescription>
               <strong>{user?.name || user?.email}</strong> vai voltar a depender do
               status real da assinatura. Se a sub for canceled/past_due, o cliente
-              perde acesso ao Jurify imediatamente.
+              perde acesso ao JuridFlow imediatamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea

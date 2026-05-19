@@ -14,7 +14,7 @@
 
 import { ZodTypeAny, z } from "zod";
 
-const SAMPLE_EMAIL = "smoke@jurify.com.br";
+const SAMPLE_EMAIL = "smoke@juridflow.com.br";
 
 export function gerarInputMinimo(schema: ZodTypeAny | undefined): unknown {
   if (!schema) return undefined;
