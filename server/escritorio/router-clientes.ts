@@ -159,7 +159,7 @@ export const clientesRouter = router({
      * com 200 clientes mostrava só os VIPs entre os 50 mais recentes).
      */
     segmento: z
-      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs"])
+      .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs", "com_debito"])
       .optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
@@ -199,6 +199,25 @@ export const clientesRouter = router({
           SELECT ${conversas.contatoId} FROM ${conversas}
           WHERE ${conversas.escritorioId} = ${perm.escritorioId}
             AND ${conversas.ultimaMensagemAt} >= ${trintaDias}
+        )`,
+      );
+    } else if (seg === "com_debito") {
+      // Mesma definição do contador "Inadimplência" (estatisticas):
+      // contato com pelo menos 1 cobrança OVERDUE OU PENDING com vencimento
+      // passado. Sub-query escopada por escritório pra defesa em profundidade.
+      // Antes o filtro era client-side em cima dos 50 da página → mostrava
+      // lista vazia quando os 192 inadimplentes estavam espalhados em outras
+      // páginas. Agora filtra no SQL antes da paginação.
+      const hojeFiltro = dataHojeBR();
+      where = and(
+        where,
+        sql`${contatos.id} IN (
+          SELECT ${asaasCobrancas.contatoId} FROM ${asaasCobrancas}
+          WHERE ${asaasCobrancas.escritorioId} = ${perm.escritorioId}
+            AND (
+              ${asaasCobrancas.status} = 'OVERDUE'
+              OR (${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} < ${hojeFiltro})
+            )
         )`,
       );
     }
