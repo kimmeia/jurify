@@ -12,6 +12,87 @@ import { createLogger } from "../_core/logger";
 
 const log = createLogger("smartflow-executores");
 
+/** Timeout pra chamadas LLM dentro do SmartFlow — atendimento via WhatsApp
+ *  precisa responder rápido; 30s já é generoso pro usuário não desistir. */
+const LLM_TIMEOUT_MS = 30000;
+
+/**
+ * Invoca o LLM com a config completa (provider + modelo + keys + RAG).
+ *
+ * Compartilhada entre `chamarIA` (passo `ia_responder` sem agenteId) e
+ * `executarAgente` (com agenteId). Centraliza:
+ *   - escolha do provider (Anthropic vs OpenAI) baseada em `provider`,
+ *     não em "tem openaiApiKey?" (que falhava quando o canal só tem Claude)
+ *   - inclusão de docs RAG (`contextoDocumentos`) no system prompt
+ *   - respeito a `maxTokens` e `temperatura` do agente
+ *   - timeout consistente
+ */
+async function invocarLLM(
+  cfg: {
+    provider: "openai" | "anthropic";
+    modelo: string;
+    openaiApiKey?: string;
+    anthropicApiKey?: string;
+    maxTokens: number;
+    temperatura: number;
+    contextoDocumentos?: string;
+  },
+  systemPromptBase: string,
+  mensagem: string,
+): Promise<string> {
+  const systemPrompt = [systemPromptBase, cfg.contextoDocumentos]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (cfg.provider === "anthropic") {
+    if (!cfg.anthropicApiKey) {
+      throw new Error("Provider anthropic sem anthropicApiKey configurada.");
+    }
+    const { gerarRespostaAnthropic } = await import("../integracoes/chatbot-openai");
+    const r = await gerarRespostaAnthropic(
+      cfg.anthropicApiKey,
+      cfg.modelo,
+      systemPrompt,
+      [],
+      mensagem,
+      cfg.maxTokens,
+      cfg.temperatura,
+      LLM_TIMEOUT_MS,
+    );
+    if (r.erro || !r.resposta) throw new Error(r.erro || "Claude não retornou resposta");
+    return r.resposta;
+  }
+
+  if (!cfg.openaiApiKey) {
+    throw new Error("Provider openai sem openaiApiKey configurada.");
+  }
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${cfg.openaiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: cfg.modelo || "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: mensagem },
+      ],
+      max_tokens: cfg.maxTokens,
+      temperature: cfg.temperatura,
+    }),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
 /**
  * Resolve o client Cal.com para um escritório — lê o canal com `tipo=calcom`,
  * descriptografa config e devolve um `CalcomClient` pronto. Retorna `null`
@@ -54,49 +135,35 @@ export async function obterCalcomClient(escritorioId: number, defaultDuration = 
 export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
   return {
     async chamarIA(prompt: string, mensagem: string): Promise<string> {
-      // Resolve API key do escritório (ChatGPT ou Claude)
-      const { obterConfigChatBot, gerarRespostaAnthropic } = await import("../integracoes/chatbot-openai");
+      // Resolve config do agente ativo do escritório (provider + key + modelo
+      // + maxTokens/temperatura + docs RAG). Antes desse fix, esta função
+      // ignorava `provider` e tentava OpenAI primeiro — então escritórios
+      // com só Claude configurado caíam num caminho de fallback que
+      // hardcodava model="claude-haiku-4-5" e maxTokens=300 ignorando o
+      // que estava no agente. Agora respeita 100% da config do agente
+      // ativo, igual ao `executarAgente`.
+      const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
       const config = await obterConfigChatBot(escritorioId);
 
-      if (config?.openaiApiKey) {
-        // OpenAI
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.openaiApiKey}` },
-          body: JSON.stringify({
-            model: config.modelo || "gpt-4o-mini",
-            messages: [{ role: "system", content: prompt }, { role: "user", content: mensagem }],
-            max_tokens: 300,
-            temperature: 0.3,
-          }),
-        });
-        if (!res.ok) throw new Error(`OpenAI ${res.status}`);
-        const data = await res.json();
-        return data.choices?.[0]?.message?.content?.trim() || "";
+      if (!config || !config.provider) {
+        throw new Error(
+          "Nenhuma IA configurada. Configure em Integrações → ChatGPT ou Claude.",
+        );
       }
 
-      // Tenta Claude via canal
-      try {
-        const { getDb } = await import("../db");
-        const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and, or: orOp, like } = await import("drizzle-orm");
-        const { decryptConfig } = await import("../escritorio/crypto-utils");
-        const db = await getDb();
-        if (db) {
-          const [canal] = await db.select().from(canaisIntegrados)
-            .where(and(eq(canaisIntegrados.escritorioId, escritorioId), orOp(eq(canaisIntegrados.tipo, "claude"), like(canaisIntegrados.nome, "%Claude%"))))
-            .limit(1);
-          if (canal?.configEncrypted && canal.configIv && canal.configTag) {
-            const cfg = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-            if (cfg?.anthropicApiKey) {
-              const result = await gerarRespostaAnthropic(cfg.anthropicApiKey, "claude-haiku-4-5-20251001", prompt, [], mensagem, 300, 0.3);
-              if (result.resposta) return result.resposta;
-            }
-          }
-        }
-      } catch { /* fallback */ }
-
-      throw new Error("Nenhuma IA configurada. Configure em Integrações → ChatGPT ou Claude.");
+      return invocarLLM(
+        {
+          provider: config.provider,
+          modelo: config.modelo,
+          openaiApiKey: config.openaiApiKey,
+          anthropicApiKey: config.anthropicApiKey,
+          maxTokens: config.maxTokens ?? 300,
+          temperatura: config.temperatura ?? 0.3,
+          contextoDocumentos: config.contextoDocumentos,
+        },
+        prompt,
+        mensagem,
+      );
     },
 
     async executarAgente(agenteId: number, mensagem: string): Promise<string> {
@@ -106,44 +173,19 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         throw new Error(`Agente ${agenteId} não encontrado, inativo ou sem API key configurada.`);
       }
 
-      // Concatena prompt do agente + bloco de docs RAG já formatado.
-      const systemPrompt = [cfg.prompt, cfg.contextoDocumentos].filter(Boolean).join("\n\n");
-
-      if (cfg.provider === "anthropic") {
-        const { gerarRespostaAnthropic } = await import("../integracoes/chatbot-openai");
-        const r = await gerarRespostaAnthropic(
-          cfg.anthropicApiKey!,
-          cfg.modelo,
-          systemPrompt,
-          [],
-          mensagem,
-          cfg.maxTokens,
-          cfg.temperatura,
-        );
-        if (r.erro) throw new Error(`Agente Anthropic: ${r.erro}`);
-        return r.resposta || "";
-      }
-
-      // OpenAI
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${cfg.openaiApiKey}`,
+      return invocarLLM(
+        {
+          provider: cfg.provider,
+          modelo: cfg.modelo,
+          openaiApiKey: cfg.openaiApiKey,
+          anthropicApiKey: cfg.anthropicApiKey,
+          maxTokens: cfg.maxTokens,
+          temperatura: cfg.temperatura,
+          contextoDocumentos: cfg.contextoDocumentos,
         },
-        body: JSON.stringify({
-          model: cfg.modelo || "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: mensagem },
-          ],
-          max_tokens: cfg.maxTokens,
-          temperature: cfg.temperatura,
-        }),
-      });
-      if (!res.ok) throw new Error(`Agente OpenAI: ${res.status}`);
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content?.trim() || "";
+        cfg.prompt,
+        mensagem,
+      );
     },
 
     async buscarHorarios(duracao: number): Promise<string[]> {
