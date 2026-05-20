@@ -25,6 +25,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { agentesIa, agenteIaDocumentos, adminIntegracoes } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { toIsoString } from "../_core/dates";
 
 /** Helper: valida ownership de um agente quando verProprios. */
 async function podeMexerNoAgente(
@@ -277,7 +278,7 @@ export const agentesIaRouter = router({
       modulosPermitidos: r.modulosPermitidos ? r.modulosPermitidos.split(",") : [],
       temApiKey: !!(r.openaiApiKey && r.apiKeyIv && r.apiKeyTag),
       totalDocumentos: docCount.get(r.id) || 0,
-      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+      createdAt: toIsoString(r.createdAt) ?? "",
     }));
   }),
 

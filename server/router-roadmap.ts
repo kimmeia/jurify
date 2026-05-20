@@ -18,6 +18,7 @@
 import { z } from "zod";
 import { eq, and, desc, like, or, sql, inArray, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { toIsoString } from "./_core/dates";
 import { adminProcedure, protectedProcedure, router } from "./_core/trpc";
 import { escapeLikePattern } from "./_core/sql-helpers";
 import { getDb } from "./db";
@@ -151,7 +152,7 @@ export const roadmapRouter = router({
         itens: linhas.map((l) => ({
           ...l,
           autorNome: l.autorNome ?? "Usuário",
-          createdAt: (l.createdAt as Date).toISOString(),
+          createdAt: toIsoString(l.createdAt) ?? "",
           jaVotou: setVotados.has(l.id),
         })),
         total,
@@ -289,10 +290,10 @@ export const roadmapRouter = router({
       return {
         ...item,
         autorNome: item.autorNome ?? "Usuário",
-        createdAt: (item.createdAt as Date).toISOString(),
+        createdAt: toIsoString(item.createdAt) ?? "",
         ultimosVotos: ultimosVotos.map((v) => ({
           userName: v.userName ?? "Usuário",
-          createdAt: (v.createdAt as Date).toISOString(),
+          createdAt: toIsoString(v.createdAt) ?? "",
         })),
       };
     }),
