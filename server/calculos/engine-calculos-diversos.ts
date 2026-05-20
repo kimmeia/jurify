@@ -231,19 +231,14 @@ export function calcularTaxaReal(input: TaxaRealInput): TaxaRealResult {
 
 /**
  * Converte prazo para o mesmo período da taxa.
+ * Usa "ano" como base unificada (365 dias corridos) para manter consistência
+ * com `periodosPorAno` — a versão antiga usava 30 dias/mês e 365 dias/ano,
+ * o que gerava ~0,17% de erro em conversões diária↔mensal.
  */
 function converterPrazo(prazo: number, periodoPrazo: PeriodoTaxa, periodoTaxa: PeriodoTaxa): number {
-  // Converter ambos para meses como base
-  const paraMeses: Record<PeriodoTaxa, number> = {
-    diaria: 1 / 30,
-    mensal: 1,
-    bimestral: 2,
-    trimestral: 3,
-    semestral: 6,
-    anual: 12,
-  };
-  const prazoEmMeses = prazo * paraMeses[periodoPrazo];
-  return prazoEmMeses / paraMeses[periodoTaxa];
+  const nPrazoPorAno = periodosPorAno(periodoPrazo, "corridos");
+  const nTaxaPorAno = periodosPorAno(periodoTaxa, "corridos");
+  return (prazo / nPrazoPorAno) * nTaxaPorAno;
 }
 
 /**

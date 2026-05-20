@@ -56,6 +56,38 @@ function calcularTempoServico(dataAdmissao: string, dataDesligamento: string) {
   return { anos, meses, dias, totalDias };
 }
 
+/**
+ * Conta meses para fins de avos (13º e férias proporcionais).
+ *
+ * Regra (Lei 4.090/62 §2º + CLT art. 146 par. único):
+ * - Cada mês aquisitivo completo conta 1 avo
+ * - Fração final ≥ 15 dias conta como mês integral (+1 avo)
+ *
+ * Mês aquisitivo: do dia X até o mesmo dia X do mês seguinte. Ex: 20/mar a 20/abr.
+ */
+function contarMesesParaAvos(inicio: Date, fim: Date): number {
+  if (fim.getTime() < inicio.getTime()) return 0;
+
+  let meses = 0;
+  const cursor = new Date(inicio);
+
+  while (true) {
+    const proximo = new Date(cursor);
+    proximo.setMonth(proximo.getMonth() + 1);
+
+    if (proximo.getTime() <= fim.getTime()) {
+      meses++;
+      cursor.setTime(proximo.getTime());
+    } else {
+      const diasParciais = Math.floor((fim.getTime() - cursor.getTime()) / 86400000) + 1;
+      if (diasParciais >= 15) meses++;
+      break;
+    }
+  }
+
+  return meses;
+}
+
 // ─── Cálculo INSS Progressivo ─────────────────────────────────────────────────
 
 export function calcularINSS(salarioBruto: number): number {
@@ -176,11 +208,16 @@ export function calcularRescisao(params: ParametrosRescisao): ResultadoRescisao 
   // ─── 3. 13º Salário Proporcional ───────────────────────────────────────────
   const temDireito13 = params.tipoRescisao !== "justa_causa";
   if (temDireito13) {
-    // Meses trabalhados no ano (>= 15 dias no mês conta como mês cheio)
-    const mesProjetado = dataProjetada.getMonth(); // 0-indexed
-    const diaProjetado = dataProjetada.getDate();
-    let avos13 = mesProjetado; // Janeiro = 0 avos, etc.
-    if (diaProjetado >= 15) avos13++;
+    // Meses trabalhados NO ANO da rescisão (Lei 4.090/62 §2º).
+    // Se admitido em ano anterior: conta de jan/anoRescisão até dataProjetada.
+    // Se admitido no mesmo ano: conta da admissão até dataProjetada.
+    const admissao = new Date(params.dataAdmissao + "T00:00:00");
+    const anoProj = dataProjetada.getFullYear();
+    const inicioContagem13 = admissao.getFullYear() < anoProj
+      ? new Date(anoProj, 0, 1)
+      : admissao;
+
+    let avos13 = contarMesesParaAvos(inicioContagem13, dataProjetada);
     avos13 = Math.min(avos13, 12);
 
     if (avos13 > 0) {
@@ -197,24 +234,18 @@ export function calcularRescisao(params: ParametrosRescisao): ResultadoRescisao 
   // ─── 4. Férias Proporcionais + 1/3 ─────────────────────────────────────────
   const temDireitoFeriasProporcionais = params.tipoRescisao !== "justa_causa";
   if (temDireitoFeriasProporcionais) {
-    // Calcular meses desde último período aquisitivo
-    const admissao = new Date(params.dataAdmissao + "T00:00:00");
-    
-    // Encontrar o último aniversário de admissão antes da data projetada
-    let ultimoAniversario = new Date(admissao);
+    // CLT art. 146 par. único: 1/12 por mês aquisitivo OU fração > 14 dias.
+    const admissaoFerias = new Date(params.dataAdmissao + "T00:00:00");
+
+    let ultimoAniversario = new Date(admissaoFerias);
     while (true) {
       const proximo = new Date(ultimoAniversario);
       proximo.setFullYear(proximo.getFullYear() + 1);
-      if (proximo > dataProjetada) break;
+      if (proximo.getTime() > dataProjetada.getTime()) break;
       ultimoAniversario = proximo;
     }
 
-    // Meses proporcionais desde o último aniversário
-    let mesesProporcionais = (dataProjetada.getFullYear() - ultimoAniversario.getFullYear()) * 12 +
-      (dataProjetada.getMonth() - ultimoAniversario.getMonth());
-    if (dataProjetada.getDate() >= 15 && dataProjetada.getDate() > ultimoAniversario.getDate()) {
-      mesesProporcionais++;
-    }
+    let mesesProporcionais = contarMesesParaAvos(ultimoAniversario, dataProjetada);
     mesesProporcionais = Math.min(Math.max(mesesProporcionais, 0), 12);
 
     if (mesesProporcionais > 0) {
