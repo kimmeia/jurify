@@ -70,6 +70,16 @@ const ALLOWED_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/plain",
   "text/csv",
+  // Áudio (notas de voz gravadas no Atendimento).
+  // MediaRecorder devolve audio/webm em Chrome/Firefox e audio/mp4 em Safari;
+  // mantemos ogg+mpeg+wav pra cobrir variações de codec e arquivos arrastados.
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/aac",
 ]);
 
 // Tipos sem magic number — só passam se input.tipo declarar e o conteúdo
@@ -82,6 +92,18 @@ async function ensureDir(dir: string): Promise<void> {
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+}
+
+/**
+ * Aceita o mismatch quando o navegador declara `audio/webm` e o file-type
+ * vê `video/webm` (mesmo container, sem trilha de vídeo). Idem mp4.
+ * Apenas pra esses dois containers — qualquer outra divergência continua
+ * sendo erro.
+ */
+function audioContainerCompativel(declarado: string, detectado: string): boolean {
+  if (declarado === "audio/webm" && detectado === "video/webm") return true;
+  if (declarado === "audio/mp4" && detectado === "video/mp4") return true;
+  return false;
 }
 
 /** Heurística simples pra "isso parece texto?" — sem bytes nulos e
@@ -149,7 +171,11 @@ export const uploadRouter = router({
           });
         }
         // Cliente declarou um tipo, conteúdo é outro: pode ser ataque.
-        if (detectado.mime !== mimeDeclarado) {
+        // Exceção: containers WebM e MP4 podem ser detectados como
+        // "video/*" mesmo quando carregam só áudio (MediaRecorder devolve
+        // audio/webm mas o file-type vê "video/webm"). Tolerar essas duas
+        // duplas — em todo o resto, exigir bate exato.
+        if (detectado.mime !== mimeDeclarado && !audioContainerCompativel(mimeDeclarado, detectado.mime)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: `Tipo declarado (${mimeDeclarado}) não bate com o conteúdo (${detectado.mime}).`,
