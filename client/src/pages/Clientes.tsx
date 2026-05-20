@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover, VincularAsaasBlock } from "@/components/FinanceiroBadge";
+import { VincularBeneficiarioDialog } from "./financeiro/VincularBeneficiarioDialog";
 import { GerarContratoDialog } from "@/components/GerarContratoDialog";
 import {
   EditarForm, AnotacoesTab, ArquivosTab, AssinaturasTab, TarefasClienteTab,
@@ -1249,12 +1250,33 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
   );
 }
 
-function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
+function FinanceiroClienteTab({
+  contatoId,
+  contatoNome,
+}: {
+  contatoId: number;
+  contatoNome: string;
+}) {
   const { data, isLoading, refetch } = (trpc as any).asaas.listarCobrancas.useQuery({
     contatoId,
     limit: 100,
   });
   const items: any[] = data?.items || [];
+  const [vincularBenefOpen, setVincularBenefOpen] = useState(false);
+  const utils = trpc.useUtils();
+
+  const desvincularBenefMut = (trpc as any).asaas.desvincularPagamentoBeneficiario.useMutation({
+    onSuccess: () => {
+      toast.success("Vínculo de beneficiário removido", {
+        description: "A cobrança voltou a contar para o contato pagador original.",
+      });
+      refetch();
+      utils.asaas.resumoContato.invalidate();
+      utils.asaas.resumoPorContatos.invalidate();
+      utils.asaas.kpis.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
 
   // Cobranças PIX antigas podem não ter pixQrCodePayload no banco
   // (criadas antes do fix). Endpoint busca on-demand e cacheia.
@@ -1329,20 +1351,67 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
 
   if (items.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <DollarSign className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-sm font-medium">Nenhuma cobrança vinculada</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Cobranças deste cliente no Asaas aparecerão aqui automaticamente.
-          </p>
-        </CardContent>
-      </Card>
+      <>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <DollarSign className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">Nenhuma cobrança vinculada</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+              Cobranças deste cliente no Asaas aparecerão aqui automaticamente.
+              Se ele pagou no nome de outra pessoa, use o botão abaixo pra
+              vincular sem precisar lançar manual.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-4"
+              onClick={() => setVincularBenefOpen(true)}
+            >
+              <Link2 className="h-3.5 w-3.5 mr-1.5" />
+              Vincular pagamento de terceiro
+            </Button>
+          </CardContent>
+        </Card>
+        <VincularBeneficiarioDialog
+          open={vincularBenefOpen}
+          onOpenChange={setVincularBenefOpen}
+          contatoBeneficiarioId={contatoId}
+          contatoBeneficiarioNome={contatoNome}
+          onSuccess={refetch}
+        />
+      </>
     );
   }
 
   return (
     <div className="space-y-3">
+      {/* Header com ação "Vincular pagamento de terceiro" */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Cobranças deste cliente</p>
+          <p className="text-[10px] text-muted-foreground">
+            Inclui pagamentos no nome de terceiros vinculados a este cliente.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setVincularBenefOpen(true)}
+          title="Caso o cliente pagou no Asaas no nome de outra pessoa (esposa, sócio...) e você quer atribuir ao caixa deste cliente sem duplicar"
+        >
+          <Link2 className="h-3.5 w-3.5 mr-1.5" />
+          Vincular pagamento de terceiro
+        </Button>
+      </div>
+
+      <VincularBeneficiarioDialog
+        open={vincularBenefOpen}
+        onOpenChange={setVincularBenefOpen}
+        contatoBeneficiarioId={contatoId}
+        contatoBeneficiarioNome={contatoNome}
+        onSuccess={refetch}
+      />
+
       {/* Totais agregados */}
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
@@ -1374,6 +1443,27 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                       {c.origem === "manual" && (
                         <Badge className="text-[9px] h-4 px-1 border-0 bg-warning-bg text-warning-fg">
                           manual
+                        </Badge>
+                      )}
+                      {/* Indicador de beneficiário lógico:
+                          - Vendo do Carlos: cobrança veio do CPF da esposa → "Pago por terceiro"
+                          - Vendo da esposa: cobrança foi atribuída ao Carlos → "Atribuída a outro" */}
+                      {c.contatoBeneficiarioId === contatoId && c.contatoId !== contatoId && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] h-4 px-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800"
+                          title="Esta cobrança foi paga no nome de outra pessoa e vinculada como pagamento deste cliente"
+                        >
+                          pago por terceiro
+                        </Badge>
+                      )}
+                      {c.contatoBeneficiarioId !== null && c.contatoBeneficiarioId !== contatoId && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] h-4 px-1 bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800"
+                          title="Esta cobrança foi atribuída a outro cliente (beneficiário lógico) — não conta no caixa deste contato"
+                        >
+                          atribuída a outro
                         </Badge>
                       )}
                       {c.formaPagamento && (
@@ -1521,6 +1611,27 @@ function FinanceiroClienteTab({ contatoId }: { contatoId: number }) {
                               <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
                             )}
                           </DropdownMenuItem>
+                          {/* Desvincular beneficiário: só aparece quando há vínculo lógico.
+                              Reverte pra cobrança contar pro contato pagador original. */}
+                          {c.contatoBeneficiarioId !== null && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                                Beneficiário
+                              </DropdownMenuLabel>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  desvincularBenefMut.mutate({ cobrancaId: c.id })
+                                }
+                                disabled={desvincularBenefMut.isPending}
+                                className="gap-2"
+                                title="Desfaz o vínculo: cobrança volta a contar pro pagador original"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                Desvincular pagamento de terceiro
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -2704,7 +2815,7 @@ function ClienteDetalhe({
         <TabsContent value="financeiro" className="mt-4 space-y-4">
           <VincularAsaasBlock key={id} contatoId={id} cpfCnpj={cliente.cpfCnpj} />
           <FinanceiroBadge contatoId={id} />
-          <FinanceiroClienteTab key={id} contatoId={id} />
+          <FinanceiroClienteTab key={id} contatoId={id} contatoNome={cliente.nome} />
         </TabsContent>
 
         {/* Aba 3: Histórico (conversas + leads + notas + timeline) */}

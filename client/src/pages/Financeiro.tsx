@@ -30,6 +30,7 @@ import {
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
   Paperclip, FileUp, Percent, MoreVertical, CalendarDays, CircleDollarSign,
+  Wand2,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
@@ -53,6 +54,7 @@ import { DespesasWrapper } from "./financeiro/DespesasWrapper";
 import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
 import { DiagnosticarDuplicidadesDialog } from "./financeiro/DiagnosticarDuplicidadesDialog";
+import { ResolverDuplicidadesDialog } from "./financeiro/ResolverDuplicidadesDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 /** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
@@ -78,6 +80,7 @@ export default function Financeiro() {
   const [ofxOpen, setOfxOpen] = useState(false);
   const [limpezaOpen, setLimpezaOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [resolverDupOpen, setResolverDupOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Aba Clientes: chip de quick filter + filtro de dias em atraso + ordenação por coluna.
@@ -334,15 +337,21 @@ export default function Financeiro() {
     }
   };
 
-  // Lista de cobranças pendentes selecionadas — derivada pra usar tanto no
-  // contador do dialog quanto na execução do bulk delete.
-  const cobrancasBulkSelecionadas = cobrancasFiltradas.filter(
-    (c: any) => selecionadas.has(c.id) && c.status === "PENDING",
-  );
+  // Cobranças elegíveis pra exclusão em massa:
+  //  - Asaas: só PENDING (pago lá fora não cancela aqui — webhook propaga)
+  //  - Manual: qualquer status (lançamento por engano precisa ser desfeito,
+  //    inclusive já marcado como recebido)
+  const cobrancasBulkSelecionadas = cobrancasFiltradas.filter((c: any) => {
+    if (!selecionadas.has(c.id)) return false;
+    if (c.origem === "manual") return true;
+    return c.status === "PENDING";
+  });
 
   const handleBulkDelete = () => {
     if (cobrancasBulkSelecionadas.length === 0) {
-      toast.error("Selecione cobranças pendentes para cancelar");
+      toast.error(
+        "Nenhuma cobrança elegível selecionada. Asaas: só pendentes. Manual: qualquer status.",
+      );
       return;
     }
     setConfirmBulkCancel(true);
@@ -438,6 +447,20 @@ export default function Financeiro() {
     () => (cashFlow?.pontos || []).map((p: any) => Number(p.recebido || 0)),
     [cashFlow],
   );
+
+  // Magnitude da inflação por duplicatas — alimenta banner persistente
+  // e legenda do Hero. Cache 15min, sem refetch agressivo (read-only).
+  const { data: diagDup } = (trpc as any).asaas.diagnosticarDuplicidades.useQuery(
+    undefined,
+    {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 15 * 60_000,
+      enabled: perms.podeVer,
+    },
+  );
+  const paresSuspeitosCount = diagDup?.paresSuspeitos?.count ?? 0;
+  const paresSuspeitosValor = diagDup?.paresSuspeitos?.valorTotal ?? 0;
 
   if (loadStatus) {
     return (
@@ -550,18 +573,53 @@ export default function Financeiro() {
                     Limpar órfãos
                   </DropdownMenuItem>
                 )}
+                {perms.podeExcluir && (
+                  <DropdownMenuItem
+                    onClick={() => setResolverDupOpen(true)}
+                    title="Wizard pra limpar duplicatas no caixa — resolver cada par escolhendo qual cobrança manter"
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    Resolver duplicatas
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => setDiagOpen(true)}
-                  title="Diagnostica possíveis pagamentos duplicados (read-only)"
+                  title="Visão geral read-only: contagem de duplicatas, órfãs pagas, manuais já-pagas"
                 >
                   <Search className="h-4 w-4 mr-2" />
-                  Diagnosticar duplicidades
+                  Diagnosticar (visão geral)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
         </div>
       </div>
+
+      {/* ═══════════ BANNER DUPLICATAS PENDENTES ═══════════ */}
+      {/* Magnitude do problema na cara do operador. Só some quando
+          paresSuspeitos.count = 0 (resolvendo via wizard). */}
+      {paresSuspeitosCount > 0 && perms.podeExcluir && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              {paresSuspeitosCount} pagamento(s) provavelmente duplicado(s) — caixa pode estar inflado em {formatBRL(paresSuspeitosValor)}
+            </p>
+            <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+              Pares com mesmo valor + datas próximas, ao menos um lado lançado manual ou
+              sem cliente vinculado. Resolva caso a caso pra ter o caixa real.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+            onClick={() => setResolverDupOpen(true)}
+          >
+            <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+            Resolver agora
+          </Button>
+        </div>
+      )}
 
       {/* ═══════════ HERO COMANDO CENTRAL ═══════════ */}
       <HeroFinanceiro
@@ -1072,12 +1130,21 @@ export default function Financeiro() {
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                          {perms.podeExcluir && c.status === "PENDING" && (
+                          {/* Excluir:
+                              - Asaas: só PENDING (Asaas pago não cancela aqui)
+                              - Manual: qualquer status (engano precisa ser desfeito) */}
+                          {perms.podeExcluir &&
+                            (c.origem === "manual" || c.status === "PENDING") && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-destructive"
                               onClick={() => setCobrancaParaCancelar(c)}
+                              title={
+                                c.origem === "manual" && c.status !== "PENDING"
+                                  ? "Excluir cobrança manual (qualquer status)"
+                                  : "Cancelar cobrança pendente"
+                              }
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -1205,6 +1272,10 @@ export default function Financeiro() {
         open={diagOpen}
         onOpenChange={setDiagOpen}
       />
+      <ResolverDuplicidadesDialog
+        open={resolverDupOpen}
+        onOpenChange={setResolverDupOpen}
+      />
 
       <AlertDialog
         open={confirmBulkCancel}
@@ -1213,13 +1284,14 @@ export default function Financeiro() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Cancelar {cobrancasBulkSelecionadas.length} cobrança(s)
-              pendente(s)?
+              Excluir {cobrancasBulkSelecionadas.length} cobrança(s)?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              As cobranças pendentes selecionadas serão canceladas no Asaas e
-              no sistema, uma de cada vez. Cobranças já pagas ou estornadas
-              não são afetadas. Esta ação não pode ser desfeita.
+              Cobranças Asaas pendentes serão canceladas no Asaas e no sistema;
+              cobranças manuais serão removidas do sistema. Cobranças Asaas já
+              pagas/estornadas não são afetadas. Esta ação não pode ser desfeita.
+              Cobranças que já entraram em fechamento de comissão são bloqueadas
+              automaticamente — exclua o fechamento primeiro se precisar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1234,7 +1306,7 @@ export default function Financeiro() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {excluirCobBulkMut.isPending ? "Cancelando..." : "Cancelar cobranças"}
+              {excluirCobBulkMut.isPending ? "Excluindo..." : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

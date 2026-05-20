@@ -27,22 +27,34 @@ interface CobMock {
 }
 
 let cobsNoBanco: CobMock[] = [];
+/** IDs de cobranças que JÁ entraram em fechamento de comissão (bloqueiam exclusão). */
+let cobIdsEmComissaoFechada: number[] = [];
 let deletados: number[] = [];
 let asaasExcluidos: string[] = [];
 let asaasExcluirThrow: Error | null = null;
 let getClientCallCount = 0;
 
-function makeSelectBuilder() {
+/**
+ * Builder discrimina por colunas selecionadas:
+ *  - Query do pré-check pega `{ asaasCobrancaId }` → retorna `cobIdsEmComissaoFechada`
+ *  - Query principal de cobranças tem `id`, `origem`, etc → retorna `cobsNoBanco`
+ */
+function makeSelectBuilder(cols: any) {
+  const ehQueryComissao =
+    cols && typeof cols === "object" && "asaasCobrancaId" in cols;
+  const resultado = ehQueryComissao
+    ? cobIdsEmComissaoFechada.map((id) => ({ asaasCobrancaId: id }))
+    : cobsNoBanco;
   const builder: any = {
     from: () => builder,
-    where: () => Promise.resolve(cobsNoBanco),
-    then: (resolve: (v: unknown) => unknown) => resolve(cobsNoBanco),
+    where: () => Promise.resolve(resultado),
+    then: (resolve: (v: unknown) => unknown) => resolve(resultado),
   };
   return builder;
 }
 
 const mockDb = {
-  select: () => makeSelectBuilder(),
+  select: (cols?: any) => makeSelectBuilder(cols),
   delete: () => ({
     where: (cond: any) => {
       // Drizzle SQL cond — extrai o ID que o helper passou no where.
@@ -74,6 +86,7 @@ const { executarExclusaoCobrancasEmMassa } = await import(
 
 beforeEach(() => {
   cobsNoBanco = [];
+  cobIdsEmComissaoFechada = [];
   deletados = [];
   asaasExcluidos = [];
   asaasExcluirThrow = null;
@@ -145,7 +158,7 @@ describe("executarExclusaoCobrancasEmMassa", () => {
     expect(getClientCallCount).toBe(1);
   });
 
-  it("status != PENDING: ignorada (sem erro, sem chamada Asaas)", async () => {
+  it("Asaas status != PENDING: ignorada (Asaas pago não cancela aqui)", async () => {
     cobsNoBanco = [
       { id: 1, asaasPaymentId: "pay_1", origem: "asaas", status: "RECEIVED" },
       { id: 2, asaasPaymentId: "pay_2", origem: "asaas", status: "OVERDUE" },
@@ -163,6 +176,60 @@ describe("executarExclusaoCobrancasEmMassa", () => {
     expect(r.ignoradas).toBe(2);
     expect(r.erros).toEqual([]);
     expect(asaasExcluidos).toEqual(["pay_3"]);
+  });
+
+  it("Manual qualquer status: excluída (engano precisa ser desfeito, mesmo já-paga)", async () => {
+    // Caso clássico: operador lançou manual "Já recebida" no Carlos (R$ 10k)
+    // mas a esposa já tinha pago via Asaas. A manual duplicou o caixa.
+    // Tem que poder excluir a manual mesmo RECEIVED — backend já suportava,
+    // mas o frontend escondia o botão.
+    cobsNoBanco = [
+      { id: 1, asaasPaymentId: null, origem: "manual", status: "RECEIVED" },
+      { id: 2, asaasPaymentId: null, origem: "manual", status: "OVERDUE" },
+      { id: 3, asaasPaymentId: null, origem: "manual", status: "PENDING" },
+    ];
+
+    const r = await executarExclusaoCobrancasEmMassa({
+      db: mockDb,
+      escritorioId: 10,
+      ids: [1, 2, 3],
+      getAsaasClient,
+    });
+
+    expect(r.excluidasManual).toBe(3);
+    expect(r.excluidasAsaas).toBe(0);
+    expect(r.ignoradas).toBe(0);
+    expect(r.erros).toEqual([]);
+    expect(getClientCallCount).toBe(0);
+  });
+
+  it("Cobrança em fechamento de comissão: bloqueia com mensagem clara", async () => {
+    // Integridade do snapshot — comissoes_fechadas_itens referencia
+    // asaas_cobrancas. Apagar a cobrança deixaria item órfão.
+    cobsNoBanco = [
+      { id: 1, asaasPaymentId: "pay_1", origem: "asaas", status: "PENDING" },
+      { id: 2, asaasPaymentId: null, origem: "manual", status: "RECEIVED" },
+      { id: 3, asaasPaymentId: null, origem: "manual", status: "PENDING" },
+    ];
+    cobIdsEmComissaoFechada = [1, 2]; // #1 e #2 estão em fechamento
+
+    const r = await executarExclusaoCobrancasEmMassa({
+      db: mockDb,
+      escritorioId: 10,
+      ids: [1, 2, 3],
+      getAsaasClient,
+    });
+
+    expect(r.excluidasManual).toBe(1); // só #3
+    expect(r.excluidasAsaas).toBe(0);
+    expect(r.erros).toHaveLength(2);
+    expect(r.erros[0].id).toBe(1);
+    expect(r.erros[0].mensagem).toMatch(/fechamento de comiss[ãa]o/i);
+    expect(r.erros[1].id).toBe(2);
+    expect(r.erros[1].mensagem).toMatch(/fechamento de comiss[ãa]o/i);
+    // Asaas nunca foi chamado (1 bloqueada, 2 bloqueada, 3 é manual)
+    expect(asaasExcluidos).toEqual([]);
+    expect(getClientCallCount).toBe(0);
   });
 
   it("RateLimitError (rate guard local): aborta lote + devolve parcial", async () => {
