@@ -5,11 +5,6 @@ import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,9 +20,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
@@ -38,13 +30,7 @@ import {
   Calculator,
   LogOut,
   PanelLeft,
-  ChevronRight,
-  Landmark,
-  Building2,
-  Briefcase,
-  Receipt,
   ShieldCheck,
-  TrendingUp,
   CreditCard,
   Lock,
   FileSearch,
@@ -69,15 +55,6 @@ import { BetaBadge } from "./BetaBadge";
 import { EmBreveBadge } from "./EmBreveBadge";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import { toast } from "sonner";
-
-const calculosSubItems = [
-  { icon: Landmark, label: "Bancário", path: "/calculos/bancario" },
-  { icon: Building2, label: "Imobiliário", path: "/calculos/imobiliario" },
-  { icon: Briefcase, label: "Trabalhista", path: "/calculos/trabalhista" },
-  { icon: Receipt, label: "Tributário", path: "/calculos/tributario" },
-  { icon: ShieldCheck, label: "Previdenciário", path: "/calculos/previdenciario" },
-  { icon: TrendingUp, label: "Cálculos Diversos", path: "/calculos/atualizacao-monetaria" },
-];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -163,9 +140,6 @@ function AppSidebarContent({
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
-  const [calculosOpen, setCalculosOpen] = useState(
-    location.startsWith("/calculos")
-  );
 
   // Check subscription status for sidebar navigation gating
   const { data: subscription, isFetched: subFetched } = trpc.subscription.current.useQuery(
@@ -229,12 +203,6 @@ function AppSidebarContent({
     if (!p) return false;
     return !!(p?.verTodos || p?.verProprios);
   };
-
-  useEffect(() => {
-    if (location.startsWith("/calculos")) {
-      setCalculosOpen(true);
-    }
-  }, [location]);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -366,58 +334,24 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
-              {/* Cálculos (collapsible) — botão navega pro hub /calculos;
-                  chevron à direita só expande/recolhe o submenu. */}
-              {canSee("calculos") && !moduloOcultoNoMenu("calculos") && <Collapsible open={calculosOpen} onOpenChange={setCalculosOpen}>
+              {/* Cálculos — navega pro hub /calculos (sem submenu).
+                  As 5 ferramentas aparecem como cards visuais dentro do hub. */}
+              {canSee("calculos") && !moduloOcultoNoMenu("calculos") && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     tooltip="Cálculos"
                     className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                    isActive={location === "/calculos"}
-                    onClick={() => {
-                      navigateOrBlock("/calculos");
-                      setCalculosOpen(true);
-                    }}
+                    isActive={location === "/calculos" || location.startsWith("/calculos/")}
+                    onClick={() => navigateOrBlock("/calculos")}
                   >
                     <Calculator
                       className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
                     />
                     <span className="flex-1">Cálculos</span>
-                    <EmBreveBadge className="ml-auto mr-1" />
                     {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
-                    <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <span
-                        role="button"
-                        aria-label={calculosOpen ? "Recolher submenu" : "Expandir submenu"}
-                        className="ml-1 inline-flex items-center justify-center rounded p-0.5 hover:bg-muted/60"
-                      >
-                        <ChevronRight
-                          className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${calculosOpen ? "rotate-90" : ""}`}
-                        />
-                      </span>
-                    </CollapsibleTrigger>
                   </SidebarMenuButton>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {calculosSubItems.map((item) => {
-                        const isActive = location === item.path;
-                        return (
-                          <SidebarMenuSubItem key={item.path}>
-                            <SidebarMenuSubButton
-                              isActive={isActive}
-                              onClick={() => navigateOrBlock(item.path)}
-                              className={`cursor-pointer ${itemsLocked ? "opacity-50" : ""}`}
-                            >
-                              <item.icon className="h-3.5 w-3.5" />
-                              <span>{item.label}</span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
                 </SidebarMenuItem>
-              </Collapsible>}
+              )}
 
               {/* Clientes */}
               {canSee("clientes") && <SidebarMenuItem>
