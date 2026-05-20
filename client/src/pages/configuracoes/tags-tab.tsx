@@ -81,78 +81,85 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
   });
 
   return (
-    <Card>
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <CardTitle className="text-base flex items-center gap-2">
-            <TagIcon className="h-4 w-4" /> Tags do Escritório
-          </CardTitle>
-          <CardDescription>
-            Categorize clientes e cards. As tags aparecem no Kanban, cadastro de cliente e SmartFlow.
-          </CardDescription>
+          <h3 className="text-base font-bold tracking-tight">Tags do escritório</h3>
+          <p className="text-[11px] text-slate-500">
+            {tags?.length || 0} tag(s) · usadas em Kanban, cadastro de cliente e SmartFlow
+          </p>
         </div>
         {canEdit && (
-          <Button size="sm" onClick={() => setCriandoOpen(true)} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> Nova tag
+          <Button
+            size="sm"
+            className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm"
+            onClick={() => setCriandoOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" /> Nova tag
           </Button>
         )}
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="text-center py-8 text-sm text-muted-foreground">Carregando...</div>
-        ) : !tags || tags.length === 0 ? (
-          <div className="text-center py-12">
-            <TagIcon className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground mb-2">Nenhuma tag configurada ainda</p>
-            <p className="text-xs text-muted-foreground/70 mb-4">
-              Tags ajudam a categorizar clientes (VIP, Trabalhista, Empresarial...) e ficam disponíveis em todo o sistema.
-            </p>
-            {canEdit && (
-              <Button size="sm" onClick={() => setCriandoOpen(true)} className="gap-1.5">
-                <Plus className="h-3.5 w-3.5" /> Criar primeira tag
-              </Button>
-            )}
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-8 text-sm text-slate-400">Carregando…</div>
+      ) : !tags || tags.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center mx-auto mb-1">
+            <TagIcon className="h-7 w-7 text-violet-500/70" />
           </div>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {tags.map((t: Tag) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
+          <p className="font-semibold text-slate-700">Nenhuma tag configurada</p>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Tags ajudam a categorizar clientes (VIP, Trabalhista, Recorrente...) e ficam disponíveis em todo o sistema.
+          </p>
+          {canEdit && (
+            <Button
+              size="sm"
+              className="mt-2 bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700"
+              onClick={() => setCriandoOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Criar primeira tag
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {tags.map((t: Tag) => (
+            <div
+              key={t.id}
+              className="group flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all"
+            >
+              <span
+                className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold text-white shrink-0"
+                style={{ background: t.cor }}
               >
-                <span
-                  className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium text-white"
-                  style={{ background: t.cor }}
-                >
-                  {t.nome}
-                </span>
-                {canEdit && (
-                  <div className="flex items-center gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setEditando(t)}
-                      title="Editar"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                      onClick={() => setExcluindo(t)}
-                      title="Excluir"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+                {t.nome}
+              </span>
+              {canEdit && (
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-slate-500 hover:bg-slate-100"
+                    onClick={() => setEditando(t)}
+                    title="Editar"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-50"
+                    onClick={() => setExcluindo(t)}
+                    title="Excluir"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Dialog: Criar — re-monta a cada abertura pra resetar o form */}
       {criandoOpen && (
@@ -196,7 +203,7 @@ export function TagsTab({ canEdit }: { canEdit: boolean }) {
           loading={deletar.isPending}
         />
       )}
-    </Card>
+    </div>
   );
 }
 

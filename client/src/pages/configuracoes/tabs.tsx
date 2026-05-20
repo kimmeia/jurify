@@ -120,26 +120,66 @@ export function PermissoesTab() {
   }
 
   return (<div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <div><h3 className="text-base font-semibold">Cargos e Permissões</h3><p className="text-xs text-muted-foreground">{cargos.length} cargo(s) configurado(s)</p></div>
-      <Button size="sm" onClick={() => { setNovoNome(""); setNovoCor(CORES_CARGO[cargos.length % CORES_CARGO.length]); setNovoPerms(initNovoPerms()); setShowNovo(true); }}><Plus className="h-4 w-4 mr-1" /> Novo Cargo</Button>
+    <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <h3 className="text-base font-bold tracking-tight">Cargos e Permissões</h3>
+        <p className="text-[11px] text-slate-500">{cargos.length} cargo(s) configurado(s) · clique pra ver/editar matriz de permissões</p>
+      </div>
+      <Button
+        size="sm"
+        className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm"
+        onClick={() => { setNovoNome(""); setNovoCor(CORES_CARGO[cargos.length % CORES_CARGO.length]); setNovoPerms(initNovoPerms()); setShowNovo(true); }}
+      >
+        <Plus className="h-3.5 w-3.5 mr-1.5" /> Novo cargo
+      </Button>
     </div>
 
+    {/* Cards de cargos — border-left colorida + métricas */}
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {cargos.map((cargo: any) => (
-        <Card key={cargo.id} className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => setEditId(cargo.id)}>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ background: cargo.cor }}>{cargo.nome[0]}</div>
-              <div className="flex-1"><p className="text-sm font-semibold">{cargo.nome}</p><p className="text-[10px] text-muted-foreground">{cargo.totalColaboradores} colaborador(es)</p></div>
-              {cargo.isDefault && <Badge variant="outline" className="text-[9px]">Padrão</Badge>}
+      {cargos.map((cargo: any) => {
+        const modulosVisiveis = modulos.filter(m => cargo.permissoes[m]?.verTodos || cargo.permissoes[m]?.verProprios);
+        return (
+          <div
+            key={cargo.id}
+            onClick={() => setEditId(cargo.id)}
+            className="group rounded-xl bg-white border border-slate-200 border-l-[4px] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4"
+            style={{ borderLeftColor: cargo.cor }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0" style={{ background: cargo.cor }}>
+                {cargo.nome[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold tracking-tight truncate" title={cargo.nome}>{cargo.nome}</p>
+                  {cargo.isDefault && <Badge variant="outline" className="text-[8.5px] px-1 py-0">Padrão</Badge>}
+                </div>
+                <p className="text-[10.5px] text-slate-500 mt-0.5">
+                  <b className="text-slate-700 tabular-nums">{cargo.totalColaboradores}</b> {cargo.totalColaboradores === 1 ? "colaborador" : "colaboradores"}
+                </p>
+              </div>
+              <Shield className="h-3.5 w-3.5 text-slate-300 group-hover:text-violet-500 transition-colors shrink-0" />
             </div>
-            <div className="flex flex-wrap gap-1">{modulos.filter(m => cargo.permissoes[m]?.verTodos || cargo.permissoes[m]?.verProprios).map(m => (
-              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-muted">{MODULOS_LABELS[m]}</span>
-            ))}</div>
-          </CardContent>
-        </Card>
-      ))}
+            {modulosVisiveis.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-slate-100">
+                {modulosVisiveis.slice(0, 6).map(m => (
+                  <span key={m} className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium">
+                    {MODULOS_LABELS[m]}
+                  </span>
+                ))}
+                {modulosVisiveis.length > 6 && (
+                  <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                    +{modulosVisiveis.length - 6}
+                  </span>
+                )}
+              </div>
+            )}
+            {modulosVisiveis.length === 0 && (
+              <p className="text-[10.5px] text-slate-400 italic mt-2">Sem permissões de visualização</p>
+            )}
+          </div>
+        );
+      })}
     </div>
 
     {/* Dialog editar cargo */}

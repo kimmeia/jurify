@@ -38,6 +38,8 @@ import {
 } from "./configuracoes/dialogs";
 import { PermissoesTab } from "./configuracoes/tabs";
 import { TagsTab } from "./configuracoes/tags-tab";
+import { gradientAvatar, gerarIniciais } from "./dashboards/common";
+import { Search as SearchIcon } from "lucide-react";
 import { OrigensLeadTab } from "./configuracoes/OrigensLeadTab";
 import { CamposClienteTab } from "./configuracoes/campos-cliente-tab";
 import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
@@ -194,6 +196,10 @@ export default function Configuracoes() {
 
   const { data: cargosList } = trpc.permissoes.listarCargos.useQuery(undefined, { retry: false });
   const { data: setoresList, refetch: refetchSetores } = trpc.configuracoes.listarSetores.useQuery(undefined, { retry: false });
+
+  // Busca + filtro pra aba Equipe
+  const [buscaEquipe, setBuscaEquipe] = useState("");
+  const [filtroEquipe, setFiltroEquipe] = useState<"todos" | "ativos" | "convites" | "inativos">("todos");
 
   const [conviteEmail, setConviteEmail] = useState("");
   // Cargo do convite — pode ser default ("gestor"|"atendente"|"estagiario")
@@ -363,271 +369,506 @@ export default function Configuracoes() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center gap-4">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-gray-100 to-slate-200 dark:from-gray-800 dark:to-slate-700 shadow-sm">
-          <Settings className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+    <div className="space-y-5">
+      {/* ─── HERO ─────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
+           style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4338ca 100%)" }}>
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-70 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <p className="text-[11px] font-semibold tracking-[0.18em] text-white/85 uppercase">Configurações</p>
+            </div>
+            <h1 className="text-xl font-bold tracking-tight">{escritorio.nome}</h1>
+            <p className="text-[11px] text-white/80 mt-1">
+              {escritorio.cnpj && <>CNPJ {escritorio.cnpj} · </>}
+              {escritorio.endereco && <>{escritorio.endereco.split(",")[0]} · </>}
+              Fuso {escritorio.fusoHorario}
+            </p>
+          </div>
+          <CargoBadge
+            cargo={colaborador.cargo as CargoColaborador}
+            nomePersonalizado={(colaborador as any).cargoPersonalizadoNome}
+            cor={(colaborador as any).cargoPersonalizadoCor}
+          />
         </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-          <p className="text-sm text-muted-foreground">{escritorio.nome}</p>
-        </div>
-        <CargoBadge
-          cargo={colaborador.cargo as CargoColaborador}
-          nomePersonalizado={(colaborador as any).cargoPersonalizadoNome}
-          cor={(colaborador as any).cargoPersonalizadoCor}
-        />
       </div>
 
       <Tabs value={tabAtiva} onValueChange={setTabAtiva}>
-        <TabsList className={`grid w-full ${podeVerMeuPlano ? "grid-cols-9" : "grid-cols-8"} h-10`}>
-          <TabsTrigger value="perfil" className="gap-1.5 text-xs"><Building2 className="h-3.5 w-3.5" /> Escritório</TabsTrigger>
-          <TabsTrigger value="equipe" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Equipe</TabsTrigger>
-          <TabsTrigger value="permissoes" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Permissões</TabsTrigger>
-          <TabsTrigger value="tags" className="gap-1.5 text-xs"><TagIcon className="h-3.5 w-3.5" /> Tags</TabsTrigger>
-          <TabsTrigger value="origens" className="gap-1.5 text-xs"><Megaphone className="h-3.5 w-3.5" /> Origens</TabsTrigger>
-          <TabsTrigger value="campos" className="gap-1.5 text-xs"><Sparkles className="h-3.5 w-3.5" /> Campos</TabsTrigger>
-          <TabsTrigger value="canais" className="gap-1.5 text-xs"><MessageCircle className="h-3.5 w-3.5" /> Canais</TabsTrigger>
-          <TabsTrigger value="financeiro" className="gap-1.5 text-xs"><DollarSign className="h-3.5 w-3.5" /> Financeiro</TabsTrigger>
-          <TabsTrigger value="integracoes" className="gap-1.5 text-xs"><Link2 className="h-3.5 w-3.5" /> Integrações</TabsTrigger>
-          {podeVerMeuPlano && (
-            <TabsTrigger value="meu-plano" className="gap-1.5 text-xs"><CreditCardIcon className="h-3.5 w-3.5" /> Meu Plano</TabsTrigger>
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5">
+
+          {/* ─── SIDEBAR LATERAL VERTICAL ─────────────────────────────── */}
+          <aside className="lg:sticky lg:top-4 lg:self-start">
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] p-2">
+              <TabsList className="!flex !flex-col !gap-0.5 !h-auto !bg-transparent !p-0 !w-full">
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 self-start">Geral</p>
+                <TabsTrigger
+                  value="perfil"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Building2 className="h-4 w-4" /> <span className="flex-1 text-left">Escritório</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="equipe"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Users className="h-4 w-4" /> <span className="flex-1 text-left">Equipe</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="permissoes"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Shield className="h-4 w-4" /> <span className="flex-1 text-left">Permissões</span>
+                </TabsTrigger>
+
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Cadastros</p>
+                <TabsTrigger
+                  value="tags"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <TagIcon className="h-4 w-4" /> <span className="flex-1 text-left">Tags</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="origens"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Megaphone className="h-4 w-4" /> <span className="flex-1 text-left">Origens de leads</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="campos"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Sparkles className="h-4 w-4" /> <span className="flex-1 text-left">Campos de cliente</span>
+                </TabsTrigger>
+
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Integrações</p>
+                <TabsTrigger
+                  value="canais"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <MessageCircle className="h-4 w-4" /> <span className="flex-1 text-left">Canais</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="integracoes"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <Plug className="h-4 w-4" /> <span className="flex-1 text-left">Apps externos</span>
+                </TabsTrigger>
+
+                <p className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 px-3 py-2 mt-2 self-start">Operação</p>
+                <TabsTrigger
+                  value="financeiro"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                >
+                  <DollarSign className="h-4 w-4" /> <span className="flex-1 text-left">Financeiro</span>
+                </TabsTrigger>
+                {podeVerMeuPlano && (
+                  <TabsTrigger
+                    value="meu-plano"
+                    className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-slate-600 hover:bg-slate-50 data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-violet-50 data-[state=active]:!to-indigo-50 data-[state=active]:!text-indigo-900 data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-violet-500 data-[state=active]:pl-[9px]"
+                  >
+                    <CreditCardIcon className="h-4 w-4" /> <span className="flex-1 text-left">Meu plano</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
+          </aside>
+
+          {/* ─── CONTEÚDO DAS ABAS ────────────────────────────────────── */}
+          <div className="min-w-0">
+        {/* ─── Perfil — sections collapsibles ───────────────────────── */}
+        <TabsContent value="perfil" className="space-y-3">
+          {canEdit && !editMode && (
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={initPerfilForm}>
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Editar dados
+              </Button>
+            </div>
           )}
-        </TabsList>
 
-        {/* ─── Perfil ────────────────────────────────────────────────── */}
-        <TabsContent value="perfil" className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2"><Building2 className="h-4 w-4" /> Dados do Escritório</CardTitle>
-                <CardDescription>Informações básicas da sua empresa</CardDescription>
+          {/* Section 1: Dados básicos */}
+          <details open className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center"><Building2 className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Dados básicos</p>
+                  <p className="text-[10.5px] text-slate-500">Nome, CNPJ, telefone, email, endereço</p>
+                </div>
               </div>
-              {canEdit && !editMode && <Button variant="outline" size="sm" onClick={initPerfilForm}>Editar</Button>}
-            </CardHeader>
-            <CardContent>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5">
               {editMode ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Nome *</Label>
-                      <Input value={formPerfil.nome} onChange={(e) => setFormPerfil({ ...formPerfil, nome: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>CNPJ</Label>
-                      <Input placeholder="00.000.000/0001-00" value={formPerfil.cnpj} onChange={(e) => setFormPerfil({ ...formPerfil, cnpj: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Telefone</Label>
-                      <Input placeholder="(85) 99999-0000" value={formPerfil.telefone} onChange={(e) => setFormPerfil({ ...formPerfil, telefone: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Email</Label>
-                      <Input type="email" value={formPerfil.email} onChange={(e) => setFormPerfil({ ...formPerfil, email: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Endereço</Label>
-                    <Input value={formPerfil.endereco} onChange={(e) => setFormPerfil({ ...formPerfil, endereco: e.target.value })} />
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label className="text-[11px]">Nome *</Label><Input value={formPerfil.nome} onChange={(e) => setFormPerfil({ ...formPerfil, nome: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">CNPJ</Label><Input placeholder="00.000.000/0001-00" value={formPerfil.cnpj} onChange={(e) => setFormPerfil({ ...formPerfil, cnpj: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Telefone</Label><Input placeholder="(85) 99999-0000" value={formPerfil.telefone} onChange={(e) => setFormPerfil({ ...formPerfil, telefone: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Email</Label><Input type="email" value={formPerfil.email} onChange={(e) => setFormPerfil({ ...formPerfil, email: e.target.value })} /></div>
+                  <div className="space-y-1.5 sm:col-span-2"><Label className="text-[11px]">Endereço</Label><Input value={formPerfil.endereco} onChange={(e) => setFormPerfil({ ...formPerfil, endereco: e.target.value })} /></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Nome</p><p className="font-semibold mt-0.5">{escritorio.nome}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CNPJ</p><p className="font-mono mt-0.5">{escritorio.cnpj || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Telefone</p><p className="font-mono mt-0.5">{escritorio.telefone || "—"}</p></div>
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Email</p><p className="mt-0.5">{escritorio.email || "—"}</p></div>
+                  {escritorio.endereco && <div className="rounded-lg bg-slate-50 p-3 col-span-2"><p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Endereço</p><p className="mt-0.5">{escritorio.endereco}</p></div>}
+                </div>
+              )}
+            </div>
+          </details>
 
-                  <Separator />
-                  <p className="text-sm font-medium">Horário de Funcionamento</p>
+          {/* Section 2: Horários */}
+          <details open className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center"><Clock className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Horários de atendimento</p>
+                  <p className="text-[10.5px] text-slate-500">
+                    {escritorio.horarioAbertura}–{escritorio.horarioFechamento} · {(escritorio.diasFuncionamento || []).length} dias/sem · {escritorio.fusoHorario}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5 space-y-4">
+              {editMode ? (
+                <>
                   <div className="space-y-1.5">
-                    <Label>Fuso horário</Label>
-                    <Select
-                      value={formPerfil.fusoHorario || FUSO_HORARIO_PADRAO}
-                      onValueChange={(v) => setFormPerfil({ ...formPerfil, fusoHorario: v })}
-                    >
+                    <Label className="text-[11px]">Fuso horário</Label>
+                    <Select value={formPerfil.fusoHorario || FUSO_HORARIO_PADRAO} onValueChange={(v) => setFormPerfil({ ...formPerfil, fusoHorario: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {FUSOS_HORARIOS.map((f) => (
-                          <SelectItem key={f.valor} value={f.valor}>
-                            <span className="font-medium">{f.utc}</span>
-                            <span className="text-muted-foreground"> — {f.label}</span>
-                          </SelectItem>
-                        ))}
+                        {FUSOS_HORARIOS.map((f) => (<SelectItem key={f.valor} value={f.valor}><span className="font-medium">{f.utc}</span><span className="text-muted-foreground"> — {f.label}</span></SelectItem>))}
                       </SelectContent>
                     </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      Usado nos gatilhos com horário (SmartFlow Asaas, lembretes Cal.com).
-                    </p>
+                    <p className="text-[10.5px] text-slate-500">Usado nos gatilhos com horário (SmartFlow Asaas, lembretes Cal.com).</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Abertura</Label>
-                      <Input type="time" value={formPerfil.horarioAbertura} onChange={(e) => setFormPerfil({ ...formPerfil, horarioAbertura: e.target.value })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Fechamento</Label>
-                      <Input type="time" value={formPerfil.horarioFechamento} onChange={(e) => setFormPerfil({ ...formPerfil, horarioFechamento: e.target.value })} />
-                    </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><Label className="text-[11px]">Abertura</Label><Input type="time" value={formPerfil.horarioAbertura} onChange={(e) => setFormPerfil({ ...formPerfil, horarioAbertura: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label className="text-[11px]">Fechamento</Label><Input type="time" value={formPerfil.horarioFechamento} onChange={(e) => setFormPerfil({ ...formPerfil, horarioFechamento: e.target.value })} /></div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Dias de funcionamento</Label>
-                    <div className="flex gap-2">
+                    <Label className="text-[11px]">Dias de funcionamento</Label>
+                    <div className="flex gap-1.5 flex-wrap">
                       {DIAS_SEMANA.map((d) => (
-                        <button key={d.key} onClick={() => toggleDia(d.key)}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${formPerfil.diasFuncionamento?.includes(d.key) ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"}`}>
-                          {d.label}
-                        </button>
+                        <button key={d.key} type="button" onClick={() => toggleDia(d.key)} className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${formPerfil.diasFuncionamento?.includes(d.key) ? "bg-violet-600 text-white border-violet-600" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"}`}>{d.label}</button>
                       ))}
                     </div>
                   </div>
-
-                  <Separator />
-                  <p className="text-sm font-medium">Mensagens Automáticas</p>
-                  <div className="space-y-1.5">
-                    <Label>Mensagem de boas-vindas (primeiro contato)</Label>
-                    <Textarea placeholder="Olá! Bem-vindo ao escritório..." rows={3} value={formPerfil.mensagemBoasVindas} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemBoasVindas: e.target.value })} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Mensagem de ausência (fora do horário)</Label>
-                    <Textarea placeholder="No momento estamos fora do horário..." rows={3} value={formPerfil.mensagemAusencia} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemAusencia: e.target.value })} />
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <Button onClick={() => atualizarMut.mutate(formPerfil)} disabled={atualizarMut.isPending}>
-                      {atualizarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null} Salvar
-                    </Button>
-                    <Button variant="ghost" onClick={() => setEditMode(false)}>Cancelar</Button>
-                  </div>
-                </div>
+                </>
               ) : (
-                <div className="space-y-4 text-sm">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Nome</p><p className="font-semibold">{escritorio.nome}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">CNPJ</p><p>{escritorio.cnpj || "—"}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Telefone</p><p>{escritorio.telefone || "—"}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Email</p><p>{escritorio.email || "—"}</p></div>
-                  </div>
-                  {escritorio.endereco && <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Endereço</p><p>{escritorio.endereco}</p></div>}
-                  <Separator />
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Horário</p><p className="font-medium">{escritorio.horarioAbertura} — {escritorio.horarioFechamento}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Dias</p><p>{(escritorio.diasFuncionamento || []).join(", ")}</p></div>
-                    <div className="rounded-lg bg-muted/30 p-3 space-y-0.5"><p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Fuso</p><p>{escritorio.fusoHorario}</p></div>
-                  </div>
-
-                  {podeFazerBackup && (
-                    <>
-                      <Separator />
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-medium flex items-center gap-1.5">
-                            <Database className="h-4 w-4" /> Backup e import
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Exporta ou restaura todos os dados do escritório.
-                          </p>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {DIAS_SEMANA.map((d) => {
+                    const ativo = (escritorio.diasFuncionamento || []).includes(d.key);
+                    return (
+                      <div key={d.key} className="text-center">
+                        <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase">{d.label}</p>
+                        <div className={`rounded-lg p-2 ${ativo ? "bg-emerald-100 border border-emerald-200" : "bg-slate-100 border border-slate-200"}`}>
+                          {ativo ? (
+                            <>
+                              <p className="text-[11px] font-bold tabular-nums">{escritorio.horarioAbertura}</p>
+                              <p className="text-[9px] text-slate-400">–</p>
+                              <p className="text-[11px] font-bold tabular-nums">{escritorio.horarioFechamento}</p>
+                            </>
+                          ) : (
+                            <p className="text-[10px] text-slate-400 py-1">Fechado</p>
+                          )}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setBackupDialogOpen(true)}
-                        >
-                          Abrir
-                        </Button>
                       </div>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </details>
 
-        {/* ─── Equipe ───────────────────────────────────────────────── */}
-        <TabsContent value="equipe" className="space-y-4">
-          {/* Resumo */}
-          {equipeData && (
-            <Card>
-              <CardContent className="pt-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div><p className="text-xs text-muted-foreground">Colaboradores ativos</p><p className="text-2xl font-bold">{equipeData.total}</p></div>
-                    <Separator orientation="vertical" className="h-10" />
-                    <div><p className="text-xs text-muted-foreground">Limite do plano</p><p className="text-2xl font-bold">{equipeData.limite}</p></div>
-                    {equipeData.extras > 0 && (
-                      <>
-                        <Separator orientation="vertical" className="h-10" />
-                        <div><p className="text-xs text-amber-600">Extras</p><p className="text-lg font-bold text-amber-600">{equipeData.extras} × R$ {CUSTO_COLABORADOR_EXTRA.toFixed(2)}</p></div>
-                      </>
-                    )}
+          {/* Section 3: Mensagens automáticas */}
+          <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center"><MessageCircle className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Mensagens automáticas</p>
+                  <p className="text-[10.5px] text-slate-500">Boas-vindas e fora do horário</p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5 space-y-3">
+              {editMode ? (
+                <>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de boas-vindas (primeiro contato)</Label><Textarea placeholder="Olá! Bem-vindo ao escritório..." rows={3} value={formPerfil.mensagemBoasVindas} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemBoasVindas: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-[11px]">Mensagem de ausência (fora do horário)</Label><Textarea placeholder="No momento estamos fora do horário..." rows={3} value={formPerfil.mensagemAusencia} onChange={(e) => setFormPerfil({ ...formPerfil, mensagemAusencia: e.target.value })} /></div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">📨 Boas-vindas</p>
+                    <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemBoasVindas || "Sem mensagem configurada"}"</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">🌙 Fora do horário</p>
+                    <p className="text-[11.5px] text-slate-700 italic">"{escritorio.mensagemAusencia || "Sem mensagem configurada"}"</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </details>
+
+          {/* Section 4: Backup */}
+          {podeFazerBackup && (
+            <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+              <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"><Database className="h-4 w-4" /></span>
+                  <div>
+                    <p className="text-sm font-bold tracking-tight">Backup e importação</p>
+                    <p className="text-[10.5px] text-slate-500">Exporte ou restaure todos os dados do escritório</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+              </summary>
+              <div className="p-5">
+                <Button variant="outline" onClick={() => setBackupDialogOpen(true)}>
+                  <Database className="h-3.5 w-3.5 mr-1.5" /> Abrir backup
+                </Button>
+              </div>
+            </details>
           )}
 
-          {/* Lista de colaboradores */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Membros da Equipe</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {equipeData?.colaboradores.map((c) => (
-                  <div key={c.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors hover:bg-muted/30 ${!c.ativo ? "opacity-40 bg-muted/20" : ""}`}>
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                      {(c.userName || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{c.userName || "Sem nome"}</p>
-                        <CargoBadge
-                          cargo={c.cargo as CargoColaborador}
-                          nomePersonalizado={(c as any).cargoPersonalizadoNome}
-                          cor={(c as any).cargoPersonalizadoCor}
-                        />
-                        {!c.ativo && <Badge variant="secondary" className="text-xs">Inativo</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {c.userEmail || "—"}
-                        {(c.setorNome || c.departamento) ? ` · ${c.setorNome || c.departamento}` : ""}
+          {/* Save/cancel sticky em edit mode */}
+          {editMode && (
+            <div className="flex gap-2 sticky bottom-4 bg-white p-3 rounded-xl border border-slate-200 shadow-md">
+              <Button onClick={() => atualizarMut.mutate(formPerfil)} disabled={atualizarMut.isPending}>
+                {atualizarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />} Salvar alterações
+              </Button>
+              <Button variant="ghost" onClick={() => setEditMode(false)}>Cancelar</Button>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── Equipe — busca + chips + cards ricos ─────────────────── */}
+        <TabsContent value="equipe" className="space-y-4">
+          {(() => {
+            const colaboradoresAtivos = equipeData?.colaboradores || [];
+            const inativos = removidos.length;
+            const todos = colaboradoresAtivos.length + inativos;
+            // Filtro client-side (a lista cabe inteira) + busca normalizada
+            const normalizar = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+            const buscaN = normalizar(buscaEquipe);
+            const listaFiltrada = colaboradoresAtivos.filter((c: any) => {
+              if (filtroEquipe === "inativos") return false; // inativos só aparecem na seção separada
+              if (filtroEquipe === "convites") return false; // convites são outra seção
+              if (filtroEquipe === "ativos" && !c.ativo) return false;
+              if (!buscaN) return true;
+              return [c.userName, c.userEmail, c.cargo, c.setorNome, c.departamento].some(
+                (v) => v && normalizar(String(v)).includes(buscaN),
+              );
+            });
+            return (
+              <>
+                {/* Header: contagem + botão Convidar */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <h3 className="text-base font-bold tracking-tight">Equipe</h3>
+                    <p className="text-[11px] text-slate-500">
+                      <b className="text-slate-700">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
+                      {(equipeData?.extras ?? 0) > 0 && (
+                        <> · <b className="text-amber-700">{equipeData?.extras}</b> extras × R$ {CUSTO_COLABORADOR_EXTRA.toFixed(2)}</>
+                      )}
+                      {inativos > 0 && <> · <b className="text-slate-500">{inativos}</b> removidos</>}
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm"
+                      onClick={() => {
+                        // foca o input do email — já tem form de convite mais abaixo
+                        const el = document.getElementById("convite-email-input");
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        (el as HTMLInputElement | null)?.focus();
+                      }}
+                    >
+                      <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Convidar colaborador
+                    </Button>
+                  )}
+                </div>
+
+                {/* Busca + chips */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[240px] max-w-md">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      placeholder="Buscar por nome, email, cargo…"
+                      value={buscaEquipe}
+                      onChange={(e) => setBuscaEquipe(e.target.value)}
+                      className="pl-9 h-9 bg-white"
+                    />
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { id: "todos", label: "Todos", count: todos },
+                      { id: "ativos", label: "Ativos", count: colaboradoresAtivos.filter((c: any) => c.ativo).length },
+                      { id: "convites", label: "Convites", count: 0, color: "amber" },
+                      { id: "inativos", label: "Removidos", count: inativos },
+                    ].map((chip) => {
+                      const active = filtroEquipe === chip.id;
+                      const isAmber = (chip as any).color === "amber";
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setFiltroEquipe(chip.id as any)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                            active
+                              ? isAmber
+                                ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                                : "bg-slate-900 text-white border-slate-900 shadow-sm"
+                              : isAmber
+                                ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          {chip.label}
+                          <span className={`tabular-nums ${active ? "text-white/85" : "text-slate-400"}`}>
+                            {chip.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Grid de cards */}
+                {filtroEquipe === "inativos" ? null : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {listaFiltrada.length === 0 ? (
+                      <p className="col-span-full text-center text-[12px] text-slate-400 italic py-6">
+                        Nenhum colaborador bate com a busca.
                       </p>
-                    </div>
-                    <div className="text-xs text-muted-foreground text-right shrink-0">
-                      <p>Max: {c.maxAtendimentosSimultaneos} atend.</p>
-                      <p>{c.recebeLeadsAutomaticos ? "Recebe leads" : "Sem leads auto"}</p>
-                    </div>
-                    {canEdit && c.cargo !== "dono" && c.ativo && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        title="Editar cargo, setor e atendimento"
-                        onClick={() => abrirEditColab(c)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {isDono && c.ativo && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        title="Ver permissões efetivas (diagnóstico)"
-                        onClick={() => setDiagColabId(c.id)}
-                      >
-                        <Stethoscope className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {isDono && c.cargo !== "dono" && c.ativo && (
-                      <Button variant="ghost" size="sm" className="text-destructive shrink-0" onClick={() => {
-                        if (confirm(`Remover ${c.userName}?`)) removerColabMut.mutate({ colaboradorId: c.id });
-                      }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    ) : (
+                      listaFiltrada.map((c: any) => {
+                        const nome = c.userName || c.userEmail || "Colaborador";
+                        const isDono2 = c.cargo === "dono";
+                        const corBorda = isDono2
+                          ? "border-l-violet-500"
+                          : c.cargo === "gestor"
+                            ? "border-l-indigo-500"
+                            : c.cargo === "atendente"
+                              ? "border-l-cyan-500"
+                              : c.cargo === "sdr"
+                                ? "border-l-amber-500"
+                                : "border-l-slate-300";
+                        return (
+                          <div
+                            key={c.id}
+                            className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${!c.ativo ? "opacity-65" : ""}`}
+                          >
+                            <div className="p-3">
+                              <div className="flex items-start gap-2.5">
+                                <span className={`w-11 h-11 rounded-full flex items-center justify-center text-[12px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(nome)}`}>
+                                  {gerarIniciais(nome)}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-bold truncate" title={nome}>{nome}</p>
+                                    {c.ativo && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Ativo" />}
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 truncate" title={c.userEmail}>{c.userEmail || "—"}</p>
+                                  <div className="mt-1.5">
+                                    <CargoBadge
+                                      cargo={c.cargo as CargoColaborador}
+                                      nomePersonalizado={(c as any).cargoPersonalizadoNome}
+                                      cor={(c as any).cargoPersonalizadoCor}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Métricas inline */}
+                              <div className="grid grid-cols-3 gap-1 mt-3 pt-3 border-t border-slate-100 text-[10px]">
+                                <div>
+                                  <p className="text-slate-400 uppercase tracking-wider text-[9px]">Setor</p>
+                                  <p className="font-semibold truncate" title={c.setorNome || c.departamento || "Todos"}>{c.setorNome || c.departamento || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400 uppercase tracking-wider text-[9px]">Max atend.</p>
+                                  <p className="font-semibold tabular-nums">{c.maxAtendimentosSimultaneos ?? "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-400 uppercase tracking-wider text-[9px]">Leads auto</p>
+                                  <p className={`font-semibold ${c.recebeLeadsAutomaticos ? "text-emerald-600" : "text-slate-400"}`}>
+                                    {c.recebeLeadsAutomaticos ? "Sim" : "Não"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Ações */}
+                              {(canEdit || isDono) && c.ativo && (
+                                <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                                  {canEdit && c.cargo !== "dono" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-[10px] rounded-md text-violet-600 hover:bg-violet-50 px-2"
+                                      title="Editar cargo, setor e atendimento"
+                                      onClick={() => abrirEditColab(c)}
+                                    >
+                                      <Pencil className="h-3 w-3 mr-1" />Editar
+                                    </Button>
+                                  )}
+                                  {isDono && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-[10px] rounded-md text-blue-600 hover:bg-blue-50 px-2"
+                                      title="Diagnóstico de permissões"
+                                      onClick={() => setDiagColabId(c.id)}
+                                    >
+                                      <Stethoscope className="h-3 w-3 mr-1" />Permissões
+                                    </Button>
+                                  )}
+                                  {isDono && c.cargo !== "dono" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-[10px] rounded-md text-rose-600 hover:bg-rose-50 px-2"
+                                      onClick={() => {
+                                        if (confirm(`Remover ${nome}?`)) removerColabMut.mutate({ colaboradorId: c.id });
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3 mr-1" />Remover
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
-                ))}
-                {(!equipeData?.colaboradores || equipeData.colaboradores.length === 0) && (
-                  <p className="text-center text-sm text-muted-foreground py-6">Nenhum colaborador encontrado.</p>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+
+                {filtroEquipe === "convites" && (
+                  <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/40 p-6 text-center">
+                    <p className="text-[12px] text-amber-700 font-semibold">📨 Convites pendentes</p>
+                    <p className="text-[10.5px] text-amber-600/85 mt-1">
+                      Use o formulário abaixo pra convidar. Convites enviados via link ficam ativos até serem aceitos.
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Colaboradores removidos — soft delete reversível */}
           {removidos.length > 0 && isDono && (
@@ -691,7 +932,7 @@ export default function Configuracoes() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label>Email *</Label>
-                    <Input type="email" placeholder="colaborador@email.com" value={conviteEmail} onChange={(e) => setConviteEmail(e.target.value)} />
+                    <Input id="convite-email-input" type="email" placeholder="colaborador@email.com" value={conviteEmail} onChange={(e) => setConviteEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Cargo *</Label>
@@ -926,6 +1167,8 @@ export default function Configuracoes() {
           </TabsContent>
         )}
 
+          </div>{/* fim do conteúdo das abas */}
+        </div>{/* fim do grid sidebar+content */}
       </Tabs>
 
       <BackupDialog open={backupDialogOpen} onOpenChange={setBackupDialogOpen} />
@@ -1343,10 +1586,25 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     },
   ];
 
+  const totalCanaisConectados = canaisPrincipais.filter((c) => c.conectado).length;
+  const totalCanaisErro = canaisPrincipais.filter((c) => c.comErro).length;
+
   return (
     <>
+      {/* Header da aba */}
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>
+          <p className="text-[11px] text-slate-500">
+            {canaisPrincipais.length} canais disponíveis ·
+            <b className="text-emerald-700 ml-1">{totalCanaisConectados} conectados</b>
+            {totalCanaisErro > 0 && <> · <b className="text-rose-700">{totalCanaisErro} com erro</b></>}
+          </p>
+        </div>
+      </div>
+
       {/* Banner explicativo */}
-      <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-4 mb-4">
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50 p-4 mb-4">
         <div className="flex items-start gap-3">
           <div className="h-8 w-8 rounded-lg bg-[#1877F2] flex items-center justify-center text-white shrink-0">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1354,11 +1612,11 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+            <p className="text-sm font-semibold text-blue-900">
               Conexão simplificada via Facebook
             </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-              WhatsApp, Instagram e Messenger agora se conectam com 1 clique. Sem precisar copiar
+            <p className="text-xs text-blue-700 mt-1">
+              WhatsApp, Instagram e Messenger se conectam com 1 clique. Sem precisar copiar
               tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
             </p>
           </div>
@@ -1526,69 +1784,108 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
     {
       id: "asaas",
       nome: "Asaas",
-      descricao: "Cobranças por boleto, Pix e cartão. Veja status financeiro dos clientes no CRM.",
+      descricao: "Cobranças por boleto, Pix e cartão",
+      categoria: "Financeiro",
       logo: "💰",
-      cor: "from-emerald-500 to-green-600",
+      bgIcon: "bg-cyan-50 border-cyan-200",
       conectado: asaasStatus?.conectado || false,
     },
     {
       id: "calcom",
       nome: "Cal.com",
-      descricao: "Agendamento online integrado ao CRM. Permita que clientes marquem reuniões automaticamente.",
+      descricao: "Agendamento online integrado ao CRM",
+      categoria: "Calendário",
       logo: "📅",
-      cor: "from-blue-500 to-sky-600",
+      bgIcon: "bg-blue-50 border-blue-200",
       conectado: calcomCanal?.status === "conectado",
     },
     {
       id: "chatgpt",
       nome: "ChatGPT",
-      descricao: "OpenAI para agentes de IA. Modelos: GPT-4o, GPT-4o-mini.",
+      descricao: "OpenAI · GPT-4o · GPT-4o-mini",
+      categoria: "IA",
       logo: "🤖",
-      cor: "from-green-500 to-teal-600",
+      bgIcon: "bg-emerald-50 border-emerald-200",
       conectado: chatgptCanal?.status === "conectado",
     },
     {
       id: "claude",
       nome: "Claude",
-      descricao: "Anthropic para agentes de IA. Modelos: Claude Sonnet, Claude Haiku.",
-      logo: "🧠",
-      cor: "from-amber-500 to-orange-600",
+      descricao: "Anthropic · Claude Sonnet / Haiku",
+      categoria: "IA",
+      logo: "🦾",
+      bgIcon: "bg-amber-50 border-amber-200",
       conectado: claudeCanal?.status === "conectado",
     },
     {
       id: "twilio",
       nome: "Twilio VoIP",
-      descricao: "Faça e receba ligações telefônicas diretamente pelo sistema. Ideal para equipe comercial.",
+      descricao: "Ligações telefônicas pelo sistema",
+      categoria: "Mensageria",
       logo: "📞",
-      cor: "from-purple-500 to-violet-600",
+      bgIcon: "bg-violet-50 border-violet-200",
       conectado: twilioCanal?.status === "conectado",
     },
   ];
 
+  const totalConectadas = integracoes.filter((i) => i.conectado).length;
+
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-bold tracking-tight">Apps externos</h3>
+          <p className="text-[11px] text-slate-500">
+            {integracoes.length} integrações disponíveis ·
+            <b className="text-emerald-700 ml-1">{totalConectadas} conectadas</b>
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {integracoes.map((integ) => (
-          <Card key={integ.id} className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${integ.conectado ? "border-emerald-300" : "border-transparent hover:border-primary/20"}`}
-            onClick={() => setOpenDialog(integ.id)}>
-            <CardContent className="p-5">
-              <div className="flex flex-col items-center text-center gap-3">
-                <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${integ.cor} flex items-center justify-center text-3xl shadow-md`}>
-                  {integ.logo}
-                </div>
-                <div>
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm">{integ.nome}</h3>
-                    {integ.conectado && <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"><Wifi className="h-3 w-3 mr-1" />Ativo</Badge>}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">{integ.descricao}</p>
-                </div>
-                <Button variant={integ.conectado ? "outline" : "default"} size="sm" className="text-xs w-full">
-                  {integ.conectado ? "Gerenciar" : "Configurar"}
-                </Button>
+          <div
+            key={integ.id}
+            onClick={() => setOpenDialog(integ.id)}
+            className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${
+              integ.conectado ? "border-l-emerald-500" : "border-l-slate-300"
+            } hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all cursor-pointer p-4`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`w-12 h-12 rounded-xl ${integ.bgIcon} border flex items-center justify-center text-2xl shrink-0`}>
+                {integ.logo}
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-bold">{integ.nome}</p>
+                  {integ.conectado ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold">
+                      <span className="w-1 h-1 rounded-full bg-emerald-500" /> Conectada
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-bold">
+                      <span className="w-1 h-1 rounded-full bg-slate-400" /> Não configurada
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-0.5">{integ.descricao}</p>
+                <p className="text-[9.5px] text-slate-400 mt-1 uppercase tracking-wider font-semibold">{integ.categoria}</p>
+              </div>
+            </div>
+            <div className="flex gap-1.5 mt-3 pt-3 border-t border-slate-100">
+              <Button
+                variant={integ.conectado ? "outline" : "default"}
+                size="sm"
+                className={`flex-1 h-7 text-[10.5px] rounded-md ${
+                  integ.conectado
+                    ? "border-slate-200 hover:bg-slate-50"
+                    : "bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+                }`}
+                onClick={(e) => { e.stopPropagation(); setOpenDialog(integ.id); }}
+              >
+                {integ.conectado ? "⚙ Gerenciar" : "+ Conectar"}
+              </Button>
+            </div>
+          </div>
         ))}
       </div>
 
