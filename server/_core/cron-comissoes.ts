@@ -322,13 +322,17 @@ export async function processarAgendasComissao(): Promise<void> {
         }
       }
 
-      // Notifica só se houve algo (sucesso, falha, ou rodou e não tinha
-      // ninguém pra fechar). Quando atendentes=[] ainda assim notifica
-      // pra dar feedback de que o cron rodou.
-      if (atendentes.length === 0 && fechadosOk + fechadosFalha + puladosManual === 0) {
-        // Mesmo assim, marca como "rodou" via log fictício? Não — sem
-        // atendente o período fica intocado. Próxima passada vai
-        // re-checar (atendente pode ser cadastrado depois).
+      // Só notifica quando ALGO foi processado nesta execução. Antes
+      // disso o cron mandava notificação a cada 15min mesmo quando todos
+      // os atendentes já tinham fechado em execuções anteriores
+      // (puladosManual=0 porque reservarExecucao já devolvia null antes
+      // de chegar no catch). Resultado: notificação com mensagem vazia
+      // "Período X a Y: ." disparada infinitamente.
+      //
+      // Regra correta: notifica só se houve fechamento (sucesso, falha
+      // ou pulado por já existir manual). Se nenhuma execução foi
+      // reservada nesta passada, fica em silêncio.
+      if (fechadosOk + fechadosFalha + puladosManual === 0) {
         continue;
       }
 
