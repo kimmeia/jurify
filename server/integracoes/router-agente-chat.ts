@@ -60,12 +60,14 @@ const TEXT_EXTRACTABLE_MIMES = new Set([
   "application/json",
 ]);
 
-// Limite operacional pra extração de PDF — pdf-parse carrega o doc inteiro
-// em memória, então arquivos enormes podem estourar a RAM do worker. 25MB
-// cobre relatórios e petições comuns; PDFs maiores ficam anexados mas
-// sem conteúdo extraído (a IA vê só o nome do arquivo).
-const LIMITE_PDF_BYTES = 25 * 1024 * 1024;
+// Limite operacional pra extração de binários (PDF, DOCX) — as libs
+// carregam o doc inteiro em memória, então arquivos enormes podem estourar
+// a RAM do worker. 25MB cobre relatórios/petições comuns; arquivos maiores
+// ficam anexados mas sem conteúdo extraído (a IA vê só o nome).
+const LIMITE_BINARIO_BYTES = 25 * 1024 * 1024;
 const MAX_CHARS_EXTRACAO = 20000;
+const MIME_DOCX =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -98,7 +100,7 @@ export async function extrairTextoAnexo(
     }
   }
   if (mimeType === "application/pdf") {
-    if (buffer.length > LIMITE_PDF_BYTES) {
+    if (buffer.length > LIMITE_BINARIO_BYTES) {
       log.warn({ tamanho: buffer.length }, "PDF acima do limite — extração ignorada");
       return null;
     }
@@ -131,6 +133,26 @@ export async function extrairTextoAnexo(
       return null;
     }
   }
+  if (mimeType === MIME_DOCX) {
+    if (buffer.length > LIMITE_BINARIO_BYTES) {
+      log.warn({ tamanho: buffer.length }, "DOCX acima do limite — extração ignorada");
+      return null;
+    }
+    try {
+      const mammoth = (await import("mammoth")).default;
+      const result = await mammoth.extractRawText({ buffer });
+      const texto = (result.value || "").trim();
+      return texto ? texto.slice(0, MAX_CHARS_EXTRACAO) : null;
+    } catch (err) {
+      log.warn(
+        { err: String((err as Error)?.message || err).slice(0, 200) },
+        "Falha ao extrair texto do DOCX",
+      );
+      return null;
+    }
+  }
+  // application/msword (.doc legado) não é suportado por mammoth — o usuário
+  // precisa salvar como .docx ou PDF. Retornamos null silenciosamente.
   return null;
 }
 
