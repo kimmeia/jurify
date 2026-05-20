@@ -55,6 +55,7 @@ import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
 import { DiagnosticarDuplicidadesDialog } from "./financeiro/DiagnosticarDuplicidadesDialog";
 import { ResolverDuplicidadesDialog } from "./financeiro/ResolverDuplicidadesDialog";
+import { ResetarHistoricoDialog } from "./financeiro/ResetarHistoricoDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 /** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
@@ -81,6 +82,7 @@ export default function Financeiro() {
   const [limpezaOpen, setLimpezaOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
   const [resolverDupOpen, setResolverDupOpen] = useState(false);
+  const [resetHistOpen, setResetHistOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Aba Clientes: chip de quick filter + filtro de dias em atraso + ordenação por coluna.
@@ -589,6 +591,16 @@ export default function Financeiro() {
                   <Search className="h-4 w-4 mr-2" />
                   Diagnosticar (visão geral)
                 </DropdownMenuItem>
+                {perms.podeExcluir && (
+                  <DropdownMenuItem
+                    onClick={() => setResetHistOpen(true)}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    title="Apaga tudo (cobranças + comissões) pra ressincronizar do zero. Preserva configuração e mapeamento de clientes."
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Resetar histórico (zerar)
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -1275,6 +1287,20 @@ export default function Financeiro() {
       <ResolverDuplicidadesDialog
         open={resolverDupOpen}
         onOpenChange={setResolverDupOpen}
+      />
+
+      <ResetarHistoricoDialog
+        open={resetHistOpen}
+        onOpenChange={setResetHistOpen}
+        onSuccess={() => {
+          // Invalida tudo do módulo asaas — estado mudou radicalmente
+          utils.asaas.kpis.invalidate();
+          utils.asaas.listarCobrancas.invalidate();
+          utils.asaas.listarClientesVinculados.invalidate();
+          (utils.asaas as any).resumoPorContatos?.invalidate?.();
+          (utils.asaas as any).diagnosticarDuplicidades?.invalidate?.();
+          (utils.asaas as any).listarParesSuspeitos?.invalidate?.();
+        }}
       />
 
       <AlertDialog

@@ -16,7 +16,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadasItens, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/mysql-core";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
@@ -42,6 +42,7 @@ import {
   garantirCategoriaCobrancaServicosAsaas,
 } from "./asaas-despesas-auto";
 import { checkPermission } from "../escritorio/check-permission";
+import { exigirDonoOuAdmin } from "../escritorio/router-backup";
 import { createLogger } from "../_core/logger";
 import { dataHojeBR } from "../../shared/escritorio-types";
 import {
@@ -3519,6 +3520,190 @@ export const asaasRouter = router({
       });
     }),
 
+  // ═════════════════════════════════════════════════════════════════════════
+  // RESET DE HISTÓRICO (operação destrutiva — só dono do escritório)
+  //
+  // Caso de uso: caixa contaminado por lançamentos manuais errados
+  // (duplicatas tipo Carlos+esposa) — operador quer apagar tudo e
+  // ressincronizar do Asaas pra ter um histórico limpo.
+  //
+  // Apaga (escopado por escritorioId): asaas_cobrancas, cobranca_acoes
+  // (FK), comissoes_fechadas_itens (FK), comissoes_fechadas,
+  // comissoes_lancamentos_log (idempotência de cron), asaas_webhook_eventos
+  // (audit de eventos antigos).
+  //
+  // Preserva: asaas_config (API key + webhook), asaas_clientes (mapeamento
+  // contato↔customer), asaas_config_cobranca_pai (config padrão), regras
+  // de comissão, categorias, despesas, contatos.
+  //
+  // Após o reset, o usuário roda "Sincronizar tudo" (botão existente) pra
+  // o Asaas reinserir o histórico baseado nos vínculos preservados.
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Dry-run do reset — retorna quantas linhas seriam apagadas em cada
+   * tabela. UI mostra antes do operador digitar a confirmação. Read-only.
+   */
+  previaApagarHistoricoCobrancas: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    exigirDonoOuAdmin(ctx.user, esc);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const eid = esc.escritorio.id;
+    const [cobs] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(asaasCobrancas)
+      .where(eq(asaasCobrancas.escritorioId, eid));
+    const [acoes] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(cobrancaAcoes)
+      .innerJoin(asaasCobrancas, eq(asaasCobrancas.id, cobrancaAcoes.cobrancaId))
+      .where(eq(asaasCobrancas.escritorioId, eid));
+    const [comFech] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(comissoesFechadas)
+      .where(eq(comissoesFechadas.escritorioId, eid));
+    const [comItens] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(comissoesFechadasItens)
+      .innerJoin(comissoesFechadas, eq(comissoesFechadas.id, comissoesFechadasItens.comissaoFechadaId))
+      .where(eq(comissoesFechadas.escritorioId, eid));
+    const [lancLog] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(comissoesLancamentosLog)
+      .where(eq(comissoesLancamentosLog.escritorioId, eid));
+    const [webhooks] = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(asaasWebhookEventos)
+      .where(eq(asaasWebhookEventos.escritorioId, eid));
+
+    return {
+      escritorioId: eid,
+      escritorioNome: esc.escritorio.nome,
+      apagar: {
+        cobrancas: Number(cobs?.c ?? 0),
+        cobrancaAcoes: Number(acoes?.c ?? 0),
+        comissoesFechadas: Number(comFech?.c ?? 0),
+        comissoesItens: Number(comItens?.c ?? 0),
+        comissoesLogs: Number(lancLog?.c ?? 0),
+        webhookEventos: Number(webhooks?.c ?? 0),
+      },
+      preservar: [
+        "Configuração Asaas (API key + webhook)",
+        "Mapeamento contato ↔ cliente Asaas",
+        "Regras de comissão",
+        "Categorias de cobrança",
+        "Despesas e categorias de despesa",
+        "Contatos, processos, clientes",
+      ],
+    };
+  }),
+
+  /**
+   * Executa o reset. Confirmação dupla obrigatória:
+   *  1. Gate de dono (não-dono → 403)
+   *  2. Input `confirmacao` precisa ser exatamente o texto literal —
+   *     evita clique acidental / endpoint chamado por engano
+   *
+   * Tudo em uma transação MySQL — rollback automático se algo falhar.
+   * Ordem dos DELETEs respeita FKs (filhos primeiro, pai depois).
+   */
+  apagarHistoricoCobrancas: protectedProcedure
+    .input(
+      z.object({
+        confirmacao: z.literal("RESETAR HISTORICO COBRANCAS"),
+      }),
+    )
+    .mutation(async ({ ctx }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      exigirDonoOuAdmin(ctx.user, esc);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const eid = esc.escritorio.id;
+
+      const deletados = {
+        cobrancaAcoes: 0,
+        comissoesItens: 0,
+        comissoesFechadas: 0,
+        comissoesLogs: 0,
+        webhookEventos: 0,
+        cobrancas: 0,
+      };
+
+      await db.transaction(async (tx) => {
+        // 1. cobranca_acoes (FK → asaas_cobrancas). Filtra via join porque
+        //    a tabela N:M não tem escritorioId direto.
+        const acoesAlvo = await tx
+          .select({ cobrancaId: cobrancaAcoes.cobrancaId })
+          .from(cobrancaAcoes)
+          .innerJoin(asaasCobrancas, eq(asaasCobrancas.id, cobrancaAcoes.cobrancaId))
+          .where(eq(asaasCobrancas.escritorioId, eid));
+        if (acoesAlvo.length > 0) {
+          const cobIds = Array.from(new Set(acoesAlvo.map((a) => a.cobrancaId)));
+          const r = await tx
+            .delete(cobrancaAcoes)
+            .where(inArray(cobrancaAcoes.cobrancaId, cobIds));
+          deletados.cobrancaAcoes = (r as any)?.[0]?.affectedRows ?? acoesAlvo.length;
+        }
+
+        // 2. comissoes_fechadas_itens (FK → asaas_cobrancas e comissoes_fechadas).
+        //    Filtra pelo escritorioId da comissão fechada.
+        const fechIds = (
+          await tx
+            .select({ id: comissoesFechadas.id })
+            .from(comissoesFechadas)
+            .where(eq(comissoesFechadas.escritorioId, eid))
+        ).map((r) => r.id);
+        if (fechIds.length > 0) {
+          const r = await tx
+            .delete(comissoesFechadasItens)
+            .where(inArray(comissoesFechadasItens.comissaoFechadaId, fechIds));
+          deletados.comissoesItens = (r as any)?.[0]?.affectedRows ?? 0;
+        }
+
+        // 3. comissoes_fechadas (cabeçalho)
+        if (fechIds.length > 0) {
+          const r = await tx
+            .delete(comissoesFechadas)
+            .where(eq(comissoesFechadas.escritorioId, eid));
+          deletados.comissoesFechadas = (r as any)?.[0]?.affectedRows ?? fechIds.length;
+        }
+
+        // 4. comissoes_lancamentos_log (idempotência de cron — referenciava
+        //    comissaoFechadaId; sem cabeçalho, log fica órfão e atrapalha retries)
+        const r4 = await tx
+          .delete(comissoesLancamentosLog)
+          .where(eq(comissoesLancamentosLog.escritorioId, eid));
+        deletados.comissoesLogs = (r4 as any)?.[0]?.affectedRows ?? 0;
+
+        // 5. asaas_webhook_eventos (audit antigo — não tem FK, mas faz parte
+        //    do histórico que o usuário quer limpar)
+        const r5 = await tx
+          .delete(asaasWebhookEventos)
+          .where(eq(asaasWebhookEventos.escritorioId, eid));
+        deletados.webhookEventos = (r5 as any)?.[0]?.affectedRows ?? 0;
+
+        // 6. asaas_cobrancas (pai — depois de todos os dependentes)
+        const r6 = await tx
+          .delete(asaasCobrancas)
+          .where(eq(asaasCobrancas.escritorioId, eid));
+        deletados.cobrancas = (r6 as any)?.[0]?.affectedRows ?? 0;
+      });
+
+      log.warn(
+        { escritorioId: eid, userId: ctx.user.id, deletados },
+        "Reset de histórico financeiro executado",
+      );
+
+      return {
+        success: true,
+        deletados,
+        proximoPasso:
+          "Vá em Financeiro → Sincronizar tudo (ou aguarde o cron) pra o Asaas reinserir o histórico baseado nos vínculos preservados.",
+      };
+    }),
+
   /**
    * Obtém QR Code Pix de uma cobrança. Mutation (não query) porque
    * tem efeito colateral: cacheia o payload em `pixQrCodePayload` na
@@ -4256,13 +4441,18 @@ export const asaasRouter = router({
           sql`(${asaasCobrancas.parcelamentoLocalId} IS NULL
                OR ${aliasB.parcelamentoLocalId} IS NULL
                OR ${asaasCobrancas.parcelamentoLocalId} != ${aliasB.parcelamentoLocalId})`,
-          // Filtro novo: par já resolvido por beneficiário não aparece mais.
+          // Filtro: par já resolvido por beneficiário não aparece mais.
           // Se A.contatoBeneficiarioId == B.contatoId ou B.contatoBeneficiarioId
           // == A.contatoId, o operador já consolidou esse par via "vincular
           // pagamento de terceiro" — não precisa aparecer no wizard.
+          //
+          // COALESCE crítico: `NULL = X` é NULL (não FALSE) em SQL, e `NOT NULL`
+          // continua NULL, que o WHERE trata como falso → excluiria TODOS os
+          // pares novos (contatoBeneficiarioId IS NULL nos dois lados é o caso
+          // comum). Sem COALESCE, o banner mostra count mas wizard vem vazio.
           sql`NOT (
-            ${asaasCobrancas.contatoBeneficiarioId} = ${aliasB.contatoId}
-            OR ${aliasB.contatoBeneficiarioId} = ${asaasCobrancas.contatoId}
+            COALESCE(${asaasCobrancas.contatoBeneficiarioId} = ${aliasB.contatoId}, FALSE)
+            OR COALESCE(${aliasB.contatoBeneficiarioId} = ${asaasCobrancas.contatoId}, FALSE)
           )`,
         ),
       )
