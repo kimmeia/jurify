@@ -13,6 +13,7 @@ import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
 import { assinaturasDigitais, assinaturaCampos, contatos } from "../../drizzle/schema";
 import { eq, and, desc, sql, asc } from "drizzle-orm";
+import { toIsoString } from "../_core/dates";
 import crypto from "crypto";
 import { estamparAssinatura } from "./pdf-stamp-assinatura";
 import { createLogger } from "../_core/logger";
@@ -51,11 +52,11 @@ export const assinaturasRouter = router({
         assinantNome: r.assinantNome,
         assinantEmail: r.assinantEmail,
         tokenAssinatura: r.tokenAssinatura,
-        enviadoAt: r.enviadoAt ? (r.enviadoAt as Date).toISOString() : null,
-        visualizadoAt: r.visualizadoAt ? (r.visualizadoAt as Date).toISOString() : null,
-        assinadoAt: r.assinadoAt ? (r.assinadoAt as Date).toISOString() : null,
-        expiracaoAt: r.expiracaoAt ? (r.expiracaoAt as Date).toISOString() : null,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+        enviadoAt: toIsoString(r.enviadoAt),
+        visualizadoAt: toIsoString(r.visualizadoAt),
+        assinadoAt: toIsoString(r.assinadoAt),
+        expiracaoAt: toIsoString(r.expiracaoAt),
+        createdAt: toIsoString(r.createdAt) ?? "",
       }));
     }),
 
@@ -507,6 +508,6 @@ function mapDoc(doc: any) {
     documentoUrl: doc.documentoUrl,
     documentoAssinadoUrl: doc.documentoAssinadoUrl ?? null,
     assinantNome: doc.assinantNome,
-    expiracaoAt: doc.expiracaoAt ? (doc.expiracaoAt as Date).toISOString() : null,
+    expiracaoAt: toIsoString(doc.expiracaoAt),
   };
 }

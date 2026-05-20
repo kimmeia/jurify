@@ -35,6 +35,7 @@ import {
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "../_core/logger";
+import { toIsoString } from "../_core/dates";
 
 const log = createLogger("customer360");
 
@@ -350,37 +351,35 @@ export const customer360Router = router({
             origem: contato.origem,
             tags,
             observacoes: contato.observacoes,
-            createdAt: (contato.createdAt as Date).toISOString(),
+            createdAt: toIsoString(contato.createdAt) ?? "",
           },
           financeiro,
           leads: leadsAtivos.map((l) => ({
             ...l,
-            createdAt: (l.createdAt as Date).toISOString(),
+            createdAt: toIsoString(l.createdAt) ?? "",
           })),
           tarefas: tarefasPendentes.map((t) => ({
             ...t,
-            dataVencimento: t.dataVencimento ? (t.dataVencimento as Date).toISOString() : null,
-            createdAt: (t.createdAt as Date).toISOString(),
+            dataVencimento: toIsoString(t.dataVencimento),
+            createdAt: toIsoString(t.createdAt) ?? "",
           })),
           compromissos: compromissosDoCliente.map((a) => ({
             ...a,
-            dataInicio: (a.dataInicio as Date).toISOString(),
+            dataInicio: toIsoString(a.dataInicio) ?? "",
           })),
           anotacoes: anotacoesRecentes.map((n) => ({
             ...n,
-            createdAt: (n.createdAt as Date).toISOString(),
+            createdAt: toIsoString(n.createdAt) ?? "",
           })),
           assinaturas: assinaturasPendentes.map((a) => ({
             ...a,
-            enviadoAt: a.enviadoAt ? (a.enviadoAt as Date).toISOString() : null,
-            expiracaoAt: a.expiracaoAt ? (a.expiracaoAt as Date).toISOString() : null,
+            enviadoAt: toIsoString(a.enviadoAt),
+            expiracaoAt: toIsoString(a.expiracaoAt),
           })),
           conversas: ultimasConversas.map((c) => ({
             ...c,
-            ultimaMensagemAt: c.ultimaMensagemAt
-              ? (c.ultimaMensagemAt as Date).toISOString()
-              : null,
-            createdAt: (c.createdAt as Date).toISOString(),
+            ultimaMensagemAt: toIsoString(c.ultimaMensagemAt),
+            createdAt: toIsoString(c.createdAt) ?? "",
           })),
           processos: processosDoUser,
           stats: {

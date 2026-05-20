@@ -28,6 +28,7 @@ import {
   agenteChatMensagens,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
+import { toIsoString } from "../_core/dates";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -60,8 +61,100 @@ const TEXT_EXTRACTABLE_MIMES = new Set([
   "application/json",
 ]);
 
+// Limite operacional pra extração de binários (PDF, DOCX) — as libs
+// carregam o doc inteiro em memória, então arquivos enormes podem estourar
+// a RAM do worker. 25MB cobre relatórios/petições comuns; arquivos maiores
+// ficam anexados mas sem conteúdo extraído (a IA vê só o nome).
+const LIMITE_BINARIO_BYTES = 25 * 1024 * 1024;
+const MAX_CHARS_EXTRACAO = 20000;
+const MIME_DOCX =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+/**
+ * Extrai texto de um anexo para alimentar o contexto da IA.
+ *
+ * Suporta:
+ *  - text/plain | markdown | csv | json: lê o buffer como UTF-8
+ *  - application/pdf: usa pdf-parse (best-effort, PDFs escaneados sem
+ *    OCR retornam vazio; PDFs criptografados lançam erro e caímos pra null)
+ *
+ * DOC/DOCX ficam de fora — precisaria mammoth, que não está nas deps.
+ * O usuário verá um aviso no frontend pra esses casos.
+ *
+ * Retorna `null` quando não foi possível extrair (formato não suportado,
+ * arquivo muito grande, parsing falhou). Nunca lança — a falha cai
+ * silenciosamente pro caminho onde a IA vê só o nome do anexo.
+ */
+export async function extrairTextoAnexo(
+  mimeType: string,
+  buffer: Buffer,
+): Promise<string | null> {
+  if (TEXT_EXTRACTABLE_MIMES.has(mimeType)) {
+    try {
+      return buffer.toString("utf8").slice(0, MAX_CHARS_EXTRACAO);
+    } catch {
+      return null;
+    }
+  }
+  if (mimeType === "application/pdf") {
+    if (buffer.length > LIMITE_BINARIO_BYTES) {
+      log.warn({ tamanho: buffer.length }, "PDF acima do limite — extração ignorada");
+      return null;
+    }
+    try {
+      // pdf-parse@1.1.4 quebra em Node 22+ com "bad XRef entry"; pdfjs-dist
+      // 5.x já está nas deps (usado pelo react-pdf) e roda bem em backend.
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const doc = await pdfjs.getDocument({
+        data: new Uint8Array(buffer),
+        useSystemFonts: true,
+        verbosity: 0,
+      }).promise;
+      const partes: string[] = [];
+      const maxPaginas = Math.min(doc.numPages, 100);
+      for (let i = 1; i <= maxPaginas; i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        partes.push(content.items.map((it: any) => it.str || "").join(" "));
+        // Curto-circuita se já passamos o limite — evita processar PDF
+        // gigante por inteiro só pra truncar depois.
+        if (partes.join("\n").length > MAX_CHARS_EXTRACAO) break;
+      }
+      const texto = partes.join("\n").trim();
+      return texto ? texto.slice(0, MAX_CHARS_EXTRACAO) : null;
+    } catch (err) {
+      log.warn(
+        { err: String((err as Error)?.message || err).slice(0, 200) },
+        "Falha ao extrair texto do PDF",
+      );
+      return null;
+    }
+  }
+  if (mimeType === MIME_DOCX) {
+    if (buffer.length > LIMITE_BINARIO_BYTES) {
+      log.warn({ tamanho: buffer.length }, "DOCX acima do limite — extração ignorada");
+      return null;
+    }
+    try {
+      const mammoth = (await import("mammoth")).default;
+      const result = await mammoth.extractRawText({ buffer });
+      const texto = (result.value || "").trim();
+      return texto ? texto.slice(0, MAX_CHARS_EXTRACAO) : null;
+    } catch (err) {
+      log.warn(
+        { err: String((err as Error)?.message || err).slice(0, 200) },
+        "Falha ao extrair texto do DOCX",
+      );
+      return null;
+    }
+  }
+  // application/msword (.doc legado) não é suportado por mammoth — o usuário
+  // precisa salvar como .docx ou PDF. Retornamos null silenciosamente.
+  return null;
 }
 
 /** Valida que a thread existe e pertence ao usuário. Retorna thread + agente. */
@@ -191,8 +284,8 @@ export const agenteChatRouter = router({
         agenteId: r.agenteId,
         titulo: r.titulo,
         arquivada: r.arquivada,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
-        updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+        createdAt: toIsoString(r.createdAt) ?? "",
+        updatedAt: toIsoString(r.updatedAt) ?? "",
       }));
     }),
 
@@ -288,7 +381,7 @@ export const agenteChatRouter = router({
         anexoNome: r.anexoNome,
         anexoMime: r.anexoMime,
         tokensUsados: r.tokensUsados,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+        createdAt: toIsoString(r.createdAt) ?? "",
       }));
     }),
 
@@ -355,14 +448,9 @@ export const agenteChatRouter = router({
         anexoNome = input.anexo.nome.replace(/[^a-zA-Z0-9._\- ]/g, "_").slice(0, 200);
         anexoMime = mimeType;
 
-        // Extração best-effort (só formatos de texto puro por enquanto)
-        if (TEXT_EXTRACTABLE_MIMES.has(mimeType)) {
-          try {
-            anexoConteudo = buffer.toString("utf8").slice(0, 20000);
-          } catch {
-            anexoConteudo = null;
-          }
-        }
+        // Extração best-effort de texto pra alimentar o contexto da IA.
+        // PDF/TXT/MD/CSV/JSON suportados; DOCX fica só como anexo.
+        anexoConteudo = await extrairTextoAnexo(mimeType, buffer);
       }
 
       // ── Salva mensagem do usuário ──
@@ -376,10 +464,11 @@ export const agenteChatRouter = router({
         anexoConteudo,
       });
 
-      // Atualiza updatedAt da thread (SQL vai setar automaticamente via ON UPDATE)
+      // MySQL pula o ON UPDATE quando nenhuma coluna realmente muda; setar
+      // updatedAt explícito garante o bump (e protege se titulo vier null).
       await db
         .update(agenteChatThreads)
-        .set({ titulo: thread.titulo })
+        .set({ updatedAt: new Date() })
         .where(eq(agenteChatThreads.id, thread.id));
 
       // ── Monta contexto: histórico (últimas 30) + docs de treinamento ──
