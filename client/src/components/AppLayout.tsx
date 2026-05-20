@@ -66,6 +66,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { BetaBadge } from "./BetaBadge";
+import { EmBreveBadge } from "./EmBreveBadge";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import { toast } from "sonner";
 
@@ -378,6 +379,7 @@ function AppSidebarContent({
                         className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
                       />
                       <span className="flex-1">Cálculos</span>
+                      <EmBreveBadge className="ml-auto mr-1" />
                       {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
                       <ChevronRight
                         className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ml-1 ${calculosOpen ? "rotate-90" : ""}`}
@@ -471,7 +473,7 @@ function AppSidebarContent({
                 >
                   <Headphones className={`h-4 w-4 ${location === "/atendimento" ? "text-primary" : ""}`} />
                   <span className="flex-1">Atendimento</span>
-                  <BetaBadge className="ml-auto" />
+                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -485,7 +487,7 @@ function AppSidebarContent({
                 >
                   <BrainCircuit className={`h-4 w-4 ${location === "/agentes-ia" ? "text-primary" : ""}`} />
                   <span>Agentes IA</span>
-                  <BetaBadge className="ml-auto" />
+                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -512,7 +514,7 @@ function AppSidebarContent({
                 >
                   <Zap className={`h-4 w-4 ${location === "/smartflow" ? "text-primary" : ""}`} />
                   <span>SmartFlow</span>
-                  <BetaBadge className="ml-auto" />
+                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
@@ -565,7 +567,8 @@ function AppSidebarContent({
                   className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
                 >
                   <Lightbulb className={`h-4 w-4 ${location === "/roadmap" ? "text-primary" : ""}`} />
-                  <span>Roadmap</span>
+                  <span className="flex-1">Roadmap</span>
+                  <EmBreveBadge className="ml-auto" />
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
