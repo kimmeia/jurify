@@ -44,6 +44,12 @@ import {
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { dataHojeBR } from "../../shared/escritorio-types";
+import {
+  decidirExcluirCobranca,
+  decidirVinculoBeneficiario,
+  decidirResolverPar,
+  type Decision,
+} from "./financeiro-duplicidade-rules";
 
 /** Helper: retorna IDs dos contatos visíveis ao colaborador atual.
  *  Se ele tem verTodos no módulo "financeiro" → null (sem filtro).
@@ -82,6 +88,13 @@ async function requireEscritorio(userId: number) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Você precisa de um escritório para usar cobranças." });
   }
   return result;
+}
+
+/** Converte uma `Decision` (regra pura) em `TRPCError` quando falha, ou
+ *  retorna o payload quando passa. Centraliza a tradução. */
+function unwrapDecision<T>(d: Decision<T>): T {
+  if (!d.ok) throw new TRPCError({ code: d.code, message: d.message });
+  return d.data;
 }
 
 /**
@@ -3160,36 +3173,20 @@ export const asaasRouter = router({
 
       if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const ehManual = cob.origem === "manual" || !cob.asaasPaymentId;
-
-      // Cobrança Asaas só pode ser excluída quando PENDING. Pago/vencido/
-      // estornado nasceu do banco lá fora — cancelar precisa ser feito no
-      // Asaas (UI ou painel). Manual pode ser excluída em qualquer status:
-      // lançamento por engano (caso clássico Carlos+esposa) precisa poder
-      // ser desfeito sem ter que fechar/reabrir comissão.
-      if (!ehManual && cob.status !== "PENDING") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "Cobrança Asaas só pode ser excluída quando pendente. Para cancelar, faça no painel do Asaas — o webhook propaga.",
-        });
-      }
-
-      // Trava de integridade: cobrança que já entrou em fechamento de
-      // comissão NÃO pode ser deletada (vira item órfão no snapshot).
-      // Mensagem aponta o caminho: excluir o fechamento primeiro.
+      // Política: Asaas só PENDING; manual qualquer status. Cobrança em
+      // fechamento de comissão fica congelada (vira item órfão no snapshot
+      // se removida). Regra pura em `financeiro-duplicidade-rules`.
       const itensComissao = await db
         .select({ comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId })
         .from(comissoesFechadasItens)
         .where(eq(comissoesFechadasItens.asaasCobrancaId, input.id))
         .limit(1);
-      if (itensComissao.length > 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            `Esta cobrança já entrou no fechamento de comissão #${itensComissao[0].comissaoFechadaId}. Exclua o fechamento (Comissões → Histórico → Detalhar → Excluir) antes de remover a cobrança.`,
-        });
-      }
+      const { ehManual } = unwrapDecision(
+        decidirExcluirCobranca(
+          cob,
+          itensComissao[0]?.comissaoFechadaId ?? null,
+        ),
+      );
 
       // Cobrança manual: deleta direto, sem chamar Asaas (não passou
       // pela API). Cobrança Asaas PENDING: chama API e depois remove local.
@@ -3274,32 +3271,26 @@ export const asaasRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Contato beneficiário não encontrado." });
       }
 
-      if (cob.contatoId === benef.id) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "O beneficiário é o mesmo pagador. Não há nada pra vincular.",
-        });
-      }
-
       // Trava de integridade: cobrança em fechamento de comissão não pode
-      // mudar de beneficiário (snapshot ficaria inconsistente).
+      // mudar de beneficiário (snapshot ficaria inconsistente). Regra
+      // pura em `financeiro-duplicidade-rules`.
       const itemFech = await db
         .select({ comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId })
         .from(comissoesFechadasItens)
         .where(eq(comissoesFechadasItens.asaasCobrancaId, input.cobrancaId))
         .limit(1);
-      if (itemFech.length > 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: `Cobrança já está no fechamento de comissão #${itemFech[0].comissaoFechadaId}. Exclua o fechamento antes de remarcar o beneficiário.`,
-        });
-      }
+      const { contatoBeneficiarioId, novoAtendenteId } = unwrapDecision(
+        decidirVinculoBeneficiario({
+          cob,
+          benef,
+          fechamentoComissaoId: itemFech[0]?.comissaoFechadaId ?? null,
+          reatribuirAtendente: input.reatribuirAtendente,
+        }),
+      );
 
-      const set: Record<string, unknown> = {
-        contatoBeneficiarioId: input.contatoBeneficiarioId,
-      };
-      if (input.reatribuirAtendente && benef.responsavelId) {
-        set.atendenteId = benef.responsavelId;
+      const set: Record<string, unknown> = { contatoBeneficiarioId };
+      if (novoAtendenteId !== null) {
+        set.atendenteId = novoAtendenteId;
       }
       await db
         .update(asaasCobrancas)
@@ -3308,10 +3299,7 @@ export const asaasRouter = router({
 
       return {
         success: true,
-        atendenteReatribuido:
-          input.reatribuirAtendente && benef.responsavelId
-            ? benef.responsavelId
-            : null,
+        atendenteReatribuido: novoAtendenteId,
       };
     }),
 
@@ -4378,12 +4366,6 @@ export const asaasRouter = router({
       if (!perm.excluir) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
       }
-      if (input.manterCobrancaId === input.removerCobrancaId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cobranças manter e remover não podem ser a mesma.",
-        });
-      }
       const esc = await requireEscritorio(ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -4417,9 +4399,6 @@ export const asaasRouter = router({
         });
       }
 
-      // Trava de integridade: se a cobrança a remover está em fechamento de
-      // comissão, bloqueia. Se a manter está em fechamento, só não pode
-      // vincular beneficiário (mas pode resolver com vincular=false).
       const itensFech = await db
         .select({ asaasCobrancaId: comissoesFechadasItens.asaasCobrancaId })
         .from(comissoesFechadasItens)
@@ -4430,60 +4409,29 @@ export const asaasRouter = router({
           ]),
         );
       const idsEmFech = new Set(itensFech.map((i) => i.asaasCobrancaId));
-      if (idsEmFech.has(input.removerCobrancaId)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "A cobrança a remover já está em fechamento de comissão. Exclua o fechamento primeiro (Comissões → Histórico).",
-        });
-      }
-      if (input.vincularBeneficiario && idsEmFech.has(input.manterCobrancaId)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "A cobrança a manter já está em fechamento de comissão — não pode remarcar beneficiário. Tente com vincular=false ou exclua o fechamento.",
-        });
-      }
 
-      // Remoção: Asaas só PENDING; manual qualquer status.
-      const removerEhManual =
-        remover.origem === "manual" || !remover.asaasPaymentId;
-      if (!removerEhManual && remover.status !== "PENDING") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "A cobrança a remover é Asaas e não está pendente. Cancele no painel do Asaas — o webhook propaga.",
-        });
-      }
+      // Regra pura: valida matriz (mesma id, fechamento, status Asaas,
+      // manual-only no auto-fix) — `financeiro-duplicidade-rules`.
+      const { vincularBeneficiarioPara } = unwrapDecision(
+        decidirResolverPar({
+          manter,
+          remover,
+          manterEmFechamento: idsEmFech.has(input.manterCobrancaId),
+          removerEmFechamento: idsEmFech.has(input.removerCobrancaId),
+          vincularBeneficiario: input.vincularBeneficiario,
+        }),
+      );
 
       // Auto-fix em transação: vincula + remove. Se algo falhar, rollback.
-      const novoBeneficiarioId =
-        input.vincularBeneficiario && remover.contatoId !== null
-          ? remover.contatoId
-          : null;
-
       await db.transaction(async (tx) => {
-        // 1. (opcional) Vincula a cobrança a manter como pagamento do
-        //    contato da remover (caso clássico Carlos+esposa).
-        if (novoBeneficiarioId !== null && manter.contatoId !== novoBeneficiarioId) {
+        if (
+          vincularBeneficiarioPara !== null &&
+          manter.contatoId !== vincularBeneficiarioPara
+        ) {
           await tx
             .update(asaasCobrancas)
-            .set({ contatoBeneficiarioId: novoBeneficiarioId })
+            .set({ contatoBeneficiarioId: vincularBeneficiarioPara })
             .where(eq(asaasCobrancas.id, input.manterCobrancaId));
-        }
-
-        // 2. Exclui a cobrança escolhida. Asaas API call só rolaria se
-        //    fosse Asaas PENDING — pra simplicidade do auto-fix, NÃO
-        //    chamamos client.excluirCobranca(asaas) dentro da tx (chamada
-        //    externa pode falhar e estragar a tx). Se a remoção é Asaas
-        //    PENDING, o operador deve usar o "Cancelar cobrança" normal
-        //    no Asaas; o wizard só remove manuais.
-        if (!removerEhManual) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "Auto-fix só remove cobrança manual. Pra remover Asaas PENDING, use o botão de cancelar normal.",
-          });
         }
         await tx
           .delete(asaasCobrancas)
@@ -4492,8 +4440,8 @@ export const asaasRouter = router({
 
       return {
         success: true,
-        vinculouBeneficiario: novoBeneficiarioId !== null,
-        beneficiarioId: novoBeneficiarioId,
+        vinculouBeneficiario: vincularBeneficiarioPara !== null,
+        beneficiarioId: vincularBeneficiarioPara,
       };
     }),
 
