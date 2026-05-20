@@ -1357,6 +1357,23 @@ export const asaasCobrancas = mysqlTable(
      */
     comissionavelOverride: boolean("comissionavelOverrideAsaasCob"),
     /**
+     * Vínculo lógico "esta cobrança conta como pagamento de OUTRO contato".
+     *
+     * Caso clássico: Carlos é cliente, mas a R$ 10k entrou no Asaas no CPF
+     * da esposa. Sem esta coluna, o operador era forçado a lançar uma
+     * cobrança manual no Carlos pra ver o pagamento no perfil dele → o
+     * mesmo dinheiro contava 2 vezes (1 Asaas esposa + 1 manual Carlos).
+     *
+     * Com esta coluna: a cobrança Asaas continua no `contatoId` da esposa
+     * (auditoria correta, mostra "Pago por: Esposa Carlos"), mas o KPI,
+     * o resumo do cliente Carlos e a comissão usam
+     * `COALESCE(contatoBeneficiarioId, contatoId)` — a cobrança conta UMA
+     * vez, atribuída ao Carlos.
+     *
+     * NULL (default): comportamento legado — pagador = beneficiário.
+     */
+    contatoBeneficiarioId: int("contatoBeneficiarioIdAsaasCob"),
+    /**
      * Identificador local de parcelamento (nanoid).
      *
      * Em vez de usar o /installments do Asaas (que junta tudo no cartão de
@@ -1401,6 +1418,12 @@ export const asaasCobrancas = mysqlTable(
     idxEscritorioCustomer: index("asaas_cob_escr_customer_idx").on(
       t.escritorioId,
       t.asaasCustomerId,
+    ),
+    // Acelera KPI/resumo do contato beneficiário (cobranças vinculadas
+    // como "pagas no nome de terceiro mas atribuídas a este cliente").
+    idxBeneficiario: index("asaas_cob_beneficiario_idx").on(
+      t.escritorioId,
+      t.contatoBeneficiarioId,
     ),
   }),
 );

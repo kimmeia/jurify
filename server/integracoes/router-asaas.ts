@@ -2197,7 +2197,32 @@ export const asaasRouter = router({
         const vinculos = await db.select().from(asaasClientes)
           .where(and(eq(asaasClientes.contatoId, input.contatoId), eq(asaasClientes.escritorioId, esc.escritorio.id)));
 
-        if (vinculos.length === 0) {
+        // Mesmo sem vínculo Asaas direto, o contato pode ter cobranças
+        // vinculadas como beneficiário (esposa pagou pelo cliente).
+        // Antes daqui retornava `vinculado: false` e zerava tudo — perdendo
+        // o histórico de pagamentos de terceiros.
+        // Por isso `vinculado` agora reflete só o vínculo direto, mas a
+        // consulta de cobranças segue rodando pra captar beneficiárias.
+
+        // Cobranças que CONTAM pro contato (pagador direto OU beneficiário
+        // lógico via contatoBeneficiarioId). Resolve o caso Carlos+esposa:
+        // a cobrança continua na esposa (auditoria), mas aparece no resumo
+        // do Carlos quando `contatoBeneficiarioId = Carlos.id`.
+        const cobrancas = await db.select().from(asaasCobrancas)
+          .where(and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            or(
+              and(
+                eq(asaasCobrancas.contatoId, input.contatoId),
+                isNull(asaasCobrancas.contatoBeneficiarioId),
+              ),
+              eq(asaasCobrancas.contatoBeneficiarioId, input.contatoId),
+            )!,
+          ))
+          .orderBy(desc(asaasCobrancas.createdAt))
+          .limit(20);
+
+        if (vinculos.length === 0 && cobrancas.length === 0) {
           return {
             vinculado: false,
             pendente: 0,
@@ -2208,12 +2233,6 @@ export const asaasRouter = router({
             ultimoErroSync: null,
           };
         }
-
-        // Buscar cobranças locais
-        const cobrancas = await db.select().from(asaasCobrancas)
-          .where(and(eq(asaasCobrancas.contatoId, input.contatoId), eq(asaasCobrancas.escritorioId, esc.escritorio.id)))
-          .orderBy(desc(asaasCobrancas.createdAt))
-          .limit(20);
 
         let pendente = 0, vencido = 0, pago = 0;
         for (const c of cobrancas) {
@@ -2226,7 +2245,10 @@ export const asaasRouter = router({
         // Estado do sync: pega o vínculo primário, ou o primeiro se não
         // houver primário marcado. Erro mais recente entre todos os
         // vínculos é o que a UI deve mostrar.
-        const primario = vinculos.find((v) => v.primario) ?? vinculos[0];
+        // Se o contato só tem cobranças beneficiárias (sem vínculo Asaas
+        // próprio), `primario` é null — o frontend já trata "vinculado: false"
+        // mas mostra os totais e cobranças capturadas.
+        const primario = vinculos.find((v) => v.primario) ?? vinculos[0] ?? null;
         const erros = vinculos
           .filter((v) => v.ultimoErroSync)
           .sort((a, b) => {
@@ -2237,14 +2259,14 @@ export const asaasRouter = router({
         const erroMaisRecente = erros[0] ?? null;
 
         return {
-          vinculado: true,
-          asaasCustomerId: primario.asaasCustomerId,
+          vinculado: vinculos.length > 0,
+          asaasCustomerId: primario?.asaasCustomerId ?? null,
           totalVinculos: vinculos.length,
           pendente,
           vencido,
           pago,
           cobrancas,
-          sincronizadoEm: primario.sincronizadoEm?.toISOString() ?? null,
+          sincronizadoEm: primario?.sincronizadoEm?.toISOString() ?? null,
           ultimoErroSync: erroMaisRecente?.ultimoErroSync ?? null,
           ultimoErroSyncEm: erroMaisRecente?.ultimoErroSyncEm?.toISOString() ?? null,
         };
@@ -2286,14 +2308,22 @@ export const asaasRouter = router({
           ));
         const vinculados = new Set(vinculos.map((v) => v.contatoId));
 
-        // Cobranças agrupadas: traz só (contatoId, status, valor)
+        // Cobranças que contam pra cada contato — pagador direto OU
+        // beneficiário lógico. Traz ambos pra somar 1x cada (o WHERE OR
+        // garante union). A coluna `contatoBeneficiarioId` tem prioridade
+        // semântica: quando setada, é o "dono" do pagamento (Carlos);
+        // quando NULL, o pagador (contatoId) é o dono (comportamento legado).
         const cobs = await db.select({
           contatoId: asaasCobrancas.contatoId,
+          contatoBeneficiarioId: asaasCobrancas.contatoBeneficiarioId,
           status: asaasCobrancas.status,
           valor: asaasCobrancas.valor,
         }).from(asaasCobrancas).where(and(
           eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-          inArray(asaasCobrancas.contatoId, input.contatoIds),
+          or(
+            inArray(asaasCobrancas.contatoId, input.contatoIds),
+            inArray(asaasCobrancas.contatoBeneficiarioId, input.contatoIds),
+          )!,
         ));
 
         const result: Record<number, {
@@ -2303,8 +2333,11 @@ export const asaasRouter = router({
           result[id] = { vinculado: vinculados.has(id), pendente: 0, vencido: 0, pago: 0 };
         }
         for (const c of cobs) {
-          if (c.contatoId == null) continue; // cobrança órfã — ignora
-          const r = result[c.contatoId];
+          // Atribui ao beneficiário se houver, senão ao pagador (semântica
+          // COALESCE). Cobrança órfã sem ambos → ignora.
+          const donoId = c.contatoBeneficiarioId ?? c.contatoId;
+          if (donoId == null) continue;
+          const r = result[donoId];
           if (!r) continue;
           const val = parseFloat(c.valor) || 0;
           if (c.status === "PENDING") r.pendente += val;
@@ -3158,6 +3191,221 @@ export const asaasRouter = router({
       }
 
       return { success: true };
+    }),
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // PAGADOR TERCEIRO (beneficiário lógico)
+  // Resolve o caso "Carlos é cliente mas a esposa pagou via Asaas no CPF dela".
+  // A cobrança Asaas mantém o contatoId pagador (auditoria), e o
+  // contatoBeneficiarioId aponta pro contato CRM dono lógico do pagamento.
+  // Elimina a necessidade de lançar manual duplicado.
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Marca esta cobrança como pagamento de OUTRO contato (beneficiário).
+   * KPI / resumo do beneficiário / comissão usam beneficiário em lugar do
+   * pagador. Reversível via `desvincularPagamentoBeneficiario`.
+   *
+   * Validações:
+   *  - Cobrança e contato beneficiário pertencem ao escritório
+   *  - Beneficiário != pagador (faz pouco sentido vincular ao mesmo)
+   *  - Bloqueia se a cobrança já entrou em fechamento de comissão
+   *    (snapshot imutável — primeiro exclui o fechamento)
+   *
+   * Reatribuição opcional de atendente: caller pode pedir pra atualizar
+   * o atendenteId da cobrança pro responsável do contato beneficiário,
+   * pra a comissão ir pra quem cuida do Carlos (não do CPF da esposa).
+   */
+  vincularPagamentoBeneficiario: protectedProcedure
+    .input(
+      z.object({
+        cobrancaId: z.number().int().positive(),
+        contatoBeneficiarioId: z.number().int().positive(),
+        /** Se true, seta atendenteId = responsavelId do contato beneficiário. */
+        reatribuirAtendente: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [cob] = await db
+        .select({
+          id: asaasCobrancas.id,
+          contatoId: asaasCobrancas.contatoId,
+        })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.cobrancaId),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!cob) throw new TRPCError({ code: "NOT_FOUND", message: "Cobrança não encontrada." });
+
+      const [benef] = await db
+        .select({ id: contatos.id, responsavelId: contatos.responsavelId })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.id, input.contatoBeneficiarioId),
+            eq(contatos.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!benef) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Contato beneficiário não encontrado." });
+      }
+
+      if (cob.contatoId === benef.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "O beneficiário é o mesmo pagador. Não há nada pra vincular.",
+        });
+      }
+
+      // Trava de integridade: cobrança em fechamento de comissão não pode
+      // mudar de beneficiário (snapshot ficaria inconsistente).
+      const itemFech = await db
+        .select({ comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId })
+        .from(comissoesFechadasItens)
+        .where(eq(comissoesFechadasItens.asaasCobrancaId, input.cobrancaId))
+        .limit(1);
+      if (itemFech.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cobrança já está no fechamento de comissão #${itemFech[0].comissaoFechadaId}. Exclua o fechamento antes de remarcar o beneficiário.`,
+        });
+      }
+
+      const set: Record<string, unknown> = {
+        contatoBeneficiarioId: input.contatoBeneficiarioId,
+      };
+      if (input.reatribuirAtendente && benef.responsavelId) {
+        set.atendenteId = benef.responsavelId;
+      }
+      await db
+        .update(asaasCobrancas)
+        .set(set)
+        .where(eq(asaasCobrancas.id, input.cobrancaId));
+
+      return {
+        success: true,
+        atendenteReatribuido:
+          input.reatribuirAtendente && benef.responsavelId
+            ? benef.responsavelId
+            : null,
+      };
+    }),
+
+  /**
+   * Remove o vínculo de beneficiário — a cobrança volta a contar pro
+   * contato pagador original (contatoId). Reversível.
+   */
+  desvincularPagamentoBeneficiario: protectedProcedure
+    .input(z.object({ cobrancaId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const itemFech = await db
+        .select({ comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId })
+        .from(comissoesFechadasItens)
+        .where(eq(comissoesFechadasItens.asaasCobrancaId, input.cobrancaId))
+        .limit(1);
+      if (itemFech.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cobrança já está no fechamento de comissão #${itemFech[0].comissaoFechadaId}. Exclua o fechamento antes de desvincular.`,
+        });
+      }
+
+      await db
+        .update(asaasCobrancas)
+        .set({ contatoBeneficiarioId: null })
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.cobrancaId),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        );
+      return { success: true };
+    }),
+
+  /**
+   * Lista cobranças do escritório que podem ser vinculadas como pagamento
+   * deste contato (esposa/familiar pagou). Filtros aplicados:
+   *  - Pagas (RECEIVED/CONFIRMED/RECEIVED_IN_CASH)
+   *  - contatoBeneficiarioId IS NULL (ainda não atribuídas a ninguém)
+   *  - contatoId != contatoBeneficiarioParaVincular (sem auto-vincular)
+   *  - Busca opcional por nome do contato pagador / descrição
+   *
+   * UI usa pra popular um seletor "Vincular pagamento que entrou no nome de X
+   * mas é deste cliente".
+   */
+  listarCobrancasParaVincularBeneficiario: protectedProcedure
+    .input(
+      z.object({
+        contatoBeneficiarioId: z.number().int().positive(),
+        busca: z.string().trim().max(120).optional(),
+        limit: z.number().int().min(1).max(100).default(30),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
+      if (!perm.verTodos && !perm.verProprios) return [];
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) return [];
+
+      const conds = [
+        eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+        inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
+        isNull(asaasCobrancas.contatoBeneficiarioId),
+        // Não permite vincular cobrança que já é deste contato (pagador =
+        // beneficiário fica como NULL na coluna nova, mas a UI ainda
+        // mostraria como candidata). Filtra explícito.
+        sql`(${asaasCobrancas.contatoId} IS NULL OR ${asaasCobrancas.contatoId} != ${input.contatoBeneficiarioId})`,
+      ];
+
+      if (input.busca && input.busca.length > 0) {
+        const pat = `%${input.busca.replace(/[%_]/g, (m) => "\\" + m)}%`;
+        conds.push(
+          or(
+            like(asaasCobrancas.descricao, pat),
+            like(contatos.nome, pat),
+          )!,
+        );
+      }
+
+      return db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          valor: asaasCobrancas.valor,
+          status: asaasCobrancas.status,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          descricao: asaasCobrancas.descricao,
+          contatoIdPagador: asaasCobrancas.contatoId,
+          contatoNomePagador: contatos.nome,
+          origem: asaasCobrancas.origem,
+        })
+        .from(asaasCobrancas)
+        .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
+        .where(and(...conds))
+        .orderBy(desc(asaasCobrancas.dataPagamento))
+        .limit(input.limit);
     }),
 
   /**
