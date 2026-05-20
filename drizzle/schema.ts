@@ -783,6 +783,18 @@ export const agentesIa = mysqlTable("agentes_ia", {
    * permissões `verProprios` — colaboradores só podem editar seus próprios agentes.
    */
   criadoPor: int("criadoPorAgenteIa"),
+  /**
+   * Campos personalizados do cliente que este agente deve EXTRAIR da
+   * conversa automaticamente. JSON array de chaves de
+   * `campos_personalizados_cliente.chave`. Quando o cliente responde
+   * com um valor que casa com um campo (ex: "Meu financiamento é R$ 50k"
+   * → campo `valor_financiamento`), o sistema persiste em
+   * `contatos.camposPersonalizados`.
+   *
+   * Formato: ["valor_financiamento", "cpf_principal", "data_nascimento"]
+   * NULL ou vazio = agente não extrai nada.
+   */
+  camposCaptura: text("camposCapturaAgente"),
   createdAt: timestamp("createdAtAgente").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgente").defaultNow().onUpdateNow().notNull(),
 });
