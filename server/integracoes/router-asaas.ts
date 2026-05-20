@@ -2046,7 +2046,18 @@ export const asaasRouter = router({
             conditions.push(inArray(asaasCobrancas.formaPagamento, formaList as any));
           }
         }
-        if (input?.contatoId) conditions.push(eq(asaasCobrancas.contatoId, input.contatoId));
+        if (input?.contatoId) {
+          // Inclui cobranças onde o contato é o pagador OU o beneficiário
+          // lógico. Resolve o caso "Carlos pagou no CPF da esposa": a aba
+          // financeiro do Carlos passa a mostrar a cobrança beneficiária
+          // junto com as dele.
+          conditions.push(
+            or(
+              eq(asaasCobrancas.contatoId, input.contatoId),
+              eq(asaasCobrancas.contatoBeneficiarioId, input.contatoId),
+            )!,
+          );
+        }
         if (input?.atendenteId) conditions.push(eq(asaasCobrancas.atendenteId, input.atendenteId));
         if (input?.vencimentoInicio && input?.vencimentoFim) {
           conditions.push(between(asaasCobrancas.vencimento, input.vencimentoInicio, input.vencimentoFim));
