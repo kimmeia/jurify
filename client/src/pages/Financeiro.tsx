@@ -334,15 +334,21 @@ export default function Financeiro() {
     }
   };
 
-  // Lista de cobranças pendentes selecionadas — derivada pra usar tanto no
-  // contador do dialog quanto na execução do bulk delete.
-  const cobrancasBulkSelecionadas = cobrancasFiltradas.filter(
-    (c: any) => selecionadas.has(c.id) && c.status === "PENDING",
-  );
+  // Cobranças elegíveis pra exclusão em massa:
+  //  - Asaas: só PENDING (pago lá fora não cancela aqui — webhook propaga)
+  //  - Manual: qualquer status (lançamento por engano precisa ser desfeito,
+  //    inclusive já marcado como recebido)
+  const cobrancasBulkSelecionadas = cobrancasFiltradas.filter((c: any) => {
+    if (!selecionadas.has(c.id)) return false;
+    if (c.origem === "manual") return true;
+    return c.status === "PENDING";
+  });
 
   const handleBulkDelete = () => {
     if (cobrancasBulkSelecionadas.length === 0) {
-      toast.error("Selecione cobranças pendentes para cancelar");
+      toast.error(
+        "Nenhuma cobrança elegível selecionada. Asaas: só pendentes. Manual: qualquer status.",
+      );
       return;
     }
     setConfirmBulkCancel(true);
@@ -1072,12 +1078,21 @@ export default function Financeiro() {
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                          {perms.podeExcluir && c.status === "PENDING" && (
+                          {/* Excluir:
+                              - Asaas: só PENDING (Asaas pago não cancela aqui)
+                              - Manual: qualquer status (engano precisa ser desfeito) */}
+                          {perms.podeExcluir &&
+                            (c.origem === "manual" || c.status === "PENDING") && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-destructive"
                               onClick={() => setCobrancaParaCancelar(c)}
+                              title={
+                                c.origem === "manual" && c.status !== "PENDING"
+                                  ? "Excluir cobrança manual (qualquer status)"
+                                  : "Cancelar cobrança pendente"
+                              }
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -1213,13 +1228,14 @@ export default function Financeiro() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Cancelar {cobrancasBulkSelecionadas.length} cobrança(s)
-              pendente(s)?
+              Excluir {cobrancasBulkSelecionadas.length} cobrança(s)?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              As cobranças pendentes selecionadas serão canceladas no Asaas e
-              no sistema, uma de cada vez. Cobranças já pagas ou estornadas
-              não são afetadas. Esta ação não pode ser desfeita.
+              Cobranças Asaas pendentes serão canceladas no Asaas e no sistema;
+              cobranças manuais serão removidas do sistema. Cobranças Asaas já
+              pagas/estornadas não são afetadas. Esta ação não pode ser desfeita.
+              Cobranças que já entraram em fechamento de comissão são bloqueadas
+              automaticamente — exclua o fechamento primeiro se precisar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1234,7 +1250,7 @@ export default function Financeiro() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {excluirCobBulkMut.isPending ? "Cancelando..." : "Cancelar cobranças"}
+              {excluirCobBulkMut.isPending ? "Excluindo..." : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

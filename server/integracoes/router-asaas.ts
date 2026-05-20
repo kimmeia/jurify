@@ -16,7 +16,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadasItens, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/mysql-core";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
@@ -3107,7 +3107,6 @@ export const asaasRouter = router({
         });
       }
       const esc = await requireEscritorio(ctx.user.id);
-      const client = await requireAsaasClient(esc.escritorio.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -3117,12 +3116,44 @@ export const asaasRouter = router({
 
       if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
 
+      const ehManual = cob.origem === "manual" || !cob.asaasPaymentId;
+
+      // Cobrança Asaas só pode ser excluída quando PENDING. Pago/vencido/
+      // estornado nasceu do banco lá fora — cancelar precisa ser feito no
+      // Asaas (UI ou painel). Manual pode ser excluída em qualquer status:
+      // lançamento por engano (caso clássico Carlos+esposa) precisa poder
+      // ser desfeito sem ter que fechar/reabrir comissão.
+      if (!ehManual && cob.status !== "PENDING") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Cobrança Asaas só pode ser excluída quando pendente. Para cancelar, faça no painel do Asaas — o webhook propaga.",
+        });
+      }
+
+      // Trava de integridade: cobrança que já entrou em fechamento de
+      // comissão NÃO pode ser deletada (vira item órfão no snapshot).
+      // Mensagem aponta o caminho: excluir o fechamento primeiro.
+      const itensComissao = await db
+        .select({ comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId })
+        .from(comissoesFechadasItens)
+        .where(eq(comissoesFechadasItens.asaasCobrancaId, input.id))
+        .limit(1);
+      if (itensComissao.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            `Esta cobrança já entrou no fechamento de comissão #${itensComissao[0].comissaoFechadaId}. Exclua o fechamento (Comissões → Histórico → Detalhar → Excluir) antes de remover a cobrança.`,
+        });
+      }
+
       // Cobrança manual: deleta direto, sem chamar Asaas (não passou
-      // pela API). Cobrança Asaas: chama API e depois remove local.
-      if (cob.origem === "manual" || !cob.asaasPaymentId) {
+      // pela API). Cobrança Asaas PENDING: chama API e depois remove local.
+      if (ehManual) {
         await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, input.id));
       } else {
-        await client.excluirCobranca(cob.asaasPaymentId);
+        const client = await requireAsaasClient(esc.escritorio.id);
+        await client.excluirCobranca(cob.asaasPaymentId!);
         await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, input.id));
       }
 
