@@ -42,6 +42,25 @@ interface SessionState {
 type MensagemCallback = (canalId: number, escritorioId: number, msg: WhatsappMensagemRecebida) => void | Promise<void>;
 type StatusCallback = (canalId: number, status: WhatsappSessionStatus, extra?: Record<string, unknown>) => void | Promise<void>;
 
+/**
+ * Resolve o mimetype do áudio a partir do path do arquivo. WhatsApp respeita
+ * o mimetype declarado pra escolher o decoder — mandar "audio/mpeg" pra um
+ * .webm faz o app do cliente rejeitar/quebrar o player.
+ */
+export function detectarMimetypeAudio(mediaUrl: string): string {
+  const ext = mediaUrl.toLowerCase().split("?")[0].split("#")[0].split(".").pop() || "";
+  switch (ext) {
+    case "webm": return "audio/webm; codecs=opus";
+    case "ogg":
+    case "oga": return "audio/ogg; codecs=opus";
+    case "mp4":
+    case "m4a": return "audio/mp4";
+    case "aac": return "audio/aac";
+    case "wav": return "audio/wav";
+    default: return "audio/mpeg";
+  }
+}
+
 // ─── Singleton Manager ──────────────────────────────────────────────────────
 
 class WhatsappSessionManager extends EventEmitter {
@@ -278,9 +297,14 @@ class WhatsappSessionManager extends EventEmitter {
           caption: mediaCaption || conteudo || "",
         });
       } else if (tipo === "audio" && mediaUrl) {
+        // ptt:true faz o WhatsApp tratar como NOTA DE VOZ (ondulação +
+        // ícone de microfone), não player de música. Mimetype baseado na
+        // extensão real do arquivo gravado pelo MediaRecorder do navegador
+        // (webm/mp4/ogg/mp3) — fallback audio/mpeg pra arquivos antigos.
         sent = await state.socket.sendMessage(jid, {
           audio: { url: mediaUrl },
-          mimetype: "audio/mpeg",
+          mimetype: detectarMimetypeAudio(mediaUrl),
+          ptt: true,
         });
       } else {
         sent = await state.socket.sendMessage(jid, { text: conteudo });
@@ -294,9 +318,17 @@ class WhatsappSessionManager extends EventEmitter {
     }
   }
 
-  /** Lista todas as sessões ativas */
-  async listarSessoes(): Promise<WhatsappSessionInfo[]> {
-    return Promise.all(Array.from(this.sessions.keys()).map((id) => this.getSessionInfo(id)));
+  /**
+   * Lista sessões ativas. Se `escritorioId` for informado, filtra apenas as
+   * desse escritório — multi-tenant safe. Sem argumento, devolve tudo (uso
+   * interno: restauração no boot, debug admin).
+   */
+  async listarSessoes(escritorioId?: number): Promise<WhatsappSessionInfo[]> {
+    const estados = Array.from(this.sessions.values());
+    const filtrados = escritorioId == null
+      ? estados
+      : estados.filter((s) => s.escritorioId === escritorioId);
+    return Promise.all(filtrados.map((s) => this.getSessionInfo(s.canalId)));
   }
 
   /**

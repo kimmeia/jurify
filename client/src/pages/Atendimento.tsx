@@ -12,6 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List } from "lucide-react";
 import { toast } from "sonner";
@@ -82,11 +86,16 @@ const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot:
 const ETAPAS: EtapaFunil[] = ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"];
 
 function WhatsAppCallPopup({ phone, onClose }: { phone: string; onClose: () => void }) {
-  const clean = phone.replace(/\D/g, "");
+  // O `onClose` antes era chamado durante o render — React reclamava com
+  // "Cannot update a component while rendering". Move pra dentro do effect,
+  // que só roda depois do commit. Como o array de deps é vazio, dispara
+  // 1x no mount (suficiente — o componente é desmontado em seguida).
   useEffect(() => {
+    const clean = phone.replace(/\D/g, "");
     window.open("https://wa.me/" + clean, "_blank");
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  onClose();
   return null;
 }
 
@@ -737,6 +746,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [showVincular, setShowVincular] = useState(false);
   const [buscaVincular, setBuscaVincular] = useState("");
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
+  const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
 
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
@@ -770,11 +780,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [msgs]);
   const send = () => { if (msg.trim()) enviar.mutate({ conversaId: cid, conteudo: msg.trim() }); };
 
-  const handleDelete = () => {
-    if (confirm("Excluir esta conversa e todas as mensagens? Esta ação não pode ser desfeita.")) {
-      excluir.mutate({ id: cid });
-    }
-  };
+  const handleDelete = () => setConfirmExcluirConversa(true);
 
   const renderMsgContent = (m: any) => {
     const content = m.conteudo || "";
@@ -1020,7 +1026,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA"
           className="bg-background"
         />
-        <AudioRecordButton onSend={(text) => enviar.mutate({ conversaId: cid, conteudo: text })} />
+        <AudioRecordButton
+          onSend={(args) => enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl })}
+        />
         <Button
           size="sm"
           onClick={send}
@@ -1093,6 +1101,29 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </Dialog>
     )}
     {showAgendar && <AgendarFromConversaDialog open={showAgendar} onOpenChange={setShowAgendar} contatoNome={conv?.contatoNome || ""} contatoTelefone={conv?.contatoTelefone || ""} />}
+
+    <AlertDialog open={confirmExcluirConversa} onOpenChange={setConfirmExcluirConversa}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir conversa?</AlertDialogTitle>
+          <AlertDialogDescription>
+            A conversa <strong>{conv?.contatoNome || ""}</strong> e todas as mensagens
+            serão removidas permanentemente. Esta ação não pode ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={excluir.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); excluir.mutate({ id: cid }); }}
+            disabled={excluir.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {excluir.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </>);
 }
 
@@ -1140,49 +1171,209 @@ function AgendarFromConversaDialog({ open, onOpenChange, contatoNome, contatoTel
   </DialogContent></Dialog>);
 }
 
-function AudioRecordButton({ onSend }: { onSend: (text: string) => void }) {
-  const [recording, setRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+/**
+ * Botão de gravar nota de voz para o atendimento.
+ *
+ * Antes: enviava só o texto "🎵 Nota de voz (Xs)" — o cliente recebia uma
+ * mensagem mentirosa sem áudio nenhum.
+ *
+ * Agora: usa MediaRecorder (suportado em todos os navegadores modernos),
+ * grava o áudio pra blob, faz upload via uploadRouter (URL devolvida fica
+ * acessível pelo Express static) e dispara onSend com tipo "audio" +
+ * mediaUrl. O envio pro WhatsApp acontece no `crm.enviarMensagem`, que
+ * agora propaga mediaUrl pro Baileys com ptt:true (vira nota de voz).
+ *
+ * Cancela com X (descarta blob). Em mobile, requer HTTPS.
+ */
+type EnvioComposer = { tipo: "texto" | "audio"; conteudo: string; mediaUrl?: string };
 
-  const handleToggle = () => {
-    if (recording) {
-      setRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-      const dur = duration;
-      setDuration(0);
-      onSend(`🎵 Nota de voz (${dur}s)`);
-    } else {
-      setRecording(true);
-      setDuration(0);
-      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+function AudioRecordButton({ onSend }: { onSend: (args: EnvioComposer) => void }) {
+  const [estado, setEstado] = useState<"idle" | "gravando" | "enviando">("idle");
+  const [duracao, setDuracao] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const canceladoRef = useRef(false);
+
+  const uploadMut = (trpc as any).upload.enviar.useMutation();
+
+  const limparTudo = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    recorderRef.current = null;
+    chunksRef.current = [];
+    setDuracao(0);
+  }, []);
+
+  useEffect(() => () => limparTudo(), [limparTudo]);
+
+  const iniciarGravacao = async () => {
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      toast.error("Seu navegador não suporta gravação de áudio.");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      toast.error("Gravação não suportada neste navegador.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      // Escolhe o mimeType com fallback — Safari só fala mp4, Chrome/FF webm.
+      const candidatos = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"];
+      const mime = candidatos.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      recorderRef.current = rec;
+      chunksRef.current = [];
+      canceladoRef.current = false;
+
+      rec.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data); };
+      rec.onstop = async () => {
+        const dur = duracao;
+        if (canceladoRef.current) { limparTudo(); setEstado("idle"); return; }
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        if (blob.size < 800) { // áudio com menos de ~0.5s vira lixo
+          toast.error("Gravação muito curta. Segure o botão por mais tempo.");
+          limparTudo(); setEstado("idle"); return;
+        }
+        const tipoMime = blob.type.split(";")[0]; // sem ;codecs=...
+        const extPorMime: Record<string, string> = {
+          "audio/webm": "webm", "audio/mp4": "m4a", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/wav": "wav",
+        };
+        const ext = extPorMime[tipoMime] || "webm";
+        const nome = `nota-de-voz-${Date.now()}.${ext}`;
+        try {
+          setEstado("enviando");
+          const base64 = await blobParaBase64(blob);
+          const result = await uploadMut.mutateAsync({ nome, tipo: tipoMime, base64, tamanho: blob.size });
+          onSend({ tipo: "audio", conteudo: `🎵 Nota de voz (${dur}s)`, mediaUrl: result.url });
+        } catch (e: any) {
+          toast.error(e?.message || "Falha ao enviar nota de voz.");
+        } finally {
+          limparTudo();
+          setEstado("idle");
+        }
+      };
+
+      rec.start();
+      setDuracao(0);
+      setEstado("gravando");
+      timerRef.current = setInterval(() => {
+        setDuracao((d) => {
+          // Hard limit de 2 min — protege contra esquecer o botão clicado.
+          if (d >= 120) {
+            try { rec.stop(); } catch { /* ignorar */ }
+            return d;
+          }
+          return d + 1;
+        });
+      }, 1000);
+    } catch (err: any) {
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        toast.error("Permissão de microfone negada. Libere nas configurações do navegador.");
+      } else if (err?.name === "NotFoundError") {
+        toast.error("Nenhum microfone encontrado neste dispositivo.");
+      } else {
+        toast.error(err?.message || "Não foi possível acessar o microfone.");
+      }
+      limparTudo();
+      setEstado("idle");
     }
   };
 
-  useEffect(() => { return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+  const pararGravacao = () => {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      try { rec.stop(); } catch { /* ignorar */ }
+    }
+  };
+
+  const cancelarGravacao = () => {
+    canceladoRef.current = true;
+    pararGravacao();
+  };
+
+  const fmtDur = (s: number) => `${String(Math.floor(s / 60)).padStart(1, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  if (estado === "gravando") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+          onClick={cancelarGravacao}
+          title="Cancelar (descarta áudio)"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        <span className="text-xs font-mono tabular-nums text-rose-600 flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-rose-600 animate-pulse" />
+          {fmtDur(duracao)}
+        </span>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={pararGravacao}
+          className="px-3"
+          title="Parar e enviar"
+        >
+          <Square className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  if (estado === "enviando") {
+    return (
+      <Button size="sm" variant="ghost" disabled className="h-9 w-9 p-0">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </Button>
+    );
+  }
 
   return (
-    <Button size="sm" variant={recording ? "destructive" : "ghost"} onClick={handleToggle} className={recording ? "px-3 animate-pulse" : "px-2"} title={recording ? "Parar gravação" : "Gravar áudio"}>
-      {recording ? (<><Square className="h-3.5 w-3.5 mr-1" /> {duration}s</>) : (<Mic className="h-4 w-4" />)}
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={iniciarGravacao}
+      className="h-9 w-9 p-0"
+      title="Gravar nota de voz"
+    >
+      <Mic className="h-4 w-4" />
     </Button>
   );
+}
+
+/** Lê um Blob/File como Data URL base64 (data:mime;base64,xxx). */
+function blobParaBase64(blob: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result as string);
+    r.onerror = () => rej(new Error("Falha ao ler áudio do navegador."));
+    r.readAsDataURL(blob);
+  });
 }
 
 function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { leads: any[]; onUpdate: () => void; onWA?: (p: string) => void; onAddLead: () => void; onGoToConversa: (conversaId: number) => void }) {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
   const [view, setView] = useState<"kanban" | "lista">("kanban");
+  const [excluirLeadAlvo, setExcluirLeadAlvo] = useState<{ id: number; nome: string } | null>(null);
   const mut = trpc.crm.atualizarLead.useMutation({ onSuccess: () => { toast.success("Lead movido!"); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
-  const excluirMut = trpc.crm.excluirLead.useMutation({ onSuccess: () => { toast.success("Lead excluído!"); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
+  const excluirMut = trpc.crm.excluirLead.useMutation({
+    onSuccess: () => { toast.success("Lead excluído!"); setExcluirLeadAlvo(null); onUpdate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const total = leads.filter((l: any) => !l.etapaFunil.startsWith("fechado")).reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
   const al = activeId ? leads.find((l: any) => l.id === activeId) : null;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }));
 
-  const handleDeleteLead = (id: number, nome: string) => {
-    if (confirm(`Excluir lead "${nome}" do pipeline?`)) {
-      excluirMut.mutate({ id });
-    }
-  };
+  const handleDeleteLead = (id: number, nome: string) => setExcluirLeadAlvo({ id, nome });
 
   // Métricas inline (substituem o KPIs strip removido do header)
   const totalGanho = leads
@@ -1320,6 +1511,29 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
         onGoToConversa={onGoToConversa}
       />
     )}
+
+    <AlertDialog open={!!excluirLeadAlvo} onOpenChange={(o) => !o && setExcluirLeadAlvo(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir lead do pipeline?</AlertDialogTitle>
+          <AlertDialogDescription>
+            O lead <strong>{excluirLeadAlvo?.nome}</strong> será removido do pipeline.
+            O contato e a conversa continuam — só a negociação é apagada.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); if (excluirLeadAlvo) excluirMut.mutate({ id: excluirLeadAlvo.id }); }}
+            disabled={excluirMut.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>);
 }
 

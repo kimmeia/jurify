@@ -579,7 +579,6 @@ export const atendimentoIaRouter = router({
       };
     }),
 
-  // ─── Persona Risk Score ────────────────────────────────────────────────────
   // ─── Composer Sugestão (IA escreve resposta no tom selecionado) ────────────
   composerSugestao: protectedProcedure
     .input(z.object({
@@ -665,6 +664,7 @@ export const atendimentoIaRouter = router({
       }
     }),
 
+  // ─── Persona Risk Score ────────────────────────────────────────────────────
   riskScore: protectedProcedure
     .input(z.object({ conversaId: z.number() }))
     .query(async ({ ctx, input }) => {

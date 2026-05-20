@@ -180,10 +180,6 @@ export const whatsappRouter = router({
   sessoes: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return [];
-
-    // Retorna apenas sessões do escritório (o manager é global)
-    const todas = await manager.listarSessoes();
-    // TODO: filtrar por escritorioId quando disponível no state
-    return todas;
+    return manager.listarSessoes(esc.escritorio.id);
   }),
 });
