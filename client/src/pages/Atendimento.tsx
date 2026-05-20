@@ -5,13 +5,11 @@ import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -19,7 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle } from "lucide-react";
+import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
@@ -32,6 +30,7 @@ import { AIActionCards } from "./atendimento/ai-action-cards";
 import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
 import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
 import { AIRail } from "./atendimento/ai-rail";
+import { CentroDeComando } from "./atendimento/centro-de-comando";
 import { Sparkles, ScrollText } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -55,6 +54,25 @@ function colorFromName(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
+/** Preview rico da última mensagem da conversa — adiciona ícone do tipo de mídia
+ *  quando a mensagem não é texto puro. Faz com que o atendente identifique em
+ *  segundos se a última msg foi áudio, foto, doc, etc. */
+function previewMensagem(c: any): string {
+  const tipo = c.ultimaMensagemTipo as string | undefined;
+  const preview = c.ultimaMensagemPreview || "";
+  if (!tipo || tipo === "texto") return preview || "Sem mensagens";
+  const prefix = tipo === "audio" ? "🎤 Áudio"
+    : tipo === "imagem" ? "📷 Foto"
+    : tipo === "video" ? "🎥 Vídeo"
+    : tipo === "documento" ? "📄 Documento"
+    : tipo === "localizacao" ? "📍 Localização"
+    : tipo === "contato" ? "👤 Contato"
+    : tipo === "sticker" ? "🏷️ Sticker"
+    : "";
+  if (!prefix) return preview || "Sem mensagens";
+  return preview ? `${prefix} · ${preview}` : prefix;
 }
 
 const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string }> = {
@@ -323,7 +341,6 @@ export default function Atendimento() {
     { enabled: !!contatoIdUrl, retry: false },
   );
 
-  const { data: metricas } = trpc.crm.metricas.useQuery(undefined, { refetchInterval: 10000 });
   // Sempre buscamos todas as conversas e filtramos no client. Permite
   // contadores corretos nas pills sem quintuplicar o request, e a busca
   // local fica instantânea (sem ida ao servidor).
@@ -399,7 +416,7 @@ export default function Atendimento() {
             <h1 className="text-2xl font-bold tracking-tight">Atendimento</h1>
             <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
               <Sparkles className="h-3 w-3 text-violet-500" />
-              <span>Inbox · Pipeline · Dashboard · com Brief Instantâneo IA, Compliance Guard e Linha do Tempo Unificada</span>
+              <span>Inbox · Pipeline · com Brief Instantâneo IA, Compliance Guard e Linha do Tempo Unificada</span>
             </p>
           </div>
           <Button
@@ -411,12 +428,10 @@ export default function Atendimento() {
           </Button>
         </div>
       </div>
-      {metricas && <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{[{ v: metricas.totalContatos, l: "Contatos", c: "" }, { v: metricas.conversasAguardando, l: "Aguardando", c: "text-amber-600" }, { v: metricas.conversasAbertas, l: "Abertas", c: "text-blue-600" }, { v: metricas.leadsNovos, l: "Leads", c: "" }, { v: metricas.leadsGanhos, l: "Ganhos", c: "text-emerald-600" }, { v: formatBRL(metricas.valorPipeline), l: "Pipeline", c: "text-violet-600" }].map((k, i) => (<div key={i} className="rounded-lg border bg-card px-3 py-2 text-center"><p className={"text-lg font-bold leading-tight " + k.c}>{k.v}</p><p className="text-[10px] text-muted-foreground">{k.l}</p></div>))}</div>}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-3 h-10">
+        <TabsList className="grid w-full grid-cols-2 h-10">
           <TabsTrigger value="inbox" className="text-xs sm:text-sm gap-1.5"><Inbox className="h-3.5 w-3.5" /> Inbox</TabsTrigger>
           <TabsTrigger value="pipeline" className="text-xs sm:text-sm gap-1.5"><TrendingUp className="h-3.5 w-3.5" /> Pipeline</TabsTrigger>
-          <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Dashboard</TabsTrigger>
         </TabsList>
         <TabsContent value="inbox" className="mt-4">
           {/* Layout ULTRA: Lista | Chat hero | AI Rail (colapsa pra Customer 360°) */}
@@ -500,28 +515,46 @@ export default function Atendimento() {
                       <button
                         key={c.id}
                         className={
-                          "w-full text-left px-3 py-3 border-b transition-colors " +
+                          "w-full text-left px-3 py-3 border-b transition-colors relative " +
                           (selecionada
-                            ? "bg-primary/8 hover:bg-primary/10"
+                            ? "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/40"
                             : "hover:bg-muted/40")
                         }
                         onClick={() => setSelId(c.id)}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={
-                              "h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 " +
-                              colorFromName(c.contatoNome || "?")
-                            }
-                          >
-                            {initials(c.contatoNome || "?")}
+                        {selecionada && (
+                          <span className="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r" aria-hidden />
+                        )}
+                        <div className="flex items-start gap-2.5">
+                          <div className="relative shrink-0">
+                            <div
+                              className={
+                                "h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm " +
+                                gradientFromName(c.contatoNome || "?")
+                              }
+                            >
+                              {initials(c.contatoNome || "?")}
+                            </div>
+                            {/* Channel icon overlay (canto inferior direito) */}
+                            {(c as any).canalTipo && (
+                              <div
+                                className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-background border-2 border-background flex items-center justify-center text-[8px]"
+                                title={(c as any).canalNome || (c as any).canalTipo}
+                              >
+                                {(c as any).canalTipo?.startsWith("whatsapp") ? "💬"
+                                  : (c as any).canalTipo === "instagram" ? "📷"
+                                  : (c as any).canalTipo === "facebook" ? "🟪"
+                                  : (c as any).canalTipo === "telefone_voip" ? "📞"
+                                  : "💬"}
+                              </div>
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <p
                                 className={
                                   "text-sm truncate " +
-                                  (naoLidas > 0 ? "font-semibold text-foreground" : "font-medium")
+                                  (naoLidas > 0 ? "font-bold text-foreground" : "font-medium")
                                 }
                               >
                                 {c.contatoNome}
@@ -529,7 +562,7 @@ export default function Atendimento() {
                               <span
                                 className={
                                   "text-[10px] shrink-0 tabular-nums " +
-                                  (naoLidas > 0 ? "text-primary font-semibold" : "text-muted-foreground")
+                                  (naoLidas > 0 ? "text-violet-600 font-bold" : "text-muted-foreground")
                                 }
                               >
                                 {timeAgo(c.ultimaMensagemAt)}
@@ -539,34 +572,45 @@ export default function Atendimento() {
                               <p
                                 className={
                                   "text-xs truncate " +
-                                  (naoLidas > 0 ? "text-foreground/80" : "text-muted-foreground")
+                                  (naoLidas > 0 ? "text-foreground/85 font-medium" : "text-muted-foreground")
                                 }
                               >
-                                {c.ultimaMensagemPreview || "Sem mensagens"}
+                                {previewMensagem(c)}
                               </p>
                               {naoLidas > 0 && (
-                                <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
+                                <span className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold tabular-nums">
                                   {naoLidas > 99 ? "99+" : naoLidas}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1 mt-1">
-                              <Badge
-                                variant="outline"
-                                className={
-                                  "text-[9px] px-1.5 py-0 " +
-                                  (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
-                                }
-                              >
-                                {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
-                              </Badge>
-                              {(c as any).temAtraso && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[9px] px-1.5 py-0 bg-red-50 text-red-700 border-red-300 font-semibold gap-0.5"
+                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                              {(c as any).temAtraso ? (
+                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-red-100 text-red-700 border border-red-200 inline-flex items-center gap-0.5">
+                                  <AlertTriangle className="h-2.5 w-2.5" /> SLA crítico
+                                </span>
+                              ) : (
+                                <span
+                                  className={
+                                    "text-[9px] px-1.5 py-0 rounded font-semibold border inline-flex items-center gap-1 " +
+                                    (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
+                                  }
                                 >
-                                  <AlertTriangle className="h-2.5 w-2.5" /> Atraso
-                                </Badge>
+                                  <span
+                                    className={
+                                      "w-1.5 h-1.5 rounded-full " +
+                                      (c.status === "aguardando" ? "bg-amber-500"
+                                        : c.status === "em_atendimento" ? "bg-blue-500"
+                                        : c.status === "resolvido" ? "bg-emerald-500"
+                                        : "bg-slate-400")
+                                    }
+                                  />
+                                  {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
+                                </span>
+                              )}
+                              {(c as any).atendenteNome && (
+                                <span className="text-[9px] px-1.5 py-0 rounded text-muted-foreground truncate max-w-[80px]" title={(c as any).atendenteNome}>
+                                  · {(c as any).atendenteNome.split(" ")[0]}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -598,17 +642,11 @@ export default function Atendimento() {
                   }}
                 />
               ) : (
-                <div className="flex-1 flex items-center justify-center min-h-[520px]">
-                  <div className="text-center space-y-3">
-                    <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
-                      <MessageCircle className="h-8 w-8 text-muted-foreground/30" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Selecione uma conversa</p>
-                    <Button variant="outline" size="sm" onClick={() => setShowIniciar(true)}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Iniciar nova
-                    </Button>
-                  </div>
-                </div>
+                <CentroDeComando
+                  convs={convs || []}
+                  onAbrirConversa={setSelId}
+                  onIniciar={() => setShowIniciar(true)}
+                />
               )}
             </div>
 
@@ -631,7 +669,6 @@ export default function Atendimento() {
           </div>
         </TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} /></TabsContent>
-        <TabsContent value="dashboard" className="mt-4"><DashboardAtendimento /></TabsContent>
       </Tabs>
       {waPopup && <WhatsAppCallPopup phone={waPopup} onClose={() => setWaPopup(null)} />}
       {telPopup && <TwilioCallPopup phone={telPopup} onClose={() => setTelPopup(null)} />}
@@ -708,7 +745,19 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [showTransferir, setShowTransferir] = useState(false);
   const [showVincular, setShowVincular] = useState(false);
   const [buscaVincular, setBuscaVincular] = useState("");
+  const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
+
+  // Compor com IA — gera sugestão no tom escolhido
+  const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
+    onSuccess: (data) => {
+      setMsg(data.sugestao);
+      if (data.ia === false) {
+        toast.info("IA não configurada — usando template baseado no tom.");
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   // Atendentes pra transferência
   const { data: atendentes } = trpc.crm.listarAtendentes.useQuery();
@@ -891,51 +940,116 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       onAplicarSugestao={(s) => setMsg(s)}
       onIgnorar={() => { /* registrar event log se quiser auditar */ }}
     />
-    <div className="p-3 border-t flex gap-2 bg-muted/20 relative">
-      <Popover open={showTemplates} onOpenChange={setShowTemplates}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rapidas"><Zap className="h-4 w-4" /></Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-2" align="start" side="top">
-          <p className="text-xs font-medium px-2 pb-0.5 text-muted-foreground">Respostas rápidas</p>
-          <p className="text-[10px] px-2 pb-1.5 text-muted-foreground/80">
-            Dica: digite <span className="font-mono">/</span> no campo de mensagem para autocompletar.
-          </p>
-          {tplList && tplList.length > 0 ? (
-            <div className="max-h-48 overflow-y-auto space-y-0.5">
-              {tplList.map((t: any) => (
-                <div key={t.id} className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors" onClick={() => { setMsg(t.conteudo); setShowTemplates(false); }}>
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-xs">{t.titulo}</p>
-                    {t.atalho && <span className="font-mono text-[10px] text-primary/80">{t.atalho}</span>}
+    {/* Composer ULTRA: Tone Selector + Compor IA + Slash + Compliance badge */}
+    <div className="border-t bg-muted/20">
+      {/* Linha 1: Tone Selector + ✨ Compor IA + Compliance badge */}
+      <div className="px-3 pt-2 pb-1.5 flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Tom:</span>
+        <div className="inline-flex bg-background border rounded-lg p-0.5 gap-0 shadow-sm">
+          {(["formal", "direto", "empatico", "amigavel"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTom(t)}
+              className={
+                "px-2.5 py-1 rounded-md text-[11px] font-medium transition " +
+                (tom === t
+                  ? "bg-violet-100 text-violet-700 font-semibold"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
+            </button>
+          ))}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-[11px] border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-700 px-2.5"
+          disabled={composerSugestao.isPending}
+          onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
+          title="Gerar resposta com IA no tom selecionado"
+        >
+          {composerSugestao.isPending
+            ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            : <Sparkles className="h-3 w-3 mr-1" />
+          }
+          Compor com IA
+        </Button>
+        <div className="flex-1" />
+        <ComplianceGuardBadge />
+      </div>
+
+      {/* Linha 2: Composer */}
+      <div className="p-3 pt-2 flex gap-2">
+        <Popover open={showTemplates} onOpenChange={setShowTemplates}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
+              <Zap className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-2" align="start" side="top">
+            <p className="text-xs font-medium px-2 pb-0.5 text-muted-foreground">Respostas rápidas</p>
+            <p className="text-[10px] px-2 pb-1.5 text-muted-foreground/80">
+              Dica: digite <span className="font-mono bg-muted px-1 rounded">/</span> no campo de mensagem para autocompletar.
+            </p>
+            {tplList && tplList.length > 0 ? (
+              <div className="max-h-56 overflow-y-auto space-y-0.5">
+                {tplList.map((t: any) => (
+                  <div
+                    key={t.id}
+                    className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors"
+                    onClick={() => { setMsg(t.conteudo); setShowTemplates(false); }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-xs">{t.titulo}</p>
+                      {t.atalho && (
+                        <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
+                          /{t.atalho}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configurações.</p>
-          )}
-        </PopoverContent>
-      </Popover>
-      <RespostaRapidaAutocomplete
-        value={msg}
-        onChange={setMsg}
-        templates={(tplList || []) as any}
-        onEnter={send}
-        placeholder="Digite sua mensagem..."
-        className="bg-background"
-      />
-      <AudioRecordButton
-        onSend={(args) => enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl })}
-      />
-      <Button size="sm" onClick={send} disabled={!msg.trim() || enviar.isPending} className="px-4">{enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
-    </div>
-    <div className="px-3 pb-2 flex items-center justify-between gap-2 bg-muted/20 border-t-0">
-      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-        Dica: <span className="font-mono bg-background px-1 rounded border">/</span> respostas rápidas
-      </span>
-      <ComplianceGuardBadge />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configurações.</p>
+            )}
+          </PopoverContent>
+        </Popover>
+        <RespostaRapidaAutocomplete
+          value={msg}
+          onChange={setMsg}
+          templates={(tplList || []) as any}
+          onEnter={send}
+          placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA"
+          className="bg-background"
+        />
+        <AudioRecordButton
+          onSend={(args) => enviar.mutate({ conversaId: cid, conteudo: args.conteudo, tipo: args.tipo, mediaUrl: args.mediaUrl })}
+        />
+        <Button
+          size="sm"
+          onClick={send}
+          disabled={!msg.trim() || enviar.isPending}
+          className="px-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+        >
+          {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Linha 3: Hint compacto */}
+      <div className="px-3 pb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">/</kbd> respostas rápidas
+          <span className="mx-1.5">·</span>
+          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">Enter</kbd> enviar
+        </span>
+        {composerSugestao.data?.ia === false && (
+          <span className="text-amber-600 text-[10px]">⚠ IA não configurada — usando template</span>
+        )}
+      </div>
     </div>
     {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
 
@@ -1247,6 +1361,8 @@ function blobParaBase64(blob: Blob): Promise<string> {
 
 function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { leads: any[]; onUpdate: () => void; onWA?: (p: string) => void; onAddLead: () => void; onGoToConversa: (conversaId: number) => void }) {
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [busca, setBusca] = useState("");
+  const [view, setView] = useState<"kanban" | "lista">("kanban");
   const [excluirLeadAlvo, setExcluirLeadAlvo] = useState<{ id: number; nome: string } | null>(null);
   const mut = trpc.crm.atualizarLead.useMutation({ onSuccess: () => { toast.success("Lead movido!"); onUpdate(); }, onError: (e: any) => toast.error(e.message) });
   const excluirMut = trpc.crm.excluirLead.useMutation({
@@ -1259,12 +1375,142 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
 
   const handleDeleteLead = (id: number, nome: string) => setExcluirLeadAlvo({ id, nome });
 
-  return (<div className="space-y-3">
-    <div className="flex items-center gap-3"><p className="text-sm font-semibold">{leads.length} leads</p>{total > 0 && <><Separator orientation="vertical" className="h-4" /><p className="text-sm font-semibold text-violet-600">{formatBRL(total)} em pipeline</p></>}<div className="flex-1" /><Button size="sm" onClick={onAddLead}><Plus className="h-4 w-4 mr-1" /> Novo Lead</Button></div>
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e: DragStartEvent) => setActiveId(Number(e.active.id))} onDragEnd={(e: DragEndEvent) => { setActiveId(null); if (!e.over) return; const oid = String(e.over.id); if (ETAPAS.includes(oid as EtapaFunil)) { const ld = leads.find((l: any) => l.id === Number(e.active.id)); if (ld && ld.etapaFunil !== oid) mut.mutate({ id: ld.id, etapaFunil: oid as EtapaFunil }); } }}>
-      <div className="overflow-x-auto -mx-2 px-2 pb-4"><div className="flex gap-3" style={{ minWidth: 1000 }}>{ETAPAS.map((etapa) => { const items = leads.filter((l: any) => l.etapaFunil === etapa); const val = items.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0); const st = EST[etapa]; return (<KCol key={etapa} etapa={etapa} st={st} count={items.length} val={val}><SortableContext items={items.map((l: any) => l.id)} strategy={verticalListSortingStrategy}>{!items.length && <div className="flex items-center justify-center h-24"><p className="text-[10px] text-muted-foreground/50">Arraste leads aqui</p></div>}{items.map((l: any) => <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} />)}</SortableContext></KCol>); })}</div></div>
-      <DragOverlay>{al ? <KOver lead={al} /> : null}</DragOverlay>
-    </DndContext>
+  // Métricas inline (substituem o KPIs strip removido do header)
+  const totalGanho = leads
+    .filter((l: any) => l.etapaFunil === "fechado_ganho")
+    .reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+
+  // Busca local
+  const buscaQ = busca.trim().toLowerCase();
+  const buscaDigits = buscaQ.replace(/\D/g, "");
+  const leadsFiltrados = buscaQ
+    ? leads.filter((l: any) => {
+        if ((l.contatoNome || "").toLowerCase().includes(buscaQ)) return true;
+        if (buscaDigits && (l.contatoTelefone || "").replace(/\D/g, "").includes(buscaDigits)) return true;
+        return false;
+      })
+    : leads;
+
+  return (<div className="space-y-4">
+    {/* Top bar: métricas inline + busca + filtros + toggle view + Novo Lead */}
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2">
+        <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border bg-card shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+          <div className="leading-tight">
+            <p className="text-base font-bold leading-none tabular-nums">{leads.length}</p>
+            <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-bold mt-0.5">leads</p>
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/70 shadow-sm">
+          <div className="leading-tight">
+            <p className="text-base font-bold leading-none tabular-nums text-emerald-700">{formatBRL(totalGanho)}</p>
+            <p className="text-[9px] uppercase tracking-wide text-emerald-700/70 font-bold mt-0.5">ganhos</p>
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl border bg-card shadow-sm">
+          <div className="leading-tight">
+            <p className="text-base font-bold leading-none tabular-nums text-muted-foreground">{formatBRL(total)}</p>
+            <p className="text-[9px] uppercase tracking-wide text-muted-foreground font-bold mt-0.5">em pipeline</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1" />
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="relative">
+          <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar lead…"
+            className="h-9 pl-8 pr-3 text-xs w-48 bg-background"
+          />
+        </div>
+        <div className="inline-flex items-center bg-muted/40 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("kanban")}
+            className={
+              "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
+              (view === "kanban" ? "bg-background text-violet-600 shadow-sm ring-1 ring-violet-300/40" : "text-muted-foreground hover:text-foreground")
+            }
+            title="Visualização Kanban"
+          >
+            <BarChart3 className="h-3.5 w-3.5 rotate-90" /> Kanban
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("lista")}
+            className={
+              "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
+              (view === "lista" ? "bg-background text-violet-600 shadow-sm ring-1 ring-violet-300/40" : "text-muted-foreground hover:text-foreground")
+            }
+            title="Visualização Lista"
+          >
+            <List className="h-3.5 w-3.5" /> Lista
+          </button>
+        </div>
+        <Button size="sm" onClick={onAddLead} className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md">
+          <Plus className="h-4 w-4 mr-1" /> Novo Lead
+        </Button>
+      </div>
+    </div>
+
+    {view === "kanban" ? (
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={(e: DragStartEvent) => setActiveId(Number(e.active.id))}
+        onDragEnd={(e: DragEndEvent) => {
+          setActiveId(null);
+          if (!e.over) return;
+          const oid = String(e.over.id);
+          if (ETAPAS.includes(oid as EtapaFunil)) {
+            const ld = leads.find((l: any) => l.id === Number(e.active.id));
+            if (ld && ld.etapaFunil !== oid) mut.mutate({ id: ld.id, etapaFunil: oid as EtapaFunil });
+          }
+        }}
+      >
+        <div className="overflow-x-auto -mx-2 pb-2">
+          <div className="grid gap-3 px-2 pt-1" style={{ gridTemplateColumns: "200px 200px 200px 200px 1fr 200px" }}>
+            {ETAPAS.map((etapa) => {
+              const items = leadsFiltrados.filter((l: any) => l.etapaFunil === etapa);
+              const val = items.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+              return (
+                <KCol key={etapa} etapa={etapa} count={items.length} val={val}>
+                  <SortableContext items={items.map((l: any) => l.id)} strategy={verticalListSortingStrategy}>
+                    {!items.length ? (
+                      <div className="p-3 min-h-[120px] flex items-center justify-center">
+                        <div
+                          className="w-full h-20 rounded-lg flex items-center justify-center text-[11px] text-muted-foreground/60 opacity-40"
+                          style={{ border: `1.5px dashed ${ETAPA_HEX[etapa]}`, background: "white" }}
+                        >
+                          arraste aqui
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 space-y-2 max-h-[820px] overflow-y-auto">
+                        {items.map((l: any) => (
+                          <KCard key={l.id} lead={l} onWA={onWA} onDelete={handleDeleteLead} onGoToConversa={onGoToConversa} />
+                        ))}
+                      </div>
+                    )}
+                  </SortableContext>
+                </KCol>
+              );
+            })}
+          </div>
+        </div>
+        <DragOverlay>{al ? <KOver lead={al} /> : null}</DragOverlay>
+      </DndContext>
+    ) : (
+      <KanbanLista
+        leads={leadsFiltrados}
+        onWA={onWA}
+        onDelete={handleDeleteLead}
+        onGoToConversa={onGoToConversa}
+      />
+    )}
 
     <AlertDialog open={!!excluirLeadAlvo} onOpenChange={(o) => !o && setExcluirLeadAlvo(null)}>
       <AlertDialogContent>
@@ -1290,110 +1536,258 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa }: { 
     </AlertDialog>
   </div>);
 }
-function KCol({ etapa, st, count, val, children }: { etapa: EtapaFunil; st: any; count: number; val: number; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: etapa });
-  return (<div className="flex-1 min-w-[170px]"><div className={"rounded-t-xl px-3 py-2.5 border border-b-0 " + st.header + " " + st.border}><div className="flex items-center gap-2"><div className={"h-2.5 w-2.5 rounded-full " + st.dot} /><span className="text-xs font-semibold flex-1">{ETAPA_FUNIL_LABELS[etapa]}</span><Badge variant="secondary" className="text-[10px] h-5 min-w-[20px] justify-center">{count}</Badge></div>{val > 0 && <p className="text-[10px] text-muted-foreground mt-1 ml-4">{formatBRL(val)}</p>}</div><div ref={setNodeRef} className={"border border-t-0 rounded-b-xl p-2 space-y-2 min-h-[250px] transition-colors " + st.bg + " " + st.border + (isOver ? " ring-2 ring-primary/30 bg-primary/5" : "")}>{children}</div></div>);
-}
-function KCard({ lead, onWA, onDelete, onGoToConversa }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
-  const v = parseValorBR(lead.valorEstimado);
-  return (<div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }} {...attributes} {...listeners} className="rounded-lg bg-background border shadow-sm hover:shadow-md transition-all p-3 space-y-2 cursor-grab active:cursor-grabbing">
-    <div><p className="text-xs font-semibold truncate">{lead.contatoNome}</p>{lead.contatoTelefone && <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5"><Phone className="h-2.5 w-2.5" /> {lead.contatoTelefone}</p>}</div>
-    {(v > 0 || (lead.probabilidade && lead.probabilidade !== 50)) && <div className="flex items-center gap-2">{v > 0 && <span className="text-xs font-bold text-emerald-600 flex items-center gap-0.5"><DollarSign className="h-3 w-3" />{formatBRL(v)}</span>}{lead.probabilidade && lead.probabilidade !== 50 && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Percent className="h-2.5 w-2.5" />{lead.probabilidade}%</span>}</div>}
-    {lead.probabilidade > 0 && <div className="h-1 rounded-full bg-muted overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 transition-all" style={{ width: lead.probabilidade + "%" }} /></div>}
-    <div className="flex justify-end gap-1">
-      {lead.conversaId && (
-        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-blue-600" title="Ir para conversa" onClick={(e) => { e.stopPropagation(); onGoToConversa(lead.conversaId); }}><Inbox className="h-3 w-3 mr-0.5" /> Inbox</Button>
-      )}
-      {lead.contatoTelefone && onWA && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-emerald-600" onClick={(e) => { e.stopPropagation(); onWA(lead.contatoTelefone); }}><PhoneCall className="h-3 w-3" /></Button>}
-      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" title="Excluir lead" onClick={(e) => { e.stopPropagation(); onDelete(lead.id, lead.contatoNome); }}><Trash2 className="h-3 w-3" /></Button>
-    </div>
-  </div>);
-}
-function KOver({ lead }: { lead: any }) { const v = parseValorBR(lead.valorEstimado); return (<div className="rounded-lg bg-background border-2 border-primary shadow-xl p-3 space-y-2 w-[170px] rotate-2"><p className="text-xs font-semibold truncate">{lead.contatoNome}</p>{v > 0 && <span className="text-xs font-bold text-emerald-600">{formatBRL(v)}</span>}</div>); }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Dashboard de Métricas do Atendimento
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function DashboardAtendimento() {
-  const { data, isLoading } = trpc.crm.metricasDetalhadas.useQuery(undefined, { refetchInterval: 30000 });
-
-  if (isLoading) return <div className="text-center py-12"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>;
-  if (!data) return <Card><CardContent className="pt-6 text-center py-12"><BarChart3 className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">Sem dados disponíveis.</p></CardContent></Card>;
-
-  const statusLabels: Record<string, string> = { aguardando: "Aguardando", em_atendimento: "Em atendimento", resolvido: "Resolvido", fechado: "Fechado" };
-  const statusCores: Record<string, string> = { aguardando: "text-amber-600", em_atendimento: "text-blue-600", resolvido: "text-emerald-600", fechado: "text-gray-500" };
-
+/** Visualização tabular do Pipeline — alternativa ao Kanban. */
+function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
+  leads: any[];
+  onWA?: (p: string) => void;
+  onDelete: (id: number, nome: string) => void;
+  onGoToConversa: (conversaId: number) => void;
+}) {
+  if (!leads.length) {
+    return (
+      <div className="rounded-xl border bg-card p-12 text-center">
+        <TrendingUp className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
+        <p className="text-sm text-muted-foreground">Nenhum lead encontrado.</p>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-4">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-        <DashKpi label="Msgs Recebidas Hoje" value={data.msgsEntradaHoje} cor="text-blue-600" />
-        <DashKpi label="Msgs Enviadas Hoje" value={data.msgsSaidaHoje} cor="text-violet-600" />
-        <DashKpi label="Novas Conversas Hoje" value={data.novasHoje} cor="text-amber-600" />
-        <DashKpi label="Resolvidas Hoje" value={data.resolvidasHoje} cor="text-emerald-600" />
-        <DashKpi label="Tempo Médio Resposta" value={data.tempoMedioResposta ? `${data.tempoMedioResposta}min` : "—"} cor="text-rose-600" />
-        <DashKpi label="Total Msgs Hoje" value={data.msgsTotalHoje} cor="" />
-      </div>
-
-      {/* Conversas por Status */}
-      <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Conversas por Status</CardTitle></CardHeader><CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {Object.entries(data.conversasPorStatus || {}).map(([s, t]) => (
-            <div key={s} className="rounded-lg border p-3 text-center">
-              <p className={`text-2xl font-bold ${statusCores[s] || ""}`}>{t}</p>
-              <p className="text-xs text-muted-foreground">{statusLabels[s] || s}</p>
-            </div>
-          ))}
-        </div>
-      </CardContent></Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Mensagens por Canal */}
-        <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Mensagens por Canal (7 dias)</CardTitle></CardHeader><CardContent>
-          {!(data.porCanal || []).length ? <p className="text-sm text-muted-foreground text-center py-6">Sem dados.</p> : (
-            <div className="space-y-2">
-              {data.porCanal.map((c: any, i: number) => {
-                const max = Math.max(...data.porCanal.map((x: any) => x.total), 1);
-                const pct = (c.total / max) * 100;
-                const cores = ["bg-emerald-500", "bg-blue-500", "bg-violet-500", "bg-amber-500", "bg-rose-500"];
-                return (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-28 text-xs font-medium truncate">{c.nome}</div>
-                    <div className="flex-1 h-6 bg-muted/40 rounded-full overflow-hidden relative">
-                      <div className={`h-full rounded-full ${cores[i % cores.length]}`} style={{ width: `${Math.max(pct, 5)}%` }} />
-                      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium">{c.total}</span>
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/30 border-b text-[10px] uppercase font-bold text-muted-foreground tracking-wide">
+          <tr>
+            <th className="px-3 py-2 text-left">Lead</th>
+            <th className="px-3 py-2 text-left">Telefone</th>
+            <th className="px-3 py-2 text-left">Etapa</th>
+            <th className="px-3 py-2 text-right">Valor</th>
+            <th className="px-3 py-2 text-right">Probab.</th>
+            <th className="px-3 py-2 w-32"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {leads.map((l: any) => {
+            const v = parseValorBR(l.valorEstimado);
+            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-emerald-100 text-emerald-700"
+              : l.etapaFunil === "fechado_perdido" ? "bg-rose-100 text-rose-700"
+              : l.etapaFunil === "negociacao" ? "bg-amber-100 text-amber-700"
+              : l.etapaFunil === "proposta" ? "bg-violet-100 text-violet-700"
+              : l.etapaFunil === "qualificado" ? "bg-blue-100 text-blue-700"
+              : "bg-slate-100 text-slate-700";
+            return (
+              <tr key={l.id} className="hover:bg-muted/20 transition-colors">
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={"w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 " + gradientFromName(l.contatoNome || "?")}>
+                      {initials(l.contatoNome || "?")}
                     </div>
+                    <span className="font-medium truncate">{l.contatoNome}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent></Card>
-
-        {/* Ranking de Atendentes */}
-        <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Ranking de Atendentes (30 dias)</CardTitle></CardHeader><CardContent>
-          {!(data.ranking || []).length ? <p className="text-sm text-muted-foreground text-center py-6">Sem dados.</p> : (
-            <div className="space-y-2">
-              {data.ranking.map((r: any, i: number) => (
-                <div key={r.id} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/20">
-                  <div className={"h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 " + (i === 0 ? "bg-amber-500" : i === 1 ? "bg-gray-400" : i === 2 ? "bg-amber-700" : "bg-muted-foreground/40")}>{i + 1}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2"><p className="text-sm font-medium truncate">{r.nome}</p>{r.online && <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Online" />}</div>
-                    <p className="text-[10px] text-muted-foreground">{r.resolvidas} resolvidas · {r.emAtendimento} em atendimento</p>
+                </td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{l.contatoTelefone || "—"}</td>
+                <td className="px-3 py-2">
+                  <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold " + corBg}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: ETAPA_HEX[l.etapaFunil as EtapaFunil] }} />
+                    {ETAPA_FUNIL_LABELS[l.etapaFunil as EtapaFunil]}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right font-bold text-emerald-700 text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
+                <td className="px-3 py-2 text-right text-xs text-muted-foreground tabular-nums">{l.probabilidade ? `${l.probabilidade}%` : "—"}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center justify-end gap-0.5">
+                    {l.conversaId && (
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
+                        <Inbox className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {l.contatoTelefone && onWA && (
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
+                        <PhoneCall className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" title="Excluir lead" onClick={() => onDelete(l.id, l.contatoNome)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                  <div className="text-right shrink-0"><p className="text-sm font-bold">{r.total}</p><p className="text-[9px] text-muted-foreground">total</p></div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent></Card>
-      </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function DashKpi({ label, value, cor }: { label: string; value: string | number; cor: string }) {
-  return (<div className="rounded-lg border bg-card px-3 py-2.5 text-center"><p className={`text-lg font-bold leading-tight ${cor}`}>{value}</p><p className="text-[9px] text-muted-foreground mt-0.5">{label}</p></div>);
+/** Cor hex por etapa (border-left + dashed empty boxes + dot da etapa) */
+const ETAPA_HEX: Record<EtapaFunil, string> = {
+  novo: "#94a3b8",
+  qualificado: "#3b82f6",
+  proposta: "#a855f7",
+  negociacao: "#f59e0b",
+  fechado_ganho: "#10b981",
+  fechado_perdido: "#ef4444",
+};
+
+/** Gradients de avatar determinístico por hash do nome — paleta consistente. */
+const AVATAR_GRADIENTS = [
+  "bg-gradient-to-br from-violet-500 to-pink-500",
+  "bg-gradient-to-br from-blue-500 to-cyan-500",
+  "bg-gradient-to-br from-amber-500 to-red-500",
+  "bg-gradient-to-br from-emerald-500 to-teal-600",
+  "bg-gradient-to-br from-indigo-500 to-violet-500",
+  "bg-gradient-to-br from-pink-500 to-rose-500",
+  "bg-gradient-to-br from-teal-500 to-emerald-500",
+];
+function gradientFromName(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
+  return AVATAR_GRADIENTS[Math.abs(h) % AVATAR_GRADIENTS.length];
+}
+
+function KCol({ etapa, count, val, children }: { etapa: EtapaFunil; count: number; val: number; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: etapa });
+  const st = EST[etapa];
+  const isGanho = etapa === "fechado_ganho";
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        "rounded-2xl border flex flex-col transition-colors " +
+        st.bg + " " + st.border +
+        (isOver ? " ring-2 ring-primary/30" : "")
+      }
+    >
+      <div
+        className={"px-3 py-2.5 border-b " + st.border}
+        style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.4), transparent)" }}
+      >
+        <div className="flex items-center gap-2">
+          <span className={"h-2.5 w-2.5 rounded-full " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
+          <span className={"text-sm font-semibold flex-1 truncate " + (isGanho ? "text-emerald-900" : "")}>
+            {ETAPA_FUNIL_LABELS[etapa]}
+          </span>
+          <span
+            className={
+              "text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full " +
+              (isGanho ? "bg-emerald-600 text-white" : "bg-white/70 text-muted-foreground")
+            }
+          >
+            {count}
+          </span>
+        </div>
+        {val > 0 && (
+          <p className={"text-[11px] font-semibold mt-1 ml-4.5 " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
+            {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
+          </p>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function KCard({ lead, onWA, onDelete, onGoToConversa }: { lead: any; onWA?: (p: string) => void; onDelete: (id: number, nome: string) => void; onGoToConversa: (conversaId: number) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id });
+  const v = parseValorBR(lead.valorEstimado);
+  const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        borderLeftColor: hex,
+      }}
+      {...attributes}
+      {...listeners}
+      className="rounded-xl bg-background border border-border border-l-4 px-3 py-2.5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing group"
+    >
+      <div className="flex items-start gap-2.5">
+        <div className={"w-9 h-9 rounded-lg flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
+          {initials(lead.contatoNome || "?")}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold truncate">{lead.contatoNome}</p>
+          {lead.contatoTelefone && (
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
+              <Phone className="h-2.5 w-2.5 flex-shrink-0" /> {lead.contatoTelefone}
+            </p>
+          )}
+          <div className="flex items-center justify-between mt-2 gap-2">
+            {v > 0 ? (
+              <span className="text-[13px] font-bold text-emerald-700">{formatBRL(v)}</span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground">sem valor</span>
+            )}
+            {lead.probabilidade && lead.probabilidade !== 50 && (
+              <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-0.5 flex-shrink-0">
+                <Percent className="h-2.5 w-2.5" />{lead.probabilidade}%
+              </span>
+            )}
+          </div>
+          {lead.probabilidade > 0 && (
+            <div className="h-1 rounded-full bg-muted overflow-hidden mt-1.5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 transition-all"
+                style={{ width: lead.probabilidade + "%" }}
+              />
+            </div>
+          )}
+          {/* Ações visíveis no hover */}
+          <div className="flex items-center justify-end gap-0.5 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {lead.conversaId && (
+              <Button
+                variant="ghost" size="sm"
+                className="h-6 px-1.5 text-[10px] text-blue-600"
+                title="Ir para conversa"
+                onClick={(e) => { e.stopPropagation(); onGoToConversa(lead.conversaId); }}
+              >
+                <Inbox className="h-3 w-3 mr-0.5" /> Inbox
+              </Button>
+            )}
+            {lead.contatoTelefone && onWA && (
+              <Button
+                variant="ghost" size="sm"
+                className="h-6 w-6 p-0 text-emerald-600"
+                title="WhatsApp"
+                onClick={(e) => { e.stopPropagation(); onWA(lead.contatoTelefone); }}
+              >
+                <PhoneCall className="h-3 w-3" />
+              </Button>
+            )}
+            <Button
+              variant="ghost" size="sm"
+              className="h-6 w-6 p-0 text-destructive"
+              title="Excluir lead"
+              onClick={(e) => { e.stopPropagation(); onDelete(lead.id, lead.contatoNome); }}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function KOver({ lead }: { lead: any }) {
+  const v = parseValorBR(lead.valorEstimado);
+  const hex = ETAPA_HEX[lead.etapaFunil as EtapaFunil] || ETAPA_HEX.novo;
+  return (
+    <div
+      className="rounded-xl bg-background border-l-4 border-2 border-primary shadow-2xl p-3 w-[200px] rotate-3"
+      style={{ borderLeftColor: hex }}
+    >
+      <div className="flex items-start gap-2.5">
+        <div className={"w-9 h-9 rounded-lg flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
+          {initials(lead.contatoNome || "?")}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold truncate">{lead.contatoNome}</p>
+          {v > 0 && <span className="text-[13px] font-bold text-emerald-700">{formatBRL(v)}</span>}
+        </div>
+      </div>
+    </div>
+  );
 }
