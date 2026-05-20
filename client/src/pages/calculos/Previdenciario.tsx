@@ -11,10 +11,11 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Streamdown } from "streamdown";
+import { PulseDot } from "../dashboards/common";
 import {
   ShieldCheck, Calculator, AlertTriangle, CheckCircle, FileText, Loader2,
   Clock, User, DollarSign, ArrowLeft, ArrowRight, Plus, Trash2, Check,
-  CalendarClock, Award, Receipt, Briefcase,
+  CalendarClock, Award, Receipt, Briefcase, CircleCheckBig, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -35,21 +36,55 @@ const FERRAMENTAS = [
 
 function StepIndicator({ steps, current }: { steps: string[]; current: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-6">
-      {steps.map((label, i) => {
-        const n = i + 1; const done = n < current; const active = n === current;
+    <div className="flex items-center justify-end gap-3 text-xs flex-wrap">
+      {steps.map((nome, i) => {
+        const num = i + 1; const concluido = num < current; const ativo = num === current;
         return (
-          <div key={i} className="flex items-center gap-2">
-            <div className="flex flex-col items-center gap-1">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${done ? "bg-rose-500 text-white" : active ? "bg-foreground text-background" : "bg-muted text-muted-foreground"}`}>
-                {done ? <Check className="h-4 w-4" /> : n}
+          <div key={nome} className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
+                concluido ? "bg-emerald-600 text-white"
+                : ativo ? "bg-violet-700 text-white"
+                : "bg-slate-200 text-slate-600"
+              }`}>
+                {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={`text-xs hidden sm:block ${active ? "font-semibold" : "text-muted-foreground"}`}>{label}</span>
+              <span className={ativo ? "font-medium text-slate-900" : "text-slate-500"}>{nome}</span>
             </div>
-            {i < steps.length - 1 && <div className={`w-8 sm:w-12 h-0.5 mb-4 sm:mb-0 ${done ? "bg-rose-500" : "bg-muted"}`} />}
+            {i < steps.length - 1 && (
+              <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Hero do submódulo Previdenciário — violet/purple
+function PrevHero({ titulo, descricao, passoAtual, totalPassos }: {
+  titulo?: string; descricao?: string; passoAtual?: number; totalPassos?: number;
+}) {
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <ShieldCheck className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
+      <div className="relative">
+        {passoAtual && totalPassos ? (
+          <div className="flex items-center gap-2 mb-2">
+            <PulseDot />
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+              Passo {passoAtual} de {totalPassos}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mb-1">
+            <PulseDot />
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Previdenciário</p>
+          </div>
+        )}
+        {titulo && <h2 className="text-2xl font-bold mb-1">{titulo}</h2>}
+        {descricao && <p className="text-sm text-white/80">{descricao}</p>}
+      </div>
     </div>
   );
 }
@@ -59,28 +94,43 @@ function StepIndicator({ steps, current }: { steps: string[]; current: number })
 export default function Previdenciario() {
   const [ferramenta, setFerramenta] = useState<"simulador" | "rmi" | "gps" | null>(null);
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-900/30"><ShieldCheck className="h-6 w-6 text-rose-600" /></div>
-        <div><h1 className="text-2xl font-bold tracking-tight">Previdenciário</h1><p className="text-sm text-muted-foreground">Aposentadoria, benefícios e contribuições — EC 103/2019</p></div>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-violet-50/20 p-6 space-y-5">
+        {!ferramenta && (
+          <>
+            <PrevHero
+              titulo="Cálculos previdenciários"
+              descricao="Aposentadoria, benefícios e contribuições — EC 103/2019 + 10 regras de transição"
+            />
+            <div>
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-3">
+                O que você precisa calcular?
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {FERRAMENTAS.map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFerramenta(f.id)}
+                    className="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-violet-400 hover:shadow-lg transition-all"
+                  >
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className={`p-2.5 ${f.bg} rounded-lg`}>
+                        <f.icon className={`h-5 w-5 ${f.color}`} />
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-violet-600 group-hover:translate-x-1 transition-all ml-auto" />
+                    </div>
+                    <p className="font-semibold text-slate-900 mb-1 text-sm">{f.label}</p>
+                    <p className="text-xs text-slate-500">{f.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+        {ferramenta === "simulador" && <Simulador onVoltar={() => setFerramenta(null)} />}
+        {ferramenta === "rmi" && <CalculoRMI onVoltar={() => setFerramenta(null)} />}
+        {ferramenta === "gps" && <CalculoGPS onVoltar={() => setFerramenta(null)} />}
       </div>
-      {!ferramenta && (
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-muted-foreground">O que você precisa calcular?</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {FERRAMENTAS.map(f => (
-              <button key={f.id} onClick={() => setFerramenta(f.id)} className={`p-5 rounded-xl border-2 text-left transition-all hover:shadow-md ${f.border} ${f.bg}`}>
-                <div className="p-2 rounded-lg bg-white/80 dark:bg-black/20 w-fit mb-3"><f.icon className={`h-5 w-5 ${f.color}`} /></div>
-                <p className="font-bold text-sm">{f.label}</p>
-                <p className="text-xs text-muted-foreground mt-1">{f.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {ferramenta === "simulador" && <Simulador onVoltar={() => setFerramenta(null)} />}
-      {ferramenta === "rmi" && <CalculoRMI onVoltar={() => setFerramenta(null)} />}
-      {ferramenta === "gps" && <CalculoGPS onVoltar={() => setFerramenta(null)} />}
     </div>
   );
 }
@@ -114,12 +164,23 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
     mutation.mutate({ sexo, dataNascimento: dataNasc, periodos: validos, continuaContribuindo });
   };
 
-  const stepLabels = ["Dados Pessoais", "Períodos", "Resultado"];
+  const stepLabels = ["Dados pessoais", "Períodos", "Resultado"];
+  const heroTitulo = step === 1 ? "Dados pessoais"
+    : step === 2 ? "Períodos de contribuição"
+    : "Resultado da simulação";
+  const heroDescricao = step === 1 ? "Informe sexo e data de nascimento. Esses dados definem qual regra de aposentadoria se aplica."
+    : step === 2 ? "Cadastre cada vínculo (CLT, autônomo, especial, rural). O tempo total é calculado automaticamente — períodos sobrepostos contam só uma vez."
+    : "";
 
   return (
-    <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-      <StepIndicator steps={stepLabels} current={step} />
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" size="sm" onClick={onVoltar} className="text-slate-500"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
+        {step !== 3 && <StepIndicator steps={stepLabels} current={step} />}
+      </div>
+      {step !== 3 && (
+        <PrevHero titulo={heroTitulo} descricao={heroDescricao} passoAtual={step} totalPassos={3} />
+      )}
 
       {/* STEP 1: Dados pessoais */}
       {step === 1 && (
@@ -257,27 +318,74 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
 
 function ResultadoSimulador({ resultado, onNovo, onVoltar }: { resultado: ResultadoSimulacao; onNovo: () => void; onVoltar: () => void }) {
   const tc = resultado.resumoTC;
+  const elegivelAgora = !!resultado.melhorRegra;
   return (
-    <div className="space-y-4">
-      {/* Hero */}
-      <Card className={resultado.melhorRegra ? "border-emerald-200 dark:border-emerald-800" : "border-amber-200 dark:border-amber-800"}>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-xl ${resultado.melhorRegra ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
-              {resultado.melhorRegra ? <Award className="h-8 w-8 text-emerald-600" /> : <Clock className="h-8 w-8 text-amber-600" />}
-            </div>
+    <div className="space-y-5">
+      {/* Hero gradient — verde se já pode aposentar, violet se ainda falta */}
+      <div className={`rounded-2xl p-7 text-white relative overflow-hidden shadow-lg ${
+        elegivelAgora
+          ? "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800"
+          : "bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800"
+      }`}>
+        {elegivelAgora
+          ? <Award className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
+          : <Clock className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />}
+        <div className="relative">
+          <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
             <div>
-              <h2 className={`text-xl font-bold ${resultado.melhorRegra ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
-                {resultado.melhorRegra ? "Você já pode se aposentar!" : "Ainda falta um pouco..."}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {resultado.melhorRegra ? `${resultado.melhorRegra.nomeRegra} — ${(resultado.melhorRegra.coeficiente * 100).toFixed(0)}% da média`
-                  : resultado.regrasMaisProximas[0] ? `Mais próxima: ${resultado.regrasMaisProximas[0].nomeRegra} — ${fmtMeses(resultado.regrasMaisProximas[0].mesesRestantes)}` : "Dados insuficientes"}
+              <div className="flex items-center gap-2 mb-1">
+                <PulseDot />
+                <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                  {elegivelAgora ? "✓ Aposentadoria possível agora" : "Simulação previdenciária"}
+                </p>
+              </div>
+              <p className="text-xs text-white/70">
+                Protocolo {resultado.protocoloCalculo} · Calculado em {new Date(resultado.dataCalculo).toLocaleDateString("pt-BR")}
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={onNovo}
+                className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                <Copy className="h-3.5 w-3.5 mr-1" /> Nova simulação
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+            <div className="lg:col-span-7">
+              <p className="text-sm font-medium text-white/85 mb-1">
+                {elegivelAgora ? "Melhor regra de aposentadoria" : "Regra mais próxima"}
+              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className="text-3xl font-extrabold tracking-tight leading-none">
+                  {elegivelAgora
+                    ? resultado.melhorRegra!.nomeRegra
+                    : resultado.regrasMaisProximas[0]?.nomeRegra ?? "—"}
+                </span>
+              </div>
+              <p className="text-xs text-white/65 mt-2">
+                {elegivelAgora
+                  ? `Coeficiente ${(resultado.melhorRegra!.coeficiente * 100).toFixed(0)}% da média`
+                  : resultado.regrasMaisProximas[0]
+                    ? `Falta ${fmtMeses(resultado.regrasMaisProximas[0].mesesRestantes)} para se aposentar`
+                    : "Dados insuficientes"}
+              </p>
+            </div>
+            <div className="lg:col-span-5">
+              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Tempo de contribuição</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                  <p className="text-xs text-white/70 mb-1">Total (bruto)</p>
+                  <p className="text-lg font-bold tabular-nums leading-none">{fmtMeses(tc.totalMesesBruto)}</p>
+                </div>
+                <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                  <p className="text-xs text-white/70 mb-1">Com conversão</p>
+                  <p className="text-lg font-bold tabular-nums leading-none text-emerald-200">{fmtMeses(tc.totalMesesConvertido)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* TC resumo */}
       <Card>
@@ -382,11 +490,11 @@ function CalculoRMI({ onVoltar }: { onVoltar: () => void }) {
   );
 
   return (
-    <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
+    <div className="space-y-5">
+      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-slate-500"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
+      <PrevHero titulo="Cálculo de RMI" descricao="Renda Mensal Inicial — calcula o valor do benefício a partir da média dos salários de contribuição." />
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5 text-violet-600" /> Quanto vou receber?</CardTitle><CardDescription>Calcula a RMI com base nos salários de contribuição</CardDescription></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="pt-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Sexo *</Label><Select value={sexo} onValueChange={v => setSexo(v as any)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="F">Feminino</SelectItem><SelectItem value="M">Masculino</SelectItem></SelectContent></Select></div>
             <div className="space-y-1.5"><Label>Regra *</Label><Select value={regra} onValueChange={setRegra}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(REGRA_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
@@ -429,11 +537,11 @@ function CalculoGPS({ onVoltar }: { onVoltar: () => void }) {
   );
 
   return (
-    <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-muted-foreground"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
+    <div className="space-y-5">
+      <Button variant="ghost" size="sm" onClick={onVoltar} className="text-slate-500"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar para ferramentas</Button>
+      <PrevHero titulo="GPS em atraso" descricao="Calcule juros e multa para regularizar contribuições previdenciárias atrasadas (Lei 8.212/91)." />
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Receipt className="h-5 w-5 text-amber-600" /> GPS em Atraso</CardTitle><CardDescription>Calcule juros e multa para regularizar contribuições (Lei 8.212/91)</CardDescription></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="pt-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Categoria *</Label><Select value={cat} onValueChange={setCat}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CONTRIBUINTE_INDIVIDUAL">Autônomo</SelectItem><SelectItem value="FACULTATIVO">Facultativo</SelectItem><SelectItem value="MEI">MEI</SelectItem></SelectContent></Select></div>
             <div className="space-y-1.5"><Label>Plano *</Label><Select value={plano} onValueChange={setPlano}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="NORMAL">Normal (20%)</SelectItem><SelectItem value="SIMPLIFICADO">Simplificado (11%)</SelectItem><SelectItem value="MEI">MEI (5%)</SelectItem><SelectItem value="BAIXA_RENDA">Baixa Renda (5%)</SelectItem></SelectContent></Select></div>

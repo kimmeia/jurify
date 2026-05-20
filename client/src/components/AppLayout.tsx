@@ -366,26 +366,37 @@ function AppSidebarContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>}
 
-              {/* Cálculos (collapsible) */}
+              {/* Cálculos (collapsible) — botão navega pro hub /calculos;
+                  chevron à direita só expande/recolhe o submenu. */}
               {canSee("calculos") && !moduloOcultoNoMenu("calculos") && <Collapsible open={calculosOpen} onOpenChange={setCalculosOpen}>
                 <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Cálculos"
-                      className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
-                      isActive={location.startsWith("/calculos")}
-                    >
-                      <Calculator
-                        className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
-                      />
-                      <span className="flex-1">Cálculos</span>
-                      <EmBreveBadge className="ml-auto mr-1" />
-                      {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
-                      <ChevronRight
-                        className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ml-1 ${calculosOpen ? "rotate-90" : ""}`}
-                      />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
+                  <SidebarMenuButton
+                    tooltip="Cálculos"
+                    className={`h-10 transition-all font-normal ${itemsLocked ? "opacity-50" : ""}`}
+                    isActive={location === "/calculos"}
+                    onClick={() => {
+                      navigateOrBlock("/calculos");
+                      setCalculosOpen(true);
+                    }}
+                  >
+                    <Calculator
+                      className={`h-4 w-4 ${location.startsWith("/calculos") ? "text-primary" : ""}`}
+                    />
+                    <span className="flex-1">Cálculos</span>
+                    <EmBreveBadge className="ml-auto mr-1" />
+                    {itemsLocked && <Lock className="h-3 w-3 text-muted-foreground ml-1" />}
+                    <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <span
+                        role="button"
+                        aria-label={calculosOpen ? "Recolher submenu" : "Expandir submenu"}
+                        className="ml-1 inline-flex items-center justify-center rounded p-0.5 hover:bg-muted/60"
+                      >
+                        <ChevronRight
+                          className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${calculosOpen ? "rotate-90" : ""}`}
+                        />
+                      </span>
+                    </CollapsibleTrigger>
+                  </SidebarMenuButton>
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {calculosSubItems.map((item) => {

@@ -26,6 +26,7 @@ import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
 import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
+import Calculos from "./pages/calculos/Calculos";
 import Imobiliario from "./pages/calculos/Imobiliario";
 import Trabalhista from "./pages/calculos/Trabalhista";
 import Tributario from "./pages/calculos/Tributario";
@@ -178,6 +179,11 @@ function Router() {
       <Route path="/dashboard">
         <ClientArea>
           <Dashboard />
+        </ClientArea>
+      </Route>
+      <Route path="/calculos">
+        <ClientArea>
+          <Calculos />
         </ClientArea>
       </Route>
       <Route path="/calculos/bancario">

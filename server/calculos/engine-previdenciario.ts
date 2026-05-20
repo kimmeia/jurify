@@ -51,6 +51,34 @@ function addMesesStr(d: string, m: number): string {
 function minStr(a: string, b: string): string { return a < b ? a : b; }
 function maxStr(a: string, b: string): string { return a > b ? a : b; }
 
+/**
+ * Funde intervalos de data sobrepostos.
+ * Dois períodos do mesmo trabalhador no mesmo tipo de atividade só podem
+ * contar uma vez na linha do tempo (não duplica TC quando há vínculos
+ * simultâneos do mesmo tipo).
+ */
+function unirIntervalos(
+  intervalos: Array<{ inicio: string; fim: string }>,
+): Array<{ inicio: string; fim: string }> {
+  if (intervalos.length === 0) return [];
+  const validos = intervalos.filter(i => i.fim > i.inicio);
+  if (validos.length === 0) return [];
+
+  const sorted = [...validos].sort((a, b) => a.inicio.localeCompare(b.inicio));
+  const merged: Array<{ inicio: string; fim: string }> = [{ ...sorted[0] }];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    const current = sorted[i];
+    if (current.inicio <= last.fim) {
+      if (current.fim > last.fim) last.fim = current.fim;
+    } else {
+      merged.push({ ...current });
+    }
+  }
+  return merged;
+}
+
 export function gerarProtocolo(): string {
   const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
   const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -67,42 +95,28 @@ export function gerarProtocolo(): string {
  * - Aplica conversão especial → comum para períodos até 13/11/2019
  */
 export function calcularResumoTC(periodos: PeriodoContribuicao[], sexo: Sexo): ResumoTC {
-  let totalComum = 0;
-  let totalEsp15 = 0;
-  let totalEsp20 = 0;
-  let totalEsp25 = 0;
-  let totalRural = 0;
-  let totalProfessor = 0;
   const conversoes: ResumoTC["conversoes"] = [];
 
+  // 1. Agrupa intervalos por tipo de atividade (com data fim resolvida).
+  const porTipo: Record<string, Array<{ inicio: string; fim: string }>> = {};
   for (const p of periodos) {
     const fim = p.aindaAtivo ? hoje() : p.dataFim;
     if (!fim || fim <= p.dataInicio) continue;
-
-    const meses = Math.max(0, diffMeses(p.dataInicio, fim));
-    if (meses === 0) continue;
-
-    switch (p.tipoAtividade) {
-      case "URBANA_COMUM":
-        totalComum += meses;
-        break;
-      case "URBANA_ESPECIAL_15":
-        totalEsp15 += meses;
-        break;
-      case "URBANA_ESPECIAL_20":
-        totalEsp20 += meses;
-        break;
-      case "URBANA_ESPECIAL_25":
-        totalEsp25 += meses;
-        break;
-      case "RURAL":
-        totalRural += meses;
-        break;
-      case "PROFESSOR":
-        totalProfessor += meses;
-        break;
-    }
+    (porTipo[p.tipoAtividade] ??= []).push({ inicio: p.dataInicio, fim });
   }
+
+  // 2. Soma meses ÚNICOS por tipo (intervalos sobrepostos fundidos).
+  const totalPorTipo = (tipo: string): number => {
+    const intervalos = unirIntervalos(porTipo[tipo] ?? []);
+    return intervalos.reduce((s, i) => s + Math.max(0, diffMeses(i.inicio, i.fim)), 0);
+  };
+
+  const totalComum = totalPorTipo("URBANA_COMUM");
+  const totalEsp15 = totalPorTipo("URBANA_ESPECIAL_15");
+  const totalEsp20 = totalPorTipo("URBANA_ESPECIAL_20");
+  const totalEsp25 = totalPorTipo("URBANA_ESPECIAL_25");
+  const totalRural = totalPorTipo("RURAL");
+  const totalProfessor = totalPorTipo("PROFESSOR");
 
   const totalBruto = totalComum + totalEsp15 + totalEsp20 + totalEsp25 + totalRural + totalProfessor;
 
@@ -626,11 +640,16 @@ export function calcularGPSAtraso(params: ParametrosGPS): ResultadoGPS {
 
   for (const comp of params.competenciasAtrasadas) {
     const [ac, mc] = comp.split("-").map(Number);
+    // mc é o número do mês de competência (1-12). new Date(y, mc, 15) usa
+    // mc como 0-indexed, o que resulta no mês SEGUINTE — coincide com a
+    // regra do INSS (vencimento dia 15 do mês posterior à competência).
     const venc = new Date(ac, mc, 15);
     const dias = Math.max(0, Math.floor((hojeDate.getTime() - venc.getTime()) / 86400000));
     const mesesAtr = Math.max(1, Math.ceil(dias / 30));
     const juros = round2(valorBase * 0.01 * mesesAtr);
-    const multa = round2(valorBase * 0.10);
+    // Multa de mora: 0,33% por dia, limitado a 20% (Lei 9.430/96 art. 61).
+    const multaPct = Math.min(0.20, 0.0033 * dias);
+    const multa = round2(valorBase * multaPct);
     const total = round2(valorBase + juros + multa);
     const carencia = params.categoria === "FACULTATIVO"
       ? (dias <= 180 && params.primeiraContribuicaoEmDia)
