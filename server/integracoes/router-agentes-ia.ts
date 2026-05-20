@@ -364,6 +364,9 @@ export const agentesIaRouter = router({
         ativo: agente.ativo,
         canalId: agente.canalId,
         modulosPermitidos: agente.modulosPermitidos ? agente.modulosPermitidos.split(",") : [],
+        camposCaptura: agente.camposCaptura
+          ? (() => { try { return JSON.parse(agente.camposCaptura) as string[]; } catch { return []; } })()
+          : [],
         temApiKey: !!(agente.openaiApiKey && agente.apiKeyIv && agente.apiKeyTag),
         documentos,
       };
@@ -382,6 +385,7 @@ export const agentesIaRouter = router({
         maxTokens: z.number().min(100).max(4000).optional(),
         temperatura: z.string().optional(),
         modulosPermitidos: z.array(z.string()).optional(),
+        camposCaptura: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -426,6 +430,10 @@ export const agentesIaRouter = router({
           input.modulosPermitidos && input.modulosPermitidos.length > 0
             ? input.modulosPermitidos.join(",")
             : null,
+        camposCaptura:
+          input.camposCaptura && input.camposCaptura.length > 0
+            ? JSON.stringify(input.camposCaptura)
+            : null,
         ativo: false,
         criadoPor: ctx.user.id,
       });
@@ -447,6 +455,7 @@ export const agentesIaRouter = router({
         temperatura: z.string().optional(),
         ativo: z.boolean().optional(),
         modulosPermitidos: z.array(z.string()).optional(),
+        camposCaptura: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -467,6 +476,10 @@ export const agentesIaRouter = router({
       if (input.modulosPermitidos !== undefined) {
         u.modulosPermitidos =
           input.modulosPermitidos.length > 0 ? input.modulosPermitidos.join(",") : null;
+      }
+      if (input.camposCaptura !== undefined) {
+        u.camposCaptura =
+          input.camposCaptura.length > 0 ? JSON.stringify(input.camposCaptura) : null;
       }
       if (input.openaiApiKey) {
         const enc = encryptApiKey(input.openaiApiKey);
@@ -908,6 +921,65 @@ export const agentesIaRouter = router({
 
       log.info({ templateId: input.templateId, novoId, escritorioId: perm.escritorioId }, "template clonado");
       return { id: novoId, totalDocsClonados: templateDocs.length };
+    }),
+
+  // ─── Capturar campos personalizados de uma conversa ───────────────────────
+  // Dispara extração IA + persiste em contatos.camposPersonalizados.
+  // Pode ser chamado manualmente (botão no chat) ou automaticamente após
+  // mensagem do cliente.
+  capturarCamposDaConversa: protectedProcedure
+    .input(z.object({
+      conversaId: z.number(),
+      /** Se omitido, busca agente do canal da conversa. */
+      agenteId: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório" });
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      const { conversas } = await import("../../drizzle/schema");
+
+      const [conv] = await db
+        .select()
+        .from(conversas)
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada" });
+      if (!conv.contatoId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Conversa não tem contato vinculado." });
+      }
+
+      // Resolve qual agente usar
+      let agenteId = input.agenteId;
+      if (!agenteId && conv.canalId) {
+        const { obterAgenteParaCanal } = await import("./router-agentes-ia");
+        const ag = await obterAgenteParaCanal(esc.escritorio.id, conv.canalId);
+        if (ag) agenteId = ag.id;
+      }
+      if (!agenteId) {
+        // Fallback: qualquer agente ativo do escritório com camposCaptura configurado
+        const [ag] = await db
+          .select({ id: agentesIa.id })
+          .from(agentesIa)
+          .where(and(eq(agentesIa.escritorioId, esc.escritorio.id), eq(agentesIa.ativo, true)))
+          .limit(1);
+        if (ag) agenteId = ag.id;
+      }
+      if (!agenteId) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhum agente ativo encontrado para esta conversa." });
+      }
+
+      const { extrairECaptarCampos } = await import("./agente-captura-campos");
+      const capturados = await extrairECaptarCampos({
+        agenteId,
+        conversaId: input.conversaId,
+        contatoId: conv.contatoId,
+        escritorioId: esc.escritorio.id,
+      });
+
+      return { capturados };
     }),
 
   // ─── KPIs do hero (resumo geral dos agentes) ──────────────────────────────
