@@ -448,6 +448,20 @@ export default function Financeiro() {
     [cashFlow],
   );
 
+  // Magnitude da inflação por duplicatas — alimenta banner persistente
+  // e legenda do Hero. Cache 15min, sem refetch agressivo (read-only).
+  const { data: diagDup } = (trpc as any).asaas.diagnosticarDuplicidades.useQuery(
+    undefined,
+    {
+      retry: false,
+      refetchOnWindowFocus: false,
+      staleTime: 15 * 60_000,
+      enabled: perms.podeVer,
+    },
+  );
+  const paresSuspeitosCount = diagDup?.paresSuspeitos?.count ?? 0;
+  const paresSuspeitosValor = diagDup?.paresSuspeitos?.valorTotal ?? 0;
+
   if (loadStatus) {
     return (
       <div className="space-y-6">
@@ -580,6 +594,32 @@ export default function Financeiro() {
           )}
         </div>
       </div>
+
+      {/* ═══════════ BANNER DUPLICATAS PENDENTES ═══════════ */}
+      {/* Magnitude do problema na cara do operador. Só some quando
+          paresSuspeitos.count = 0 (resolvendo via wizard). */}
+      {paresSuspeitosCount > 0 && perms.podeExcluir && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              {paresSuspeitosCount} pagamento(s) provavelmente duplicado(s) — caixa pode estar inflado em {formatBRL(paresSuspeitosValor)}
+            </p>
+            <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+              Pares com mesmo valor + datas próximas, ao menos um lado lançado manual ou
+              sem cliente vinculado. Resolva caso a caso pra ter o caixa real.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+            onClick={() => setResolverDupOpen(true)}
+          >
+            <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+            Resolver agora
+          </Button>
+        </div>
+      )}
 
       {/* ═══════════ HERO COMANDO CENTRAL ═══════════ */}
       <HeroFinanceiro
