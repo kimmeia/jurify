@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Loader2, Copy, CheckCircle2, Repeat, UserPlus } from "lucide-react";
+import { AlertTriangle, Plus, Loader2, Copy, CheckCircle2, Link2, Repeat, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ClienteCombobox } from "./ClienteCombobox";
 import { AnexosFinanceiro } from "./Anexos";
@@ -140,6 +140,25 @@ export function NovaCobrancaDialog({
   // VEZ por ação, com o contexto da ação. Cobertura do "pacote": cobro
   // R$ 3000 e abro 3 ações.
   const [acoesIds, setAcoesIds] = useState<number[]>(processoIdsIniciais || []);
+  // Prevenção de duplicata no modo manual: ao clicar Criar, antes de chamar
+  // criarManualMut, fazemos lookup por valor+data e mostramos alerta se
+  // achar Asaas pago similar (caso clássico Carlos+esposa). Operador
+  // escolhe vincular ao Asaas existente (auto-fix) ou criar mesmo assim.
+  const [duplicatasDetectadas, setDuplicatasDetectadas] = useState<any[] | null>(null);
+  const [verificandoDuplicata, setVerificandoDuplicata] = useState(false);
+  const utils = trpc.useUtils();
+  const vincularBenefMut = (trpc as any).asaas.vincularPagamentoBeneficiario.useMutation({
+    onSuccess: () => {
+      toast.success("Pagamento existente vinculado a este cliente", {
+        description: "Não foi criada cobrança nova — o pagamento original ficou no caixa do cliente.",
+      });
+      setDuplicatasDetectadas(null);
+      onSuccess();
+      onOpenChange(false);
+    },
+    onError: (err: any) =>
+      toast.error("Erro ao vincular", { description: err.message }),
+  });
 
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const { data: categoriasList = [] } = trpc.financeiro.listarCategoriasCobranca.useQuery();
@@ -201,9 +220,26 @@ export function NovaCobrancaDialog({
     },
     onError: (err: any) => toast.error("Erro", { description: err.message, duration: 8000 }),
   });
-  const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending || criarManualMut.isPending;
-  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo(asaasConectado ? "avulsa" : "manual"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); setAcoesIds([]); };
-  const handleCriar = () => {
+  const isPending = criarAvulsaMut.isPending || criarParcelaMut.isPending || criarAssinaturaMut.isPending || criarManualMut.isPending || verificandoDuplicata || vincularBenefMut.isPending;
+  const resetForm = () => { setContatoId(contatoIdInicial ? String(contatoIdInicial) : ""); setValor(""); setVencimento(""); setForma("PIX"); setDescricao(""); setParcelas("2"); setCiclo("MONTHLY"); setResultado(null); setModo(asaasConectado ? "avulsa" : "manual"); setAtendenteId("auto"); setCategoriaId("none"); setOverrideComissao("padrao"); setJaPaga(false); setDataPagamento(""); setAcoesIds([]); setDuplicatasDetectadas(null); };
+
+  /** Dispara a criação manual de fato — chamado tanto pelo fluxo normal
+   *  quanto pelo "criar mesmo assim" depois do warning de duplicata. */
+  const submeterManual = (comissaoFields: any, acoesField: any) => {
+    criarManualMut.mutate({
+      contatoId: parseInt(contatoId),
+      valor: parseFloat(valor),
+      vencimento,
+      formaPagamento: forma as any,
+      descricao: descricao || undefined,
+      ...acoesField,
+      jaPaga,
+      dataPagamento: jaPaga ? (dataPagamento || undefined) : undefined,
+      ...comissaoFields,
+    });
+  };
+
+  const handleCriar = async () => {
     const overrideMap = { padrao: undefined, sim: true, nao: false } as const;
     const comissaoFields = {
       atendenteId: atendenteId === "auto" ? undefined : parseInt(atendenteId),
@@ -246,18 +282,34 @@ export function NovaCobrancaDialog({
         ...comissaoFields,
       });
     } else {
-      // Manual: não chama Asaas. Pode nascer já paga.
-      criarManualMut.mutate({
-        contatoId: parseInt(contatoId),
-        valor: parseFloat(valor),
-        vencimento,
-        formaPagamento: forma as any,
-        descricao: descricao || undefined,
-        ...acoesField,
-        jaPaga,
-        dataPagamento: jaPaga ? (dataPagamento || undefined) : undefined,
-        ...comissaoFields,
-      });
+      // Modo manual: ANTES de criar, faz lookup por duplicata potencial.
+      // Se houver Asaas pago com mesmo valor + data próxima do outro contato,
+      // mostra alerta e oferece vincular em vez de criar.
+      // Se já está mostrando warning e o operador insiste, submete direto.
+      if (duplicatasDetectadas !== null) {
+        submeterManual(comissaoFields, acoesField);
+        return;
+      }
+      const dataRef = jaPaga ? (dataPagamento || vencimento) : vencimento;
+      setVerificandoDuplicata(true);
+      try {
+        const dup = await utils.asaas.buscarDuplicataPotencial.fetch({
+          contatoBeneficiarioId: parseInt(contatoId),
+          valor: parseFloat(valor),
+          dataReferencia: dataRef,
+          janelaDias: 7,
+        });
+        if (Array.isArray(dup) && dup.length > 0) {
+          setDuplicatasDetectadas(dup);
+          return;
+        }
+      } catch {
+        // Lookup falhou (rede etc.) — não bloqueia o submit. Operador
+        // pode revisar depois via "Resolver duplicatas".
+      } finally {
+        setVerificandoDuplicata(false);
+      }
+      submeterManual(comissaoFields, acoesField);
     }
   };
 
@@ -504,7 +556,73 @@ export function NovaCobrancaDialog({
                 </p>
               )}
             </div>
-          </div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : "Criar"}</Button></DialogFooter></>
+            {/* Warning de duplicata potencial — só aparece no modo manual
+                quando o lookup achou Asaas pago similar. Caso clássico:
+                operador vai lançar manual no Carlos, mas existe Asaas pago
+                no CPF da esposa com mesmo valor 7d atrás. Sem esse alerta,
+                o operador duplicava o caixa (problema raiz). */}
+            {modo === "manual" && duplicatasDetectadas && duplicatasDetectadas.length > 0 && (
+              <div className="mt-2 rounded-md border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 text-xs">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100">
+                      Cuidado: já existe pagamento similar no sistema
+                    </p>
+                    <p className="text-amber-800 dark:text-amber-200 mt-0.5">
+                      Encontramos {duplicatasDetectadas.length} cobrança(s) paga(s)
+                      de outro contato com o mesmo valor e data próxima.
+                      Lançar uma manual aqui vai <b>duplicar o caixa</b>.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {duplicatasDetectadas.map((d: any) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center gap-2 rounded bg-background border p-2"
+                    >
+                      <div className="flex-1 min-w-0 text-xs">
+                        <p className="font-medium truncate">
+                          {d.contatoNomePagador ?? "(sem contato)"}
+                          {d.origem === "manual" && (
+                            <span className="ml-1 text-[10px] text-amber-700">manual</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {d.descricao || "—"} · pago em{" "}
+                          {d.dataPagamento
+                            ? d.dataPagamento.split("-").reverse().join("/")
+                            : "—"}{" "}
+                          · {formatBRL(d.valor)}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[10px] shrink-0"
+                        disabled={isPending}
+                        onClick={() =>
+                          vincularBenefMut.mutate({
+                            cobrancaId: d.id,
+                            contatoBeneficiarioId: parseInt(contatoId),
+                            reatribuirAtendente: true,
+                          })
+                        }
+                        title="Vincula ESTE pagamento existente ao cliente em vez de criar uma nova cobrança duplicada"
+                      >
+                        <Link2 className="h-3 w-3 mr-1" />
+                        Vincular este
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-amber-700 dark:text-amber-300 italic">
+                  Pra criar a manual mesmo assim, clique de novo no botão "Criar".
+                </p>
+              </div>
+            )}
+          </div><DialogFooter><Button variant="outline" onClick={() => { setDuplicatasDetectadas(null); onOpenChange(false); }}>Cancelar</Button><Button onClick={handleCriar} disabled={isPending || !contatoId || !valor || !vencimento || (vencimento < new Date().toISOString().slice(0, 10) && !(modo === "manual" && jaPaga))}>{isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}{modo === "parcelada" ? `Parcelar ${parcelas}x` : modo === "recorrente" ? "Criar assinatura" : (duplicatasDetectadas && duplicatasDetectadas.length > 0 ? "Criar mesmo assim" : "Criar")}</Button></DialogFooter></>
         )}
       </DialogContent>
     </Dialog>

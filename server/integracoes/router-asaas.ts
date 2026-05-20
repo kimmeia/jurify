@@ -3355,6 +3355,75 @@ export const asaasRouter = router({
     }),
 
   /**
+   * Busca cobranças que POSSIVELMENTE são a mesma do pagamento que o
+   * operador está prestes a lançar manual. Usado pelo dialog "Nova
+   * cobrança manual" pra detectar duplicata antes do submit — evita a
+   * inflação do caixa que motivou o Sprint todo.
+   *
+   * Critério: mesma faixa de valor (±0.01) + data próxima
+   * (vencimento OU dataPagamento dentro de ±janelaDias do alvo) +
+   * cobrança pertence a OUTRO contato (não-auto) + sem beneficiário
+   * (não-resolvida ainda).
+   *
+   * UI ideal: dispara onBlur do campo valor, mostra warning inline
+   * "tem 1 pagamento Asaas de R$ 10k da Esposa Carlos em 12/05 que
+   * pode ser este — vincular em vez de criar?".
+   */
+  buscarDuplicataPotencial: protectedProcedure
+    .input(
+      z.object({
+        contatoBeneficiarioId: z.number().int().positive(),
+        valor: z.number().positive(),
+        /** Data de referência (vencimento da manual que vai criar). */
+        dataReferencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        janelaDias: z.number().int().min(0).max(60).default(7),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
+      if (!perm.verTodos && !perm.verProprios) return [];
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) return [];
+
+      const valorCent = Math.round(input.valor * 100);
+      const rows = await db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          valor: asaasCobrancas.valor,
+          status: asaasCobrancas.status,
+          origem: asaasCobrancas.origem,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          vencimento: asaasCobrancas.vencimento,
+          descricao: asaasCobrancas.descricao,
+          contatoIdPagador: asaasCobrancas.contatoId,
+          contatoNomePagador: contatos.nome,
+        })
+        .from(asaasCobrancas)
+        .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
+        .where(
+          and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
+            isNull(asaasCobrancas.contatoBeneficiarioId),
+            sql`(${asaasCobrancas.contatoId} IS NULL OR ${asaasCobrancas.contatoId} != ${input.contatoBeneficiarioId})`,
+            sql`ABS(ROUND(CAST(${asaasCobrancas.valor} AS DECIMAL(20,2)) * 100) - ${valorCent}) <= 1`,
+            sql`(
+              ABS(DATEDIFF(COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}), ${input.dataReferencia})) <= ${input.janelaDias}
+            )`,
+          ),
+        )
+        .orderBy(desc(asaasCobrancas.dataPagamento))
+        .limit(5);
+
+      return rows.map((r) => ({
+        ...r,
+        valor: parseFloat(r.valor) || 0,
+      }));
+    }),
+
+  /**
    * Lista cobranças do escritório que podem ser vinculadas como pagamento
    * deste contato (esposa/familiar pagou). Filtros aplicados:
    *  - Pagas (RECEIVED/CONFIRMED/RECEIVED_IN_CASH)
