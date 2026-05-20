@@ -12,9 +12,10 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Calculator, ArrowRightLeft, TrendingUp, Clock, Percent,
-  Loader2, Info, AlertTriangle, CheckCircle, Copy, RotateCcw,
+  Loader2, Info, AlertTriangle, CheckCircle, Copy, RotateCcw, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PulseDot } from "../dashboards/common";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1064,57 +1065,65 @@ function PrazosTab() {
 
 export default function CalculosDiversos() {
   return (
-    <div className="container max-w-5xl py-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <div className="bg-teal-100 dark:bg-teal-900/30 p-2 rounded-lg">
-            <Calculator className="h-6 w-6 text-teal-600" />
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-teal-50/20 p-6 space-y-5">
+        {/* HERO teal/cyan — distinto dos outros submódulos */}
+        <div className="rounded-2xl bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 p-6 text-white relative overflow-hidden shadow-lg">
+          <TrendingUp className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
+          <div className="relative">
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <PulseDot />
+                  <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Cálculos diversos</p>
+                </div>
+                <h2 className="text-2xl font-bold mb-1">Ferramentas de cálculo</h2>
+                <p className="text-sm text-white/80">
+                  Conversão de taxas · Juros · Atualização monetária (IPCA/SELIC/etc) · Prazos prescricionais
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-emerald-400/25 text-emerald-100 border border-emerald-300/30 h-fit">
+                <Gift className="w-3 h-3" /> Gratuito · sem créditos
+              </span>
+            </div>
           </div>
-          Cálculos Diversos
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Ferramentas de cálculo para o dia a dia do advogado — conversão de taxas, juros, atualização monetária e prazos prescricionais.
-        </p>
-        <Badge variant="outline" className="mt-2 text-green-600 border-green-300">
-          <CheckCircle className="h-3 w-3 mr-1" /> Gratuito — não consome créditos
-        </Badge>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="conversao" className="space-y-4">
+          <TabsList className="grid grid-cols-4 w-full">
+            <TabsTrigger value="conversao" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <ArrowRightLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Conversão de</span> Taxas
+            </TabsTrigger>
+            <TabsTrigger value="juros" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <Percent className="h-4 w-4" />
+              Juros
+            </TabsTrigger>
+            <TabsTrigger value="atualizacao" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Atualização</span> Monetária
+            </TabsTrigger>
+            <TabsTrigger value="prazos" className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <Clock className="h-4 w-4" />
+              Prazos
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="conversao">
+            <ConversaoTaxasTab />
+          </TabsContent>
+          <TabsContent value="juros">
+            <JurosTab />
+          </TabsContent>
+          <TabsContent value="atualizacao">
+            <AtualizacaoMonetariaTab />
+          </TabsContent>
+          <TabsContent value="prazos">
+            <PrazosTab />
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="conversao" className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="conversao" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <ArrowRightLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Conversão de</span> Taxas
-          </TabsTrigger>
-          <TabsTrigger value="juros" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <Percent className="h-4 w-4" />
-            Juros
-          </TabsTrigger>
-          <TabsTrigger value="atualizacao" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Atualização</span> Monetária
-          </TabsTrigger>
-          <TabsTrigger value="prazos" className="flex items-center gap-1.5 text-xs sm:text-sm">
-            <Clock className="h-4 w-4" />
-            Prazos
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="conversao">
-          <ConversaoTaxasTab />
-        </TabsContent>
-        <TabsContent value="juros">
-          <JurosTab />
-        </TabsContent>
-        <TabsContent value="atualizacao">
-          <AtualizacaoMonetariaTab />
-        </TabsContent>
-        <TabsContent value="prazos">
-          <PrazosTab />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }
