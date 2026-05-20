@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cálculos — Redesign dos 4 submódulos</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 0 rgba(16,185,129,0.7); animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .screen-divider { background: repeating-linear-gradient(135deg, #e2e8f0, #e2e8f0 8px, #f1f5f9 8px, #f1f5f9 16px); }
+  .section-anchor { scroll-margin-top: 60px; }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- NAV FIXO -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between sticky top-0 z-50">
+  <div class="flex items-center gap-2">
+    <i data-lucide="lightbulb" class="w-4 h-4 text-amber-300"></i>
+    <span class="font-semibold">Cálculos — Redesign dos 4 submódulos</span>
+  </div>
+  <div class="flex items-center gap-4 text-xs">
+    <a href="#bancario" class="hover:text-blue-300">Bancário</a>
+    <a href="#imobiliario" class="hover:text-emerald-300">Imobiliário</a>
+    <a href="#previdenciario" class="hover:text-violet-300">Previdenciário</a>
+    <a href="#diversos" class="hover:text-teal-300">Diversos</a>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     1. BANCÁRIO — Wizard de Modalidade + Resultado de Abusividade
+     ═══════════════════════════════════════════════════════════════════ -->
+<section id="bancario" class="section-anchor bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">Bancário</span>
+      <span class="text-xs text-slate-500">Revisão de financiamento — abusividade, anatocismo, CET, repetição de indébito</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Wizard de modalidade + análise visual de abusividade</h2>
+  </div>
+</section>
+
+<!-- BANCÁRIO — Step 1: Modalidade -->
+<div class="max-w-6xl mx-auto p-6 pb-8">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5 border border-slate-200">
+
+    <!-- Stepper -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs">
+        <a class="text-slate-500 hover:text-slate-900">Cálculos</a>
+        <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+        <a class="text-slate-500 hover:text-slate-900">Bancário</a>
+        <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+        <span class="font-medium text-slate-900">Nova revisão</span>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5"><div class="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[11px]">1</div><span class="font-medium text-slate-900">Modalidade</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">2</div><span class="text-slate-500">Contrato</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">3</div><span class="text-slate-500">Tarifas</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">4</div><span class="text-slate-500">Resultado</span></div>
+      </div>
+    </div>
+
+    <!-- Hero do step -->
+    <div class="rounded-2xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="landmark" class="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-center gap-2 mb-2"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">Passo 1 de 4</p></div>
+        <h1 class="text-2xl font-bold mb-1">Qual a modalidade do contrato?</h1>
+        <p class="text-sm text-white/80">Cada modalidade tem uma taxa média BACEN diferente e tetos legais específicos. Escolha o que está no contrato do cliente.</p>
+      </div>
+    </div>
+
+    <!-- Cards de modalidade -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <button class="group text-left bg-white rounded-xl p-5 border-2 border-blue-500 ring-2 ring-blue-100 shadow-md">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-blue-100 rounded-lg"><i data-lucide="user-circle" class="w-5 h-5 text-blue-600"></i></div>
+          <span class="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Mais comum</span>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Crédito pessoal</p>
+        <p class="text-xs text-slate-500 mb-3">Empréstimo sem garantia, taxa livre.</p>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">BACEN ~5,2% a.m.</span>
+        </div>
+      </button>
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all">
+        <div class="flex items-start gap-3 mb-3"><div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="building" class="w-5 h-5 text-slate-700"></i></div></div>
+        <p class="font-semibold text-slate-900 mb-1">Consignado</p>
+        <p class="text-xs text-slate-500 mb-3">Desconto em folha (INSS, servidor público, militar).</p>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">Teto INSS 1,85% a.m.</span>
+        </div>
+      </button>
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all">
+        <div class="flex items-start gap-3 mb-3"><div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="car" class="w-5 h-5 text-slate-700"></i></div></div>
+        <p class="font-semibold text-slate-900 mb-1">Financiamento de veículo</p>
+        <p class="text-xs text-slate-500 mb-3">CDC, garantido pelo veículo. PF ou PJ.</p>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">BACEN ~2,0% a.m.</span>
+        </div>
+      </button>
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all">
+        <div class="flex items-start gap-3 mb-3"><div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="credit-card" class="w-5 h-5 text-slate-700"></i></div></div>
+        <p class="font-semibold text-slate-900 mb-1">Cartão de crédito</p>
+        <p class="text-xs text-slate-500 mb-3">Rotativo ou parcelamento de fatura.</p>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">Teto Lei 14.690 — juros &gt; 100%</span>
+        </div>
+      </button>
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all">
+        <div class="flex items-start gap-3 mb-3"><div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="wallet" class="w-5 h-5 text-slate-700"></i></div></div>
+        <p class="font-semibold text-slate-900 mb-1">Cheque especial</p>
+        <p class="text-xs text-slate-500 mb-3">Limite emergencial conta-corrente.</p>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full">Teto CMN 4.765 — 8% a.m.</span>
+        </div>
+      </button>
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all">
+        <div class="flex items-start gap-3 mb-3"><div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="briefcase" class="w-5 h-5 text-slate-700"></i></div></div>
+        <p class="font-semibold text-slate-900 mb-1">Capital de giro</p>
+        <p class="text-xs text-slate-500 mb-3">Empréstimo PJ pra fluxo de caixa.</p>
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">BACEN ~3,5% a.m.</span>
+        </div>
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+      <button class="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1"><i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar</button>
+      <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-md flex items-center gap-2 shadow-sm">
+        Continuar com "Crédito pessoal" <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- BANCÁRIO — Resultado -->
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-rose-50/20 p-6 space-y-5 border border-slate-200">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs"><a class="text-slate-500">Cálculos</a><i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i><a class="text-slate-500">Bancário</a><i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i><span class="font-medium text-slate-900">Resultado</span></div>
+    </div>
+
+    <!-- Hero vermelho — pagou a mais (abusiva) -->
+    <div class="rounded-2xl bg-gradient-to-br from-rose-600 via-red-600 to-orange-700 p-7 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="alert-triangle" class="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-start justify-between mb-2 flex-wrap gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">⚠ Taxa abusiva detectada</p></div>
+            <p class="text-xs text-white/70">RC-20260520-BX2L01 · Crédito pessoal — Maria Andrade · 24 parcelas restantes</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="bg-white/15 hover:bg-white/25 border border-white/20 text-xs h-8 px-3 rounded-md flex items-center gap-1.5"><i data-lucide="file-down" class="w-3.5 h-3.5"></i> PDF</button>
+            <button class="bg-white/15 hover:bg-white/25 border border-white/20 text-xs h-8 px-3 rounded-md flex items-center gap-1.5"><i data-lucide="share-2" class="w-3.5 h-3.5"></i> Compartilhar</button>
+            <button class="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8 px-3 rounded-md flex items-center gap-1.5 text-xs"><i data-lucide="copy" class="w-3.5 h-3.5"></i> Novo cálculo</button>
+          </div>
+        </div>
+
+        <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          <div class="lg:col-span-6">
+            <p class="text-sm font-medium text-white/85 mb-1">Valor pago a mais (recálculo)</p>
+            <div class="flex items-baseline gap-3 flex-wrap">
+              <span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none">R$ 8.432,90</span>
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-100 border border-amber-300/30">+ R$ 16.865,80 em repetição de indébito (2x)</span>
+            </div>
+            <p class="text-xs text-white/65 mt-2 tabular-nums">Taxa contratada 7,2% a.m. × BACEN 4,1% a.m. (75% acima da média) · Teto STJ: 6,15% a.m.</p>
+          </div>
+          <div class="lg:col-span-6">
+            <p class="text-[10px] text-white/65 uppercase tracking-wider mb-2">Irregularidades</p>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><div class="flex items-center gap-1.5 mb-1"><i data-lucide="x-circle" class="w-3 h-3 text-rose-200"></i><p class="text-xs text-white/70">Anatocismo</p></div><p class="text-sm font-bold leading-none text-rose-100">Detectado</p></div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><div class="flex items-center gap-1.5 mb-1"><i data-lucide="x-circle" class="w-3 h-3 text-rose-200"></i><p class="text-xs text-white/70">TAC ilegal</p></div><p class="text-sm font-bold leading-none text-rose-100">R$ 1.200,00</p></div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><div class="flex items-center gap-1.5 mb-1"><i data-lucide="x-circle" class="w-3 h-3 text-rose-200"></i><p class="text-xs text-white/70">Seguro venda casada</p></div><p class="text-sm font-bold leading-none text-rose-100">R$ 2.840,00</p></div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><div class="flex items-center gap-1.5 mb-1"><i data-lucide="alert-triangle" class="w-3 h-3 text-amber-200"></i><p class="text-xs text-white/70">CET vs Nominal</p></div><p class="text-sm font-bold leading-none text-amber-100">+12,4 p.p.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="border-b border-slate-200 px-4">
+        <div class="flex gap-1">
+          <button class="px-4 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-700">Análise</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Demonstrativo original</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Demonstrativo recalculado</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Comparativo 4 cenários</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Parecer</button>
+        </div>
+      </div>
+      <div class="p-5">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <!-- Análise -->
+          <div class="bg-rose-50 border border-rose-200 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2"><i data-lucide="alert-octagon" class="w-4 h-4 text-rose-600"></i><p class="text-sm font-semibold text-rose-900">Taxa abusiva</p></div>
+            <div class="text-xs text-rose-800 space-y-1">
+              <p><b>Contratada:</b> 7,20% a.m. (130% a.a.)</p>
+              <p><b>Média BACEN:</b> 4,10% a.m. (62% a.a.)</p>
+              <p><b>Teto STJ (1,5× BACEN):</b> 6,15% a.m.</p>
+              <p class="mt-2 pt-2 border-t border-rose-300"><b>Fundamentação:</b> REsp 1.061.530/RS · Súmula 382/STJ</p>
+            </div>
+          </div>
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-2"><i data-lucide="repeat" class="w-4 h-4 text-amber-600"></i><p class="text-sm font-semibold text-amber-900">Anatocismo detectado</p></div>
+            <div class="text-xs text-amber-800 space-y-1">
+              <p>Taxa anual informada (130%) é superior ao duodécuplo da mensal (7,2 × 12 = 86,4%).</p>
+              <p>Indica capitalização composta de juros.</p>
+              <p class="mt-2 pt-2 border-t border-amber-300"><b>Fundamentação:</b> Súmula 541/STJ · MP 2.170-36/2001 (contrato pós-31/03/2000)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="screen-divider h-6"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     2. IMOBILIÁRIO — Wizard de Enquadramento + Resultado de Capitalização
+     ═══════════════════════════════════════════════════════════════════ -->
+<section id="imobiliario" class="section-anchor bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">Imobiliário</span>
+      <span class="text-xs text-slate-500">Financiamento habitacional — SFH/SFI, MIP, DFI, capitalização, anatocismo</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Wizard de enquadramento + análise de capitalização</h2>
+  </div>
+</section>
+
+<div class="max-w-6xl mx-auto p-6 pb-8">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5 border border-slate-200">
+    <!-- Stepper -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs"><a class="text-slate-500">Cálculos</a><i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i><a class="text-slate-500">Imobiliário</a><i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i><span class="font-medium text-slate-900">Nova revisão</span></div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5"><div class="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[11px]">1</div><span class="font-medium text-slate-900">Enquadramento</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">2</div><span class="text-slate-500">Imóvel</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">3</div><span class="text-slate-500">Contrato</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">4</div><span class="text-slate-500">Resultado</span></div>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="building-2" class="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-center gap-2 mb-2"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">Passo 1 de 4</p></div>
+        <h1 class="text-2xl font-bold mb-1">Qual o tipo de financiamento?</h1>
+        <p class="text-sm text-white/80">SFH e SFI têm tetos legais diferentes e regras distintas de capitalização. Quem é o credor (banco SFN, entidade SFI ou incorporadora) também muda a análise.</p>
+      </div>
+    </div>
+
+    <!-- Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <button class="text-left bg-white rounded-xl p-5 border-2 border-emerald-500 ring-2 ring-emerald-100 shadow-md">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-emerald-100 rounded-lg"><i data-lucide="home" class="w-5 h-5 text-emerald-600"></i></div>
+          <span class="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Mais comum</span>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">SFH — Sistema Financeiro de Habitação</p>
+        <p class="text-xs text-slate-500 mb-3">Imóvel ≤ R$ 2.250.000 · taxa máx 12% a.a. · enquadramento padrão.</p>
+        <div class="space-y-1 text-[11px] text-slate-600">
+          <p>✓ Capitalização permitida apenas se pactuada (Súmula 539/STJ)</p>
+          <p>✓ MIP + DFI obrigatórios</p>
+          <p>✓ Aceita TR, IPCA, IGPM como indexador</p>
+        </div>
+      </button>
+      <button class="text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="building" class="w-5 h-5 text-slate-700"></i></div>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">SFI — Sistema de Financiamento Imobiliário</p>
+        <p class="text-xs text-slate-500 mb-3">Imóvel &gt; R$ 2.250.000 · taxa livre · Lei 9.514/1997.</p>
+        <div class="space-y-1 text-[11px] text-slate-600">
+          <p>✗ Capitalização mensal VEDADA (REsp 2.086.650/MG)</p>
+          <p>✓ Apenas capitalização anual permitida</p>
+          <p>✓ Alienação fiduciária obrigatória</p>
+        </div>
+      </button>
+    </div>
+
+    <div class="mt-4">
+      <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">Tipo de credor (afeta análise de capitalização)</p>
+      <div class="grid grid-cols-3 gap-3">
+        <button class="bg-white rounded-lg p-3 border-2 border-emerald-500 ring-2 ring-emerald-100 text-left">
+          <div class="flex items-center gap-2 mb-1"><i data-lucide="landmark" class="w-4 h-4 text-emerald-600"></i><p class="text-sm font-semibold">Banco SFN</p></div>
+          <p class="text-xs text-slate-500">Itaú, Bradesco, Caixa, etc.</p>
+        </button>
+        <button class="bg-white rounded-lg p-3 border border-slate-200 hover:border-emerald-400 text-left">
+          <div class="flex items-center gap-2 mb-1"><i data-lucide="building-2" class="w-4 h-4 text-slate-700"></i><p class="text-sm font-semibold">Entidade SFI</p></div>
+          <p class="text-xs text-slate-500">Cias hipotecárias, FII, etc.</p>
+        </button>
+        <button class="bg-white rounded-lg p-3 border border-slate-200 hover:border-emerald-400 text-left">
+          <div class="flex items-center gap-2 mb-1"><i data-lucide="hard-hat" class="w-4 h-4 text-slate-700"></i><p class="text-sm font-semibold">Incorporadora</p></div>
+          <p class="text-xs text-slate-500">Financiamento direto.</p>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+      <button class="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1"><i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar</button>
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2.5 rounded-md flex items-center gap-2 shadow-sm">Continuar com "SFH + Banco SFN" <i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- IMOBILIÁRIO — Resultado -->
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-rose-50/20 p-6 space-y-5 border border-slate-200">
+    <div class="rounded-2xl bg-gradient-to-br from-rose-600 via-red-600 to-pink-700 p-7 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="alert-triangle" class="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-start justify-between mb-2 flex-wrap gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">⚠ Capitalização irregular</p></div>
+            <p class="text-xs text-white/70">IMOB-20260520-FX91A2 · SFH · PRICE com IPCA · 360 parcelas · Carlos Mendes</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="bg-white/15 hover:bg-white/25 border border-white/20 text-xs h-8 px-3 rounded-md flex items-center gap-1.5"><i data-lucide="file-down" class="w-3.5 h-3.5"></i> PDF</button>
+            <button class="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8 px-3 rounded-md flex items-center gap-1.5 text-xs"><i data-lucide="copy" class="w-3.5 h-3.5"></i> Novo</button>
+          </div>
+        </div>
+        <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          <div class="lg:col-span-6">
+            <p class="text-sm font-medium text-white/85 mb-1">Valor da diferença em 360 parcelas</p>
+            <div class="flex items-baseline gap-3 flex-wrap"><span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none">R$ 47.211,80</span></div>
+            <p class="text-xs text-white/65 mt-2 tabular-nums">PRICE com IPCA gera capitalização composta sobre saldo corrigido (Tema 572/STJ)</p>
+          </div>
+          <div class="lg:col-span-6">
+            <p class="text-[10px] text-white/65 uppercase tracking-wider mb-2">Composição da diferença</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><p class="text-xs text-white/70 mb-1">Juros excessivos</p><p class="text-lg font-bold tabular-nums leading-none">R$ 38.420</p></div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><p class="text-xs text-white/70 mb-1">MIP recálculo</p><p class="text-lg font-bold tabular-nums leading-none">R$ 5.840</p></div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15"><p class="text-xs text-white/70 mb-1">DFI ajuste</p><p class="text-lg font-bold tabular-nums leading-none">R$ 2.951</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="border-b border-slate-200 px-4">
+        <div class="flex gap-1">
+          <button class="px-4 py-3 text-sm font-medium border-b-2 border-emerald-600 text-emerald-700">Capitalização</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">MIP / DFI</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Demonstrativos</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Parecer</button>
+        </div>
+      </div>
+      <div class="p-5 space-y-3">
+        <div class="bg-rose-50 border border-rose-200 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2"><i data-lucide="alert-octagon" class="w-4 h-4 text-rose-600"></i><p class="text-sm font-semibold text-rose-900">Regime SFH pós-2009 + Banco SFN — Capitalização permitida APENAS se pactuada</p></div>
+          <p class="text-xs text-rose-800">Contrato não traz cláusula de capitalização expressa. Sistema PRICE com correção mensal (IPCA) gera capitalização composta de fato. Conforme Súmula 539/STJ e Tema 572/STJ, exige perícia pra aferir anatocismo.</p>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i><p class="text-sm font-semibold text-emerald-900">Taxa SFH dentro do teto</p></div>
+          <p class="text-xs text-emerald-800">Taxa 9,5% a.a. está abaixo do teto de 12% a.a. (Lei 8.692/1993). Não há abusividade direta da taxa de juros.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="screen-divider h-6"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     3. PREVIDENCIÁRIO — Timeline de Períodos + Comparativo de Regras
+     ═══════════════════════════════════════════════════════════════════ -->
+<section id="previdenciario" class="section-anchor bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">Previdenciário</span>
+      <span class="text-xs text-slate-500">Aposentadoria, RMI e GPS — 10 regras EC 103/2019</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Timeline de períodos + comparativo visual das 10 regras</h2>
+  </div>
+</section>
+
+<div class="max-w-6xl mx-auto p-6 pb-8">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-violet-50/20 p-6 space-y-5 border border-slate-200">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs"><a class="text-slate-500">Cálculos</a><i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i><a class="text-slate-500">Previdenciário</a><i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i><span class="font-medium text-slate-900">Simulador</span></div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5"><div class="w-6 h-6 rounded-full bg-violet-600 text-white font-bold flex items-center justify-center text-[11px]">1</div><span class="font-medium text-slate-900">Períodos</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">2</div><span class="text-slate-500">Dados pessoais</span></div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50"><div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">3</div><span class="text-slate-500">Resultado</span></div>
+      </div>
+    </div>
+
+    <div class="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="shield-check" class="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-center gap-2 mb-2"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">Passo 1 de 3</p></div>
+        <h1 class="text-2xl font-bold mb-1">Cadastre os períodos de contribuição</h1>
+        <p class="text-sm text-white/80">Adicione cada vínculo (CLT, autônomo, especial, rural). Períodos sobrepostos contam só uma vez (correção implementada no engine).</p>
+      </div>
+    </div>
+
+    <!-- Timeline visual de períodos -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm font-semibold text-slate-800">Períodos cadastrados (4)</p>
+        <button class="text-xs bg-violet-600 text-white px-3 py-1.5 rounded-md hover:bg-violet-700 flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Adicionar período</button>
+      </div>
+
+      <!-- Timeline -->
+      <div class="space-y-3">
+        <div class="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
+          <div class="p-2 bg-blue-100 rounded"><i data-lucide="building" class="w-4 h-4 text-blue-600"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Empresa X — Analista de TI</p>
+            <p class="text-xs text-slate-500">CLT · URBANA COMUM · 01/Mar/2010 → 31/Jul/2015 · 65 meses</p>
+          </div>
+          <div class="w-48 h-2 bg-slate-200 rounded-full overflow-hidden"><div class="h-full bg-blue-500" style="width: 35%"></div></div>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
+          <div class="p-2 bg-orange-100 rounded"><i data-lucide="hard-hat" class="w-4 h-4 text-orange-600"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Construtora Y — Operário (insalubre)</p>
+            <p class="text-xs text-slate-500">CLT · URBANA ESPECIAL 25 anos · 15/Ago/2015 → 30/Jun/2019 · 47 meses</p>
+          </div>
+          <div class="w-48 h-2 bg-slate-200 rounded-full overflow-hidden"><div class="h-full bg-orange-500" style="width: 26%"></div></div>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+        </div>
+        <div class="bg-amber-50 rounded-lg p-3 flex items-center gap-3 border border-amber-300">
+          <div class="p-2 bg-amber-100 rounded"><i data-lucide="alert-triangle" class="w-4 h-4 text-amber-700"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Autônomo — Consultoria</p>
+            <p class="text-xs text-amber-800">Contribuinte Individual · URBANA COMUM · 01/Jan/2018 → 31/Dez/2024 · sobrepõe com Construtora Y por 18 meses (Jan/18 a Jun/19) — contado só uma vez ✓</p>
+          </div>
+          <div class="w-48 h-2 bg-amber-200 rounded-full overflow-hidden"><div class="h-full bg-amber-500" style="width: 47%"></div></div>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
+          <div class="p-2 bg-emerald-100 rounded"><i data-lucide="briefcase" class="w-4 h-4 text-emerald-600"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Empresa Z — Gerente</p>
+            <p class="text-xs text-slate-500">CLT · URBANA COMUM · 01/Jan/2025 → ativo · 5 meses</p>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded-full text-[10px] bg-emerald-100 text-emerald-700"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Ainda ativo</span>
+          </div>
+          <div class="w-48 h-2 bg-slate-200 rounded-full overflow-hidden"><div class="h-full bg-emerald-500" style="width: 3%"></div></div>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+
+      <!-- TC acumulado -->
+      <div class="mt-4 pt-4 border-t border-slate-200 grid grid-cols-3 gap-3">
+        <div class="bg-violet-50 rounded-lg p-3">
+          <p class="text-xs text-violet-700 mb-1">TC total (calendário)</p>
+          <p class="text-xl font-bold tabular-nums text-violet-900">14 anos · 9 meses</p>
+        </div>
+        <div class="bg-orange-50 rounded-lg p-3">
+          <p class="text-xs text-orange-700 mb-1">TC especial não convertido</p>
+          <p class="text-xl font-bold tabular-nums text-orange-900">3 anos · 11 meses</p>
+        </div>
+        <div class="bg-blue-50 rounded-lg p-3">
+          <p class="text-xs text-blue-700 mb-1">TC comum + convertido (1,4×)</p>
+          <p class="text-xl font-bold tabular-nums text-blue-900">17 anos · 5 meses</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+      <button class="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1"><i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar</button>
+      <button class="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-6 py-2.5 rounded-md flex items-center gap-2 shadow-sm">Continuar para dados pessoais <i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- PREVIDENCIÁRIO — Resultado: comparativo de regras -->
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-violet-50/20 p-6 space-y-5 border border-slate-200">
+    <div class="rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-700 p-7 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="award" class="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-start justify-between mb-2 flex-wrap gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">Melhor regra</p></div>
+            <p class="text-xs text-white/70">PREV-20260520-AAB7C9 · Roberto Lima (M, 58 anos) · 4 períodos cadastrados</p>
+          </div>
+        </div>
+        <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          <div class="lg:col-span-7">
+            <p class="text-sm font-medium text-white/85 mb-1">Pedágio 100% (art. 20 EC 103)</p>
+            <div class="flex items-baseline gap-3 flex-wrap"><span class="text-4xl font-extrabold tracking-tight tabular-nums leading-none">100% da média</span></div>
+            <p class="text-xs text-white/65 mt-2 tabular-nums">Elegível em <b class="text-white">3 anos e 8 meses</b> (Jan/2030) · Pedágio: 28 meses · Benefício integral</p>
+          </div>
+          <div class="lg:col-span-5">
+            <p class="text-[10px] text-white/65 uppercase tracking-wider mb-2">RMI estimada</p>
+            <div class="bg-white/10 rounded-lg px-4 py-3 border border-white/15">
+              <p class="text-3xl font-bold tabular-nums leading-none">R$ 6.842,30</p>
+              <p class="text-xs text-white/70 mt-1">média de 100% dos salários × coef. 100%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparativo das outras regras -->
+    <div>
+      <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-3">Outras regras aplicáveis (5)</p>
+      <div class="space-y-2">
+        <div class="bg-white rounded-lg p-4 border border-slate-200 flex items-center gap-4">
+          <div class="p-2 bg-amber-100 rounded-lg"><i data-lucide="trending-up" class="w-5 h-5 text-amber-600"></i></div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2"><p class="font-semibold text-sm">Idade Progressiva</p><span class="text-[10px] uppercase font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Próxima</span></div>
+            <p class="text-xs text-slate-500">art. 16 EC 103 · Elegível em 4 anos · Idade mín 64 anos · TC 35 anos</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">Coef.</p>
+            <p class="text-sm font-bold tabular-nums">76%</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">RMI est.</p>
+            <p class="text-sm font-bold tabular-nums text-slate-700">R$ 5.200</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg p-4 border border-slate-200 flex items-center gap-4">
+          <div class="p-2 bg-emerald-100 rounded-lg"><i data-lucide="award" class="w-5 h-5 text-emerald-600"></i></div>
+          <div class="flex-1">
+            <p class="font-semibold text-sm">Pontos</p>
+            <p class="text-xs text-slate-500">art. 15 EC 103 · Elegível em 5 anos · Pontos req. 105 (atuais 92) · TC 35 anos</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">Coef.</p>
+            <p class="text-sm font-bold tabular-nums">82%</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">RMI est.</p>
+            <p class="text-sm font-bold tabular-nums text-slate-700">R$ 5.610</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg p-4 border border-slate-200 flex items-center gap-4">
+          <div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="user" class="w-5 h-5 text-slate-700"></i></div>
+          <div class="flex-1">
+            <p class="font-semibold text-sm">Pedágio 50%</p>
+            <p class="text-xs text-slate-500">art. 17 EC 103 · Pedágio: 14m · Fator Previdenciário · Não recomendada</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">Coef.</p>
+            <p class="text-sm font-bold tabular-nums">68%</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">RMI est.</p>
+            <p class="text-sm font-bold tabular-nums text-slate-700">R$ 4.650</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-lg p-4 border border-slate-200 flex items-center gap-4 opacity-60">
+          <div class="p-2 bg-orange-100 rounded-lg"><i data-lucide="hard-hat" class="w-5 h-5 text-orange-600"></i></div>
+          <div class="flex-1">
+            <p class="font-semibold text-sm">Especial — Transição (25 anos)</p>
+            <p class="text-xs text-slate-500">art. 21 EC 103 · TC especial faltante: 21a 1m · Inelegível</p>
+          </div>
+          <div class="text-right text-xs text-slate-400">Não atinge</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="screen-divider h-6"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     4. CÁLCULOS DIVERSOS — Grid de ferramentas
+     ═══════════════════════════════════════════════════════════════════ -->
+<section id="diversos" class="section-anchor bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-100 text-teal-700">Cálculos Diversos</span>
+      <span class="text-xs text-slate-500">Ferramentas independentes — grátis, sem consumo de créditos</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Grid de 5 ferramentas + atalhos com últimos valores</h2>
+  </div>
+</section>
+
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-teal-50/20 p-6 space-y-5 border border-slate-200">
+    <!-- Hero teal -->
+    <div class="rounded-2xl bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="trending-up" class="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-start justify-between mb-2 flex-wrap gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1"><div class="pulse-dot"></div><p class="text-xs font-medium text-white/85 uppercase tracking-wider">Cálculos Diversos</p></div>
+            <p class="text-xs text-white/70">Conversão de taxas · Juros · Atualização monetária · Prazos prescricionais</p>
+          </div>
+          <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-emerald-400/25 text-emerald-100 border border-emerald-300/30">
+            <i data-lucide="gift" class="w-3 h-3"></i> Gratuito · sem consumo de créditos
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid de ferramentas -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <button class="text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all">
+        <div class="p-2.5 bg-teal-100 rounded-lg w-fit mb-3"><i data-lucide="percent" class="w-5 h-5 text-teal-600"></i></div>
+        <p class="font-semibold text-slate-900 mb-1">Conversão de taxas</p>
+        <p class="text-xs text-slate-500 mb-3">Mensal ↔ anual · efetiva ↔ nominal · base 365 vs 252 dias</p>
+        <p class="text-[11px] text-slate-400">Ex: 1% a.m. → 12,68% a.a.</p>
+      </button>
+
+      <button class="text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all">
+        <div class="p-2.5 bg-emerald-100 rounded-lg w-fit mb-3"><i data-lucide="line-chart" class="w-5 h-5 text-emerald-600"></i></div>
+        <p class="font-semibold text-slate-900 mb-1">Taxa real (Fisher)</p>
+        <p class="text-xs text-slate-500 mb-3">Desconto de inflação · (1+i)/(1+π)−1</p>
+        <p class="text-[11px] text-slate-400">Ex: 10% nominal − 4% IPCA = 5,77% real</p>
+      </button>
+
+      <button class="text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all">
+        <div class="p-2.5 bg-blue-100 rounded-lg w-fit mb-3"><i data-lucide="calculator" class="w-5 h-5 text-blue-600"></i></div>
+        <p class="font-semibold text-slate-900 mb-1">Juros simples / compostos</p>
+        <p class="text-xs text-slate-500 mb-3">Evolução período a período · tabela de saldos</p>
+        <p class="text-[11px] text-slate-400">Ex: R$ 10.000 a 1% a.m. por 24m</p>
+      </button>
+
+      <button class="text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all">
+        <div class="p-2.5 bg-violet-100 rounded-lg w-fit mb-3"><i data-lucide="trending-up" class="w-5 h-5 text-violet-600"></i></div>
+        <p class="font-semibold text-slate-900 mb-1">Atualização monetária</p>
+        <p class="text-xs text-slate-500 mb-3">8 índices (IPCA, IGPM, SELIC, CDI, TR, INPC...) · BACEN em tempo real</p>
+        <p class="text-[11px] text-slate-400">+ juros de mora e multa opcionais</p>
+      </button>
+
+      <button class="text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-md transition-all">
+        <div class="p-2.5 bg-amber-100 rounded-lg w-fit mb-3"><i data-lucide="hourglass" class="w-5 h-5 text-amber-600"></i></div>
+        <p class="font-semibold text-slate-900 mb-1">Prazo prescricional</p>
+        <p class="text-xs text-slate-500 mb-3">Civil · Trabalhista · Tributário · Consumidor · Penal</p>
+        <p class="text-[11px] text-slate-400">+ suspensões e interrupções</p>
+      </button>
+
+      <div class="rounded-xl p-5 bg-gradient-to-br from-slate-100 to-slate-50 border border-dashed border-slate-300">
+        <div class="p-2.5 bg-white rounded-lg w-fit mb-3"><i data-lucide="sparkles" class="w-5 h-5 text-slate-400"></i></div>
+        <p class="font-semibold text-slate-600 mb-1">Sugestões?</p>
+        <p class="text-xs text-slate-500">Há outra ferramenta diversa que você gostaria de ver aqui? Conte pra gente.</p>
+      </div>
+    </div>
+
+    <!-- Últimos resultados rápidos -->
+    <div>
+      <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-3">Seus últimos cálculos rápidos (locais)</p>
+      <div class="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+        <div class="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer">
+          <div class="p-1.5 bg-teal-100 rounded"><i data-lucide="percent" class="w-3.5 h-3.5 text-teal-600"></i></div>
+          <div class="flex-1 text-sm"><b>Conversão:</b> 1,5% a.m. → <span class="tabular-nums">19,56% a.a.</span></div>
+          <span class="text-xs text-slate-400">há 5 min</span>
+        </div>
+        <div class="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer">
+          <div class="p-1.5 bg-violet-100 rounded"><i data-lucide="trending-up" class="w-3.5 h-3.5 text-violet-600"></i></div>
+          <div class="flex-1 text-sm"><b>IPCA jan/22 → dez/24:</b> R$ 50.000,00 → <span class="tabular-nums">R$ 56.842,30</span> (+13,68%)</div>
+          <span class="text-xs text-slate-400">há 2h</span>
+        </div>
+        <div class="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer">
+          <div class="p-1.5 bg-amber-100 rounded"><i data-lucide="hourglass" class="w-3.5 h-3.5 text-amber-600"></i></div>
+          <div class="flex-1 text-sm"><b>Prescrição civil 3 anos</b> (reparação) — fato 15/Mar/2022 → prescreve <span class="tabular-nums">15/Mar/2025</span> · <span class="text-rose-600 font-medium">prescrito há 66 dias</span></div>
+          <span class="text-xs text-slate-400">ontem</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rodapé explicativo -->
+<div class="bg-slate-50 border-t border-slate-200 py-12">
+  <div class="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div>
+      <div class="flex items-center gap-2 mb-2"><i data-lucide="landmark" class="w-5 h-5 text-blue-600"></i><p class="font-semibold text-slate-900">Bancário</p></div>
+      <p class="text-sm text-slate-600">Escolha visual da modalidade (com taxa BACEN como referência). Resultado vermelho destaca abusividade + irregularidades em mini-cards.</p>
+    </div>
+    <div>
+      <div class="flex items-center gap-2 mb-2"><i data-lucide="building-2" class="w-5 h-5 text-emerald-600"></i><p class="font-semibold text-slate-900">Imobiliário</p></div>
+      <p class="text-sm text-slate-600">Enquadramento (SFH/SFI) + tipo de credor escolhidos visualmente. Resultado destaca análise de capitalização (Tema 572/STJ) e MIP/DFI separados.</p>
+    </div>
+    <div>
+      <div class="flex items-center gap-2 mb-2"><i data-lucide="shield-check" class="w-5 h-5 text-violet-600"></i><p class="font-semibold text-slate-900">Previdenciário</p></div>
+      <p class="text-sm text-slate-600">Timeline visual dos vínculos com aviso de sobreposição. Resultado mostra a MELHOR regra em destaque + comparativo das outras 9 ordenadas por elegibilidade.</p>
+    </div>
+    <div>
+      <div class="flex items-center gap-2 mb-2"><i data-lucide="trending-up" class="w-5 h-5 text-teal-600"></i><p class="font-semibold text-slate-900">Cálculos Diversos</p></div>
+      <p class="text-sm text-slate-600">Grid de 5 ferramentas independentes (sem wizard — escolha direta). Histórico local dos últimos cálculos rápidos. Tudo gratuito (badge "Grátis" visível).</p>
+    </div>
+  </div>
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>
