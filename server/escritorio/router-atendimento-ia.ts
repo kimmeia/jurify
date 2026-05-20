@@ -580,6 +580,91 @@ export const atendimentoIaRouter = router({
     }),
 
   // ─── Persona Risk Score ────────────────────────────────────────────────────
+  // ─── Composer Sugestão (IA escreve resposta no tom selecionado) ────────────
+  composerSugestao: protectedProcedure
+    .input(z.object({
+      conversaId: z.number(),
+      tom: z.enum(["formal", "direto", "empatico", "amigavel"]).default("empatico"),
+      hintAdvogado: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Sem escritório");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const [conv] = await db
+        .select()
+        .from(conversas)
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
+        .limit(1);
+      if (!conv) throw new Error("Conversa não encontrada");
+
+      const [contato] = conv.contatoId
+        ? await db.select().from(contatos).where(eq(contatos.id, conv.contatoId)).limit(1)
+        : [null];
+
+      const msgs = await db
+        .select()
+        .from(mensagens)
+        .where(eq(mensagens.conversaId, input.conversaId))
+        .orderBy(desc(mensagens.createdAt))
+        .limit(20);
+      msgs.reverse();
+
+      const chave = await resolverChaveIA();
+      if (!chave) {
+        // Fallback determinístico — devolve template baseado no tom
+        const primeiroNome = (contato?.nome || "Cliente").split(" ")[0];
+        const templates: Record<string, string> = {
+          formal: `Prezado(a) ${primeiroNome}, recebi sua mensagem. Estarei à disposição para tratar do tema. Atenciosamente.`,
+          direto: `Olá ${primeiroNome}. Recebi e vou retornar com a posição em seguida.`,
+          empatico: `Olá ${primeiroNome}! Fica tranquilo(a), vou cuidar disso pra você. Já te dou retorno.`,
+          amigavel: `Oi ${primeiroNome}! Tudo bem? Recebi sua mensagem, vou te dar um retorno rapidinho.`,
+        };
+        return { ia: false, sugestao: templates[input.tom] || templates.empatico };
+      }
+
+      const tomDescricao = {
+        formal: "formal, com tratamento 'Prezado(a)', cordialidade institucional, sem emojis. Termina com 'Atenciosamente'.",
+        direto: "direto e objetivo, sem floreios, em 2-3 frases. Tratamento informal sem ser íntimo. Sem emojis.",
+        empatico: "empático e acolhedor, demonstra que entendeu a preocupação. Pode usar 1 emoji discreto se ajudar a transmitir empatia. Tratamento informal.",
+        amigavel: "amigável e leve, conversacional. Pode usar 1-2 emojis. Tratamento bem informal, como amigo.",
+      }[input.tom];
+
+      const ultimaCliente = [...msgs].reverse().find((m: any) => m.direcao === "entrada");
+
+      try {
+        const raw = await chamarIA({
+          system: [
+            "Você é um advogado brasileiro experiente respondendo via WhatsApp ao seu cliente.",
+            `Tom da resposta: ${tomDescricao}`,
+            "REGRAS DURAS:",
+            "- NÃO faça promessa de resultado (vedado pelo Art. 30 II do Cód. Ética OAB).",
+            "- NÃO mencione preço menor que concorrência (vedado pelo Provimento 205/2021).",
+            "- Use APENAS info disponível, NÃO invente datas, valores, prazos.",
+            "- Resposta enxuta: máximo 4 frases.",
+            "- NÃO use markdown.",
+            "- Comece direto na resposta — sem 'Aqui está a resposta:' ou similares.",
+          ].join("\n"),
+          user: [
+            `Cliente: ${contato?.nome || "?"}`,
+            `\nHistórico recente da conversa (mais recente embaixo):\n${resumirMensagens(msgs, 12)}`,
+            ultimaCliente ? `\n\nÚltima mensagem do cliente:\n"${(ultimaCliente.conteudo || "").slice(0, 500)}"` : "",
+            input.hintAdvogado ? `\n\nDica do advogado sobre o que responder: ${input.hintAdvogado}` : "",
+            `\n\nComponha a resposta no tom '${input.tom}'.`,
+          ].filter(Boolean).join("\n"),
+          maxTokens: 400,
+          temperature: 0.5,
+        });
+        return { ia: true, sugestao: raw.trim().replace(/^["']|["']$/g, "") };
+      } catch (e: any) {
+        log.warn({ err: e?.message, conversaId: input.conversaId }, "composerSugestao IA falhou");
+        const primeiroNome = (contato?.nome || "Cliente").split(" ")[0];
+        return { ia: false, sugestao: `Olá ${primeiroNome}! Recebi sua mensagem, vou te dar um retorno em instantes.`, erro: "IA indisponível" };
+      }
+    }),
+
   riskScore: protectedProcedure
     .input(z.object({ conversaId: z.number() }))
     .query(async ({ ctx, input }) => {

@@ -736,6 +736,18 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [showTransferir, setShowTransferir] = useState(false);
   const [showVincular, setShowVincular] = useState(false);
   const [buscaVincular, setBuscaVincular] = useState("");
+  const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
+
+  // Compor com IA — gera sugestão no tom escolhido
+  const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
+    onSuccess: (data) => {
+      setMsg(data.sugestao);
+      if (data.ia === false) {
+        toast.info("IA não configurada — usando template baseado no tom.");
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   // Atendentes pra transferência
   const { data: atendentes } = trpc.crm.listarAtendentes.useQuery();
@@ -922,49 +934,114 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       onAplicarSugestao={(s) => setMsg(s)}
       onIgnorar={() => { /* registrar event log se quiser auditar */ }}
     />
-    <div className="p-3 border-t flex gap-2 bg-muted/20 relative">
-      <Popover open={showTemplates} onOpenChange={setShowTemplates}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rapidas"><Zap className="h-4 w-4" /></Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-2" align="start" side="top">
-          <p className="text-xs font-medium px-2 pb-0.5 text-muted-foreground">Respostas rápidas</p>
-          <p className="text-[10px] px-2 pb-1.5 text-muted-foreground/80">
-            Dica: digite <span className="font-mono">/</span> no campo de mensagem para autocompletar.
-          </p>
-          {tplList && tplList.length > 0 ? (
-            <div className="max-h-48 overflow-y-auto space-y-0.5">
-              {tplList.map((t: any) => (
-                <div key={t.id} className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors" onClick={() => { setMsg(t.conteudo); setShowTemplates(false); }}>
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-xs">{t.titulo}</p>
-                    {t.atalho && <span className="font-mono text-[10px] text-primary/80">{t.atalho}</span>}
+    {/* Composer ULTRA: Tone Selector + Compor IA + Slash + Compliance badge */}
+    <div className="border-t bg-muted/20">
+      {/* Linha 1: Tone Selector + ✨ Compor IA + Compliance badge */}
+      <div className="px-3 pt-2 pb-1.5 flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Tom:</span>
+        <div className="inline-flex bg-background border rounded-lg p-0.5 gap-0 shadow-sm">
+          {(["formal", "direto", "empatico", "amigavel"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTom(t)}
+              className={
+                "px-2.5 py-1 rounded-md text-[11px] font-medium transition " +
+                (tom === t
+                  ? "bg-violet-100 text-violet-700 font-semibold"
+                  : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
+            </button>
+          ))}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-[11px] border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-700 px-2.5"
+          disabled={composerSugestao.isPending}
+          onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
+          title="Gerar resposta com IA no tom selecionado"
+        >
+          {composerSugestao.isPending
+            ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            : <Sparkles className="h-3 w-3 mr-1" />
+          }
+          Compor com IA
+        </Button>
+        <div className="flex-1" />
+        <ComplianceGuardBadge />
+      </div>
+
+      {/* Linha 2: Composer */}
+      <div className="p-3 pt-2 flex gap-2">
+        <Popover open={showTemplates} onOpenChange={setShowTemplates}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rápidas">
+              <Zap className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-2" align="start" side="top">
+            <p className="text-xs font-medium px-2 pb-0.5 text-muted-foreground">Respostas rápidas</p>
+            <p className="text-[10px] px-2 pb-1.5 text-muted-foreground/80">
+              Dica: digite <span className="font-mono bg-muted px-1 rounded">/</span> no campo de mensagem para autocompletar.
+            </p>
+            {tplList && tplList.length > 0 ? (
+              <div className="max-h-56 overflow-y-auto space-y-0.5">
+                {tplList.map((t: any) => (
+                  <div
+                    key={t.id}
+                    className="rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted text-sm transition-colors"
+                    onClick={() => { setMsg(t.conteudo); setShowTemplates(false); }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-xs">{t.titulo}</p>
+                      {t.atalho && (
+                        <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
+                          /{t.atalho}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configurações.</p>
-          )}
-        </PopoverContent>
-      </Popover>
-      <RespostaRapidaAutocomplete
-        value={msg}
-        onChange={setMsg}
-        templates={(tplList || []) as any}
-        onEnter={send}
-        placeholder="Digite sua mensagem..."
-        className="bg-background"
-      />
-      <AudioRecordButton onSend={(text) => enviar.mutate({ conversaId: cid, conteudo: text })} />
-      <Button size="sm" onClick={send} disabled={!msg.trim() || enviar.isPending} className="px-4">{enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
-    </div>
-    <div className="px-3 pb-2 flex items-center justify-between gap-2 bg-muted/20 border-t-0">
-      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-        Dica: <span className="font-mono bg-background px-1 rounded border">/</span> respostas rápidas
-      </span>
-      <ComplianceGuardBadge />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-3">Nenhum template. Crie em Configurações.</p>
+            )}
+          </PopoverContent>
+        </Popover>
+        <RespostaRapidaAutocomplete
+          value={msg}
+          onChange={setMsg}
+          templates={(tplList || []) as any}
+          onEnter={send}
+          placeholder="Digite sua mensagem… ou clique em ✨ Compor com IA"
+          className="bg-background"
+        />
+        <AudioRecordButton onSend={(text) => enviar.mutate({ conversaId: cid, conteudo: text })} />
+        <Button
+          size="sm"
+          onClick={send}
+          disabled={!msg.trim() || enviar.isPending}
+          className="px-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+        >
+          {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Linha 3: Hint compacto */}
+      <div className="px-3 pb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">/</kbd> respostas rápidas
+          <span className="mx-1.5">·</span>
+          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">Enter</kbd> enviar
+        </span>
+        {composerSugestao.data?.ia === false && (
+          <span className="text-amber-600 text-[10px]">⚠ IA não configurada — usando template</span>
+        )}
+      </div>
     </div>
     {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
 
