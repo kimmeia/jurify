@@ -16,21 +16,38 @@ export interface ChatBotConfig {
 }
 export interface ChatBotMessage { role: "system" | "user" | "assistant"; content: string; }
 
-/** Gera resposta usando Anthropic Claude API */
-export async function gerarRespostaAnthropic(apiKey: string, modelo: string, prompt: string, historico: ChatBotMessage[], msgCliente: string, maxTokens?: number, temperatura?: number): Promise<{ resposta: string | null; tokensUsados: number; erro?: string }> {
+/** Gera resposta usando Anthropic Claude API. Timeout default 30s. */
+export async function gerarRespostaAnthropic(
+  apiKey: string,
+  modelo: string,
+  prompt: string,
+  historico: ChatBotMessage[],
+  msgCliente: string,
+  maxTokens?: number,
+  temperatura?: number,
+  timeoutMs: number = 30000,
+): Promise<{ resposta: string | null; tokensUsados: number; erro?: string }> {
   try {
     const messages = [...historico.slice(-20).map(m => ({ role: m.role === "system" ? "user" as const : m.role, content: m.content })), { role: "user" as const, content: msgCliente }];
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: modelo || "claude-haiku-4-5-20251001", system: prompt, messages, max_tokens: maxTokens || 500, temperature: temperatura || 0.7 }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) { const err = await res.text(); log.error({ status: res.status, err }, "Anthropic retornou erro"); return { resposta: null, tokensUsados: 0, erro: `Claude ${res.status}` }; }
     const data = await res.json();
     const texto = data.content?.[0]?.text?.trim() || "";
     const tokens = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
     return { resposta: texto, tokensUsados: tokens };
-  } catch (err: any) { log.error(`[Claude] Erro:`, err.message); return { resposta: null, tokensUsados: 0, erro: err.message }; }
+  } catch (err: any) {
+    if (err?.name === "AbortError" || err?.name === "TimeoutError") {
+      log.warn({ timeoutMs }, "[Claude] Timeout");
+      return { resposta: null, tokensUsados: 0, erro: "Claude timeout" };
+    }
+    log.error(`[Claude] Erro:`, err.message);
+    return { resposta: null, tokensUsados: 0, erro: err.message };
+  }
 }
 
 export async function obterConfigChatBot(escritorioId: number, canalId?: number): Promise<ChatBotConfig | null> {

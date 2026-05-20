@@ -13,6 +13,10 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -114,7 +118,13 @@ function AgenteFormDialog({
   useEffect(() => {
     if (!open) return;
     if (!agenteId) {
-      setForm(DEFAULT_FORM);
+      // Se o escritório só tem Claude configurado, default vai pra modelo
+      // Claude — senão o user cria o agente com gpt-4o-mini e a IA falha
+      // por falta de key OpenAI ao testar.
+      const modeloPadrao = !chatgptConfigurado && claudeConfigurado
+        ? "claude-haiku-4-5-20251001"
+        : DEFAULT_FORM.modelo;
+      setForm({ ...DEFAULT_FORM, modelo: modeloPadrao });
       return;
     }
     if (existing) {
@@ -131,7 +141,7 @@ function AgenteFormDialog({
         openaiApiKey: "", // nunca popula (key criptografada — user precisa digitar de novo se quiser trocar)
       });
     }
-  }, [open, agenteId, existing]);
+  }, [open, agenteId, existing, chatgptConfigurado, claudeConfigurado]);
 
   const criarMut = trpc.agentesIa.criar.useMutation({
     onSuccess: () => {
@@ -390,6 +400,7 @@ function TreinamentoDialog({
   const [testeQuestion, setTesteQuestion] = useState("");
   const [testeResposta, setTesteResposta] = useState<string | null>(null);
   const [tokensUsados, setTokensUsados] = useState<number>(0);
+  const [docParaExcluir, setDocParaExcluir] = useState<{ id: number; nome: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -552,11 +563,7 @@ function TreinamentoDialog({
                       </a>
                     )}
                     <button
-                      onClick={() => {
-                        if (confirm(`Remover "${d.nome}"?`)) {
-                          deletarDocMut.mutate({ id: d.id });
-                        }
-                      }}
+                      onClick={() => setDocParaExcluir({ id: d.id, nome: d.nome })}
                       className="text-muted-foreground hover:text-destructive"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -702,6 +709,39 @@ function TreinamentoDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog
+        open={docParaExcluir !== null}
+        onOpenChange={(o) => { if (!o) setDocParaExcluir(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O documento <strong>{docParaExcluir?.nome}</strong> será removido
+              do treinamento deste agente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarDocMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarDocMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (docParaExcluir) {
+                  deletarDocMut.mutate(
+                    { id: docParaExcluir.id },
+                    { onSuccess: () => setDocParaExcluir(null) },
+                  );
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarDocMut.isPending ? "Removendo..." : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
@@ -716,6 +756,7 @@ export default function AgentesIA() {
   const [formOpen, setFormOpen] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [treinandoId, setTreinandoId] = useState<number | null>(null);
+  const [agenteParaExcluir, setAgenteParaExcluir] = useState<{ id: number; nome: string } | null>(null);
 
   const toggleAtivoMut = trpc.agentesIa.toggleAtivo.useMutation({
     onSuccess: () => {
@@ -888,15 +929,7 @@ export default function AgentesIA() {
                     size="sm"
                     variant="ghost"
                     className="text-[10px] h-7 px-2 text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `Deletar agente "${a.nome}"? Todos os documentos de treinamento também serão removidos.`,
-                        )
-                      ) {
-                        excluirMut.mutate({ id: a.id });
-                      }
-                    }}
+                    onClick={() => setAgenteParaExcluir({ id: a.id, nome: a.nome })}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -926,6 +959,40 @@ export default function AgentesIA() {
           if (!o) setTreinandoId(null);
         }}
       />
+
+      <AlertDialog
+        open={agenteParaExcluir !== null}
+        onOpenChange={(o) => { if (!o) setAgenteParaExcluir(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir agente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O agente <strong>{agenteParaExcluir?.nome}</strong> e todos os seus
+              documentos de treinamento serão removidos permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={excluirMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (agenteParaExcluir) {
+                  excluirMut.mutate(
+                    { id: agenteParaExcluir.id },
+                    { onSuccess: () => setAgenteParaExcluir(null) },
+                  );
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluirMut.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
