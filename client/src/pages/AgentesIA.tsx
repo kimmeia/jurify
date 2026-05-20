@@ -64,8 +64,122 @@ interface AgenteForm {
   temperatura: string;
   maxTokens: number;
   modulosPermitidos: string[];
+  camposCaptura: string[];
   ativo: boolean;
   openaiApiKey: string;
+}
+
+const MODULO_ICONS: Record<string, string> = {
+  atendimento: "💬",
+  analiseProcessual: "⚖️",
+  resumos: "📋",
+  documentos: "📜",
+  pesquisa: "🔍",
+  calculos: "🧮",
+};
+
+const MODULO_LABELS_CURTOS: Record<string, string> = {
+  atendimento: "Atendimento",
+  analiseProcessual: "Processos",
+  resumos: "Resumos",
+  documentos: "Documentos",
+  pesquisa: "Pesquisa",
+  calculos: "Cálculos",
+};
+
+const TEMPLATES_QUICK = [
+  {
+    id: "trabalhista",
+    icon: "⚖️",
+    label: "Trabalhista",
+    area: "Direito Trabalhista",
+    descricao: "Especialista em CLT, súmulas TST e jurisprudência trabalhista.",
+    prompt: "Você é um advogado especialista em Direito do Trabalho com 20 anos de experiência. Domina CLT (Lei 13.467/2017), súmulas TST e jurisprudência. Cite o dispositivo legal e súmula TST relevante em cada resposta. NUNCA prometa resultado (vedação Art. 30 II OAB). Adapte a linguagem ao perfil: cliente leigo (português claro) ou colega (técnico).",
+    modulos: ["atendimento", "analiseProcessual"],
+  },
+  {
+    id: "atendimento",
+    icon: "💬",
+    label: "Atendimento",
+    area: "Geral / Recepção",
+    descricao: "Compõe respostas WhatsApp empáticas e claras para clientes.",
+    prompt: "Você é um atendente jurídico empático e profissional. Responda dúvidas com clareza, sem juridiquês. Use 1 emoji discreto quando ajudar a transmitir empatia. Encaminhe questões complexas para um advogado. NUNCA prometa resultado nem compita por preço.",
+    modulos: ["atendimento"],
+  },
+  {
+    id: "analista",
+    icon: "🔍",
+    label: "Analista",
+    area: "Análise Processual",
+    descricao: "Lê movimentações + extrai status, prazos e teses adversárias.",
+    prompt: "Você é um analista jurídico experiente. Ao receber atos processuais, extraia: (1) status atual do processo, (2) próximos prazos, (3) teses adversárias identificadas, (4) riscos. Seja objetivo, em bullets.",
+    modulos: ["analiseProcessual", "resumos"],
+  },
+  {
+    id: "geral",
+    icon: "📋",
+    label: "Geral",
+    area: "",
+    descricao: "Assistente jurídico generalista para o escritório.",
+    prompt: "Você é um assistente jurídico especializado, educado e preciso. Use os documentos de treinamento como fonte principal. Se a pergunta estiver fora do seu escopo, admita com transparência e sugira falar com um advogado.",
+    modulos: ["atendimento"],
+  },
+];
+
+/** 3 modelos em cards comparativos. Filtrados depois conforme provedor configurado. */
+const MODELOS_DISPONIVEIS = [
+  {
+    id: "gpt-4o-mini",
+    provider: "openai" as const,
+    nome: "GPT-4o Mini",
+    tier: "Econômico",
+    feat: "Rápido · FAQ e respostas curtas",
+    custo: "R$ 0,06",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    provider: "anthropic" as const,
+    nome: "Claude Haiku",
+    tier: "Econômico",
+    feat: "Rápido · contexto jurídico",
+    custo: "R$ 0,10",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "claude-sonnet-4-20250514",
+    provider: "anthropic" as const,
+    nome: "Claude Sonnet",
+    tier: "Balanceado · recomendado",
+    feat: "Casos jurídicos complexos",
+    custo: "R$ 0,36",
+    custoDesc: "/1k convs",
+  },
+  {
+    id: "gpt-4o",
+    provider: "openai" as const,
+    nome: "GPT-4o",
+    tier: "Avançado",
+    feat: "Máxima precisão · casos complexos",
+    custo: "R$ 0,90",
+    custoDesc: "/1k convs",
+  },
+];
+
+/** Helper: descrição amigável de temperatura. */
+function describeTemperatura(t: number): string {
+  if (t <= 0.3) return "Preciso";
+  if (t <= 0.7) return "Equilibrado";
+  if (t <= 1.2) return "Criativo";
+  return "Muito criativo";
+}
+/** Helper: tradução de tokens em palavras (~75% dos tokens são palavras). */
+function tokensEmPalavras(t: number): string {
+  const p = Math.round(t * 0.75);
+  if (p < 50) return `~${p} palavras`;
+  if (p < 200) return `~${p} palavras · curto`;
+  if (p < 600) return `~${p} palavras · médio`;
+  return `~${p} palavras · longo`;
 }
 
 const DEFAULT_FORM: AgenteForm = {
@@ -78,6 +192,7 @@ const DEFAULT_FORM: AgenteForm = {
   temperatura: "0.70",
   maxTokens: 800,
   modulosPermitidos: ["atendimento"],
+  camposCaptura: [],
   ativo: true,
   openaiApiKey: "",
 };
@@ -138,11 +253,16 @@ function AgenteFormDialog({
         temperatura: existing.temperatura ?? "0.70",
         maxTokens: existing.maxTokens,
         modulosPermitidos: existing.modulosPermitidos ?? [],
+        camposCaptura: (existing as any).camposCaptura ?? [],
         ativo: existing.ativo,
         openaiApiKey: "", // nunca popula (key criptografada — user precisa digitar de novo se quiser trocar)
       });
     }
   }, [open, agenteId, existing, chatgptConfigurado, claudeConfigurado]);
+
+  // Lista de campos personalizados disponíveis para captura
+  const { data: camposCliente } = trpc.camposCliente.listar.useQuery(undefined, { staleTime: 60_000 });
+  const camposDisponiveis = camposCliente || [];
 
   const criarMut = trpc.agentesIa.criar.useMutation({
     onSuccess: () => {
@@ -184,6 +304,7 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
+        camposCaptura: form.camposCaptura,
         ativo: form.ativo,
       });
     } else {
@@ -196,8 +317,29 @@ function AgenteFormDialog({
         temperatura: form.temperatura,
         maxTokens: form.maxTokens,
         modulosPermitidos: form.modulosPermitidos,
+        camposCaptura: form.camposCaptura,
       });
     }
+  };
+
+  const aplicarTemplate = (t: typeof TEMPLATES_QUICK[number]) => {
+    setForm((f) => ({
+      ...f,
+      nome: t.label === "Geral" ? f.nome : t.label,
+      areaConhecimento: t.area,
+      descricao: t.descricao,
+      prompt: t.prompt,
+      modulosPermitidos: t.modulos,
+    }));
+  };
+
+  const toggleCampo = (chave: string) => {
+    setForm((f) => ({
+      ...f,
+      camposCaptura: f.camposCaptura.includes(chave)
+        ? f.camposCaptura.filter((c) => c !== chave)
+        : [...f.camposCaptura, chave],
+    }));
   };
 
   const toggleModulo = (id: string) => {
@@ -209,169 +351,304 @@ function AgenteFormDialog({
     }));
   };
 
+  const temperaturaNum = parseFloat(form.temperatura) || 0.7;
+  // Modelos disponíveis baseados em quais provedores estão conectados
+  const modelosDisponiveis = MODELOS_DISPONIVEIS.filter((m) =>
+    m.provider === "openai" ? chatgptConfigurado
+      : m.provider === "anthropic" ? claudeConfigurado
+        : false,
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{agenteId ? "Editar Agente" : "Novo Agente de IA"}</DialogTitle>
-          <DialogDescription>
-            Configure um agente especializado para tarefas do escritório.
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        {/* Header simples */}
+        <DialogHeader className="px-5 py-3 border-b">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white">
+              <Sparkles className="h-3.5 w-3.5" />
+            </div>
+            {agenteId ? "Editar agente" : "Criar novo agente"}
+          </DialogTitle>
+          <DialogDescription className="text-xs ml-9 -mt-0.5">
+            Configure um assistente especializado para o escritório
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Nome *</Label>
-              <Input
-                placeholder="Ex: Analisador Processual"
-                value={form.nome}
-                onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Área de conhecimento</Label>
-              <Select
-                value={form.areaConhecimento}
-                onValueChange={(v) => setForm({ ...form, areaConhecimento: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {AREAS.map((a) => (
-                    <SelectItem key={a} value={a}>{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <div className="px-5 py-4 space-y-4">
 
-          <div className="space-y-1.5">
-            <Label>Descrição</Label>
-            <Input
-              placeholder="Resumo curto sobre o papel deste agente"
-              value={form.descricao}
-              onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-              maxLength={512}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Prompt de sistema *</Label>
-            <Textarea
-              rows={6}
-              placeholder="Defina a 'personalidade' e instruções do agente..."
-              value={form.prompt}
-              onChange={(e) => setForm({ ...form, prompt: e.target.value })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {form.prompt.length} / 8000 caracteres
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label>Modelo</Label>
-              <Select value={form.modelo} onValueChange={(v) => setForm({ ...form, modelo: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {chatgptConfigurado && (
-                    <>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini (OpenAI — barato)</SelectItem>
-                      <SelectItem value="gpt-4o">GPT-4o (OpenAI — avançado)</SelectItem>
-                    </>
-                  )}
-                  {claudeConfigurado && (
-                    <>
-                      <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4 (Anthropic — avançado)</SelectItem>
-                      <SelectItem value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Anthropic — rápido)</SelectItem>
-                    </>
-                  )}
-                  {!chatgptConfigurado && !claudeConfigurado && (
-                    <SelectItem value="gpt-4o-mini" disabled>Nenhuma IA configurada</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Temperatura (0-2)</Label>
-              <Input
-                value={form.temperatura}
-                onChange={(e) => setForm({ ...form, temperatura: e.target.value })}
-                placeholder="0.70"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Max tokens</Label>
-              <Input
-                type="number"
-                value={form.maxTokens}
-                onChange={(e) => setForm({ ...form, maxTokens: Number(e.target.value) })}
-                min={100}
-                max={4000}
-              />
-            </div>
-          </div>
-
-          {algumIAConfigurado ? (
-            <div className="flex items-center gap-2 p-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 text-xs text-emerald-700">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>
-                {ambosConfigurados ? "ChatGPT e Claude configurados — escolha o modelo acima" :
-                 chatgptConfigurado ? "API Key OpenAI configurada em Integrações → ChatGPT" :
-                 "API Key Claude configurada em Integrações → Claude"}
-              </span>
-            </div>
-          ) : (
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 p-3 text-xs text-amber-900 dark:text-amber-200">
-              <p className="font-semibold">Nenhuma IA configurada</p>
-              <p className="mt-0.5">
-                Vá em <strong>Configurações → Integrações</strong> e cadastre a API Key do
-                <strong> ChatGPT (OpenAI)</strong> ou <strong>Claude (Anthropic)</strong> antes de criar agentes.
-              </p>
+          {/* Templates rápidos (só ao criar novo) */}
+          {!agenteId && (
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Começar de um template</p>
+              <div className="flex flex-wrap gap-1.5">
+                {TEMPLATES_QUICK.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => aplicarTemplate(t)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-card text-xs hover:border-violet-300 hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition"
+                  >
+                    <span className="text-sm">{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <Label>Módulos onde este agente será usado</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {MODULOS.map((m) => (
-                <label
-                  key={m.id}
-                  className="flex items-center gap-2 text-xs p-2 rounded border cursor-pointer hover:bg-muted/50"
+          {/* Identidade */}
+          <div className="space-y-2.5">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Identidade</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <Label className="text-xs">Nome <span className="text-red-500">*</span></Label>
+                <Input
+                  placeholder="Ex: Especialista Trabalhista"
+                  value={form.nome}
+                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                  className="h-8 text-sm mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Área</Label>
+                <Select
+                  value={form.areaConhecimento || undefined}
+                  onValueChange={(v) => setForm({ ...form, areaConhecimento: v })}
                 >
-                  <input
-                    type="checkbox"
-                    checked={form.modulosPermitidos.includes(m.id)}
-                    onChange={() => toggleModulo(m.id)}
-                    className="accent-primary"
-                  />
-                  <span>{m.label}</span>
-                </label>
-              ))}
+                  <SelectTrigger className="h-8 text-sm mt-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {AREAS.map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Descrição curta</Label>
+              <Input
+                placeholder="Resumo de 1 linha do papel deste agente"
+                value={form.descricao}
+                onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+                className="h-8 text-sm mt-1"
+                maxLength={512}
+              />
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          {/* Modelo — cards comparativos */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Modelo (cérebro do agente)</p>
+            {algumIAConfigurado ? (
+              <>
+                <div className={`grid gap-1.5 ${modelosDisponiveis.length >= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                  {modelosDisponiveis.map((m) => {
+                    const active = form.modelo === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setForm({ ...form, modelo: m.id })}
+                        className={
+                          "relative text-left rounded-lg border-2 px-2.5 py-2 transition " +
+                          (active
+                            ? "border-violet-500 bg-violet-50/40 dark:bg-violet-950/30"
+                            : "border-border bg-card hover:border-violet-300")
+                        }
+                      >
+                        {active && (
+                          <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-violet-600 text-white text-[9px] font-bold flex items-center justify-center">✓</span>
+                        )}
+                        <p className="text-xs font-bold leading-tight">{m.nome}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{m.tier}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">{m.feat}</p>
+                        <p className="text-[11px] font-bold mt-1.5">
+                          {m.custo}
+                          <span className="text-[9px] text-muted-foreground font-normal ml-0.5">{m.custoDesc}</span>
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-1.5">
+                  <CheckCircle2 className="h-3 w-3" />
+                  {ambosConfigurados ? "OpenAI e Anthropic configurados" : chatgptConfigurado ? "OpenAI configurada · Integrações → ChatGPT" : "Anthropic configurada · Integrações → Claude"}
+                </p>
+              </>
+            ) : (
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 p-3 text-xs text-amber-900 dark:text-amber-200">
+                <p className="font-semibold">Nenhuma IA configurada</p>
+                <p className="mt-0.5">Vá em <strong>Configurações → Integrações</strong> e cadastre a API Key do ChatGPT ou Claude antes de criar agentes.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Prompt + Sugerir */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Prompt de sistema <span className="text-red-500">*</span></p>
+              <button
+                type="button"
+                onClick={() => {
+                  // Auto-gera prompt baseado em área
+                  const t = TEMPLATES_QUICK.find(
+                    (tp) => tp.area.toLowerCase().includes((form.areaConhecimento || "").toLowerCase().split(" ").pop() || ""),
+                  );
+                  if (t) {
+                    setForm((f) => ({ ...f, prompt: t.prompt }));
+                    toast.success("Prompt sugerido aplicado!");
+                  } else {
+                    toast.info("Selecione uma área de conhecimento primeiro");
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/50"
+              >
+                <Sparkles className="h-2.5 w-2.5" /> Sugerir
+              </button>
+            </div>
+            <Textarea
+              rows={5}
+              placeholder="Defina a personalidade e instruções do agente..."
+              value={form.prompt}
+              onChange={(e) => setForm({ ...form, prompt: e.target.value })}
+              className="text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground text-right mt-1">{form.prompt.length} / 8000</p>
+          </div>
+
+          {/* Tom (slider) + Tamanho (tokens) */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Ativo</Label>
-              <p className="text-[11px] text-muted-foreground">
-                Só agentes ativos aparecem para os módulos
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-xs">Tom da resposta</Label>
+                <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300">
+                  {temperaturaNum.toFixed(1)} · {describeTemperatura(temperaturaNum)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.1}
+                value={temperaturaNum}
+                onChange={(e) => setForm({ ...form, temperatura: e.target.value })}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-violet-600"
+                style={{ background: "linear-gradient(90deg, #3b82f6, #8b5cf6 50%, #ef4444)" }}
+              />
+              <div className="flex justify-between text-[9px] text-muted-foreground mt-1">
+                <span>Preciso</span>
+                <span>Criativo</span>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Tamanho da resposta</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input
+                  type="number"
+                  value={form.maxTokens}
+                  onChange={(e) => setForm({ ...form, maxTokens: Number(e.target.value) })}
+                  min={100}
+                  max={4000}
+                  step={100}
+                  className="h-8 text-sm flex-1"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">{tokensEmPalavras(form.maxTokens)}</p>
+            </div>
+          </div>
+
+          {/* Módulos */}
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Onde usar (módulos)</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {MODULOS.map((m) => {
+                const active = form.modulosPermitidos.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleModulo(m.id)}
+                    className={
+                      "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border-2 text-xs transition " +
+                      (active
+                        ? "border-violet-500 bg-violet-50/40 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-semibold"
+                        : "border-border bg-card hover:border-violet-300")
+                    }
+                    title={m.label}
+                  >
+                    <span className="text-sm">{MODULO_ICONS[m.id] || "·"}</span>
+                    <span className="truncate">{MODULO_LABELS_CURTOS[m.id] || m.id}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 🎯 Campos a capturar (NOVO!) */}
+          {camposDisponiveis.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                🎯 Captar valores durante a conversa
               </p>
+              <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
+                A IA vai extrair esses campos da conversa e salvar no cadastro do cliente automaticamente.
+                Diga no prompt o que perguntar pra cada um (ex: <em>"pergunte o valor do financiamento"</em>).
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {camposDisponiveis.map((c: any) => {
+                  const active = form.camposCaptura.includes(c.chave);
+                  return (
+                    <button
+                      key={c.chave}
+                      type="button"
+                      onClick={() => toggleCampo(c.chave)}
+                      className={
+                        "inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition " +
+                        (active
+                          ? "border-violet-500 bg-violet-50/40 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-semibold"
+                          : "border-border bg-card hover:border-violet-300 text-foreground")
+                      }
+                      title={`Chave: ${c.chave} · Tipo: ${c.tipo}`}
+                    >
+                      {active && <span className="text-violet-600">✓</span>}
+                      <span>{c.label}</span>
+                      <span className="text-[9px] text-muted-foreground">· {c.tipo}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {form.camposCaptura.length === 0 && (
+                <p className="text-[10px] text-muted-foreground/70 mt-1.5 italic">Nenhum campo selecionado — o agente não vai capturar valores automaticamente.</p>
+              )}
+            </div>
+          )}
+          {camposDisponiveis.length === 0 && (
+            <p className="text-[10px] text-muted-foreground italic">
+              💡 Crie campos personalizados em <strong>Configurações → Campos do cliente</strong> para habilitar a captação automática de valores.
+            </p>
+          )}
+
+          {/* Toggle ativar */}
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <p className="text-xs font-medium">Ativar imediatamente</p>
+              <p className="text-[10px] text-muted-foreground">Só agentes ativos aparecem para os módulos</p>
             </div>
             <Switch checked={form.ativo} onCheckedChange={(v) => setForm({ ...form, ativo: v })} />
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={criarMut.isPending || atualizarMut.isPending || !algumIAConfigurado}>
-            {(criarMut.isPending || atualizarMut.isPending) && (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            )}
+        {/* Footer */}
+        <DialogFooter className="px-5 py-3 border-t bg-muted/30 gap-1">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="h-8 text-xs">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={criarMut.isPending || atualizarMut.isPending || !algumIAConfigurado}
+            className="h-8 text-xs bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+          >
+            {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            {!(criarMut.isPending || atualizarMut.isPending) && <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
             {agenteId ? "Salvar" : "Criar agente"}
           </Button>
         </DialogFooter>
