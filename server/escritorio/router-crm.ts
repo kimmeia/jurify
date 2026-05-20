@@ -20,7 +20,21 @@ import { conversas } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { createLogger } from "../_core/logger";
+import path from "path";
 const log = createLogger("escritorio-router-crm");
+
+/**
+ * Converte a URL devolvida pelo uploadRouter (`/uploads/escritorio_X/foo.webm`)
+ * em path absoluto que o socket Baileys consegue ler do disco. URLs HTTP
+ * absolutas passam intactas — o Baileys também aceita.
+ */
+export function resolverMediaPathLocal(mediaUrl: string): string {
+  if (/^https?:\/\//i.test(mediaUrl)) return mediaUrl;
+  if (mediaUrl.startsWith("/uploads/")) {
+    return path.resolve(process.cwd(), mediaUrl.slice(1));
+  }
+  return mediaUrl;
+}
 
 export const crmRouter = router({
   // ─── Contatos ──────────────────────────────────────────────────────────────
@@ -168,6 +182,11 @@ export const crmRouter = router({
       conversaId: z.number(),
       conteudo: z.string().min(1).max(5000),
       tipo: z.enum(["texto", "imagem", "audio", "video", "documento"]).optional(),
+      // Quando o tipo é mídia (audio/imagem/documento), o frontend faz
+      // upload primeiro e passa aqui a URL devolvida pelo uploadRouter.
+      // Aceita tanto `/uploads/...` (path local do projeto) quanto URL
+      // HTTP absoluta — o resolverMediaPath() lida com os dois.
+      mediaUrl: z.string().max(2000).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -180,6 +199,7 @@ export const crmRouter = router({
         direcao: "saida",
         tipo: input.tipo,
         conteudo: input.conteudo,
+        mediaUrl: input.mediaUrl,
       });
 
       // Marcar conversa como em_atendimento se estava aguardando
@@ -223,7 +243,20 @@ export const crmRouter = router({
               // com/sem "9" via onWhatsApp() automaticamente.
               const destinatario = convData.chatIdExterno || convData.telefone;
               if (destinatario) {
-                await manager.enviarMensagemJid(convData.canalId, destinatario, input.conteudo);
+                // Para mídia, resolve o path local antes de mandar pro Baileys:
+                // upload devolve "/uploads/escritorio_X/foo.webm" mas o socket
+                // precisa de path absoluto OU URL HTTP. Texto puro ignora.
+                const mediaParaBaileys = input.mediaUrl
+                  ? resolverMediaPathLocal(input.mediaUrl)
+                  : undefined;
+                await manager.enviarMensagemJid(
+                  convData.canalId,
+                  destinatario,
+                  input.conteudo,
+                  input.tipo,
+                  mediaParaBaileys,
+                  undefined,
+                );
                 log.info(`[CRM] Mensagem enviada via WhatsApp QR para ${destinatario}`);
               } else {
                 log.warn(`[CRM] Sem destinatário para conversa ${input.conversaId}`);

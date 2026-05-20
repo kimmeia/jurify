@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { Sparkles, Zap, MessageSquare, Clock, Users, History, ChevronLeft, ChevronRight, ScrollText, Heart } from "lucide-react";
+import { Sparkles, ChevronRight, ScrollText, Heart } from "lucide-react";
 import { useState } from "react";
 import { CustomerPanel } from "./customer-panel";
 
@@ -78,24 +78,9 @@ export function AIRail({
         onClick={onAbrirLinhaTempo}
         disabled={!contatoId}
       />
-      <RailButton
-        icon={<Zap className="h-4 w-4 text-amber-500" />}
-        label="Ações IA"
-        onClick={() => {}}
-        disabled
-      />
-      <RailButton
-        icon={<MessageSquare className="h-4 w-4 text-blue-600" />}
-        label="Templates"
-        onClick={() => {}}
-        disabled
-      />
-      <RailButton
-        icon={<History className="h-4 w-4 text-slate-600" />}
-        label="Histórico"
-        onClick={() => {}}
-        disabled
-      />
+      {/* "Ações IA", "Templates" e "Histórico" foram removidos: eram botões
+          desabilitados que só ocupavam espaço (placeholders mortos). Quando
+          essas ações forem implementadas, devolva os RailButton aqui. */}
 
       <div className="flex-1" />
 
