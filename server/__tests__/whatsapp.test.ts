@@ -387,6 +387,47 @@ describe("Session Manager (unit)", () => {
   });
 });
 
+// ─── Multi-tenant safety: listarSessoes filtra por escritorioId ────────────
+//
+// Regressão: o método retornava TODAS as sessões (de todos escritórios) e o
+// router só repassava — vazamento de dados entre tenants. O filtro precisa
+// ficar dentro do método pra ninguém esquecer no caller.
+
+describe("WhatsappSessionManager.listarSessoes — multi-tenancy", () => {
+  it("sem escritorioId, devolve todas as sessões (uso interno)", async () => {
+    const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
+    const manager = getWhatsappManager();
+    // Limpa estado pra teste determinístico
+    (manager as any).sessions = new Map();
+    (manager as any).sessions.set(1, { canalId: 1, escritorioId: 100, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
+    (manager as any).sessions.set(2, { canalId: 2, escritorioId: 200, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
+    (manager as any).sessions.set(3, { canalId: 3, escritorioId: 100, status: "aguardando_qr", reconnectAttempts: 0, maxReconnectAttempts: 15 });
+
+    const todas = await manager.listarSessoes();
+    expect(todas).toHaveLength(3);
+  });
+
+  it("com escritorioId, filtra apenas sessões daquele escritório", async () => {
+    const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
+    const manager = getWhatsappManager();
+    (manager as any).sessions = new Map();
+    (manager as any).sessions.set(1, { canalId: 1, escritorioId: 100, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
+    (manager as any).sessions.set(2, { canalId: 2, escritorioId: 200, status: "conectado", reconnectAttempts: 0, maxReconnectAttempts: 15 });
+    (manager as any).sessions.set(3, { canalId: 3, escritorioId: 100, status: "aguardando_qr", reconnectAttempts: 0, maxReconnectAttempts: 15 });
+
+    const doEsc100 = await manager.listarSessoes(100);
+    expect(doEsc100).toHaveLength(2);
+    expect(doEsc100.map((s) => s.canalId).sort()).toEqual([1, 3]);
+
+    const doEsc200 = await manager.listarSessoes(200);
+    expect(doEsc200).toHaveLength(1);
+    expect(doEsc200[0].canalId).toBe(2);
+
+    const doEsc999 = await manager.listarSessoes(999);
+    expect(doEsc999).toHaveLength(0);
+  });
+});
+
 function mapStatusToDb(status: WhatsappSessionStatus): string {
   switch (status) {
     case "conectado": return "conectado";

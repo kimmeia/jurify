@@ -24,6 +24,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import {
@@ -961,6 +965,7 @@ function EditarLeadInline({
   onSuccess: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmExcluir, setConfirmExcluir] = useState(false);
   const [etapa, setEtapa] = useState<EtapaFunil>(lead.etapaFunil);
   const [valor, setValor] = useState(lead.valorEstimado || "");
   const [observacoes, setObservacoes] = useState(lead.observacoes || "");
@@ -977,6 +982,7 @@ function EditarLeadInline({
   const excluirMut = trpc.crm.excluirLead.useMutation({
     onSuccess: () => {
       toast.success("Lead removido");
+      setConfirmExcluir(false);
       setOpen(false);
       onSuccess();
     },
@@ -984,6 +990,7 @@ function EditarLeadInline({
   });
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="w-full text-left text-[11px] rounded border bg-muted/20 px-2 py-1.5 hover:bg-muted/40 transition-colors">
@@ -1020,11 +1027,7 @@ function EditarLeadInline({
           </p>
           <button
             className="text-[10px] text-red-600 hover:underline"
-            onClick={() => {
-              if (confirm("Remover este lead do pipeline?")) {
-                excluirMut.mutate({ id: lead.id });
-              }
-            }}
+            onClick={() => setConfirmExcluir(true)}
             disabled={excluirMut.isPending}
           >
             Excluir
@@ -1085,5 +1088,32 @@ function EditarLeadInline({
         </Button>
       </PopoverContent>
     </Popover>
+
+    {/* AlertDialog renderizado FORA do Popover de propósito: se o popover
+        fechasse junto, o componente desmontaria antes do mutation resolver
+        e o usuário não veria o resultado. */}
+    <AlertDialog open={confirmExcluir} onOpenChange={setConfirmExcluir}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remover lead do pipeline?</AlertDialogTitle>
+          <AlertDialogDescription>
+            A negociação será apagada. O contato continua cadastrado e as
+            conversas seguem ativas — só o lead é removido.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); excluirMut.mutate({ id: lead.id }); }}
+            disabled={excluirMut.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {excluirMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+            Remover
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

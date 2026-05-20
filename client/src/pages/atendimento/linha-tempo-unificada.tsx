@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MessageCircle, Scale, DollarSign, Calendar, FileSignature, Phone, Loader2 } from "lucide-react";
+import { MessageCircle, Scale, DollarSign, Calendar, FileSignature, Loader2 } from "lucide-react";
 
+// "Ligações" foi removido: o Twilio (router-twilio.ts) hoje só dispara/lê
+// status da chamada — não persiste histórico no banco. Sem tabela própria,
+// o filtro ficava eternamente vazio e induzia o atendente a procurar dado
+// que nunca chegava. Quando o histórico de ligações for persistido (tabela
+// `ligacoes_twilio` + emissão no router-atendimento-ia.linhaTempoUnificada),
+// devolva o filtro pra cá.
 const FILTROS = [
   { v: "todos", l: "Todos", icon: null, cor: "text-violet-700" },
   { v: "mensagem", l: "WhatsApp", icon: MessageCircle, cor: "text-emerald-700" },
@@ -10,7 +16,6 @@ const FILTROS = [
   { v: "pagamento", l: "Financeiro", icon: DollarSign, cor: "text-emerald-700" },
   { v: "agenda", l: "Agenda", icon: Calendar, cor: "text-amber-700" },
   { v: "documento", l: "Documentos", icon: FileSignature, cor: "text-fuchsia-700" },
-  { v: "ligacao", l: "Ligações", icon: Phone, cor: "text-rose-700" },
 ] as const;
 
 function tipoCfg(tipo: string) {
@@ -25,8 +30,6 @@ function tipoCfg(tipo: string) {
       return { icon: Calendar, bg: "bg-amber-50", border: "border-amber-200", iconBg: "bg-amber-100", text: "text-amber-700" };
     case "documento":
       return { icon: FileSignature, bg: "bg-fuchsia-50", border: "border-fuchsia-200", iconBg: "bg-fuchsia-100", text: "text-fuchsia-700" };
-    case "ligacao":
-      return { icon: Phone, bg: "bg-rose-50", border: "border-rose-200", iconBg: "bg-rose-100", text: "text-rose-700" };
     default:
       return { icon: MessageCircle, bg: "bg-muted/30", border: "border-border", iconBg: "bg-muted", text: "text-foreground" };
   }
