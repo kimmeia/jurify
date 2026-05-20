@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { CustomerPanel } from "./atendimento/customer-panel";
 import { DndContext, closestCenter, DragOverlay, useSensor, useSensors, PointerSensor, TouchSensor, useDroppable } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -16,13 +15,20 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Headphones, MessageCircle, Users, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, Mail, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, ExternalLink, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle } from "lucide-react";
+import { Headphones, MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, DollarSign, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { FinanceiroBadge, FinanceiroPopover } from "@/components/FinanceiroBadge";
 import { STATUS_CONVERSA_LABELS, STATUS_CONVERSA_CORES, ETAPA_FUNIL_LABELS, ORIGEM_LABELS } from "@shared/crm-types";
 import type { StatusConversa, EtapaFunil } from "@shared/crm-types";
 import { parseValorBR } from "@shared/valor-br";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
+import { MagicBrief } from "./atendimento/magic-brief";
+import { ConversationDiff } from "./atendimento/conversation-diff";
+import { AIActionCards } from "./atendimento/ai-action-cards";
+import { ComplianceGuard, ComplianceGuardBadge } from "./atendimento/compliance-guard";
+import { LinhaTempoUnificada } from "./atendimento/linha-tempo-unificada";
+import { AIRail } from "./atendimento/ai-rail";
+import { Sparkles, ScrollText } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -291,6 +297,7 @@ export default function Atendimento() {
   const [busca, setBusca] = useState(""); const [filtro, setFiltro] = useState("todos");
   const [inboxBusca, setInboxBusca] = useState("");
   const [waPopup, setWaPopup] = useState<string | null>(null); const [telPopup, setTelPopup] = useState<string | null>(null);
+  const [showLinhaTempo, setShowLinhaTempo] = useState<number | null>(null);
 
   // Deep link vindo do CRM (ex.: botão "Inbox" na ficha do cliente):
   // /atendimento?contatoId=X abre automaticamente a conversa existente, ou
@@ -367,10 +374,33 @@ export default function Atendimento() {
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 dark:from-sky-900/40 dark:to-blue-900/40"><Headphones className="h-6 w-6 text-sky-600" /></div>
-        <div className="flex-1"><h1 className="text-2xl font-bold tracking-tight">Atendimento</h1><p className="text-sm text-muted-foreground">CRM — Inbox e Pipeline</p></div>
-        <Button size="sm" onClick={() => setShowIniciar(true)} className="bg-emerald-600 hover:bg-emerald-700"><MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa</Button>
+      <div
+        className="relative overflow-hidden rounded-2xl p-5 border"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.06) 100%)",
+          borderColor: "rgba(139,92,246,0.18)",
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md">
+            <Headphones className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold tracking-tight">Atendimento</h1>
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+              <Sparkles className="h-3 w-3 text-violet-500" />
+              <span>Inbox · Pipeline · Dashboard · com Brief Instantâneo IA, Compliance Guard e Linha do Tempo Unificada</span>
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setShowIniciar(true)}
+            className="bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
+          >
+            <MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa
+          </Button>
+        </div>
       </div>
       {metricas && <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{[{ v: metricas.totalContatos, l: "Contatos", c: "" }, { v: metricas.conversasAguardando, l: "Aguardando", c: "text-amber-600" }, { v: metricas.conversasAbertas, l: "Abertas", c: "text-blue-600" }, { v: metricas.leadsNovos, l: "Leads", c: "" }, { v: metricas.leadsGanhos, l: "Ganhos", c: "text-emerald-600" }, { v: formatBRL(metricas.valorPipeline), l: "Pipeline", c: "text-violet-600" }].map((k, i) => (<div key={i} className="rounded-lg border bg-card px-3 py-2 text-center"><p className={"text-lg font-bold leading-tight " + k.c}>{k.v}</p><p className="text-[10px] text-muted-foreground">{k.l}</p></div>))}</div>}
       <Tabs value={tab} onValueChange={setTab}>
@@ -380,10 +410,10 @@ export default function Atendimento() {
           <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Dashboard</TabsTrigger>
         </TabsList>
         <TabsContent value="inbox" className="mt-4">
-          {/* Layout Customer 360: Lista | Chat | Painel contextual */}
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_320px] gap-4" style={{ minHeight: 600 }}>
+          {/* Layout ULTRA: Lista | Chat hero | AI Rail (colapsa pra Customer 360°) */}
+          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_auto] gap-0 rounded-xl border bg-card overflow-hidden" style={{ minHeight: 600 }}>
             {/* Coluna 1: Lista de conversas */}
-            <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+            <div className="border-r bg-muted/10 overflow-hidden flex flex-col">
               {/* Header: busca + pills de filtro com contador */}
               <div className="p-3 border-b space-y-2.5">
                 <div className="relative">
@@ -539,8 +569,8 @@ export default function Atendimento() {
               </ScrollArea>
             </div>
 
-            {/* Coluna 2: Chat */}
-            <div className="rounded-xl border bg-card overflow-hidden flex flex-col">
+            {/* Coluna 2: Chat hero */}
+            <div className="bg-card overflow-hidden flex flex-col">
               {selId ? (
                 <ChatArea
                   cid={selId}
@@ -552,6 +582,10 @@ export default function Atendimento() {
                   onDeleted={() => {
                     setSelId(null);
                     rC();
+                  }}
+                  onAbrirLinhaTempo={() => {
+                    const conv = (convs || []).find((c: any) => c.id === selId);
+                    if (conv?.contatoId) setShowLinhaTempo(conv.contatoId);
                   }}
                 />
               ) : (
@@ -569,36 +603,22 @@ export default function Atendimento() {
               )}
             </div>
 
-            {/* Coluna 3: Customer 360 Panel */}
-            <div className="rounded-xl border bg-card overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
-              {(() => {
-                const convAtual = (convs || []).find((c: any) => c.id === selId);
-                if (!selId || !convAtual?.contatoId) {
-                  return (
-                    <div className="flex-1 flex items-center justify-center p-6">
-                      <div className="text-center space-y-2">
-                        <div className="h-12 w-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto">
-                          <Users className="h-6 w-6 text-muted-foreground/30" />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Selecione uma conversa para ver o perfil do cliente
-                        </p>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <CustomerPanel
-                    contatoId={convAtual.contatoId}
-                    onOpenWhatsapp={
-                      hasWhatsapp
-                        ? (p) => setWaPopup(p || convAtual.contatoTelefone)
-                        : undefined
-                    }
-                  />
-                );
-              })()}
-            </div>
+            {/* Coluna 3: AI Rail (colapsável — clica no ✨ pra expandir o Customer 360°) */}
+            {(() => {
+              const convAtual = (convs || []).find((c: any) => c.id === selId);
+              return (
+                <AIRail
+                  conversaId={selId}
+                  contatoId={convAtual?.contatoId || null}
+                  onAbrirLinhaTempo={() => convAtual?.contatoId && setShowLinhaTempo(convAtual.contatoId)}
+                  onOpenWhatsapp={
+                    hasWhatsapp
+                      ? (p?: string) => setWaPopup(p || convAtual?.contatoTelefone || "")
+                      : undefined
+                  }
+                />
+              );
+            })()}
           </div>
         </TabsContent>
         <TabsContent value="pipeline" className="mt-4"><PipelineKanban leads={leads || []} onUpdate={rL} onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined} onAddLead={() => setShowNovoLead(true)} onGoToConversa={goToConversaFromLead} /></TabsContent>
@@ -613,6 +633,17 @@ export default function Atendimento() {
         preencherDe={preencherConversa}
       />
       <NovoLeadDialog open={showNovoLead} onOpenChange={setShowNovoLead} onSuccess={rL} />
+      {showLinhaTempo && (() => {
+        const conv = (convs || []).find((c: any) => c.contatoId === showLinhaTempo);
+        return (
+          <LinhaTempoUnificada
+            open={!!showLinhaTempo}
+            onOpenChange={(v) => { if (!v) setShowLinhaTempo(null); }}
+            contatoId={showLinhaTempo}
+            contatoNome={conv?.contatoNome || "Cliente"}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -660,7 +691,7 @@ function AlertaFinanceiroChat({ contatoId, contatoNome }: { contatoId: number; c
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onAbrirLinhaTempo }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onAbrirLinhaTempo?: () => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showAgendar, setShowAgendar] = useState(false);
@@ -790,6 +821,17 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
       </div>
       {/* Header linha 2: acoes */}
       <div className="flex items-center gap-1 mt-1.5 -mb-0.5 overflow-x-auto">
+        {onAbrirLinhaTempo && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-[10px] px-2 text-indigo-600 shrink-0 font-semibold"
+            onClick={onAbrirLinhaTempo}
+            title="Toda a vida jurídica do cliente em uma timeline"
+          >
+            <ScrollText className="h-3 w-3 mr-1" />Linha do Tempo
+          </Button>
+        )}
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-violet-600 shrink-0" onClick={() => setShowAddLead(true)}><TrendingUp className="h-3 w-3 mr-1" />Pipeline</Button>
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 text-blue-600 shrink-0" onClick={() => setShowAgendar(true)}><Calendar className="h-3 w-3 mr-1" />Agendar</Button>
@@ -803,6 +845,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
     </div>
     {/* Alerta financeiro */}
     {conv?.contatoId && <AlertaFinanceiroChat contatoId={conv.contatoId} contatoNome={conv.contatoNome} />}
+    {/* 🌟 Killer feature: Magic Brief Instantâneo (IA prevê motivo da conversa) */}
+    <MagicBrief conversaId={cid} />
+    {/* 🌟 Killer feature: Conversation Diff (o que mudou desde sua última resposta) */}
+    <ConversationDiff conversaId={cid} />
+    {/* 🌟 Killer feature: AI Action Cards (detecta intenção e oferece workflow 1-click) */}
+    <AIActionCards
+      conversaId={cid}
+      contatoNome={conv?.contatoNome || "Cliente"}
+      onEnviarMensagem={(texto) => setMsg(texto)}
+    />
     <div ref={ref} className="flex-1 overflow-y-auto p-4 space-y-2" style={{ minHeight: 360, maxHeight: 420 }}>
       {!msgs?.length ? (
         <p className="text-xs text-muted-foreground text-center py-12">Nenhuma mensagem ainda.</p>
@@ -827,7 +879,13 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
         ))
       )}
     </div>
-    <div className="p-3 border-t flex gap-2 bg-muted/20">
+    {/* 🌟 Killer feature: Compliance Guard (verifica rascunho contra ética OAB) */}
+    <ComplianceGuard
+      rascunho={msg}
+      onAplicarSugestao={(s) => setMsg(s)}
+      onIgnorar={() => { /* registrar event log se quiser auditar */ }}
+    />
+    <div className="p-3 border-t flex gap-2 bg-muted/20 relative">
       <Popover open={showTemplates} onOpenChange={setShowTemplates}>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0" title="Respostas rapidas"><Zap className="h-4 w-4" /></Button>
@@ -864,6 +922,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted }
       />
       <AudioRecordButton onSend={(text) => enviar.mutate({ conversaId: cid, conteudo: text })} />
       <Button size="sm" onClick={send} disabled={!msg.trim() || enviar.isPending} className="px-4">{enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
+    </div>
+    <div className="px-3 pb-2 flex items-center justify-between gap-2 bg-muted/20 border-t-0">
+      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+        Dica: <span className="font-mono bg-background px-1 rounded border">/</span> respostas rápidas
+      </span>
+      <ComplianceGuardBadge />
     </div>
     {showAddLead && <AddLeadFromConversaDialog open={showAddLead} onOpenChange={setShowAddLead} conversaId={cid} onSuccess={onLeadUpdate} />}
 
