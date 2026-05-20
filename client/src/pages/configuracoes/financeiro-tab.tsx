@@ -387,6 +387,47 @@ function RegraComissaoCard({ canEdit }: { canEdit: boolean }) {
                     Quem fechou R$ 25.000 ganha 5% × R$ 25.000 = R$ 1.250.
                   </p>
                 </div>
+
+                {/* Preview visual das faixas */}
+                {faixas.filter((f) => f.aliquotaText.trim() !== "").length > 0 && (
+                  <div className="border-t pt-3 mt-3">
+                    <Label className="text-xs mb-2 block">📊 Preview das faixas</Label>
+                    <div className="space-y-2">
+                      {faixas
+                        .filter((f) => f.aliquotaText.trim() !== "")
+                        .map((f, idx, arr) => {
+                          const aliquota = parseFloat(f.aliquotaText) || 0;
+                          const limiteAte = f.limiteAteText.trim() === "" ? null : parseFloat(f.limiteAteText) || 0;
+                          const limiteAnt = idx > 0 ? parseFloat(arr[idx - 1].limiteAteText) || 0 : 0;
+                          const cores = [
+                            { bg: "bg-emerald-50 border-emerald-200", num: "bg-emerald-600", text: "text-emerald-700", label: "Faixa básica" },
+                            { bg: "bg-amber-50 border-amber-200", num: "bg-amber-500", text: "text-amber-700", label: "Faixa intermediária" },
+                            { bg: "bg-indigo-50 border-indigo-200", num: "bg-indigo-600", text: "text-indigo-700", label: "Faixa premium" },
+                            { bg: "bg-violet-50 border-violet-200", num: "bg-violet-600", text: "text-violet-700", label: "Faixa elite" },
+                          ];
+                          const c = cores[Math.min(idx, cores.length - 1)];
+                          const rangeStr = limiteAte === null
+                            ? `Acima de R$ ${limiteAnt.toLocaleString("pt-BR")}`
+                            : limiteAnt === 0
+                              ? `Até R$ ${limiteAte.toLocaleString("pt-BR")}`
+                              : `R$ ${limiteAnt.toLocaleString("pt-BR")} — R$ ${limiteAte.toLocaleString("pt-BR")}`;
+                          return (
+                            <div key={idx} className={`flex items-center gap-3 p-3 rounded-lg border ${c.bg}`}>
+                              <span className={`w-9 h-9 rounded-full ${c.num} text-white font-bold flex items-center justify-center shrink-0`}>{idx + 1}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11.5px] font-bold">{rangeStr}</p>
+                                <p className="text-[10px] text-slate-600">{c.label}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className={`text-lg font-extrabold tabular-nums ${c.text}`}>{aliquota}%</p>
+                                <p className="text-[9.5px] text-slate-500">comissão</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

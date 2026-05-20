@@ -13,7 +13,9 @@ test.describe("Módulo Kanban (MVP)", () => {
     await expect(page.locator("body")).not.toContainText(/erro 5\d\d|internal server error/i);
   });
 
-  test("badge Beta aparece na sidebar", async ({ page }) => {
+  test("item Kanban aparece na sidebar", async ({ page }) => {
+    // Badge "Beta" foi removida em 05/2026 — só verificamos que o item
+    // está visível pra dono autenticado.
     const sidebar = page.locator('[data-sidebar]').first();
     await expect(sidebar.getByText(/^kanban$/i).first()).toBeVisible();
   });

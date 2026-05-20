@@ -24,6 +24,7 @@ import { cofreCredenciaisRouter } from "./escritorio/router-cofre-credenciais";
 import { configuracoesRouter } from "./escritorio/router-configuracoes";
 import { agendamentoRouter } from "./escritorio/router-agendamento";
 import { crmRouter } from "./escritorio/router-crm";
+import { atendimentoIaRouter } from "./escritorio/router-atendimento-ia";
 import { clientesRouter } from "./escritorio/router-clientes";
 import { origensLeadRouter } from "./escritorio/router-origens-lead";
 import { camposClienteRouter } from "./escritorio/router-campos-cliente";
@@ -97,6 +98,7 @@ export const appRouter = router({
   configuracoes: configuracoesRouter,
   agendamento: agendamentoRouter,
   crm: crmRouter,
+  atendimentoIa: atendimentoIaRouter,
   calcom: calcomRouter,
   whatsapp: whatsappRouter,
   twilio: twilioRouter,

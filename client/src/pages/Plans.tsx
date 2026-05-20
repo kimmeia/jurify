@@ -199,166 +199,173 @@ export default function Plans() {
 
   if (isLoading) {
     return (
-      <div className="max-w-5xl mx-auto py-12 px-4 space-y-8">
-        <div className="text-center space-y-2">
-          <Skeleton className="h-8 w-64 mx-auto" />
-          <Skeleton className="h-4 w-96 mx-auto" />
-        </div>
+      <div className="max-w-6xl mx-auto py-6 px-2 space-y-5">
+        <Skeleton className="h-32 w-full rounded-2xl" />
         <div className="grid gap-6 md:grid-cols-3">
-          <Skeleton className="h-96 rounded-xl" />
-          <Skeleton className="h-96 rounded-xl" />
-          <Skeleton className="h-96 rounded-xl" />
+          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-2xl" />
         </div>
       </div>
     );
   }
 
+  const currentPlanName = plans?.find((p) => p.id === currentPlanId)?.name ?? currentPlanId;
+  const currentPlanData = plans?.find((p) => p.id === currentPlanId);
+  const currentPrice = currentPlanData
+    ? (billingInterval === "monthly" ? currentPlanData.priceMonthly : currentPlanData.priceYearly)
+    : 0;
+
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 space-y-8">
-      <div className="text-center space-y-3">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          {currentSub ? "Gerenciar Plano" : "Escolha seu Plano"}
-        </h1>
-        <p className="text-muted-foreground max-w-lg mx-auto">
-          {currentSub
-            ? "Gerencie sua assinatura ou faça upgrade/downgrade do seu plano."
-            : "Selecione o plano ideal para o seu escritório jurídico."}
-        </p>
-      </div>
+    <div className="max-w-6xl mx-auto py-6 px-2 space-y-5">
+
+      {/* HERO gradient — substitui título plain */}
+      {currentSub ? (
+        <div className="relative overflow-hidden rounded-2xl p-6 text-white shadow-lg"
+             style={{ background: "linear-gradient(135deg,#4f46e5 0%,#7c3aed 45%,#c026d3 100%)" }}>
+          <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+          <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+            {/* Plano atual */}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-white/80 font-semibold mb-1">Plano atual</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-2xl font-extrabold tracking-tight">{currentPlanName}</p>
+                <StatusPlanoBadge status={resolverStatusVisual(currentSub)} />
+              </div>
+              {currentPrice > 0 && (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold tabular-nums">{formatPrice(currentPrice)}</span>
+                  <span className="text-[10px] text-white/70">/{billingInterval === "monthly" ? "mês" : "ano"}</span>
+                </div>
+              )}
+              <p className="text-[11px] text-white/80 mt-2">
+                {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
+                  ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}`
+                  : currentSub.currentPeriodEnd
+                    ? `Próxima cobrança em ${new Date(currentSub.currentPeriodEnd).toLocaleDateString("pt-BR")}`
+                    : null}
+              </p>
+            </div>
+
+            {/* Recursos do plano em destaque */}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-white/80 font-semibold mb-2">Recursos inclusos</p>
+              <ul className="space-y-1">
+                {(currentPlanData?.features || []).slice(0, 4).map((feature, i) => (
+                  <li key={i} className="flex items-center gap-1.5 text-[11px] text-white/90">
+                    <Check className="h-3 w-3 text-emerald-300 shrink-0" />
+                    <span className="truncate">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Ações */}
+            <div className="flex flex-col gap-2">
+              {currentSub.status !== "trialing" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={cancelLoading}
+                  className="bg-white/12 border border-white/25 text-white hover:bg-white/20 backdrop-blur-sm"
+                >
+                  {cancelLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  ) : (
+                    <XCircle className="h-4 w-4 mr-1.5" />
+                  )}
+                  Cancelar assinatura
+                </Button>
+              )}
+              <p className="text-[10px] text-white/65 text-center">
+                Pagamento seguro via <b className="text-white">Asaas</b> · PIX · Boleto · Cartão
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center space-y-3 py-6">
+          <h1 className="text-3xl font-bold tracking-tight">Escolha seu plano</h1>
+          <p className="text-sm text-slate-500 max-w-lg mx-auto">
+            Selecione o plano ideal para o seu escritório jurídico.
+          </p>
+        </div>
+      )}
 
       {/* Aviso quando o sistema de cobrança não está configurado */}
       {billingOk === false && (
-        <Card className="border-amber-300/50 bg-amber-50/50 dark:bg-amber-950/20">
-          <CardContent className="pt-6 flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-semibold text-foreground">
-                Sistema de cobrança em configuração
-              </p>
-              <p className="text-sm text-muted-foreground">
-                A integração com o Asaas ainda não foi configurada pelo
-                administrador. Os botões de assinatura ficarão disponíveis em
-                breve.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border-l-[3px] border-l-amber-500 border border-amber-200 bg-amber-50/50 p-3.5 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-amber-900">Sistema de cobrança em configuração</p>
+            <p className="text-[11px] text-amber-700 mt-0.5">
+              A integração com o Asaas ainda não foi configurada. Os botões de assinatura ficarão disponíveis em breve.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Estado "aguardando pagamento" — polling ativo */}
       {awaitingPayment && (
-        <Card className="border-blue-300/50 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardContent className="pt-6 flex items-start gap-3">
-            <div className="relative">
-              <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
-              <Loader2 className="h-3 w-3 text-blue-600 absolute -bottom-0.5 -right-0.5 animate-spin" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold text-foreground">
-                Aguardando confirmação do pagamento
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Complete o pagamento na aba do Asaas que foi aberta. Esta
-                página vai atualizar automaticamente quando o pagamento for
-                confirmado (pode levar alguns segundos após o pagamento).
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3"
-                onClick={() => {
-                  utils.subscription.current.invalidate();
-                  toast.info("Verificando...");
-                }}
-              >
-                <Loader2 className="h-3 w-3 mr-1.5" />
-                Verificar agora
-              </Button>
-            </div>
-            <button
-              onClick={() => setAwaitingPayment(false)}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label="Cancelar espera"
+        <div className="rounded-xl border-l-[3px] border-l-blue-500 border border-blue-200 bg-blue-50/50 p-3.5 flex items-start gap-3">
+          <div className="relative shrink-0">
+            <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Loader2 className="h-3 w-3 text-blue-600 absolute -bottom-0.5 -right-0.5 animate-spin" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-blue-900">Aguardando confirmação do pagamento</p>
+            <p className="text-[11px] text-blue-700 mt-0.5">
+              Complete o pagamento na aba do Asaas que foi aberta. Esta página vai atualizar automaticamente.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 h-7 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-100"
+              onClick={() => { utils.subscription.current.invalidate(); toast.info("Verificando..."); }}
             >
-              <XCircle className="h-4 w-4" />
-            </button>
-          </CardContent>
-        </Card>
+              <Loader2 className="h-3 w-3 mr-1" /> Verificar agora
+            </Button>
+          </div>
+          <button onClick={() => setAwaitingPayment(false)} className="text-slate-400 hover:text-slate-700" aria-label="Cancelar espera">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
-      {/* Current plan info */}
-      {currentSub && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-lg">
-                    Plano{" "}
-                    {plans?.find((p) => p.id === currentPlanId)?.name ??
-                      currentPlanId}
-                  </p>
-                  <StatusPlanoBadge status={resolverStatusVisual(currentSub)} />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
-                    ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}. Adicione forma de pagamento pra continuar.`
-                    : currentSub.currentPeriodEnd && (
-                        <>
-                          Próxima cobrança em{" "}
-                          {new Date(currentSub.currentPeriodEnd).toLocaleDateString("pt-BR")}
-                        </>
-                      )}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {currentSub.status !== "trialing" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCancel}
-                    disabled={cancelLoading}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    {cancelLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <XCircle className="h-4 w-4 mr-1" />
-                    )}
-                    Cancelar Assinatura
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Billing Toggle */}
-      <div className="flex items-center justify-center gap-3">
-        <button
-          onClick={() => setBillingInterval("monthly")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            billingInterval === "monthly"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Mensal
-        </button>
-        <button
-          onClick={() => setBillingInterval("yearly")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            billingInterval === "yearly"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Anual
-          <Badge variant="secondary" className="ml-2 text-[10px]">
-            2 meses grátis
-          </Badge>
-        </button>
+      {/* Billing Toggle — estilo segmented control */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-bold tracking-tight">
+            {currentSub ? "Trocar de plano" : "Planos disponíveis"}
+          </p>
+          <p className="text-[11px] text-slate-500">
+            {currentSub ? "Upgrade pra desbloquear recursos · downgrade reduz limites" : "Escolha o melhor pro tamanho do seu escritório"}
+          </p>
+        </div>
+        <div className="bg-slate-100 border border-slate-200 rounded-lg p-1 inline-flex gap-0.5">
+          <button
+            onClick={() => setBillingInterval("monthly")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              billingInterval === "monthly"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Mensal
+          </button>
+          <button
+            onClick={() => setBillingInterval("yearly")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
+              billingInterval === "yearly"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Anual
+            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">−2 meses</span>
+          </button>
+        </div>
       </div>
 
       {/* Plans Grid */}
@@ -384,88 +391,103 @@ export default function Plans() {
           else if (isDowngrade) buttonLabel = "Fazer Downgrade";
 
           return (
-            <Card
+            <div
               key={plan.id}
-              className={`relative flex flex-col ${
-                isPopular ? "border-primary shadow-lg ring-1 ring-primary/20" : ""
-              } ${isCurrentPlan ? "ring-2 ring-primary/40" : ""}`}
+              className={`relative flex flex-col rounded-2xl border bg-white p-6 ${
+                isCurrentPlan
+                  ? "border-2 border-violet-500 bg-violet-50/30 ring-4 ring-violet-100"
+                  : isPopular
+                    ? "border-2 border-amber-300 bg-gradient-to-br from-amber-50/40 to-orange-50/40 shadow-lg"
+                    : "border-slate-200"
+              }`}
             >
               {isPopular && !isCurrentPlan && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="shadow-sm">Mais Popular</Badge>
-                </div>
+                <span className="absolute -top-2.5 right-3 px-2 py-0.5 bg-amber-500 text-white text-[9px] rounded-full font-bold tracking-wider uppercase shadow-sm">
+                  🏆 Mais escolhido
+                </span>
               )}
               {isCurrentPlan && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge variant="default" className="shadow-sm">
-                    Seu Plano
-                  </Badge>
-                </div>
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-violet-600 text-white text-[9px] rounded-full font-bold tracking-wider uppercase shadow-sm">
+                  ✓ Plano atual
+                </span>
               )}
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <CardDescription>{plan.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <div className="mb-6">
-                  <span className="text-4xl font-bold text-foreground">
+
+              <div>
+                <p className={`text-[11px] font-bold uppercase tracking-wider ${
+                  isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-500"
+                }`}>
+                  {plan.name}
+                </p>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className={`text-3xl font-extrabold tracking-tight tabular-nums ${
+                    isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900"
+                  }`}>
                     {formatPrice(price)}
                   </span>
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-xs text-slate-400 font-normal">
                     /{billingInterval === "monthly" ? "mês" : "ano"}
                   </span>
-                  {billingInterval === "yearly" && (
-                    <p className="text-xs text-emerald-600 mt-1">
-                      Economia de{" "}
-                      {formatPrice(plan.priceMonthly * 12 - plan.priceYearly)}/ano
-                    </p>
-                  )}
                 </div>
-                <ul className="space-y-3">
-                  {plan.features.map((feature, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                      <span className="text-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button
-                  className="w-full"
-                  variant={
-                    isCurrentPlan ? "secondary" : isPopular ? "default" : "outline"
-                  }
-                  size="lg"
-                  disabled={
-                    loadingPlan !== null || isCurrentPlan || billingOk === false
-                  }
-                  onClick={() => handleSelectPlan(plan.id)}
-                >
-                  {loadingPlan === plan.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...
-                    </>
-                  ) : (
-                    <>
-                      {buttonLabel}
-                      {!isCurrentPlan && <ArrowRight className="ml-2 h-4 w-4" />}
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
+                {billingInterval === "yearly" && (
+                  <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                    Economia de {formatPrice(plan.priceMonthly * 12 - plan.priceYearly)}/ano
+                  </p>
+                )}
+                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">{plan.description}</p>
+              </div>
+
+              <ul className="space-y-2 mt-5 flex-1">
+                {plan.features.map((feature, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[11.5px]">
+                    <Check className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${
+                      isCurrentPlan ? "text-violet-600" : isPopular ? "text-amber-600" : "text-emerald-600"
+                    }`} />
+                    <span className="text-slate-700">{feature}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                className={`w-full mt-5 ${
+                  isCurrentPlan
+                    ? "bg-violet-100 text-violet-700 hover:bg-violet-100 cursor-default"
+                    : isPopular
+                      ? "bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-sm"
+                      : ""
+                }`}
+                variant={isCurrentPlan || isPopular ? "default" : "outline"}
+                size="sm"
+                disabled={loadingPlan !== null || isCurrentPlan || billingOk === false}
+                onClick={() => handleSelectPlan(plan.id)}
+              >
+                {loadingPlan === plan.id ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
+                  </>
+                ) : isCurrentPlan ? (
+                  <>✓ Você está aqui</>
+                ) : (
+                  <>
+                    {isUpgrade && <>↑ </>}
+                    {isDowngrade && <>↓ </>}
+                    {buttonLabel}
+                    {!isCurrentPlan && <ArrowRight className="ml-1.5 h-3.5 w-3.5" />}
+                  </>
+                )}
+              </Button>
+            </div>
           );
         })}
       </div>
 
-      <div className="text-center text-xs text-muted-foreground mt-8 space-y-1">
-        <p>
-          Pagamento seguro via <strong>Asaas</strong> — PIX, boleto ou cartão de
-          crédito.
-        </p>
-        <p>O acesso é liberado automaticamente após confirmação do pagamento.</p>
-      </div>
+      {!currentSub && (
+        <div className="text-center text-[11px] text-slate-500 mt-6 space-y-0.5">
+          <p>
+            Pagamento seguro via <b className="text-slate-700">Asaas</b> · PIX · Boleto · Cartão
+          </p>
+          <p>O acesso é liberado automaticamente após confirmação do pagamento.</p>
+        </div>
+      )}
 
       {/* Modal CPF/CNPJ */}
       <Dialog open={cpfModalOpen} onOpenChange={setCpfModalOpen}>
