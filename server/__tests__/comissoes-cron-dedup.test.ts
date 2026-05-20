@@ -160,6 +160,45 @@ describe("processarAgendasComissao — dedup cross-origem", () => {
     expect(valores[0].mensagem).toContain("já tinha");
   });
 
+  it("NÃO notifica quando reservarExecucao já bloqueou todos os atendentes (regressão: spam a cada 15min)", async () => {
+    // Cenário do bug reportado em prod: escritório fechou comissões dias
+    // atrás. A cada nova execução do cron (15min), reservarExecucao
+    // devolve null pra TODOS os atendentes (já concluído). Antes do fix,
+    // a condição "atendentes.length === 0 && total === 0" deixava o
+    // notificar() rodar porque atendentes.length > 0 — gerando
+    // notificação vazia "Período X a Y: ." a cada tick.
+    selectQueue.push([
+      {
+        id: 1,
+        escritorioId: 100,
+        diaDoMes: 1,
+        horaLocal: "18:00",
+        fusoHorario: "America/Sao_Paulo",
+      },
+    ]);
+    selectQueue.push([{ atendenteId: 10 }, { atendenteId: 20 }]);
+    selectQueue.push([
+      { id: 10, userId: 50, userName: "Atendente A" },
+      { id: 20, userId: 51, userName: "Atendente B" },
+    ]);
+    selectQueue.push([{ userId: 1 }]);
+
+    // CRÍTICO: reservarExecucao devolve null pra todos (já rodaram antes).
+    reservarExecucao.mockResolvedValue(null);
+
+    await processarAgendasComissao();
+
+    expect(reservarExecucao).toHaveBeenCalledTimes(2);
+    expect(fecharComissao).not.toHaveBeenCalled();
+    expect(marcarExecucaoConcluida).not.toHaveBeenCalled();
+
+    // SEM notificação: o cron rodou e não processou nada novo.
+    const notif = captured.find(
+      (c) => c.op === "insert" && c.table === "notificacoes",
+    );
+    expect(notif).toBeUndefined();
+  });
+
   it("fecha normalmente quando NÃO existe fechamento prévio", async () => {
     selectQueue.push([
       {
