@@ -4134,6 +4134,300 @@ export const asaasRouter = router({
    *    informativo, pra calibrar a probabilidade de duplicidade
    *    (manual já-paga é o caminho típico do cenário Carlos+Esposa).
    */
+  /**
+   * Lista TODOS os pares suspeitos com info detalhada de cada lado.
+   * Versão completa do `diagnosticarDuplicidades.paresSuspeitos.exemplos`
+   * (que cap em 5). Usada pelo wizard "Resolver duplicatas" pra mostrar
+   * cobrança por cobrança e permitir auto-fix.
+   *
+   * Cada par traz: ambas cobranças completas + nomes de contatos +
+   * indicadores se estão em fechamento de comissão (bloqueia ação).
+   */
+  listarParesSuspeitos: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
+    if (!perm.verTodos && !perm.verProprios) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const db = await getDb();
+    if (!db) return [];
+
+    const eid = esc.escritorio.id;
+    const statusPagoList = STATUS_PAGO_ASAAS as unknown as string[];
+    const aliasB = aliasedTable(asaasCobrancas, "b");
+
+    const rows = await db
+      .select({
+        aId: asaasCobrancas.id,
+        aValor: asaasCobrancas.valor,
+        aOrigem: asaasCobrancas.origem,
+        aContatoId: asaasCobrancas.contatoId,
+        aContatoBeneficiarioId: asaasCobrancas.contatoBeneficiarioId,
+        aDataPag: asaasCobrancas.dataPagamento,
+        aStatus: asaasCobrancas.status,
+        aDescricao: asaasCobrancas.descricao,
+        aAsaasPaymentId: asaasCobrancas.asaasPaymentId,
+        aFormaPag: asaasCobrancas.formaPagamento,
+        bId: aliasB.id,
+        bValor: aliasB.valor,
+        bOrigem: aliasB.origem,
+        bContatoId: aliasB.contatoId,
+        bContatoBeneficiarioId: aliasB.contatoBeneficiarioId,
+        bDataPag: aliasB.dataPagamento,
+        bStatus: aliasB.status,
+        bDescricao: aliasB.descricao,
+        bAsaasPaymentId: aliasB.asaasPaymentId,
+        bFormaPag: aliasB.formaPagamento,
+      })
+      .from(asaasCobrancas)
+      .innerJoin(
+        aliasB,
+        and(
+          eq(aliasB.escritorioId, asaasCobrancas.escritorioId),
+          sql`${asaasCobrancas.id} < ${aliasB.id}`,
+          eq(aliasB.valor, asaasCobrancas.valor),
+          inArray(aliasB.status, statusPagoList),
+          sql`ABS(DATEDIFF(${asaasCobrancas.dataPagamento}, ${aliasB.dataPagamento})) <= 7`,
+        ),
+      )
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, eid),
+          inArray(asaasCobrancas.status, statusPagoList),
+          sql`(${asaasCobrancas.origem} = 'manual' OR ${aliasB.origem} = 'manual'
+               OR ${asaasCobrancas.contatoId} IS NULL OR ${aliasB.contatoId} IS NULL)`,
+          sql`(${asaasCobrancas.parcelamentoLocalId} IS NULL
+               OR ${aliasB.parcelamentoLocalId} IS NULL
+               OR ${asaasCobrancas.parcelamentoLocalId} != ${aliasB.parcelamentoLocalId})`,
+          // Filtro novo: par já resolvido por beneficiário não aparece mais.
+          // Se A.contatoBeneficiarioId == B.contatoId ou B.contatoBeneficiarioId
+          // == A.contatoId, o operador já consolidou esse par via "vincular
+          // pagamento de terceiro" — não precisa aparecer no wizard.
+          sql`NOT (
+            ${asaasCobrancas.contatoBeneficiarioId} = ${aliasB.contatoId}
+            OR ${aliasB.contatoBeneficiarioId} = ${asaasCobrancas.contatoId}
+          )`,
+        ),
+      )
+      .orderBy(desc(asaasCobrancas.dataPagamento))
+      .limit(200);
+
+    if (rows.length === 0) return [];
+
+    // Enriquece com nomes de contatos pra UI mostrar "Esposa Carlos ↔ Carlos".
+    const contatoIds = new Set<number>();
+    for (const r of rows) {
+      if (r.aContatoId) contatoIds.add(r.aContatoId);
+      if (r.bContatoId) contatoIds.add(r.bContatoId);
+    }
+    const contatosList =
+      contatoIds.size > 0
+        ? await db
+            .select({ id: contatos.id, nome: contatos.nome })
+            .from(contatos)
+            .where(
+              and(
+                eq(contatos.escritorioId, eid),
+                inArray(contatos.id, Array.from(contatoIds)),
+              ),
+            )
+        : [];
+    const nomePorContato = new Map<number, string>(
+      contatosList.map((c) => [c.id, c.nome]),
+    );
+
+    // Marca quais ids estão em fechamento de comissão (bloqueio de ação).
+    const todosIds = rows.flatMap((r) => [r.aId, r.bId]);
+    const itensFech =
+      todosIds.length > 0
+        ? await db
+            .select({ asaasCobrancaId: comissoesFechadasItens.asaasCobrancaId })
+            .from(comissoesFechadasItens)
+            .where(inArray(comissoesFechadasItens.asaasCobrancaId, todosIds))
+        : [];
+    const idsEmFechamento = new Set(
+      itensFech.map((i) => i.asaasCobrancaId),
+    );
+
+    return rows.map((r) => ({
+      a: {
+        id: r.aId,
+        valor: parseFloat(r.aValor) || 0,
+        origem: r.aOrigem,
+        contatoId: r.aContatoId,
+        contatoNome: r.aContatoId ? nomePorContato.get(r.aContatoId) ?? null : null,
+        dataPagamento: r.aDataPag,
+        status: r.aStatus,
+        descricao: r.aDescricao,
+        asaasPaymentId: r.aAsaasPaymentId,
+        formaPagamento: r.aFormaPag,
+        emFechamento: idsEmFechamento.has(r.aId),
+      },
+      b: {
+        id: r.bId,
+        valor: parseFloat(r.bValor) || 0,
+        origem: r.bOrigem,
+        contatoId: r.bContatoId,
+        contatoNome: r.bContatoId ? nomePorContato.get(r.bContatoId) ?? null : null,
+        dataPagamento: r.bDataPag,
+        status: r.bStatus,
+        descricao: r.bDescricao,
+        asaasPaymentId: r.bAsaasPaymentId,
+        formaPagamento: r.bFormaPag,
+        emFechamento: idsEmFechamento.has(r.bId),
+      },
+    }));
+  }),
+
+  /**
+   * Resolve UM par suspeito de uma vez (auto-fix em transação).
+   *
+   * Caso de uso típico: par Asaas+manual (Carlos+esposa). O wizard chama
+   * com a Asaas como "manter" e a manual como "remover". Backend:
+   *   1. Valida que a "manter" existe e não está em fechamento
+   *   2. (opcional) Vincula "manter" como pagamento beneficiário do
+   *      contato da "remover" — preserva o histórico no perfil correto
+   *   3. Exclui a "remover" (manual qualquer status; Asaas só PENDING)
+   *   4. Tudo em transação MySQL — rollback automático se algo falhar
+   *
+   * Se `vincularBeneficiario=false`, só remove a cobrança escolhida.
+   * Útil quando o operador olha o par e decide "as duas são reais, só
+   * uma delas tava errada".
+   */
+  resolverDuplicataPar: protectedProcedure
+    .input(
+      z.object({
+        manterCobrancaId: z.number().int().positive(),
+        removerCobrancaId: z.number().int().positive(),
+        /** Se true, "manter" ganha contatoBeneficiarioId = contatoId da "remover".
+         *  Quando false, só exclui sem vincular. */
+        vincularBeneficiario: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "excluir");
+      if (!perm.excluir) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      }
+      if (input.manterCobrancaId === input.removerCobrancaId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cobranças manter e remover não podem ser a mesma.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Lê ambas em paralelo. Valida escritório.
+      const [manter] = await db
+        .select()
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.manterCobrancaId),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      const [remover] = await db
+        .select()
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.removerCobrancaId),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!manter || !remover) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Uma das cobranças não foi encontrada no seu escritório.",
+        });
+      }
+
+      // Trava de integridade: se a cobrança a remover está em fechamento de
+      // comissão, bloqueia. Se a manter está em fechamento, só não pode
+      // vincular beneficiário (mas pode resolver com vincular=false).
+      const itensFech = await db
+        .select({ asaasCobrancaId: comissoesFechadasItens.asaasCobrancaId })
+        .from(comissoesFechadasItens)
+        .where(
+          inArray(comissoesFechadasItens.asaasCobrancaId, [
+            input.manterCobrancaId,
+            input.removerCobrancaId,
+          ]),
+        );
+      const idsEmFech = new Set(itensFech.map((i) => i.asaasCobrancaId));
+      if (idsEmFech.has(input.removerCobrancaId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "A cobrança a remover já está em fechamento de comissão. Exclua o fechamento primeiro (Comissões → Histórico).",
+        });
+      }
+      if (input.vincularBeneficiario && idsEmFech.has(input.manterCobrancaId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "A cobrança a manter já está em fechamento de comissão — não pode remarcar beneficiário. Tente com vincular=false ou exclua o fechamento.",
+        });
+      }
+
+      // Remoção: Asaas só PENDING; manual qualquer status.
+      const removerEhManual =
+        remover.origem === "manual" || !remover.asaasPaymentId;
+      if (!removerEhManual && remover.status !== "PENDING") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "A cobrança a remover é Asaas e não está pendente. Cancele no painel do Asaas — o webhook propaga.",
+        });
+      }
+
+      // Auto-fix em transação: vincula + remove. Se algo falhar, rollback.
+      const novoBeneficiarioId =
+        input.vincularBeneficiario && remover.contatoId !== null
+          ? remover.contatoId
+          : null;
+
+      await db.transaction(async (tx) => {
+        // 1. (opcional) Vincula a cobrança a manter como pagamento do
+        //    contato da remover (caso clássico Carlos+esposa).
+        if (novoBeneficiarioId !== null && manter.contatoId !== novoBeneficiarioId) {
+          await tx
+            .update(asaasCobrancas)
+            .set({ contatoBeneficiarioId: novoBeneficiarioId })
+            .where(eq(asaasCobrancas.id, input.manterCobrancaId));
+        }
+
+        // 2. Exclui a cobrança escolhida. Asaas API call só rolaria se
+        //    fosse Asaas PENDING — pra simplicidade do auto-fix, NÃO
+        //    chamamos client.excluirCobranca(asaas) dentro da tx (chamada
+        //    externa pode falhar e estragar a tx). Se a remoção é Asaas
+        //    PENDING, o operador deve usar o "Cancelar cobrança" normal
+        //    no Asaas; o wizard só remove manuais.
+        if (!removerEhManual) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Auto-fix só remove cobrança manual. Pra remover Asaas PENDING, use o botão de cancelar normal.",
+          });
+        }
+        await tx
+          .delete(asaasCobrancas)
+          .where(eq(asaasCobrancas.id, input.removerCobrancaId));
+      });
+
+      return {
+        success: true,
+        vinculouBeneficiario: novoBeneficiarioId !== null,
+        beneficiarioId: novoBeneficiarioId,
+      };
+    }),
+
   diagnosticarDuplicidades: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
     if (!perm.allowed) {

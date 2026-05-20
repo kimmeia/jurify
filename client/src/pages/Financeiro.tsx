@@ -30,6 +30,7 @@ import {
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
   Paperclip, FileUp, Percent, MoreVertical, CalendarDays, CircleDollarSign,
+  Wand2,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
@@ -53,6 +54,7 @@ import { DespesasWrapper } from "./financeiro/DespesasWrapper";
 import { OFXImportDialog } from "./financeiro/OFXImportDialog";
 import { LimpezaContatosOrfaosDialog } from "./financeiro/LimpezaContatosOrfaosDialog";
 import { DiagnosticarDuplicidadesDialog } from "./financeiro/DiagnosticarDuplicidadesDialog";
+import { ResolverDuplicidadesDialog } from "./financeiro/ResolverDuplicidadesDialog";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 /** Helper: 1º dia e último dia do mês corrente em YYYY-MM-DD. */
@@ -78,6 +80,7 @@ export default function Financeiro() {
   const [ofxOpen, setOfxOpen] = useState(false);
   const [limpezaOpen, setLimpezaOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [resolverDupOpen, setResolverDupOpen] = useState(false);
   const perms = useFinanceiroPerms();
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   // Aba Clientes: chip de quick filter + filtro de dias em atraso + ordenação por coluna.
@@ -556,12 +559,21 @@ export default function Financeiro() {
                     Limpar órfãos
                   </DropdownMenuItem>
                 )}
+                {perms.podeExcluir && (
+                  <DropdownMenuItem
+                    onClick={() => setResolverDupOpen(true)}
+                    title="Wizard pra limpar duplicatas no caixa — resolver cada par escolhendo qual cobrança manter"
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    Resolver duplicatas
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => setDiagOpen(true)}
-                  title="Diagnostica possíveis pagamentos duplicados (read-only)"
+                  title="Visão geral read-only: contagem de duplicatas, órfãs pagas, manuais já-pagas"
                 >
                   <Search className="h-4 w-4 mr-2" />
-                  Diagnosticar duplicidades
+                  Diagnosticar (visão geral)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1219,6 +1231,10 @@ export default function Financeiro() {
       <DiagnosticarDuplicidadesDialog
         open={diagOpen}
         onOpenChange={setDiagOpen}
+      />
+      <ResolverDuplicidadesDialog
+        open={resolverDupOpen}
+        onOpenChange={setResolverDupOpen}
       />
 
       <AlertDialog
