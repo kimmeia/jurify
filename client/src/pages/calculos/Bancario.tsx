@@ -17,7 +17,9 @@ import {
   Scale, Receipt, Hash, Download, ArrowRight, CircleDollarSign,
   Car, Wallet, Banknote, Building2, PiggyBank, ChevronsRight,
   HelpCircle, XCircle, Percent, User, Briefcase, Shield, HeartPulse,
+  Check, CircleCheckBig, Copy,
 } from "lucide-react";
+import { PulseDot } from "../dashboards/common";
 import { toast } from "sonner";
 import type {
   ResultadoFinanciamento, LinhaFinanciamento, ModalidadeCredito,
@@ -180,26 +182,59 @@ function DemonstrativoTable({ linhas, title, desc }: { linhas: LinhaFinanciament
 }
 
 function StepBar({ current }: { current: number }) {
-  const steps = [
-    { n: 1, label: "Tipo" },
-    { n: 2, label: "Dados" },
-    { n: 3, label: "Resultado" },
-  ];
+  const steps = ["Modalidade", "Dados do contrato", "Resultado"];
   return (
-    <div className="flex items-center gap-2 text-sm">
-      {steps.map((s, i) => (
-        <div key={s.n} className="flex items-center gap-2">
-          {i > 0 && <ChevronsRight className="h-4 w-4 text-muted-foreground/40" />}
-          <div className={`flex items-center gap-1.5 ${s.n === current ? "text-primary font-medium" : s.n < current ? "text-muted-foreground" : "text-muted-foreground/50"}`}>
-            <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${
-              s.n < current ? "bg-primary/20 text-primary" : s.n === current ? "bg-primary text-primary-foreground" : "bg-muted"
-            }`}>
-              {s.n < current ? <CheckCircle className="h-3.5 w-3.5" /> : s.n}
+    <div className="flex items-center justify-end gap-3 text-xs flex-wrap">
+      {steps.map((nome, i) => {
+        const num = i + 1;
+        const concluido = num < current;
+        const ativo = num === current;
+        return (
+          <div key={nome} className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
+                concluido ? "bg-emerald-600 text-white"
+                : ativo ? "bg-blue-600 text-white"
+                : "bg-slate-200 text-slate-600"
+              }`}>
+                {concluido ? <Check className="w-3 h-3" /> : num}
+              </div>
+              <span className={ativo ? "font-medium text-slate-900" : "text-slate-500"}>{nome}</span>
             </div>
-            {s.label}
+            {i < steps.length - 1 && (
+              <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
+    </div>
+  );
+}
+
+// Hero do submódulo Bancário — sempre visível no topo do wizard
+function BancarioHero({ titulo, descricao, passoAtual, totalPassos }: {
+  titulo?: string; descricao?: string; passoAtual?: number; totalPassos?: number;
+}) {
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <Landmark className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
+      <div className="relative">
+        {passoAtual && totalPassos ? (
+          <div className="flex items-center gap-2 mb-2">
+            <PulseDot />
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+              Passo {passoAtual} de {totalPassos}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mb-1">
+            <PulseDot />
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Revisão bancária</p>
+          </div>
+        )}
+        {titulo && <h2 className="text-2xl font-bold mb-1">{titulo}</h2>}
+        {descricao && <p className="text-sm text-white/80">{descricao}</p>}
+      </div>
     </div>
   );
 }
@@ -362,54 +397,52 @@ export default function Bancario() {
 
   if (step === 1) {
     return (
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/30">
-            <Landmark className="h-6 w-6 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Revisão de Financiamento</h1>
-            <p className="text-sm text-muted-foreground">Descubra se você está pagando juros abusivos no seu contrato</p>
-          </div>
-        </div>
+      <div className="space-y-6 max-w-6xl mx-auto">
+        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5">
+          <StepBar current={1} />
 
-        <StepBar current={1} />
+          <BancarioHero
+            titulo="Qual a modalidade do contrato?"
+            descricao="Cada modalidade tem uma taxa média BACEN diferente e tetos legais específicos. Escolha o que está no contrato do seu cliente."
+            passoAtual={1}
+            totalPassos={3}
+          />
 
-        <Card>
-          <CardContent className="pt-5 pb-5">
-            <Label htmlFor="modalidadeCredito" className="text-base font-semibold">
-              Qual o tipo do seu contrato?
-            </Label>
-            <p className="text-sm text-muted-foreground mt-0.5 mb-3">
-              Selecione a modalidade de crédito que consta no contrato.
-            </p>
-            <Select
-              value={form.modalidadeCredito}
-              onValueChange={(v) => {
-                updateField("modalidadeCredito", v);
-                if (v !== "financiamento_veiculo") updateField("tipoPessoa", "fisica");
-                if (v !== "consignado") updateField("tipoVinculoConsignado", "clt");
-              }}
-            >
-              <SelectTrigger id="modalidadeCredito" className="h-12">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODALIDADES.map((mod) => (
-                  <SelectItem key={mod.id} value={mod.id}>
-                    <div className="flex items-center gap-2.5 py-0.5">
-                      <mod.icon className={`h-4 w-4 ${mod.color}`} />
-                      <div className="flex flex-col text-left">
-                        <span className="font-medium">{mod.label}</span>
-                        <span className="text-xs text-muted-foreground">{mod.desc}</span>
-                      </div>
+          {/* Grid de cards visuais */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {MODALIDADES.map((mod) => {
+              const selected = form.modalidadeCredito === mod.id;
+              return (
+                <button
+                  key={mod.id}
+                  type="button"
+                  onClick={() => {
+                    updateField("modalidadeCredito", mod.id);
+                    if (mod.id !== "financiamento_veiculo") updateField("tipoPessoa", "fisica");
+                    if (mod.id !== "consignado") updateField("tipoVinculoConsignado", "clt");
+                  }}
+                  className={`text-left bg-white rounded-xl p-5 transition-all ${
+                    selected
+                      ? "border-2 border-blue-500 ring-2 ring-blue-100 shadow-md"
+                      : "border border-slate-200 hover:border-blue-400 hover:shadow-md"
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={`p-2 ${mod.bg} rounded-lg`}>
+                      <mod.icon className={`w-5 h-5 ${mod.color}`} />
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+                    {mod.id === "credito_pessoal" && (
+                      <span className="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                        Mais comum
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-semibold text-slate-900 mb-1">{mod.label}</p>
+                  <p className="text-xs text-slate-500">{mod.desc}</p>
+                </button>
+              );
+            })}
+          </div>
 
         {/* Seleção PF/PJ — aparece apenas para Financiamento de Veículo */}
         {form.modalidadeCredito === "financiamento_veiculo" && (
@@ -529,9 +562,12 @@ export default function Bancario() {
           </Card>
         )}
 
-        <Button size="lg" className="w-full" onClick={() => setStep(2)}>
-          Continuar com {selectedModalidade?.label}{form.modalidadeCredito === "financiamento_veiculo" ? ` (${form.tipoPessoa === "fisica" ? "PF" : "PJ"})` : ""}{form.modalidadeCredito === "consignado" ? ` — ${form.tipoVinculoConsignado === "clt" ? "CLT" : form.tipoVinculoConsignado === "servidor_publico" ? "Servidor Público" : form.tipoVinculoConsignado === "inss" ? "INSS" : "Militar"}` : ""} <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
+          <div className="flex items-center justify-end border-t border-slate-200 pt-4">
+            <Button size="lg" onClick={() => setStep(2)} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 shadow-sm">
+              Continuar com {selectedModalidade?.label}{form.modalidadeCredito === "financiamento_veiculo" ? ` (${form.tipoPessoa === "fisica" ? "PF" : "PJ"})` : ""}{form.modalidadeCredito === "consignado" ? ` — ${form.tipoVinculoConsignado === "clt" ? "CLT" : form.tipoVinculoConsignado === "servidor_publico" ? "Servidor Público" : form.tipoVinculoConsignado === "inss" ? "INSS" : "Militar"}` : ""} <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -542,21 +578,15 @@ export default function Bancario() {
 
   if (step === 2) {
     return (
-      <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl ${selectedModalidade?.bg}`}>
-            {selectedModalidade && <selectedModalidade.icon className={`h-6 w-6 ${selectedModalidade.color}`} />}
-          </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight">Dados do Contrato</h1>
-            <p className="text-sm text-muted-foreground">{selectedModalidade?.label} — preencha as informações do seu financiamento</p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setStep(1)} className="text-muted-foreground">
-            <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
-          </Button>
-        </div>
-
-        <StepBar current={2} />
+      <div className="space-y-6 max-w-6xl mx-auto">
+        <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-blue-50/20 p-6 space-y-5">
+          <StepBar current={2} />
+          <BancarioHero
+            titulo={`Dados do contrato — ${selectedModalidade?.label}`}
+            descricao="Preencha os dados que constam no contrato. Os campos com asterisco (*) são obrigatórios."
+            passoAtual={2}
+            totalPassos={3}
+          />
 
         {/* Informações Principais */}
         <Card>
@@ -764,11 +794,22 @@ export default function Bancario() {
         </Card>
 
         {/* Calcular */}
-        <div className="space-y-2">
-          <Button size="lg" className="w-full" onClick={handleSubmit} disabled={calcularMutation.isPending}>
-            {calcularMutation.isPending ? (<><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Analisando seu contrato...</>) : (<><Calculator className="h-5 w-5 mr-2" /> Analisar Contrato</>)}
+        <div className="flex items-center justify-between border-t border-slate-200 pt-4">
+          <Button variant="ghost" onClick={() => setStep(1)} className="text-sm">
+            <ChevronLeft className="h-4 w-4 mr-1" /> Voltar para modalidade
           </Button>
-          <p className="text-xs text-center text-muted-foreground">Cada análise consome 1 crédito do seu plano</p>
+          <div className="text-right space-y-1">
+            <Button size="lg" onClick={handleSubmit} disabled={calcularMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 shadow-sm">
+              {calcularMutation.isPending ? (
+                <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Analisando...</>
+              ) : (
+                <><Calculator className="h-5 w-5 mr-2" /> Analisar contrato</>
+              )}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">Consome 1 crédito do seu plano</p>
+          </div>
+        </div>
         </div>
       </div>
     );
@@ -782,57 +823,91 @@ export default function Bancario() {
     const temProblema = (resumo?.diferencaTotal ?? 0) > 0;
 
     return (
-      <div className="space-y-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${temProblema ? "bg-amber-100 dark:bg-amber-950/30" : "bg-emerald-100 dark:bg-emerald-950/30"}`}>
-              {temProblema ? <AlertTriangle className="h-6 w-6 text-amber-600" /> : <CheckCircle className="h-6 w-6 text-emerald-600" />}
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{temProblema ? "Potenciais Irregularidades Encontradas" : "Contrato Regular"}</h1>
-              <p className="text-sm text-muted-foreground">{temProblema ? "Identificamos potenciais cobranças indevidas no seu financiamento" : "Não encontramos problemas significativos"}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {resultado.protocoloCalculo && <Badge variant="outline" className="text-xs flex items-center gap-1"><Hash className="h-3 w-3" /> {resultado.protocoloCalculo}</Badge>}
-            <Button variant="ghost" size="sm" onClick={() => { setStep(1); setResultado(null); }}>Nova análise</Button>
-          </div>
-        </div>
+      <div className="space-y-6 max-w-6xl mx-auto">
+        <div className={`rounded-2xl p-6 space-y-5 ${
+          temProblema
+            ? "bg-gradient-to-br from-slate-50/40 via-white to-rose-50/20"
+            : "bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20"
+        }`}>
+          <StepBar current={3} />
 
-        {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className={temProblema ? "border-red-200 bg-red-50/50 dark:bg-red-950/20" : "border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20"}>
-            <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground font-medium">Você pagou a mais</p>
-              <p className={`text-2xl font-bold mt-1 ${temProblema ? "text-red-700" : "text-emerald-700"}`}>{resumo ? formatBRL(resumo.diferencaTotal) : "—"}</p>
-              <p className="text-xs text-muted-foreground mt-1">{temProblema ? "Diferença entre o contrato e o cálculo justo" : "Seu contrato está dentro do esperado"}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground font-medium">Total pelo contrato atual</p>
-              <p className="text-xl font-bold mt-1">{resumo ? formatBRL(resumo.totalPagoOriginal) : "—"}</p>
-              <p className="text-xs text-muted-foreground mt-1">Soma de todas as parcelas originais</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground font-medium">Total com juros corretos</p>
-              <p className="text-xl font-bold mt-1 text-emerald-700">{resumo ? formatBRL(resumo.totalPagoRecalculado) : "—"}</p>
-              <p className="text-xs text-muted-foreground mt-1">Recalculado pelo Método Gauss</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground font-medium">Problemas encontrados</p>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-2xl font-bold">{irregularidadesCount}</p>
-                {irregularidadesCount > 0 ? <AlertTriangle className="h-5 w-5 text-amber-500" /> : <CheckCircle className="h-5 w-5 text-emerald-500" />}
+          {/* Hero gradient — vermelho se abusivo, verde se regular */}
+          <div className={`rounded-2xl p-7 text-white relative overflow-hidden shadow-lg ${
+            temProblema
+              ? "bg-gradient-to-br from-rose-600 via-red-600 to-orange-700"
+              : "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800"
+          }`}>
+            {temProblema
+              ? <AlertTriangle className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
+              : <CircleCheckBig className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />}
+            <div className="relative">
+              <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <PulseDot />
+                    <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                      {temProblema ? "⚠ Potenciais irregularidades encontradas" : "✓ Contrato regular"}
+                    </p>
+                  </div>
+                  <p className="text-xs text-white/70">
+                    Protocolo {resultado.protocoloCalculo} · {selectedModalidade?.label}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button size="sm" variant="ghost" onClick={exportPDF} disabled={isPdfLoading}
+                    className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs">
+                    {isPdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Download className="h-3.5 w-3.5 mr-1" />} PDF
+                  </Button>
+                  <Button size="sm" onClick={() => { setStep(1); setResultado(null); }}
+                    className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                    <Copy className="h-3.5 w-3.5 mr-1" /> Nova análise
+                  </Button>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">{irregularidadesCount === 0 ? "Nenhuma irregularidade" : `${irregularidadesCount} irregularidade${irregularidadesCount > 1 ? "s" : ""}`}</p>
-            </CardContent>
-          </Card>
-        </div>
+
+              <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                <div className="lg:col-span-6">
+                  <p className="text-sm font-medium text-white/85 mb-1">
+                    {temProblema ? "Valor pago a mais (recálculo)" : "Diferença vs. cálculo justo"}
+                  </p>
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
+                      {resumo ? formatBRL(resumo.diferencaTotal) : "—"}
+                    </span>
+                    {temProblema && resumo && resumo.repeticaoIndebito > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-100 border border-amber-300/30">
+                        + {formatBRL(resumo.repeticaoIndebito)} em repetição de indébito (2×)
+                      </span>
+                    )}
+                  </div>
+                  {analise && (
+                    <p className="text-xs text-white/65 mt-2 tabular-nums">
+                      Taxa contratada {formatPercent(analise.taxaContratadaMensal)} a.m. ·
+                      média BACEN {formatPercent(analise.taxaMediaBACEN_mensal)} a.m.
+                      {analise.percentualAcimaDaMedia > 0 ? ` (${formatPercent(analise.percentualAcimaDaMedia, 1)} acima)` : ""}
+                    </p>
+                  )}
+                </div>
+                <div className="lg:col-span-6">
+                  <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Resumo</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Total contrato</p>
+                      <p className="text-sm font-bold tabular-nums leading-none">{resumo ? formatBRL(resumo.totalPagoOriginal) : "—"}</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Total justo</p>
+                      <p className="text-sm font-bold tabular-nums leading-none text-emerald-200">{resumo ? formatBRL(resumo.totalPagoRecalculado) : "—"}</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                      <p className="text-xs text-white/70 mb-1">Irregularidades</p>
+                      <p className="text-sm font-bold tabular-nums leading-none">{irregularidadesCount}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
         {/* Parcelas Já Pagas */}
         {dadosParcPagas && dadosParcPagas.parcelasPagas > 0 && (
@@ -1113,6 +1188,7 @@ export default function Bancario() {
             />
           </TabsContent>
         </Tabs>
+        </div>
       </div>
     );
   }

@@ -11,10 +11,12 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ParecerEditor } from "@/components/calculos/ParecerEditor";
+import { PulseDot } from "../dashboards/common";
 import {
   Building2, Calculator, AlertTriangle, CheckCircle, FileText, Loader2,
   ChevronDown, Info, Download, ArrowLeft, ArrowRight, Check,
   Home, Shield, DollarSign, TrendingUp, Calendar, Landmark, HardHat, Briefcase,
+  CircleCheckBig, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -91,25 +93,57 @@ function DemonstrativoImobTable({ linhas, title }: { linhas: LinhaImobiliario[];
 
 function StepIndicator({ steps, current }: { steps: string[]; current: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-6">
-      {steps.map((label, i) => {
-        const stepNum = i + 1;
-        const isDone = stepNum < current;
-        const isActive = stepNum === current;
+    <div className="flex items-center justify-end gap-3 text-xs flex-wrap">
+      {steps.map((nome, i) => {
+        const num = i + 1;
+        const concluido = num < current;
+        const ativo = num === current;
         return (
-          <div key={i} className="flex items-center gap-2">
-            <div className="flex flex-col items-center gap-1">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                isDone ? "bg-emerald-500 text-white" : isActive ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
+          <div key={nome} className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] ${
+                concluido ? "bg-emerald-600 text-white"
+                : ativo ? "bg-emerald-700 text-white"
+                : "bg-slate-200 text-slate-600"
               }`}>
-                {isDone ? <Check className="h-4 w-4" /> : stepNum}
+                {concluido ? <Check className="w-3 h-3" /> : num}
               </div>
-              <span className={`text-xs hidden sm:block ${isActive ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{label}</span>
+              <span className={ativo ? "font-medium text-slate-900" : "text-slate-500"}>{nome}</span>
             </div>
-            {i < steps.length - 1 && <div className={`w-8 sm:w-12 h-0.5 mb-4 sm:mb-0 ${isDone ? "bg-emerald-500" : "bg-muted"}`} />}
+            {i < steps.length - 1 && (
+              <div className={`w-8 h-px ${concluido ? "bg-emerald-300" : "bg-slate-300"}`} />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Hero do submódulo Imobiliário — verde/teal pra diferenciar dos outros
+function ImobHero({ titulo, descricao, passoAtual, totalPassos }: {
+  titulo?: string; descricao?: string; passoAtual?: number; totalPassos?: number;
+}) {
+  return (
+    <div className="rounded-2xl bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-800 p-6 text-white relative overflow-hidden shadow-lg">
+      <Building2 className="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" strokeWidth={1.2} />
+      <div className="relative">
+        {passoAtual && totalPassos ? (
+          <div className="flex items-center gap-2 mb-2">
+            <PulseDot />
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+              Passo {passoAtual} de {totalPassos}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mb-1">
+            <PulseDot />
+            <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Revisão imobiliária</p>
+          </div>
+        )}
+        {titulo && <h2 className="text-2xl font-bold mb-1">{titulo}</h2>}
+        {descricao && <p className="text-sm text-white/80">{descricao}</p>}
+      </div>
     </div>
   );
 }
@@ -363,22 +397,29 @@ export default function Imobiliario() {
 
   const stepLabels = ["Dados do Imóvel", "Enquadramento", "Contrato", "Resultado"];
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-          <Building2 className="h-6 w-6 text-emerald-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Revisão de Financiamento Imobiliário</h1>
-          <p className="text-sm text-muted-foreground">
-            Análise completa com MIP, DFI, correção monetária e parecer técnico
-          </p>
-        </div>
-      </div>
+  const heroTitulo =
+    step === 1 ? "Dados do imóvel e financiamento"
+    : step === 2 ? "Enquadramento do contrato"
+    : step === 3 ? "Indexador, seguros e taxa de administração"
+    : "";
+  const heroDescricao =
+    step === 1 ? "Comece informando os valores principais — valor do imóvel, valor financiado, prazo e taxa."
+    : step === 2 ? "SFH ou SFI? Quem é o credor? Essas escolhas definem tetos legais e regras de capitalização."
+    : step === 3 ? "Indexador de correção (TR, IPCA, IGP-M), seguros obrigatórios (MIP/DFI) e custos acessórios."
+    : "";
 
-      <StepIndicator steps={stepLabels} current={step} />
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5">
+        {step !== 4 && <StepIndicator steps={stepLabels} current={step} />}
+        {step !== 4 && (
+          <ImobHero
+            titulo={heroTitulo}
+            descricao={heroDescricao}
+            passoAtual={step}
+            totalPassos={4}
+          />
+        )}
 
       {/* ─── STEP 1: Dados do Imóvel ──────────────────────────────────────── */}
       {step === 1 && (
@@ -779,35 +820,81 @@ export default function Imobiliario() {
 
       {/* ─── STEP 4: Resultado ────────────────────────────────────────────── */}
       {step === 4 && resultado && analise && resumo && (
-        <div className="space-y-4">
-          {/* Resumo rápido */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Card className="p-4">
-              <p className="text-xs text-muted-foreground">Diferença Total</p>
-              <p className={`text-lg font-bold ${resumo.diferencaTotal > 0 ? "text-red-600" : "text-green-600"}`}>
-                {formatBRL(resumo.diferencaTotal)}
-              </p>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs text-muted-foreground">Repetição Indébito</p>
-              <p className="text-lg font-bold text-amber-600">{formatBRL(resumo.repeticaoIndebito)}</p>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs text-muted-foreground">Irregularidades</p>
-              <div className="flex items-center gap-2">
-                <p className={`text-lg font-bold ${irregularidadesCount > 0 ? "text-red-600" : "text-green-600"}`}>
-                  {irregularidadesCount}
-                </p>
-                {irregularidadesCount > 0
-                  ? <AlertTriangle className="h-4 w-4 text-red-500" />
-                  : <CheckCircle className="h-4 w-4 text-green-500" />}
+        <div className="space-y-5">
+          <StepIndicator steps={stepLabels} current={4} />
+          {(() => {
+            const temProblema = resumo.diferencaTotal > 0 || irregularidadesCount > 0;
+            return (
+              <div className={`rounded-2xl p-7 text-white relative overflow-hidden shadow-lg ${
+                temProblema
+                  ? "bg-gradient-to-br from-rose-600 via-red-600 to-pink-700"
+                  : "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800"
+              }`}>
+                {temProblema
+                  ? <AlertTriangle className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
+                  : <CircleCheckBig className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />}
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-2 flex-wrap gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <PulseDot />
+                        <p className="text-xs font-medium text-white/85 uppercase tracking-wider">
+                          {temProblema ? "⚠ Irregularidades encontradas" : "✓ Contrato regular"}
+                        </p>
+                      </div>
+                      <p className="text-xs text-white/70">
+                        Protocolo {resultado.protocoloCalculo} · {analise.enquadramento} · {form.sistemaAmortizacao}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button size="sm" onClick={() => { setStep(1); setResultado(null); setForm(initialForm); }}
+                        className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8">
+                        <Copy className="h-3.5 w-3.5 mr-1" /> Novo cálculo
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                    <div className="lg:col-span-6">
+                      <p className="text-sm font-medium text-white/85 mb-1">
+                        {temProblema ? "Diferença total em " + form.prazoMeses + " parcelas" : "Diferença vs. cálculo justo"}
+                      </p>
+                      <div className="flex items-baseline gap-3 flex-wrap">
+                        <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">
+                          {formatBRL(resumo.diferencaTotal)}
+                        </span>
+                        {temProblema && resumo.repeticaoIndebito > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-400/25 text-amber-100 border border-amber-300/30">
+                            + {formatBRL(resumo.repeticaoIndebito)} em repetição de indébito (2×)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-white/65 mt-2 tabular-nums">
+                        Taxa contratada {formatPercent(analise.taxaContratadaAnual, 2)} a.a. ·
+                        média BACEN {formatPercent(analise.taxaMediaBACEN_anual, 2)} a.a.
+                      </p>
+                    </div>
+                    <div className="lg:col-span-6">
+                      <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Resumo</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                          <p className="text-xs text-white/70 mb-1">Total contrato</p>
+                          <p className="text-sm font-bold tabular-nums leading-none">{formatBRL(resumo.totalPagoOriginal)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                          <p className="text-xs text-white/70 mb-1">Total justo</p>
+                          <p className="text-sm font-bold tabular-nums leading-none text-emerald-200">{formatBRL(resumo.totalPagoRecalculado)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                          <p className="text-xs text-white/70 mb-1">Irregularidades</p>
+                          <p className="text-sm font-bold tabular-nums leading-none">{irregularidadesCount}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs text-muted-foreground">Protocolo</p>
-              <p className="text-sm font-mono font-bold truncate">{resultado.protocoloCalculo}</p>
-            </Card>
-          </div>
+            );
+          })()}
 
           <Tabs defaultValue="analise">
             <TabsList className="grid w-full grid-cols-4">
@@ -1058,6 +1145,7 @@ export default function Imobiliario() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

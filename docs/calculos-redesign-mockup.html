@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Proposta de redesign Cálculos</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 0 rgba(16,185,129,0.7); animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .screen-divider { background: repeating-linear-gradient(135deg, #e2e8f0, #e2e8f0 8px, #f1f5f9 8px, #f1f5f9 16px); }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     NAV BAR EXPLICATIVA
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between sticky top-0 z-50">
+  <div class="flex items-center gap-2">
+    <i data-lucide="lightbulb" class="w-4 h-4 text-amber-300"></i>
+    <span class="font-semibold">Proposta de redesign — Módulo Cálculos</span>
+    <span class="text-slate-400">·</span>
+    <span class="text-slate-300">3 telas: Hub principal · Wizard simplificado · Resultado</span>
+  </div>
+  <span class="text-xs text-slate-400">Use o mesmo padrão visual de Clientes / Modelos de Contrato</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     TELA 1: HUB DE CÁLCULOS (página principal, /calculos)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">Tela 1</span>
+      <span class="text-xs text-slate-500">Página inicial do módulo Cálculos — substitui o salto direto pros submódulos</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Hub central de Cálculos (novo)</h2>
+  </div>
+</section>
+
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-amber-50/20 p-6 space-y-6 border border-slate-200">
+
+    <!-- HERO -->
+    <div class="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-700 p-7 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="calculator" class="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" stroke-width="1.2"></i>
+      <i data-lucide="trending-up" class="absolute right-12 top-6 w-20 h-20 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-start justify-between mb-2 flex-wrap gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <div class="pulse-dot"></div>
+              <p class="text-xs font-medium text-white/85 uppercase tracking-wider">Cálculos jurídicos</p>
+            </div>
+            <p class="text-xs text-white/70">Bancário · Trabalhista · Imobiliário · Previdenciário · Diversos</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 px-3 text-xs rounded-md flex items-center gap-1">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i> Histórico completo
+            </button>
+            <button class="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8 px-3 rounded-md flex items-center gap-1 text-xs">
+              <i data-lucide="plus" class="w-4 h-4"></i> Novo cálculo
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          <div class="lg:col-span-6">
+            <p class="text-sm font-medium text-white/85 mb-1">Cálculos este mês</p>
+            <div class="flex items-baseline gap-3 flex-wrap">
+              <span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none">47</span>
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                <i data-lucide="trending-up" class="w-3 h-3"></i> +12 vs. mês passado
+              </span>
+            </div>
+            <p class="text-xs text-white/65 mt-2 tabular-nums">
+              <b class="text-white">38</b> pareceres gerados · <b class="text-white">29</b> exportados em PDF · <b class="text-white">12</b> compartilhados
+            </p>
+          </div>
+
+          <div class="lg:col-span-6">
+            <p class="text-[10px] text-white/65 uppercase tracking-wider mb-2">Créditos</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                <p class="text-xs text-white/70 mb-1">Disponíveis</p>
+                <p class="text-2xl font-bold tabular-nums leading-none text-emerald-200">53</p>
+              </div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                <p class="text-xs text-white/70 mb-1">Usados</p>
+                <p class="text-2xl font-bold tabular-nums leading-none">47</p>
+              </div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                <p class="text-xs text-white/70 mb-1">Renova em</p>
+                <p class="text-2xl font-bold tabular-nums leading-none">11d</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUSCA + CHIPS -->
+    <div class="flex items-center gap-3 flex-wrap">
+      <div class="relative flex-1 min-w-[260px] max-w-md">
+        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+        <input placeholder="Buscar no histórico de cálculos..." class="pl-10 h-10 bg-white border border-slate-200 rounded-md w-full text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/40">
+      </div>
+      <div class="flex gap-2 flex-wrap text-sm">
+        <button class="px-3 py-1.5 rounded-full font-medium bg-slate-900 text-white">Todos <span class="ml-1 text-[11px] bg-white/20 px-1.5 py-0.5 rounded-full">47</span></button>
+        <button class="px-3 py-1.5 rounded-full font-medium bg-white border border-slate-200 text-slate-700 hover:border-slate-300">Trabalhista <span class="ml-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded-full">22</span></button>
+        <button class="px-3 py-1.5 rounded-full font-medium bg-white border border-slate-200 text-slate-700 hover:border-slate-300">Bancário <span class="ml-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded-full">15</span></button>
+        <button class="px-3 py-1.5 rounded-full font-medium bg-white border border-slate-200 text-slate-700 hover:border-slate-300">Imobiliário <span class="ml-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded-full">7</span></button>
+        <button class="px-3 py-1.5 rounded-full font-medium bg-white border border-slate-200 text-slate-700 hover:border-slate-300">Diversos <span class="ml-1 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded-full">3</span></button>
+      </div>
+    </div>
+
+    <!-- CARDS DOS SUBMÓDULOS -->
+    <div>
+      <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-3">Tipos de cálculo</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        <!-- BANCÁRIO -->
+        <a href="#" class="group bg-white rounded-xl p-5 border border-slate-200 hover:border-blue-400 hover:shadow-lg transition-all">
+          <div class="flex items-start gap-3 mb-3">
+            <div class="p-2.5 bg-blue-100 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              <i data-lucide="landmark" class="w-5 h-5 text-blue-600 group-hover:text-white"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-900">Bancário</p>
+              <p class="text-xs text-slate-500">Revisão de financiamento</p>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all"></i>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-500">PRICE · SAC · CET · Anatocismo</span>
+            <span class="font-bold tabular-nums text-slate-700">15</span>
+          </div>
+        </a>
+
+        <!-- TRABALHISTA -->
+        <a href="#" class="group bg-white rounded-xl p-5 border border-slate-200 hover:border-amber-400 hover:shadow-lg transition-all">
+          <div class="flex items-start gap-3 mb-3">
+            <div class="p-2.5 bg-amber-100 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors">
+              <i data-lucide="briefcase" class="w-5 h-5 text-amber-600 group-hover:text-white"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-900">Trabalhista</p>
+              <p class="text-xs text-slate-500">Rescisão · HE · FGTS</p>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-amber-600 group-hover:translate-x-1 transition-all"></i>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-500">CLT · Lei 12.506 · Súmulas TST</span>
+            <span class="font-bold tabular-nums text-slate-700">22</span>
+          </div>
+        </a>
+
+        <!-- IMOBILIÁRIO -->
+        <a href="#" class="group bg-white rounded-xl p-5 border border-slate-200 hover:border-emerald-400 hover:shadow-lg transition-all">
+          <div class="flex items-start gap-3 mb-3">
+            <div class="p-2.5 bg-emerald-100 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <i data-lucide="building-2" class="w-5 h-5 text-emerald-600 group-hover:text-white"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-900">Imobiliário</p>
+              <p class="text-xs text-slate-500">Financiamento habitacional</p>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all"></i>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-500">SFH · SFI · MIP · DFI · Indexadores</span>
+            <span class="font-bold tabular-nums text-slate-700">7</span>
+          </div>
+        </a>
+
+        <!-- PREVIDENCIÁRIO -->
+        <a href="#" class="group bg-white rounded-xl p-5 border border-slate-200 hover:border-violet-400 hover:shadow-lg transition-all">
+          <div class="flex items-start gap-3 mb-3">
+            <div class="p-2.5 bg-violet-100 rounded-lg group-hover:bg-violet-600 group-hover:text-white transition-colors">
+              <i data-lucide="shield-check" class="w-5 h-5 text-violet-600 group-hover:text-white"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-900">Previdenciário</p>
+              <p class="text-xs text-slate-500">Aposentadoria · RMI · GPS</p>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-violet-600 group-hover:translate-x-1 transition-all"></i>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-500">EC 103 · 10 regras de aposentadoria</span>
+            <span class="font-bold tabular-nums text-slate-700">2</span>
+          </div>
+        </a>
+
+        <!-- CÁLCULOS DIVERSOS -->
+        <a href="#" class="group bg-white rounded-xl p-5 border border-slate-200 hover:border-teal-400 hover:shadow-lg transition-all">
+          <div class="flex items-start gap-3 mb-3">
+            <div class="p-2.5 bg-teal-100 rounded-lg group-hover:bg-teal-600 group-hover:text-white transition-colors">
+              <i data-lucide="trending-up" class="w-5 h-5 text-teal-600 group-hover:text-white"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-900">Cálculos Diversos</p>
+              <p class="text-xs text-slate-500">Taxas · Juros · Atualização · Prazos</p>
+            </div>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-300 group-hover:text-teal-600 group-hover:translate-x-1 transition-all"></i>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-emerald-600 font-medium flex items-center gap-1"><i data-lucide="gift" class="w-3 h-3"></i> Grátis (sem créditos)</span>
+            <span class="font-bold tabular-nums text-slate-700">3</span>
+          </div>
+        </a>
+
+        <!-- TRIBUTÁRIO (placeholder) -->
+        <div class="bg-slate-50 rounded-xl p-5 border border-dashed border-slate-300 opacity-60">
+          <div class="flex items-start gap-3 mb-3">
+            <div class="p-2.5 bg-purple-100 rounded-lg">
+              <i data-lucide="receipt" class="w-5 h-5 text-purple-600"></i>
+            </div>
+            <div class="flex-1">
+              <p class="font-semibold text-slate-900">Tributário</p>
+              <p class="text-xs text-slate-500">Em breve</p>
+            </div>
+            <span class="text-[10px] uppercase font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Em breve</span>
+          </div>
+          <div class="text-xs text-slate-500">CTN · Repetição de indébito</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTÓRICO RECENTE -->
+    <div>
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Cálculos recentes</p>
+        <button class="text-xs text-slate-600 hover:text-slate-900">Ver todos →</button>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+        <div class="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer">
+          <div class="p-2 bg-amber-100 rounded-lg"><i data-lucide="briefcase" class="w-4 h-4 text-amber-600"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Rescisão sem justa causa — João Silva</p>
+            <p class="text-xs text-slate-500">há 2 horas · protocolo TRAB-RES-20260520-A4B2C9</p>
+          </div>
+          <span class="text-sm font-bold tabular-nums text-emerald-600">R$ 23.847,12</span>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="more-vertical" class="w-4 h-4"></i></button>
+        </div>
+        <div class="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer">
+          <div class="p-2 bg-blue-100 rounded-lg"><i data-lucide="landmark" class="w-4 h-4 text-blue-600"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Revisão financiamento veículo — Maria Andrade</p>
+            <p class="text-xs text-slate-500">ontem · taxa 2,1× média BACEN · abusividade detectada</p>
+          </div>
+          <span class="text-sm font-bold tabular-nums text-rose-600">−R$ 8.432,90</span>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="more-vertical" class="w-4 h-4"></i></button>
+        </div>
+        <div class="flex items-center gap-3 p-4 hover:bg-slate-50 cursor-pointer">
+          <div class="p-2 bg-emerald-100 rounded-lg"><i data-lucide="building-2" class="w-4 h-4 text-emerald-600"></i></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">SFH PRICE com IPCA — Carlos Mendes</p>
+            <p class="text-xs text-slate-500">2 dias atrás · 360 parcelas · capitalização irregular detectada</p>
+          </div>
+          <span class="text-sm font-bold tabular-nums text-rose-600">−R$ 47.211,80</span>
+          <button class="text-slate-400 hover:text-slate-700"><i data-lucide="more-vertical" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SEPARADOR ENTRE TELAS
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="screen-divider h-6"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     TELA 2: WIZARD TRABALHISTA — STEP 1 (Escolha do cenário)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700">Tela 2</span>
+      <span class="text-xs text-slate-500">Substitui o formulão denso de hoje — pergunta primeiro o cenário, depois afina os dados</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Wizard simplificado — Trabalhista / Rescisão</h2>
+  </div>
+</section>
+
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-amber-50/20 p-6 space-y-5 border border-slate-200">
+
+    <!-- BREADCRUMB + STEPPER -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs">
+        <a class="text-slate-500 hover:text-slate-900">Cálculos</a>
+        <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+        <a class="text-slate-500 hover:text-slate-900">Trabalhista</a>
+        <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+        <span class="font-medium text-slate-900">Nova rescisão</span>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5">
+          <div class="w-6 h-6 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center text-[11px]">1</div>
+          <span class="font-medium text-slate-900">Cenário</span>
+        </div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50">
+          <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">2</div>
+          <span class="text-slate-500">Dados básicos</span>
+        </div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50">
+          <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">3</div>
+          <span class="text-slate-500">Extras</span>
+        </div>
+        <div class="w-8 h-px bg-slate-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50">
+          <div class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">4</div>
+          <span class="text-slate-500">Resultado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HERO RESUMIDO DO STEP -->
+    <div class="rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-700 p-6 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="briefcase" class="absolute -right-6 -bottom-8 w-40 h-40 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="pulse-dot"></div>
+          <p class="text-xs font-medium text-white/85 uppercase tracking-wider">Passo 1 de 4</p>
+        </div>
+        <h1 class="text-2xl font-bold mb-1">Qual o tipo de rescisão?</h1>
+        <p class="text-sm text-white/80">Cada tipo tem direitos e descontos diferentes. Escolha o que mais se aproxima do caso do seu cliente.</p>
+      </div>
+    </div>
+
+    <!-- CARDS DE CENÁRIO -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+      <button class="group text-left bg-white rounded-xl p-5 border-2 border-emerald-500 ring-2 ring-emerald-100 shadow-md">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-emerald-100 rounded-lg"><i data-lucide="user-x" class="w-5 h-5 text-emerald-600"></i></div>
+          <span class="text-[10px] uppercase font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Mais comum</span>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Demissão sem justa causa</p>
+        <p class="text-xs text-slate-500 mb-3">Empregador dispensa o empregado sem motivo grave previsto na CLT.</p>
+        <div class="text-[11px] text-slate-600 space-y-0.5">
+          <p>✓ Aviso prévio (30+3/ano)</p>
+          <p>✓ 13º proporcional</p>
+          <p>✓ Férias proporcionais + 1/3</p>
+          <p>✓ FGTS + multa 40%</p>
+        </div>
+      </button>
+
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="hand" class="w-5 h-5 text-slate-700"></i></div>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Pedido de demissão</p>
+        <p class="text-xs text-slate-500 mb-3">Empregado decide sair por iniciativa própria.</p>
+        <div class="text-[11px] text-slate-600 space-y-0.5">
+          <p>✗ Sem aviso prévio indenizado</p>
+          <p>✓ 13º proporcional</p>
+          <p>✓ Férias proporcionais + 1/3</p>
+          <p>✗ Sem multa FGTS</p>
+        </div>
+      </button>
+
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="handshake" class="w-5 h-5 text-slate-700"></i></div>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Acordo mútuo (Reforma)</p>
+        <p class="text-xs text-slate-500 mb-3">Empregador e empregado entram em acordo (art. 484-A CLT).</p>
+        <div class="text-[11px] text-slate-600 space-y-0.5">
+          <p>✓ Aviso prévio (50%)</p>
+          <p>✓ 13º proporcional</p>
+          <p>✓ Férias proporcionais + 1/3</p>
+          <p>✓ FGTS + multa 20%</p>
+        </div>
+      </button>
+
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-rose-100 rounded-lg"><i data-lucide="alert-octagon" class="w-5 h-5 text-rose-600"></i></div>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Demissão por justa causa</p>
+        <p class="text-xs text-slate-500 mb-3">Falta grave do empregado (art. 482 CLT).</p>
+        <div class="text-[11px] text-slate-600 space-y-0.5">
+          <p>✓ Apenas saldo de salário</p>
+          <p>✓ Férias vencidas + 1/3</p>
+          <p>✗ Sem 13º proporcional</p>
+          <p>✗ Sem multa FGTS</p>
+        </div>
+      </button>
+
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-rose-100 rounded-lg"><i data-lucide="gavel" class="w-5 h-5 text-rose-600"></i></div>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Rescisão indireta</p>
+        <p class="text-xs text-slate-500 mb-3">Falta grave do empregador (art. 483 CLT) — "justa causa do patrão".</p>
+        <div class="text-[11px] text-slate-600 space-y-0.5">
+          <p>✓ Mesmos direitos da demissão sem justa causa</p>
+          <p>✓ Requer ação judicial</p>
+        </div>
+      </button>
+
+      <button class="group text-left bg-white rounded-xl p-5 border border-slate-200 hover:border-amber-400 hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div class="p-2 bg-slate-100 rounded-lg"><i data-lucide="calendar-x" class="w-5 h-5 text-slate-700"></i></div>
+        </div>
+        <p class="font-semibold text-slate-900 mb-1">Término de contrato</p>
+        <p class="text-xs text-slate-500 mb-3">Contrato com prazo determinado chegou ao fim.</p>
+        <div class="text-[11px] text-slate-600 space-y-0.5">
+          <p>✓ 13º proporcional</p>
+          <p>✓ Férias proporcionais + 1/3</p>
+          <p>✗ Sem aviso prévio</p>
+          <p>✗ Sem multa FGTS</p>
+        </div>
+      </button>
+    </div>
+
+    <!-- AÇÕES -->
+    <div class="flex items-center justify-between border-t border-slate-200 pt-4">
+      <button class="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para Cálculos
+      </button>
+      <button class="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2.5 rounded-md flex items-center gap-2 shadow-sm">
+        Continuar com "Demissão sem justa causa"
+        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SEPARADOR
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="screen-divider h-6"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     TELA 3: RESULTADO (após calcular)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="bg-white">
+  <div class="max-w-6xl mx-auto px-6 pt-8 pb-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">Tela 3</span>
+      <span class="text-xs text-slate-500">Resultado com hero verde "valor total" + tabs · padrão visual igual ao módulo de Clientes</span>
+    </div>
+    <h2 class="text-xl font-bold text-slate-800">Resultado final — destaque visual + tabs organizados</h2>
+  </div>
+</section>
+
+<div class="max-w-6xl mx-auto p-6 pb-12">
+  <div class="rounded-2xl bg-gradient-to-br from-slate-50/40 via-white to-emerald-50/20 p-6 space-y-5 border border-slate-200">
+
+    <!-- BREADCRUMB + STEPPER FINAL -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-xs">
+        <a class="text-slate-500 hover:text-slate-900">Cálculos</a>
+        <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+        <a class="text-slate-500 hover:text-slate-900">Trabalhista</a>
+        <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+        <span class="font-medium text-slate-900">Resultado</span>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-1.5 opacity-50">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[11px]"><i data-lucide="check" class="w-3 h-3"></i></div>
+          <span class="text-slate-500">Cenário</span>
+        </div>
+        <div class="w-8 h-px bg-emerald-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[11px]"><i data-lucide="check" class="w-3 h-3"></i></div>
+          <span class="text-slate-500">Dados</span>
+        </div>
+        <div class="w-8 h-px bg-emerald-300"></div>
+        <div class="flex items-center gap-1.5 opacity-50">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[11px]"><i data-lucide="check" class="w-3 h-3"></i></div>
+          <span class="text-slate-500">Extras</span>
+        </div>
+        <div class="w-8 h-px bg-emerald-600"></div>
+        <div class="flex items-center gap-1.5">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[11px]">4</div>
+          <span class="font-medium text-slate-900">Resultado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HERO VERDE COM VALOR TOTAL -->
+    <div class="rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-7 text-white relative overflow-hidden shadow-lg">
+      <i data-lucide="circle-check-big" class="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" stroke-width="1.2"></i>
+      <div class="relative">
+        <div class="flex items-start justify-between mb-2 flex-wrap gap-3">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <div class="pulse-dot"></div>
+              <p class="text-xs font-medium text-white/85 uppercase tracking-wider">Cálculo concluído</p>
+            </div>
+            <p class="text-xs text-white/70">Protocolo TRAB-RES-20260520-A4B2C9 · Demissão sem justa causa · João Silva</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="bg-white/15 hover:bg-white/25 border border-white/20 text-xs h-8 px-3 rounded-md flex items-center gap-1.5">
+              <i data-lucide="file-down" class="w-3.5 h-3.5"></i> Exportar PDF
+            </button>
+            <button class="bg-white/15 hover:bg-white/25 border border-white/20 text-xs h-8 px-3 rounded-md flex items-center gap-1.5">
+              <i data-lucide="share-2" class="w-3.5 h-3.5"></i> Compartilhar
+            </button>
+            <button class="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-8 px-3 rounded-md flex items-center gap-1.5 text-xs">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i> Novo cálculo
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          <div class="lg:col-span-6">
+            <p class="text-sm font-medium text-white/85 mb-1">Valor líquido a receber</p>
+            <div class="flex items-baseline gap-3 flex-wrap">
+              <span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none">R$ 23.847,12</span>
+            </div>
+            <p class="text-xs text-white/65 mt-2 tabular-nums">
+              4 anos, 10 meses de serviço · aviso prévio de 42 dias · 13º (5/12 avos) · férias proporcionais (11/12 avos)
+            </p>
+          </div>
+
+          <div class="lg:col-span-6">
+            <p class="text-[10px] text-white/65 uppercase tracking-wider mb-2">Composição</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                <p class="text-xs text-white/70 mb-1">Proventos</p>
+                <p class="text-lg font-bold tabular-nums leading-none">R$ 27.190</p>
+              </div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                <p class="text-xs text-white/70 mb-1">Descontos</p>
+                <p class="text-lg font-bold tabular-nums leading-none text-rose-200">−R$ 3.343</p>
+              </div>
+              <div class="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
+                <p class="text-xs text-white/70 mb-1">FGTS+multa</p>
+                <p class="text-lg font-bold tabular-nums leading-none text-amber-200">R$ 18.624</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABS DE DETALHE -->
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="border-b border-slate-200 px-4">
+        <div class="flex gap-1">
+          <button class="px-4 py-3 text-sm font-medium border-b-2 border-emerald-600 text-emerald-700">Verbas detalhadas</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">FGTS</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Parecer técnico</button>
+          <button class="px-4 py-3 text-sm font-medium text-slate-600 hover:text-slate-900">Fundamentação</button>
+        </div>
+      </div>
+      <div class="p-5 space-y-4">
+        <div>
+          <h3 class="text-sm font-semibold text-emerald-700 mb-2 flex items-center gap-2"><i data-lucide="plus-circle" class="w-4 h-4"></i> Proventos</h3>
+          <div class="space-y-2">
+            <div class="flex justify-between items-center py-2 border-b border-slate-100">
+              <div>
+                <p class="text-sm font-medium">Saldo de Salário (20 dias)</p>
+                <p class="text-xs text-slate-500">Art. 462, CLT · 20/30 avos do salário</p>
+              </div>
+              <p class="font-semibold tabular-nums text-emerald-700">R$ 3.333,33</p>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-100">
+              <div>
+                <p class="text-sm font-medium">Aviso Prévio Indenizado (42 dias)</p>
+                <p class="text-xs text-slate-500">Art. 487, §1º CLT + Lei 12.506/2011 · 30 dias + 12 proporcionais</p>
+              </div>
+              <p class="font-semibold tabular-nums text-emerald-700">R$ 7.000,00</p>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-100">
+              <div>
+                <p class="text-sm font-medium">13º Salário Proporcional (5/12 avos)</p>
+                <p class="text-xs text-slate-500">Lei 4.090/1962 + Art. 7º, VIII, CF</p>
+              </div>
+              <p class="font-semibold tabular-nums text-emerald-700">R$ 2.083,33</p>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-100">
+              <div>
+                <p class="text-sm font-medium">Férias Proporcionais (11/12 avos)</p>
+                <p class="text-xs text-slate-500">Art. 146, parágrafo único, CLT</p>
+              </div>
+              <p class="font-semibold tabular-nums text-emerald-700">R$ 4.583,33</p>
+            </div>
+            <div class="flex justify-between items-center py-2">
+              <div>
+                <p class="text-sm font-medium">1/3 Constitucional sobre Férias Proporcionais</p>
+                <p class="text-xs text-slate-500">Art. 7º, XVII, CF</p>
+              </div>
+              <p class="font-semibold tabular-nums text-emerald-700">R$ 1.527,78</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="h-px bg-slate-100"></div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-rose-700 mb-2 flex items-center gap-2"><i data-lucide="minus-circle" class="w-4 h-4"></i> Descontos</h3>
+          <div class="space-y-2">
+            <div class="flex justify-between items-center py-2 border-b border-slate-100">
+              <div>
+                <p class="text-sm font-medium">INSS (saldo salário + 13º)</p>
+                <p class="text-xs text-slate-500">Lei 8.212/1991 · Saldo: R$ 300,00 · 13º: R$ 187,50</p>
+              </div>
+              <p class="font-semibold tabular-nums text-rose-700">− R$ 487,50</p>
+            </div>
+            <div class="flex justify-between items-center py-2">
+              <div>
+                <p class="text-sm font-medium">IRRF (saldo salário + 13º)</p>
+                <p class="text-xs text-slate-500">Lei 7.713/1988</p>
+              </div>
+              <p class="font-semibold tabular-nums text-rose-700">− R$ 250,00</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     RODAPÉ EXPLICATIVO
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="bg-slate-50 border-t border-slate-200 py-12">
+  <div class="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="layout-grid" class="w-5 h-5 text-amber-600"></i>
+        <p class="font-semibold text-slate-900">1. Hub central novo</p>
+      </div>
+      <p class="text-sm text-slate-600">Em vez de cair direto num dos 5 formulões dos cálculos, o usuário vê um painel com cards visuais, histórico recente e créditos disponíveis — igual ao módulo Clientes.</p>
+    </div>
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="footprints" class="w-5 h-5 text-amber-600"></i>
+        <p class="font-semibold text-slate-900">2. Wizard em 4 passos</p>
+      </div>
+      <p class="text-sm text-slate-600">Pergunta o cenário (com cards explicativos), depois pede só os dados necessários pra aquele cenário. Hoje o usuário enfrenta 20+ campos numa tela só sem saber o que importa.</p>
+    </div>
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="award" class="w-5 h-5 text-amber-600"></i>
+        <p class="font-semibold text-slate-900">3. Resultado com hierarquia</p>
+      </div>
+      <p class="text-sm text-slate-600">Hero verde com o valor total e composição (proventos, descontos, FGTS) em destaque. Detalhes vão pra tabs — não polui a primeira visão.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  lucide.createIcons();
+</script>
+</body>
+</html>
