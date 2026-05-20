@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { AgenteCard, type AgenteCardData } from "./agentes/agente-card";
 import { AgentesHero } from "./agentes/agentes-hero";
+import type { AgenteVariavel } from "@shared/agente-variaveis-types";
 
 // ─── Catálogo de módulos e áreas ───────────────────────────────────────────
 
@@ -64,7 +65,7 @@ interface AgenteForm {
   temperatura: string;
   maxTokens: number;
   modulosPermitidos: string[];
-  camposCaptura: string[];
+  camposCaptura: AgenteVariavel[];
   ativo: boolean;
   openaiApiKey: string;
 }
@@ -253,7 +254,7 @@ function AgenteFormDialog({
         temperatura: existing.temperatura ?? "0.70",
         maxTokens: existing.maxTokens,
         modulosPermitidos: existing.modulosPermitidos ?? [],
-        camposCaptura: (existing as any).camposCaptura ?? [],
+        camposCaptura: existing.camposCaptura ?? [],
         ativo: existing.ativo,
         openaiApiKey: "", // nunca popula (key criptografada — user precisa digitar de novo se quiser trocar)
       });
@@ -333,12 +334,24 @@ function AgenteFormDialog({
     }));
   };
 
-  const toggleCampo = (chave: string) => {
+  const adicionarVariavel = () => {
     setForm((f) => ({
       ...f,
-      camposCaptura: f.camposCaptura.includes(chave)
-        ? f.camposCaptura.filter((c) => c !== chave)
-        : [...f.camposCaptura, chave],
+      camposCaptura: [...f.camposCaptura, { atributo: "", descricao: "", campoChave: "" }],
+    }));
+  };
+
+  const removerVariavel = (idx: number) => {
+    setForm((f) => ({
+      ...f,
+      camposCaptura: f.camposCaptura.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const atualizarVariavel = (idx: number, patch: Partial<AgenteVariavel>) => {
+    setForm((f) => ({
+      ...f,
+      camposCaptura: f.camposCaptura.map((v, i) => (i === idx ? { ...v, ...patch } : v)),
     }));
   };
 
@@ -583,41 +596,117 @@ function AgenteFormDialog({
             </div>
           </div>
 
-          {/* 🎯 Campos a capturar (NOVO!) */}
+          {/* 🎯 Variáveis a capturar — atributo + descrição + campo destino */}
           {camposDisponiveis.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-                🎯 Captar valores durante a conversa
-              </p>
-              <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
-                A IA vai extrair esses campos da conversa e salvar no cadastro do cliente automaticamente.
-                Diga no prompt o que perguntar pra cada um (ex: <em>"pergunte o valor do financiamento"</em>).
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {camposDisponiveis.map((c: any) => {
-                  const active = form.camposCaptura.includes(c.chave);
-                  return (
-                    <button
-                      key={c.chave}
-                      type="button"
-                      onClick={() => toggleCampo(c.chave)}
-                      className={
-                        "inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[11px] transition " +
-                        (active
-                          ? "border-violet-500 bg-violet-50/40 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-semibold"
-                          : "border-border bg-card hover:border-violet-300 text-foreground")
-                      }
-                      title={`Chave: ${c.chave} · Tipo: ${c.tipo}`}
-                    >
-                      {active && <span className="text-violet-600">✓</span>}
-                      <span>{c.label}</span>
-                      <span className="text-[9px] text-muted-foreground">· {c.tipo}</span>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  🎯 Variáveis a capturar da conversa
+                </p>
+                <button
+                  type="button"
+                  onClick={adicionarVariavel}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/50"
+                >
+                  <Plus className="h-2.5 w-2.5" /> Adicionar variável
+                </button>
               </div>
-              {form.camposCaptura.length === 0 && (
-                <p className="text-[10px] text-muted-foreground/70 mt-1.5 italic">Nenhum campo selecionado — o agente não vai capturar valores automaticamente.</p>
+              <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
+                A IA extrai cada variável da conversa e salva no campo personalizado mapeado.
+                A <strong>descrição</strong> orienta a IA (ex: formato, restrições, sinônimos aceitos).
+              </p>
+
+              {form.camposCaptura.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-4 text-center">
+                  <p className="text-[11px] text-muted-foreground italic">
+                    Nenhuma variável configurada. Clique em <strong>Adicionar variável</strong> pra começar.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {form.camposCaptura.map((v, idx) => {
+                    const campoDef = camposDisponiveis.find((c: any) => c.chave === v.campoChave);
+                    const atributoInvalido =
+                      v.atributo && !/^[a-z][a-z0-9_]*$/i.test(v.atributo);
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-lg border border-border bg-card/50 p-2.5 space-y-2 relative"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => removerVariavel(idx)}
+                          className="absolute top-1.5 right-1.5 text-muted-foreground hover:text-destructive"
+                          aria-label="Remover variável"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-[10px]">Atributo (nome técnico)</Label>
+                            <Input
+                              placeholder="ex: data_consulta"
+                              value={v.atributo}
+                              onChange={(e) => atualizarVariavel(idx, { atributo: e.target.value })}
+                              className={
+                                "h-7 text-xs mt-0.5 " +
+                                (atributoInvalido ? "border-amber-400" : "")
+                              }
+                              maxLength={48}
+                            />
+                            {atributoInvalido && (
+                              <p className="text-[9px] text-amber-600 mt-0.5">
+                                Use letras, números e underscore. Comece com letra.
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Campo de destino</Label>
+                            <Select
+                              value={v.campoChave || undefined}
+                              onValueChange={(novo) => {
+                                const def = camposDisponiveis.find((c: any) => c.chave === novo);
+                                atualizarVariavel(idx, {
+                                  campoChave: novo,
+                                  atributo: v.atributo || (def?.chave ?? novo),
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-7 text-xs mt-0.5">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {camposDisponiveis.map((c: any) => (
+                                  <SelectItem key={c.chave} value={c.chave}>
+                                    {c.label} <span className="text-muted-foreground">· {c.tipo}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {campoDef && (
+                              <p className="text-[9px] text-muted-foreground mt-0.5">
+                                Salva em <code>{campoDef.chave}</code> ({campoDef.tipo})
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">
+                            Descrição para a IA <span className="text-muted-foreground/70">(opcional)</span>
+                          </Label>
+                          <Textarea
+                            placeholder="Ex: Data que o cliente prefere para a consulta. Aceitar datas relativas como 'amanhã' ou 'sexta'."
+                            value={v.descricao}
+                            onChange={(e) => atualizarVariavel(idx, { descricao: e.target.value })}
+                            rows={2}
+                            className="text-xs mt-0.5"
+                            maxLength={300}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

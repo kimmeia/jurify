@@ -1,29 +1,28 @@
 /**
  * Extração automática de valores em conversas via IA.
  *
- * Quando um agente tem `camposCaptura` configurado (lista de chaves de
- * campos personalizados de cliente), o sistema chama a IA depois de cada
- * mensagem do cliente pra tentar extrair valores e persistir em
- * `contatos.camposPersonalizados`.
+ * Quando um agente tem variáveis configuradas (em `camposCaptura`),
+ * o sistema chama a IA depois de cada mensagem do cliente pra tentar
+ * extrair valores e persistir em `contatos.camposPersonalizados`.
  *
  * Estratégia:
  *  - Roda EM BACKGROUND (não bloqueia resposta da IA pro usuário)
  *  - Heurística de skip: se a última msg do cliente não tem caractere
  *    numérico/CPF/data, pula a chamada IA pra evitar burn money
  *  - Faz UPSERT em camposPersonalizados (merge, não overwrite)
- *  - Loga em audit_log pra rastreabilidade
+ *  - Aceita descrição custom + datas relativas ("amanhã", "sexta")
  */
 import { getDb } from "../db";
 import {
   agentesIa,
   contatos,
   mensagens,
-  conversas,
   camposPersonalizadosCliente,
 } from "../../drizzle/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { chamarIA, parseJsonIA, resolverChaveIA } from "../_core/ai-call";
 import { createLogger } from "../_core/logger";
+import { parseAgenteVariaveis, type AgenteVariavel } from "../../shared/agente-variaveis-types";
 
 const log = createLogger("agente-captura-campos");
 
@@ -33,6 +32,8 @@ export interface CampoCapturado {
   valor: string | number | boolean;
   /** Tipo do campo no catálogo (texto/numero/data/etc) */
   tipo: string;
+  /** Atributo técnico usado pela IA (pode diferir de `chave` quando o agente define alias) */
+  atributo: string;
 }
 
 /**
@@ -64,7 +65,7 @@ export async function extrairECaptarCampos(opts: {
     const db = await getDb();
     if (!db) return [];
 
-    // 1. Pega o agente e a lista de campos que ele deve capturar
+    // 1. Pega o agente e suas variáveis configuradas
     const [agente] = await db
       .select({ camposCaptura: agentesIa.camposCaptura })
       .from(agentesIa)
@@ -72,21 +73,22 @@ export async function extrairECaptarCampos(opts: {
       .limit(1);
     if (!agente?.camposCaptura) return [];
 
-    let chaves: string[];
-    try { chaves = JSON.parse(agente.camposCaptura); } catch { return []; }
-    if (!Array.isArray(chaves) || chaves.length === 0) return [];
+    const variaveis = parseAgenteVariaveis(agente.camposCaptura);
+    if (variaveis.length === 0) return [];
 
-    // 2. Resolve as definições dos campos (label/tipo/opcoes)
+    // 2. Resolve as definições dos campos personalizados referenciados
+    const chavesCampo = Array.from(new Set(variaveis.map((v) => v.campoChave)));
     const definicoes = await db
       .select()
       .from(camposPersonalizadosCliente)
       .where(
         and(
           eq(camposPersonalizadosCliente.escritorioId, opts.escritorioId),
-          inArray(camposPersonalizadosCliente.chave, chaves),
+          inArray(camposPersonalizadosCliente.chave, chavesCampo),
         ),
       );
     if (definicoes.length === 0) return [];
+    const definicaoPorChave = new Map(definicoes.map((d) => [d.chave, d]));
 
     // 3. Pega últimas mensagens da conversa
     const msgs = await db
@@ -113,24 +115,31 @@ export async function extrairECaptarCampos(opts: {
       catch { return {}; }
     })();
 
-    // Campos AINDA não capturados (skip os que já têm valor)
-    const definicoesPendentes = definicoes.filter((d) => {
-      const v = jaCapturados[d.chave];
-      return v === undefined || v === null || v === "";
-    });
-    if (definicoesPendentes.length === 0) return [];
+    // Variáveis AINDA não capturadas (campo de destino vazio no contato)
+    type VarComDef = AgenteVariavel & { def: (typeof definicoes)[number] };
+    const variaveisPendentes: VarComDef[] = [];
+    for (const v of variaveis) {
+      const def = definicaoPorChave.get(v.campoChave);
+      if (!def) continue;
+      const valorAtual = jaCapturados[def.chave];
+      if (valorAtual !== undefined && valorAtual !== null && valorAtual !== "") continue;
+      variaveisPendentes.push({ ...v, def });
+    }
+    if (variaveisPendentes.length === 0) return [];
 
     // 5. Resolve chave de IA — se não tem, pula sem erro
     const chaveIA = await resolverChaveIA();
     if (!chaveIA) return [];
 
-    // 6. Prompt de extração estruturada
-    const camposDescricao = definicoesPendentes
-      .map((d) => {
-        const opcoes = d.tipo === "select" && d.opcoes
-          ? ` (uma destas opções: ${d.opcoes})`
+    // 6. Prompt de extração estruturada — usa o atributo da variável como chave
+    // do JSON e a descrição custom (quando houver) como hint pra IA.
+    const camposDescricao = variaveisPendentes
+      .map((v) => {
+        const opcoes = v.def.tipo === "select" && v.def.opcoes
+          ? ` Opções aceitas: ${v.def.opcoes}.`
           : "";
-        return `- ${d.chave} (${d.label}, tipo ${d.tipo}${opcoes})`;
+        const hint = v.descricao ? ` ${v.descricao}` : "";
+        return `- ${v.atributo} (${v.def.label}, tipo ${v.def.tipo}).${hint}${opcoes}`;
       })
       .join("\n");
 
@@ -138,6 +147,12 @@ export async function extrairECaptarCampos(opts: {
       .slice(-10)
       .map((m) => `${m.direcao === "entrada" ? "CLIENTE" : "ADV"}: ${(m.conteudo || "").slice(0, 200)}`)
       .join("\n");
+
+    // Contexto temporal pra resolver datas relativas ("amanhã", "sexta")
+    const hoje = new Date();
+    const diasSemana = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+    const hojeISO = hoje.toISOString().slice(0, 10);
+    const diaSemanaHoje = diasSemana[hoje.getDay()];
 
     const raw = await chamarIA({
       json: true,
@@ -149,7 +164,7 @@ export async function extrairECaptarCampos(opts: {
         "  - Se a conversa contém o valor claramente, devolva o valor formatado conforme tipo (texto, numero, data ISO 8601, boolean true/false, string da opção exata se select).",
         "  - Se NÃO há valor confiável na conversa, devolva null pra essa chave.",
         "Números: extraia somente o número (sem R$, sem pontos de milhar, use ponto pra decimal: 50000 ou 50000.50).",
-        "Datas: formato YYYY-MM-DD.",
+        `Datas: formato YYYY-MM-DD. Hoje é ${hojeISO} (${diaSemanaHoje}). Resolva datas relativas ("amanhã", "sexta", "semana que vem") em relação a essa data.`,
         "NÃO invente valores. Em dúvida, retorne null.",
         "RESPONDA SÓ COM O JSON. Sem markdown.",
       ].join("\n"),
@@ -160,23 +175,29 @@ export async function extrairECaptarCampos(opts: {
         `## Histórico recente da conversa`,
         historico,
         ``,
-        `Retorne JSON com as chaves: ${definicoesPendentes.map((d) => d.chave).join(", ")}`,
+        `Retorne JSON com as chaves: ${variaveisPendentes.map((v) => v.atributo).join(", ")}`,
       ].join("\n"),
     });
 
     const parsed = parseJsonIA<Record<string, any>>(raw);
     if (!parsed || typeof parsed !== "object") return [];
 
-    // 7. Filtra valores válidos (não null) e prepara para persistência
+    // 7. Filtra valores válidos (não null) e mapeia atributo → campoChave
     const novos: CampoCapturado[] = [];
-    for (const def of definicoesPendentes) {
-      const v = parsed[def.chave];
-      if (v === null || v === undefined || v === "") continue;
-      novos.push({ chave: def.chave, label: def.label, valor: v, tipo: def.tipo });
+    for (const v of variaveisPendentes) {
+      const valor = parsed[v.atributo];
+      if (valor === null || valor === undefined || valor === "") continue;
+      novos.push({
+        chave: v.def.chave,
+        label: v.def.label,
+        valor,
+        tipo: v.def.tipo,
+        atributo: v.atributo,
+      });
     }
     if (novos.length === 0) return [];
 
-    // 8. UPSERT em contatos.camposPersonalizados
+    // 8. UPSERT em contatos.camposPersonalizados (merge, não overwrite)
     const merged = { ...jaCapturados };
     for (const novo of novos) merged[novo.chave] = novo.valor;
 
@@ -190,7 +211,7 @@ export async function extrairECaptarCampos(opts: {
         agenteId: opts.agenteId,
         conversaId: opts.conversaId,
         contatoId: opts.contatoId,
-        capturados: novos.map((n) => n.chave),
+        capturados: novos.map((n) => `${n.atributo}→${n.chave}`),
       },
       "campos extraídos da conversa",
     );
