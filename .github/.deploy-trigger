@@ -1,2 +1,5 @@
+2026-05-20T19:30:00Z — retry production após instabilidade Railway
+2026-05-20T18:50:00Z — novo retry production após renovação RAILWAY_TOKEN
+2026-05-20T18:35:00Z — retry deploy production (Phase 1 Agentes IA não disparou após merge #509)
 2026-05-20T16:55:00Z — retry deploy production (run #411 falhou com exit 1)
 2026-05-20T16:35:00Z — retry deploy staging (run #410 falhou com exit 1)
