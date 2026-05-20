@@ -13,6 +13,7 @@ import { excluirClienteEmCascata } from "./excluir-cliente";
 import { reconciliarCobrancasOrfas } from "./db-financeiro";
 import { criarLead } from "./db-crm";
 import { createLogger } from "../_core/logger";
+import { toIsoString } from "../_core/dates";
 
 const log = createLogger("router-clientes");
 
@@ -244,15 +245,16 @@ export const clientesRouter = router({
         ))
         .groupBy(conversas.contatoId);
       for (const r of ultimaConversa) {
-        if (r.maxData) dateMap.set(r.contatoId, (r.maxData as Date).toISOString());
+        const iso = toIsoString(r.maxData);
+        if (iso) dateMap.set(r.contatoId, iso);
       }
     }
 
     return {
       clientes: rows.map((r) => ({
         ...r,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
-        updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+        createdAt: toIsoString(r.createdAt) ?? "",
+        updatedAt: toIsoString(r.updatedAt) ?? "",
         ultimaConversaAt: dateMap.get(r.id) ?? null,
       })),
       total: Number((cnt as { count: number } | undefined)?.count || 0),
@@ -277,7 +279,7 @@ export const clientesRouter = router({
     const [lc] = await db.select({ count: sql`COUNT(*)` }).from(leads).where(and(eq(leads.contatoId, input.id), eq(leads.escritorioId, esc.escritorio.id)));
     const [ac] = await db.select({ count: sql`COUNT(*)` }).from(clienteArquivos).where(and(eq(clienteArquivos.contatoId, input.id), eq(clienteArquivos.escritorioId, esc.escritorio.id)));
     const [nc] = await db.select({ count: sql`COUNT(*)` }).from(clienteAnotacoes).where(and(eq(clienteAnotacoes.contatoId, input.id), eq(clienteAnotacoes.escritorioId, esc.escritorio.id)));
-    return { ...c, createdAt: c.createdAt ? (c.createdAt as Date).toISOString() : "", updatedAt: c.updatedAt ? (c.updatedAt as Date).toISOString() : "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
+    return { ...c, createdAt: toIsoString(c.createdAt) ?? "", updatedAt: toIsoString(c.updatedAt) ?? "", totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
   criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.enum(ORIGEM_CONTATO).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional(),
@@ -634,8 +636,8 @@ export const clientesRouter = router({
     // pra esconder o botão de lixeira quando o user não pode.
     return rows.map(r => ({
       ...r,
-      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
-      updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+      createdAt: toIsoString(r.createdAt) ?? "",
+      updatedAt: toIsoString(r.updatedAt) ?? "",
       podeExcluir: perm.verTodos || r.criadoPor === perm.colaboradorId,
     }));
   }),
@@ -700,7 +702,7 @@ export const clientesRouter = router({
     if (input.pastaId === null) conds.push(isNull(clienteArquivos.pastaId));
     else if (typeof input.pastaId === "number") conds.push(eq(clienteArquivos.pastaId, input.pastaId));
     const rows = await db.select().from(clienteArquivos).where(and(...conds)).orderBy(desc(clienteArquivos.createdAt));
-    return rows.map(r => ({ ...r, createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "" }));
+    return rows.map(r => ({ ...r, createdAt: toIsoString(r.createdAt) ?? "" }));
   }),
   salvarArquivo: protectedProcedure.input(z.object({
     contatoId: z.number(),
@@ -852,7 +854,7 @@ export const clientesRouter = router({
 
     return pastas.map((p) => ({
       ...p,
-      createdAt: p.createdAt ? (p.createdAt as Date).toISOString() : "",
+      createdAt: toIsoString(p.createdAt) ?? "",
       totalArquivos: contagens[p.id]?.arquivos ?? 0,
       totalSubpastas: contagens[p.id]?.subpastas ?? 0,
     }));
@@ -1062,7 +1064,7 @@ export const clientesRouter = router({
     const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
     if (!ok) return [];
     const rows = await db.select().from(conversas).where(and(eq(conversas.contatoId, input.contatoId), eq(conversas.escritorioId, perm.escritorioId))).orderBy(desc(conversas.createdAt));
-    return rows.map(r => ({ id: r.id, status: r.status, assunto: r.assunto, ultimaMensagemPreview: r.ultimaMensagemPreview, ultimaMensagemAt: r.ultimaMensagemAt ? (r.ultimaMensagemAt as Date).toISOString() : "", createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "" }));
+    return rows.map(r => ({ id: r.id, status: r.status, assunto: r.assunto, ultimaMensagemPreview: r.ultimaMensagemPreview, ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? "", createdAt: toIsoString(r.createdAt) ?? "" }));
   }),
 
   listarLeads: protectedProcedure.input(z.object({ contatoId: z.number() })).query(async ({ ctx, input }) => {
@@ -1091,7 +1093,7 @@ export const clientesRouter = router({
       id: r.id,
       etapaFunil: r.etapaFunil,
       valorEstimado: r.valorEstimado,
-      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+      createdAt: toIsoString(r.createdAt) ?? "",
       responsavelId: r.responsavelId,
       responsavelNome: r.responsavelNome,
       origemLead: r.origemLead,

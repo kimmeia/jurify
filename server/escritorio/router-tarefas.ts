@@ -13,6 +13,7 @@ import { tarefas, colaboradores, users, contatos } from "../../drizzle/schema";
 import { eq, and, desc, or, sql, gte, lte, like, inArray } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { TRPCError } from "@trpc/server";
+import { toIsoString } from "../_core/dates";
 
 /** Valida ownership de uma tarefa quando a permissão é "verProprios" only.
  *  Retorna true se o colaborador pode mexer nela. */
@@ -99,10 +100,10 @@ export const tarefasRouter = router({
       return rows.map(r => ({
         ...r,
         responsavelNome: r.responsavelId ? (nomeMap[r.responsavelId] || null) : null,
-        dataVencimento: r.dataVencimento ? (r.dataVencimento as Date).toISOString() : null,
-        concluidaAt: r.concluidaAt ? (r.concluidaAt as Date).toISOString() : null,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
-        updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+        dataVencimento: toIsoString(r.dataVencimento),
+        concluidaAt: toIsoString(r.concluidaAt),
+        createdAt: toIsoString(r.createdAt) ?? "",
+        updatedAt: toIsoString(r.updatedAt) ?? "",
         vencida: r.dataVencimento && r.status !== "concluida" && r.status !== "cancelada" && new Date(r.dataVencimento) < new Date(),
       }));
     }),

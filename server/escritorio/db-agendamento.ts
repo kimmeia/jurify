@@ -7,6 +7,7 @@ import { eq, and, desc, gte, lte, or, asc } from "drizzle-orm";
 import { getDb } from "../db";
 import { agendamentos, agendamentoLembretes, colaboradores, users } from "../../drizzle/schema";
 import type { TipoAgendamento, PrioridadeAgendamento, StatusAgendamento } from "../../shared/agendamento-constants";
+import { toIsoString } from "../_core/dates";
 
 // ─── Agendamentos ────────────────────────────────────────────────────────────
 
@@ -120,9 +121,9 @@ export async function listarAgendamentos(
 
   return rows.map((r) => ({
     ...r,
-    dataInicio: r.dataInicio ? (r.dataInicio as Date).toISOString() : "",
-    dataFim: r.dataFim ? (r.dataFim as Date).toISOString() : null,
-    createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+    dataInicio: toIsoString(r.dataInicio) ?? "",
+    dataFim: toIsoString(r.dataFim),
+    createdAt: toIsoString(r.createdAt) ?? "",
   }));
 }
 
@@ -143,9 +144,9 @@ export async function obterAgendamento(agendamentoId: number, escritorioId: numb
 
   return {
     ...row,
-    dataInicio: row.dataInicio ? (row.dataInicio as Date).toISOString() : "",
-    dataFim: row.dataFim ? (row.dataFim as Date).toISOString() : null,
-    createdAt: row.createdAt ? (row.createdAt as Date).toISOString() : "",
+    dataInicio: toIsoString(row.dataInicio) ?? "",
+    dataFim: toIsoString(row.dataFim),
+    createdAt: toIsoString(row.createdAt) ?? "",
     lembretes,
   };
 }
@@ -231,7 +232,7 @@ export async function listarProximosCompromissos(escritorioId: number, limite = 
 
   return rows.map((r) => ({
     ...r,
-    dataInicio: r.dataInicio ? (r.dataInicio as Date).toISOString() : "",
+    dataInicio: toIsoString(r.dataInicio) ?? "",
   }));
 }
 

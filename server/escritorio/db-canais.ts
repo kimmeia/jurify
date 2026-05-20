@@ -8,6 +8,7 @@ import { getDb } from "../db";
 import { canaisIntegrados, integracaoAuditLog } from "../../drizzle/schema";
 import { encryptConfig, decryptConfig, maskToken, generateWebhookSecret } from "./crypto-utils";
 import type { TipoCanal, StatusCanal } from "../../shared/canal-types";
+import { toIsoString } from "../_core/dates";
 
 // ─── Canais ──────────────────────────────────────────────────────────────────
 
@@ -43,10 +44,10 @@ export async function listarCanais(escritorioId: number) {
       nome: r.nome || "",
       status: r.status as StatusCanal,
       telefone: r.telefone || undefined,
-      ultimaSync: r.ultimaSync ? (r.ultimaSync as Date).toISOString() : undefined,
+      ultimaSync: toIsoString(r.ultimaSync) ?? undefined,
       mensagemErro: r.mensagemErro || undefined,
       temConfig: !!(r.configEncrypted && r.configIv && r.configTag),
-      createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+      createdAt: toIsoString(r.createdAt) ?? "",
     }));
 }
 

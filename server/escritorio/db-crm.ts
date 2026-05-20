@@ -9,6 +9,7 @@ import { contatos, conversas, mensagens, leads, colaboradores, users, canaisInte
 import { createLogger } from "../_core/logger";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { normalizarValorBR } from "../../shared/valor-br";
+import { toIsoString } from "../_core/dates";
 
 /**
  * Busca contato existente por telefone normalizado (exato).
@@ -184,7 +185,7 @@ export async function listarContatos(escritorioId: number, busca?: string) {
     ...r,
     tags: r.tags ? JSON.parse(r.tags as string) : [],
     telefonesSecundarios: r.telefonesSecundarios ? JSON.parse(r.telefonesSecundarios as string) : [],
-    createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+    createdAt: toIsoString(r.createdAt) ?? "",
   }));
 }
 
@@ -471,8 +472,8 @@ export async function listarConversas(escritorioId: number, filtros?: {
     ...r,
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
-    ultimaMensagemAt: r.ultimaMensagemAt ? (r.ultimaMensagemAt as Date).toISOString() : undefined,
-    createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+    ultimaMensagemAt: toIsoString(r.ultimaMensagemAt) ?? undefined,
+    createdAt: toIsoString(r.createdAt) ?? "",
   }));
 }
 
@@ -574,7 +575,7 @@ export async function listarMensagens(conversaId: number, limite = 50) {
   return rows.map((r) => ({
     ...r,
     remetenteNome: r.remetenteId ? remMap[r.remetenteId] : undefined,
-    createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+    createdAt: toIsoString(r.createdAt) ?? "",
   }));
 }
 
@@ -637,7 +638,7 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
 
   return rows.map((r) => ({
     ...r,
-    createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+    createdAt: toIsoString(r.createdAt) ?? "",
   }));
 }
 

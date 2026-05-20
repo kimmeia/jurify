@@ -13,6 +13,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { escapeLikePattern } from "../_core/sql-helpers";
 import { getDb } from "../db";
+import { toIsoString } from "../_core/dates";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte, or, like, asc, inArray } from "drizzle-orm";
@@ -223,8 +224,8 @@ export const agendaRouter = router({
             fonte: "compromisso",
             titulo: ag.titulo,
             descricao: ag.descricao,
-            dataInicio: (ag.dataInicio as Date).toISOString(),
-            dataFim: ag.dataFim ? (ag.dataFim as Date).toISOString() : null,
+            dataInicio: toIsoString(ag.dataInicio) ?? "",
+            dataFim: toIsoString(ag.dataFim),
             dataVencimento: null,
             diaInteiro: ag.diaInteiro,
             local: ag.local,
@@ -237,7 +238,7 @@ export const agendaRouter = router({
             contatoTelefone: ag.contatoTelefone,
             processoId: ag.processoId,
             cor: ag.corHex || CORES_TIPO[ag.tipo] || "#3b82f6",
-            createdAt: (ag.createdAt as Date).toISOString(),
+            createdAt: toIsoString(ag.createdAt) ?? "",
           });
         }
       }
@@ -303,7 +304,7 @@ export const agendaRouter = router({
         const fallbackVenc = inicioDoDiaNoFuso(dataHojeBR(fusoHorario), fusoHorario).toISOString();
 
         for (const t of trs) {
-          const venc = t.dataVencimento ? (t.dataVencimento as Date).toISOString() : fallbackVenc;
+          const venc = toIsoString(t.dataVencimento) ?? fallbackVenc;
           eventos.push({
             id: t.id,
             fonte: "tarefa",
@@ -323,7 +324,7 @@ export const agendaRouter = router({
             contatoNome: t.contatoId ? contatosMap[t.contatoId] : undefined,
             processoId: t.processoId,
             cor: CORES_PRIORIDADE_TAREFA[t.prioridade] || "#f59e0b",
-            createdAt: (t.createdAt as Date).toISOString(),
+            createdAt: toIsoString(t.createdAt) ?? "",
           });
         }
       }
@@ -438,8 +439,8 @@ export const agendaRouter = router({
       status: item.status,
       prioridade: item.prioridade || item.prioridadeTarefa || "normal",
       dataInicio: fonte === "compromisso"
-        ? (item.dataInicio as Date).toISOString()
-        : item.dataVencimento ? (item.dataVencimento as Date).toISOString() : "",
+        ? (toIsoString(item.dataInicio) ?? "")
+        : (toIsoString(item.dataVencimento) ?? ""),
       cor: fonte === "compromisso" ? (item.corHex || CORES_TIPO[item.tipo] || "#3b82f6") : CORES_PRIORIDADE_TAREFA[item.prioridade] || "#f59e0b",
     });
 
