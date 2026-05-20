@@ -13,6 +13,7 @@ import { asaasCobrancas, clienteProcessos, cobrancaAcoes, contatos } from "../..
 import { eq, and, desc, or, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { checkPermission } from "./check-permission";
+import { toIsoString } from "../_core/dates";
 
 /** Verifica que o colaborador pode acessar esse cliente.
  *  - verTodos: qualquer cliente do escritório
@@ -328,7 +329,7 @@ export const clienteProcessosRouter = router({
       return anots.map((a) => ({
         ...a,
         autorNome: a.autorNome ?? "Usuário",
-        createdAt: (a.createdAt as Date).toISOString(),
+        createdAt: toIsoString(a.createdAt) ?? "",
       }));
     }),
 

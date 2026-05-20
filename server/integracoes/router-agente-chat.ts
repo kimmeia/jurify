@@ -28,6 +28,7 @@ import {
   agenteChatMensagens,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
+import { toIsoString } from "../_core/dates";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -283,8 +284,8 @@ export const agenteChatRouter = router({
         agenteId: r.agenteId,
         titulo: r.titulo,
         arquivada: r.arquivada,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
-        updatedAt: r.updatedAt ? (r.updatedAt as Date).toISOString() : "",
+        createdAt: toIsoString(r.createdAt) ?? "",
+        updatedAt: toIsoString(r.updatedAt) ?? "",
       }));
     }),
 
@@ -380,7 +381,7 @@ export const agenteChatRouter = router({
         anexoNome: r.anexoNome,
         anexoMime: r.anexoMime,
         tokensUsados: r.tokensUsados,
-        createdAt: r.createdAt ? (r.createdAt as Date).toISOString() : "",
+        createdAt: toIsoString(r.createdAt) ?? "",
       }));
     }),
 

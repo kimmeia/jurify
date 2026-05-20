@@ -8,6 +8,7 @@
 import { eq, and, desc, asc, gte, lte, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { toIsoString } from "../_core/dates";
 import {
   getDb,
   getEstatisticasUso,
@@ -421,7 +422,7 @@ export const dashboardRouter = router({
           if (pago) {
             totalRecebido += valor;
             const dia = (c.dataPagamento || "").slice(0, 10) ||
-              (c.createdAt as Date).toISOString().slice(0, 10);
+              (toIsoString(c.createdAt) ?? "").slice(0, 10);
             if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
           } else if (c.status === "PENDING") {
             // PENDING vencida vai pra totalVencido (mesma lógica do KPI
@@ -518,7 +519,7 @@ export const dashboardRouter = router({
               tipo: "pagamento",
               titulo: `Pagamento recebido`,
               descricao: `R$ ${parseFloat(p.valor).toFixed(2)} — ${p.descricao || "cobrança"}`,
-              timestamp: (p.updatedAt as Date).toISOString(),
+              timestamp: toIsoString(p.updatedAt) ?? "",
               link: "/financeiro",
             });
           }
@@ -554,7 +555,7 @@ export const dashboardRouter = router({
             tipo: "mensagem",
             titulo: `Nova mensagem de ${m.contatoNome}`,
             descricao: (m.conteudo || "").slice(0, 80),
-            timestamp: (m.createdAt as Date).toISOString(),
+            timestamp: toIsoString(m.createdAt) ?? "",
             link: "/atendimento",
           });
         }
@@ -589,7 +590,7 @@ export const dashboardRouter = router({
             tipo: "tarefa",
             titulo: `Tarefa concluída`,
             descricao: t.titulo,
-            timestamp: (t.concluidaAt as Date).toISOString(),
+            timestamp: toIsoString(t.concluidaAt) ?? "",
             link: "/tarefas",
           });
         }
@@ -616,7 +617,7 @@ export const dashboardRouter = router({
             tipo: "lead",
             titulo: `Novo lead`,
             descricao: `${l.contatoNome} — etapa: ${l.etapaFunil}`,
-            timestamp: (l.createdAt as Date).toISOString(),
+            timestamp: toIsoString(l.createdAt) ?? "",
             link: "/atendimento",
           });
         }
