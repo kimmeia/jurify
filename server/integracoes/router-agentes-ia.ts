@@ -780,6 +780,162 @@ export const agentesIaRouter = router({
         throw new Error(err.message || "Falha ao chamar IA");
       }
     }),
+
+  // ─── Templates da plataforma (agentes_admin) ──────────────────────────────
+  // Permite escritórios verem catálogo de agentes pré-construídos pela Jurify
+  // e clonarem pra customizar — resolve a divisão admin × escritório.
+  listarTemplates: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const { agentesAdmin, agenteDocumentos } = await import("../../drizzle/schema");
+    const rows = await db
+      .select()
+      .from(agentesAdmin)
+      .where(eq(agentesAdmin.ativo, true))
+      .orderBy(desc(agentesAdmin.updatedAt));
+
+    // Conta docs por agente (uma query única + agrupamento)
+    const ids = rows.map((r: any) => r.id);
+    const docCounts: Record<number, number> = {};
+    if (ids.length > 0) {
+      const docs = await db
+        .select({ agenteId: agenteDocumentos.agenteId })
+        .from(agenteDocumentos);
+      docs.forEach((d: any) => {
+        docCounts[d.agenteId] = (docCounts[d.agenteId] || 0) + 1;
+      });
+    }
+
+    return rows.map((r: any) => ({
+      id: r.id,
+      nome: r.nome,
+      descricao: r.descricao,
+      areaConhecimento: r.areaConhecimento,
+      modelo: r.modelo,
+      modulosPermitidos: (r.modulosPermitidos || "").split(",").filter(Boolean),
+      totalDocumentos: docCounts[r.id] || 0,
+      origem: "template" as const,
+    }));
+  }),
+
+  clonarTemplate: protectedProcedure
+    .input(z.object({ templateId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "agentes_ia", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar agentes." });
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const { agentesAdmin, agenteDocumentos } = await import("../../drizzle/schema");
+      const [template] = await db
+        .select()
+        .from(agentesAdmin)
+        .where(and(eq(agentesAdmin.id, input.templateId), eq(agentesAdmin.ativo, true)))
+        .limit(1);
+      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
+
+      // Cria novo agente no escritório baseado no template
+      const [novo] = await db
+        .insert(agentesIa)
+        .values({
+          escritorioId: perm.escritorioId,
+          nome: template.nome,
+          descricao: template.descricao || null,
+          areaConhecimento: template.areaConhecimento || null,
+          modelo: template.modelo,
+          prompt: template.prompt,
+          temperatura: template.temperatura,
+          maxTokens: template.maxTokens,
+          ativo: true,
+          modulosPermitidos: template.modulosPermitidos,
+          criadoPor: ctx.user.id,
+        } as any)
+        .$returningId();
+
+      const novoId = (novo as any).id;
+
+      // Copia documentos do template (referências, não duplica arquivos)
+      const templateDocs = await db
+        .select()
+        .from(agenteDocumentos)
+        .where(eq(agenteDocumentos.agenteId, input.templateId));
+
+      if (templateDocs.length > 0) {
+        await db.insert(agenteIaDocumentos).values(
+          templateDocs.map((d: any) => ({
+            agenteId: novoId,
+            escritorioId: perm.escritorioId,
+            tipo: d.tipo,
+            nome: d.nome,
+            url: d.url,
+            conteudo: d.conteudo,
+            tamanho: d.tamanho,
+            mimeType: d.mimeType,
+          })) as any,
+        );
+      }
+
+      log.info({ templateId: input.templateId, novoId, escritorioId: perm.escritorioId }, "template clonado");
+      return { id: novoId, totalDocsClonados: templateDocs.length };
+    }),
+
+  // ─── KPIs do hero (resumo geral dos agentes) ──────────────────────────────
+  metricasResumo: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return { ativos: 0, conversasMes: 0, mensagensMes: 0, tokensMes: 0, custoEstimadoCent: 0 };
+    const db = await getDb();
+    if (!db) return { ativos: 0, conversasMes: 0, mensagensMes: 0, tokensMes: 0, custoEstimadoCent: 0 };
+
+    const { agenteChatMensagens, agenteChatThreads } = await import("../../drizzle/schema");
+    const { sql, gte } = await import("drizzle-orm");
+
+    const desde = new Date();
+    desde.setDate(desde.getDate() - 30);
+
+    const [ativosRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(agentesIa)
+      .where(and(eq(agentesIa.escritorioId, esc.escritorio.id), eq(agentesIa.ativo, true)));
+
+    // Conversas (threads não-arquivadas no mês)
+    const [conversasRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(agenteChatThreads)
+      .where(
+        and(
+          eq(agenteChatThreads.escritorioId, esc.escritorio.id),
+          gte(agenteChatThreads.createdAt, desde),
+        ),
+      );
+
+    // Mensagens + tokens nos últimos 30d
+    const [tokensRow] = await db
+      .select({
+        msgs: sql<number>`count(*)`,
+        tokens: sql<number>`coalesce(sum(${agenteChatMensagens.tokensUsados}), 0)`,
+      })
+      .from(agenteChatMensagens)
+      .innerJoin(agenteChatThreads, eq(agenteChatMensagens.threadId, agenteChatThreads.id))
+      .where(
+        and(
+          eq(agenteChatThreads.escritorioId, esc.escritorio.id),
+          gte(agenteChatMensagens.createdAt, desde),
+        ),
+      );
+
+    const tokens = Number(tokensRow?.tokens || 0);
+    // Estimativa simples: $0.50/1M tokens médio (GPT-4o-mini blend) → ~R$ 2,50/1M
+    // Centavos = tokens * 0.00025 (R$ por token)
+    const custoEstimadoCent = Math.round(tokens * 0.00025);
+
+    return {
+      ativos: Number(ativosRow?.count || 0),
+      conversasMes: Number(conversasRow?.count || 0),
+      mensagensMes: Number(tokensRow?.msgs || 0),
+      tokensMes: tokens,
+      custoEstimadoCent,
+    };
+  }),
 });
 
 export interface AgenteCanalConfig {

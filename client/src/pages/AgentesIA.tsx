@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from "react";
-import { Link } from "wouter";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,15 +12,21 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
   Send, Sparkles, ExternalLink, BrainCircuit, Play, KeyRound, CheckCircle2,
-  MessageSquare,
+  MessageSquare, Search, Store, Users, User as UserIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AgenteCard, type AgenteCardData } from "./agentes/agente-card";
+import { AgentesHero } from "./agentes/agentes-hero";
 
 // ─── Catálogo de módulos e áreas ───────────────────────────────────────────
 
@@ -712,197 +717,217 @@ function TreinamentoDialog({
 
 export default function AgentesIA() {
   const { data: agentes, isLoading, refetch } = trpc.agentesIa.listar.useQuery();
+  const { data: templates, isLoading: templatesLoading } = trpc.agentesIa.listarTemplates.useQuery();
+  const { data: me } = trpc.auth.me.useQuery(undefined, { staleTime: 60_000 });
 
+  const [tab, setTab] = useState<"templates" | "escritorio" | "meus">("templates");
+  const [busca, setBusca] = useState("");
+  const [areaFiltro, setAreaFiltro] = useState<string>("todas");
   const [formOpen, setFormOpen] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [treinandoId, setTreinandoId] = useState<number | null>(null);
+  const [excluirAlvo, setExcluirAlvo] = useState<AgenteCardData | null>(null);
 
   const toggleAtivoMut = trpc.agentesIa.toggleAtivo.useMutation({
-    onSuccess: () => {
-      toast.success("Atualizado");
-      refetch();
-    },
+    onSuccess: () => { toast.success("Atualizado"); refetch(); },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
   const excluirMut = trpc.agentesIa.excluir.useMutation({
-    onSuccess: () => {
-      toast.success("Agente removido");
-      refetch();
-    },
+    onSuccess: () => { toast.success("Agente removido"); setExcluirAlvo(null); refetch(); },
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
+  const clonarMut = trpc.agentesIa.clonarTemplate.useMutation({
+    onSuccess: (data) => {
+      toast.success("Template clonado!", {
+        description: data.totalDocsClonados > 0
+          ? `${data.totalDocsClonados} docs de treinamento copiados. Você pode editar e treinar.`
+          : "Pode editar e adicionar documentos próprios.",
+      });
+      refetch();
+      setTab("escritorio");
+    },
+    onError: (err) => toast.error("Erro ao clonar", { description: err.message }),
+  });
+
+  // Áreas dos agentes (para o filtro)
+  const todasAreas = useMemo(() => {
+    const set = new Set<string>();
+    (templates || []).forEach((t: any) => { if (t.areaConhecimento) set.add(t.areaConhecimento); });
+    (agentes || []).forEach((a: any) => { if (a.areaConhecimento) set.add(a.areaConhecimento); });
+    return Array.from(set).sort();
+  }, [templates, agentes]);
+
+  // Filtra por busca + área
+  const filtrar = <T extends { nome: string; areaConhecimento?: string | null; descricao?: string | null }>(lista: T[]) => {
+    const q = busca.trim().toLowerCase();
+    return lista.filter((a) => {
+      if (areaFiltro !== "todas" && a.areaConhecimento !== areaFiltro) return false;
+      if (!q) return true;
+      return (
+        a.nome.toLowerCase().includes(q)
+        || (a.descricao || "").toLowerCase().includes(q)
+        || (a.areaConhecimento || "").toLowerCase().includes(q)
+      );
+    });
+  };
+
+  // Separa agentes do escritório em "do escritório (criado por outros)" e "meus (criado por mim)"
+  const meuUserId = (me as any)?.id;
+  const agentesEscritorio = (agentes || []).filter((a: any) => a.criadoPor !== meuUserId);
+  const agentesMeus = (agentes || []).filter((a: any) => a.criadoPor === meuUserId);
+
+  // Adapta para AgenteCardData
+  const toCardData = (a: any, origem: "escritorio" | "pessoal" | "template"): AgenteCardData => ({
+    id: a.id,
+    nome: a.nome,
+    descricao: a.descricao,
+    areaConhecimento: a.areaConhecimento,
+    modelo: a.modelo,
+    modulosPermitidos: a.modulosPermitidos || [],
+    totalDocumentos: a.totalDocumentos || 0,
+    ativo: a.ativo,
+    temApiKey: a.temApiKey,
+    origem,
+  });
+
+  const templatesFiltrados = filtrar(templates || []).map((t: any) => toCardData(t, "template"));
+  const escritorioFiltrados = filtrar(agentesEscritorio).map((a: any) => toCardData(a, "escritorio"));
+  const meusFiltrados = filtrar(agentesMeus).map((a: any) => toCardData(a, "pessoal"));
+
+  // Heurística leve de badges para templates (top 2 por nome = popular, recente = novo)
+  templatesFiltrados.forEach((t, i) => {
+    if (i === 0) t.badge = "popular";
+    else if (i === 1) t.badge = "verificado";
+    else if (i === 2) t.badge = "novo";
+  });
+
+  const listaAtual = tab === "templates" ? templatesFiltrados : tab === "escritorio" ? escritorioFiltrados : meusFiltrados;
+  const isLoadingAtual = tab === "templates" ? templatesLoading : isLoading;
+  const totalAgentes = (agentes || []).length;
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-            <BrainCircuit className="h-6 w-6 text-violet-600" />
+    <div className="space-y-5 max-w-7xl mx-auto">
+      <AgentesHero onNovo={() => { setEditandoId(null); setFormOpen(true); }} />
+
+      {/* Tabs Templates · Escritório · Meus */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="inline-flex bg-muted/50 rounded-xl p-1 gap-0.5">
+          <TabButton
+            active={tab === "templates"}
+            onClick={() => setTab("templates")}
+            icon={<Store className="h-3.5 w-3.5" />}
+            label="Templates"
+            count={templates?.length ?? 0}
+          />
+          <TabButton
+            active={tab === "escritorio"}
+            onClick={() => setTab("escritorio")}
+            icon={<Users className="h-3.5 w-3.5" />}
+            label="Escritório"
+            count={agentesEscritorio.length}
+          />
+          <TabButton
+            active={tab === "meus"}
+            onClick={() => setTab("meus")}
+            icon={<UserIcon className="h-3.5 w-3.5" />}
+            label="Meus"
+            count={agentesMeus.length}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar agente, área, descrição…"
+              className="h-9 pl-8 pr-3 text-xs w-56"
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Agentes de IA</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Crie assistentes especializados treináveis para análise processual, atendimento,
-              pesquisa e muito mais.
+          {todasAreas.length > 0 && (
+            <Select value={areaFiltro} onValueChange={setAreaFiltro}>
+              <SelectTrigger className="h-9 text-xs w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as áreas</SelectItem>
+                {todasAreas.map((a) => (
+                  <SelectItem key={a} value={a}>{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      {/* Banner contextual da aba atual */}
+      {tab === "templates" && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/40 px-4 py-2.5 flex items-start gap-2.5">
+          <Store className="h-4 w-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
+          <div className="text-xs">
+            <p className="font-semibold text-amber-900 dark:text-amber-200">Catálogo da Jurify</p>
+            <p className="text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+              Agentes pré-construídos pela equipe Jurify. Clique em <strong>Clonar p/ escritório</strong> para customizar com seus documentos e prompts.
             </p>
           </div>
         </div>
-        <Button
-          onClick={() => {
-            setEditandoId(null);
-            setFormOpen(true);
-          }}
-          className="bg-violet-600 hover:bg-violet-700"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Novo agente
-        </Button>
-      </div>
+      )}
+      {tab === "meus" && totalAgentes === 0 && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/50 dark:bg-violet-950/20 dark:border-violet-900/40 px-4 py-2.5 flex items-start gap-2.5">
+          <Sparkles className="h-4 w-4 text-violet-700 dark:text-violet-300 mt-0.5 shrink-0" />
+          <div className="text-xs">
+            <p className="font-semibold">Comece com um template</p>
+            <p className="text-muted-foreground mt-0.5">
+              A forma mais rápida é clonar um template pronto na aba Templates e ajustar o prompt + documentos.
+            </p>
+          </div>
+        </div>
+      )}
 
-      {isLoading ? (
+      {/* Grid de cards */}
+      {isLoadingAtual ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-48 rounded-xl" />
           <Skeleton className="h-48 rounded-xl" />
           <Skeleton className="h-48 rounded-xl" />
         </div>
-      ) : !agentes || agentes.length === 0 ? (
+      ) : listaAtual.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Bot className="h-14 w-14 mb-4 opacity-30" />
             <p className="text-lg font-semibold text-foreground mb-2">
-              Nenhum agente criado ainda
+              {busca || areaFiltro !== "todas"
+                ? "Nada encontrado com esse filtro"
+                : tab === "templates"
+                  ? "Sem templates disponíveis no momento"
+                  : tab === "escritorio"
+                    ? "Nenhum agente compartilhado pelo escritório"
+                    : "Você ainda não criou um agente"}
             </p>
-            <p className="text-sm text-center max-w-md mb-4">
-              Agentes de IA ajudam com análise processual automática, respostas no chatbot
-              de atendimento, resumos de conversas, pesquisa jurisprudencial e muito mais.
-              Crie o primeiro pra começar.
-            </p>
-            <Button
-              onClick={() => {
-                setEditandoId(null);
-                setFormOpen(true);
-              }}
-              className="bg-violet-600 hover:bg-violet-700"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Criar primeiro agente
-            </Button>
+            {tab === "meus" && !busca && (
+              <Button
+                onClick={() => { setEditandoId(null); setFormOpen(true); }}
+                className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 mt-2"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Criar primeiro agente
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {agentes.map((a) => (
-            <Card key={a.id} className={`transition-all ${a.ativo ? "" : "opacity-60"}`}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2 min-w-0">
-                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white shrink-0">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-sm truncate">{a.nome}</CardTitle>
-                      <p className="text-[10px] text-muted-foreground">
-                        {a.modelo}
-                        {a.areaConhecimento && ` · ${a.areaConhecimento}`}
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={a.ativo}
-                    onCheckedChange={(v) => toggleAtivoMut.mutate({ id: a.id, ativo: v })}
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2.5">
-                {a.descricao && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{a.descricao}</p>
-                )}
-
-                <div className="flex flex-wrap gap-1">
-                  {(a.modulosPermitidos || []).slice(0, 3).map((m: string) => (
-                    <span
-                      key={m}
-                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-700"
-                    >
-                      {m}
-                    </span>
-                  ))}
-                  {(a.modulosPermitidos || []).length > 3 && (
-                    <span className="text-[9px] text-muted-foreground">
-                      +{a.modulosPermitidos.length - 3}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <FileIcon className="h-3 w-3" />
-                    <span>
-                      {a.totalDocumentos} {a.totalDocumentos === 1 ? "doc" : "docs"}
-                    </span>
-                  </div>
-                  {a.temApiKey && (
-                    <div className="flex items-center gap-1 text-emerald-600">
-                      <KeyRound className="h-3 w-3" />
-                      <span>Key própria</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1 pt-1">
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="default"
-                    className="flex-1 text-[10px] h-7 bg-violet-600 hover:bg-violet-700"
-                    disabled={!a.ativo}
-                    title={a.ativo ? "Abrir chat" : "Ative o agente para conversar"}
-                  >
-                    <Link href={`/agentes-ia/${a.id}/chat`}>
-                      <MessageSquare className="h-3 w-3 mr-1" />
-                      Conversar
-                    </Link>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 text-[10px] h-7"
-                    onClick={() => setTreinandoId(a.id)}
-                  >
-                    <BrainCircuit className="h-3 w-3 mr-1" />
-                    Treinar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-[10px] h-7 px-2"
-                    onClick={() => {
-                      setEditandoId(a.id);
-                      setFormOpen(true);
-                    }}
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-[10px] h-7 px-2 text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `Deletar agente "${a.nome}"? Todos os documentos de treinamento também serão removidos.`,
-                        )
-                      ) {
-                        excluirMut.mutate({ id: a.id });
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {listaAtual.map((agente) => (
+            <AgenteCard
+              key={`${agente.origem}-${agente.id}`}
+              agente={agente}
+              onClone={(id) => clonarMut.mutate({ templateId: id })}
+              onEditar={(id) => { setEditandoId(id); setFormOpen(true); }}
+              onTreinar={(id) => setTreinandoId(id)}
+              onExcluir={(a) => setExcluirAlvo(a)}
+              onToggleAtivo={(id, ativo) => toggleAtivoMut.mutate({ id, ativo })}
+            />
           ))}
         </div>
       )}
@@ -911,10 +936,7 @@ export default function AgentesIA() {
         key={editandoId || "new"}
         agenteId={editandoId}
         open={formOpen}
-        onOpenChange={(o) => {
-          setFormOpen(o);
-          if (!o) setEditandoId(null);
-        }}
+        onOpenChange={(o) => { setFormOpen(o); if (!o) setEditandoId(null); }}
         onSaved={refetch}
       />
 
@@ -922,10 +944,59 @@ export default function AgentesIA() {
         key={`train-${treinandoId}`}
         agenteId={treinandoId}
         open={!!treinandoId}
-        onOpenChange={(o) => {
-          if (!o) setTreinandoId(null);
-        }}
+        onOpenChange={(o) => { if (!o) setTreinandoId(null); }}
       />
+
+      <AlertDialog open={!!excluirAlvo} onOpenChange={(o) => !o && setExcluirAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir agente "{excluirAlvo?.nome}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá o agente e <strong>todos os documentos de treinamento</strong>.
+              Conversas anteriores também serão arquivadas. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); if (excluirAlvo) excluirMut.mutate({ id: excluirAlvo.id }); }}
+              disabled={excluirMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+function TabButton({
+  active, onClick, icon, label, count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition " +
+        (active
+          ? "bg-background text-violet-700 dark:text-violet-300 font-semibold shadow-sm ring-1 ring-violet-300/30"
+          : "text-muted-foreground hover:text-foreground")
+      }
+    >
+      {icon}
+      {label}
+      <span className={"text-[10px] font-bold px-1.5 py-0.5 rounded-full " + (active ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" : "bg-muted text-muted-foreground")}>
+        {count}
+      </span>
+    </button>
   );
 }
