@@ -90,16 +90,17 @@ export function OrigensLeadTab() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-medium">Origens de lead</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Estas opções aparecem no dropdown <b>Origem</b> ao cadastrar um cliente
-          que já fechou contrato. Cada escritório customiza as suas.
-        </p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-bold tracking-tight">Origens de leads</h3>
+          <p className="text-[11px] text-slate-500">
+            <b className="text-slate-700">{ativas.length}</b> ativas · {inativas.length} inativas · aparecem no dropdown "Origem" ao cadastrar cliente
+          </p>
+        </div>
       </div>
 
-      {/* Criar nova */}
-      <div className="flex gap-2">
+      {/* Criar nova — inline */}
+      <div className="flex gap-2 rounded-xl border border-dashed border-violet-200 bg-violet-50/40 p-2.5">
         <Input
           placeholder='Nova origem (ex: "Instagram", "BNI", "Google Ads")'
           value={novoNome}
@@ -109,11 +110,12 @@ export function OrigensLeadTab() {
               criarMut.mutate({ nome: novoNome.trim() });
             }
           }}
-          className="h-9 text-sm flex-1"
+          className="h-9 text-sm flex-1 bg-white"
           maxLength={80}
         />
         <Button
           size="sm"
+          className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700"
           onClick={() => criarMut.mutate({ nome: novoNome.trim() })}
           disabled={!novoNome.trim() || criarMut.isPending}
         >
