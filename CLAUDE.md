@@ -16,6 +16,22 @@ pnpm dev                # dev server local
 - `develop` dispara deploy de **staging**; `main` dispara **production**
 - Migrations em `drizzle/NNNN_*.sql` (numeração sequencial, ALTER TABLE com defaults pra ser non-destrutivo)
 
+### Regra de merge autorizado pelo dono
+
+Quando o dono do projeto autoriza explicitamente uma mudança (ex: "pode
+mergear", "faça o merge", "pode aplicar"), o assistente faz merge **direto
+em `develop` E em `main`**, sem abrir PR, na mesma sessão. Ordem: develop
+primeiro → main depois. Usar `git merge --no-ff` para preservar histórico
+de feature (comportamento equivalente ao "Merge pull request" do GitHub).
+
+Pré-requisitos obrigatórios antes do merge:
+- `pnpm check` limpo (typecheck sem erros)
+- `pnpm test` 100% verde
+- Build do client (`pnpm vite build`) passa quando há mudança em `client/`
+
+Se algum desses falha, NÃO mergeia — reporta o problema e aguarda nova
+autorização. A regra é "autorização → merge", não "merge incondicional".
+
 ## Padrões e convenções
 
 ### Comentários

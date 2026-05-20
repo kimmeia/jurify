@@ -20,6 +20,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   BrainCircuit,
   Plus,
   Send,
@@ -130,6 +140,7 @@ export default function AgenteChat() {
   const [threadAtiva, setThreadAtiva] = useState<number | null>(null);
   const [renomeandoId, setRenomeandoId] = useState<number | null>(null);
   const [novoTitulo, setNovoTitulo] = useState("");
+  const [threadParaArquivar, setThreadParaArquivar] = useState<{ id: number; titulo: string } | null>(null);
 
   // ── Queries ──
   const { data: agente, isLoading: loadingAgente } = trpc.agentesIa.obter.useQuery(
@@ -168,9 +179,10 @@ export default function AgenteChat() {
   });
 
   const arquivarMut = trpc.agenteChat.arquivarThread.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success("Conversa arquivada");
-      if (threadAtiva === renomeandoId) setThreadAtiva(null);
+      // Limpa a thread ativa se foi justamente a que arquivamos
+      if (threadAtiva === variables.threadId) setThreadAtiva(null);
       threadsQuery.refetch();
     },
     onError: (err) => toast.error("Erro", { description: err.message }),
@@ -305,11 +317,7 @@ export default function AgenteChat() {
                         Renomear
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => {
-                          if (confirm(`Arquivar "${t.titulo}"?`)) {
-                            arquivarMut.mutate({ threadId: t.id, arquivada: true });
-                          }
-                        }}
+                        onClick={() => setThreadParaArquivar({ id: t.id, titulo: t.titulo })}
                         className="text-destructive focus:text-destructive"
                       >
                         <Archive className="h-3.5 w-3.5 mr-2" />
@@ -381,6 +389,40 @@ export default function AgenteChat() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={threadParaArquivar !== null}
+        onOpenChange={(o) => { if (!o) setThreadParaArquivar(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Arquivar conversa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A conversa <strong>{threadParaArquivar?.titulo}</strong> será
+              ocultada da lista. As mensagens permanecem salvas e você pode
+              reabrir mostrando arquivadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={arquivarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={arquivarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (threadParaArquivar) {
+                  arquivarMut.mutate(
+                    { threadId: threadParaArquivar.id, arquivada: true },
+                    { onSuccess: () => setThreadParaArquivar(null) },
+                  );
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {arquivarMut.isPending ? "Arquivando..." : "Arquivar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
