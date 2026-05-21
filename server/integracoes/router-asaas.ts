@@ -1123,8 +1123,13 @@ export const asaasRouter = router({
     let cobNovas = 0, cobAtualizadas = 0, cobRemovidas = 0;
     const cobAdotadas = 0;
     try {
+      // Turbo seguro: 1 dia × 500ms delay porque a janela curta limita
+      // o número de cobranças por customer (raramente >1 página). Reduz
+      // 200 customers × 1s = 3min30s pra ~100s. Webhook em tempo real é
+      // a fonte primária; este botão só é catch-up das últimas 24h.
       const result = await syncCobrancasEscritorio(esc.escritorio.id, {
         diasHistorico: 1,
+        delayMs: 500,
       });
       cobNovas = result.novas;
       cobAtualizadas = result.atualizadas;
@@ -2558,10 +2563,40 @@ export const asaasRouter = router({
       };
     }),
 
-  /** Sincronizar tudo: clientes + cobranças do escritório inteiro */
-  sincronizarTudo: protectedProcedure.mutation(async ({ ctx }) => {
+  /** Sincronizar tudo: clientes + cobranças do escritório inteiro.
+   *  Default: 90 dias retroativos (catch-up completo). Caller pode passar
+   *  `diasHistorico` menor pra um sync mais rápido (ex: 7 dias). */
+  sincronizarTudo: protectedProcedure
+    .input(
+      z
+        .object({
+          diasHistorico: z.number().int().min(1).max(365).optional(),
+        })
+        .optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      const result = await syncCobrancasEscritorio(esc.escritorio.id, {
+        diasHistorico: input?.diasHistorico,
+      });
+      return result;
+    }),
+
+  /** Sync rápido sob-demanda — janela curta (3 dias) + turbo (delay 500ms
+   *  entre vínculos). Pensado pro botão "Atualizar agora" da UI: retorna
+   *  em segundos em vez de minutos. O webhook já cobre real-time, então
+   *  a janela curta basta pra pegar o que perdeu por race condition.
+   *
+   *  Risco assumido: o turbo pode bater no rate guard local (Camada 1)
+   *  em escritórios com 60+ customers — nesse caso aborta gracefully e
+   *  retorna parcial. Operador roda "Sincronizar tudo" depois pra catch-up.
+   */
+  sincronizarRapido: protectedProcedure.mutation(async ({ ctx }) => {
     const esc = await requireEscritorio(ctx.user.id);
-    const result = await syncCobrancasEscritorio(esc.escritorio.id);
+    const result = await syncCobrancasEscritorio(esc.escritorio.id, {
+      diasHistorico: 3,
+      delayMs: 500,
+    });
     return result;
   }),
 

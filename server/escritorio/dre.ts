@@ -37,11 +37,27 @@ export interface DRECategoria {
   percentual: number;
 }
 
+/** Linha agregada por dimensão arbitrária (origem ou forma de pagamento)
+ *  dentro de uma seção (receitas). Mesma forma da DRECategoria mas sem id. */
+export interface DRELinhaDimensao {
+  chave: string;
+  nome: string;
+  total: number;
+  count: number;
+  percentual: number;
+}
+
 export interface DREResultado {
   periodo: { inicio: string; fim: string };
   receitas: {
     total: number;
     porCategoria: DRECategoria[];
+    /** Caixa Asaas vs Caixa Escritório (origem='asaas' vs 'manual').
+     *  Responde "quanto veio de onde". */
+    porOrigem: DRELinhaDimensao[];
+    /** Pix/Boleto/Cartão/Dinheiro/etc — granularidade dentro do canal.
+     *  Cobrança sem formaPagamento agrupa em "(não informado)". */
+    porFormaPagamento: DRELinhaDimensao[];
   };
   despesas: {
     total: number;
@@ -51,6 +67,24 @@ export interface DREResultado {
   /** Margem líquida em percentual (0-100). NaN se receita=0. */
   margemPercent: number;
 }
+
+/** Nomes amigáveis das formas de pagamento Asaas (UI-ready). */
+const NOME_FORMA_PAG: Record<string, string> = {
+  BOLETO: "Boleto",
+  CREDIT_CARD: "Cartão de Crédito",
+  PIX: "Pix",
+  DEBIT_CARD: "Cartão de Débito",
+  UNDEFINED: "Indefinido",
+  DINHEIRO: "Dinheiro",
+  TRANSFERENCIA: "Transferência",
+  CHEQUE: "Cheque",
+  OUTRO: "Outro",
+};
+
+const NOME_ORIGEM: Record<string, string> = {
+  asaas: "Caixa Asaas",
+  manual: "Caixa Escritório (manual)",
+};
 
 const SEM_CATEGORIA = "(sem categoria)";
 const CATEGORIA_REMOVIDA_PREFIX = "Categoria removida";
@@ -70,7 +104,7 @@ export async function calcularDRE(
   if (!db) {
     return {
       periodo: { inicio: dataInicio, fim: dataFim },
-      receitas: { total: 0, porCategoria: [] },
+      receitas: { total: 0, porCategoria: [], porOrigem: [], porFormaPagamento: [] },
       despesas: { total: 0, porCategoria: [] },
       resultadoLiquido: 0,
       margemPercent: NaN,
@@ -81,11 +115,15 @@ export async function calcularDRE(
   // Cobranças pagas no período, agrupadas por categoria.
   // Left join com categorias_cobranca pra trazer nome — pode ser null
   // (cobrança sem categoria atribuída, comum em PIX direto pelo Asaas).
+  // Traz também `origem` e `formaPagamento` pra as quebras adicionais
+  // (Caixa Asaas vs Escritório, e por forma de pagamento dentro do canal).
   const rowsReceita = await db
     .select({
       categoriaId: asaasCobrancas.categoriaId,
       categoriaNome: categoriasCobranca.nome,
       valor: asaasCobrancas.valor,
+      origem: asaasCobrancas.origem,
+      formaPagamento: asaasCobrancas.formaPagamento,
     })
     .from(asaasCobrancas)
     .leftJoin(
@@ -190,8 +228,59 @@ export async function calcularDRE(
     return { total: +totalGeral.toFixed(2), porCategoria };
   };
 
+  // ─── AGREGAÇÃO POR DIMENSÃO LIVRE ──────────────────────────────────────────
+  // Pra "porOrigem" e "porFormaPagamento" — chave string, soma valor, ordena
+  // por total desc. Idêntico em forma à agregação por categoria mas sem id.
+  const agregarPorChave = (
+    rows: Array<{ chave: string | null; nome: string; valor: string }>,
+    chaveDefault = "(sem)",
+  ): DRELinhaDimensao[] => {
+    const grupo = new Map<string, { nome: string; total: number; count: number }>();
+    for (const row of rows) {
+      const chave = row.chave ?? chaveDefault;
+      const valorNum = parseFloat(row.valor) || 0;
+      const ja = grupo.get(chave);
+      if (ja) {
+        ja.total += valorNum;
+        ja.count++;
+      } else {
+        grupo.set(chave, { nome: row.nome, total: valorNum, count: 1 });
+      }
+    }
+    const totalGeral = Array.from(grupo.values()).reduce((s, g) => s + g.total, 0);
+    return Array.from(grupo.entries())
+      .map(([chave, g]) => ({
+        chave,
+        nome: g.nome,
+        total: +g.total.toFixed(2),
+        count: g.count,
+        percentual:
+          totalGeral > 0 ? +((g.total / totalGeral) * 100).toFixed(2) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+  };
+
   const receitas = agregar(rowsReceita);
   const despesasAgg = agregar(despesasNoPeriodo);
+
+  // Quebra adicional das receitas por origem (Asaas/Manual) e forma de pag.
+  const porOrigem = agregarPorChave(
+    rowsReceita.map((r) => {
+      const chave = r.origem ?? "asaas";
+      return { chave, nome: NOME_ORIGEM[chave] ?? chave, valor: r.valor };
+    }),
+  );
+  const porFormaPagamento = agregarPorChave(
+    rowsReceita.map((r) => {
+      const chave = r.formaPagamento;
+      return {
+        chave,
+        nome: chave ? (NOME_FORMA_PAG[chave] ?? chave) : "(não informado)",
+        valor: r.valor,
+      };
+    }),
+    "(não informado)",
+  );
 
   const resultadoLiquido = +(receitas.total - despesasAgg.total).toFixed(2);
   // Margem: NaN se receita zero (UI mostra "—"). Cap em ±999% pra evitar
@@ -207,7 +296,7 @@ export async function calcularDRE(
 
   return {
     periodo: { inicio: dataInicio, fim: dataFim },
-    receitas,
+    receitas: { ...receitas, porOrigem, porFormaPagamento },
     despesas: despesasAgg,
     resultadoLiquido,
     margemPercent,
@@ -242,6 +331,24 @@ export function gerarDRECSV(dre: DREResultado, nomeEscritorio: string): string {
   }
   linhas.push(`"TOTAL RECEITAS";${num(dre.receitas.total)};;`);
   linhas.push("");
+
+  if (dre.receitas.porOrigem.length > 0) {
+    linhas.push('"RECEITAS — POR ORIGEM"');
+    linhas.push('"Origem";"Total (R$)";"Qtd";"% da seção"');
+    for (const o of dre.receitas.porOrigem) {
+      linhas.push(`${escape(o.nome)};${num(o.total)};${o.count};${num(o.percentual)}%`);
+    }
+    linhas.push("");
+  }
+
+  if (dre.receitas.porFormaPagamento.length > 0) {
+    linhas.push('"RECEITAS — POR FORMA DE PAGAMENTO"');
+    linhas.push('"Forma";"Total (R$)";"Qtd";"% da seção"');
+    for (const f of dre.receitas.porFormaPagamento) {
+      linhas.push(`${escape(f.nome)};${num(f.total)};${f.count};${num(f.percentual)}%`);
+    }
+    linhas.push("");
+  }
 
   linhas.push('"DESPESAS"');
   linhas.push('"Categoria";"Total (R$)";"Qtd";"% da seção"');

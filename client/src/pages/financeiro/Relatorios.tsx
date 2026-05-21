@@ -247,11 +247,33 @@ export function RelatoriosTab() {
 
           {/* Tabela receitas */}
           <DreSection
-            titulo="Receitas"
+            titulo="Receitas — por categoria"
             total={dre.receitas.total}
             categorias={dre.receitas.porCategoria}
             accent="emerald"
           />
+
+          {/* Quebra adicional das receitas: Caixa Asaas vs Caixa Escritório */}
+          {dre.receitas.porOrigem && dre.receitas.porOrigem.length > 0 && (
+            <DreSectionDimensao
+              titulo="Receitas — por origem (de onde veio)"
+              total={dre.receitas.total}
+              linhas={dre.receitas.porOrigem}
+              colunaLabel="Origem"
+              accent="emerald"
+            />
+          )}
+
+          {/* Quebra por forma de pagamento (Pix/Cartão/Dinheiro/etc) */}
+          {dre.receitas.porFormaPagamento && dre.receitas.porFormaPagamento.length > 0 && (
+            <DreSectionDimensao
+              titulo="Receitas — por forma de pagamento"
+              total={dre.receitas.total}
+              linhas={dre.receitas.porFormaPagamento}
+              colunaLabel="Forma"
+              accent="emerald"
+            />
+          )}
 
           {/* Tabela despesas */}
           <DreSection
@@ -263,6 +285,80 @@ export function RelatoriosTab() {
         </>
       )}
     </div>
+  );
+}
+
+function DreSectionDimensao({
+  titulo,
+  total,
+  linhas,
+  colunaLabel,
+  accent,
+}: {
+  titulo: string;
+  total: number;
+  linhas: Array<{
+    chave: string;
+    nome: string;
+    total: number;
+    count: number;
+    percentual: number;
+  }>;
+  colunaLabel: string;
+  accent: "emerald" | "red";
+}) {
+  const accentClass =
+    accent === "emerald" ? "text-emerald-600" : "text-red-600";
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className={`text-sm flex items-center gap-2 ${accentClass}`}>
+          {accent === "emerald" ? (
+            <TrendingUp className="h-4 w-4" />
+          ) : (
+            <TrendingDown className="h-4 w-4" />
+          )}
+          {titulo}
+          <span className="ml-auto font-mono text-base tabular-nums">
+            {formatBRL(total)}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {linhas.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-3 text-center">
+            Sem lançamentos no período.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">{colunaLabel}</TableHead>
+                <TableHead className="text-xs text-right">Qtd</TableHead>
+                <TableHead className="text-xs text-right">% da seção</TableHead>
+                <TableHead className="text-xs text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {linhas.map((l) => (
+                <TableRow key={l.chave}>
+                  <TableCell className="text-xs">{l.nome}</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums">
+                    {l.count}
+                  </TableCell>
+                  <TableCell className="text-xs text-right tabular-nums">
+                    {l.percentual.toFixed(1)}%
+                  </TableCell>
+                  <TableCell className="text-xs text-right tabular-nums font-medium">
+                    {formatBRL(l.total)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

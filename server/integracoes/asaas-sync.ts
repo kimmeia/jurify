@@ -594,6 +594,10 @@ export async function syncCobrancasEscritorio(
      *  `syncCobrancasDeCliente`. Default 90 (compat retroativa pro botão
      *  manual). Cron diário usa 1 — webhook é fonte primária. */
     diasHistorico?: number | null;
+    /** Override do throttle entre vínculos. Default 1000ms (rate-safe).
+     *  500ms é o "turbo" — só usar quando rate-limit-remaining > 30,
+     *  caso contrário a Camada 1 do guard local aborta o tick. */
+    delayMs?: number;
   },
 ): Promise<{ clientes: number } & SyncCobrancasStats> {
   const zero = { clientes: 0, novas: 0, atualizadas: 0, removidas: 0 };
@@ -629,10 +633,11 @@ export async function syncCobrancasEscritorio(
   // customers — primeiro vínculo passava, depois Camada 1 marcava
   // remaining≤10 e os próximos abortavam o tick (visto em produção em
   // 2026-05-14). 1000ms (= 60/min) deixa o sync abaixo do teto típico
-  // e o webhook continua sendo a fonte primária em tempo real. Custo:
-  // 200 customers × 1s = 3min30s extras, irrisório no intervalo de 24h
-  // do `syncAsaas` cron.
-  const DELAY_ENTRE_REQUESTS_MS = 1_000;
+  // e o webhook continua sendo a fonte primária em tempo real.
+  // Caller pode reduzir pra 500ms ("turbo") via opts.delayMs quando a
+  // janela é curta (sync sob-demanda de 3 dias), assumindo o risco de
+  // hit no rate guard em troca de UI responsiva.
+  const DELAY_ENTRE_REQUESTS_MS = opts?.delayMs ?? 1_000;
 
   for (let i = 0; i < vinculos.length; i++) {
     const vinculo = vinculos[i];
