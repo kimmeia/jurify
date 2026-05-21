@@ -123,18 +123,18 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
     return (
       <>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           disabled={deletarMut.isPending}
           onClick={() => setConfirmPararOpen(true)}
-          className="border-emerald-500/30 text-emerald-700 hover:bg-red-50 hover:border-red-500/30 hover:text-red-700 group"
+          className="bg-emerald-500/15 text-emerald-100 border border-emerald-300/35 backdrop-blur-sm shadow-sm hover:bg-rose-500/25 hover:text-rose-100 hover:border-rose-300/40 h-8 text-xs group"
         >
           {deletarMut.isPending ? (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
           ) : (
             <>
-              <CheckCircle2 className="h-4 w-4 mr-1 group-hover:hidden" />
-              <Trash2 className="h-4 w-4 mr-1 hidden group-hover:block" />
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1 group-hover:hidden" />
+              <Trash2 className="h-3.5 w-3.5 mr-1 hidden group-hover:block" />
             </>
           )}
           <span className="group-hover:hidden">Monitorado</span>
@@ -175,16 +175,16 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
   return (
     <>
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         onClick={() => setConfirmCriarOpen(true)}
         disabled={criarMut.isPending}
-        className="border-red-500/30 text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+        className="bg-rose-500/15 text-rose-100 border border-rose-300/35 backdrop-blur-sm shadow-sm hover:bg-rose-500/30 hover:text-white h-8 text-xs"
       >
         {criarMut.isPending ? (
-          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
         ) : (
-          <Siren className="h-4 w-4 mr-1" />
+          <Siren className="h-3.5 w-3.5 mr-1" />
         )}
         Monitorar
       </Button>
@@ -2497,6 +2497,13 @@ function ClienteDetalhe({
   const [fechamentoOpen, setFechamentoOpen] = useState(false);
   const utilsTrpc = trpc.useUtils();
   const { data: cliente, refetch } = trpc.clientes.detalhe.useQuery({ id });
+  // Resumo financeiro do Asaas — separado de `clientes.detalhe` pra reaproveitar
+  // a mesma chave dos demais consumidores (FinanceiroPopover, FinanceiroBadge,
+  // FinanceiroClienteTab) e cair no cache do React Query sem refetch.
+  const { data: asaasResumo } = trpc.asaas.resumoContato.useQuery(
+    { contatoId: id },
+    { retry: false, staleTime: 5 * 60_000 },
+  );
   const { data: anotacoes, refetch: rN } = trpc.clientes.listarAnotacoes.useQuery({ contatoId: id });
   const { data: arquivos, refetch: rA } = trpc.clientes.listarArquivos.useQuery({ contatoId: id });
   const { data: convsData } = trpc.clientes.listarConversas.useQuery({ contatoId: id });
@@ -2653,7 +2660,7 @@ function ClienteDetalhe({
                   variant="ghost"
                   size="sm"
                   onClick={() => setLocation(`/atendimento?contatoId=${id}`)}
-                  className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                  className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
                 >
                   <MessageCircle className="w-3.5 h-3.5 mr-1" />
                   Inbox
@@ -2669,7 +2676,7 @@ function ClienteDetalhe({
                 variant="ghost"
                 size="sm"
                 onClick={() => setGerarContratoOpen(true)}
-                className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
               >
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 Gerar contrato
@@ -2679,7 +2686,7 @@ function ClienteDetalhe({
                 size="sm"
                 onClick={() => setFechamentoOpen(true)}
                 title="Marca conversão (fechado_ganho)"
-                className="text-white/85 hover:text-white hover:bg-white/15 border border-white/20 h-8 text-xs"
+                className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                 Fechamento
@@ -2688,7 +2695,7 @@ function ClienteDetalhe({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-violet-200 hover:text-white hover:bg-violet-500/30 border border-white/20 h-8 text-xs"
+                  className="text-violet-100 bg-white/10 hover:bg-violet-500/30 border border-white/25 backdrop-blur-sm shadow-sm h-8 text-xs"
                   onClick={() => setMesclarOpen(true)}
                   title="Mesclar com outro cliente (caso de pagador secundário, ex: esposa)"
                 >
@@ -2700,7 +2707,7 @@ function ClienteDetalhe({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-rose-200 hover:text-white hover:bg-rose-500/30 border border-white/20 h-8 w-8 p-0"
+                  className="text-rose-100 bg-rose-500/15 hover:bg-rose-500/30 border border-rose-300/35 backdrop-blur-sm shadow-sm h-8 w-8 p-0"
                   onClick={() => setExcluirConfirmAlvo(true)}
                   title="Excluir cliente"
                 >
@@ -2714,18 +2721,18 @@ function ClienteDetalhe({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <KPIClienteHero
               label="Recebido"
-              value={fmtBRLShort(Number((cliente as any).asaasResumo?.recebido ?? 0))}
-              tone="emerald"
+              value={fmtBRLShort(Number(asaasResumo?.pago ?? 0))}
+              tone={Number(asaasResumo?.pago ?? 0) > 0 ? "emerald" : "neutral"}
             />
             <KPIClienteHero
               label="A receber"
-              value={fmtBRLShort(Number((cliente as any).asaasResumo?.pendente ?? 0))}
-              tone={Number((cliente as any).asaasResumo?.pendente ?? 0) > 0 ? "amber" : "neutral"}
+              value={fmtBRLShort(Number(asaasResumo?.pendente ?? 0))}
+              tone={Number(asaasResumo?.pendente ?? 0) > 0 ? "amber" : "neutral"}
             />
             <KPIClienteHero
               label="Vencido"
-              value={fmtBRLShort(Number((cliente as any).asaasResumo?.vencido ?? 0))}
-              tone={Number((cliente as any).asaasResumo?.vencido ?? 0) > 0 ? "rose" : "neutral"}
+              value={fmtBRLShort(Number(asaasResumo?.vencido ?? 0))}
+              tone={Number(asaasResumo?.vencido ?? 0) > 0 ? "rose" : "neutral"}
             />
             <KPIClienteHero
               label="Cadastrado em"

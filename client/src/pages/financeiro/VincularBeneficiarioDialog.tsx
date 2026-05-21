@@ -271,7 +271,10 @@ export function VincularBeneficiarioDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      {/* sm:max-w-6xl com prefixo é obrigatório — o DialogContent do shadcn
+          tem `sm:max-w-lg` hardcoded como default, então `max-w-6xl` sem
+          prefixo perde a especificidade em telas ≥640px. */}
+      <DialogContent className="sm:max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             Vincular pagamentos de terceiro a {contatoBeneficiarioNome}
