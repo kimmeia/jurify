@@ -36,11 +36,13 @@ async function invocarLLM(
     maxTokens: number;
     temperatura: number;
     contextoDocumentos?: string;
+    /** Bloco de contexto do cliente (campos personalizados já coletados). */
+    contextoCliente?: string;
   },
   systemPromptBase: string,
   mensagem: string,
 ): Promise<string> {
-  const systemPrompt = [systemPromptBase, cfg.contextoDocumentos]
+  const systemPrompt = [systemPromptBase, cfg.contextoDocumentos, cfg.contextoCliente]
     .filter(Boolean)
     .join("\n\n");
 
@@ -130,11 +132,56 @@ export async function obterCalcomClient(escritorioId: number, defaultDuration = 
 }
 
 /**
+ * Resolve o bloco de contexto do cliente (campos personalizados já capturados)
+ * pra injetar no system prompt. Retorna "" quando não há contatoId, contato
+ * sem campos preenchidos, ou nenhum campo passa pelos filtros do helper.
+ *
+ * Falhas (DB indisponível, JSON malformado, etc) → "" silencioso, pra não
+ * derrubar a chamada da IA. A IA ainda funciona sem o contexto.
+ */
+async function resolverContextoCliente(
+  escritorioId: number,
+  contatoId: number | undefined,
+): Promise<string> {
+  if (!contatoId) return "";
+  try {
+    const { getDb } = await import("../db");
+    const { contatos, camposPersonalizadosCliente } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return "";
+
+    const [contato] = await db
+      .select({ camposPersonalizados: contatos.camposPersonalizados })
+      .from(contatos)
+      .where(eq(contatos.id, contatoId))
+      .limit(1);
+    if (!contato?.camposPersonalizados) return "";
+
+    const defs = await db
+      .select({
+        chave: camposPersonalizadosCliente.chave,
+        label: camposPersonalizadosCliente.label,
+        tipo: camposPersonalizadosCliente.tipo,
+      })
+      .from(camposPersonalizadosCliente)
+      .where(eq(camposPersonalizadosCliente.escritorioId, escritorioId));
+    if (defs.length === 0) return "";
+
+    const { montarContextoCliente } = await import("../_core/contexto-cliente-ia");
+    return montarContextoCliente(contato.camposPersonalizados, defs);
+  } catch (e: any) {
+    log.warn({ err: e?.message, contatoId }, "falha ao resolver contexto do cliente — IA segue sem ele");
+    return "";
+  }
+}
+
+/**
  * Cria executores reais para um escritório específico.
  */
 export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
   return {
-    async chamarIA(prompt: string, mensagem: string): Promise<string> {
+    async chamarIA(prompt: string, mensagem: string, contatoId?: number): Promise<string> {
       // Resolve config do agente ativo do escritório (provider + key + modelo
       // + maxTokens/temperatura + docs RAG). Antes desse fix, esta função
       // ignorava `provider` e tentava OpenAI primeiro — então escritórios
@@ -151,6 +198,8 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         );
       }
 
+      const contextoCliente = await resolverContextoCliente(escritorioId, contatoId);
+
       return invocarLLM(
         {
           provider: config.provider,
@@ -160,18 +209,21 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           maxTokens: config.maxTokens ?? 300,
           temperatura: config.temperatura ?? 0.3,
           contextoDocumentos: config.contextoDocumentos,
+          contextoCliente,
         },
         prompt,
         mensagem,
       );
     },
 
-    async executarAgente(agenteId: number, mensagem: string): Promise<string> {
+    async executarAgente(agenteId: number, mensagem: string, contatoId?: number): Promise<string> {
       const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
       const cfg = await obterAgentePorId(escritorioId, agenteId);
       if (!cfg) {
         throw new Error(`Agente ${agenteId} não encontrado, inativo ou sem API key configurada.`);
       }
+
+      const contextoCliente = await resolverContextoCliente(escritorioId, contatoId);
 
       return invocarLLM(
         {
@@ -182,6 +234,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           maxTokens: cfg.maxTokens,
           temperatura: cfg.temperatura,
           contextoDocumentos: cfg.contextoDocumentos,
+          contextoCliente,
         },
         cfg.prompt,
         mensagem,

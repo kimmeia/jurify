@@ -144,14 +144,20 @@ export interface PassoResultado {
 
 /** Funções externas injetadas (pra testar sem I/O real) */
 export interface SmartflowExecutores {
-  /** Chama a IA com um prompt e retorna a resposta */
-  chamarIA: (prompt: string, mensagem: string) => Promise<string>;
+  /**
+   * Chama a IA com um prompt e retorna a resposta.
+   * `contatoId` opcional: quando passado, a implementação real injeta
+   * `contatos.camposPersonalizados` no system prompt pra IA ter ciência
+   * dos dados já capturados na conversa.
+   */
+  chamarIA: (prompt: string, mensagem: string, contatoId?: number) => Promise<string>;
   /**
    * Executa um agente IA pré-configurado (prompt + modelo + docs RAG salvos
    * em `agentesIa`) e retorna a resposta textual. Usado por `ia_responder`
-   * quando o passo tem `config.agenteId`.
+   * quando o passo tem `config.agenteId`. `contatoId` é injetado no system
+   * prompt como contexto do cliente (mesma motivação do `chamarIA`).
    */
-  executarAgente: (agenteId: number, mensagem: string) => Promise<string>;
+  executarAgente: (agenteId: number, mensagem: string, contatoId?: number) => Promise<string>;
   /** Busca horários disponíveis no Cal.com */
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
@@ -315,13 +321,18 @@ async function handleIAResponder(
     // Se o passo tem `agenteId`, usa o agente pré-configurado (prompt +
     // modelo + docs RAG vêm da tabela `agentesIa`). Caso contrário, fallback
     // pro fluxo antigo com prompt textual livre.
+    // Passamos `ctx.contatoId` pros executores reais poderem injetar campos
+    // personalizados já capturados no system prompt — a IA precisa saber o
+    // que já foi coletado pra não repetir perguntas. ia_classificar NÃO
+    // recebe esse contexto (é classificação determinística).
+    const contatoIdCtx = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
     let resposta: string;
     if (typeof agenteId === "number" && agenteId > 0) {
-      resposta = await exec.executarAgente(agenteId, mensagem);
+      resposta = await exec.executarAgente(agenteId, mensagem, contatoIdCtx);
     } else {
       const promptExtra = passo.config.prompt || "";
       const prompt = `Você é um assistente jurídico educado e profissional. ${promptExtra}\n\nResponda de forma clara e concisa.`;
-      resposta = await exec.chamarIA(prompt, mensagem);
+      resposta = await exec.chamarIA(prompt, mensagem, contatoIdCtx);
     }
 
     return {
