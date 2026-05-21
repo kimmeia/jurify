@@ -721,7 +721,11 @@ export const relatoriosRouter = router({
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
-          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
+          // "Cliente real" = COALESCE(beneficiário, pagador). Resolve o
+          // caso clássico Carlos+esposa: cobrança paga por Maria (contatoId)
+          // tem contatoBeneficiarioId=Carlos. Carlos é quem fechou o lead;
+          // sem COALESCE a cobrança ficava de fora do recebido do atendente.
+          sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAtual})`,
         ));
 
       const totalFaturado = Number(agg?.totalFaturado || 0);
@@ -743,7 +747,7 @@ export const relatoriosRouter = router({
           gte(asaasCobrancas.dataPagamento, dataInicioAnteriorStr),
           lte(asaasCobrancas.dataPagamento, dataFimAnteriorStr),
           buildFiltroComissaoSQL(["sim"])!,
-          inArray(asaasCobrancas.contatoId, contatosFechadosAnt),
+          sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAnt})`,
         ));
       const faturadoAnterior = Number(aggAnt?.totalFaturado || 0);
       const contratosAnterior = Number(aggAnt?.contratos || 0);
@@ -867,7 +871,7 @@ export const relatoriosRouter = router({
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
-          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
+          sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAtual})`,
         ))
         .groupBy(asaasCobrancas.atendenteId);
 
@@ -942,7 +946,7 @@ export const relatoriosRouter = router({
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
-          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
+          sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAtual})`,
         ))
         .groupBy(sql`DATE(${asaasCobrancas.dataPagamento})`)
         .orderBy(sql`DATE(${asaasCobrancas.dataPagamento})`);
@@ -1145,10 +1149,14 @@ export const relatoriosRouter = router({
         ))
         .groupBy(leads.contatoId);
 
-      // ── Cobranças pagas do atendente, agrupadas por contatoId ──────────────
+      // ── Cobranças pagas do atendente, agrupadas por CLIENTE REAL ───────────
+      // Cliente real = COALESCE(beneficiário, pagador). Resolve "esposa
+      // pagou pelo marido": cobrança paga por Maria com beneficiário
+      // Carlos agrupa em Carlos. Sem isso, Maria apareceria como cliente
+      // separada no drawer, confundindo gestão.
       const cobrancasRows = await db
         .select({
-          contatoId: asaasCobrancas.contatoId,
+          contatoId: sql<number>`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`,
           valorRecebido: sql<number>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(14,2))), 0)`,
           contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
@@ -1160,7 +1168,7 @@ export const relatoriosRouter = router({
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
         ))
-        .groupBy(asaasCobrancas.contatoId);
+        .groupBy(sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`);
 
       // ── Combinar por contatoId ─────────────────────────────────────────────
       type Linha = {
