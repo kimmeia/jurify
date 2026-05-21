@@ -231,30 +231,23 @@ async function enviarResposta(canalId: number, conversaId: number, chatIdExterno
     status: "pendente",
   });
 
-  try {
-    const { getWhatsappManager } = await import("./whatsapp-baileys");
-    const m = getWhatsappManager();
-    if (!m.isConectado(canalId)) {
-      throw new Error("Sessão WhatsApp desconectada");
-    }
+  // O helper enviarMensagemPeloCanal já roteia entre Baileys (whatsapp_qr) e
+  // Cloud API (whatsapp_api) baseado no tipo do canal. Antes este caminho
+  // chamava Baileys direto, fazendo respostas automáticas falharem em canais
+  // Cloud API com "Sessão WhatsApp desconectada".
+  const telefonePN = await buscarTelefonePNdaConversa(conversaId);
+  const { enviarMensagemPeloCanal } = await import("./canal-envio");
+  const r = await enviarMensagemPeloCanal({
+    canalId,
+    chatIdExterno,
+    telefone: telefonePN,
+    conteudo: resposta,
+  });
 
-    // Fallback LID → PN: se o chatIdExterno for @lid, buscar telefone
-    // real do contato associado à conversa. Evita "Chat not found".
-    let destinatario = chatIdExterno;
-    if (isLidJid(chatIdExterno)) {
-      const telefonePN = await buscarTelefonePNdaConversa(conversaId);
-      if (telefonePN) {
-        destinatario = `${telefonePN.replace(/\D/g, "")}@s.whatsapp.net`;
-        log.warn({ conversaId, lid: chatIdExterno, pn: destinatario }, "[WhatsApp] Convertendo LID para PN no envio");
-      } else {
-        log.warn({ conversaId, lid: chatIdExterno }, "[WhatsApp] LID sem telefone PN cadastrado — tentando enviar direto no LID");
-      }
-    }
-
-    await m.enviarMensagemJid(canalId, destinatario, resposta);
+  if (r.ok) {
     await atualizarStatusMensagem(msgId, "enviada");
-  } catch (e: any) {
-    log.error({ err: e?.message, conversaId, canalId, msgId }, "[ChatBot] Envio WA erro");
+  } else {
+    log.error({ err: r.erro, conversaId, canalId, msgId, provider: r.provider }, "[ChatBot] Envio WA erro");
     await atualizarStatusMensagem(msgId, "falha");
   }
 }
