@@ -360,7 +360,7 @@ export const dashboardRouter = router({
     .input(
       z
         .object({
-          days: z.number().int().min(7).max(365).default(30),
+          days: z.number().int().min(1).max(365).default(30),
         })
         .optional(),
     )

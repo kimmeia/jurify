@@ -244,6 +244,19 @@ describe("calcularRangeCashFlow", () => {
     expect(r.pontosKeys).toEqual(["2026-05-01"]);
   });
 
+  it("primeiros 6 dias do mês (days 2-6) → range correto, sempre começando em 01/mai", () => {
+    for (let dia = 2; dia <= 6; dia++) {
+      const hoje = utcMidday(2026, 4, dia);
+      const r = calcularRangeCashFlow(dia, hoje);
+      expect(r.inicioStr).toBe("2026-05-01");
+      expect(r.pontosKeys[0]).toBe("2026-05-01");
+      expect(r.pontosKeys).toHaveLength(dia);
+      expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe(
+        `2026-05-${String(dia).padStart(2, "0")}`,
+      );
+    }
+  });
+
   it("último dia de mês 31 (days=31) → inclui dia 1 e dia 31, 31 pontos", () => {
     const hoje = utcMidday(2026, 4, 31);
     const r = calcularRangeCashFlow(31, hoje);
