@@ -799,6 +799,15 @@ export const agentesIa = mysqlTable("agentes_ia", {
    * NULL ou vazio = agente não extrai nada.
    */
   camposCaptura: text("camposCapturaAgente"),
+  /**
+   * Metadados da última tentativa de captura automática. Atualizados em cada
+   * execução de `extrairECaptarCampos` (mesmo quando heurística decide pular).
+   * Usados pelo painel "Capturas IA" pra mostrar transparência sobre o
+   * comportamento do agente — ver iter 2 das melhorias.
+   */
+  ultimaCapturaAt: timestamp("ultimaCapturaAtAgente"),
+  ultimoErroCaptura: varchar("ultimoErroCapturaAgente", { length: 500 }),
+  ultimaCapturaNovos: int("ultimaCapturaNovosAgente").notNull().default(0),
   createdAt: timestamp("createdAtAgente").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAgente").defaultNow().onUpdateNow().notNull(),
 });

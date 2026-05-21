@@ -36,6 +36,37 @@ export interface CampoCapturado {
   atributo: string;
 }
 
+export interface UltimaTentativaCaptura {
+  at: Date;
+  novos: number;
+  erro: string | null;
+}
+
+/**
+ * Persiste metadados da tentativa de captura no agente. Chamado apenas
+ * quando houve ATIVIDADE real (chamou IA, falhou) — skips por heurística
+ * silenciosa não atualizam, pra não floodar UPDATEs em mensagens sociais.
+ */
+async function marcarTentativa(
+  db: any,
+  agenteId: number,
+  escritorioId: number,
+  resultado: { novos: number; erro: string | null },
+): Promise<void> {
+  try {
+    await db
+      .update(agentesIa)
+      .set({
+        ultimaCapturaAt: new Date(),
+        ultimaCapturaNovos: resultado.novos,
+        ultimoErroCaptura: resultado.erro ? resultado.erro.slice(0, 500) : null,
+      })
+      .where(and(eq(agentesIa.id, agenteId), eq(agentesIa.escritorioId, escritorioId)));
+  } catch (e: any) {
+    log.warn({ err: e?.message, agenteId }, "falha ao marcar tentativa de captura");
+  }
+}
+
 /**
  * Heurística rápida: a mensagem parece conter um valor extraível?
  * Evita chamar IA em conversas sociais como "oi", "obrigado", etc.
@@ -180,7 +211,13 @@ export async function extrairECaptarCampos(opts: {
     });
 
     const parsed = parseJsonIA<Record<string, any>>(raw);
-    if (!parsed || typeof parsed !== "object") return [];
+    if (!parsed || typeof parsed !== "object") {
+      await marcarTentativa(db, opts.agenteId, opts.escritorioId, {
+        novos: 0,
+        erro: "Resposta da IA inválida (JSON não parseável)",
+      });
+      return [];
+    }
 
     // 7. Filtra valores válidos (não null) e mapeia atributo → campoChave
     const novos: CampoCapturado[] = [];
@@ -195,7 +232,12 @@ export async function extrairECaptarCampos(opts: {
         atributo: v.atributo,
       });
     }
-    if (novos.length === 0) return [];
+
+    if (novos.length === 0) {
+      // IA rodou mas não achou nada — registra como tentativa válida sem novos.
+      await marcarTentativa(db, opts.agenteId, opts.escritorioId, { novos: 0, erro: null });
+      return [];
+    }
 
     // 8. UPSERT em contatos.camposPersonalizados (merge, não overwrite)
     const merged = { ...jaCapturados };
@@ -216,9 +258,24 @@ export async function extrairECaptarCampos(opts: {
       "campos extraídos da conversa",
     );
 
+    await marcarTentativa(db, opts.agenteId, opts.escritorioId, {
+      novos: novos.length,
+      erro: null,
+    });
+
     return novos;
   } catch (e: any) {
     log.warn({ err: e?.message }, "extrairECaptarCampos falhou (silencioso)");
+    // Tenta marcar erro — ignora se o próprio db estiver indisponível
+    try {
+      const db = await getDb();
+      if (db) {
+        await marcarTentativa(db, opts.agenteId, opts.escritorioId, {
+          novos: 0,
+          erro: String(e?.message || e || "Erro desconhecido"),
+        });
+      }
+    } catch { /* ignore — não podemos marcar */ }
     return [];
   }
 }
@@ -262,4 +319,147 @@ export async function listarCamposCapturadosDoContato(
     valor: valores[d.chave],
     tipo: d.tipo,
   }));
+}
+
+/**
+ * Lê metadados da última tentativa de captura do agente. Usado pelo painel
+ * "Capturas IA" pra mostrar status visual ("há 2min · ok" / "há 4min · erro").
+ * Retorna null se o agente nunca rodou (ultimaCapturaAt é null).
+ */
+export async function obterUltimaTentativaAgente(
+  agenteId: number,
+  escritorioId: number,
+): Promise<UltimaTentativaCaptura | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select({
+      at: agentesIa.ultimaCapturaAt,
+      novos: agentesIa.ultimaCapturaNovos,
+      erro: agentesIa.ultimoErroCaptura,
+    })
+    .from(agentesIa)
+    .where(and(eq(agentesIa.id, agenteId), eq(agentesIa.escritorioId, escritorioId)))
+    .limit(1);
+  if (!row?.at) return null;
+  return { at: row.at, novos: row.novos ?? 0, erro: row.erro ?? null };
+}
+
+/**
+ * Atualiza um único campo personalizado do contato. Usado pela edição inline
+ * no painel "Capturas IA" quando o atendente quer corrigir um valor que a IA
+ * pegou errado. Valida que o campo existe no catálogo do escritório e
+ * coage o valor pro tipo correto.
+ */
+export async function atualizarCampoCapturado(opts: {
+  contatoId: number;
+  escritorioId: number;
+  chave: string;
+  valor: unknown;
+}): Promise<{ chave: string; label: string; valor: any; tipo: string } | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  // 1. Valida que o campo existe no catálogo deste escritório
+  const [def] = await db
+    .select()
+    .from(camposPersonalizadosCliente)
+    .where(
+      and(
+        eq(camposPersonalizadosCliente.escritorioId, opts.escritorioId),
+        eq(camposPersonalizadosCliente.chave, opts.chave),
+      ),
+    )
+    .limit(1);
+  if (!def) throw new Error(`Campo personalizado "${opts.chave}" não existe no catálogo`);
+
+  // 2. Coage valor pro tipo correto (e valida select)
+  const valorCoercido = coercaoPorTipo(opts.valor, def.tipo, def.opcoes);
+
+  // 3. Lê camposPersonalizados existentes e faz merge
+  const [contato] = await db
+    .select({ camposPersonalizados: contatos.camposPersonalizados })
+    .from(contatos)
+    .where(and(eq(contatos.id, opts.contatoId), eq(contatos.escritorioId, opts.escritorioId)))
+    .limit(1);
+  if (!contato) throw new Error("Contato não encontrado");
+
+  const atual: Record<string, any> = (() => {
+    try { return contato.camposPersonalizados ? JSON.parse(contato.camposPersonalizados) : {}; }
+    catch { return {}; }
+  })();
+
+  // Se valor vazio/null, REMOVE a chave (não persiste null poluindo)
+  if (valorCoercido === null || valorCoercido === "") {
+    delete atual[opts.chave];
+  } else {
+    atual[opts.chave] = valorCoercido;
+  }
+
+  await db
+    .update(contatos)
+    .set({ camposPersonalizados: JSON.stringify(atual) })
+    .where(eq(contatos.id, opts.contatoId));
+
+  log.info(
+    { contatoId: opts.contatoId, chave: opts.chave, valor: valorCoercido },
+    "campo capturado atualizado manualmente",
+  );
+
+  return {
+    chave: def.chave,
+    label: def.label,
+    valor: valorCoercido,
+    tipo: def.tipo,
+  };
+}
+
+export function coercaoPorTipo(valor: unknown, tipo: string, opcoesJson: string | null): any {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const s = String(valor).trim();
+  if (!s) return null;
+
+  switch (tipo) {
+    case "numero": {
+      // BR usa ponto pra milhar + vírgula decimal ("1.234,56").
+      // ISO usa ponto decimal ("1234.56"). Detecta pela presença de vírgula:
+      // se tem vírgula, assume BR (remove pontos, vírgula vira ponto).
+      // Se não tem vírgula, assume ISO (mantém ponto como decimal).
+      const limpo = s.includes(",")
+        ? s.replace(/\./g, "").replace(",", ".")
+        : s;
+      const n = Number(limpo);
+      if (!Number.isFinite(n)) throw new Error(`Valor "${s}" não é um número válido`);
+      return n;
+    }
+    case "boolean": {
+      if (s === "true" || s === "sim" || s === "1") return true;
+      if (s === "false" || s === "não" || s === "nao" || s === "0") return false;
+      throw new Error(`Valor "${s}" não é um boolean válido (use sim/não/true/false)`);
+    }
+    case "data": {
+      // Aceita YYYY-MM-DD direto ou DD/MM/YYYY → converte
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const matchBr = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (matchBr) return `${matchBr[3]}-${matchBr[2]}-${matchBr[1]}`;
+      throw new Error(`Data "${s}" inválida. Use YYYY-MM-DD ou DD/MM/YYYY`);
+    }
+    case "select": {
+      if (!opcoesJson) return s;
+      // Isola try ao parse — erro de validação NÃO deve ser engolido.
+      let opcoes: string[] | null = null;
+      try {
+        const parsed = JSON.parse(opcoesJson);
+        if (Array.isArray(parsed)) opcoes = parsed;
+      } catch { /* opcoesJson inválido — aceita string crua */ }
+      if (opcoes && opcoes.length > 0 && !opcoes.includes(s)) {
+        throw new Error(`"${s}" não está nas opções permitidas (${opcoes.join(", ")})`);
+      }
+      return s;
+    }
+    case "texto":
+    case "textarea":
+    default:
+      return s;
+  }
 }
