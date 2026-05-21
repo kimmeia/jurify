@@ -3699,7 +3699,15 @@ export const asaasRouter = router({
       z.object({
         contatoBeneficiarioId: z.number().int().positive(),
         busca: z.string().trim().max(120).optional(),
-        limit: z.number().int().min(1).max(100).default(30),
+        /** Filtros adicionais — UI do dialog expõe pra restringir lista
+         *  longa em escritórios com muitos pagamentos órfãos. */
+        formaPagamento: z.array(z.string()).optional(),
+        origem: z.enum(["manual", "asaas"]).optional(),
+        valorMin: z.number().min(0).optional(),
+        valorMax: z.number().min(0).optional(),
+        periodoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        periodoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        limit: z.number().int().min(1).max(200).default(100),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -3728,6 +3736,26 @@ export const asaasRouter = router({
           )!,
         );
       }
+      if (input.formaPagamento && input.formaPagamento.length > 0) {
+        conds.push(inArray(asaasCobrancas.formaPagamento, input.formaPagamento as any));
+      }
+      if (input.origem === "manual") {
+        conds.push(eq(asaasCobrancas.origem, "manual"));
+      } else if (input.origem === "asaas") {
+        conds.push(sql`${asaasCobrancas.origem} != 'manual'`);
+      }
+      if (input.valorMin !== undefined) {
+        conds.push(sql`CAST(${asaasCobrancas.valor} AS DECIMAL(14,2)) >= ${input.valorMin}`);
+      }
+      if (input.valorMax !== undefined) {
+        conds.push(sql`CAST(${asaasCobrancas.valor} AS DECIMAL(14,2)) <= ${input.valorMax}`);
+      }
+      if (input.periodoInicio) {
+        conds.push(gte(asaasCobrancas.dataPagamento, input.periodoInicio));
+      }
+      if (input.periodoFim) {
+        conds.push(lte(asaasCobrancas.dataPagamento, input.periodoFim));
+      }
 
       return db
         .select({
@@ -3739,13 +3767,120 @@ export const asaasRouter = router({
           descricao: asaasCobrancas.descricao,
           contatoIdPagador: asaasCobrancas.contatoId,
           contatoNomePagador: contatos.nome,
+          contatoCpfPagador: contatos.cpfCnpj,
           origem: asaasCobrancas.origem,
+          formaPagamento: asaasCobrancas.formaPagamento,
         })
         .from(asaasCobrancas)
         .leftJoin(contatos, eq(contatos.id, asaasCobrancas.contatoId))
         .where(and(...conds))
         .orderBy(desc(asaasCobrancas.dataPagamento))
         .limit(input.limit);
+    }),
+
+  /**
+   * Versão em massa de `vincularPagamentoBeneficiario`. Aceita até 50
+   * cobranças por chamada. Pra cada uma, aplica `decidirVinculoBeneficiario`
+   * individualmente — se falha (já em fechamento, mesmo pagador, etc),
+   * pula sem abortar o lote.
+   *
+   * Resposta: contadores + lista de erros por cobrancaId pra UI mostrar
+   * o que falhou.
+   */
+  vincularPagamentoBeneficiarioEmMassa: protectedProcedure
+    .input(
+      z.object({
+        cobrancaIds: z.array(z.number().int().positive()).min(1).max(50),
+        contatoBeneficiarioId: z.number().int().positive(),
+        reatribuirAtendente: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [benef] = await db
+        .select({ id: contatos.id, responsavelId: contatos.responsavelId })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.id, input.contatoBeneficiarioId),
+            eq(contatos.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!benef) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Contato beneficiário não encontrado.",
+        });
+      }
+
+      const cobs = await db
+        .select({
+          id: asaasCobrancas.id,
+          contatoId: asaasCobrancas.contatoId,
+        })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            inArray(asaasCobrancas.id, input.cobrancaIds),
+          ),
+        );
+
+      const cobsMap = new Map(cobs.map((c) => [c.id, c]));
+      const fechamentos = await db
+        .select({
+          asaasCobrancaId: comissoesFechadasItens.asaasCobrancaId,
+          comissaoFechadaId: comissoesFechadasItens.comissaoFechadaId,
+        })
+        .from(comissoesFechadasItens)
+        .where(inArray(comissoesFechadasItens.asaasCobrancaId, input.cobrancaIds));
+      const fechamentoPorCobranca = new Map(
+        fechamentos.map((f) => [f.asaasCobrancaId, f.comissaoFechadaId]),
+      );
+
+      let vinculadas = 0;
+      let atendentesReatribuidos = 0;
+      const erros: Array<{ cobrancaId: number; mensagem: string }> = [];
+
+      for (const id of input.cobrancaIds) {
+        const cob = cobsMap.get(id);
+        if (!cob) {
+          erros.push({ cobrancaId: id, mensagem: "Cobrança não encontrada" });
+          continue;
+        }
+        const decision = decidirVinculoBeneficiario({
+          cob,
+          benef,
+          fechamentoComissaoId: fechamentoPorCobranca.get(id) ?? null,
+          reatribuirAtendente: input.reatribuirAtendente,
+        });
+        if (!decision.ok) {
+          erros.push({ cobrancaId: id, mensagem: decision.message });
+          continue;
+        }
+        const set: Record<string, unknown> = {
+          contatoBeneficiarioId: decision.data.contatoBeneficiarioId,
+        };
+        if (decision.data.novoAtendenteId !== null) {
+          set.atendenteId = decision.data.novoAtendenteId;
+          atendentesReatribuidos++;
+        }
+        await db
+          .update(asaasCobrancas)
+          .set(set)
+          .where(eq(asaasCobrancas.id, id));
+        vinculadas++;
+      }
+
+      return { vinculadas, atendentesReatribuidos, erros };
     }),
 
   /**
