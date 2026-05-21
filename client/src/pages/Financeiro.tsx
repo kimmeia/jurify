@@ -110,6 +110,7 @@ export default function Financeiro() {
   const [rangeInicioInput, setRangeInicioInput] = useState("");
   const [rangeFimInput, setRangeFimInput] = useState("");
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [bulkAtribuirAberto, setBulkAtribuirAberto] = useState(false);
   const [confirmBulkCancel, setConfirmBulkCancel] = useState(false);
   const [cobrancaParaCancelar, setCobrancaParaCancelar] = useState<any | null>(null);
 
@@ -281,6 +282,37 @@ export default function Financeiro() {
     onError: (err: any) =>
       toast.error("Erro", { description: err.message }),
   }) ?? { mutate: () => {}, isPending: false };
+
+  // Listas pra edição inline de categoria/atendente em cada linha da
+  // tabela de cobranças. 1 query no mount cada, cacheada — render
+  // popover na célula sem refetch a cada interação.
+  const { data: categoriasList } =
+    trpc.financeiro.listarCategoriasCobranca.useQuery(undefined, {
+      staleTime: 5 * 60_000,
+    });
+  const { data: equipeData } =
+    trpc.configuracoes.listarColaboradores.useQuery(undefined, {
+      staleTime: 5 * 60_000,
+    });
+  const atendentesList = useMemo(
+    () =>
+      (equipeData && "colaboradores" in equipeData
+        ? equipeData.colaboradores
+        : []
+      ).filter((c: any) => c.cargo !== "estagiario"),
+    [equipeData],
+  );
+
+  // Mutation única pra inline (1 ID) e bulk (N IDs). Invalida queries
+  // dependentes (kpis, contadoresPendencia pros banners) ao sucesso.
+  const atribuirMut = trpc.financeiro.atribuirCobrancasEmMassa.useMutation({
+    onSuccess: () => {
+      utils.asaas.listarCobrancas.invalidate();
+      utils.financeiro.contadoresPendencia.invalidate();
+      utils.asaas.kpis.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
 
   // Marca cobrança manual como recebida. Disponível só em cobranças
   // origem='manual' com status PENDING/OVERDUE — Asaas sincroniza
@@ -979,6 +1011,18 @@ export default function Financeiro() {
                 {selecionadas.size} cobrança(s) selecionada(s)
               </span>
               <div className="flex-1" />
+              {perms.podeEditar && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                  onClick={() => setBulkAtribuirAberto(true)}
+                  disabled={atribuirMut.isPending}
+                >
+                  <Tags className="h-3.5 w-3.5 mr-1" />
+                  Atribuir em massa
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={handleBulkExport}>
                 <Download className="h-3.5 w-3.5 mr-1" />
                 Exportar
@@ -1028,6 +1072,8 @@ export default function Financeiro() {
                     <TableHead>Vencimento</TableHead>
                     <TableHead>Forma</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="min-w-[140px]">Categoria</TableHead>
+                    <TableHead className="min-w-[140px]">Atendente</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -1055,6 +1101,36 @@ export default function Financeiro() {
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={c.status} />
+                      </TableCell>
+                      <TableCell className="p-1">
+                        <CelulaCategoria
+                          cobrancaId={c.id}
+                          categoriaIdAtual={c.categoriaId ?? null}
+                          categorias={(categoriasList ?? []).filter(
+                            (cat: any) => cat.ativo,
+                          )}
+                          onAtribuir={(categoriaId) =>
+                            atribuirMut.mutate({
+                              cobrancaIds: [c.id],
+                              categoriaId,
+                            })
+                          }
+                          disabled={!perms.podeEditar || atribuirMut.isPending}
+                        />
+                      </TableCell>
+                      <TableCell className="p-1">
+                        <CelulaAtendente
+                          cobrancaId={c.id}
+                          atendenteIdAtual={c.atendenteId ?? null}
+                          atendentes={atendentesList}
+                          onAtribuir={(atendenteId) =>
+                            atribuirMut.mutate({
+                              cobrancaIds: [c.id],
+                              atendenteId,
+                            })
+                          }
+                          disabled={!perms.podeEditar || atribuirMut.isPending}
+                        />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[200px]">
                         <div className="flex items-center gap-1.5">
@@ -1382,6 +1458,26 @@ export default function Financeiro() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BulkAtribuirDialog
+        open={bulkAtribuirAberto}
+        onClose={() => setBulkAtribuirAberto(false)}
+        cobrancaIds={Array.from(selecionadas).map((id) => Number(id))}
+        categorias={(categoriasList ?? []).filter((c: any) => c.ativo)}
+        atendentes={atendentesList}
+        onConfirm={(payload) => {
+          atribuirMut.mutate(payload, {
+            onSuccess: (r: any) => {
+              toast.success(
+                `${r?.atualizadas ?? payload.cobrancaIds.length} cobrança(s) atualizada(s)`,
+              );
+              setBulkAtribuirAberto(false);
+              setSelecionadas(new Set());
+            },
+          });
+        }}
+        isPending={atribuirMut.isPending}
+      />
     </div>
   );
 }
@@ -1763,6 +1859,233 @@ function BannersPendencia() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Dialog do botão "Atribuir em massa" na bulk action bar. Permite
+ * categorizar/atribuir atendente em N cobranças selecionadas. Os 2
+ * campos são opcionais — se o usuário só seleciona Categoria, atendente
+ * fica intacto. "— sem —" explícita seta o campo pra null.
+ *
+ * Confirma com summary do que vai mudar e o número de cobranças
+ * afetadas. Erro inline (toast) se algum dos cobrancaIds não pertence
+ * ao escritório (server valida via requireEscritorio).
+ */
+function BulkAtribuirDialog({
+  open,
+  onClose,
+  cobrancaIds,
+  categorias,
+  atendentes,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  onClose: () => void;
+  cobrancaIds: number[];
+  categorias: Array<{ id: number; nome: string }>;
+  atendentes: Array<{ id: number; nome?: string | null }>;
+  onConfirm: (payload: {
+    cobrancaIds: number[];
+    categoriaId?: number | null;
+    atendenteId?: number | null;
+  }) => void;
+  isPending: boolean;
+}) {
+  const [categoriaVal, setCategoriaVal] = useState<string>("keep");
+  const [atendenteVal, setAtendenteVal] = useState<string>("keep");
+
+  function resolverPayload() {
+    const payload: {
+      cobrancaIds: number[];
+      categoriaId?: number | null;
+      atendenteId?: number | null;
+    } = { cobrancaIds };
+    if (categoriaVal !== "keep") {
+      payload.categoriaId =
+        categoriaVal === "none" ? null : Number(categoriaVal);
+    }
+    if (atendenteVal !== "keep") {
+      payload.atendenteId =
+        atendenteVal === "none" ? null : Number(atendenteVal);
+    }
+    return payload;
+  }
+
+  const nadaSelecionado = categoriaVal === "keep" && atendenteVal === "keep";
+
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <Tags className="h-4 w-4 text-emerald-600" />
+            Atribuir em massa
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Vai alterar <b>{cobrancaIds.length}</b> cobrança(s). Campos com
+            "Manter atual" ficam intactos.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Categoria</Label>
+            <Select value={categoriaVal} onValueChange={setCategoriaVal}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="keep">Manter atual</SelectItem>
+                <SelectItem value="none" className="italic text-amber-700">
+                  — sem categoria —
+                </SelectItem>
+                {categorias.map((cat) => (
+                  <SelectItem key={cat.id} value={String(cat.id)}>
+                    {cat.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Atendente</Label>
+            <Select value={atendenteVal} onValueChange={setAtendenteVal}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="keep">Manter atual</SelectItem>
+                <SelectItem value="none" className="italic text-blue-700">
+                  — sem atendente —
+                </SelectItem>
+                {atendentes.map((a) => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.nome ?? `#${a.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={isPending || nadaSelecionado || cobrancaIds.length === 0}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm(resolverPayload());
+            }}
+          >
+            {isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+            ) : null}
+            Aplicar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+/**
+ * Célula editável da tabela de cobranças pra atribuir/trocar Categoria.
+ * Renderiza Select compacto inline — sem modal. Valor "none" significa
+ * "sem categoria" (categoriaId=null). Atribuição é otimista: dispara
+ * `atribuirCobrancasEmMassa` com cobrancaIds=[id] direto pela mutation
+ * do caller; o invalidate do listarCobrancas refresca o cache logo após.
+ *
+ * Pra não confundir o usuário: select desabilitado quando user não tem
+ * permissão de edição OU enquanto a mutation tá em flight.
+ */
+function CelulaCategoria({
+  cobrancaId: _cobrancaId,
+  categoriaIdAtual,
+  categorias,
+  onAtribuir,
+  disabled,
+}: {
+  cobrancaId: string | number;
+  categoriaIdAtual: number | null;
+  categorias: Array<{ id: number; nome: string }>;
+  onAtribuir: (categoriaId: number | null) => void;
+  disabled?: boolean;
+}) {
+  const value = categoriaIdAtual === null ? "none" : String(categoriaIdAtual);
+  const semCategoria = categoriaIdAtual === null;
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) => onAtribuir(v === "none" ? null : Number(v))}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        className={
+          "h-7 text-xs border-dashed " +
+          (semCategoria
+            ? "text-amber-700 border-amber-300 bg-amber-50/40"
+            : "border-slate-200")
+        }
+      >
+        <SelectValue placeholder="— sem —" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none" className="text-amber-700 italic">
+          — sem categoria —
+        </SelectItem>
+        {categorias.map((cat) => (
+          <SelectItem key={cat.id} value={String(cat.id)}>
+            {cat.nome}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Idem CelulaCategoria pra Atendente (responsável pela comissão). */
+function CelulaAtendente({
+  cobrancaId: _cobrancaId,
+  atendenteIdAtual,
+  atendentes,
+  onAtribuir,
+  disabled,
+}: {
+  cobrancaId: string | number;
+  atendenteIdAtual: number | null;
+  atendentes: Array<{ id: number; nome?: string | null; cargo?: string }>;
+  onAtribuir: (atendenteId: number | null) => void;
+  disabled?: boolean;
+}) {
+  const value = atendenteIdAtual === null ? "none" : String(atendenteIdAtual);
+  const semAtendente = atendenteIdAtual === null;
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) => onAtribuir(v === "none" ? null : Number(v))}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        className={
+          "h-7 text-xs border-dashed " +
+          (semAtendente
+            ? "text-blue-700 border-blue-300 bg-blue-50/40"
+            : "border-slate-200")
+        }
+      >
+        <SelectValue placeholder="— sem —" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none" className="text-blue-700 italic">
+          — sem atendente —
+        </SelectItem>
+        {atendentes.map((a) => (
+          <SelectItem key={a.id} value={String(a.id)}>
+            {a.nome ?? `#${a.id}`}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
