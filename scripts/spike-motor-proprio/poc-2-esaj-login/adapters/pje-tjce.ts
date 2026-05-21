@@ -1021,6 +1021,11 @@ export class PjeTjceScraper {
    * 1º grau. Estrutura confirmada via diagnóstico:
    *   table firstRow="Polo ativo"  rows=2
    *   table firstRow="Polo passivo" rows=2
+   *
+   * Quando a célula da parte tem CPF/CNPJ logo abaixo do nome
+   * (ex: "JOÃO SILVA\nCPF: 123.456.789-00"), atribui o documento à
+   * parte anterior em vez de tratá-lo como uma nova parte. Importante
+   * pro filtro de polo do cron: match exato por CPF > match por nome.
    */
   private async extrairPartes(page: Page): Promise<ParteProcesso[]> {
     return page
@@ -1030,6 +1035,7 @@ export class PjeTjceScraper {
           nome: string;
           polo: "ativo" | "passivo" | "terceiro";
           tipo: "fisica" | "juridica";
+          documento: string | null;
         }> = [];
 
         const tabelas = Array.from(document.querySelectorAll("table"));
@@ -1052,17 +1058,42 @@ export class PjeTjceScraper {
                 .split(/\n|<br\s*\/?>/i)
                 .map((l) => l.trim())
                 .filter((l) => l.length > 0 && l.length < 200);
-              for (const nome of linhas) {
-                if (nome.length < 3) continue;
-                if (/polo (ativo|passivo)/i.test(nome)) continue;
-                if (/^advogado/i.test(nome)) continue;
+
+              // Última parte adicionada NESTA célula — pra anexar
+              // documento que aparece em linha subsequente.
+              let ultimaParteIdx = -1;
+
+              for (const linha of linhas) {
+                if (linha.length < 3) continue;
+                if (/polo (ativo|passivo)/i.test(linha)) continue;
+                if (/^advogado/i.test(linha)) continue;
+
+                // Detecta linha que é só documento (CPF/CNPJ).
+                // Critério: tem 11 (CPF) ou 14 (CNPJ) dígitos, e os
+                // únicos caracteres alfa-permitidos são "CPF"/"CNPJ"
+                // (prefixos comuns). Evita confundir com "Av. 123"
+                // ou outros conteúdos numéricos.
+                const digitos = linha.replace(/\D/g, "");
+                const semDigitos = linha.replace(/[\d\s.\-/:]/g, "");
+                const isApenasDoc =
+                  (digitos.length === 11 || digitos.length === 14) &&
+                  /^(?:CPF|CNPJ)?$/i.test(semDigitos);
+
+                if (isApenasDoc && ultimaParteIdx >= 0) {
+                  out[ultimaParteIdx].documento = digitos;
+                  continue;
+                }
+
+                // Linha normal → nova parte
                 out.push({
-                  nome,
+                  nome: linha,
                   polo,
-                  tipo: /\bLTDA\b|S\.?A\.?|EIRELI|MEI|S\/A/i.test(nome)
+                  tipo: /\bLTDA\b|S\.?A\.?|EIRELI|MEI|S\/A/i.test(linha)
                     ? "juridica"
                     : "fisica",
+                  documento: null,
                 });
+                ultimaParteIdx = out.length - 1;
               }
             }
           }
@@ -1072,7 +1103,6 @@ export class PjeTjceScraper {
       .then((arr) =>
         arr.map((p) => ({
           ...p,
-          documento: null,
           advogados: [],
         })),
       )
