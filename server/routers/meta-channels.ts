@@ -232,6 +232,47 @@ async function exchangeCodeForToken(code: string, redirectUri?: string): Promise
   }
 }
 
+/**
+ * Inscreve o app Meta para receber webhooks de uma WABA específica.
+ * Sem esta chamada, mensagens recebidas pelo número WhatsApp NUNCA chegam
+ * ao webhook do JuriFy, mesmo com a URL configurada no painel da Meta.
+ *
+ * É best-effort: falha aqui não bloqueia a conexão do canal (usuário
+ * pode re-inscrever depois via mutation explícita). Mas logamos warn
+ * pra rastreamento.
+ *
+ * Docs:
+ *   https://developers.facebook.com/docs/whatsapp/embedded-signup/manage-business-portfolios#subscribe-to-your-business-portfolio
+ */
+async function subscribeAppToWaba(
+  accessToken: string,
+  wabaId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const axios = (await import("axios")).default;
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v21.0/${wabaId}/subscribed_apps`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10000,
+      },
+    );
+    return { ok: true };
+  } catch (err: any) {
+    const msg = explicarErroFacebook(err, "Falha ao inscrever app na WABA");
+    log.warn(
+      {
+        wabaId,
+        status: err?.response?.status,
+        fbError: err?.response?.data?.error,
+      },
+      "[metaChannels] subscribed_apps falhou",
+    );
+    return { ok: false, error: msg };
+  }
+}
+
 // ─── Router ────────────────────────────────────────────────────────────────
 
 export const metaChannelsRouter = router({
@@ -364,8 +405,29 @@ export const metaChannelsRouter = router({
         });
       }
 
-      log.info({ escritorioId: esc.escritorio.id, telefone }, "WhatsApp conectado via Embedded Signup");
-      return { success: true, telefone, nome: nomeVerificado, canal: "whatsapp" as const };
+      // Inscreve a app no WABA pra receber webhooks. Sem isso, mensagens
+      // recebidas no número NUNCA chegam ao /api/webhooks/whatsapp do JuriFy
+      // (mesmo que a URL esteja cadastrada no painel da Meta). Best-effort:
+      // se falhar, conexão segue mas usuário precisa re-inscrever via UI.
+      const subResult = await subscribeAppToWaba(accessToken, input.wabaId);
+      if (!subResult.ok) {
+        log.warn(
+          { escritorioId: esc.escritorio.id, wabaId: input.wabaId, error: subResult.error },
+          "WhatsApp conectado mas inscrição em webhooks falhou — usuário precisa re-inscrever",
+        );
+      }
+
+      log.info(
+        { escritorioId: esc.escritorio.id, telefone, webhooksInscritos: subResult.ok },
+        "WhatsApp conectado via Embedded Signup",
+      );
+      return {
+        success: true,
+        telefone,
+        nome: nomeVerificado,
+        canal: "whatsapp" as const,
+        webhooksInscritos: subResult.ok,
+      };
     }),
 
   /**
@@ -689,9 +751,74 @@ export const metaChannelsRouter = router({
         })
         .where(eq(canaisIntegrados.id, input.canalId));
 
+      // Reforça a inscrição na WABA — canais antigos (pre-fix) não tinham
+      // isso no connectWhatsApp. Best-effort: log warn se falhar.
+      const wabaId = (config as any).wabaId;
+      let webhooksInscritos = false;
+      if (wabaId) {
+        const sub = await subscribeAppToWaba(accessToken, wabaId);
+        webhooksInscritos = sub.ok;
+      }
+
       log.info(
-        { escritorioId: esc.escritorio.id, canalId: input.canalId, phoneNumberId },
+        { escritorioId: esc.escritorio.id, canalId: input.canalId, phoneNumberId, webhooksInscritos },
         "WhatsApp registrado na Cloud API",
+      );
+      return { success: true, webhooksInscritos };
+    }),
+
+  /**
+   * Re-inscreve o app Meta na WABA do canal pra receber webhooks.
+   *
+   * Necessário em 2 cenários:
+   *  - Canais conectados ANTES da implementação da inscrição automática.
+   *  - Quando o token expira e a inscrição cai (raro, mas acontece).
+   *
+   * Sem essa inscrição, mensagens chegam no número WhatsApp mas a Meta
+   * não envia pro webhook do JuriFy → módulo Atendimento fica vazio.
+   */
+  subscribeWebhooks: protectedProcedure
+    .input(z.object({ canalId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const [canal] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.id, input.canalId),
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!canal) throw new Error("Canal não encontrado");
+      if (canal.tipo !== "whatsapp_api") {
+        throw new Error("Apenas canais WhatsApp Business API suportam inscrição em webhooks.");
+      }
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) {
+        throw new Error("Canal sem configuração. Reconecte o WhatsApp.");
+      }
+
+      const { decryptConfig } = await import("../escritorio/crypto-utils");
+      const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+      const accessToken = (config as any).accessToken;
+      const wabaId = (config as any).wabaId;
+      if (!accessToken || !wabaId) {
+        throw new Error("Configuração do canal incompleta (access_token ou waba_id ausente).");
+      }
+
+      const result = await subscribeAppToWaba(accessToken, wabaId);
+      if (!result.ok) throw new Error(result.error);
+
+      log.info(
+        { escritorioId: esc.escritorio.id, canalId: input.canalId, wabaId },
+        "WhatsApp re-inscrito em webhooks",
       );
       return { success: true };
     }),
