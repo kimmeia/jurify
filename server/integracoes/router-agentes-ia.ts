@@ -26,6 +26,12 @@ import { getDb } from "../db";
 import { agentesIa, agenteIaDocumentos, adminIntegracoes } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
+import {
+  parseAgenteVariaveis,
+  serializarAgenteVariaveis,
+  temAtributosDuplicados,
+  type AgenteVariavel,
+} from "../../shared/agente-variaveis-types";
 
 /** Helper: valida ownership de um agente quando verProprios. */
 async function podeMexerNoAgente(
@@ -276,6 +282,47 @@ export async function montarContextoDocumentos(
     : "";
 }
 
+/**
+ * Schema de entrada das variáveis de captura. Aceita tanto string (legado:
+ * só a chave do campo personalizado) quanto objeto estruturado (novo:
+ * atributo + descrição + campoChave). O parser normaliza pra forma nova.
+ */
+const camposCapturaInputSchema = z
+  .array(
+    z.union([
+      z.string().min(1),
+      z.object({
+        atributo: z.string().min(1).max(48),
+        descricao: z.string().max(300).optional(),
+        campoChave: z.string().min(1).max(48),
+      }),
+    ]),
+  )
+  .optional();
+
+function normalizarCamposCapturaInput(
+  input: z.infer<typeof camposCapturaInputSchema>,
+): { variaveis: AgenteVariavel[]; serializado: string | null } {
+  if (!input || input.length === 0) return { variaveis: [], serializado: null };
+  const variaveis: AgenteVariavel[] = input.map((item) => {
+    if (typeof item === "string") {
+      return { atributo: item, descricao: "", campoChave: item };
+    }
+    return {
+      atributo: item.atributo.trim(),
+      descricao: (item.descricao || "").trim(),
+      campoChave: item.campoChave.trim(),
+    };
+  });
+  if (temAtributosDuplicados(variaveis)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Variáveis com atributos duplicados — cada atributo precisa ser único no agente.",
+    });
+  }
+  return { variaveis, serializado: serializarAgenteVariaveis(variaveis) };
+}
+
 export const agentesIaRouter = router({
   /** Lista todos os agentes do escritório + contagem de documentos */
   listar: protectedProcedure.query(async ({ ctx }) => {
@@ -364,9 +411,7 @@ export const agentesIaRouter = router({
         ativo: agente.ativo,
         canalId: agente.canalId,
         modulosPermitidos: agente.modulosPermitidos ? agente.modulosPermitidos.split(",") : [],
-        camposCaptura: agente.camposCaptura
-          ? (() => { try { return JSON.parse(agente.camposCaptura) as string[]; } catch { return []; } })()
-          : [],
+        camposCaptura: parseAgenteVariaveis(agente.camposCaptura),
         temApiKey: !!(agente.openaiApiKey && agente.apiKeyIv && agente.apiKeyTag),
         documentos,
       };
@@ -385,7 +430,7 @@ export const agentesIaRouter = router({
         maxTokens: z.number().min(100).max(4000).optional(),
         temperatura: z.string().optional(),
         modulosPermitidos: z.array(z.string()).optional(),
-        camposCaptura: z.array(z.string()).optional(),
+        camposCaptura: camposCapturaInputSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -430,10 +475,7 @@ export const agentesIaRouter = router({
           input.modulosPermitidos && input.modulosPermitidos.length > 0
             ? input.modulosPermitidos.join(",")
             : null,
-        camposCaptura:
-          input.camposCaptura && input.camposCaptura.length > 0
-            ? JSON.stringify(input.camposCaptura)
-            : null,
+        camposCaptura: normalizarCamposCapturaInput(input.camposCaptura).serializado,
         ativo: false,
         criadoPor: ctx.user.id,
       });
@@ -455,7 +497,7 @@ export const agentesIaRouter = router({
         temperatura: z.string().optional(),
         ativo: z.boolean().optional(),
         modulosPermitidos: z.array(z.string()).optional(),
-        camposCaptura: z.array(z.string()).optional(),
+        camposCaptura: camposCapturaInputSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -478,8 +520,7 @@ export const agentesIaRouter = router({
           input.modulosPermitidos.length > 0 ? input.modulosPermitidos.join(",") : null;
       }
       if (input.camposCaptura !== undefined) {
-        u.camposCaptura =
-          input.camposCaptura.length > 0 ? JSON.stringify(input.camposCaptura) : null;
+        u.camposCaptura = normalizarCamposCapturaInput(input.camposCaptura).serializado;
       }
       if (input.openaiApiKey) {
         const enc = encryptApiKey(input.openaiApiKey);
@@ -980,6 +1021,20 @@ export const agentesIaRouter = router({
       });
 
       return { capturados };
+    }),
+
+  /**
+   * Lista campos personalizados já capturados pra um contato. Usado pelo
+   * painel de auditoria dentro do chat — mostra ao atendente o que a IA
+   * já extraiu automaticamente da conversa.
+   */
+  listarCapturadosDoContato: protectedProcedure
+    .input(z.object({ contatoId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return [];
+      const { listarCamposCapturadosDoContato } = await import("./agente-captura-campos");
+      return await listarCamposCapturadosDoContato(input.contatoId, esc.escritorio.id);
     }),
 
   // ─── KPIs do hero (resumo geral dos agentes) ──────────────────────────────

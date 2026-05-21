@@ -33,7 +33,7 @@ import {
 import {
   User, Star, DollarSign, Gavel, TrendingUp, CheckSquare, Calendar,
   StickyNote, PenLine, Plus, Phone, Mail, Loader2, ChevronDown, ChevronRight,
-  AlertTriangle, ExternalLink, Copy,
+  AlertTriangle, ExternalLink, Copy, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
@@ -55,6 +55,19 @@ function daysFromNow(iso: string | null): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
+function formatarValorCaptura(valor: unknown, tipo: string): string {
+  if (valor === null || valor === undefined || valor === "") return "—";
+  if (tipo === "boolean") return valor ? "Sim" : "Não";
+  if (tipo === "data" && typeof valor === "string" && /^\d{4}-\d{2}-\d{2}/.test(valor)) {
+    const [y, m, d] = valor.slice(0, 10).split("-");
+    return `${d}/${m}/${y}`;
+  }
+  if (tipo === "numero" && typeof valor === "number") {
+    return new Intl.NumberFormat("pt-BR").format(valor);
+  }
+  return String(valor);
+}
+
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export function CustomerPanel({
@@ -71,6 +84,13 @@ export function CustomerPanel({
   const { data, isLoading, refetch } = trpc.customer360.getContext.useQuery(
     { contatoId },
     { refetchInterval: 30_000 }, // refresh a cada 30s
+  );
+
+  // Auditoria de campos capturados automaticamente pelo agente IA da conversa.
+  // Polling curto pra refletir a extração que roda em background no webhook.
+  const { data: capturados } = trpc.agentesIa.listarCapturadosDoContato.useQuery(
+    { contatoId },
+    { refetchInterval: 15_000 },
   );
 
   if (isLoading) {
@@ -152,6 +172,38 @@ export function CustomerPanel({
       </div>
 
       <div className="border-t" />
+
+      {/* ─── Card: Capturas IA ─── */}
+      {capturados && capturados.length > 0 && (
+        <Section
+          icon={Sparkles}
+          iconColor="text-violet-600"
+          title={`Capturas IA (${capturados.length})`}
+          defaultOpen
+        >
+          <p className="text-[10px] text-muted-foreground mb-1.5 italic">
+            Valores extraídos automaticamente da conversa.
+          </p>
+          <div className="space-y-1">
+            {capturados.map((c) => (
+              <div
+                key={c.chave}
+                className="text-[11px] rounded border border-violet-200/60 bg-violet-50/40 dark:border-violet-900/40 dark:bg-violet-950/20 px-2 py-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground text-[10px]">{c.label}</span>
+                  <Badge variant="outline" className="text-[8px] px-1 py-0">
+                    {c.tipo}
+                  </Badge>
+                </div>
+                <p className="font-medium break-words text-violet-900 dark:text-violet-200">
+                  {formatarValorCaptura(c.valor, c.tipo)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ─── Card 2: Processos ativos ─── */}
       <Section
