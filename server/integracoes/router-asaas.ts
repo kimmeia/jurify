@@ -16,7 +16,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, users } from "../../drizzle/schema";
+import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, categoriasCobranca, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/mysql-core";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
@@ -2137,6 +2137,20 @@ export const asaasRouter = router({
       pagamentoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       /** Filtro por atendente (responsável pela comissão). */
       atendenteId: z.number().optional(),
+      /** Filtros avançados — multi-select de categoria/atendente + flags
+       *  "incluir sem" pra cobrir cobranças com NULL no campo. UI da aba
+       *  Cobranças expõe via popover "Filtros avançados". */
+      categoriaIds: z.array(z.number().int().positive()).optional(),
+      incluirSemCategoria: z.boolean().optional(),
+      atendenteIds: z.array(z.number().int().positive()).optional(),
+      incluirSemAtendente: z.boolean().optional(),
+      /** Status efetivo de comissão. "sim"/"nao"/"indef" — calculado em
+       *  cima de comissionavelOverride + categoria.comissionavel (regra
+       *  igual ao router-financeiro `comissaoStatus`). */
+      comissao: z.array(z.enum(["sim", "nao", "indef"])).optional(),
+      /** Range de valor (decimais). Filtros parciais OK. */
+      valorMin: z.number().min(0).optional(),
+      valorMax: z.number().min(0).optional(),
       limit: z.number().min(1).max(100).default(50),
       offset: z.number().min(0).default(0),
     }).optional())
@@ -2183,6 +2197,90 @@ export const asaasRouter = router({
           );
         }
         if (input?.atendenteId) conditions.push(eq(asaasCobrancas.atendenteId, input.atendenteId));
+
+        // Filtros avançados: categoria + atendente multi-select com
+        // "incluir sem" pra cobrir cobranças com NULL. Lógica:
+        //   ids vazios + incluirSem false → ignora (filtro inativo)
+        //   ids vazios + incluirSem true  → APENAS sem (IS NULL)
+        //   ids preenchidos + incluirSem false → IN (ids)
+        //   ids preenchidos + incluirSem true  → IN (ids) OR IS NULL
+        const catIds = input?.categoriaIds ?? [];
+        if (catIds.length > 0 && input?.incluirSemCategoria) {
+          conditions.push(
+            or(
+              inArray(asaasCobrancas.categoriaId, catIds),
+              isNull(asaasCobrancas.categoriaId),
+            )!,
+          );
+        } else if (catIds.length > 0) {
+          conditions.push(inArray(asaasCobrancas.categoriaId, catIds));
+        } else if (input?.incluirSemCategoria) {
+          conditions.push(isNull(asaasCobrancas.categoriaId));
+        }
+
+        const atIds = input?.atendenteIds ?? [];
+        if (atIds.length > 0 && input?.incluirSemAtendente) {
+          conditions.push(
+            or(
+              inArray(asaasCobrancas.atendenteId, atIds),
+              isNull(asaasCobrancas.atendenteId),
+            )!,
+          );
+        } else if (atIds.length > 0) {
+          conditions.push(inArray(asaasCobrancas.atendenteId, atIds));
+        } else if (input?.incluirSemAtendente) {
+          conditions.push(isNull(asaasCobrancas.atendenteId));
+        }
+
+        // Status efetivo de comissão. Replica a regra do
+        // router-financeiro (comissionavelOverride + categoria.comissionavel):
+        //   sim   → override=true OU (override=null AND categoria.comissionavel=true)
+        //   nao   → override=false OU (override=null AND categoriaId NOT NULL AND categoria.comissionavel=false)
+        //   indef → override=null AND categoriaId IS NULL
+        const comissaoFiltro = input?.comissao ?? [];
+        if (comissaoFiltro.length > 0 && comissaoFiltro.length < 3) {
+          const conds: any[] = [];
+          if (comissaoFiltro.includes("sim")) {
+            conds.push(
+              sql`${asaasCobrancas.comissionavelOverride} = TRUE OR (
+                ${asaasCobrancas.comissionavelOverride} IS NULL
+                AND ${asaasCobrancas.categoriaId} IN (
+                  SELECT ${categoriasCobranca.id} FROM ${categoriasCobranca}
+                  WHERE ${categoriasCobranca.comissionavel} = TRUE
+                )
+              )`,
+            );
+          }
+          if (comissaoFiltro.includes("nao")) {
+            conds.push(
+              sql`${asaasCobrancas.comissionavelOverride} = FALSE OR (
+                ${asaasCobrancas.comissionavelOverride} IS NULL
+                AND ${asaasCobrancas.categoriaId} IS NOT NULL
+                AND ${asaasCobrancas.categoriaId} IN (
+                  SELECT ${categoriasCobranca.id} FROM ${categoriasCobranca}
+                  WHERE ${categoriasCobranca.comissionavel} = FALSE
+                )
+              )`,
+            );
+          }
+          if (comissaoFiltro.includes("indef")) {
+            conds.push(
+              sql`${asaasCobrancas.comissionavelOverride} IS NULL
+                  AND ${asaasCobrancas.categoriaId} IS NULL`,
+            );
+          }
+          if (conds.length > 0) {
+            conditions.push(or(...conds)!);
+          }
+        }
+
+        if (input?.valorMin !== undefined) {
+          conditions.push(sql`CAST(${asaasCobrancas.valor} AS DECIMAL(10,2)) >= ${input.valorMin}`);
+        }
+        if (input?.valorMax !== undefined) {
+          conditions.push(sql`CAST(${asaasCobrancas.valor} AS DECIMAL(10,2)) <= ${input.valorMax}`);
+        }
+
         if (input?.vencimentoInicio && input?.vencimentoFim) {
           conditions.push(between(asaasCobrancas.vencimento, input.vencimentoInicio, input.vencimentoFim));
         } else if (input?.vencimentoInicio) {

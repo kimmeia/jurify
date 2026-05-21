@@ -176,6 +176,14 @@ export default function Financeiro() {
   const filtraPorVencimento = filtroStatus.length > 0 && filtroStatus.every(
     (s) => s === "PENDING" || s === "OVERDUE",
   );
+  // Filtros avançados (popover). Estado persistido em localStorage pra
+  // o usuário não perder ao recarregar.
+  const [filtrosAvancados, setFiltrosAvancados] = useState<FiltrosAvancadosState>(
+    () => carregarFiltrosAvancados(),
+  );
+  useEffect(() => {
+    salvarFiltrosAvancados(filtrosAvancados);
+  }, [filtrosAvancados]);
   const ITENS_POR_PAGINA = 25;
   const [paginaCob, setPaginaCob] = useState(0);
   const { data: cobrancas, isLoading: loadCob, refetch: refetchCob } =
@@ -186,6 +194,16 @@ export default function Financeiro() {
         ...(filtraPorVencimento
           ? { vencimentoInicio: rangeEfetivo.inicio, vencimentoFim: rangeEfetivo.fim }
           : { pagamentoInicio: rangeEfetivo.inicio, pagamentoFim: rangeEfetivo.fim }),
+        categoriaIds: filtrosAvancados.categoriaIds.length > 0
+          ? filtrosAvancados.categoriaIds : undefined,
+        incluirSemCategoria: filtrosAvancados.incluirSemCategoria || undefined,
+        atendenteIds: filtrosAvancados.atendenteIds.length > 0
+          ? filtrosAvancados.atendenteIds : undefined,
+        incluirSemAtendente: filtrosAvancados.incluirSemAtendente || undefined,
+        comissao: filtrosAvancados.comissao.length > 0
+          ? filtrosAvancados.comissao : undefined,
+        valorMin: filtrosAvancados.valorMin ?? undefined,
+        valorMax: filtrosAvancados.valorMax ?? undefined,
         limit: ITENS_POR_PAGINA,
         offset: paginaCob * ITENS_POR_PAGINA,
       },
@@ -202,6 +220,7 @@ export default function Financeiro() {
   }, [
     filtroStatus.join(","),
     filtroForma.join(","),
+    filtrosAvancados,
     rangeEfetivo.inicio,
     rangeEfetivo.fim,
   ]);
@@ -1018,6 +1037,12 @@ export default function Financeiro() {
                 { value: "UNDEFINED", label: "Cliente escolhe" },
               ]}
             />
+            <FiltrosAvancadosPopover
+              filtros={filtrosAvancados}
+              setFiltros={setFiltrosAvancados}
+              categorias={(categoriasList ?? []).filter((c: any) => c.ativo)}
+              atendentes={atendentesList}
+            />
             <div className="flex-1" />
             <Button size="sm" variant="outline" onClick={handleBulkExport}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
@@ -1833,6 +1858,213 @@ function KPICard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Filtros avançados da aba Cobranças — multi-select de Categoria,
+ * Atendente, Status de comissão + range de valor. Persiste em
+ * localStorage pra o usuário não perder ao recarregar.
+ */
+type FiltrosAvancadosState = {
+  categoriaIds: number[];
+  incluirSemCategoria: boolean;
+  atendenteIds: number[];
+  incluirSemAtendente: boolean;
+  comissao: ("sim" | "nao" | "indef")[];
+  valorMin: number | null;
+  valorMax: number | null;
+};
+
+const FILTROS_AV_DEFAULT: FiltrosAvancadosState = {
+  categoriaIds: [],
+  incluirSemCategoria: false,
+  atendenteIds: [],
+  incluirSemAtendente: false,
+  comissao: [],
+  valorMin: null,
+  valorMax: null,
+};
+
+const FILTROS_AV_LS_KEY = "jurify:financeiro:cobrancas:filtros-avancados:v1";
+
+function carregarFiltrosAvancados(): FiltrosAvancadosState {
+  if (typeof window === "undefined") return FILTROS_AV_DEFAULT;
+  try {
+    const raw = localStorage.getItem(FILTROS_AV_LS_KEY);
+    if (!raw) return FILTROS_AV_DEFAULT;
+    const parsed = JSON.parse(raw);
+    return { ...FILTROS_AV_DEFAULT, ...parsed };
+  } catch {
+    return FILTROS_AV_DEFAULT;
+  }
+}
+
+function salvarFiltrosAvancados(f: FiltrosAvancadosState) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(FILTROS_AV_LS_KEY, JSON.stringify(f));
+  } catch {
+    /* localStorage cheio/bloqueado — ignora */
+  }
+}
+
+function contarFiltrosAvancadosAtivos(f: FiltrosAvancadosState): number {
+  let n = 0;
+  if (f.categoriaIds.length > 0 || f.incluirSemCategoria) n++;
+  if (f.atendenteIds.length > 0 || f.incluirSemAtendente) n++;
+  if (f.comissao.length > 0) n++;
+  if (f.valorMin !== null || f.valorMax !== null) n++;
+  return n;
+}
+
+function FiltrosAvancadosPopover({
+  filtros,
+  setFiltros,
+  categorias,
+  atendentes,
+}: {
+  filtros: FiltrosAvancadosState;
+  setFiltros: (f: FiltrosAvancadosState) => void;
+  categorias: Array<{ id: number; nome: string }>;
+  atendentes: Array<{ id: number; userName?: string | null }>;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const ativos = contarFiltrosAvancadosAtivos(filtros);
+  const set = <K extends keyof FiltrosAvancadosState>(
+    k: K,
+    v: FiltrosAvancadosState[K],
+  ) => setFiltros({ ...filtros, [k]: v });
+
+  return (
+    <Popover open={aberto} onOpenChange={setAberto}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant={ativos > 0 ? "default" : "outline"}
+          className="h-9 text-xs gap-1.5"
+        >
+          <Filter className="h-3.5 w-3.5" />
+          Filtros avançados
+          {ativos > 0 && (
+            <span className="ml-1 rounded-full bg-white/20 px-1.5 text-[10px] font-semibold tabular-nums">
+              {ativos}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-96 max-h-[80vh] overflow-y-auto" align="end">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">Filtros avançados</h4>
+            {ativos > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setFiltros(FILTROS_AV_DEFAULT)}
+              >
+                Limpar tudo
+              </Button>
+            )}
+          </div>
+
+          {/* Categoria */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Categoria</Label>
+            <MultiSelectFilter
+              placeholder="Todas categorias"
+              value={filtros.categoriaIds.map(String)}
+              onChange={(v) => set("categoriaIds", v.map(Number))}
+              options={categorias.map((c) => ({
+                value: String(c.id),
+                label: c.nome,
+              }))}
+              className="w-full"
+            />
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={filtros.incluirSemCategoria}
+                onCheckedChange={(v) => set("incluirSemCategoria", !!v)}
+              />
+              <span className="text-amber-700">Incluir cobranças sem categoria</span>
+            </label>
+          </div>
+
+          {/* Atendente */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Atendente</Label>
+            <MultiSelectFilter
+              placeholder="Todos atendentes"
+              value={filtros.atendenteIds.map(String)}
+              onChange={(v) => set("atendenteIds", v.map(Number))}
+              options={atendentes.map((a) => ({
+                value: String(a.id),
+                label: a.userName ?? `#${a.id}`,
+              }))}
+              className="w-full"
+            />
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={filtros.incluirSemAtendente}
+                onCheckedChange={(v) => set("incluirSemAtendente", !!v)}
+              />
+              <span className="text-blue-700">Incluir cobranças sem atendente</span>
+            </label>
+          </div>
+
+          {/* Comissão */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Status de comissão</Label>
+            <MultiSelectFilter
+              placeholder="Qualquer status"
+              value={filtros.comissao}
+              onChange={(v) => set("comissao", v as ("sim" | "nao" | "indef")[])}
+              options={[
+                { value: "sim", label: "Comissiona (Sim)" },
+                { value: "nao", label: "Não comissiona" },
+                { value: "indef", label: "Indefinida (sem categoria)" },
+              ]}
+              className="w-full"
+            />
+          </div>
+
+          {/* Valor */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Faixa de valor (R$)</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Mín"
+                value={filtros.valorMin ?? ""}
+                onChange={(e) =>
+                  set(
+                    "valorMin",
+                    e.target.value === "" ? null : parseFloat(e.target.value),
+                  )
+                }
+                className="h-8 text-xs"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Máx"
+                value={filtros.valorMax ?? ""}
+                onChange={(e) =>
+                  set(
+                    "valorMax",
+                    e.target.value === "" ? null : parseFloat(e.target.value),
+                  )
+                }
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
