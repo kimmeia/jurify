@@ -13,13 +13,17 @@
 
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, contatos, colaboradores, notificacoes } from "../../drizzle/schema";
-import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
+import { eq, and, inArray, isNull, ne, or, lt } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
 import { RateLimitError } from "./asaas-rate-guard";
 import { createLogger } from "../_core/logger";
 import { isDuplicateEntryError } from "../_core/sql-helpers";
 import { inferirAtendentePorCobranca, reconciliarCobrancasOrfas } from "../escritorio/db-financeiro";
+import {
+  STATUS_PENDENTE_ASAAS,
+  STATUS_VENCIDO_ASAAS,
+} from "../_core/asaas-status";
 
 /** Extrai a "data de pagamento" mais confiável da cobrança Asaas.
  *
@@ -901,6 +905,170 @@ export async function syncCobrancasPorVencimentoEscritorio(
     "[Asaas Sync Vencimento] sweep concluído",
   );
   return stats;
+}
+
+/**
+ * Reconcilia cobranças "fantasmas": locais com status PENDING/OVERDUE
+ * (status pendentes/vencidos do Asaas) que foram apagadas no Asaas e o
+ * webhook PAYMENT_DELETED não chegou — race condition, downtime curto
+ * do webhook ou conta sem webhook configurado.
+ *
+ * Estratégia (segura por design):
+ *  1. Lista TUDO do Asaas no range generoso (5 anos retro + 1 ano futuro)
+ *  2. Constrói Set de IDs visíveis
+ *  3. Lista locais PENDING/OVERDUE de origem=asaas
+ *  4. Deleta apenas os que não aparecem no Set
+ *
+ * Aborta em qualquer erro no passo 1 — Set incompleto produziria falsos
+ * positivos massivos. NÃO mexe em cobranças pagas (RECEIVED/CONFIRMED) —
+ * essas não vão sumir do Asaas, e se sumissem o operador precisaria
+ * decidir manualmente o que fazer (auditoria).
+ *
+ * Cobranças com `origem != 'asaas'` (criadas manualmente no Jurify) são
+ * intocadas: nunca passaram pela API do Asaas, então não estão no Set
+ * e seriam falsamente classificadas como fantasmas.
+ */
+export async function reconciliarCobrancasFantasmasEscritorio(
+  escritorioId: number,
+): Promise<{ ok: boolean; verificadas: number; fantasmas: number; motivo?: string }> {
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return { ok: false, verificadas: 0, fantasmas: 0, motivo: "sem credenciais" };
+
+  const db = await getDb();
+  if (!db) return { ok: false, verificadas: 0, fantasmas: 0, motivo: "db indisponível" };
+
+  const hoje = new Date();
+  const ge = new Date(hoje);
+  ge.setUTCDate(ge.getUTCDate() - 365 * 5);
+  const le = new Date(hoje);
+  le.setUTCDate(le.getUTCDate() + 365);
+  const dueDateGe = ge.toISOString().slice(0, 10);
+  const dueDateLe = le.toISOString().slice(0, 10);
+
+  const idsAsaas = new Set<string>();
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    let res;
+    try {
+      res = await client.listarCobrancasPorJanela({
+        dueDateGe,
+        dueDateLe,
+        limit: 100,
+        offset,
+      });
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      const motivo = status === 429 || err instanceof RateLimitError
+        ? "rate limit durante sweep — aborta"
+        : `erro durante sweep: ${err?.message ?? "desconhecido"}`;
+      log.warn({ escritorioId, motivo }, "[Asaas Reconciliação] sweep abortado");
+      return { ok: false, verificadas: 0, fantasmas: 0, motivo };
+    }
+    for (const c of res.data) {
+      if (!c.deleted) idsAsaas.add(c.id);
+    }
+    hasMore = res.hasMore;
+    offset += res.limit;
+  }
+
+  const candidatos = await db
+    .select({
+      id: asaasCobrancas.id,
+      asaasPaymentId: asaasCobrancas.asaasPaymentId,
+    })
+    .from(asaasCobrancas)
+    .where(and(
+      eq(asaasCobrancas.escritorioId, escritorioId),
+      eq(asaasCobrancas.origem, "asaas"),
+      inArray(
+        asaasCobrancas.status,
+        [...STATUS_PENDENTE_ASAAS, ...STATUS_VENCIDO_ASAAS] as unknown as string[],
+      ),
+    ));
+
+  let fantasmas = 0;
+  for (const c of candidatos) {
+    if (c.asaasPaymentId && !idsAsaas.has(c.asaasPaymentId)) {
+      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, c.id));
+      fantasmas++;
+    }
+  }
+
+  log.info(
+    { escritorioId, verificadas: candidatos.length, fantasmas, idsAsaasCount: idsAsaas.size },
+    "[Asaas Reconciliação] concluída",
+  );
+  return { ok: true, verificadas: candidatos.length, fantasmas };
+}
+
+/**
+ * Orquestrador da reconciliação mensal — itera escritórios conectados e
+ * roda `reconciliarCobrancasFantasmasEscritorio` em cada um onde já
+ * passaram 30 dias desde a última rodada (ou nunca rodou).
+ *
+ * Roda só 1 escritório por chamada — distribui custo no tempo. Cron
+ * diário chama essa função; quando há 30+ escritórios, todos rodam
+ * dentro do mês.
+ */
+export async function executarReconciliacaoFantasmasJob(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const trintaDiasAtras = new Date();
+  trintaDiasAtras.setUTCDate(trintaDiasAtras.getUTCDate() - 30);
+
+  const candidatos = await db
+    .select({
+      escritorioId: asaasConfig.escritorioId,
+      ultima: asaasConfig.ultimaReconciliacaoFantasmasEm,
+    })
+    .from(asaasConfig)
+    .where(and(
+      eq(asaasConfig.status, "conectado"),
+      or(
+        isNull(asaasConfig.ultimaReconciliacaoFantasmasEm),
+        lt(asaasConfig.ultimaReconciliacaoFantasmasEm, trintaDiasAtras),
+      ),
+    ));
+
+  if (candidatos.length === 0) return;
+
+  // Roda 1 escritório por tick pra distribuir custo no tempo.
+  // Prioriza quem nunca rodou (NULL).
+  candidatos.sort((a, b) => {
+    if (a.ultima === null && b.ultima !== null) return -1;
+    if (a.ultima !== null && b.ultima === null) return 1;
+    if (a.ultima === null && b.ultima === null) return 0;
+    return (a.ultima!.getTime() ?? 0) - (b.ultima!.getTime() ?? 0);
+  });
+
+  const escolhido = candidatos[0];
+  try {
+    const r = await reconciliarCobrancasFantasmasEscritorio(escolhido.escritorioId);
+    if (r.ok) {
+      await db
+        .update(asaasConfig)
+        .set({ ultimaReconciliacaoFantasmasEm: new Date() })
+        .where(eq(asaasConfig.escritorioId, escolhido.escritorioId));
+      if (r.fantasmas > 0) {
+        log.info(
+          { escritorioId: escolhido.escritorioId, ...r },
+          `[Asaas Reconciliação] Escritório ${escolhido.escritorioId}: ${r.fantasmas} fantasmas removidos de ${r.verificadas} verificadas`,
+        );
+      }
+    } else {
+      log.warn(
+        { escritorioId: escolhido.escritorioId, ...r },
+        "[Asaas Reconciliação] sweep parcial — tenta de novo no próximo tick",
+      );
+    }
+  } catch (err: any) {
+    log.error(
+      { escritorioId: escolhido.escritorioId, err: err?.message },
+      "[Asaas Reconciliação] falha inesperada",
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
