@@ -128,3 +128,31 @@ export function taxaConclusaoNoPrazo(
   if (total <= 0) return null;
   return +((concluidasNoPrazo / total) * 100).toFixed(1);
 }
+
+/**
+ * Calcula o range de dias da série de cash flow do dashboard.
+ *
+ * Semântica: `days` = número total de dias na série, **incluindo hoje**.
+ * O dia mais antigo é `hoje - (days - 1)`. Ex: hoje = 21/mai, days = 21
+ * → série de 1/mai a 21/mai (21 pontos, mês civil corrente).
+ *
+ * Antes do fix tinha off-by-one: `setDate(getDate() - days)` zerava o
+ * dia quando `days === getDate()`, caindo no último dia do mês anterior
+ * (ex: 21 − 21 = 0 → 30/abr).
+ */
+export function calcularRangeCashFlow(
+  days: number,
+  hoje: Date,
+): { inicioStr: string; pontosKeys: string[] } {
+  const inicio = new Date(hoje);
+  inicio.setDate(inicio.getDate() - days + 1);
+  inicio.setHours(0, 0, 0, 0);
+  const inicioStr = inicio.toISOString().slice(0, 10);
+  const pontosKeys: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(inicio);
+    d.setDate(d.getDate() + i);
+    pontosKeys.push(d.toISOString().slice(0, 10));
+  }
+  return { inicioStr, pontosKeys };
+}

@@ -43,6 +43,7 @@ import {
   percentInadimplenciaPorValor,
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
+  calcularRangeCashFlow,
 } from "./dashboard-setor-helpers";
 
 const log = createLogger("dashboard-router");
@@ -359,7 +360,7 @@ export const dashboardRouter = router({
     .input(
       z
         .object({
-          days: z.number().int().min(7).max(365).default(30),
+          days: z.number().int().min(1).max(365).default(30),
         })
         .optional(),
     )
@@ -378,10 +379,7 @@ export const dashboardRouter = router({
       }
 
       const days = input?.days ?? 30;
-      const inicio = new Date();
-      inicio.setDate(inicio.getDate() - days);
-      inicio.setHours(0, 0, 0, 0);
-      const inicioStr = inicio.toISOString().slice(0, 10);
+      const { inicioStr, pontosKeys } = calcularRangeCashFlow(days, new Date());
       const hoje = dataHojeBR();
 
       try {
@@ -414,10 +412,7 @@ export const dashboardRouter = router({
 
         // Agrupar por dia
         const porDia = new Map<string, { recebido: number; pendente: number }>();
-        for (let i = 0; i <= days; i++) {
-          const d = new Date(inicio);
-          d.setDate(d.getDate() + i);
-          const key = d.toISOString().slice(0, 10);
+        for (const key of pontosKeys) {
           porDia.set(key, { recebido: 0, pendente: 0 });
         }
 
