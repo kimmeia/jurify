@@ -18,6 +18,7 @@ import {
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
   classificarTarefaPrazo,
+  calcularRangeCashFlow,
 } from "../routers/dashboard-setor-helpers";
 
 describe("proporcionalizarMeta", () => {
@@ -217,5 +218,97 @@ describe("classificarTarefaPrazo", () => {
 
   it("comportamento na borda exata: venc = agora pra pendente → no_prazo", () => {
     expect(classificarTarefaPrazo("pendente", agora, null, agora)).toBe("no_prazo");
+  });
+});
+
+describe("calcularRangeCashFlow", () => {
+  // Constrói Date no UTC pra inicioStr/pontosKeys (que usam toISOString)
+  // baterem com o dia "civil" esperado independentemente do timezone do CI.
+  function utcMidday(y: number, mZeroIdx: number, d: number): Date {
+    return new Date(Date.UTC(y, mZeroIdx, d, 12, 0, 0));
+  }
+
+  it("cenário do bug: 21/mai com days=21 → 01/mai a 21/mai (era 30/abr)", () => {
+    const hoje = utcMidday(2026, 4, 21);
+    const r = calcularRangeCashFlow(21, hoje);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys[0]).toBe("2026-05-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-21");
+    expect(r.pontosKeys).toHaveLength(21);
+  });
+
+  it("dia 1 do mês (days=1) → range de 1 dia só, sem virar mês anterior", () => {
+    const hoje = utcMidday(2026, 4, 1);
+    const r = calcularRangeCashFlow(1, hoje);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys).toEqual(["2026-05-01"]);
+  });
+
+  it("último dia de mês 31 (days=31) → inclui dia 1 e dia 31, 31 pontos", () => {
+    const hoje = utcMidday(2026, 4, 31);
+    const r = calcularRangeCashFlow(31, hoje);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys[0]).toBe("2026-05-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-31");
+    expect(r.pontosKeys).toHaveLength(31);
+  });
+
+  it("fevereiro bissexto (2024): 29/fev com days=29 → 01/fev a 29/fev", () => {
+    const hoje = utcMidday(2024, 1, 29);
+    const r = calcularRangeCashFlow(29, hoje);
+    expect(r.inicioStr).toBe("2024-02-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2024-02-29");
+    expect(r.pontosKeys).toHaveLength(29);
+  });
+
+  it("fevereiro não-bissexto (2026): 28/fev com days=28 → 01/fev a 28/fev", () => {
+    const hoje = utcMidday(2026, 1, 28);
+    const r = calcularRangeCashFlow(28, hoje);
+    expect(r.inicioStr).toBe("2026-02-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-02-28");
+    expect(r.pontosKeys).toHaveLength(28);
+  });
+
+  it("default 30 dias atravessa virada de mês (21/mai → 22/abr a 21/mai)", () => {
+    const hoje = utcMidday(2026, 4, 21);
+    const r = calcularRangeCashFlow(30, hoje);
+    expect(r.inicioStr).toBe("2026-04-22");
+    expect(r.pontosKeys[0]).toBe("2026-04-22");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-21");
+    expect(r.pontosKeys).toHaveLength(30);
+  });
+
+  it("virada de ano: 03/jan/2026 com days=3 → 01/jan a 03/jan, sem virar pra 2025", () => {
+    const hoje = utcMidday(2026, 0, 3);
+    const r = calcularRangeCashFlow(3, hoje);
+    expect(r.pontosKeys).toEqual(["2026-01-01", "2026-01-02", "2026-01-03"]);
+  });
+
+  it("virada de ano para trás: 02/jan/2026 com days=10 → atravessa pra dez/2025", () => {
+    const hoje = utcMidday(2026, 0, 2);
+    const r = calcularRangeCashFlow(10, hoje);
+    expect(r.inicioStr).toBe("2025-12-24");
+    expect(r.pontosKeys[0]).toBe("2025-12-24");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-01-02");
+    expect(r.pontosKeys).toHaveLength(10);
+  });
+
+  it("pontosKeys são únicos (sem dia duplicado)", () => {
+    const hoje = utcMidday(2026, 4, 21);
+    const r = calcularRangeCashFlow(21, hoje);
+    expect(new Set(r.pontosKeys).size).toBe(r.pontosKeys.length);
+  });
+
+  it("inicioStr é o primeiro elemento de pontosKeys", () => {
+    const hoje = utcMidday(2026, 4, 21);
+    const r = calcularRangeCashFlow(21, hoje);
+    expect(r.inicioStr).toBe(r.pontosKeys[0]);
+  });
+
+  it("não muta o parâmetro `hoje` recebido", () => {
+    const hoje = utcMidday(2026, 4, 21);
+    const antes = hoje.getTime();
+    calcularRangeCashFlow(21, hoje);
+    expect(hoje.getTime()).toBe(antes);
   });
 });
