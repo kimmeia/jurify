@@ -1527,45 +1527,98 @@ export default function Configuracoes() {
 // ─── Canais de Comunicação Tab ──────────────────────────────────────────────
 
 function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
-  const [metaDialog, setMetaDialog] = useState<"whatsapp" | "instagram" | "messenger" | null>(null);
+  // Estado do dialog Meta: além do tipo de canal, guarda canalId opcional.
+  // canalId definido → editando canal específico (entre os múltiplos).
+  // canalId undefined → conectando NOVO canal (caso de "+ Adicionar outro").
+  const [metaDialog, setMetaDialog] = useState<{
+    type: "whatsapp" | "instagram" | "messenger";
+    canalId?: number;
+  } | null>(null);
   const [legacyDialog, setLegacyDialog] = useState<string | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
   const { data: canaisData, refetch } = trpc.configuracoes.listarCanais.useQuery();
 
   const canais = canaisData?.canais || [];
-  // Canal "moderno" WhatsApp = whatsapp_api (excluindo integrações internas)
-  const whatsappCanal = canais.find((c: any) => c.tipo === "whatsapp_api");
+  // WhatsApp API agora suporta MÚLTIPLOS canais (escritório pode conectar
+  // vários números). Filtramos só os válidos (status conectado + telefone),
+  // os órfãos do Embedded Signup ficam de fora.
+  const whatsappCanais = canais.filter(
+    (c: any) => c.tipo === "whatsapp_api" && c.status === "conectado" && !!c.telefone,
+  );
+  const whatsappComErro = canais.filter(
+    (c: any) => c.tipo === "whatsapp_api" && c.status === "erro" && !!c.mensagemErro,
+  );
   const whatsappQrCanal = canais.find(c => c.tipo === "whatsapp_qr");
   const instagramCanal = canais.find(c => c.tipo === "instagram");
   const facebookCanal = canais.find(c => c.tipo === "facebook");
 
-  // Guarda: WhatsApp API só é considerado conectado se TIVER telefone
-  // verificado. Dados antigos com status=conectado mas sem telefone eram
-  // conexões abortadas no meio do Embedded Signup. O backend agora faz
-  // cleanup desses órfãos no listarCanais, mas mantemos a guarda aqui
-  // como segunda camada — se escapar algum, exibimos "Não conectado"
-  // em vez de "Erro" (não foi erro real, foi tentativa abortada).
-  const whatsappValido =
-    whatsappCanal && whatsappCanal.status === "conectado" && !!whatsappCanal.telefone;
-  const whatsappComErroReal =
-    whatsappCanal?.status === "erro" && !!whatsappCanal?.mensagemErro;
+  // Cards principais: Embedded Signup (fluxo moderno).
+  // WhatsApp expande em N cards (1 por número conectado) + 1 card "Adicionar".
+  // Instagram/Messenger continuam single (Meta permite só 1 página por app).
+  type CardCanal = {
+    key: string;
+    dialog: { type: "whatsapp" | "instagram" | "messenger"; canalId?: number };
+    nome: string;
+    descricao: string;
+    logo: string;
+    cor: string;
+    canal: any;
+    conectado: boolean;
+    comErro: boolean;
+    /** Card de "+ Adicionar outro" — renderiza estilo tracejado. */
+    isAdicionar?: boolean;
+  };
 
-  // Cards principais: Embedded Signup (fluxo moderno)
-  const canaisPrincipais = [
-    {
-      id: "whatsapp" as const,
+  const cardsWhatsApp: CardCanal[] = whatsappCanais.map((c: any) => ({
+    key: `whatsapp-${c.id}`,
+    dialog: { type: "whatsapp", canalId: c.id },
+    nome: "WhatsApp Business",
+    descricao: c.telefone ? `Número: ${c.telefone}` : "Conectado",
+    logo: "💬",
+    cor: "from-emerald-500 to-green-600",
+    canal: c,
+    conectado: true,
+    comErro: false,
+  }));
+
+  // Card de erro: se existir canal com erro real, mostra acima do "+ Adicionar"
+  for (const e of whatsappComErro) {
+    cardsWhatsApp.push({
+      key: `whatsapp-err-${e.id}`,
+      dialog: { type: "whatsapp", canalId: e.id },
       nome: "WhatsApp Business",
-      descricao: "Conecte seu WhatsApp com 1 clique via Facebook. API oficial, sem risco de banimento.",
+      descricao: e.telefone || "Sem número",
       logo: "💬",
       cor: "from-emerald-500 to-green-600",
-      canal: whatsappValido ? whatsappCanal : undefined,
-      conectado: !!whatsappValido,
-      // "Erro" só aparece se o backend marcou explicitamente erro com
-      // mensagem. Órfãos sem telefone passam como "Não conectado".
-      comErro: whatsappComErroReal,
-    },
+      canal: e,
+      conectado: false,
+      comErro: true,
+    });
+  }
+
+  // Card "Adicionar outro WhatsApp" sempre presente — clicar abre dialog
+  // sem canalId, o que dispara fluxo de conexão de número novo.
+  cardsWhatsApp.push({
+    key: "whatsapp-novo",
+    dialog: { type: "whatsapp" },
+    nome: whatsappCanais.length === 0 ? "WhatsApp Business" : "Adicionar outro WhatsApp",
+    descricao:
+      whatsappCanais.length === 0
+        ? "Conecte seu WhatsApp com 1 clique via Facebook. API oficial, sem risco de banimento."
+        : "Conecte mais um número WhatsApp Business neste escritório.",
+    logo: "💬",
+    cor: "from-emerald-500 to-green-600",
+    canal: undefined,
+    conectado: false,
+    comErro: false,
+    isAdicionar: whatsappCanais.length > 0,
+  });
+
+  const canaisPrincipais: CardCanal[] = [
+    ...cardsWhatsApp,
     {
-      id: "instagram" as const,
+      key: "instagram",
+      dialog: { type: "instagram" },
       nome: "Instagram Business",
       descricao: "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
       logo: "📸",
@@ -1575,7 +1628,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       comErro: instagramCanal?.status === "erro",
     },
     {
-      id: "messenger" as const,
+      key: "messenger",
+      dialog: { type: "messenger" },
       nome: "Facebook Messenger",
       descricao: "Mensagens da sua página do Facebook direto no Inbox.",
       logo: "💙",
@@ -1627,27 +1681,31 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {canaisPrincipais.map((canal) => (
           <Card
-            key={canal.id}
+            key={canal.key}
             className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${
-              canal.conectado
-                ? "border-emerald-300"
-                : canal.comErro
-                  ? "border-red-300"
-                  : "border-transparent hover:border-primary/20"
+              canal.isAdicionar
+                ? "border-dashed border-emerald-300/60 bg-emerald-50/30 hover:bg-emerald-50/50"
+                : canal.conectado
+                  ? "border-emerald-300"
+                  : canal.comErro
+                    ? "border-red-300"
+                    : "border-transparent hover:border-primary/20"
             }`}
-            onClick={() => setMetaDialog(canal.id)}
+            onClick={() => setMetaDialog(canal.dialog)}
           >
             <CardContent className="p-5">
               <div className="flex items-start gap-4">
                 <div
-                  className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${canal.cor} flex items-center justify-center text-2xl shadow-md shrink-0`}
+                  className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${canal.cor} flex items-center justify-center text-2xl shadow-md shrink-0 ${
+                    canal.isAdicionar ? "opacity-60" : ""
+                  }`}
                 >
-                  {canal.logo}
+                  {canal.isAdicionar ? "+" : canal.logo}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="font-semibold text-sm">{canal.nome}</h3>
-                    {canal.conectado && (
+                    {!canal.isAdicionar && canal.conectado && (
                       <Badge
                         variant="outline"
                         className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"
@@ -1656,7 +1714,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                         Conectado
                       </Badge>
                     )}
-                    {canal.comErro && (
+                    {!canal.isAdicionar && canal.comErro && (
                       <Badge
                         variant="outline"
                         className="text-[10px] text-red-600 bg-red-50 border-red-200"
@@ -1665,7 +1723,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                         Erro
                       </Badge>
                     )}
-                    {!canal.conectado && !canal.comErro && (
+                    {!canal.isAdicionar && !canal.conectado && !canal.comErro && (
                       <Badge
                         variant="outline"
                         className="text-[10px] text-gray-500 bg-gray-50 border-gray-200"
@@ -1679,11 +1737,17 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
               </div>
               <div className="mt-4 flex justify-end">
                 <Button
-                  variant={canal.conectado ? "outline" : "default"}
+                  variant={canal.conectado || canal.isAdicionar ? "outline" : "default"}
                   size="sm"
                   className="text-xs"
                 >
-                  {canal.conectado ? "Gerenciar" : canal.comErro ? "Reconectar" : "Conectar"}
+                  {canal.isAdicionar
+                    ? "Conectar novo"
+                    : canal.conectado
+                      ? "Gerenciar"
+                      : canal.comErro
+                        ? "Reconectar"
+                        : "Conectar"}
                 </Button>
               </div>
             </CardContent>
@@ -1741,13 +1805,15 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         <MetaConnectDialog
           open={!!metaDialog}
           onClose={() => setMetaDialog(null)}
-          channel={metaDialog}
+          channel={metaDialog.type}
           canal={
-            metaDialog === "whatsapp"
-              ? whatsappCanal
-              : metaDialog === "instagram"
+            metaDialog.canalId
+              ? canais.find((c: any) => c.id === metaDialog.canalId)
+              : metaDialog.type === "instagram"
                 ? instagramCanal
-                : facebookCanal
+                : metaDialog.type === "messenger"
+                  ? facebookCanal
+                  : undefined
           }
           onRefresh={refetch}
         />
