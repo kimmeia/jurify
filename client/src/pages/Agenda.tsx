@@ -10,12 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   CalendarDays, Plus, Loader2, Clock, CheckCircle, ChevronLeft, ChevronRight,
   Trash2, ListTodo, CalendarClock, Sun, AlertTriangle, Search,
   Briefcase, Scale, Users, PhoneCall, MoreHorizontal, Check, MapPin, Bell,
+  Pencil, FileText, Paperclip, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -153,14 +158,80 @@ function tempoRelativoAgenda(iso: string): { texto: string; urgencia: "agora" | 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// BOTÃO DE EXCLUIR COM CONFIRMAÇÃO (AlertDialog em vez de confirm nativo)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
+  onConfirm: () => void;
+  titulo: string;
+  variant?: "card" | "dialog";
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {variant === "card" ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-[10.5px] rounded-lg text-slate-500 hover:bg-slate-100 px-2.5"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          <Trash2 className="h-3 w-3 mr-1" />
+          Excluir
+        </Button>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+          Excluir
+        </Button>
+      )}
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este evento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {titulo ? <>O evento "<b className="text-slate-900">{titulo}</b>" será excluído.</> : "Esse evento será excluído."}
+              {" "}Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => onConfirm()}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Sim, excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CARD DE EVENTO
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
+function EventoCard({ ev, onStatusChange, onDelete, onEdit, onCardClick, podeEditar, podeExcluir }: {
   ev: any;
   onStatusChange: (id: number, fonte: string, status: string) => void;
   onDelete: (id: number, fonte: string) => void;
   onEdit?: (ev: any) => void;
+  onCardClick?: (ev: any) => void;
+  podeEditar?: boolean;
+  podeExcluir?: boolean;
 }) {
   const overdue = isOverdue(ev.dataInicio, ev.status);
   const concluido = ev.status === "concluido" || ev.status === "concluida";
@@ -227,8 +298,17 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
 
   return (
     <div
-      className={`group relative ${cardBg} ${cardBorder} border rounded-xl transition-all hover:shadow-[0_6px_20px_-6px_rgb(0_0_0_/_0.10)] hover:-translate-y-px ${concluido ? "opacity-65" : ""}`}
+      className={`group relative ${cardBg} ${cardBorder} border rounded-xl transition-all hover:shadow-[0_6px_20px_-6px_rgb(0_0_0_/_0.10)] hover:-translate-y-px ${concluido ? "opacity-65" : ""} ${onCardClick ? "cursor-pointer" : ""}`}
       style={{ borderLeft: `4px solid ${cor}` }}
+      onClick={onCardClick ? () => onCardClick(ev) : undefined}
+      role={onCardClick ? "button" : undefined}
+      tabIndex={onCardClick ? 0 : undefined}
+      onKeyDown={onCardClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onCardClick(ev);
+        }
+      } : undefined}
     >
       <div className="flex items-start gap-3 p-3">
         {/* Hora-block colorida à esquerda */}
@@ -360,7 +440,7 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
 
         {/* Ações */}
         <div className="flex flex-col gap-1 shrink-0 self-start">
-          {!concluido && !cancelado && (
+          {!concluido && !cancelado && podeEditar !== false && (
             <Button
               size="sm"
               className="h-7 text-[10.5px] rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm px-2.5"
@@ -373,7 +453,7 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
               Concluir
             </Button>
           )}
-          {onEdit && !concluido && !cancelado && (
+          {onEdit && !concluido && !cancelado && podeEditar !== false && (
             <Button
               variant="outline"
               size="sm"
@@ -386,18 +466,12 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
               Editar
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-[10.5px] rounded-lg text-slate-500 hover:bg-slate-100 px-2.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm("Excluir este evento?")) onDelete(ev.id, ev.fonte);
-            }}
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Excluir
-          </Button>
+          {podeExcluir !== false && (
+            <ConfirmarExclusaoButton
+              onConfirm={() => onDelete(ev.id, ev.fonte)}
+              titulo={ev.titulo}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -408,9 +482,11 @@ function EventoCard({ ev, onStatusChange, onDelete, onEdit }: {
 // VIEW: CALENDÁRIO MENSAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function CalendarioMensal({ eventos, onCriarEvento }: {
+function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar }: {
   eventos: any[];
   onCriarEvento?: () => void;
+  onCardClick?: (ev: any) => void;
+  podeCriar?: boolean;
 }) {
   const [mes, setMes] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [diaSelecionado, setDiaSelecionado] = useState<Date | null>(() => new Date());
@@ -651,9 +727,11 @@ function CalendarioMensal({ eventos, onCriarEvento }: {
                       const concluido = ev.status === "concluido" || ev.status === "concluida";
                       const inicio = new Date(ev.dataInicio);
                       return (
-                        <div
+                        <button
                           key={`${ev.fonte}-${ev.id}`}
-                          className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-white transition-colors ${concluido ? "opacity-60" : ""}`}
+                          type="button"
+                          onClick={onCardClick ? () => onCardClick(ev) : undefined}
+                          className={`w-full text-left flex items-center gap-2 py-1.5 px-2 rounded hover:bg-white transition-colors ${concluido ? "opacity-60" : ""} ${onCardClick ? "cursor-pointer" : "cursor-default"}`}
                         >
                           <span
                             className="w-1 h-7 rounded-full shrink-0"
@@ -672,13 +750,13 @@ function CalendarioMensal({ eventos, onCriarEvento }: {
                               {ev.fonte === "compromisso" && ev.tipo === "prazo_processual" && " · prazo"}
                             </p>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                 </div>
               )}
 
-              {onCriarEvento && (
+              {onCriarEvento && podeCriar !== false && (
                 <button
                   onClick={onCriarEvento}
                   className="w-full mt-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 border border-dashed border-slate-300 rounded-lg hover:border-slate-400 transition-colors"
@@ -702,10 +780,13 @@ function CalendarioMensal({ eventos, onCriarEvento }: {
 // VIEW: HOJE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function HojeView({ onStatusChange, onDelete, onEdit }: {
+function HojeView({ onStatusChange, onDelete, onEdit, onCardClick, podeEditar, podeExcluir }: {
   onStatusChange: (id: number, fonte: string, status: string) => void;
   onDelete: (id: number, fonte: string) => void;
   onEdit?: (ev: any) => void;
+  onCardClick?: (ev: any) => void;
+  podeEditar?: boolean;
+  podeExcluir?: boolean;
 }) {
   const { data, isLoading } = trpc.agenda.hoje.useQuery(undefined, { refetchInterval: 30000 });
 
@@ -742,7 +823,7 @@ function HojeView({ onStatusChange, onDelete, onEdit }: {
 
   return (
     <div className="space-y-6">
-      {proximoEvento && <ProximoEventoHero ev={proximoEvento} onStatusChange={onStatusChange} onEdit={onEdit} />}
+      {proximoEvento && <ProximoEventoHero ev={proximoEvento} onStatusChange={onStatusChange} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} />}
 
       {atrasados.length > 0 && (
         <div className="space-y-2">
@@ -752,14 +833,14 @@ function HojeView({ onStatusChange, onDelete, onEdit }: {
           </h3>
           <div className="space-y-2">
             {atrasados.map(ev => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} />
+              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} podeExcluir={podeExcluir} />
             ))}
           </div>
         </div>
       )}
 
       {/* TIMELINE HORÁRIA — só pra hoje, só pra eventos com hora */}
-      {hoje.length > 0 && <TimelineHorariaHoje eventos={hoje} />}
+      {hoje.length > 0 && <TimelineHorariaHoje eventos={hoje} onCardClick={onCardClick} />}
 
       {/* Eventos "dia inteiro" do dia de hoje (não cabem na timeline) */}
       {hoje.filter((ev: any) => ev.diaInteiro).length > 0 && (
@@ -770,7 +851,7 @@ function HojeView({ onStatusChange, onDelete, onEdit }: {
           </h3>
           <div className="space-y-2">
             {hoje.filter((ev: any) => ev.diaInteiro).map((ev: any) => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} />
+              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} podeExcluir={podeExcluir} />
             ))}
           </div>
         </div>
@@ -784,7 +865,7 @@ function HojeView({ onStatusChange, onDelete, onEdit }: {
           </h3>
           <div className="space-y-2">
             {amanha.map(ev => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} />
+              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} podeExcluir={podeExcluir} />
             ))}
           </div>
         </div>
@@ -794,10 +875,12 @@ function HojeView({ onStatusChange, onDelete, onEdit }: {
 }
 
 /** Card destacado do "Próximo evento" — countdown vivo + ações rápidas. */
-function ProximoEventoHero({ ev, onStatusChange, onEdit }: {
+function ProximoEventoHero({ ev, onStatusChange, onEdit, onCardClick, podeEditar }: {
   ev: any;
   onStatusChange: (id: number, fonte: string, status: string) => void;
   onEdit?: (ev: any) => void;
+  onCardClick?: (ev: any) => void;
+  podeEditar?: boolean;
 }) {
   // Atualiza countdown a cada minuto
   const [agora, setAgora] = useState(Date.now());
@@ -824,8 +907,17 @@ function ProximoEventoHero({ ev, onStatusChange, onEdit }: {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border-2 p-5 bg-gradient-to-br from-orange-50 via-amber-50/60 to-white shadow-[0_4px_20px_-4px_rgb(249,115,22,0.18)]"
+      className={`relative overflow-hidden rounded-2xl border-2 p-5 bg-gradient-to-br from-orange-50 via-amber-50/60 to-white shadow-[0_4px_20px_-4px_rgb(249,115,22,0.18)] ${onCardClick ? "cursor-pointer transition-shadow hover:shadow-[0_6px_24px_-4px_rgb(249,115,22,0.28)]" : ""}`}
       style={{ borderColor: cor }}
+      onClick={onCardClick ? () => onCardClick(ev) : undefined}
+      role={onCardClick ? "button" : undefined}
+      tabIndex={onCardClick ? 0 : undefined}
+      onKeyDown={onCardClick ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onCardClick(ev);
+        }
+      } : undefined}
     >
       <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-orange-200/30 blur-3xl" />
       <div className="relative flex items-start gap-4 flex-wrap">
@@ -885,20 +977,28 @@ function ProximoEventoHero({ ev, onStatusChange, onEdit }: {
           </div>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
-          <Button
-            size="sm"
-            className="h-8 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 shadow-sm"
-            onClick={() => onStatusChange(ev.id, ev.fonte, "concluido")}
-          >
-            <Check className="h-3 w-3 mr-1" />
-            Cheguei / Concluir
-          </Button>
-          {onEdit && (
+          {podeEditar !== false && (
+            <Button
+              size="sm"
+              className="h-8 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(ev.id, ev.fonte, "concluido");
+              }}
+            >
+              <Check className="h-3 w-3 mr-1" />
+              Cheguei / Concluir
+            </Button>
+          )}
+          {onEdit && podeEditar !== false && (
             <Button
               size="sm"
               variant="outline"
               className="h-8 text-xs rounded-lg border-slate-200 bg-white"
-              onClick={() => onEdit(ev)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(ev);
+              }}
             >
               Editar
             </Button>
@@ -915,7 +1015,7 @@ function ProximoEventoHero({ ev, onStatusChange, onEdit }: {
  * Eventos com hora (diaInteiro=false) ficam posicionados na linha.
  * Eventos "dia inteiro" não entram aqui (renderizam em seção separada).
  */
-function TimelineHorariaHoje({ eventos }: { eventos: any[] }) {
+function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardClick?: (ev: any) => void }) {
   const HORA_INICIO = 7; // 07:00
   const HORA_FIM = 20; // 20:00
   const TOTAL_HORAS = HORA_FIM - HORA_INICIO;
@@ -999,6 +1099,15 @@ function TimelineHorariaHoje({ eventos }: { eventos: any[] }) {
                   borderLeft: `4px solid ${cor}`,
                 }}
                 title={ev.titulo}
+                onClick={onCardClick ? () => onCardClick(ev) : undefined}
+                role={onCardClick ? "button" : undefined}
+                tabIndex={onCardClick ? 0 : undefined}
+                onKeyDown={onCardClick ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onCardClick(ev);
+                  }
+                } : undefined}
               >
                 <div className="flex items-start justify-between gap-2 h-full">
                   <div className="flex-1 min-w-0 overflow-hidden">
@@ -1051,7 +1160,8 @@ function ListaView({
   filtroTipo, setFiltroTipo,
   filtroStatus, setFiltroStatus,
   eventos, isLoading,
-  onStatusChange, onDelete, onEdit,
+  onStatusChange, onDelete, onEdit, onCardClick,
+  podeEditar, podeExcluir,
 }: {
   busca: string; setBusca: (s: string) => void;
   filtroFonte: string; setFiltroFonte: (s: string) => void;
@@ -1061,6 +1171,9 @@ function ListaView({
   onStatusChange: (id: number, fonte: string, status: string) => void;
   onDelete: (id: number, fonte: string) => void;
   onEdit?: (ev: any) => void;
+  onCardClick?: (ev: any) => void;
+  podeEditar?: boolean;
+  podeExcluir?: boolean;
 }) {
   // Filtra por tipo no client (backend filtra por fonte/status; tipo é mais específico)
   const eventosFiltrados = useMemo(() => {
@@ -1231,6 +1344,9 @@ function ListaView({
                       onStatusChange={onStatusChange}
                       onDelete={onDelete}
                       onEdit={onEdit}
+                      onCardClick={onCardClick}
+                      podeEditar={podeEditar}
+                      podeExcluir={podeExcluir}
                     />
                   ))}
                 </div>
@@ -1240,6 +1356,361 @@ function ListaView({
         </div>
       )}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DIALOG: DETALHES DO EVENTO (visualização — read-only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CANAL_LABEL: Record<string, { icon: string; nome: string }> = {
+  notificacao_app: { icon: "📱", nome: "Push" },
+  email: { icon: "📧", nome: "Email" },
+  whatsapp: { icon: "💬", nome: "WhatsApp" },
+};
+
+function formatDateTimeFull(iso: string | null | undefined, diaInteiro?: boolean): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const data = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  if (diaInteiro) return `${data} · dia inteiro`;
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${data} · ${hora}`;
+}
+
+function formatTamanho(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function DetalhesEventoDialog({
+  evento,
+  open,
+  onOpenChange,
+  onEdit,
+  onDelete,
+  onStatusChange,
+  podeEditar,
+  podeExcluir,
+}: {
+  evento: any | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onEdit: (ev: any) => void;
+  onDelete: (id: number, fonte: string) => void;
+  onStatusChange: (id: number, fonte: string, status: string) => void;
+  podeEditar: boolean;
+  podeExcluir: boolean;
+}) {
+  // Anexos e lembretes só existem pra compromisso
+  const isCompromisso = evento?.fonte === "compromisso";
+  const eventoId = evento?.id;
+
+  const { data: anexos } = (trpc.agenda as any).listarAnexos?.useQuery?.(
+    { agendamentoId: eventoId },
+    { enabled: !!eventoId && isCompromisso && open, retry: false },
+  ) ?? { data: undefined };
+
+  const { data: lembretes } = (trpc.agenda as any).listarLembretes?.useQuery?.(
+    { agendamentoId: eventoId },
+    { enabled: !!eventoId && isCompromisso && open, retry: false },
+  ) ?? { data: undefined };
+
+  // Resolve nomes dos destinatários dos lembretes (cruzando com lista de colaboradores)
+  const { data: colaboradoresData } = (trpc.agenda as any).listarColaboradores?.useQuery?.(
+    undefined,
+    { enabled: open && isCompromisso && Array.isArray(lembretes) && lembretes.length > 0, retry: false },
+  ) ?? { data: undefined };
+  const colaboradoresMap = useMemo(() => {
+    const map: Record<number, { nome: string; cargo: string | null }> = {};
+    for (const c of (colaboradoresData || []) as Array<{ id: number; nome: string; cargo: string | null }>) {
+      map[c.id] = { nome: c.nome, cargo: c.cargo };
+    }
+    return map;
+  }, [colaboradoresData]);
+
+  if (!evento) return null;
+
+  const concluido = evento.status === "concluido" || evento.status === "concluida";
+  const cancelado = evento.status === "cancelado" || evento.status === "cancelada";
+  const overdue = isOverdue(evento.dataInicio, evento.status);
+  const cor = corDoEvento(evento);
+  const tipoKey = evento.fonte === "tarefa" ? "tarefa" : (evento.tipo as string) || "outro";
+  const tipoLabel = evento.fonte === "tarefa" ? "Tarefa" : TIPO_LABELS[evento.tipo] || evento.tipo;
+  const prioridade = evento.prioridade || "normal";
+  const statusLabel = STATUS_LABELS[evento.status] || evento.status;
+
+  const handleConcluir = () => {
+    onStatusChange(evento.id, evento.fonte, "concluido");
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <span
+              className="w-1.5 h-12 rounded-full shrink-0 mt-1"
+              style={{ background: cor }}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_BADGE[tipoKey] || TIPO_BADGE.outro}`}>
+                  {tipoLabel}
+                </span>
+                {prioridade !== "normal" && (
+                  <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal}`}>
+                    {PRIOR_LABEL[prioridade] || prioridade}
+                  </span>
+                )}
+                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_CORES[evento.status] || "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                  {overdue && !concluido && !cancelado ? "⚠ Atrasado" : statusLabel}
+                </span>
+              </div>
+              <DialogTitle className={`text-base tracking-tight ${concluido ? "line-through text-slate-400" : cancelado ? "text-slate-400" : "text-slate-900"}`}>
+                {evento.titulo}
+              </DialogTitle>
+              <DialogDescription className="sr-only">Detalhes do evento da agenda</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          {/* Data / hora */}
+          <div className="flex items-start gap-2.5 text-sm">
+            <CalendarDays className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
+                {evento.fonte === "tarefa" ? "Prazo" : "Data e hora"}
+              </p>
+              <p className="text-sm text-slate-800 capitalize">
+                {formatDateTimeFull(evento.dataInicio, evento.diaInteiro)}
+              </p>
+              {evento.dataFim && (
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  até {formatDateTimeFull(evento.dataFim, evento.diaInteiro)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Local */}
+          {evento.local && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Local</p>
+                <p className="text-sm text-slate-800 break-words">{evento.local}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Cliente */}
+          {evento.contatoNome && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <Users className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Cliente</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.contatoNome)}`}>
+                    {gerarIniciais(evento.contatoNome)}
+                  </span>
+                  <span className="text-sm font-medium text-slate-800 truncate">{evento.contatoNome}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Telefone do contato (com link WhatsApp) */}
+          {evento.contatoTelefone && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <PhoneCall className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Telefone / WhatsApp</p>
+                <a
+                  href={`https://wa.me/55${String(evento.contatoTelefone).replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-emerald-700 hover:underline inline-flex items-center gap-1"
+                >
+                  {evento.contatoTelefone}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Processo vinculado */}
+          {evento.cnj && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <Scale className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Processo</p>
+                <p className="text-sm font-mono font-semibold text-indigo-700 truncate">{evento.cnj}</p>
+                {evento.tribunal && <p className="text-[11px] text-slate-500">{evento.tribunal}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Responsável */}
+          {evento.responsavelNome && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <Briefcase className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Responsável</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.responsavelNome)}`}>
+                    {gerarIniciais(evento.responsavelNome)}
+                  </span>
+                  <span className="text-sm text-slate-800 truncate">{evento.responsavelNome}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Descrição */}
+          {evento.descricao && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <FileText className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Descrição</p>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">{evento.descricao}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Anexos (só compromisso) */}
+          {isCompromisso && Array.isArray(anexos) && anexos.length > 0 && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <Paperclip className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">
+                  Arquivos · {anexos.length}
+                </p>
+                <div className="space-y-1">
+                  {anexos.map((a: any) => {
+                    const isImg = a.mimeType?.startsWith?.("image/");
+                    return (
+                      <a
+                        key={a.id}
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-2 py-1.5 bg-violet-50/60 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors"
+                      >
+                        <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType?.includes?.("pdf") ? "📄" : "📎"}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11.5px] font-medium text-violet-700 truncate" title={a.nome}>{a.nome}</p>
+                          <p className="text-[10px] text-slate-500">{formatTamanho(a.tamanho || 0)}</p>
+                        </div>
+                        <ExternalLink className="h-3 w-3 text-violet-600 shrink-0" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lembretes (só compromisso) */}
+          {isCompromisso && Array.isArray(lembretes) && lembretes.length > 0 && (
+            <div className="flex items-start gap-2.5 text-sm">
+              <Bell className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">
+                  Lembretes · {lembretes.length}
+                </p>
+                <div className="space-y-1.5">
+                  {lembretes.map((l: any) => {
+                    const minutos = l.minutosAntes;
+                    const qdo = minutos === 60 * 24 ? "1 dia antes"
+                      : minutos >= 60 ? `${Math.round(minutos / 60)}h antes`
+                      : `${minutos}min antes`;
+                    const canais: string[] = Array.isArray(l.canais) ? l.canais : [l.tipo];
+                    const dests: number[] = Array.isArray(l.destinatarioIds) ? l.destinatarioIds : [];
+                    return (
+                      <div key={l.id} className="px-2.5 py-1.5 bg-blue-50/60 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[11px] font-semibold text-blue-800">{qdo}</span>
+                          <span className="text-blue-300">·</span>
+                          {canais.map((c) => (
+                            <span key={c} className="text-[10px] text-blue-700">
+                              {CANAL_LABEL[c]?.icon} {CANAL_LABEL[c]?.nome || c}
+                            </span>
+                          ))}
+                        </div>
+                        {dests.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap mt-1">
+                            {dests.map((id) => {
+                              const col = colaboradoresMap[id];
+                              if (!col) return (
+                                <span key={id} className="text-[10px] text-slate-500">Colaborador #{id}</span>
+                              );
+                              return (
+                                <span key={id} className="inline-flex items-center gap-1 text-[10px] text-slate-700">
+                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
+                                    {gerarIniciais(col.nome)}
+                                  </span>
+                                  {col.nome.split(" ")[0]}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
+          {podeEditar && !concluido && !cancelado && (
+            <Button
+              variant="default"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleConcluir}
+            >
+              <Check className="h-3.5 w-3.5 mr-1.5" />
+              Concluir
+            </Button>
+          )}
+          {podeEditar && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                onEdit(evento);
+                onOpenChange(false);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />
+              Editar
+            </Button>
+          )}
+          {podeExcluir && (
+            <ConfirmarExclusaoButton
+              variant="dialog"
+              titulo={evento.titulo}
+              onConfirm={() => {
+                onDelete(evento.id, evento.fonte);
+                onOpenChange(false);
+              }}
+            />
+          )}
+          <div className="sm:ml-auto">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2039,10 +2510,26 @@ export default function Agenda() {
   const [tab, setTab] = useState("hoje");
   const [criarOpen, setCriarOpen] = useState(false);
   const [editEvento, setEditEvento] = useState<any | null>(null);
+  const [detalhesEvento, setDetalhesEvento] = useState<any | null>(null);
   const [filtroFonte, setFiltroFonte] = useState("todos");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroStatus, setFiltroStatus] = useState("pendentes");
   const [busca, setBusca] = useState("");
+
+  // Permissões — esconde botões de criação/edição/exclusão pra quem não pode.
+  // O backend já bloqueia, mas mostrar botões que disparam erro é UX ruim.
+  // Dono e admin do sistema sempre podem (bypass — bate com canSee do AppLayout).
+  // Enquanto carrega (minhasPerms ainda undefined), assume true pra evitar
+  // flash de botões sumindo — mesma estratégia do AppLayout.canSee.
+  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchInterval: 5 * 60_000 },
+  ) ?? { data: null };
+  const isOwnerOrAdmin = user?.role === "admin" || minhasPerms?.cargo === "Dono";
+  const permsCarregando = !minhasPerms?.permissoes;
+  const podeCriar = isOwnerOrAdmin || permsCarregando || !!minhasPerms?.permissoes?.agenda?.criar;
+  const podeEditar = isOwnerOrAdmin || permsCarregando || !!minhasPerms?.permissoes?.agenda?.editar;
+  const podeExcluir = isOwnerOrAdmin || permsCarregando || !!minhasPerms?.permissoes?.agenda?.excluir;
 
   const { data: contadores } = trpc.agenda.contadores.useQuery(undefined, { refetchInterval: 30000 });
 
@@ -2089,12 +2576,14 @@ export default function Agenda() {
               </div>
               <p className="text-xs text-white/70 capitalize">{dataLabel}</p>
             </div>
-            <Button
-              onClick={() => setCriarOpen(true)}
-              className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-9"
-            >
-              <Plus className="h-4 w-4 mr-1" /> Novo evento
-            </Button>
+            {podeCriar && (
+              <Button
+                onClick={() => setCriarOpen(true)}
+                className="bg-white text-slate-900 hover:bg-slate-100 font-semibold shadow-sm h-9"
+              >
+                <Plus className="h-4 w-4 mr-1" /> Novo evento
+              </Button>
+            )}
           </div>
 
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
@@ -2180,7 +2669,14 @@ export default function Agenda() {
 
         {/* HOJE */}
         <TabsContent value="hoje" className="mt-5">
-          <HojeView onStatusChange={handleStatus} onDelete={handleDelete} onEdit={(ev) => setEditEvento(ev)} />
+          <HojeView
+            onStatusChange={handleStatus}
+            onDelete={handleDelete}
+            onEdit={(ev) => setEditEvento(ev)}
+            onCardClick={(ev) => setDetalhesEvento(ev)}
+            podeEditar={podeEditar}
+            podeExcluir={podeExcluir}
+          />
         </TabsContent>
 
         {/* LISTA */}
@@ -2199,6 +2695,9 @@ export default function Agenda() {
             onStatusChange={handleStatus}
             onDelete={handleDelete}
             onEdit={(ev) => setEditEvento(ev)}
+            onCardClick={(ev) => setDetalhesEvento(ev)}
+            podeEditar={podeEditar}
+            podeExcluir={podeExcluir}
           />
         </TabsContent>
 
@@ -2207,9 +2706,22 @@ export default function Agenda() {
           <CalendarioMensal
             eventos={eventosCalendario || []}
             onCriarEvento={() => setCriarOpen(true)}
+            onCardClick={(ev) => setDetalhesEvento(ev)}
+            podeCriar={podeCriar}
           />
         </TabsContent>
       </Tabs>
+
+      <DetalhesEventoDialog
+        evento={detalhesEvento}
+        open={!!detalhesEvento}
+        onOpenChange={(o) => { if (!o) setDetalhesEvento(null); }}
+        onEdit={(ev) => setEditEvento(ev)}
+        onDelete={handleDelete}
+        onStatusChange={handleStatus}
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+      />
 
       <CriarEventoDialog
         open={criarOpen || !!editEvento}
