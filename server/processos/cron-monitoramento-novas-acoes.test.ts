@@ -17,8 +17,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ─── Mocks dos adapters ──────────────────────────────────────────────────────
 const consultarTjcePorCpf = vi.fn();
+const consultarTjce = vi.fn();
 vi.mock("./adapters/pje-tjce", () => ({
-  consultarTjce: vi.fn(),
+  consultarTjce,
   consultarTjcePorCpf,
 }));
 
@@ -120,6 +121,7 @@ beforeEach(() => {
   selectQueue = [];
   captured.length = 0;
   consultarTjcePorCpf.mockReset();
+  consultarTjce.mockReset();
   recuperarSessao.mockReset();
   emitirNotificacao.mockReset();
 });
@@ -284,5 +286,353 @@ describe("pollMonitoramentosNovasAcoes — baseline silencioso (regressão FP)",
     );
     expect(upd).toBeDefined();
     expect(JSON.parse(upd!.set!.cnjsConhecidos as string)).toEqual([]);
+  });
+});
+
+describe("pollMonitoramentosNovasAcoes — filtro de polo passivo", () => {
+  const CPF = MON_BASE.searchKey; // "12345678901"
+  const APELIDO = MON_BASE.apelido; // "João Silva"
+  const CNJ_NOVO = "0009999-99.2026.8.06.0001";
+
+  function detalheMock(args: {
+    partes?: Array<{ nome: string; polo: "ativo" | "passivo" | "terceiro"; documento?: string | null }>;
+    dataDistribuicao?: string | null;
+    ok?: boolean;
+  } = {}) {
+    return {
+      ok: args.ok ?? true,
+      tribunal: "tjce",
+      cnj: CNJ_NOVO,
+      latenciaMs: 100,
+      capa: args.ok === false ? null : {
+        cnj: CNJ_NOVO,
+        classe: null,
+        assuntos: [],
+        orgaoJulgador: null,
+        juiz: null,
+        comarca: null,
+        uf: "CE",
+        valorCausaCentavos: null,
+        dataDistribuicao: args.dataDistribuicao ?? null,
+        status: null,
+        partes: (args.partes ?? []).map((p) => ({
+          nome: p.nome,
+          polo: p.polo,
+          tipo: "fisica" as const,
+          documento: p.documento ?? null,
+          advogados: [],
+        })),
+        segredoJustica: false,
+      },
+      movimentacoes: [],
+      categoriaErro: null,
+      mensagemErro: null,
+      screenshotPath: null,
+      finalizadoEm: new Date().toISOString(),
+    };
+  }
+
+  it("silencia (lido=true, sem notif) quando cliente é POLO ATIVO no CNJ novo", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock({
+        partes: [
+          { polo: "ativo", nome: APELIDO, documento: CPF }, // cliente é autor
+          { polo: "passivo", nome: "EMPRESA RÉ LTDA", documento: "99999999000100" },
+        ],
+      }),
+    );
+    selectQueue.push([{ ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]) }]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(1);
+    expect((eventos[0].values as any).lido).toBe(true);
+    expect((eventos[0].values as any).conteudo).toMatch(/Cliente é autor/);
+    const json = JSON.parse((eventos[0].values as any).conteudoJson);
+    expect(json.poloDoCliente).toBe("ativo");
+    expect(json.motivoSilencio).toBe("polo_ativo");
+    expect(json.filtradoPorPolo).toBe(true);
+
+    const notifs = captured.filter((c) => c.op === "insert" && c.table === "notificacoes");
+    expect(notifs).toHaveLength(0);
+    expect(emitirNotificacao).not.toHaveBeenCalled();
+
+    const upd = captured.find((c) => c.op === "update" && c.table === "motor_monitoramentos");
+    expect(upd!.set!.totalNovasAcoes).toBe(0); // não soma silenciados
+  });
+
+  it("alerta (lido=false + notif) quando cliente é POLO PASSIVO", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock({
+        partes: [
+          { polo: "ativo", nome: "BANCO XPTO S.A.", documento: "11111111000100" },
+          { polo: "passivo", nome: APELIDO, documento: CPF },
+        ],
+      }),
+    );
+    selectQueue.push([{ ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]) }]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(1);
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect((eventos[0].values as any).conteudo).toMatch(/Nova ação detectada/);
+    const json = JSON.parse((eventos[0].values as any).conteudoJson);
+    expect(json.poloDoCliente).toBe("passivo");
+    expect(json.motivoSilencio).toBeNull();
+
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+    const notifs = captured.filter((c) => c.op === "insert" && c.table === "notificacoes");
+    expect(notifs).toHaveLength(1);
+  });
+
+  it("alerta quando cliente é TERCEIRO interessado", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock({
+        partes: [
+          { polo: "ativo", nome: "AUTOR PRINCIPAL", documento: "11111111111" },
+          { polo: "passivo", nome: "RÉU PRINCIPAL", documento: "22222222222" },
+          { polo: "terceiro", nome: APELIDO, documento: CPF },
+        ],
+      }),
+    );
+    selectQueue.push([{ ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]) }]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect(JSON.parse((eventos[0].values as any).conteudoJson).poloDoCliente).toBe("terceiro");
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+  });
+
+  it("alerta (safe default) quando cliente não aparece nas partes (scraper falhou parcial)", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock({
+        partes: [
+          { polo: "ativo", nome: "ALGUÉM", documento: "11111111111" },
+          { polo: "passivo", nome: "OUTRO ALGUÉM", documento: "22222222222" },
+        ],
+      }),
+    );
+    selectQueue.push([{ ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]) }]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(false); // alerta
+    expect(JSON.parse((eventos[0].values as any).conteudoJson).poloDoCliente).toBe("desconhecido");
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+  });
+
+  it("alerta (safe default) quando detail scrape exception", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockRejectedValue(new Error("Network error"));
+    selectQueue.push([{ ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]) }]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+  });
+
+  it("alerta (safe default) quando detail scrape retorna ok=false", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(detalheMock({ ok: false }));
+    selectQueue.push([{ ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]) }]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+  });
+});
+
+describe("pollMonitoramentosNovasAcoes — filtro combinado polo + data", () => {
+  const CPF = MON_BASE.searchKey;
+  const APELIDO = MON_BASE.apelido;
+  const CNJ_NOVO = "0009999-99.2023.8.06.0001";
+
+  function detalheMock(dataDistribuicao: string | null, partes: Array<{ nome: string; polo: "ativo" | "passivo" | "terceiro"; documento?: string | null }>) {
+    return {
+      ok: true,
+      tribunal: "tjce",
+      cnj: CNJ_NOVO,
+      latenciaMs: 100,
+      capa: {
+        cnj: CNJ_NOVO,
+        classe: null,
+        assuntos: [],
+        orgaoJulgador: null,
+        juiz: null,
+        comarca: null,
+        uf: "CE",
+        valorCausaCentavos: null,
+        dataDistribuicao,
+        status: null,
+        partes: partes.map((p) => ({
+          nome: p.nome,
+          polo: p.polo,
+          tipo: "fisica" as const,
+          documento: p.documento ?? null,
+          advogados: [],
+        })),
+        segredoJustica: false,
+      },
+      movimentacoes: [],
+      categoriaErro: null,
+      mensagemErro: null,
+      screenshotPath: null,
+      finalizadoEm: new Date().toISOString(),
+    };
+  }
+
+  it("polo passivo + ajuizado ANTES do cadastro → silencia (data prevalece)", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock(
+        "2023-05-15T00:00:00.000Z", // ajuizado em maio/2023
+        [{ polo: "passivo", nome: APELIDO, documento: CPF }],
+      ),
+    );
+    selectQueue.push([
+      {
+        ...MON_BASE,
+        cnjsConhecidos: JSON.stringify(["existente-1"]),
+        dataReferenciaCadastro: new Date("2025-01-01T00:00:00.000Z"), // cadastrado em 2025
+      },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(true); // silenciado
+    expect((eventos[0].values as any).conteudo).toMatch(/Baseline antigo/);
+    const json = JSON.parse((eventos[0].values as any).conteudoJson);
+    expect(json.motivoSilencio).toBe("anterior_cadastro");
+    expect(json.filtradoPorData).toBe(true);
+
+    expect(emitirNotificacao).not.toHaveBeenCalled();
+  });
+
+  it("polo passivo + ajuizado APÓS cadastro → alerta", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock(
+        "2026-05-15T00:00:00.000Z",
+        [{ polo: "passivo", nome: APELIDO, documento: CPF }],
+      ),
+    );
+    selectQueue.push([
+      {
+        ...MON_BASE,
+        cnjsConhecidos: JSON.stringify(["existente-1"]),
+        dataReferenciaCadastro: new Date("2025-01-01T00:00:00.000Z"),
+      },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(false);
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+  });
+
+  it("polo ativo + dataRef NULL → silencia (polo vence sozinho)", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock(
+        "2026-05-15T00:00:00.000Z",
+        [{ polo: "ativo", nome: APELIDO, documento: CPF }],
+      ),
+    );
+    selectQueue.push([
+      {
+        ...MON_BASE,
+        cnjsConhecidos: JSON.stringify(["existente-1"]),
+        dataReferenciaCadastro: null, // monitoramento legado sem backfill
+      },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(true);
+    expect(JSON.parse((eventos[0].values as any).conteudoJson).motivoSilencio).toBe("polo_ativo");
+    expect(emitirNotificacao).not.toHaveBeenCalled();
+  });
+
+  it("dataRef NULL + cliente em partes desconhecido → alerta (legado sem polo nem data)", async () => {
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_NOVO] });
+    consultarTjce.mockResolvedValue(
+      detalheMock("2023-01-01T00:00:00.000Z", []),
+    );
+    selectQueue.push([
+      { ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]), dataReferenciaCadastro: null },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect((eventos[0].values as any).lido).toBe(false);
+  });
+
+  it("mistura: 1 CNJ polo passivo + 1 CNJ polo ativo → 1 alerta e 1 silencioso", async () => {
+    const CNJ_PASSIVO = "0001111-11.2026.8.06.0001";
+    const CNJ_ATIVO = "0002222-22.2026.8.06.0001";
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_PASSIVO, CNJ_ATIVO] });
+
+    // Detail mock que reage ao CNJ consultado
+    consultarTjce.mockImplementation(async (cnj: string) => {
+      if (cnj === CNJ_PASSIVO) {
+        return detalheMock("2026-05-15T00:00:00.000Z", [
+          { polo: "passivo", nome: APELIDO, documento: CPF },
+        ]);
+      }
+      return detalheMock("2026-05-15T00:00:00.000Z", [
+        { polo: "ativo", nome: APELIDO, documento: CPF },
+      ]);
+    });
+
+    selectQueue.push([
+      { ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]), dataReferenciaCadastro: null },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(2);
+
+    const evPassivo = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_PASSIVO);
+    const evAtivo = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_ATIVO);
+    expect((evPassivo!.values as any).lido).toBe(false);
+    expect((evAtivo!.values as any).lido).toBe(true);
+
+    // 1 notif (só do passivo), totalNovasAcoes += 1
+    const notifs = captured.filter((c) => c.op === "insert" && c.table === "notificacoes");
+    expect(notifs).toHaveLength(1);
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+
+    const upd = captured.find((c) => c.op === "update" && c.table === "motor_monitoramentos");
+    expect(upd!.set!.totalNovasAcoes).toBe(1);
   });
 });
