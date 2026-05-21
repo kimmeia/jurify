@@ -251,7 +251,11 @@ function IniciarConversaDialog({
 }) {
   const [tel, setTel] = useState(""); const [nome, setNome] = useState(""); const [msg, setMsg] = useState(""); const [canalId, setCanalId] = useState<number | null>(null);
   const { data: canais } = trpc.configuracoes.listarCanais.useQuery();
-  const waCh = (canais?.canais || []).filter((c: any) => c.tipo === "whatsapp_qr" && c.status === "conectado");
+  // Inclui whatsapp_api (Cloud API) E whatsapp_qr (Baileys legado).
+  // Quando há múltiplos números conectados, exige escolha explícita.
+  const waCh = (canais?.canais || []).filter(
+    (c: any) => (c.tipo === "whatsapp_api" || c.tipo === "whatsapp_qr") && c.status === "conectado",
+  );
   useEffect(() => { if (waCh.length > 0 && !canalId) setCanalId(waCh[0].id); }, [waCh, canalId]);
   // Ao abrir com dados vindos do CRM, pré-popula os campos.
   useEffect(() => {
@@ -272,6 +276,22 @@ function IniciarConversaDialog({
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600" /> Nova Conversa</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-red-400" : ""} />{tel && !telValido && <p className="text-[10px] text-red-500">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
     <div className="space-y-1.5"><Label>Mensagem *</Label><Input placeholder="Olá! Como posso ajudar?" value={msg} onChange={(e) => setMsg(e.target.value)} /></div>
+    {waCh.length > 1 && (
+      <div className="space-y-1.5">
+        <Label>Enviar a partir de</Label>
+        <select
+          className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+          value={canalId ?? ""}
+          onChange={(e) => setCanalId(Number(e.target.value))}
+        >
+          {waCh.map((c: any) => (
+            <option key={c.id} value={c.id}>
+              {c.telefone ? `${c.telefone} — ${c.nome}` : c.nome}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
     {waCh.length === 0 && <p className="text-xs text-red-600">Nenhum WhatsApp conectado.</p>}</div>
     <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleEnviar} disabled={!telValido || !msg || !canalId || ini.isPending}>{ini.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar</Button></DialogFooter>
   </DialogContent></Dialog>);
@@ -857,6 +877,22 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               </Badge>
             )}
             {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
+            {/* Badge do canal: mostra de qual número WhatsApp veio a conversa.
+                Importante quando o escritório tem MÚLTIPLOS números conectados
+                — sem isso, atendente não sabe por onde responder o cliente. */}
+            {(conv as any)?.canalNome && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
+                title={`Conversa recebida via ${(conv as any).canalNome}`}
+              >
+                {(conv as any).canalTipo?.startsWith("whatsapp") ? "💬"
+                  : (conv as any).canalTipo === "instagram" ? "📷"
+                  : (conv as any).canalTipo === "facebook" ? "🟪"
+                  : "📡"}
+                {(conv as any).canalNome}
+              </Badge>
+            )}
           </div>
           {(conv?.contatoTelefone || conv?.chatIdExterno) && (
             <p className="text-[10px] text-muted-foreground mt-0.5">
