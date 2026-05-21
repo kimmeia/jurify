@@ -124,10 +124,25 @@ describe("SmartFlow Engine", () => {
       const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
 
       expect(resultado.sucesso).toBe(true);
-      expect(executarAgente).toHaveBeenCalledWith(42, "oi");
+      // 3º arg = contatoId (undefined porque o ctx do teste não tem contato).
+      // Os executores reais recebem esse param pra injetar contexto cliente
+      // no system prompt da IA quando disponível.
+      expect(executarAgente).toHaveBeenCalledWith(42, "oi", undefined);
       expect(chamarIA).not.toHaveBeenCalled();
       expect(resultado.contexto.respostaIA).toBe("resposta do agente 42");
       expect(resultado.respostas[0]).toBe("resposta do agente 42");
+    });
+
+    it("passa contatoId pro executarAgente quando presente no contexto", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("resposta com contexto");
+      const exec = criarMockExecutores({ executarAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { agenteId: 42 } },
+      ];
+
+      await executarCenario(passos, { mensagem: "oi", contatoId: 777 }, exec);
+
+      expect(executarAgente).toHaveBeenCalledWith(42, "oi", 777);
     });
 
     it("cai no fallback chamarIA quando agenteId é 0 ou ausente", async () => {
