@@ -16,8 +16,10 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, AlertTriangle, Wifi, Unlink } from "lucide-react";
+import { Loader2, CheckCircle, AlertTriangle, Wifi, Unlink, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 export type MetaChannelType = "whatsapp" | "instagram" | "messenger";
@@ -86,6 +88,7 @@ export function MetaConnectDialog({
   const meta = CHANNEL_META[channel];
   const [conectando, setConectando] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
+  const [pin, setPin] = useState("");
 
   const { data: metaConfig } = trpc.metaChannels.getConfig.useQuery(undefined, {
     enabled: open,
@@ -185,6 +188,15 @@ export function MetaConnectDialog({
       onRefresh();
       onClose();
     },
+  });
+
+  const registerMut = trpc.metaChannels.registerWhatsAppNumber.useMutation({
+    onSuccess: () => {
+      toast.success("Número registrado na Cloud API! Já pode enviar mensagens.");
+      setPin("");
+      onRefresh();
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   // ─── Carrega o Facebook SDK ────────────────────────────────────────────────
@@ -335,7 +347,15 @@ export function MetaConnectDialog({
     channel === "whatsapp" &&
     canal?.status === "conectado" &&
     !canal?.telefone;
-  const conectado = canal?.status === "conectado" && !whatsappIncompleto;
+  // WhatsApp API: mesmo com telefone, a Cloud API exige POST /register
+  // pra ativar envio de mensagens. Embedded Signup só vincula à WABA.
+  const whatsappPrecisaRegistrar =
+    channel === "whatsapp" &&
+    canal?.status === "conectado" &&
+    !!canal?.telefone &&
+    !canal?.registradoCloudApi;
+  const conectado =
+    canal?.status === "conectado" && !whatsappIncompleto && !whatsappPrecisaRegistrar;
   const comErro = canal?.status === "erro" || whatsappIncompleto;
   const mensagemErro = whatsappIncompleto
     ? "Conexão não finalizada — o número WhatsApp não foi selecionado. Clique em Reconectar e complete o Embedded Signup até o fim."
@@ -447,6 +467,57 @@ export function MetaConnectDialog({
                 disabled={conectando || !sdkLoaded}
               >
                 Reconectar
+              </Button>
+            </div>
+          )}
+
+          {/* Estado: vinculado mas falta registrar na Cloud API */}
+          {whatsappPrecisaRegistrar && !comErro && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-amber-900">
+                    Falta registrar na Cloud API
+                  </p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    O número{" "}
+                    <code className="bg-amber-100 px-1 py-0.5 rounded">{canal?.telefone}</code>{" "}
+                    foi vinculado à sua conta WhatsApp Business, mas a Meta exige uma
+                    última etapa pra ativar o envio de mensagens: registrar o número
+                    na Cloud API com um PIN de 6 dígitos (verificação em duas etapas).
+                  </p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Este PIN será o seu PIN de 2FA do WhatsApp Business — guarde-o em
+                    local seguro. Se já definiu um PIN no WhatsApp Manager, use ele.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">PIN de 6 dígitos *</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  className="font-mono text-base tracking-widest text-center"
+                />
+              </div>
+              <Button
+                size="sm"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => registerMut.mutate({ canalId: canal.id, pin })}
+                disabled={registerMut.isPending || pin.length !== 6}
+              >
+                {registerMut.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4 mr-2" />
+                )}
+                Registrar na Cloud API
               </Button>
             </div>
           )}
