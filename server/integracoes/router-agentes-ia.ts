@@ -1029,12 +1029,89 @@ export const agentesIaRouter = router({
    * já extraiu automaticamente da conversa.
    */
   listarCapturadosDoContato: protectedProcedure
-    .input(z.object({ contatoId: z.number() }))
+    .input(z.object({
+      contatoId: z.number(),
+      /** Quando passado, devolve metadados da última tentativa do agente do canal. */
+      conversaId: z.number().optional(),
+    }))
     .query(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
-      const { listarCamposCapturadosDoContato } = await import("./agente-captura-campos");
-      return await listarCamposCapturadosDoContato(input.contatoId, esc.escritorio.id);
+      if (!esc) {
+        return { campos: [], ultimaTentativa: null };
+      }
+      const {
+        listarCamposCapturadosDoContato,
+        obterUltimaTentativaAgente,
+      } = await import("./agente-captura-campos");
+
+      const campos = await listarCamposCapturadosDoContato(input.contatoId, esc.escritorio.id);
+
+      // Resolve agente do canal pra trazer última tentativa
+      let ultimaTentativa: { at: string; novos: number; erro: string | null } | null = null;
+      if (input.conversaId) {
+        const db = await getDb();
+        if (db) {
+          const { conversas } = await import("../../drizzle/schema");
+          const [conv] = await db
+            .select({ canalId: conversas.canalId })
+            .from(conversas)
+            .where(and(
+              eq(conversas.id, input.conversaId),
+              eq(conversas.escritorioId, esc.escritorio.id),
+            ))
+            .limit(1);
+          if (conv?.canalId) {
+            const ag = await obterAgenteParaCanal(esc.escritorio.id, conv.canalId);
+            if (ag) {
+              const meta = await obterUltimaTentativaAgente(ag.id, esc.escritorio.id);
+              if (meta) {
+                ultimaTentativa = {
+                  at: meta.at.toISOString(),
+                  novos: meta.novos,
+                  erro: meta.erro,
+                };
+              }
+            }
+          }
+        }
+      }
+
+      return { campos, ultimaTentativa };
+    }),
+
+  /**
+   * Edição manual de um campo capturado. Usado pelo painel quando o
+   * atendente quer corrigir o valor que a IA pegou errado. Validação por
+   * tipo + permissão de editar o contato.
+   */
+  atualizarCampoCapturado: protectedProcedure
+    .input(z.object({
+      contatoId: z.number(),
+      chave: z.string().min(1).max(48),
+      valor: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório" });
+
+      // Permissão: precisa poder editar clientes (módulo de contatos)
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão pra editar contatos" });
+      }
+
+      const { atualizarCampoCapturado } = await import("./agente-captura-campos");
+      try {
+        const atualizado = await atualizarCampoCapturado({
+          contatoId: input.contatoId,
+          escritorioId: esc.escritorio.id,
+          chave: input.chave,
+          valor: input.valor,
+        });
+        return atualizado;
+      } catch (e: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e?.message || "Falha ao atualizar campo" });
+      }
     }),
 
   // ─── KPIs do hero (resumo geral dos agentes) ──────────────────────────────
