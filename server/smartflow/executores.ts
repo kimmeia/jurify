@@ -287,33 +287,41 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
     },
 
     async enviarWhatsApp(telefone: string, mensagem: string): Promise<boolean> {
-      // Delega pro manager do WhatsApp já existente
+      // Roteia pelo helper que abstrai whatsapp_qr (Baileys) vs whatsapp_api
+      // (Cloud API oficial Meta). Antes esta função buscava só canais
+      // whatsapp_qr — ignorava canais Cloud, fazendo SmartFlow falhar em
+      // escritórios que usam só o WhatsApp oficial.
       try {
         const { getDb } = await import("../db");
         const { canaisIntegrados } = await import("../../drizzle/schema");
-        const { eq, and } = await import("drizzle-orm");
+        const { eq, and, or } = await import("drizzle-orm");
         const db = await getDb();
         if (!db) return false;
 
-        // Busca canal WhatsApp ativo do escritório
         const canais = await db.select().from(canaisIntegrados)
           .where(and(
             eq(canaisIntegrados.escritorioId, escritorioId),
-            eq(canaisIntegrados.tipo, "whatsapp_qr"),
             eq(canaisIntegrados.status, "conectado"),
+            or(
+              eq(canaisIntegrados.tipo, "whatsapp_qr"),
+              eq(canaisIntegrados.tipo, "whatsapp_api"),
+            ),
           ))
           .limit(1);
 
         if (canais.length === 0) return false;
         const canalId = canais[0].id;
 
-        const { getWhatsappManager } = await import("../integracoes/whatsapp-baileys");
-        const m = getWhatsappManager();
-        if (m.isConectado(canalId)) {
-          await m.enviarMensagemJid(canalId, telefone, mensagem);
-          return true;
+        const { enviarMensagemPeloCanal } = await import("../integracoes/canal-envio");
+        const r = await enviarMensagemPeloCanal({
+          canalId,
+          telefone,
+          conteudo: mensagem,
+        });
+        if (!r.ok) {
+          log.warn({ canalId, erro: r.erro, provider: r.provider }, "SmartFlow: envio WhatsApp falhou");
         }
-        return false;
+        return r.ok;
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao enviar WhatsApp");
         return false;
