@@ -142,6 +142,28 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
     })();
   }
 
+  // Extração automática de variáveis configuradas no agente do canal.
+  // Roda em background — não bloqueia resposta da IA nem mensagem de SmartFlow.
+  // A heurística interna pula mensagens sociais ("oi", "obrigado") pra economizar tokens.
+  if (msg.tipo === "texto" && msg.conteudo && contatoId && conversaId) {
+    (async () => {
+      try {
+        const { obterAgenteParaCanal } = await import("./router-agentes-ia");
+        const agente = await obterAgenteParaCanal(escritorioId, canalId);
+        if (!agente) return;
+        const { extrairECaptarCampos } = await import("./agente-captura-campos");
+        await extrairECaptarCampos({
+          agenteId: agente.id,
+          conversaId,
+          contatoId,
+          escritorioId,
+        });
+      } catch (e: any) {
+        log.warn({ err: e?.message }, "[captura] extração silenciou");
+      }
+    })();
+  }
+
   // Agentes IA só são acionados DENTRO do SmartFlow (via passo ia_responder).
   // Se nenhum cenário do SmartFlow bate com a mensagem, caímos num auto-reply
   // fixo configurado no canal. Sem IA automática fora do fluxo desenhado.

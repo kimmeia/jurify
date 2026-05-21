@@ -784,14 +784,18 @@ export const agentesIa = mysqlTable("agentes_ia", {
    */
   criadoPor: int("criadoPorAgenteIa"),
   /**
-   * Campos personalizados do cliente que este agente deve EXTRAIR da
-   * conversa automaticamente. JSON array de chaves de
-   * `campos_personalizados_cliente.chave`. Quando o cliente responde
-   * com um valor que casa com um campo (ex: "Meu financiamento é R$ 50k"
-   * → campo `valor_financiamento`), o sistema persiste em
-   * `contatos.camposPersonalizados`.
+   * Variáveis que este agente deve EXTRAIR da conversa automaticamente.
+   * Cada variável define: o atributo técnico usado pela IA, uma descrição
+   * orientando a extração, e o campo personalizado de destino.
    *
-   * Formato: ["valor_financiamento", "cpf_principal", "data_nascimento"]
+   * Formato (novo): [{atributo, descricao, campoChave}, ...]
+   *   Ex: [{atributo: "data_consulta", descricao: "Aceitar 'amanhã'",
+   *        campoChave: "data_agendamento"}]
+   *
+   * Formato legado aceito (retrocompat): ["chave1", "chave2"] — interpretado
+   * como atributo = campoChave = chave, sem descrição.
+   *
+   * Parser em `shared/agente-variaveis-types.ts` (parseAgenteVariaveis).
    * NULL ou vazio = agente não extrai nada.
    */
   camposCaptura: text("camposCapturaAgente"),
