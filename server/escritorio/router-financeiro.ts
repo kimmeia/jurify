@@ -514,8 +514,14 @@ export const financeiroRouter = router({
     }),
 
   /**
-   * Contadores leves pros banners "X cobranças sem categoria"/"sem atendente"
-   * na aba Cobranças do Financeiro. Query SQL agregada — não carrega rows.
+   * Contadores leves pros banners de pendência na aba Cobranças do Financeiro.
+   * Query SQL agregada — não carrega rows.
+   *
+   * 3 contadores hoje:
+   *  - semCategoria — afeta DRE
+   *  - semAtendente — afeta comissão
+   *  - semContato   — afeta tudo (cobrança órfã = sem cliente, vinda de
+   *                   webhook que chegou antes do vínculo asaas_clientes)
    *
    * Só conta pra quem tem `verTodos` no financeiro (banner é mensagem
    * de gestão pro escritório inteiro). User com só `verProprios` recebe
@@ -524,14 +530,17 @@ export const financeiroRouter = router({
   contadoresPendencia: protectedProcedure.query(async ({ ctx }) => {
     const esc = await requireEscritorio(ctx.user.id);
     const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
-    if (!perm.verTodos) return { semCategoria: 0, semAtendente: 0 };
+    if (!perm.verTodos) {
+      return { semCategoria: 0, semAtendente: 0, semContato: 0 };
+    }
     const db = await getDb();
-    if (!db) return { semCategoria: 0, semAtendente: 0 };
+    if (!db) return { semCategoria: 0, semAtendente: 0, semContato: 0 };
 
     const [row] = await db
       .select({
         semCategoria: sql<number>`SUM(CASE WHEN ${asaasCobrancas.categoriaId} IS NULL THEN 1 ELSE 0 END)`,
         semAtendente: sql<number>`SUM(CASE WHEN ${asaasCobrancas.atendenteId} IS NULL THEN 1 ELSE 0 END)`,
+        semContato: sql<number>`SUM(CASE WHEN ${asaasCobrancas.contatoId} IS NULL THEN 1 ELSE 0 END)`,
       })
       .from(asaasCobrancas)
       .where(eq(asaasCobrancas.escritorioId, esc.escritorio.id));
@@ -539,6 +548,7 @@ export const financeiroRouter = router({
     return {
       semCategoria: Number(row?.semCategoria ?? 0),
       semAtendente: Number(row?.semAtendente ?? 0),
+      semContato: Number(row?.semContato ?? 0),
     };
   }),
 

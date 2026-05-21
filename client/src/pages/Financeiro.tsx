@@ -314,6 +314,13 @@ export default function Financeiro() {
     onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
+  // Toggle de comissionável individual — 3 estados (padrão/sim/não) via
+  // `asaasCobrancas.comissionavelOverride`. `null` = segue categoria.
+  const comissionavelMut = trpc.asaas.atualizarComissionavel.useMutation({
+    onSuccess: () => utils.asaas.listarCobrancas.invalidate(),
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
   // Marca cobrança manual como recebida. Disponível só em cobranças
   // origem='manual' com status PENDING/OVERDUE — Asaas sincroniza
   // automaticamente via webhook nas origens 'asaas'.
@@ -1074,6 +1081,7 @@ export default function Financeiro() {
                     <TableHead>Status</TableHead>
                     <TableHead className="min-w-[140px]">Categoria</TableHead>
                     <TableHead className="min-w-[140px]">Atendente</TableHead>
+                    <TableHead className="min-w-[110px]">Comissão</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -1130,6 +1138,16 @@ export default function Financeiro() {
                             })
                           }
                           disabled={!perms.podeEditar || atribuirMut.isPending}
+                        />
+                      </TableCell>
+                      <TableCell className="p-1">
+                        <CelulaComissao
+                          cobrancaId={c.id}
+                          comissionavelOverride={c.comissionavelOverride ?? null}
+                          onAtualizar={(v) =>
+                            comissionavelMut.mutate({ id: c.id, valor: v })
+                          }
+                          disabled={!perms.podeEditar || comissionavelMut.isPending}
                         />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[200px]">
@@ -1809,11 +1827,37 @@ function BannersPendencia() {
     staleTime: 60_000,
   });
   if (!data) return null;
-  const { semCategoria, semAtendente } = data;
-  if (semCategoria === 0 && semAtendente === 0) return null;
+  const { semCategoria, semAtendente, semContato } = data;
+  if (semCategoria === 0 && semAtendente === 0 && (semContato ?? 0) === 0) {
+    return null;
+  }
 
   return (
     <div className="space-y-2">
+      {(semContato ?? 0) > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-xs">
+          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+          <div className="flex-1">
+            <b className="text-red-900">
+              {semContato} {semContato === 1 ? "cobrança sem cliente" : "cobranças sem cliente"}
+            </b>
+            <span className="text-red-700">
+              {" "}— pagamento recebido sem vínculo no CRM. Afeta DRE, comissão e detecção de duplicatas.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-red-400 text-red-900 hover:bg-red-100"
+            onClick={() => {
+              window.location.href = "/financeiro/revisar-orfas";
+            }}
+          >
+            <UserPlus className="h-3 w-3 mr-1" />
+            Revisar órfãs
+          </Button>
+        </div>
+      )}
       {semCategoria > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
@@ -1885,7 +1929,7 @@ function BulkAtribuirDialog({
   onClose: () => void;
   cobrancaIds: number[];
   categorias: Array<{ id: number; nome: string }>;
-  atendentes: Array<{ id: number; nome?: string | null }>;
+  atendentes: Array<{ id: number; userName?: string | null }>;
   onConfirm: (payload: {
     cobrancaIds: number[];
     categoriaId?: number | null;
@@ -1961,7 +2005,7 @@ function BulkAtribuirDialog({
                 </SelectItem>
                 {atendentes.map((a) => (
                   <SelectItem key={a.id} value={String(a.id)}>
-                    {a.nome ?? `#${a.id}`}
+                    {a.userName ?? `#${a.id}`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -2043,6 +2087,64 @@ function CelulaCategoria({
   );
 }
 
+/**
+ * Célula editável de comissionável da cobrança. 3 estados (override null):
+ *  - "padrao" (null)  → segue `categoria.comissionavel` (default)
+ *  - "sim"   (true)   → força comissionar (ignora categoria)
+ *  - "nao"   (false)  → força não-comissionar
+ *
+ * Mostra com cores distintas pra deixar claro quando há override ativo
+ * (estado padrão é neutro; sim=verde; nao=vermelho).
+ */
+function CelulaComissao({
+  cobrancaId: _cobrancaId,
+  comissionavelOverride,
+  onAtualizar,
+  disabled,
+}: {
+  cobrancaId: string | number;
+  comissionavelOverride: boolean | null;
+  onAtualizar: (valor: boolean | null) => void;
+  disabled?: boolean;
+}) {
+  const value =
+    comissionavelOverride === null
+      ? "padrao"
+      : comissionavelOverride
+        ? "sim"
+        : "nao";
+  const cor =
+    value === "sim"
+      ? "text-emerald-700 border-emerald-300 bg-emerald-50/40"
+      : value === "nao"
+        ? "text-red-700 border-red-300 bg-red-50/40"
+        : "text-slate-600 border-slate-200";
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) =>
+        onAtualizar(v === "padrao" ? null : v === "sim")
+      }
+      disabled={disabled}
+    >
+      <SelectTrigger className={"h-7 text-xs border-dashed " + cor}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="padrao" className="italic text-slate-600">
+          Padrão (categoria)
+        </SelectItem>
+        <SelectItem value="sim" className="text-emerald-700">
+          Sim — comissionar
+        </SelectItem>
+        <SelectItem value="nao" className="text-red-700">
+          Não — não comissionar
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 /** Idem CelulaCategoria pra Atendente (responsável pela comissão). */
 function CelulaAtendente({
   cobrancaId: _cobrancaId,
@@ -2053,7 +2155,7 @@ function CelulaAtendente({
 }: {
   cobrancaId: string | number;
   atendenteIdAtual: number | null;
-  atendentes: Array<{ id: number; nome?: string | null; cargo?: string }>;
+  atendentes: Array<{ id: number; userName?: string | null; cargo?: string }>;
   onAtribuir: (atendenteId: number | null) => void;
   disabled?: boolean;
 }) {
@@ -2081,7 +2183,7 @@ function CelulaAtendente({
         </SelectItem>
         {atendentes.map((a) => (
           <SelectItem key={a.id} value={String(a.id)}>
-            {a.nome ?? `#${a.id}`}
+            {a.userName ?? `#${a.id}`}
           </SelectItem>
         ))}
       </SelectContent>

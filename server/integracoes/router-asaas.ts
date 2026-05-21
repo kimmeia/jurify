@@ -4476,6 +4476,18 @@ export const asaasRouter = router({
           sql`(${asaasCobrancas.parcelamentoLocalId} IS NULL
                OR ${aliasB.parcelamentoLocalId} IS NULL
                OR ${asaasCobrancas.parcelamentoLocalId} != ${aliasB.parcelamentoLocalId})`,
+          // Match por contato: pares só são suspeitos se forem do MESMO contato
+          // OU se pelo menos uma das cobranças está órfã (contatoId NULL — o
+          // operador precisa decidir antes de declarar duplicata). Sem essa
+          // restrição, 1 cobrança órfã de R$50 emparelhava com TODAS as outras
+          // cobranças de R$50 pagas naquela semana (bug do "38 pares" — uma
+          // cobrança sem contato falsamente parece duplicata de qualquer cliente
+          // que pagou o mesmo valor por coincidência).
+          sql`(
+            ${asaasCobrancas.contatoId} IS NULL
+            OR ${aliasB.contatoId} IS NULL
+            OR ${asaasCobrancas.contatoId} = ${aliasB.contatoId}
+          )`,
           // Filtro: par já resolvido por beneficiário não aparece mais.
           // Se A.contatoBeneficiarioId == B.contatoId ou B.contatoBeneficiarioId
           // == A.contatoId, o operador já consolidou esse par via "vincular
