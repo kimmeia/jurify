@@ -191,6 +191,40 @@ export const dashboardRouter = router({
           ),
         );
 
+      // Counts reais de "hoje" — sem LIMIT 5, pra não capar o card
+      // "Hoje precisa atenção". As queries acima trazem só 5 pra render
+      // a lista; estas dão o número total que o card exibe.
+      const [compHojeAgg] = await db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(agendamentos)
+        .where(
+          and(
+            eq(agendamentos.escritorioId, escritorioId),
+            gte(agendamentos.dataInicio, hojeInicio),
+            lte(agendamentos.dataInicio, hojeFim),
+            or(eq(agendamentos.status, "pendente"), eq(agendamentos.status, "em_andamento")),
+            ...(soProprios
+              ? [or(eq(agendamentos.responsavelId, colabId), eq(agendamentos.criadoPorId, colabId))!]
+              : []),
+          ),
+        );
+      const [tarefasHojeAgg] = await db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(tarefas)
+        .where(
+          and(
+            eq(tarefas.escritorioId, escritorioId),
+            gte(tarefas.dataVencimento, hojeInicio),
+            lte(tarefas.dataVencimento, hojeFim),
+            or(eq(tarefas.status, "pendente"), eq(tarefas.status, "em_andamento")),
+            ...(soProprios
+              ? [or(eq(tarefas.responsavelId, colabId), eq(tarefas.criadoPor, colabId))!]
+              : []),
+          ),
+        );
+      const totalHojeCount =
+        Number(compHojeAgg?.total ?? 0) + Number(tarefasHojeAgg?.total ?? 0);
+
       // ─── CRM / Conversas ────────────────────────────────────
       const conversasAguardando = await db
         .select({ id: conversas.id })
@@ -323,6 +357,7 @@ export const dashboardRouter = router({
           })),
           tarefasHoje: tarefasHoje.map((t) => ({ id: t.id, titulo: t.titulo, prioridade: t.prioridade })),
           atrasados: tarefasAtrasadas.length + compromissosAtrasados.length,
+          totalHojeCount,
         },
         crm: {
           conversasAguardando: conversasAguardando.length,
