@@ -1363,13 +1363,13 @@ export default function AgentesIA() {
       </div>
 
       {/* Banner contextual da aba atual */}
-      {tab === "templates" && (
+      {tab === "templates" && (templates?.length ?? 0) > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/40 px-4 py-2.5 flex items-start gap-2.5">
           <Store className="h-4 w-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
           <div className="text-xs">
-            <p className="font-semibold text-amber-900 dark:text-amber-200">Catálogo da Jurify</p>
+            <p className="font-semibold text-amber-900 dark:text-amber-200">Catálogo do JuridFlow</p>
             <p className="text-amber-800/80 dark:text-amber-300/80 mt-0.5">
-              Agentes pré-construídos pela equipe Jurify. Clique em <strong>Clonar p/ escritório</strong> para customizar com seus documentos e prompts.
+              Agentes pré-construídos pela equipe JuridFlow. Clique em <strong>Clonar p/ escritório</strong> para customizar com seus documentos e prompts.
             </p>
           </div>
         </div>
@@ -1406,6 +1406,11 @@ export default function AgentesIA() {
                     ? "Nenhum agente compartilhado pelo escritório"
                     : "Você ainda não criou um agente"}
             </p>
+            {tab === "templates" && !busca && areaFiltro === "todas" && (
+              <p className="text-xs text-center max-w-md mb-2">
+                A equipe JuridFlow ainda não publicou templates prontos. Você pode criar seu próprio agente do zero na aba <strong>Meus agentes</strong>.
+              </p>
+            )}
             {tab === "meus" && !busca && (
               <Button
                 onClick={() => { setEditandoId(null); setFormOpen(true); }}

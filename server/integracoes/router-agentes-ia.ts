@@ -1010,7 +1010,7 @@ export const agentesIaRouter = router({
     }),
 
   // ─── Templates da plataforma (agentes_admin) ──────────────────────────────
-  // Permite escritórios verem catálogo de agentes pré-construídos pela Jurify
+  // Permite escritórios verem catálogo de agentes pré-construídos pelo JuridFlow
   // e clonarem pra customizar — resolve a divisão admin × escritório.
   listarTemplates: protectedProcedure.query(async () => {
     const db = await getDb();
