@@ -34,6 +34,7 @@ import { calcularParcelas } from "./parcelamento-local";
 import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
+  syncCobrancasPorVencimentoEscritorio,
   syncTodasCobrancasDoContato,
   agregarVinculosPorContato,
   inserirVinculoAsaasIdempotente,
@@ -2819,7 +2820,12 @@ export const asaasRouter = router({
       const result = await syncCobrancasEscritorio(esc.escritorio.id, {
         diasHistorico: input?.diasHistorico,
       });
-      return result;
+      const sweep = await syncCobrancasPorVencimentoEscritorio(esc.escritorio.id);
+      return {
+        ...result,
+        novas: result.novas + sweep.novas,
+        atualizadas: result.atualizadas + sweep.atualizadas,
+      };
     }),
 
   /** Sync rápido sob-demanda — janela curta (3 dias) + turbo (delay 500ms
@@ -2837,7 +2843,12 @@ export const asaasRouter = router({
       diasHistorico: 3,
       delayMs: 500,
     });
-    return result;
+    const sweep = await syncCobrancasPorVencimentoEscritorio(esc.escritorio.id);
+    return {
+      ...result,
+      novas: result.novas + sweep.novas,
+      atualizadas: result.atualizadas + sweep.atualizadas,
+    };
   }),
 
   // ─── KPIs ────────────────────────────────────────────────────────────────

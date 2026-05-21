@@ -724,6 +724,185 @@ export async function syncCobrancasEscritorio(
   return { clientes: vinculos.length, ...totais };
 }
 
+/**
+ * Sweep por VENCIMENTO — passada complementar ao sync por cliente.
+ *
+ * O sync regular filtra por `dateCreated` nos últimos N dias e perde
+ * cobranças antigas que continuam pendentes/vencidas. Esta função pega
+ * tudo que vence entre `(hoje - diasParaTras)` e `(hoje + diasParaFrente)`,
+ * sem filtro de customer (1 paginação por escritório), e faz upsert
+ * resolvendo o vínculo customer→contatoId localmente.
+ *
+ * Defaults: 180d para trás + 30d para frente — cobre inadimplência crônica
+ * típica de escritório jurídico e vencimentos futuros próximos.
+ *
+ * NÃO deleta órfãs: cobrança que existe local mas sumiu do Asaas fica.
+ * Limpeza de fantasmas é do cron mensal de reconciliação (caro: GET por
+ * cobrança).
+ */
+export async function syncCobrancasPorVencimentoEscritorio(
+  escritorioId: number,
+  opts?: {
+    diasParaTras?: number;
+    diasParaFrente?: number;
+  },
+): Promise<SyncCobrancasStats> {
+  const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return zero;
+
+  const db = await getDb();
+  if (!db) return zero;
+
+  const diasParaTras = opts?.diasParaTras ?? 180;
+  const diasParaFrente = opts?.diasParaFrente ?? 30;
+  const hoje = new Date();
+  const ge = new Date(hoje);
+  ge.setUTCDate(ge.getUTCDate() - diasParaTras);
+  const le = new Date(hoje);
+  le.setUTCDate(le.getUTCDate() + diasParaFrente);
+  const dueDateGe = ge.toISOString().slice(0, 10);
+  const dueDateLe = le.toISOString().slice(0, 10);
+
+  // Carrega vínculos customerId→contatoId localmente — uma query, não
+  // 100 GETs no Asaas. Cobranças com customerId fora do mapa entram
+  // como órfãs (contatoId=null) e aparecem na tela de órfãs do app.
+  const vinculos = await db
+    .select({
+      asaasCustomerId: asaasClientes.asaasCustomerId,
+      contatoId: asaasClientes.contatoId,
+      primario: asaasClientes.primario,
+    })
+    .from(asaasClientes)
+    .where(and(
+      eq(asaasClientes.escritorioId, escritorioId),
+      eq(asaasClientes.ativo, true),
+    ));
+  const vinculosDedup = deduplicarVinculosPorCustomer(
+    vinculos.map((v, idx) => ({ ...v, id: idx })),
+  );
+  const customerToContato = new Map<string, number>();
+  for (const v of vinculosDedup) {
+    customerToContato.set(v.asaasCustomerId, v.contatoId);
+  }
+
+  const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let res;
+    try {
+      res = await client.listarCobrancasPorJanela({
+        dueDateGe,
+        dueDateLe,
+        limit: 100,
+        offset,
+      });
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      if (err instanceof RateLimitError || status === 429) {
+        log.warn(
+          { escritorioId, offset, dueDateGe, dueDateLe },
+          "[Asaas Sync Vencimento] Rate limit — abortando sweep parcial",
+        );
+        return stats;
+      }
+      log.warn(
+        { escritorioId, err: err?.message },
+        "[Asaas Sync Vencimento] Erro inesperado — abortando sweep",
+      );
+      return stats;
+    }
+
+    for (const cob of res.data) {
+      if (cob.deleted) continue;
+      const contatoId = customerToContato.get(cob.customer) ?? null;
+
+      const [local] = await db
+        .select()
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasPaymentId, cob.id),
+        ))
+        .limit(1);
+
+      if (local) {
+        const localDataPag = local.dataPagamento || null;
+        const remotaDataPag = extrairDataPagamento(cob);
+        const remotaNetValue = cob.netValue?.toString() || null;
+        const mudouStatus = local.status !== cob.status;
+        const mudouDataPag = localDataPag !== remotaDataPag;
+        const mudouNetValue = (local.valorLiquido || null) !== remotaNetValue;
+        const mudouContato = contatoId !== null && local.contatoId !== contatoId;
+
+        if (mudouStatus || mudouDataPag || mudouNetValue || mudouContato) {
+          const setObj: Record<string, unknown> = {
+            status: cob.status,
+            dataPagamento: remotaDataPag,
+            valorLiquido: remotaNetValue,
+          };
+          if (mudouContato) setObj.contatoId = contatoId;
+          await db.update(asaasCobrancas).set(setObj).where(eq(asaasCobrancas.id, local.id));
+          stats.atualizadas++;
+        }
+      } else {
+        const atendenteInferido = contatoId
+          ? await inferirAtendentePorCobranca(escritorioId, cob.externalReference || null, contatoId)
+          : null;
+        try {
+          await db
+            .insert(asaasCobrancas)
+            .values({
+              escritorioId,
+              contatoId,
+              asaasPaymentId: cob.id,
+              asaasCustomerId: cob.customer,
+              valor: cob.value.toString(),
+              valorLiquido: cob.netValue?.toString() || null,
+              vencimento: cob.dueDate,
+              formaPagamento: (cob.billingType as any) || "UNDEFINED",
+              status: cob.status,
+              descricao: cob.description || null,
+              invoiceUrl: cob.invoiceUrl,
+              bankSlipUrl: cob.bankSlipUrl || null,
+              dataPagamento: extrairDataPagamento(cob),
+              externalReference: cob.externalReference || null,
+              atendenteId: atendenteInferido,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                status: cob.status,
+                valor: cob.value.toString(),
+                valorLiquido: cob.netValue?.toString() || null,
+                vencimento: cob.dueDate,
+                formaPagamento: (cob.billingType as any) || "UNDEFINED",
+                descricao: cob.description || null,
+                invoiceUrl: cob.invoiceUrl,
+                bankSlipUrl: cob.bankSlipUrl || null,
+                dataPagamento: extrairDataPagamento(cob),
+              },
+            });
+          stats.novas++;
+        } catch (err) {
+          if (isDuplicateEntryError(err)) continue;
+          throw err;
+        }
+      }
+    }
+
+    hasMore = res.hasMore;
+    offset += res.limit;
+  }
+
+  log.info(
+    { escritorioId, dueDateGe, dueDateLe, ...stats },
+    "[Asaas Sync Vencimento] sweep concluído",
+  );
+  return stats;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // AGREGAÇÃO N:1 — vários asaas_clientes por contato do CRM
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -962,6 +1141,14 @@ export async function syncTodosEscritorios(opts?: {
       if (total > 0) {
         log.info(
           `[Asaas Sync] Escritório ${escritorioId}: ${result.novas} novas, ${result.atualizadas} atualizadas, ${result.removidas} removidas`,
+        );
+      }
+
+      const sweep = await syncCobrancasPorVencimentoEscritorio(escritorioId);
+      const sweepTotal = sweep.novas + sweep.atualizadas;
+      if (sweepTotal > 0) {
+        log.info(
+          `[Asaas Sync Vencimento] Escritório ${escritorioId}: ${sweep.novas} novas, ${sweep.atualizadas} atualizadas (sweep 180d retro + 30d futuro)`,
         );
       }
     } catch (err: any) {
