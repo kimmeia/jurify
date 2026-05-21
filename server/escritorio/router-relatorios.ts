@@ -1074,12 +1074,24 @@ export const relatoriosRouter = router({
    * Pra cada cliente fechado/pago pelo atendente no período:
    *   - `valorFechado`: soma `leads.valorEstimado` (etapaFunil=fechado_ganho)
    *   - `contratosFechados`: count desses leads
-   *   - `valorRecebido`: soma cobranças pagas
+   *   - `valorRecebido`: soma cobranças pagas comissionáveis
    *   - `contratosPagos`: count DISTINCT(COALESCE(parcelamentoLocalId, id))
    *
-   * Combina por contatoId (cliente pode ter sido fechado mas ainda não pagou,
-   * ou pago sem ter lead — caso de cobrança avulsa direta). Ordenado por
-   * valor fechado desc; clientes sem fechado mas com pagamento vão no fim.
+   * IMPORTANTE: o cálculo de `valorRecebido` aplica EXATAMENTE os mesmos
+   * filtros do ranking comercial (`comercialDashboard`):
+   *   1) Só cobranças comissionáveis (`buildFiltroComissaoSQL(["sim"])`).
+   *   2) Só cobranças cujo CLIENTE REAL tem lead fechado_ganho no MESMO
+   *      período (subquery `contatosFechadosAtual`). "Cliente real" usa
+   *      COALESCE(beneficiário, pagador) — caso esposa paga marido.
+   *
+   * Sem esses filtros, a soma do drawer (ex: R$ 6.000) divergia do card
+   * do ranking (ex: R$ 3.500) — gestor via números conflitantes pra mesma
+   * atendente. Cobrança não-comissionável (custas, ressarcimento) ou
+   * cliente antigo que pagou agora fica fora da meta comercial corrente.
+   *
+   * Combina por contatoId (cliente pode ter fechado sem pagar, ou pago
+   * sem lead próprio — quando lead é de outro atendente do setor mas
+   * pagamento veio pra ele). Ordenado por valor fechado desc.
    */
   detalheAtendenteComercial: protectedProcedure
     .input(z.object({
@@ -1149,11 +1161,27 @@ export const relatoriosRouter = router({
         ))
         .groupBy(leads.contatoId);
 
-      // ── Cobranças pagas do atendente, agrupadas por CLIENTE REAL ───────────
+      // ── Subquery: contatos com lead fechado_ganho no período ───────────────
+      // Mesma definição do `comercialDashboard` — independe de QUAL atendente
+      // fechou o lead (basta o cliente ter um fechamento no período).
+      const contatosFechadosAtual = db
+        .select({ id: leads.contatoId })
+        .from(leads)
+        .where(and(
+          eq(leads.escritorioId, eid),
+          eq(leads.etapaFunil, "fechado_ganho"),
+          gte(leads.createdAt, dataInicio),
+          lte(leads.createdAt, dataFim),
+        ));
+
+      // ── Cobranças pagas COMISSIONÁVEIS de clientes fechados no período ─────
       // Cliente real = COALESCE(beneficiário, pagador). Resolve "esposa
       // pagou pelo marido": cobrança paga por Maria com beneficiário
       // Carlos agrupa em Carlos. Sem isso, Maria apareceria como cliente
       // separada no drawer, confundindo gestão.
+      //
+      // Filtros idênticos ao `comercialDashboard.porAtendenteRows` —
+      // garante que a soma do drawer bate com o card "Recebido" do ranking.
       const cobrancasRows = await db
         .select({
           contatoId: sql<number>`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`,
@@ -1161,12 +1189,15 @@ export const relatoriosRouter = router({
           contratosPagos: sql<number>`COUNT(DISTINCT COALESCE(${asaasCobrancas.parcelamentoLocalId}, CAST(${asaasCobrancas.id} AS CHAR)))`,
         })
         .from(asaasCobrancas)
+        .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
         .where(and(
           eq(asaasCobrancas.escritorioId, eid),
           eq(asaasCobrancas.atendenteId, input.atendenteId),
           inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
+          buildFiltroComissaoSQL(["sim"])!,
+          sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAtual})`,
         ))
         .groupBy(sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`);
 
