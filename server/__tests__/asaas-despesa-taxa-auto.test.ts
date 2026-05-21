@@ -281,6 +281,27 @@ describe("gerarDespesaTaxaAsaas — idempotência", () => {
     expect(r.created).toBe(false);
   });
 
+  it("ER_DUP_ENTRY empacotado pelo Drizzle (err.cause) também é idempotente", async () => {
+    selectQueue.push([{ id: 10 }]);
+    nextInsertError = {
+      message: "Failed query: insert into `despesas` ...\nparams: ...",
+      cause: { code: "ER_DUP_ENTRY", errno: 1062, message: "Duplicate entry '1-100-taxa_asaas' for key 'desp_cob_origem_uq'" },
+    };
+
+    const r = await gerarDespesaTaxaAsaas({
+      escritorioId: 1,
+      cobrancaOriginalId: 100,
+      valor: 100,
+      valorLiquido: 98,
+      dataPagamento: "2026-05-11",
+      descricaoCobranca: "Honorário X",
+      criadoPorUserId: 1,
+    });
+
+    expect(r.created).toBe(false);
+    expect(r.despesaId).toBeNull();
+  });
+
   it("outro erro qualquer: retorna created=false (não bloqueia webhook)", async () => {
     selectQueue.push([{ id: 10 }]);
     nextInsertError = { message: "Connection lost" };

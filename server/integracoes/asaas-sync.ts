@@ -18,6 +18,7 @@ import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
 import { RateLimitError } from "./asaas-rate-guard";
 import { createLogger } from "../_core/logger";
+import { isDuplicateEntryError } from "../_core/sql-helpers";
 import { inferirAtendentePorCobranca, reconciliarCobrancasOrfas } from "../escritorio/db-financeiro";
 
 /** Extrai a "data de pagamento" mais confiável da cobrança Asaas.
@@ -148,8 +149,8 @@ export async function inserirVinculoAsaasIdempotente(
   try {
     await db.insert(asaasClientes).values(values);
     return true;
-  } catch (err: any) {
-    if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+  } catch (err: unknown) {
+    if (isDuplicateEntryError(err)) {
       // Race benigna: vínculo já existe. Bump sincronizadoEm pra
       // refletir "vi esse customer agora", sem mexer em contatoId/primario.
       await db

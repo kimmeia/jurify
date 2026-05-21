@@ -27,3 +27,55 @@ export function escapeLikePattern(input: string): string {
     .replace(/%/g, "\\%")
     .replace(/_/g, "\\_");
 }
+
+/**
+ * Detecta ER_DUP_ENTRY (UNIQUE/PK violation) cobrindo o caso em que o
+ * Drizzle reempacota o erro do mysql2 dentro de `err.cause`.
+ *
+ * Sem essa proteção, o `try/catch` legado checava apenas `err.code` e
+ * `err.message` — quando o Drizzle empacota, o `err.message` vira
+ * "Failed query: ..." e `err.code` fica `undefined`, então o catch
+ * confunde duplicata legítima (race benigna) com erro real e poluía o
+ * log + estourava contadores de "erros" no painel de sync.
+ *
+ * Caso clássico: `asaas-extrato.ts` rodando sync manual depois de já
+ * ter importado tudo via cron → 600+ duplicatas viravam "erros".
+ */
+export function isDuplicateEntryError(err: unknown): boolean {
+  if (err == null || typeof err !== "object") return false;
+  const e = err as Record<string, unknown> & { cause?: Record<string, unknown> };
+  if (e.code === "ER_DUP_ENTRY" || e.errno === 1062) return true;
+  if (
+    e.cause &&
+    typeof e.cause === "object" &&
+    (e.cause.code === "ER_DUP_ENTRY" || e.cause.errno === 1062)
+  ) {
+    return true;
+  }
+  const msg = typeof e.message === "string" ? e.message : "";
+  if (/Duplicate entry/i.test(msg)) return true;
+  const causeMsg =
+    e.cause && typeof e.cause === "object" && typeof e.cause.message === "string"
+      ? e.cause.message
+      : "";
+  return /Duplicate entry/i.test(causeMsg);
+}
+
+/**
+ * Mensagem do erro real (do mysql2), preferindo `err.cause.message` ao
+ * `err.message` quando o Drizzle empacota. Útil pra log diagnóstico —
+ * sem isso, o log vira "Failed query: ..." sem o motivo.
+ */
+export function extractDbErrorMessage(err: unknown): string {
+  if (err == null || typeof err !== "object") return String(err ?? "");
+  const e = err as Record<string, unknown> & { cause?: Record<string, unknown> };
+  if (
+    e.cause &&
+    typeof e.cause === "object" &&
+    typeof e.cause.message === "string" &&
+    e.cause.message.length > 0
+  ) {
+    return e.cause.message;
+  }
+  return typeof e.message === "string" ? e.message : String(err);
+}
