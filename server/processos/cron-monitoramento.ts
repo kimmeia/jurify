@@ -33,6 +33,10 @@ import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
 import { detectarSugestaoPrazo } from "./detector-prazos";
+import {
+  identificarPoloDoCliente,
+  type PoloIdentificado,
+} from "./polo-matcher";
 
 const log = createLogger("motor-cron");
 
@@ -607,41 +611,59 @@ export async function pollarUmMonitoramentoNovasAcoes(
     }
 
     if (cnjsNovos.length > 0) {
-      // Filtro por data de cadastro do cliente: pra cada CNJ NOVO, busca
-      // `dataDistribuicao` via detail scrape e compara com
-      // `dataReferenciaCadastro`. CNJs ajuizados ANTES do cliente entrar
-      // no escritório viram baseline silencioso (lido=true, sem alerta).
-      // Sem detail scrape (NULL = sem filtro), todos viram alerta.
+      // Pra cada CNJ NOVO, faz detail scrape pra coletar:
+      //   1. `partes` (com polo) → silencia se cliente é só polo ativo
+      //      (cliente é o AUTOR, não foi processado).
+      //   2. `dataDistribuicao` → silencia se ajuizado ANTES do cliente
+      //      entrar no escritório (`dataReferenciaCadastro`).
+      //
+      // Detail scrape custa ~15-30s. Aceita pq CNJs novos são raros
+      // (1-5/mês típico). Se o scrape falhar, assume relevante por
+      // segurança (FP é menos pior que perder ação real).
       const dataRef = mon.dataReferenciaCadastro;
       const cnjsRelevantes: string[] = [];
-      const cnjsAntigos: string[] = [];
+      const cnjsSilenciados: Array<{ cnj: string; motivo: "polo_ativo" | "anterior_cadastro" }> = [];
 
       for (const cnj of cnjsNovos) {
         let isRelevante = true;
+        let motivoSilencio: "polo_ativo" | "anterior_cadastro" | null = null;
         let dataDistribuicao: Date | null = null;
+        let poloDoCliente: PoloIdentificado = "desconhecido";
 
-        if (dataRef) {
-          // Detail scrape custa ~15-30s. Aceita pq são poucos CNJs novos
-          // por poll (1-5/mês típico). Se falhar, assume relevante
-          // (better safe than sorry — false positive é menos pior que
-          // perder uma ação real).
-          try {
-            const detalhe = await consultarTjce(cnj, sessao);
-            if (detalhe.ok && detalhe.capa?.dataDistribuicao) {
-              dataDistribuicao = new Date(detalhe.capa.dataDistribuicao);
-              if (!Number.isNaN(dataDistribuicao.getTime())) {
-                isRelevante = dataDistribuicao.getTime() >= new Date(dataRef).getTime();
+        try {
+          const detalhe = await consultarTjce(cnj, sessao);
+          if (detalhe.ok && detalhe.capa) {
+            if (detalhe.capa.dataDistribuicao) {
+              const candidato = new Date(detalhe.capa.dataDistribuicao);
+              if (!Number.isNaN(candidato.getTime())) {
+                dataDistribuicao = candidato;
               }
             }
-          } catch (err) {
-            log.warn(
-              {
-                monId: mon.id,
-                cnj,
-                err: err instanceof Error ? err.message : String(err),
-              },
-              "[motor-cron] detail scrape pra filtro de data falhou — tratando como relevante",
-            );
+            const partes = Array.isArray(detalhe.capa.partes) ? detalhe.capa.partes : [];
+            poloDoCliente = identificarPoloDoCliente(mon.apelido, mon.searchKey, partes);
+          }
+        } catch (err) {
+          log.warn(
+            {
+              monId: mon.id,
+              cnj,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            "[motor-cron] detail scrape pra polo/data falhou — tratando como relevante",
+          );
+        }
+
+        // Regra 1: polo ativo confirmado → silencia (cliente é o autor)
+        if (poloDoCliente === "ativo") {
+          isRelevante = false;
+          motivoSilencio = "polo_ativo";
+        }
+
+        // Regra 2: ajuizado antes do cadastro → silencia (baseline antigo)
+        if (isRelevante && dataRef && dataDistribuicao) {
+          if (dataDistribuicao.getTime() < new Date(dataRef).getTime()) {
+            isRelevante = false;
+            motivoSilencio = "anterior_cadastro";
           }
         }
 
@@ -655,25 +677,30 @@ export async function pollarUmMonitoramentoNovasAcoes(
             fonte: "pje",
             conteudo: isRelevante
               ? `Nova ação detectada: ${cnj} contra ${mon.apelido ?? mon.searchKey}`
-              : `Baseline antigo (anterior ao cadastro): ${cnj}`,
+              : motivoSilencio === "polo_ativo"
+                ? `Cliente é autor (polo ativo): ${cnj}`
+                : `Baseline antigo (anterior ao cadastro): ${cnj}`,
             conteudoJson: JSON.stringify({
               cnj,
               dataDistribuicao: dataDistribuicao?.toISOString() ?? null,
-              filtradoPorData: dataRef && !isRelevante,
+              poloDoCliente,
+              motivoSilencio,
+              filtradoPorData: motivoSilencio === "anterior_cadastro",
+              filtradoPorPolo: motivoSilencio === "polo_ativo",
               searchKey: mon.searchKey,
               searchType: mon.searchType,
               tribunal: mon.tribunal,
             }),
             cnjAfetado: cnj,
             hashDedup: dedup,
-            lido: !isRelevante, // antigo já entra lido (sem alerta)
+            lido: !isRelevante, // silenciado já entra lido (sem alerta)
           });
         } catch {
           /* duplicate hashDedup → ignora */
         }
 
         if (isRelevante) cnjsRelevantes.push(cnj);
-        else cnjsAntigos.push(cnj);
+        else if (motivoSilencio) cnjsSilenciados.push({ cnj, motivo: motivoSilencio });
       }
 
       const todosCnjs = [...cnjsConhecidos, ...cnjsNovos];
@@ -687,10 +714,12 @@ export async function pollarUmMonitoramentoNovasAcoes(
         })
         .where(eq(motorMonitoramentos.id, mon.id));
 
-      if (cnjsAntigos.length > 0) {
+      if (cnjsSilenciados.length > 0) {
+        const porPolo = cnjsSilenciados.filter((c) => c.motivo === "polo_ativo").length;
+        const porData = cnjsSilenciados.filter((c) => c.motivo === "anterior_cadastro").length;
         log.info(
-          { monId: mon.id, cnjsAntigos: cnjsAntigos.length, dataRef: dataRef?.toISOString() },
-          "[motor-cron] CNJs filtrados por data de cadastro (baseline silencioso)",
+          { monId: mon.id, silenciadosPorPolo: porPolo, silenciadosPorData: porData, dataRef: dataRef?.toISOString() },
+          "[motor-cron] CNJs silenciados (cliente polo ativo OU anterior ao cadastro)",
         );
       }
 
