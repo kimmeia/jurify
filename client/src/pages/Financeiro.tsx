@@ -167,17 +167,10 @@ export default function Financeiro() {
     },
   );
 
-  // Filtro da aba Cobranças: agora por DATA DE PAGAMENTO (bate com a
-  // aba Comissões). PENDING/OVERDUE não têm dataPagamento — são
-  // incluídas separadamente quando o user marca esses status no
-  // multi-select (filtramos por vencimento como fallback nesse caso).
-  // listarCobrancas inclui cobranças manuais + Asaas — funciona mesmo
-  // sem Asaas conectado (mostra só as manuais).
-  const filtraPorVencimento = filtroStatus.length > 0 && filtroStatus.every(
-    (s) => s === "PENDING" || s === "OVERDUE",
-  );
-  // Filtros avançados (popover). Estado persistido em localStorage pra
-  // o usuário não perder ao recarregar.
+  // Filtro de período da aba Cobranças usa COALESCE(dataPagamento,
+  // vencimento) no backend — bate com a ordenação. Pendentes/vencidas
+  // entram pelo vencimento, pagas pela dataPagamento. Mostra todos
+  // os status por default — filtros aplicam-se sobre o conjunto completo.
   const [filtrosAvancados, setFiltrosAvancados] = useState<FiltrosAvancadosState>(
     () => carregarFiltrosAvancados(),
   );
@@ -191,9 +184,8 @@ export default function Financeiro() {
       {
         status: filtroStatus.length > 0 ? filtroStatus : undefined,
         formaPagamento: filtroForma.length > 0 ? filtroForma : undefined,
-        ...(filtraPorVencimento
-          ? { vencimentoInicio: rangeEfetivo.inicio, vencimentoFim: rangeEfetivo.fim }
-          : { pagamentoInicio: rangeEfetivo.inicio, pagamentoFim: rangeEfetivo.fim }),
+        pagamentoInicio: rangeEfetivo.inicio,
+        pagamentoFim: rangeEfetivo.fim,
         categoriaIds: filtrosAvancados.categoriaIds.length > 0
           ? filtrosAvancados.categoriaIds : undefined,
         incluirSemCategoria: filtrosAvancados.incluirSemCategoria || undefined,
