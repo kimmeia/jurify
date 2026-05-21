@@ -777,102 +777,9 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar }: {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// VIEW: HOJE
+// HERO + TIMELINE DE HOJE — componentes integrados pela aba "Eventos" quando
+// o filtro de status está em "pendentes"
 // ═══════════════════════════════════════════════════════════════════════════════
-
-function HojeView({ onStatusChange, onDelete, onEdit, onCardClick, podeEditar, podeExcluir }: {
-  onStatusChange: (id: number, fonte: string, status: string) => void;
-  onDelete: (id: number, fonte: string) => void;
-  onEdit?: (ev: any) => void;
-  onCardClick?: (ev: any) => void;
-  podeEditar?: boolean;
-  podeExcluir?: boolean;
-}) {
-  const { data, isLoading } = trpc.agenda.hoje.useQuery(undefined, { refetchInterval: 30000 });
-
-  if (isLoading) return <div className="space-y-3"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>;
-
-  const atrasados = data?.atrasados || [];
-  const hoje = data?.hoje || [];
-  const amanha = data?.amanha || [];
-  const total = atrasados.length + hoje.length + amanha.length;
-
-  // Próximo evento pendente (ignora atrasados — esses ficam na seção própria)
-  const proximoEvento = (() => {
-    const candidatos = [...hoje, ...amanha]
-      .filter((e: any) => {
-        if (e.diaInteiro) return false;
-        if (["concluido", "concluida", "cancelado", "cancelada"].includes(e.status)) return false;
-        return new Date(e.dataInicio).getTime() > Date.now();
-      })
-      .sort((a: any, b: any) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime());
-    return candidatos[0] || null;
-  })();
-
-  if (total === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50/30 py-16 text-center space-y-2">
-        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
-          <Sun className="h-7 w-7 text-amber-500/70" />
-        </div>
-        <p className="font-semibold text-slate-700">Dia tranquilo</p>
-        <p className="text-sm text-slate-500">Nenhum compromisso ou tarefa para hoje e amanhã.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {proximoEvento && <ProximoEventoHero ev={proximoEvento} onStatusChange={onStatusChange} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} />}
-
-      {atrasados.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2 text-rose-600">
-            <AlertTriangle className="h-4 w-4" />
-            Atrasados ({atrasados.length})
-          </h3>
-          <div className="space-y-2">
-            {atrasados.map(ev => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} podeExcluir={podeExcluir} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TIMELINE HORÁRIA — só pra hoje, só pra eventos com hora */}
-      {hoje.length > 0 && <TimelineHorariaHoje eventos={hoje} onCardClick={onCardClick} />}
-
-      {/* Eventos "dia inteiro" do dia de hoje (não cabem na timeline) */}
-      {hoje.filter((ev: any) => ev.diaInteiro).length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-600">
-            <ListTodo className="h-4 w-4" />
-            Hoje · dia inteiro / sem hora
-          </h3>
-          <div className="space-y-2">
-            {hoje.filter((ev: any) => ev.diaInteiro).map((ev: any) => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} podeExcluir={podeExcluir} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {amanha.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-500">
-            <Clock className="h-4 w-4" />
-            Amanhã ({amanha.length})
-          </h3>
-          <div className="space-y-2">
-            {amanha.map(ev => (
-              <EventoCard key={`${ev.fonte}-${ev.id}`} ev={ev} onStatusChange={onStatusChange} onDelete={onDelete} onEdit={onEdit} onCardClick={onCardClick} podeEditar={podeEditar} podeExcluir={podeExcluir} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** Card destacado do "Próximo evento" — countdown vivo + ações rápidas. */
 function ProximoEventoHero({ ev, onStatusChange, onEdit, onCardClick, podeEditar }: {
@@ -1142,7 +1049,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// VIEW: LISTA (com filter chips + agrupamento por períodos)
+// VIEW: EVENTOS (busca + filtros + grupos + hero/timeline em "pendentes")
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TIPO_FILTRO_OPTS: Array<{ id: string; label: string; cor: string }> = [
@@ -1213,10 +1120,44 @@ function ListaView({
     return buckets;
   }, [eventosFiltrados]);
 
+  // Próximo evento pendente — pra hero. Considera hoje+amanhã, ignora dia
+  // inteiro (sem hora, não tem sentido de "countdown"). Só aparece quando
+  // o usuário está olhando "Pendentes" — em outros filtros (Concluídos,
+  // todos), o hero perde contexto.
+  const proximoEvento = useMemo(() => {
+    if (filtroStatus !== "pendentes") return null;
+    const candidatos = [...grupos.hoje, ...grupos.amanha]
+      .filter((e: any) => {
+        if (e.diaInteiro) return false;
+        if (["concluido", "concluida", "cancelado", "cancelada"].includes(e.status)) return false;
+        return new Date(e.dataInicio).getTime() > Date.now();
+      })
+      .sort((a: any, b: any) => new Date(a.dataInicio).getTime() - new Date(b.dataInicio).getTime());
+    return candidatos[0] || null;
+  }, [grupos.hoje, grupos.amanha, filtroStatus]);
+
+  // Eventos de hoje COM HORA (não dia-inteiro) — pra timeline horária.
+  // Mesmo critério do hero: só aparece em "Pendentes".
+  const eventosHojeComHora = useMemo(() => {
+    if (filtroStatus !== "pendentes") return [];
+    return grupos.hoje.filter((e: any) => !e.diaInteiro);
+  }, [grupos.hoje, filtroStatus]);
+
   const totalFiltrado = eventosFiltrados.length;
 
   return (
     <div className="space-y-4">
+      {/* Hero "próximo evento" — só quando filtro=pendentes e há candidato */}
+      {proximoEvento && (
+        <ProximoEventoHero
+          ev={proximoEvento}
+          onStatusChange={onStatusChange}
+          onEdit={onEdit}
+          onCardClick={onCardClick}
+          podeEditar={podeEditar}
+        />
+      )}
+
       {/* Barra de busca + select fonte (compromisso vs tarefa) */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[260px] max-w-md">
@@ -1300,6 +1241,11 @@ function ListaView({
         )}
       </p>
 
+      {/* Timeline horária de hoje — só em "Pendentes" e quando há eventos com hora */}
+      {eventosHojeComHora.length > 0 && (
+        <TimelineHorariaHoje eventos={eventosHojeComHora} onCardClick={onCardClick} />
+      )}
+
       {isLoading ? (
         <div className="space-y-2">
           <Skeleton className="h-20 w-full" />
@@ -1324,14 +1270,23 @@ function ListaView({
             { key: "proximaSemana", titulo: "Próxima semana", icon: CalendarDays, color: "text-slate-600" },
             { key: "maisTarde", titulo: "Mais tarde", icon: CalendarDays, color: "text-slate-500" },
           ].map((secao) => {
-            const lista = grupos[secao.key];
+            let lista = grupos[secao.key];
+            // Se a timeline horária já está mostrando os eventos de hoje COM
+            // hora, o grupo "Hoje" da lista só repete os de dia inteiro pra
+            // evitar duplicação visual.
+            if (secao.key === "hoje" && eventosHojeComHora.length > 0) {
+              lista = lista.filter((e: any) => e.diaInteiro);
+            }
             if (!lista || lista.length === 0) return null;
             const Icon = secao.icon;
+            const tituloFinal = secao.key === "hoje" && eventosHojeComHora.length > 0
+              ? `${secao.titulo} · dia inteiro`
+              : secao.titulo;
             return (
               <div key={secao.key} className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${secao.color}`} />
-                  <h3 className={`text-sm font-semibold tracking-tight ${secao.color}`}>{secao.titulo}</h3>
+                  <h3 className={`text-sm font-semibold tracking-tight ${secao.color}`}>{tituloFinal}</h3>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold tabular-nums">
                     {lista.length}
                   </span>
@@ -2507,7 +2462,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
 export default function Agenda() {
   const { user } = useAuth();
-  const [tab, setTab] = useState("hoje");
+  const [tab, setTab] = useState("eventos");
   const [criarOpen, setCriarOpen] = useState(false);
   const [editEvento, setEditEvento] = useState<any | null>(null);
   const [detalhesEvento, setDetalhesEvento] = useState<any | null>(null);
@@ -2611,7 +2566,7 @@ export default function Agenda() {
               <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => setTab("hoje")}
+                  onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
                   className="bg-white/10 rounded-lg px-3 py-2 border border-white/15 text-left hover:bg-white/15 transition-colors"
                 >
                   <p className="text-xs text-white/70 mb-1">Hoje</p>
@@ -2620,7 +2575,7 @@ export default function Agenda() {
                   </p>
                 </button>
                 <button
-                  onClick={() => { setFiltroStatus("pendentes"); setTab("lista"); }}
+                  onClick={() => { setFiltroStatus("pendentes"); setTab("eventos"); }}
                   className="bg-white/10 rounded-lg px-3 py-2 border border-white/15 text-left hover:bg-white/15 transition-colors"
                 >
                   <p className="text-xs text-white/70 mb-1">⚠ Atrasados</p>
@@ -2647,16 +2602,10 @@ export default function Agenda() {
         <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
           <TabsList className="bg-transparent gap-1 p-0 h-auto">
             <TabsTrigger
-              value="hoje"
+              value="eventos"
               className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
             >
-              <Sun className="h-3.5 w-3.5" /> Hoje
-            </TabsTrigger>
-            <TabsTrigger
-              value="lista"
-              className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg"
-            >
-              <ListTodo className="h-3.5 w-3.5" /> Lista
+              <ListTodo className="h-3.5 w-3.5" /> Eventos
             </TabsTrigger>
             <TabsTrigger
               value="calendario"
@@ -2667,20 +2616,9 @@ export default function Agenda() {
           </TabsList>
         </div>
 
-        {/* HOJE */}
-        <TabsContent value="hoje" className="mt-5">
-          <HojeView
-            onStatusChange={handleStatus}
-            onDelete={handleDelete}
-            onEdit={(ev) => setEditEvento(ev)}
-            onCardClick={(ev) => setDetalhesEvento(ev)}
-            podeEditar={podeEditar}
-            podeExcluir={podeExcluir}
-          />
-        </TabsContent>
-
-        {/* LISTA */}
-        <TabsContent value="lista" className="mt-5 space-y-4">
+        {/* EVENTOS (antiga "Lista" + integra "Hoje" — hero/timeline aparecem
+            quando filtroStatus = pendentes) */}
+        <TabsContent value="eventos" className="mt-5 space-y-4">
           <ListaView
             busca={busca}
             setBusca={setBusca}
