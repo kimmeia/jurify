@@ -30,7 +30,7 @@ import {
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
   Paperclip, FileUp, Percent, MoreVertical, CalendarDays, CircleDollarSign,
-  Wand2,
+  Wand2, Tags,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
@@ -715,6 +715,7 @@ export default function Financeiro() {
               .
             </div>
           )}
+          <BannersPendencia />
           {conectado && (
             <>
           {/* Hero: Fluxo de caixa (gráfico grande) — específico da
@@ -1693,6 +1694,75 @@ function KPICard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Banners "X cobranças sem categoria/sem atendente" no topo da aba
+ * Cobranças. Só aparece se contagem > 0 — cria loop natural de
+ * manutenção (some quando você zera). Link leva pra /relatorios
+ * (DRE) ou /atribuir-cobrancas conforme o caso.
+ *
+ * Som direciona o operador pra `?filtro=semCategoria` na lista de
+ * atribuição (sub-tab "Atribuir cobranças" dentro do DespesasWrapper)
+ * — assim o trabalho de catch-up vira 1 clique. Futuro: substituir
+ * pela edição inline na própria lista de cobranças.
+ */
+function BannersPendencia() {
+  const { data } = trpc.financeiro.contadoresPendencia.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  if (!data) return null;
+  const { semCategoria, semAtendente } = data;
+  if (semCategoria === 0 && semAtendente === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {semCategoria > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <div className="flex-1">
+            <b className="text-amber-900">
+              {semCategoria} {semCategoria === 1 ? "cobrança sem categoria" : "cobranças sem categoria"}
+            </b>
+            <span className="text-amber-700"> — afeta o DRE em /relatorios.</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-amber-400 text-amber-900 hover:bg-amber-100"
+            onClick={() => {
+              window.location.href = "/financeiro/atribuir?filtro=semCategoria";
+            }}
+          >
+            <Tags className="h-3 w-3 mr-1" />
+            Categorizar em massa
+          </Button>
+        </div>
+      )}
+      {semAtendente > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs">
+          <UserPlus className="h-4 w-4 text-blue-600 shrink-0" />
+          <div className="flex-1">
+            <b className="text-blue-900">
+              {semAtendente} {semAtendente === 1 ? "cobrança sem atendente" : "cobranças sem atendente"}
+            </b>
+            <span className="text-blue-700"> — sem comissão atribuída.</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-blue-300 text-blue-900 hover:bg-blue-100"
+            onClick={() => {
+              window.location.href = "/financeiro/atribuir?filtro=semAtendente";
+            }}
+          >
+            <UserPlus className="h-3 w-3 mr-1" />
+            Atribuir em massa
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

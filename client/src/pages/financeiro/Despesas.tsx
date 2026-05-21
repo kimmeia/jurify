@@ -119,7 +119,7 @@ interface DespesaListItem {
   recorrencia: "nenhuma" | "semanal" | "mensal" | "anual";
   recorrenciaAtiva?: boolean;
   recorrenciaDeOrigemId?: number | null;
-  origem?: "manual" | "taxa_asaas" | "recorrencia" | "extrato_asaas";
+  origem?: "manual" | "taxa_asaas" | "recorrencia" | "extrato_asaas" | "comissao";
   observacoes: string | null;
   categoriaId: number | null;
   categoriaNome: string | null;
@@ -377,6 +377,7 @@ export function DespesasTab() {
                 <SelectItem value="recorrencia">Recorrência (auto)</SelectItem>
                 <SelectItem value="taxa_asaas">Taxa Asaas</SelectItem>
                 <SelectItem value="extrato_asaas">Extrato Asaas</SelectItem>
+                <SelectItem value="comissao">Comissão</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-1.5 text-xs border rounded px-2 h-9 bg-background">
@@ -558,6 +559,7 @@ export function DespesasTab() {
                       </span>
                     </button>
                   </TableHead>
+                  <TableHead className="text-xs">Tipo</TableHead>
                   <TableHead className="text-xs">Descrição</TableHead>
                   <TableHead className="text-xs">Categoria</TableHead>
                   <TableHead className="text-xs">Recorrência</TableHead>
@@ -600,6 +602,9 @@ export function DespesasTab() {
                         />
                       </TableCell>
                       <TableCell className="text-xs">{formatData(d.vencimento)}</TableCell>
+                      <TableCell className="text-xs">
+                        <TipoBadge origem={d.origem} />
+                      </TableCell>
                       <TableCell className="text-xs max-w-[260px] truncate">
                         {d.descricao}
                       </TableCell>
@@ -920,6 +925,30 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <Badge variant="outline" className={cores[status] ?? ""}>
       {STATUS_LABEL[status] ?? status}
+    </Badge>
+  );
+}
+
+/** Badge visual do tipo de despesa baseado em `origem`. "comissao" tem
+ *  destaque (rosa) pra separar de despesa operacional na lista
+ *  unificada. As outras origens compartilham visual neutro. */
+function TipoBadge({ origem }: { origem?: string }) {
+  if (origem === "comissao") {
+    return (
+      <Badge variant="outline" className="text-pink-700 border-pink-200 bg-pink-50">
+        Comissão
+      </Badge>
+    );
+  }
+  const labels: Record<string, string> = {
+    manual: "Despesa",
+    taxa_asaas: "Taxa Asaas",
+    recorrencia: "Recorrente",
+    extrato_asaas: "Extrato",
+  };
+  return (
+    <Badge variant="outline" className="text-slate-600 border-slate-200">
+      {labels[origem ?? "manual"] ?? "Despesa"}
     </Badge>
   );
 }

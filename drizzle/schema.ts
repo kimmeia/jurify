@@ -2326,7 +2326,7 @@ export const despesas = mysqlTable(
      *     notificação, mensalidade, antecipações, etc. Idempotência via
      *     UNIQUE(escritorioId, asaasFinTransId).
      */
-    origem: mysqlEnum("origemDesp", ["manual", "taxa_asaas", "recorrencia", "extrato_asaas"])
+    origem: mysqlEnum("origemDesp", ["manual", "taxa_asaas", "recorrencia", "extrato_asaas", "comissao"])
       .default("manual")
       .notNull(),
     /**

@@ -513,6 +513,35 @@ export const financeiroRouter = router({
       return { rows, totalEncontrado };
     }),
 
+  /**
+   * Contadores leves pros banners "X cobranças sem categoria"/"sem atendente"
+   * na aba Cobranças do Financeiro. Query SQL agregada — não carrega rows.
+   *
+   * Só conta pra quem tem `verTodos` no financeiro (banner é mensagem
+   * de gestão pro escritório inteiro). User com só `verProprios` recebe
+   * zeros — não é o público-alvo do banner de "limpe sua casa".
+   */
+  contadoresPendencia: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    const perm = await checkPermission(ctx.user.id, "financeiro", "ver");
+    if (!perm.verTodos) return { semCategoria: 0, semAtendente: 0 };
+    const db = await getDb();
+    if (!db) return { semCategoria: 0, semAtendente: 0 };
+
+    const [row] = await db
+      .select({
+        semCategoria: sql<number>`SUM(CASE WHEN ${asaasCobrancas.categoriaId} IS NULL THEN 1 ELSE 0 END)`,
+        semAtendente: sql<number>`SUM(CASE WHEN ${asaasCobrancas.atendenteId} IS NULL THEN 1 ELSE 0 END)`,
+      })
+      .from(asaasCobrancas)
+      .where(eq(asaasCobrancas.escritorioId, esc.escritorio.id));
+
+    return {
+      semCategoria: Number(row?.semCategoria ?? 0),
+      semAtendente: Number(row?.semAtendente ?? 0),
+    };
+  }),
+
   atribuirCobrancasEmMassa: protectedProcedure
     .input(
       z.object({

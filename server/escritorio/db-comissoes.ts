@@ -624,6 +624,7 @@ export async function fecharComissao(
           valor: sim.totais.valorComissao.toFixed(2),
           vencimento,
           status: "pendente",
+          origem: "comissao",
           criadoPorUserId: params.fechadoPorUserId,
         })
         .$returningId();

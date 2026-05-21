@@ -45,6 +45,7 @@ import Kanban from "./pages/Kanban";
 import Clientes from "./pages/Clientes";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
+import AtribuirCobrancasPage from "./pages/financeiro/AtribuirCobrancasPage";
 import Agenda from "./pages/Agenda";
 import Tarefas from "./pages/Tarefas";
 import AssinarDocumento from "./pages/AssinarDocumento";
@@ -219,6 +220,11 @@ function Router() {
       <Route path="/processos">
         <ClientArea>
           <Processos />
+        </ClientArea>
+      </Route>
+      <Route path="/financeiro/atribuir">
+        <ClientArea>
+          <AtribuirCobrancasPage />
         </ClientArea>
       </Route>
       <Route path="/financeiro">

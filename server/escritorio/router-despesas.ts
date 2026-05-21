@@ -59,7 +59,7 @@ export const despesasRouter = router({
           categoriaIds: z.array(z.number().int().positive()).optional(),
           recorrencia: z.enum(["todas", "recorrentes", "pontuais"]).optional(),
           origem: z
-            .enum(["manual", "taxa_asaas", "recorrencia", "extrato_asaas"])
+            .enum(["manual", "taxa_asaas", "recorrencia", "extrato_asaas", "comissao"])
             .optional(),
           busca: z.string().max(128).optional(),
           valorMinimo: z.number().min(0).optional(),
