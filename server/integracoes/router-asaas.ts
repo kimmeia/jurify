@@ -725,12 +725,14 @@ export const asaasRouter = router({
   iniciarSyncHistorico: protectedProcedure
     .input(
       z.object({
-        /** Preset rápido. Em "custom", `dataInicio` e `dataFim` são obrigatórios. */
-        periodo: z.enum(["24h", "7d", "30d", "custom"]),
+        /** Preset rápido. Em "custom", `dataInicio` e `dataFim` são obrigatórios.
+         *  Em "completo" pega 3 anos retro com config turbo (intervalo=5min,
+         *  diasPorTick=7) — ~13h de execução, pensado pra rodar de noite. */
+        periodo: z.enum(["24h", "7d", "30d", "completo", "custom"]),
         dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         /** Cooldown entre janelas. Default 60min — conservador pra evitar
-         *  saturar a cota Asaas. Min 5min. */
+         *  saturar a cota Asaas. Min 5min. Preset "completo" força 5. */
         intervaloMinutos: z.number().int().min(5).max(720).default(60),
       }),
     )
@@ -773,6 +775,10 @@ export const asaasRouter = router({
       const hojeIso = hoje.toISOString().slice(0, 10);
       let dataInicio: string;
       let dataFim: string;
+      // Preset "completo" sobrescreve intervalo/diasPorTick em modo turbo.
+      // Os demais respeitam o input do usuário.
+      let intervaloEfetivo = input.intervaloMinutos;
+      let diasPorTickEfetivo = 1;
       if (input.periodo === "custom") {
         if (!input.dataInicio || !input.dataFim) {
           throw new TRPCError({
@@ -788,6 +794,13 @@ export const asaasRouter = router({
         }
         dataInicio = input.dataInicio;
         dataFim = input.dataFim;
+      } else if (input.periodo === "completo") {
+        const dt = new Date(hoje);
+        dt.setUTCDate(dt.getUTCDate() - (365 * 3 - 1));
+        dataInicio = dt.toISOString().slice(0, 10);
+        dataFim = hojeIso;
+        intervaloEfetivo = 5;
+        diasPorTickEfetivo = 7;
       } else {
         const dias =
           input.periodo === "24h" ? 1 : input.periodo === "7d" ? 7 : 30;
@@ -820,7 +833,8 @@ export const asaasRouter = router({
           historicoSyncDiasFeitos: 0,
           historicoSyncCobrancasImportadas: 0,
           historicoSyncCobrancasAtualizadas: 0,
-          historicoSyncIntervaloMinutos: input.intervaloMinutos,
+          historicoSyncIntervaloMinutos: intervaloEfetivo,
+          historicoSyncDiasPorTick: diasPorTickEfetivo,
           historicoSyncIniciadoEm: new Date(),
           historicoSyncUltimaJanelaEm: null,
           historicoSyncConcluidoEm: null,
@@ -834,7 +848,8 @@ export const asaasRouter = router({
           dataInicio,
           dataFim,
           totalDias,
-          intervaloMinutos: input.intervaloMinutos,
+          intervaloMinutos: intervaloEfetivo,
+          diasPorTick: diasPorTickEfetivo,
         },
         "[Asaas] Sync histórica agendada",
       );
@@ -844,9 +859,11 @@ export const asaasRouter = router({
         dataInicio,
         dataFim,
         totalDias,
-        intervaloMinutos: input.intervaloMinutos,
-        // Estimativa pro usuário: totalDias × intervaloMinutos em horas
-        estimativaHoras: Math.ceil((totalDias * input.intervaloMinutos) / 60),
+        intervaloMinutos: intervaloEfetivo,
+        // Estimativa pro usuário: (totalDias / diasPorTick) × intervalo em horas
+        estimativaHoras: Math.ceil(
+          (totalDias / diasPorTickEfetivo) * intervaloEfetivo / 60,
+        ),
       };
     }),
 
