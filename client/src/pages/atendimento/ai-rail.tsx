@@ -50,7 +50,11 @@ export function AIRail({
           </button>
         </div>
         <div className="flex-1 overflow-hidden">
-          <CustomerPanel contatoId={contatoId} onOpenWhatsapp={onOpenWhatsapp} />
+          <CustomerPanel
+            contatoId={contatoId}
+            conversaId={conversaId ?? undefined}
+            onOpenWhatsapp={onOpenWhatsapp}
+          />
         </div>
       </div>
     );

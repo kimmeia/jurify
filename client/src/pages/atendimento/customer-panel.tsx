@@ -33,7 +33,7 @@ import {
 import {
   User, Star, DollarSign, Gavel, TrendingUp, CheckSquare, Calendar,
   StickyNote, PenLine, Plus, Phone, Mail, Loader2, ChevronDown, ChevronRight,
-  AlertTriangle, ExternalLink, Copy, Sparkles,
+  AlertTriangle, ExternalLink, Copy, Sparkles, RefreshCw, Pencil, X, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
@@ -72,11 +72,13 @@ function formatarValorCaptura(valor: unknown, tipo: string): string {
 
 export function CustomerPanel({
   contatoId,
+  conversaId,
   onOpenFinanceiro,
   onOpenAgendar,
   onOpenWhatsapp,
 }: {
   contatoId: number;
+  conversaId?: number;
   onOpenFinanceiro?: () => void;
   onOpenAgendar?: () => void;
   onOpenWhatsapp?: (phone: string) => void;
@@ -84,13 +86,6 @@ export function CustomerPanel({
   const { data, isLoading, refetch } = trpc.customer360.getContext.useQuery(
     { contatoId },
     { refetchInterval: 30_000 }, // refresh a cada 30s
-  );
-
-  // Auditoria de campos capturados automaticamente pelo agente IA da conversa.
-  // Polling curto pra refletir a extração que roda em background no webhook.
-  const { data: capturados } = trpc.agentesIa.listarCapturadosDoContato.useQuery(
-    { contatoId },
-    { refetchInterval: 15_000 },
   );
 
   if (isLoading) {
@@ -174,36 +169,7 @@ export function CustomerPanel({
       <div className="border-t" />
 
       {/* ─── Card: Capturas IA ─── */}
-      {capturados && capturados.length > 0 && (
-        <Section
-          icon={Sparkles}
-          iconColor="text-violet-600"
-          title={`Capturas IA (${capturados.length})`}
-          defaultOpen
-        >
-          <p className="text-[10px] text-muted-foreground mb-1.5 italic">
-            Valores extraídos automaticamente da conversa.
-          </p>
-          <div className="space-y-1">
-            {capturados.map((c) => (
-              <div
-                key={c.chave}
-                className="text-[11px] rounded border border-violet-200/60 bg-violet-50/40 dark:border-violet-900/40 dark:bg-violet-950/20 px-2 py-1.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground text-[10px]">{c.label}</span>
-                  <Badge variant="outline" className="text-[8px] px-1 py-0">
-                    {c.tipo}
-                  </Badge>
-                </div>
-                <p className="font-medium break-words text-violet-900 dark:text-violet-200">
-                  {formatarValorCaptura(c.valor, c.tipo)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      <CapturasIASection contatoId={contatoId} conversaId={conversaId} />
 
       {/* ─── Card 2: Processos ativos ─── */}
       <Section
@@ -1168,4 +1134,232 @@ function EditarLeadInline({
     </AlertDialog>
     </>
   );
+}
+
+// ─── Capturas IA: lista + botão "Capturar agora" + edição inline ─────────────
+
+function formatarTempoRelativo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function CapturasIASection({
+  contatoId,
+  conversaId,
+}: {
+  contatoId: number;
+  conversaId?: number;
+}) {
+  const trpcUtils = trpc.useUtils();
+  const { data } = trpc.agentesIa.listarCapturadosDoContato.useQuery(
+    { contatoId, conversaId },
+    { refetchInterval: 15_000 },
+  );
+
+  const capturarMut = trpc.agentesIa.capturarCamposDaConversa.useMutation({
+    onSuccess: (res) => {
+      const n = res.capturados?.length ?? 0;
+      if (n > 0) toast.success(`Capturado ${n} novo(s) valor(es)`);
+      else toast.info("Nada novo pra capturar agora");
+      trpcUtils.agentesIa.listarCapturadosDoContato.invalidate({ contatoId, conversaId });
+    },
+    onError: (e: any) => toast.error(e.message || "Falha ao capturar"),
+  });
+
+  const campos = data?.campos ?? [];
+  const ultimaTentativa = data?.ultimaTentativa ?? null;
+
+  // Esconde a seção inteira só quando não tem nada pra mostrar
+  // (nem capturas existentes nem histórico de tentativa)
+  if (campos.length === 0 && !ultimaTentativa && !conversaId) return null;
+
+  const podeForcar = !!conversaId;
+  const statusInfo = (() => {
+    if (!ultimaTentativa) return null;
+    if (ultimaTentativa.erro) {
+      return { cor: "text-red-700", dot: "bg-red-500", label: "erro" };
+    }
+    if (ultimaTentativa.novos > 0) {
+      return { cor: "text-violet-700", dot: "bg-violet-500", label: "novo" };
+    }
+    return { cor: "text-emerald-700", dot: "bg-emerald-500", label: "ok" };
+  })();
+
+  return (
+    <Section
+      icon={Sparkles}
+      iconColor="text-violet-600"
+      title={`Capturas IA${campos.length > 0 ? ` (${campos.length})` : ""}`}
+      defaultOpen
+      headerAction={
+        podeForcar ? (
+          <button
+            type="button"
+            onClick={() => capturarMut.mutate({ conversaId: conversaId! })}
+            disabled={capturarMut.isPending}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-violet-300 bg-violet-50 dark:bg-violet-950/30 text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 disabled:opacity-50"
+            title="Forçar reextração agora"
+          >
+            {capturarMut.isPending
+              ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              : <RefreshCw className="h-2.5 w-2.5" />}
+            Capturar
+          </button>
+        ) : null
+      }
+    >
+      {/* Indicador de última tentativa (#4) */}
+      {ultimaTentativa && statusInfo && (
+        <div className="flex items-center justify-between mb-2 text-[10px]">
+          <span className="text-muted-foreground italic">
+            Última tentativa há {formatarTempoRelativo(ultimaTentativa.at)}
+            {ultimaTentativa.erro
+              ? ` · ${ultimaTentativa.erro.slice(0, 40)}`
+              : ` · ${ultimaTentativa.novos} ${ultimaTentativa.novos === 1 ? "novo" : "novos"}`}
+          </span>
+          <span className={`inline-flex items-center gap-1 ${statusInfo.cor}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`}></span>
+            {statusInfo.label}
+          </span>
+        </div>
+      )}
+
+      {campos.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground italic">
+          {ultimaTentativa
+            ? "Nenhum valor capturado ainda."
+            : "Os valores extraídos pela IA aparecerão aqui."}
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {campos.map((c) => (
+            <CampoCapturadoCard key={c.chave} contatoId={contatoId} campo={c} conversaId={conversaId} />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function CampoCapturadoCard({
+  contatoId,
+  campo,
+  conversaId,
+}: {
+  contatoId: number;
+  campo: { chave: string; label: string; valor: any; tipo: string };
+  conversaId?: number;
+}) {
+  const trpcUtils = trpc.useUtils();
+  const [editando, setEditando] = useState(false);
+  const [rascunho, setRascunho] = useState(() => valorParaInput(campo.valor, campo.tipo));
+
+  const atualizarMut = trpc.agentesIa.atualizarCampoCapturado.useMutation({
+    onSuccess: () => {
+      toast.success("Valor atualizado");
+      setEditando(false);
+      trpcUtils.agentesIa.listarCapturadosDoContato.invalidate({ contatoId, conversaId });
+    },
+    onError: (e: any) => toast.error(e.message || "Falha ao salvar"),
+  });
+
+  const iniciarEdicao = () => {
+    setRascunho(valorParaInput(campo.valor, campo.tipo));
+    setEditando(true);
+  };
+
+  const salvar = () => {
+    let valor: string | number | boolean | null = rascunho;
+    if (campo.tipo === "boolean") {
+      valor = rascunho === "true";
+    } else if (campo.tipo === "numero") {
+      const n = parseFloat(rascunho.replace(",", "."));
+      if (!Number.isFinite(n)) { toast.error("Número inválido"); return; }
+      valor = n;
+    }
+    atualizarMut.mutate({ contatoId, chave: campo.chave, valor });
+  };
+
+  if (editando) {
+    return (
+      <div className="rounded border-2 border-amber-400 bg-amber-50/40 dark:bg-amber-950/20 px-2 py-2">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="text-[10px] text-muted-foreground">{campo.label}</span>
+          <span className="text-[9px] text-amber-700 dark:text-amber-300 font-medium">editando…</span>
+        </div>
+        {campo.tipo === "boolean" ? (
+          <Select value={rascunho} onValueChange={setRascunho}>
+            <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="true">Sim</SelectItem>
+              <SelectItem value="false">Não</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            type={campo.tipo === "data" ? "date" : campo.tipo === "numero" ? "number" : "text"}
+            value={rascunho}
+            onChange={(e) => setRascunho(e.target.value)}
+            className="h-7 text-[11px]"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") salvar();
+              if (e.key === "Escape") setEditando(false);
+            }}
+          />
+        )}
+        <div className="flex items-center justify-end gap-1 mt-1.5">
+          <button
+            type="button"
+            onClick={() => setEditando(false)}
+            disabled={atualizarMut.isPending}
+            className="text-[10px] px-1.5 py-0.5 rounded text-muted-foreground hover:bg-muted"
+          >
+            cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            disabled={atualizarMut.isPending}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-violet-600 text-white font-semibold hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-0.5"
+          >
+            {atualizarMut.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Check className="h-2.5 w-2.5" />}
+            salvar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-[11px] rounded border border-violet-200/60 bg-violet-50/40 dark:border-violet-900/40 dark:bg-violet-950/20 px-2 py-1.5 group">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground text-[10px]">{campo.label}</span>
+        <button
+          type="button"
+          onClick={iniciarEdicao}
+          className="text-[9px] text-violet-600 dark:text-violet-300 hover:underline opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-0.5"
+        >
+          <Pencil className="h-2.5 w-2.5" />
+          editar
+        </button>
+      </div>
+      <p className="font-medium break-words text-violet-900 dark:text-violet-200">
+        {formatarValorCaptura(campo.valor, campo.tipo)}
+      </p>
+    </div>
+  );
+}
+
+function valorParaInput(valor: any, tipo: string): string {
+  if (valor === null || valor === undefined) return "";
+  if (tipo === "boolean") return valor ? "true" : "false";
+  if (tipo === "data" && typeof valor === "string") return valor.slice(0, 10);
+  return String(valor);
 }

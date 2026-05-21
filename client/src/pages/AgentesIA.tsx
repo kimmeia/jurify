@@ -372,6 +372,20 @@ function AgenteFormDialog({
         : false,
   );
 
+  // Set de atributos duplicados (case-insensitive) — usado pra mostrar
+  // feedback inline e desabilitar Salvar enquanto não resolve.
+  const atributosDuplicados = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of form.camposCaptura) {
+      const k = (v.atributo || "").trim().toLowerCase();
+      if (!k) continue;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
+  }, [form.camposCaptura]);
+
+  const temDuplicata = atributosDuplicados.size > 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto p-0 gap-0">
@@ -628,10 +642,19 @@ function AgenteFormDialog({
                     const campoDef = camposDisponiveis.find((c: any) => c.chave === v.campoChave);
                     const atributoInvalido =
                       v.atributo && !/^[a-z][a-z0-9_]*$/i.test(v.atributo);
+                    const atributoDuplicado =
+                      v.atributo.trim().length > 0 &&
+                      atributosDuplicados.has(v.atributo.trim().toLowerCase());
+                    const inputAlerta = atributoInvalido || atributoDuplicado;
                     return (
                       <div
                         key={idx}
-                        className="rounded-lg border border-border bg-card/50 p-2.5 space-y-2 relative"
+                        className={
+                          "rounded-lg border bg-card/50 p-2.5 space-y-2 relative " +
+                          (atributoDuplicado
+                            ? "border-amber-400 bg-amber-50/30 dark:bg-amber-950/10"
+                            : "border-border")
+                        }
                       >
                         <button
                           type="button"
@@ -650,15 +673,19 @@ function AgenteFormDialog({
                               onChange={(e) => atualizarVariavel(idx, { atributo: e.target.value })}
                               className={
                                 "h-7 text-xs mt-0.5 " +
-                                (atributoInvalido ? "border-amber-400" : "")
+                                (inputAlerta ? "border-amber-400" : "")
                               }
                               maxLength={48}
                             />
-                            {atributoInvalido && (
+                            {atributoDuplicado ? (
+                              <p className="text-[9px] text-amber-700 dark:text-amber-400 mt-0.5 font-medium">
+                                ⚠ Outra variável já usa esse atributo
+                              </p>
+                            ) : atributoInvalido ? (
                               <p className="text-[9px] text-amber-600 mt-0.5">
                                 Use letras, números e underscore. Comece com letra.
                               </p>
-                            )}
+                            ) : null}
                           </div>
                           <div>
                             <Label className="text-[10px]">Campo de destino</Label>
@@ -727,19 +754,31 @@ function AgenteFormDialog({
         </div>
 
         {/* Footer */}
-        <DialogFooter className="px-5 py-3 border-t bg-muted/30 gap-1">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="h-8 text-xs">
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={criarMut.isPending || atualizarMut.isPending || !algumIAConfigurado}
-            className="h-8 text-xs bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
-          >
-            {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-            {!(criarMut.isPending || atualizarMut.isPending) && <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
-            {agenteId ? "Salvar" : "Criar agente"}
-          </Button>
+        <DialogFooter className="px-5 py-3 border-t bg-muted/30 gap-1 flex items-center justify-between sm:justify-between">
+          {temDuplicata && (
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1 mr-auto">
+              ⚠ Resolva os atributos duplicados antes de salvar
+            </p>
+          )}
+          <div className="flex gap-1 ml-auto">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="h-8 text-xs">
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={
+                criarMut.isPending ||
+                atualizarMut.isPending ||
+                !algumIAConfigurado ||
+                temDuplicata
+              }
+              className="h-8 text-xs bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+            >
+              {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              {!(criarMut.isPending || atualizarMut.isPending) && <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+              {agenteId ? "Salvar" : "Criar agente"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
