@@ -321,6 +321,19 @@ export default function Financeiro() {
     onError: (err: any) => toast.error("Erro", { description: err.message }),
   });
 
+  // "Pagamento por terceiro": cobrança paga pelo CPF da esposa de Carlos,
+  // mas Carlos é o cliente real. Seta `contatoBeneficiarioId` — DRE/
+  // comissão atribuem ao beneficiário (Carlos), nome da esposa fica
+  // como "Pago por" na linha.
+  const beneficiarioMut = trpc.asaas.atribuirBeneficiario.useMutation({
+    onSuccess: () => {
+      toast.success("Beneficiário atualizado");
+      utils.asaas.listarCobrancas.invalidate();
+      utils.financeiro.contadoresPendencia.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
   // Marca cobrança manual como recebida. Disponível só em cobranças
   // origem='manual' com status PENDING/OVERDUE — Asaas sincroniza
   // automaticamente via webhook nas origens 'asaas'.
@@ -1095,7 +1108,18 @@ export default function Financeiro() {
                           onCheckedChange={() => toggleSelecionada(c.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium text-sm">{c.nomeContato}</TableCell>
+                      <TableCell className="font-medium text-sm">
+                        <CelulaCliente
+                          cobranca={c}
+                          podeEditar={perms.podeEditar}
+                          onAtribuirBeneficiario={(beneficiarioId) =>
+                            beneficiarioMut.mutate({
+                              cobrancaId: c.id,
+                              contatoBeneficiarioId: beneficiarioId,
+                            })
+                          }
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-sm">
                         {formatBRL(parseFloat(c.valor))}
                       </TableCell>
@@ -2029,6 +2053,173 @@ function BulkAtribuirDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+/**
+ * Célula "Cliente" da tabela. Mostra:
+ *  - Beneficiário se diferente do pagador ("Carlos Silva")
+ *    com sub-linha cinza "Pago por Maria Silva"
+ *  - Pagador apenas, quando não há beneficiário override
+ *
+ * Botão sutil 🔗 ao hover abre popover pra atribuir/remover beneficiário
+ * via busca de contato. Útil pro caso clássico Carlos+esposa.
+ */
+function CelulaCliente({
+  cobranca,
+  podeEditar,
+  onAtribuirBeneficiario,
+}: {
+  cobranca: any;
+  podeEditar: boolean;
+  onAtribuirBeneficiario: (beneficiarioId: number | null) => void;
+}) {
+  const [popoverAberto, setPopoverAberto] = useState(false);
+  const temBeneficiario =
+    cobranca.contatoBeneficiarioId &&
+    cobranca.contatoBeneficiarioId !== cobranca.contatoId;
+  const nomePagador = cobranca.nomeContato || "—";
+  const nomeBeneficiario = cobranca.nomeContatoBeneficiario;
+
+  return (
+    <div className="group flex items-start gap-1.5">
+      <div className="flex-1 min-w-0">
+        {temBeneficiario && nomeBeneficiario ? (
+          <>
+            <div className="text-sm font-medium flex items-center gap-1">
+              <span className="truncate">{nomeBeneficiario}</span>
+              <span
+                className="shrink-0 rounded border border-violet-300 bg-violet-50 px-1 text-[9px] font-medium text-violet-700"
+                title="Cliente real — beneficiário do pagamento"
+              >
+                cliente
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              Pago por {nomePagador}
+            </div>
+          </>
+        ) : (
+          <div className="text-sm truncate">{nomePagador}</div>
+        )}
+      </div>
+      {podeEditar && (
+        <Popover open={popoverAberto} onOpenChange={setPopoverAberto}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+              title={
+                temBeneficiario
+                  ? "Editar pagamento por terceiro"
+                  : "Marcar como pagamento por terceiro"
+              }
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80" align="start">
+            <BuscarBeneficiario
+              cobrancaContatoId={cobranca.contatoId}
+              beneficiarioAtual={cobranca.contatoBeneficiarioId ?? null}
+              onSelect={(id) => {
+                onAtribuirBeneficiario(id);
+                setPopoverAberto(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
+  );
+}
+
+/** Busca de contato dentro do popover do "Pagamento por terceiro".
+ *  Faz query `crm.listarContatos` com debounce. Mostra opção "Remover
+ *  beneficiário" quando já existe. */
+function BuscarBeneficiario({
+  cobrancaContatoId,
+  beneficiarioAtual,
+  onSelect,
+}: {
+  cobrancaContatoId: number | null;
+  beneficiarioAtual: number | null;
+  onSelect: (id: number | null) => void;
+}) {
+  const [busca, setBusca] = useState("");
+  const { data: contatos = [], isLoading } = (trpc as any).crm?.listarContatos?.useQuery?.(
+    { busca: busca || undefined },
+    { staleTime: 30_000 },
+  ) ?? { data: [], isLoading: false };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-semibold">Pagamento por terceiro</div>
+      <p className="text-[11px] text-muted-foreground">
+        Quem é o <b>cliente real</b> (beneficiário)? O pagador atual continua
+        registrado como quem efetuou o pagamento.
+      </p>
+      <Input
+        placeholder="Buscar cliente por nome ou CPF..."
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        className="h-8 text-xs"
+      />
+      <div className="max-h-48 overflow-y-auto border rounded">
+        {isLoading && (
+          <div className="p-2 text-xs text-muted-foreground text-center">
+            <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
+            Buscando...
+          </div>
+        )}
+        {!isLoading && contatos.length === 0 && busca.length > 0 && (
+          <div className="p-2 text-xs text-muted-foreground text-center">
+            Nenhum cliente encontrado
+          </div>
+        )}
+        {!isLoading && contatos.length === 0 && busca.length === 0 && (
+          <div className="p-2 text-xs text-muted-foreground text-center">
+            Digite pra buscar
+          </div>
+        )}
+        {contatos.slice(0, 10).map((c: any) => {
+          const desabilitado = c.id === cobrancaContatoId;
+          return (
+            <button
+              type="button"
+              key={c.id}
+              disabled={desabilitado}
+              onClick={() => onSelect(c.id)}
+              className={
+                "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
+                (desabilitado ? "opacity-40 cursor-not-allowed" : "")
+              }
+              title={
+                desabilitado
+                  ? "Esse é o pagador atual — escolha outro como beneficiário"
+                  : ""
+              }
+            >
+              <div className="font-medium">{c.nome}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {beneficiarioAtual !== null && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-7 text-xs text-destructive"
+          onClick={() => onSelect(null)}
+        >
+          <XCircle className="h-3 w-3 mr-1" />
+          Remover vínculo (sem beneficiário)
+        </Button>
+      )}
+    </div>
   );
 }
 

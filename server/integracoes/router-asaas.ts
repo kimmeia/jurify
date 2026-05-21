@@ -1800,6 +1800,74 @@ export const asaasRouter = router({
    * assinatura) e estavam com o flag herdado errado, ou pra excepcionar
    * casos pontuais sem mudar a categoria.
    */
+  /**
+   * Marca uma cobrança como "pagamento por terceiro" — o pagador (contatoId,
+   * vinculado ao customer Asaas) é uma pessoa diferente do cliente real
+   * (contatoBeneficiarioId). Caso clássico: Carlos é cliente, mas a esposa
+   * paga as faturas pela conta dela. A cobrança fica vinculada ao Carlos
+   * pra DRE/comissão; o nome da esposa aparece como "Pago por" na linha.
+   *
+   * `contatoBeneficiarioId` null/undefined remove o vínculo (volta a contar
+   * só o pagador). Valida que o beneficiário pertence ao mesmo escritório.
+   */
+  atribuirBeneficiario: protectedProcedure
+    .input(
+      z.object({
+        cobrancaId: z.number(),
+        contatoBeneficiarioId: z.number().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Sem permissão pra editar cobranças.",
+        });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      if (input.contatoBeneficiarioId !== null) {
+        const [benef] = await db
+          .select({ id: contatos.id })
+          .from(contatos)
+          .where(
+            and(
+              eq(contatos.id, input.contatoBeneficiarioId),
+              eq(contatos.escritorioId, esc.escritorio.id),
+            ),
+          )
+          .limit(1);
+        if (!benef) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Beneficiário não encontrado neste escritório.",
+          });
+        }
+      }
+
+      const [cob] = await db
+        .select({ id: asaasCobrancas.id })
+        .from(asaasCobrancas)
+        .where(
+          and(
+            eq(asaasCobrancas.id, input.cobrancaId),
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!cob) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await db
+        .update(asaasCobrancas)
+        .set({ contatoBeneficiarioId: input.contatoBeneficiarioId })
+        .where(eq(asaasCobrancas.id, cob.id));
+
+      return { success: true };
+    }),
+
   atualizarComissionavel: protectedProcedure
     .input(
       z.object({
@@ -2126,7 +2194,17 @@ export const asaasRouter = router({
         // Enriquecer com nome do contato — primário do CRM. Fallback pro
         // nome em `asaas_clientes` quando contato não existe (customer
         // do Asaas sem CPF que ainda não virou contato local).
-        const contatoIds = [...new Set(items.map((i) => i.contatoId).filter(Boolean))];
+        //
+        // Inclui também `contatoBeneficiarioId` quando definido (caso
+        // "pagamento por terceiro" — Carlos é cliente, esposa pagou).
+        // UI mostra "Carlos Silva [cliente] · Pago por Maria Silva".
+        const contatoIds = [
+          ...new Set(
+            items
+              .flatMap((i) => [i.contatoId, i.contatoBeneficiarioId])
+              .filter(Boolean) as number[],
+          ),
+        ];
         let contatosMap: Record<number, string> = {};
         if (contatoIds.length > 0) {
           const contatosList = await db.select({ id: contatos.id, nome: contatos.nome })
@@ -2193,12 +2271,19 @@ export const asaasRouter = router({
           const nomeFallback = i.asaasCustomerId
             ? asaasClienteNomeMap[i.asaasCustomerId]
             : null;
+          const nomeBeneficiarioRaw = i.contatoBeneficiarioId
+            ? contatosMap[i.contatoBeneficiarioId]
+            : null;
           return {
             ...i,
             nomeContato:
               (nomeContrato && nomeContrato.trim()) ||
               (nomeFallback && nomeFallback.trim()) ||
               "—",
+            nomeContatoBeneficiario:
+              nomeBeneficiarioRaw && nomeBeneficiarioRaw.trim()
+                ? nomeBeneficiarioRaw
+                : null,
             acoesVinculadas: acoesPorCobranca.get(i.id) ?? [],
           };
         });

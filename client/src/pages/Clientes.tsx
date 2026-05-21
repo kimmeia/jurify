@@ -30,7 +30,7 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
-  MapPin, AlertTriangle, Briefcase,
+  MapPin, AlertTriangle, Briefcase, UserPlus,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
 import {
@@ -2518,6 +2518,19 @@ function ClienteDetalhe({
     onError: (e: any) => toast.error(e.message),
   });
   const [excluirConfirmAlvo, setExcluirConfirmAlvo] = useState(false);
+  const [mesclarOpen, setMesclarOpen] = useState(false);
+  const mesclarMut = trpc.crm.unificarContatos.useMutation({
+    onSuccess: () => {
+      toast.success("Clientes mesclados", {
+        description: "Cobranças, conversas e processos foram transferidos.",
+      });
+      setMesclarOpen(false);
+      onVoltar();
+      onUpdate();
+    },
+    onError: (err: any) =>
+      toast.error("Erro ao mesclar", { description: err.message }),
+  });
   // Editor de lead na aba Histórico — abre quando user clica no lápis do card.
   // null = fechado. Quando o lead muda (mutation), o key={alvo.id} no Dialog
   // garante remount com valores frescos.
@@ -2675,6 +2688,18 @@ function ClienteDetalhe({
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="text-violet-200 hover:text-white hover:bg-violet-500/30 border border-white/20 h-8 text-xs"
+                  onClick={() => setMesclarOpen(true)}
+                  title="Mesclar com outro cliente (caso de pagador secundário, ex: esposa)"
+                >
+                  <UserPlus className="w-3.5 h-3.5 mr-1" />
+                  Mesclar
+                </Button>
+              )}
+              {podeExcluirCliente && (
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="text-rose-200 hover:text-white hover:bg-rose-500/30 border border-white/20 h-8 w-8 p-0"
                   onClick={() => setExcluirConfirmAlvo(true)}
                   title="Excluir cliente"
@@ -2716,6 +2741,16 @@ function ClienteDetalhe({
           </div>
         </div>
       </div>
+
+      <MesclarClienteDialog
+        open={mesclarOpen}
+        onOpenChange={setMesclarOpen}
+        clienteAtual={cliente}
+        onConfirmar={(principalId) =>
+          mesclarMut.mutate({ principalId, duplicadoId: id })
+        }
+        isPending={mesclarMut.isPending}
+      />
 
       <AlertDialog open={excluirConfirmAlvo} onOpenChange={setExcluirConfirmAlvo}>
         <AlertDialogContent>
@@ -2996,6 +3031,139 @@ function KPIClienteHero({
         {value}
       </p>
     </div>
+  );
+}
+
+/**
+ * Dialog "Mesclar com outro cliente". Caso clássico: a esposa do Carlos
+ * pagou as cobranças e o webhook criou contato pra ela; queremos transferir
+ * tudo pro Carlos e remover o contato espúrio.
+ *
+ * Operação destrutiva — usa AlertDialog com confirmação forte. `unificarContatos`
+ * migra cobranças, asaas_clientes, conversas, leads, processos, tarefas,
+ * anotações, arquivos, assinaturas e smartflow. Telefones/emails/CPF
+ * complementares do duplicado também são copiados pro principal.
+ *
+ * NOTA: hard delete do contato duplicado é definitivo. Pra suportar
+ * rollback no futuro, precisaria de migration adicionando `ativo` em
+ * `contatos` e filtro nas queries (não está no escopo deste PR).
+ */
+function MesclarClienteDialog({
+  open,
+  onOpenChange,
+  clienteAtual,
+  onConfirmar,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  clienteAtual: { id: number; nome: string };
+  onConfirmar: (principalId: number) => void;
+  isPending: boolean;
+}) {
+  const [busca, setBusca] = useState("");
+  const [selecionado, setSelecionado] = useState<{ id: number; nome: string } | null>(
+    null,
+  );
+  const [confirmacao, setConfirmacao] = useState(false);
+  const { data: contatos = [] } = (trpc as any).crm?.listarContatos?.useQuery?.(
+    { busca: busca || undefined },
+    { staleTime: 30_000, enabled: open },
+  ) ?? { data: [] };
+
+  const candidatos = (contatos as any[]).filter((c) => c.id !== clienteAtual.id);
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-violet-600" />
+            Mesclar com outro cliente
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Vai mover <b>todas</b> as cobranças, conversas, processos e
+            histórico de <b>{clienteAtual.nome}</b> pro cliente selecionado.
+            Depois,&nbsp;<b className="text-rose-600">{clienteAtual.nome}</b>
+            &nbsp;será <b>excluído</b> deste CRM (operação definitiva).
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        {!confirmacao ? (
+          <div className="space-y-3 py-2">
+            <Label className="text-xs">Cliente principal (vai receber os dados)</Label>
+            <Input
+              placeholder="Buscar por nome ou CPF..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="h-9"
+            />
+            <div className="max-h-56 overflow-y-auto border rounded">
+              {candidatos.length === 0 && busca.length > 0 && (
+                <div className="p-3 text-xs text-muted-foreground text-center">
+                  Nenhum cliente encontrado
+                </div>
+              )}
+              {candidatos.slice(0, 20).map((c: any) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
+                  className={
+                    "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
+                    (selecionado?.id === c.id ? "bg-violet-50" : "")
+                  }
+                >
+                  <div className="font-medium">{c.nome}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3 text-xs space-y-2">
+            <p className="font-semibold text-rose-900 flex items-center gap-1">
+              <AlertTriangle className="h-4 w-4" />
+              Confirmação final
+            </p>
+            <p className="text-rose-800">
+              Vai mover dados de <b>{clienteAtual.nome}</b> pra{" "}
+              <b>{selecionado?.nome}</b> e <b>excluir</b>{" "}
+              <b>{clienteAtual.nome}</b> deste CRM. Não há como desfazer.
+            </p>
+          </div>
+        )}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
+          {!confirmacao ? (
+            <Button
+              variant="default"
+              disabled={!selecionado}
+              onClick={() => setConfirmacao(true)}
+            >
+              Continuar
+            </Button>
+          ) : (
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-700"
+              disabled={isPending || !selecionado}
+              onClick={(e) => {
+                e.preventDefault();
+                if (selecionado) onConfirmar(selecionado.id);
+              }}
+            >
+              {isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : null}
+              Confirmar mesclagem
+            </AlertDialogAction>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
