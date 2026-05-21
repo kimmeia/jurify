@@ -27,7 +27,7 @@ import { eq, and, or, like } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { marcarEventoProcessado } from "./asaas-idempotency";
 import { inferirAtendentePorCobranca } from "../escritorio/db-financeiro";
-import { extrairDataPagamento, inserirVinculoAsaasIdempotente } from "./asaas-sync";
+import { extrairDataPagamento, inserirVinculoAsaasIdempotente, getAsaasClientForEscritorio } from "./asaas-sync";
 import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
 import { dataHojeBR } from "../../shared/escritorio-types";
 const log = createLogger("integracoes-asaas-webhook");
@@ -160,12 +160,76 @@ export function registerAsaasWebhook(app: Express) {
           // Upsert idempotente: retry do Asaas não cria duplicata. A constraint
           // UNIQUE(escritorioId, asaasPaymentId) protege o banco e permite que
           // o mesmo POST chegando 2× produza no máximo 1 linha.
-          const [vinculo] = await db.select().from(asaasClientes)
+          let [vinculo] = await db.select().from(asaasClientes)
             .where(and(
               eq(asaasClientes.asaasCustomerId, payment.customer),
               eq(asaasClientes.escritorioId, escritorioId)
             ))
             .limit(1);
+
+          // PR-3: se não tem vínculo, tenta achar contato local pelo CPF
+          // do customer Asaas (1 GET adicional). Resolve cobranças que
+          // antes ficavam órfãs (contatoId NULL) quando o pagamento chega
+          // antes do customer ser explicitamente vinculado no CRM.
+          //
+          // Se acha contato com CPF compatível, cria vínculo asaas_clientes
+          // automaticamente (primario=false pra não interferir nas criações
+          // de cobrança manuais). Se não acha, segue com contatoId=NULL
+          // — operador resolve via banner "X cobranças sem cliente".
+          //
+          // Falha graciosa: erro de network/auth aqui não bloqueia o
+          // INSERT da cobrança (continua órfã, melhor que perder evento).
+          if (!vinculo) {
+            try {
+              const asaasClient = await getAsaasClientForEscritorio(escritorioId);
+              if (asaasClient) {
+                const customerInfo = await asaasClient.buscarCliente(payment.customer);
+                const cpfLimpo = customerInfo?.cpfCnpj?.replace(/\D/g, "");
+                if (cpfLimpo && cpfLimpo.length >= 11) {
+                  const [contatoExistente] = await db
+                    .select({ id: contatos.id })
+                    .from(contatos)
+                    .where(and(
+                      eq(contatos.escritorioId, escritorioId),
+                      like(contatos.cpfCnpj, `%${cpfLimpo}%`),
+                    ))
+                    .limit(1);
+                  if (contatoExistente) {
+                    await db
+                      .insert(asaasClientes)
+                      .values({
+                        escritorioId,
+                        contatoId: contatoExistente.id,
+                        asaasCustomerId: payment.customer,
+                        cpfCnpj: cpfLimpo,
+                        nome: customerInfo.name ?? null,
+                        primario: false,
+                        ativo: true,
+                      })
+                      .onDuplicateKeyUpdate({
+                        set: { contatoId: contatoExistente.id, ativo: true },
+                      });
+                    [vinculo] = await db
+                      .select()
+                      .from(asaasClientes)
+                      .where(and(
+                        eq(asaasClientes.asaasCustomerId, payment.customer),
+                        eq(asaasClientes.escritorioId, escritorioId),
+                      ))
+                      .limit(1);
+                    log.info(
+                      `[Asaas Webhook] Vínculo auto-criado via CPF — customer ${payment.customer} → contato ${contatoExistente.id}`,
+                    );
+                  }
+                }
+              }
+            } catch (err: any) {
+              log.warn(
+                { err: err.message, paymentId: payment.id },
+                "[Asaas Webhook] Falha no auto-vínculo por CPF, gravando órfã",
+              );
+            }
+          }
 
           // Inferência de atendente: só usada no INSERT inicial. Em UPDATE
           // não tocamos no atendenteId — atribuição manual via bulk-edit

@@ -48,7 +48,7 @@ const log = createLogger("integracoes-asaas-sync");
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function getAsaasClientForEscritorio(escritorioId: number): Promise<AsaasClient | null> {
+export async function getAsaasClientForEscritorio(escritorioId: number): Promise<AsaasClient | null> {
   const db = await getDb();
   if (!db) return null;
 

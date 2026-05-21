@@ -18,6 +18,7 @@ import {
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
+  asaasClientes,
   asaasCobrancas,
   categoriasCobranca,
   contatos,
@@ -551,6 +552,161 @@ export const financeiroRouter = router({
       semContato: Number(row?.semContato ?? 0),
     };
   }),
+
+  /**
+   * Lista cobranças sem cliente (contatoId NULL) agrupadas por
+   * asaasCustomerId, retornando metadados pra tela de revisão:
+   *  - asaasCustomerId
+   *  - nome (do `asaas_clientes.nome` ou `payerName` da própria cobrança)
+   *  - qtdCobrancas
+   *  - valorTotal
+   *  - primeiraData / ultimaData
+   *
+   * Permite tratar várias cobranças do mesmo pagador em 1 ação (1 vínculo
+   * resolve todas).
+   */
+  listarOrfasAgrupadas: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    await exigirAcaoFinanceiro(ctx.user.id, "editar");
+    const db = await getDb();
+    if (!db) return [];
+
+    const rows = await db
+      .select({
+        asaasCustomerId: asaasCobrancas.asaasCustomerId,
+        qtd: sql<number>`COUNT(*)`,
+        valorTotal: sql<number>`SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(10,2)))`,
+        primeiraData: sql<string>`MIN(COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}))`,
+        ultimaData: sql<string>`MAX(COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}))`,
+      })
+      .from(asaasCobrancas)
+      .where(
+        and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          isNull(asaasCobrancas.contatoId),
+        ),
+      )
+      .groupBy(asaasCobrancas.asaasCustomerId)
+      .orderBy(desc(sql`MAX(COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}))`))
+      .limit(200);
+
+    // Enriquece com nome do customer (asaas_clientes.nome) se houver.
+    // Customer Asaas pode existir como linha sem contato vinculado quando
+    // o webhook criou cobrança antes do vínculo (asaas_clientes pode
+    // não existir pra esse customerId ainda).
+    const customerIds = rows
+      .map((r) => r.asaasCustomerId)
+      .filter((c): c is string => !!c);
+    let nomesMap: Record<string, string> = {};
+    if (customerIds.length > 0) {
+      const nomes = await db
+        .select({
+          customerId: asaasClientes.asaasCustomerId,
+          nome: asaasClientes.nome,
+        })
+        .from(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, esc.escritorio.id),
+            inArray(asaasClientes.asaasCustomerId, customerIds),
+          ),
+        );
+      nomesMap = Object.fromEntries(
+        nomes.filter((n) => n.nome).map((n) => [n.customerId, n.nome!]),
+      );
+    }
+
+    return rows.map((r) => ({
+      asaasCustomerId: r.asaasCustomerId,
+      nomeCustomer: r.asaasCustomerId ? (nomesMap[r.asaasCustomerId] ?? null) : null,
+      qtd: Number(r.qtd ?? 0),
+      valorTotal: Number(r.valorTotal ?? 0),
+      primeiraData: r.primeiraData,
+      ultimaData: r.ultimaData,
+    }));
+  }),
+
+  /**
+   * Vincula todas as cobranças órfãs de um asaasCustomerId a um contato
+   * existente do CRM (ou cria contato novo).
+   *
+   *  - Atualiza/cria row em `asaas_clientes` (vínculo customer → contato)
+   *  - Backfilla `contatoId` em TODAS as cobranças órfãs desse customer
+   *
+   * Caso "esposa do Carlos": customer = Maria, contatoId escolhido = Carlos.
+   * Maria não vira contato. Nome de Maria fica em `asaas_clientes.nome`
+   * pra referência histórica.
+   */
+  vincularOrfas: protectedProcedure
+    .input(
+      z.object({
+        asaasCustomerId: z.string().min(1),
+        contatoId: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [contato] = await db
+        .select({ id: contatos.id })
+        .from(contatos)
+        .where(
+          and(
+            eq(contatos.id, input.contatoId),
+            eq(contatos.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+      if (!contato) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Contato não encontrado" });
+      }
+
+      // Pega o CPF do customer Asaas se já houver row em asaas_clientes
+      // (criada pelo webhook anteriormente com cpfCnpj). Senão, usa "".
+      // `cpfCnpj` é notNull no schema; valor real é só metadado pra
+      // referência humana — o vínculo funcional é via asaasCustomerId.
+      const [vinculoExistente] = await db
+        .select({ cpfCnpj: asaasClientes.cpfCnpj })
+        .from(asaasClientes)
+        .where(
+          and(
+            eq(asaasClientes.escritorioId, esc.escritorio.id),
+            eq(asaasClientes.asaasCustomerId, input.asaasCustomerId),
+          ),
+        )
+        .limit(1);
+      const cpfCnpj = vinculoExistente?.cpfCnpj ?? "";
+
+      await db
+        .insert(asaasClientes)
+        .values({
+          escritorioId: esc.escritorio.id,
+          contatoId: contato.id,
+          asaasCustomerId: input.asaasCustomerId,
+          cpfCnpj,
+          primario: false,
+          ativo: true,
+        })
+        .onDuplicateKeyUpdate({
+          set: { contatoId: contato.id, ativo: true },
+        });
+
+      const result: any = await db
+        .update(asaasCobrancas)
+        .set({ contatoId: contato.id })
+        .where(
+          and(
+            eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+            eq(asaasCobrancas.asaasCustomerId, input.asaasCustomerId),
+            isNull(asaasCobrancas.contatoId),
+          ),
+        );
+
+      return { vinculadas: Number(result?.[0]?.affectedRows ?? 0) };
+    }),
 
   atribuirCobrancasEmMassa: protectedProcedure
     .input(
