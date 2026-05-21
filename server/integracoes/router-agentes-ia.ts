@@ -252,7 +252,46 @@ export function providerDoModelo(modelo: string | null | undefined): "openai" | 
   return "openai";
 }
 
-/** Monta o bloco de contexto com documentos de treinamento do agente. */
+/**
+ * Lê arquivo do disco e extrai texto. Quando bem-sucedido, cacheia em
+ * `agente_ia_documentos.conteudo` pra próximas chamadas serem instantâneas
+ * (lazy heal — arquivos uploadados antes da extração ser implementada
+ * curam automaticamente na primeira vez que são usados).
+ */
+async function lerExtrairECachear(
+  db: any,
+  doc: { id: number; nome: string; url: string | null; mimeType: string | null },
+): Promise<string | null> {
+  if (!doc.url || !doc.mimeType) return null;
+  try {
+    const filePath = path.join(UPLOAD_DIR, doc.url.replace("/uploads/agentes-escritorio/", ""));
+    if (!fs.existsSync(filePath)) {
+      log.warn({ docId: doc.id, filePath }, "arquivo do disco não encontrado");
+      return null;
+    }
+    const buffer = fs.readFileSync(filePath);
+    const { extrairTextoDocumento } = await import("../_core/agente-doc-extracao");
+    const r = await extrairTextoDocumento(buffer, doc.mimeType);
+    if (r.texto) {
+      // Cache no DB pra próximas chamadas
+      await db
+        .update(agenteIaDocumentos)
+        .set({ conteudo: r.texto })
+        .where(eq(agenteIaDocumentos.id, doc.id));
+      return r.texto;
+    }
+    return null;
+  } catch (e: any) {
+    log.warn({ err: e?.message, docId: doc.id }, "falha ao extrair lazy");
+    return null;
+  }
+}
+
+/**
+ * Monta o bloco de contexto com documentos de treinamento do agente.
+ * Particiona o espaço entre os docs (3000 chars cada, 8000 total) pra um
+ * arquivo longo não consumir todo o budget e sobrar nada pros outros.
+ */
 export async function montarContextoDocumentos(
   db: any,
   agenteId: number,
@@ -267,19 +306,35 @@ export async function montarContextoDocumentos(
         eq(agenteIaDocumentos.escritorioId, escritorioId),
       ),
     );
-  const contextos: string[] = [];
+
+  // Links viram referência textual; texto/arquivo viram conteúdo extraído.
+  const linksTextuais: string[] = [];
+  const docsComConteudo: Array<{ nome: string; conteudo: string | null }> = [];
+
   for (const d of docs) {
-    if (d.tipo === "texto" && d.conteudo) {
-      contextos.push(`[${d.nome}]\n${d.conteudo}`);
+    if (d.tipo === "texto") {
+      docsComConteudo.push({ nome: d.nome, conteudo: d.conteudo });
     } else if (d.tipo === "link" && d.url) {
-      contextos.push(`[Link: ${d.nome}] ${d.url}`);
+      linksTextuais.push(`[Link: ${d.nome}] ${d.url}`);
     } else if (d.tipo === "arquivo") {
-      contextos.push(`[Arquivo anexado: ${d.nome}]`);
+      // Lazy heal: se ainda não tem conteúdo extraído, lê do disco agora
+      let conteudo = d.conteudo;
+      if (!conteudo) {
+        conteudo = await lerExtrairECachear(db, {
+          id: d.id, nome: d.nome, url: d.url, mimeType: d.mimeType,
+        });
+      }
+      docsComConteudo.push({ nome: d.nome, conteudo });
     }
   }
-  return contextos.length > 0
-    ? `\n\n--- CONHECIMENTO DISPONÍVEL ---\n${contextos.join("\n\n").slice(0, 8000)}`
-    : "";
+
+  const { particionarContexto } = await import("../_core/agente-doc-extracao");
+  const blocoContents = particionarContexto(docsComConteudo);
+
+  const partes = [blocoContents, linksTextuais.join("\n")].filter(Boolean);
+  if (partes.length === 0) return "";
+
+  return `\n\n--- CONHECIMENTO DISPONÍVEL ---\n${partes.join("\n\n")}`;
 }
 
 /**
@@ -388,7 +443,7 @@ export const agentesIaRouter = router({
         .limit(1);
       if (!agente) throw new TRPCError({ code: "NOT_FOUND", message: "Agente não encontrado" });
 
-      const documentos = await db
+      const docsRaw = await db
         .select()
         .from(agenteIaDocumentos)
         .where(
@@ -398,6 +453,21 @@ export const agentesIaRouter = router({
           ),
         )
         .orderBy(desc(agenteIaDocumentos.createdAt));
+
+      // Não devolve `conteudo` cru (pode ter 10kb+ por doc) — só metadados
+      // + flag pro frontend saber se a extração funcionou e mostrar indicador.
+      const documentos = docsRaw.map((d: any) => ({
+        id: d.id,
+        agenteId: d.agenteId,
+        nome: d.nome,
+        tipo: d.tipo,
+        url: d.url,
+        tamanho: d.tamanho,
+        mimeType: d.mimeType,
+        createdAt: d.createdAt,
+        temConteudoExtraido: !!(d.conteudo && d.conteudo.trim().length > 0),
+        tamanhoConteudo: d.conteudo ? d.conteudo.length : 0,
+      }));
 
       return {
         id: agente.id,
@@ -636,6 +706,12 @@ export const agentesIaRouter = router({
       fs.writeFileSync(filepath, buffer);
       const url = `/uploads/agentes-escritorio/escritorio_${perm.escritorioId}/agente_${input.agenteId}/${filename}`;
 
+      // Extrai texto na hora pro agente conseguir usar o conteúdo. Falha aqui
+      // NÃO bloqueia upload — o arquivo fica salvo e a UI indica que a
+      // extração não funcionou (usuário pode reprocessar manualmente depois).
+      const { extrairTextoDocumento } = await import("../_core/agente-doc-extracao");
+      const extracao = await extrairTextoDocumento(buffer, mimeType);
+
       await db.insert(agenteIaDocumentos).values({
         agenteId: input.agenteId,
         escritorioId: perm.escritorioId,
@@ -644,9 +720,15 @@ export const agentesIaRouter = router({
         url,
         tamanho: buffer.length,
         mimeType,
+        conteudo: extracao.texto,
       });
 
-      return { success: true, url };
+      return {
+        success: true,
+        url,
+        textoExtraido: !!extracao.texto,
+        avisoExtracao: extracao.erro,
+      };
     }),
 
   adicionarLink: protectedProcedure
@@ -707,6 +789,67 @@ export const agentesIaRouter = router({
         conteudo: input.conteudo,
       });
       return { success: true };
+    }),
+
+  /**
+   * Reprocessa a extração de texto de um documento. Útil quando o upload
+   * inicial falhou (PDF escaneado, lib indisponível) ou pra forçar
+   * reextração após mudança no helper. Lê o arquivo do disco e regrava
+   * `conteudo` no DB.
+   */
+  reprocessarDocumento: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Sem escritório" });
+
+      const [doc] = await db
+        .select()
+        .from(agenteIaDocumentos)
+        .where(and(
+          eq(agenteIaDocumentos.id, input.id),
+          eq(agenteIaDocumentos.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado" });
+
+      await exigirPermAgente(ctx.user.id, "editar", doc.agenteId);
+
+      if (doc.tipo !== "arquivo" || !doc.url) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Só arquivos uploadados podem ser reprocessados",
+        });
+      }
+
+      try {
+        const filePath = path.join(UPLOAD_DIR, doc.url.replace("/uploads/agentes-escritorio/", ""));
+        if (!fs.existsSync(filePath)) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo não encontrado no disco" });
+        }
+        const buffer = fs.readFileSync(filePath);
+        const { extrairTextoDocumento } = await import("../_core/agente-doc-extracao");
+        const r = await extrairTextoDocumento(buffer, doc.mimeType || "");
+
+        await db
+          .update(agenteIaDocumentos)
+          .set({ conteudo: r.texto })
+          .where(eq(agenteIaDocumentos.id, input.id));
+
+        return {
+          textoExtraido: !!r.texto,
+          tamanhoConteudo: r.texto ? r.texto.length : 0,
+          aviso: r.erro,
+        };
+      } catch (e: any) {
+        if (e?.code === "NOT_FOUND") throw e;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: e?.message || "Falha ao reprocessar",
+        });
+      }
     }),
 
   deletarDocumento: protectedProcedure
