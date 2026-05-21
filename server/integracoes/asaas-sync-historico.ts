@@ -343,21 +343,57 @@ export async function processarSyncHistorico(): Promise<void> {
         continue;
       }
 
-      const resultado = await processarJanelaUm(client, cfg.escritorioId, cursorDia);
+      // Quantos dias processar neste tick. Default 1. Configurável até 7
+      // pra acelerar quando rate guard tá folgado. Processa dia-a-dia
+      // mas em sequência dentro do mesmo tick (sem novo cooldown entre).
+      const diasPorTick = Math.max(
+        1,
+        Math.min(7, cfg.historicoSyncDiasPorTick ?? 1),
+      );
+      let diasProcessados = 0;
+      let novasAcum = 0;
+      let atualizadasAcum = 0;
+      let proximoCursor = cursorDia;
+      type ErroLoop = { tipo: "rate_limit" | "erro_fatal"; mensagem: string };
+      let primeiroErro: ErroLoop | null = null;
 
-      if (resultado.ok) {
-        const proximoCursor = subtrairDias(cursorDia, 1);
+      for (let i = 0; i < diasPorTick; i++) {
+        if (proximoCursor < limiteInferior) break;
+        const resultadoLoop = await processarJanelaUm(
+          client,
+          cfg.escritorioId,
+          proximoCursor,
+        );
+        if (!resultadoLoop.ok) {
+          primeiroErro = {
+            tipo: resultadoLoop.tipo,
+            mensagem: resultadoLoop.mensagem,
+          };
+          break;
+        }
+        diasProcessados++;
+        novasAcum += resultadoLoop.novas;
+        atualizadasAcum += resultadoLoop.atualizadas;
+        proximoCursor = subtrairDias(proximoCursor, 1);
+      }
+
+      const resultado: { ok: true } | { ok: false; tipo: "rate_limit" | "erro_fatal"; mensagem: string } =
+        primeiroErro
+          ? { ok: false as const, tipo: primeiroErro.tipo, mensagem: primeiroErro.mensagem }
+          : { ok: true as const };
+
+      if (resultado.ok && diasProcessados > 0) {
         const concluiu = proximoCursor < limiteInferior;
         await db
           .update(asaasConfig)
           .set({
             historicoSyncStatus: concluiu ? "concluido" : "executando",
             historicoSyncCursor: concluiu ? null : proximoCursor,
-            historicoSyncDiasFeitos: cfg.historicoSyncDiasFeitos + 1,
+            historicoSyncDiasFeitos: cfg.historicoSyncDiasFeitos + diasProcessados,
             historicoSyncCobrancasImportadas:
-              cfg.historicoSyncCobrancasImportadas + resultado.novas,
+              cfg.historicoSyncCobrancasImportadas + novasAcum,
             historicoSyncCobrancasAtualizadas:
-              cfg.historicoSyncCobrancasAtualizadas + resultado.atualizadas,
+              cfg.historicoSyncCobrancasAtualizadas + atualizadasAcum,
             historicoSyncUltimaJanelaEm: new Date(),
             ...(concluiu ? { historicoSyncConcluidoEm: new Date() } : {}),
             historicoSyncErroMensagem: null,
@@ -368,11 +404,12 @@ export async function processarSyncHistorico(): Promise<void> {
           {
             escritorioId: cfg.escritorioId,
             diaIso: cursorDia,
-            novas: resultado.novas,
-            atualizadas: resultado.atualizadas,
+            diasProcessados,
+            novas: novasAcum,
+            atualizadas: atualizadasAcum,
             concluiu,
           },
-          "[asaas-sync-historico] janela processada",
+          `[asaas-sync-historico] tick processou ${diasProcessados} dia(s)`,
         );
 
         // Ao concluir o sync, adota cobranças órfãs (customer Asaas
@@ -401,7 +438,7 @@ export async function processarSyncHistorico(): Promise<void> {
             );
           }
         }
-      } else if (resultado.tipo === "rate_limit") {
+      } else if (!resultado.ok && resultado.tipo === "rate_limit") {
         // 429 — pausa pro usuário decidir. NÃO marca erro porque é
         // condição transitória (cota libera em 12h).
         await db
@@ -416,7 +453,7 @@ export async function processarSyncHistorico(): Promise<void> {
           { escritorioId: cfg.escritorioId, mensagem: resultado.mensagem },
           "[asaas-sync-historico] pausado por rate limit",
         );
-      } else {
+      } else if (!resultado.ok) {
         // Erro fatal (401/403 — credencial inválida). Marca erro e para.
         await db
           .update(asaasConfig)

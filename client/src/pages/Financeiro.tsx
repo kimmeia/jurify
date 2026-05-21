@@ -768,6 +768,7 @@ export default function Financeiro() {
             </div>
           )}
           <BannersPendencia />
+          <PainelSyncHistorico />
           {conectado && (
             <>
           {/* Hero: Fluxo de caixa (gráfico grande) — específico da
@@ -2379,6 +2380,179 @@ function CelulaAtendente({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/**
+ * Painel "Sincronizando histórico Asaas" — aparece no topo da aba
+ * Cobranças quando o sync histórico está agendado/executando/pausado/erro.
+ * Some quando concluído (UX limpa pro estado estável).
+ *
+ * Mostra progresso (dias feitos / total), próxima janela, controles de
+ * velocidade (intervaloMinutos + diasPorTick) e pausar/cancelar/retomar.
+ *
+ * Refetch a cada 30s — não usa polling agressivo porque o cron é tick
+ * de 5min mínimo.
+ */
+function PainelSyncHistorico() {
+  const utils = trpc.useUtils();
+  const { data } = trpc.asaas.statusSyncHistorico.useQuery(undefined, {
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+  const ajustarMut = trpc.asaas.ajustarVelocidadeSyncHistorico.useMutation({
+    onSuccess: () => {
+      toast.success("Velocidade ajustada");
+      utils.asaas.statusSyncHistorico.invalidate();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+  const pausarMut = trpc.asaas.pausarSyncHistorico.useMutation({
+    onSuccess: () => utils.asaas.statusSyncHistorico.invalidate(),
+  });
+  const retomarMut = trpc.asaas.retomarSyncHistorico.useMutation({
+    onSuccess: () => utils.asaas.statusSyncHistorico.invalidate(),
+  });
+
+  if (!data || data.status === "inativo" || data.status === "concluido") {
+    return null;
+  }
+
+  const total = data.totalDias ?? 0;
+  const feitos = data.diasFeitos ?? 0;
+  const restante = Math.max(0, total - feitos);
+  const pct = total > 0 ? Math.min(100, (feitos / total) * 100) : 0;
+  const intervaloMin = data.intervaloMinutos ?? 10;
+  const diasPorTick = (data as any).diasPorTick ?? 1;
+  // Estimativa: cada tick avança `diasPorTick` dias e leva `intervaloMin`
+  // minutos. Tempo restante ≈ (restante / diasPorTick) × intervaloMin.
+  const minutosRestante = Math.ceil((restante / diasPorTick) * intervaloMin);
+  const horasRestante = Math.floor(minutosRestante / 60);
+  const diasRestante = Math.floor(horasRestante / 24);
+  const estimativaTexto =
+    diasRestante > 1
+      ? `~${diasRestante} dias`
+      : horasRestante > 1
+        ? `~${horasRestante}h`
+        : `~${minutosRestante}min`;
+
+  const corStatus =
+    data.status === "pausado" || data.status === "erro"
+      ? "border-amber-300 bg-amber-50"
+      : "border-blue-300 bg-blue-50";
+
+  return (
+    <Card className={"border " + corStatus}>
+      <CardContent className="py-3 space-y-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <RefreshCw
+            className={
+              "h-4 w-4 " +
+              (data.status === "executando" ? "animate-spin text-blue-600" : "text-amber-600")
+            }
+          />
+          <div className="flex-1 min-w-[200px]">
+            <div className="text-sm font-medium">
+              {data.status === "executando" && "Importando histórico do Asaas"}
+              {data.status === "agendado" && "Importação histórica agendada"}
+              {data.status === "pausado" && "Importação pausada"}
+              {data.status === "erro" && "Importação com erro"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {feitos} de {total} dias · {restante} restantes · estimativa {estimativaTexto}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {data.status !== "pausado" && data.status !== "erro" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => pausarMut.mutate()}
+              >
+                Pausar
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => retomarMut.mutate()}
+              >
+                Retomar
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="w-full h-1.5 bg-slate-200 rounded overflow-hidden">
+          <div
+            className="h-full bg-blue-500 transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        {/* Controles de velocidade */}
+        <div className="flex items-center gap-3 pt-1 border-t flex-wrap text-xs">
+          <span className="font-medium text-muted-foreground">Velocidade:</span>
+          <label className="flex items-center gap-1">
+            <span className="text-muted-foreground">A cada</span>
+            <Select
+              value={String(intervaloMin)}
+              onValueChange={(v) =>
+                ajustarMut.mutate({
+                  intervaloMinutos: Number(v),
+                  diasPorTick,
+                })
+              }
+              disabled={ajustarMut.isPending}
+            >
+              <SelectTrigger className="h-6 text-xs w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5 min</SelectItem>
+                <SelectItem value="10">10 min</SelectItem>
+                <SelectItem value="30">30 min</SelectItem>
+                <SelectItem value="60">60 min</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="flex items-center gap-1">
+            <span className="text-muted-foreground">processa</span>
+            <Select
+              value={String(diasPorTick)}
+              onValueChange={(v) =>
+                ajustarMut.mutate({
+                  intervaloMinutos: intervaloMin,
+                  diasPorTick: Number(v),
+                })
+              }
+              disabled={ajustarMut.isPending}
+            >
+              <SelectTrigger className="h-6 text-xs w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 dia</SelectItem>
+                <SelectItem value="3">3 dias</SelectItem>
+                <SelectItem value="5">5 dias</SelectItem>
+                <SelectItem value="7">7 dias</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          {(intervaloMin <= 5 || diasPorTick >= 5) && (
+            <span className="text-amber-700 text-[11px]">
+              ⚡ Modo turbo — pode bater no rate guard se Asaas estiver com cota baixa
+            </span>
+          )}
+        </div>
+
+        {data.erroMensagem && (
+          <p className="text-xs text-amber-700">⚠ {data.erroMensagem}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

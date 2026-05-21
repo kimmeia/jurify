@@ -862,6 +862,7 @@ export const asaasRouter = router({
         cobrancasImportadas: asaasConfig.historicoSyncCobrancasImportadas,
         cobrancasAtualizadas: asaasConfig.historicoSyncCobrancasAtualizadas,
         intervaloMinutos: asaasConfig.historicoSyncIntervaloMinutos,
+        diasPorTick: asaasConfig.historicoSyncDiasPorTick,
         iniciadoEm: asaasConfig.historicoSyncIniciadoEm,
         ultimaJanelaEm: asaasConfig.historicoSyncUltimaJanelaEm,
         concluidoEm: asaasConfig.historicoSyncConcluidoEm,
@@ -881,7 +882,8 @@ export const asaasRouter = router({
         diasFeitos: 0,
         cobrancasImportadas: 0,
         cobrancasAtualizadas: 0,
-        intervaloMinutos: 60,
+        intervaloMinutos: 10,
+        diasPorTick: 1,
         iniciadoEm: null,
         ultimaJanelaEm: null,
         concluidoEm: null,
@@ -1014,6 +1016,41 @@ export const asaasRouter = router({
 
     return { success: true };
   }),
+
+  /**
+   * Ajusta `intervaloMinutos` (5..60) e `diasPorTick` (1..7) do sync
+   * histórico. Acelera ou desacelera sem cancelar o progresso atual.
+   *
+   * Cenário típico: cliente piloto com 3 anos de histórico — o default
+   * (10min × 1 dia) demora ~7,5 dias de calendário. Subir pra 5min × 7
+   * dias = 1 dia de calendário, mas pressiona o rate guard.
+   */
+  ajustarVelocidadeSyncHistorico: protectedProcedure
+    .input(
+      z.object({
+        intervaloMinutos: z.number().int().min(5).max(60),
+        diasPorTick: z.number().int().min(1).max(7),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+      if (!perm.editar) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+      }
+      const esc = await requireEscritorio(ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await db
+        .update(asaasConfig)
+        .set({
+          historicoSyncIntervaloMinutos: input.intervaloMinutos,
+          historicoSyncDiasPorTick: input.diasPorTick,
+        })
+        .where(eq(asaasConfig.escritorioId, esc.escritorio.id));
+
+      return { success: true };
+    }),
 
   // ─── SYNC CLIENTES ───────────────────────────────────────────────────────
 

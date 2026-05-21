@@ -1244,8 +1244,16 @@ export const asaasConfig = mysqlTable("asaas_config", {
   historicoSyncDiasFeitos: int("historicoSyncDiasFeitos").default(0).notNull(),
   historicoSyncCobrancasImportadas: int("historicoSyncCobrancasImportadas").default(0).notNull(),
   historicoSyncCobrancasAtualizadas: int("historicoSyncCobrancasAtualizadas").default(0).notNull(),
-  /** Cooldown entre janelas (default 60min). Configurável pelo user. */
-  historicoSyncIntervaloMinutos: int("historicoSyncIntervaloMinutos").default(60).notNull(),
+  /** Cooldown entre janelas (default 10min). Configurável pelo user.
+   *  Valores aceitos: 5..60. Antes era 60 fixo — pra 3 anos = 45 dias
+   *  de calendário pra concluir. Com 10min cai pra ~7,5 dias. */
+  historicoSyncIntervaloMinutos: int("historicoSyncIntervaloMinutos").default(10).notNull(),
+  /** Quantos dias processar por tick (default 1). Configurável 1..7.
+   *  Subir aumenta paralelismo aparente mas multiplica requests por
+   *  tick (sobe pressão no rate guard local). 1 dia = 1 request por
+   *  vínculo paginado. 7 dias = mesma coisa multiplicado por 7 — só
+   *  liga quando rate-remaining estiver alto. */
+  historicoSyncDiasPorTick: int("historicoSyncDiasPorTick").default(1).notNull(),
   historicoSyncIniciadoEm: timestamp("historicoSyncIniciadoEm"),
   historicoSyncUltimaJanelaEm: timestamp("historicoSyncUltimaJanelaEm"),
   historicoSyncConcluidoEm: timestamp("historicoSyncConcluidoEm"),
