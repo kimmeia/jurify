@@ -68,17 +68,63 @@ async function marcarTentativa(
 }
 
 /**
- * Heurística rápida: a mensagem parece conter um valor extraível?
- * Evita chamar IA em conversas sociais como "oi", "obrigado", etc.
+ * Saudações/agradecimentos curtos que jamais carregam valor extraível.
+ * Lista deliberadamente restrita pra não pular falsos positivos.
  */
-function mensagemPareceTerValor(texto: string): boolean {
-  if (!texto || texto.length < 3) return false;
-  // Números, valores monetários, datas, CPF/CNPJ
-  if (/\d/.test(texto)) return true;
-  // Datas por extenso ("janeiro", "fevereiro", etc)
-  if (/\b(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i.test(texto)) return true;
+const MENSAGENS_SOCIAIS = new Set([
+  "oi", "olá", "ola", "ok", "okay", "blz", "beleza",
+  "obrigado", "obrigada", "valeu", "vlw",
+  "tchau", "ate", "até",
+  "bom dia", "boa tarde", "boa noite",
+  "oi!", "oi.", "olá!", "ok.", "ok!",
+]);
+
+/**
+ * Heurística rápida: a mensagem parece conter um valor extraível?
+ * Evita chamar IA em conversas puramente sociais ("oi", "obrigado").
+ *
+ * Estratégia (mais permissiva que a versão anterior — era whitelist muito
+ * estreita que pulava casos óbvios tipo "Rafael, para amanha"):
+ *  - Mensagens muito curtas (< 3) ou exatamente saudações conhecidas pulam
+ *  - Mensagens longas (> 30 chars) sempre passam — alta chance de ter info
+ *  - Caso contrário, procura sinais (números, datas, dias da semana,
+ *    termos temporais, booleans, palavras de agendamento/intenção)
+ */
+export function mensagemPareceTerValor(texto: string): boolean {
+  if (!texto) return false;
+  const limpo = texto.trim();
+  if (limpo.length < 3) return false;
+
+  // Saudações puras (mensagem inteira é a saudação)
+  if (MENSAGENS_SOCIAIS.has(limpo.toLowerCase())) return false;
+
+  // Mensagens longas têm alta chance de conter informação útil
+  if (limpo.length > 30) return true;
+
+  // Normaliza pra remover acentos — regex \b não reconhece "ã"/"á"/etc
+  // como word-chars em ASCII, então procurar "amanhã" com \b sempre falha.
+  // Strategy: comparamos sempre na forma sem acento (NFD + strip combining marks).
+  const norm = limpo
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
+  // Números, valores monetários, datas, CPF/CNPJ, horários
+  if (/\d/.test(norm)) return true;
+  // Datas por extenso (meses)
+  if (/\b(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/.test(norm)) return true;
+  // Dias da semana (com/sem "-feira", sem acento já normalizado)
+  if (/\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)(-?feira)?\b/.test(norm)) return true;
+  // Termos temporais relativos
+  if (/\b(amanha|hoje|ontem|anteontem|agora|ja)\b/.test(norm)) return true;
+  if (/(depois de amanha|semana que vem|mes que vem|proxim[ao])/.test(norm)) return true;
+  // Períodos do dia
+  if (/\b(manha|tarde|noite|madrugada)\b/.test(norm)) return true;
+  // Intenção de agendamento (mesmo sem data, sinaliza que vale tentar extrair)
+  if (/\b(agendar|marcar|reservar|reagendar|remarcar|consulta|reuniao|audiencia)\b/.test(norm)) return true;
   // Booleans
-  if (/\b(sim|não|nao|verdadeiro|falso|true|false)\b/i.test(texto)) return true;
+  if (/\b(sim|nao|verdadeiro|falso|true|false)\b/.test(norm)) return true;
+
   return false;
 }
 
