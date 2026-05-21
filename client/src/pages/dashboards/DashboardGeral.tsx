@@ -116,7 +116,7 @@ export default function DashboardGeral() {
     { enabled: !!user, retry: false, refetchInterval: 120_000 },
   );
   const { data: feed } = trpc.dashboard.activityFeed.useQuery(
-    { limit: 15 },
+    { limit: 5 },
     { enabled: !!user, retry: false, refetchInterval: 30_000 },
   );
 
@@ -126,7 +126,8 @@ export default function DashboardGeral() {
   const isUnlimited = creditsTotal >= 999_999;
   const ok = !!r;
 
-  const totalHoje = ok ? r.agenda.compromissosHoje.length + r.agenda.tarefasHoje.length : 0;
+  const totalHoje = ok ? r.agenda.totalHojeCount : 0;
+  const inadimplentes: number = clientesStats?.inadimplentes ?? 0;
 
   const recebido = cashFlow?.totalRecebido ?? 0;
   const pendente = cashFlow?.totalPendente ?? 0;
@@ -436,39 +437,31 @@ export default function DashboardGeral() {
                 onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
                 isString: true,
               },
-              {
-                value: formatBRLShort(r.financeiro.pendente),
-                label: "A receber",
-                color: "text-amber-600",
-                onClick: () => nav("/financeiro"),
-                isString: true,
-              },
             ]}
           />
           <CardContexto
-            titulo="Escritório"
-            icone={Activity}
-            iconBg="bg-emerald-50"
-            iconFg="text-emerald-500"
+            titulo="Operação"
+            icone={AlertTriangle}
+            iconBg="bg-rose-50"
+            iconFg="text-rose-500"
             itens={[
               {
-                value: r.processos.ativos,
-                label: "Processos",
-                color: "text-indigo-600",
-                onClick: () => nav("/processos"),
-              },
-              {
-                value: r.crm.totalContatos,
-                label: "Clientes",
+                value: r.crm.conversasAbertas,
+                label: "Conversas abertas",
                 color: "text-blue-600",
-                onClick: () => nav("/clientes"),
+                onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
               },
               {
-                value: formatBRLShort(r.financeiro.recebido),
-                label: "Recebido total",
-                color: "text-emerald-600",
+                value: r.agenda.atrasados,
+                label: "Atrasados",
+                color: "text-amber-600",
+                onClick: () => nav("/agenda"),
+              },
+              {
+                value: inadimplentes,
+                label: "Inadimplentes",
+                color: "text-rose-600",
                 onClick: () => nav("/financeiro"),
-                isString: true,
               },
             ]}
           />
@@ -584,7 +577,7 @@ export default function DashboardGeral() {
         </div>
 
         {/* Coluna direita: Activity feed */}
-        <Card className="border-slate-200 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] flex flex-col">
+        <Card className="border-slate-200">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -594,7 +587,7 @@ export default function DashboardGeral() {
               <PulseDot />
             </div>
           </CardHeader>
-          <CardContent className="overflow-y-auto flex-1 pr-2">
+          <CardContent>
             {!feed || feed.length === 0 ? (
               <div className="text-center py-8">
                 <Activity className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
@@ -602,7 +595,7 @@ export default function DashboardGeral() {
               </div>
             ) : (
               <div className="space-y-3">
-                {feed.map((item: any) => {
+                {feed.slice(0, 5).map((item: any) => {
                   const cfg = ACTIVITY_ICONS[item.tipo] || ACTIVITY_ICONS.mensagem;
                   const Icon = cfg.icon;
                   return (
