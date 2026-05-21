@@ -126,7 +126,8 @@ export default function DashboardGeral() {
   const isUnlimited = creditsTotal >= 999_999;
   const ok = !!r;
 
-  const totalHoje = ok ? r.agenda.compromissosHoje.length + r.agenda.tarefasHoje.length : 0;
+  const totalHoje = ok ? r.agenda.totalHojeCount : 0;
+  const inadimplentes: number = clientesStats?.inadimplentes ?? 0;
 
   const recebido = cashFlow?.totalRecebido ?? 0;
   const pendente = cashFlow?.totalPendente ?? 0;
@@ -436,39 +437,31 @@ export default function DashboardGeral() {
                 onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
                 isString: true,
               },
-              {
-                value: formatBRLShort(r.financeiro.pendente),
-                label: "A receber",
-                color: "text-amber-600",
-                onClick: () => nav("/financeiro"),
-                isString: true,
-              },
             ]}
           />
           <CardContexto
-            titulo="Escritório"
-            icone={Activity}
-            iconBg="bg-emerald-50"
-            iconFg="text-emerald-500"
+            titulo="Operação"
+            icone={AlertTriangle}
+            iconBg="bg-rose-50"
+            iconFg="text-rose-500"
             itens={[
               {
-                value: r.processos.ativos,
-                label: "Processos",
-                color: "text-indigo-600",
-                onClick: () => nav("/processos"),
-              },
-              {
-                value: r.crm.totalContatos,
-                label: "Clientes",
+                value: r.crm.conversasAbertas,
+                label: "Conversas abertas",
                 color: "text-blue-600",
-                onClick: () => nav("/clientes"),
+                onClick: () => nav(rotaSegura("/atendimento", "/clientes")),
               },
               {
-                value: formatBRLShort(r.financeiro.recebido),
-                label: "Recebido total",
-                color: "text-emerald-600",
+                value: r.agenda.atrasados,
+                label: "Atrasados",
+                color: "text-amber-600",
+                onClick: () => nav("/agenda"),
+              },
+              {
+                value: inadimplentes,
+                label: "Inadimplentes",
+                color: "text-rose-600",
                 onClick: () => nav("/financeiro"),
-                isString: true,
               },
             ]}
           />
