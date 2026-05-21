@@ -1157,7 +1157,8 @@ function DashboardComercial() {
           <SheetHeader>
             <SheetTitle>{atendenteDrillDown?.nome || "Atendente"}</SheetTitle>
             <SheetDescription>
-              Clientes fechados e pagamentos no período selecionado.
+              Clientes fechados no período e cobranças comissionáveis recebidas — mesmos
+              critérios do card de "Recebido" do ranking.
             </SheetDescription>
           </SheetHeader>
 
