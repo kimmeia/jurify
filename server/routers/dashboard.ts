@@ -381,21 +381,34 @@ export const dashboardRouter = router({
       const inicio = new Date();
       inicio.setDate(inicio.getDate() - days);
       inicio.setHours(0, 0, 0, 0);
+      const inicioStr = inicio.toISOString().slice(0, 10);
+      const hoje = dataHojeBR();
 
       try {
+        // Critério "recebido": filtra por `dataPagamento` (quando foi
+        // efetivamente pago), igual ao `asaas.cashFlowMensal` da página
+        // Financeiro. Antes usava `createdAt` (data da row no DB) e somava
+        // todas as cobranças pagas no carregamento — incluía pagamentos
+        // de meses anteriores cujas cobranças foram criadas dentro do
+        // range, divergindo do Financeiro. Para PENDING/OVERDUE usa
+        // `vencimento` no range — mesmo critério da página Financeiro.
         const cobrancas = await db
           .select({
             valor: asaasCobrancas.valor,
             status: asaasCobrancas.status,
             vencimento: asaasCobrancas.vencimento,
             dataPagamento: asaasCobrancas.dataPagamento,
-            createdAt: asaasCobrancas.createdAt,
           })
           .from(asaasCobrancas)
           .where(
             and(
               eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-              gte(asaasCobrancas.createdAt, inicio),
+              or(
+                sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')
+                    AND COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento}) >= ${inicioStr}`,
+                sql`${asaasCobrancas.status} IN ('PENDING','OVERDUE')
+                    AND ${asaasCobrancas.vencimento} >= ${inicioStr}`,
+              ),
             ),
           );
 
@@ -411,23 +424,19 @@ export const dashboardRouter = router({
         let totalRecebido = 0;
         let totalPendente = 0;
         let totalVencido = 0;
-        // Fuso BR: server roda UTC; após 21h BRT viraria amanhã e marcaria
-        // PENDING do dia atual como vencidas indevidamente.
-        const hoje = dataHojeBR();
 
         for (const c of cobrancas) {
           const valor = parseFloat(c.valor) || 0;
           const pago = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(c.status);
 
           if (pago) {
+            // Bucket de "recebido" é a data do pagamento (cai no dia certo
+            // do gráfico). Total já está coberto pelo filtro WHERE — só
+            // entram cobranças com dataPagamento (ou venc) >= inicioStr.
             totalRecebido += valor;
-            const dia = (c.dataPagamento || "").slice(0, 10) ||
-              (toIsoString(c.createdAt) ?? "").slice(0, 10);
+            const dia = (c.dataPagamento || c.vencimento || "").slice(0, 10);
             if (porDia.has(dia)) porDia.get(dia)!.recebido += valor;
           } else if (c.status === "PENDING") {
-            // PENDING vencida vai pra totalVencido (mesma lógica do KPI
-            // e cashFlowMensal do router-asaas). PENDING dentro do prazo
-            // continua em totalPendente.
             if (c.vencimento && c.vencimento < hoje) {
               totalVencido += valor;
             } else {

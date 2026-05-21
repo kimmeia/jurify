@@ -69,6 +69,8 @@ describe("gerarDRECSV", () => {
           percentual: 20,
         },
       ],
+      porOrigem: [],
+      porFormaPagamento: [],
     },
     despesas: {
       total: 4500.0,
@@ -154,7 +156,7 @@ describe("gerarDRECSV", () => {
   it("Margem='—' quando NaN (receita zero)", () => {
     const dre: DREResultado = {
       ...dreBase,
-      receitas: { total: 0, porCategoria: [] },
+      receitas: { total: 0, porCategoria: [], porOrigem: [], porFormaPagamento: [] },
       resultadoLiquido: -1000,
       margemPercent: NaN,
     };
@@ -165,7 +167,7 @@ describe("gerarDRECSV", () => {
   it("seções vazias renderizam totais zerados sem quebrar", () => {
     const dre: DREResultado = {
       periodo: { inicio: "2026-05-01", fim: "2026-05-31" },
-      receitas: { total: 0, porCategoria: [] },
+      receitas: { total: 0, porCategoria: [], porOrigem: [], porFormaPagamento: [] },
       despesas: { total: 0, porCategoria: [] },
       resultadoLiquido: 0,
       margemPercent: NaN,
