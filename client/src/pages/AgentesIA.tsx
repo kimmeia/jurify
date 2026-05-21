@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
   Send, Sparkles, ExternalLink, BrainCircuit, Play, KeyRound, CheckCircle2,
-  MessageSquare, Search, Store, Users, User as UserIcon,
+  MessageSquare, Search, Store, Users, User as UserIcon, RefreshCw, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AgenteCard, type AgenteCardData } from "./agentes/agente-card";
@@ -816,11 +816,31 @@ function TreinamentoDialog({
   );
 
   const uploadMut = trpc.agentesIa.uploadArquivo.useMutation({
-    onSuccess: () => {
-      toast.success("Arquivo enviado");
+    onSuccess: (res) => {
+      if (res.textoExtraido) {
+        toast.success("Arquivo enviado e texto extraído");
+      } else {
+        toast.warning("Arquivo enviado, mas texto não foi extraído", {
+          description: res.avisoExtracao || "Você pode tentar reprocessar depois.",
+        });
+      }
       refetch();
     },
     onError: (err) => toast.error("Erro no upload", { description: err.message }),
+  });
+
+  const reprocessarMut = trpc.agentesIa.reprocessarDocumento.useMutation({
+    onSuccess: (res) => {
+      if (res.textoExtraido) {
+        toast.success(`Texto reextraído (${res.tamanhoConteudo} caracteres)`);
+      } else {
+        toast.warning("Não foi possível extrair texto", {
+          description: res.aviso || "Tipo de arquivo não suporta extração automática.",
+        });
+      }
+      refetch();
+    },
+    onError: (err) => toast.error("Erro ao reprocessar", { description: err.message }),
   });
 
   const linkMut = trpc.agentesIa.adicionarLink.useMutation({
@@ -936,46 +956,86 @@ function TreinamentoDialog({
 
             {agente?.documentos && agente.documentos.length > 0 ? (
               <div className="space-y-1.5">
-                {agente.documentos.map((d: any) => (
-                  <div
-                    key={d.id}
-                    className="flex items-center gap-2 border rounded-md p-2 text-xs"
-                  >
-                    {d.tipo === "arquivo" ? (
-                      <FileIcon className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                    ) : d.tipo === "link" ? (
-                      <Link2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                    ) : (
-                      <FileText className="h-3.5 w-3.5 text-violet-600 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{d.nome}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {d.tipo === "arquivo" && d.tamanho
-                          ? `${(d.tamanho / 1024).toFixed(1)} KB · ${d.mimeType}`
-                          : d.tipo === "link"
-                          ? d.url
-                          : d.conteudo?.slice(0, 60) + "..."}
-                      </p>
-                    </div>
-                    {(d.tipo === "arquivo" || d.tipo === "link") && d.url && (
-                      <a
-                        href={d.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                    <button
-                      onClick={() => setDocParaExcluir({ id: d.id, nome: d.nome })}
-                      className="text-muted-foreground hover:text-destructive"
+                {agente.documentos.map((d: any) => {
+                  const ehArquivo = d.tipo === "arquivo";
+                  const semConteudo = ehArquivo && !d.temConteudoExtraido;
+                  return (
+                    <div
+                      key={d.id}
+                      className={
+                        "flex items-center gap-2 border rounded-md p-2 text-xs " +
+                        (semConteudo ? "border-amber-300 bg-amber-50/30 dark:bg-amber-950/10" : "")
+                      }
                     >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+                      {ehArquivo ? (
+                        <FileIcon className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      ) : d.tipo === "link" ? (
+                        <Link2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium truncate">{d.nome}</p>
+                          {ehArquivo && (
+                            d.temConteudoExtraido ? (
+                              <span
+                                title={`Texto extraído (${d.tamanhoConteudo} caracteres)`}
+                                className="text-[9px] px-1 py-0 rounded bg-emerald-100 text-emerald-700 font-semibold inline-flex items-center gap-0.5 shrink-0"
+                              >
+                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                texto OK
+                              </span>
+                            ) : (
+                              <span
+                                title="Sem texto extraído — a IA não vai ver o conteúdo deste arquivo. Clique em reprocessar."
+                                className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-700 font-semibold inline-flex items-center gap-0.5 shrink-0"
+                              >
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                sem texto
+                              </span>
+                            )
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {ehArquivo && d.tamanho
+                            ? `${(d.tamanho / 1024).toFixed(1)} KB · ${d.mimeType}`
+                            : d.tipo === "link"
+                            ? d.url
+                            : "Texto colado"}
+                        </p>
+                      </div>
+                      {ehArquivo && (
+                        <button
+                          onClick={() => reprocessarMut.mutate({ id: d.id })}
+                          disabled={reprocessarMut.isPending}
+                          title="Reextrair texto do arquivo"
+                          className="text-muted-foreground hover:text-violet-600 disabled:opacity-50"
+                        >
+                          {reprocessarMut.isPending && reprocessarMut.variables?.id === d.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <RefreshCw className="h-3 w-3" />}
+                        </button>
+                      )}
+                      {(d.tipo === "arquivo" || d.tipo === "link") && d.url && (
+                        <a
+                          href={d.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => setDocParaExcluir({ id: d.id, nome: d.nome })}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-6 text-muted-foreground text-xs">

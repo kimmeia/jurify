@@ -12,6 +12,25 @@ import { normalizarValorBR } from "../../shared/valor-br";
 import { toIsoString } from "../_core/dates";
 
 /**
+ * Parse defensivo de campo TEXT que deveria ser JSON array. Se o conteúdo
+ * está malformado (ex: legado salvou texto puro tipo "DEFESA EM CRIMINAL"
+ * em vez de `["DEFESA EM CRIMINAL"]`), retorna array com o texto bruto
+ * como único item ao invés de explodir a query inteira.
+ */
+function parseTagsTolerante(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((v) => typeof v === "string");
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((v) => typeof v === "string");
+    return [String(parsed)];
+  } catch {
+    return [raw];
+  }
+}
+
+/**
  * Busca contato existente por telefone normalizado (exato).
  *
  * Verifica no campo principal `telefone` E no histórico `telefonesAnteriores`.
@@ -183,8 +202,8 @@ export async function listarContatos(escritorioId: number, busca?: string) {
     .where(and(...conditions)).orderBy(desc(contatos.createdAt)).limit(100);
   return rows.map((r) => ({
     ...r,
-    tags: r.tags ? JSON.parse(r.tags as string) : [],
-    telefonesSecundarios: r.telefonesSecundarios ? JSON.parse(r.telefonesSecundarios as string) : [],
+    tags: parseTagsTolerante(r.tags),
+    telefonesSecundarios: parseTagsTolerante(r.telefonesSecundarios),
     createdAt: toIsoString(r.createdAt) ?? "",
   }));
 }
@@ -315,18 +334,14 @@ export async function unificarContatos(
   } catch { /* migration pode estar pendente */ }
 
   // Consolidar telefones: move telefone do duplicado pra secundários do principal
-  const telefonesSecPrincipal: string[] = principal.telefonesSecundarios
-    ? JSON.parse(principal.telefonesSecundarios as string)
-    : [];
+  const telefonesSecPrincipal: string[] = parseTagsTolerante(principal.telefonesSecundarios);
   if (duplicado.telefone && duplicado.telefone !== principal.telefone) {
     if (!telefonesSecPrincipal.includes(duplicado.telefone)) {
       telefonesSecPrincipal.push(duplicado.telefone);
     }
   }
   // Mover secundários do duplicado também
-  const telefonesSecDuplicado: string[] = duplicado.telefonesSecundarios
-    ? JSON.parse(duplicado.telefonesSecundarios as string)
-    : [];
+  const telefonesSecDuplicado: string[] = parseTagsTolerante(duplicado.telefonesSecundarios);
   for (const tel of telefonesSecDuplicado) {
     if (tel !== principal.telefone && !telefonesSecPrincipal.includes(tel)) {
       telefonesSecPrincipal.push(tel);
@@ -1014,7 +1029,7 @@ export async function obterMetricasDetalhadas(escritorioId: number) {
   // Tempo médio de primeira resposta (últimos 7 dias, em minutos)
   // Simplificado: diferença entre createdAtConv e primeira msg de saída
   const [tmr] = await db.select({
-    avg: sql<number>`AVG(TIMESTAMPDIFF(MINUTE, c.createdAtConv, m.createdAtMsg))`,
+    avg: sql<number>`AVG(TIMESTAMPDIFF(MINUTE, sub.createdAtConv, sub.createdAtMsg))`,
   }).from(sql`(
     SELECT c.id as conv_id, c.createdAtConv, MIN(m.createdAtMsg) as createdAtMsg
     FROM conversas c

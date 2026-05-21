@@ -64,8 +64,14 @@ async function getVerifyToken(): Promise<string> {
   return (await getMetaConfig()).verifyToken;
 }
 
+interface CanalInfo {
+  canalId: number;
+  escritorioId: number;
+  accessToken: string;
+}
+
 /** Busca canal CoEx pelo phoneNumberId ou wabaId */
-async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<{ canalId: number; escritorioId: number } | null> {
+async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInfo | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -78,7 +84,11 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<{ canalI
       try {
         const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
         if (config.phoneNumberId === phoneNumberId || config.coexMode === "true") {
-          return { canalId: canal.id, escritorioId: canal.escritorioId };
+          return {
+            canalId: canal.id,
+            escritorioId: canal.escritorioId,
+            accessToken: typeof config.accessToken === "string" ? config.accessToken : "",
+          };
         }
       } catch { continue; }
     }
@@ -87,7 +97,7 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<{ canalI
 }
 
 /** Busca canal CoEx pelo WABA ID (metadata do webhook) */
-async function findCanalByWabaId(wabaId: string): Promise<{ canalId: number; escritorioId: number } | null> {
+async function findCanalByWabaId(wabaId: string): Promise<CanalInfo | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -100,7 +110,11 @@ async function findCanalByWabaId(wabaId: string): Promise<{ canalId: number; esc
       try {
         const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
         if (config.wabaId === wabaId) {
-          return { canalId: canal.id, escritorioId: canal.escritorioId };
+          return {
+            canalId: canal.id,
+            escritorioId: canal.escritorioId,
+            accessToken: typeof config.accessToken === "string" ? config.accessToken : "",
+          };
         }
       } catch { continue; }
     }
@@ -204,7 +218,11 @@ export function registerWhatsAppCloudWebhook(app: Express) {
 
               let tipo: WhatsappMensagemRecebida["tipo"] = "texto";
               let conteudo = "";
+              // mediaId: ID opaco da Meta (usado pra baixar). mediaUrl: path
+              // público local após download (vai pro DB).
+              let mediaId = "";
               let mediaUrl = "";
+              let nomeOriginalArquivo: string | undefined;
 
               switch (message.type) {
                 case "text":
@@ -213,27 +231,28 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                   break;
                 case "image":
                   conteudo = message.image?.caption || "Imagem";
-                  mediaUrl = message.image?.id || "";
+                  mediaId = message.image?.id || "";
                   tipo = "imagem";
                   break;
                 case "audio":
                   conteudo = "Audio";
-                  mediaUrl = message.audio?.id || "";
+                  mediaId = message.audio?.id || "";
                   tipo = "audio";
                   break;
                 case "video":
                   conteudo = message.video?.caption || "Video";
-                  mediaUrl = message.video?.id || "";
+                  mediaId = message.video?.id || "";
                   tipo = "video";
                   break;
                 case "document":
                   conteudo = message.document?.filename || "Documento";
-                  mediaUrl = message.document?.id || "";
+                  mediaId = message.document?.id || "";
+                  nomeOriginalArquivo = message.document?.filename;
                   tipo = "documento";
                   break;
                 case "sticker":
                   conteudo = "Sticker";
-                  mediaUrl = message.sticker?.id || "";
+                  mediaId = message.sticker?.id || "";
                   tipo = "sticker";
                   break;
                 case "location":
@@ -247,6 +266,21 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                 default:
                   conteudo = `[${message.type}]`;
                   tipo = "texto";
+              }
+
+              // Baixa mídia da Cloud API e persiste local. Sem isso, o
+              // frontend renderiza só o ícone/label (regex de [media:/path]
+              // exige path começando com "/").
+              if (mediaId && canalInfo.accessToken) {
+                const { baixarMidiaCloudApi } = await import("./whatsapp-cloud-media");
+                const baixada = await baixarMidiaCloudApi({
+                  mediaId,
+                  accessToken: canalInfo.accessToken,
+                  escritorioId: canalInfo.escritorioId,
+                  canalId: canalInfo.canalId,
+                  nomeOriginal: nomeOriginalArquivo,
+                });
+                if (baixada) mediaUrl = baixada.url;
               }
 
               const msg: WhatsappMensagemRecebida = {

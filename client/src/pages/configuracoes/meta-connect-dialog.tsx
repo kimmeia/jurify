@@ -199,6 +199,14 @@ export function MetaConnectDialog({
     onError: (e: any) => toast.error(e.message),
   });
 
+  const subscribeMut = trpc.metaChannels.subscribeWebhooks.useMutation({
+    onSuccess: () => {
+      toast.success("Webhooks re-inscritos. Mensagens recebidas vão começar a chegar no Atendimento.");
+      onRefresh();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // ─── Carrega o Facebook SDK ────────────────────────────────────────────────
 
   useEffect(() => {
@@ -446,6 +454,20 @@ export function MetaConnectDialog({
                   Desconectar
                 </Button>
               </div>
+              {channel === "whatsapp" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => subscribeMut.mutate({ canalId: canal.id })}
+                  disabled={subscribeMut.isPending}
+                >
+                  {subscribeMut.isPending ? (
+                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  ) : null}
+                  Não está recebendo mensagens? Re-inscrever webhooks
+                </Button>
+              )}
             </div>
           )}
 
