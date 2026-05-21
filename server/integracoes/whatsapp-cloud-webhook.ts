@@ -83,7 +83,11 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInf
       if (!canal.configEncrypted || !canal.configIv || !canal.configTag) continue;
       try {
         const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
-        if (config.phoneNumberId === phoneNumberId || config.coexMode === "true") {
+        // Match exato pelo phoneNumberId — crucial pra multi-tenant.
+        // Antes tinha um fallback "|| config.coexMode === 'true'" que
+        // dava match liberal e podia rotear mensagem do número A pro
+        // canal do número B no mesmo (ou em outro) escritório.
+        if (config.phoneNumberId === phoneNumberId) {
           return {
             canalId: canal.id,
             escritorioId: canal.escritorioId,

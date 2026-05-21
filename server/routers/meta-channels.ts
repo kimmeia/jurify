@@ -368,7 +368,10 @@ export const metaChannelsRouter = router({
       };
       const { encrypted, iv, tag } = encryptConfig(config);
 
-      const [existente] = await db
+      // Procura canal existente pelo MESMO número (display_phone_number ou
+      // phoneNumberId). Se bate, é reconexão — UPDATE. Se não, é número
+      // novo — INSERT (escritório pode ter múltiplos números WhatsApp).
+      const todosCanaisWA = await db
         .select()
         .from(canaisIntegrados)
         .where(
@@ -376,8 +379,19 @@ export const metaChannelsRouter = router({
             eq(canaisIntegrados.escritorioId, esc.escritorio.id),
             eq(canaisIntegrados.tipo, "whatsapp_api"),
           ),
-        )
-        .limit(1);
+        );
+
+      const { decryptConfig } = await import("../escritorio/crypto-utils");
+      const existente = todosCanaisWA.find((c) => {
+        if (c.telefone === telefone) return true;
+        if (!c.configEncrypted || !c.configIv || !c.configTag) return false;
+        try {
+          const cfg = decryptConfig(c.configEncrypted, c.configIv, c.configTag);
+          return cfg.phoneNumberId === input.phoneNumberId;
+        } catch {
+          return false;
+        }
+      });
 
       if (existente) {
         await db
