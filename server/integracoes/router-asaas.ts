@@ -19,7 +19,11 @@ import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, categoriasCobranca, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/mysql-core";
-import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
+import {
+  STATUS_PAGO_ASAAS,
+  STATUS_PENDENTE_ASAAS,
+  STATUS_VENCIDO_ASAAS,
+} from "../_core/asaas-status";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -2911,9 +2915,9 @@ export const asaasRouter = router({
         AND (${vencFim} IS NULL OR ${asaasCobrancas.vencimento} <= ${vencFim})`;
       const valorDec = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
       const valorLiquidoDec = sql`CAST(COALESCE(${asaasCobrancas.valorLiquido}, ${asaasCobrancas.valor}) AS DECIMAL(20,2))`;
-      const ehPago = sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`;
-      const ehPending = sql`${asaasCobrancas.status} = 'PENDING'`;
-      const ehOverdue = sql`${asaasCobrancas.status} = 'OVERDUE'`;
+      const ehPago = inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]);
+      const ehPending = inArray(asaasCobrancas.status, STATUS_PENDENTE_ASAAS as unknown as string[]);
+      const ehOverdue = inArray(asaasCobrancas.status, STATUS_VENCIDO_ASAAS as unknown as string[]);
       const pendingNoFuturo = sql`${asaasCobrancas.vencimento} >= ${hojeStr}`;
       const pendingNoPassado = sql`${asaasCobrancas.vencimento} < ${hojeStr}`;
 
