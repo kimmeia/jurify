@@ -116,7 +116,7 @@ export default function DashboardGeral() {
     { enabled: !!user, retry: false, refetchInterval: 120_000 },
   );
   const { data: feed } = trpc.dashboard.activityFeed.useQuery(
-    { limit: 15 },
+    { limit: 5 },
     { enabled: !!user, retry: false, refetchInterval: 30_000 },
   );
 
@@ -584,7 +584,7 @@ export default function DashboardGeral() {
         </div>
 
         {/* Coluna direita: Activity feed */}
-        <Card className="border-slate-200 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] flex flex-col">
+        <Card className="border-slate-200">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -594,7 +594,7 @@ export default function DashboardGeral() {
               <PulseDot />
             </div>
           </CardHeader>
-          <CardContent className="overflow-y-auto flex-1 pr-2">
+          <CardContent>
             {!feed || feed.length === 0 ? (
               <div className="text-center py-8">
                 <Activity className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
@@ -602,7 +602,7 @@ export default function DashboardGeral() {
               </div>
             ) : (
               <div className="space-y-3">
-                {feed.map((item: any) => {
+                {feed.slice(0, 5).map((item: any) => {
                   const cfg = ACTIVITY_ICONS[item.tipo] || ACTIVITY_ICONS.mensagem;
                   const Icon = cfg.icon;
                   return (
