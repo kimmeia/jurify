@@ -2288,12 +2288,28 @@ export const asaasRouter = router({
         } else if (input?.vencimentoFim) {
           conditions.push(lte(asaasCobrancas.vencimento, input.vencimentoFim));
         }
+        // Filtro de período "efetivo": COALESCE(dataPagamento, vencimento).
+        // Antes filtrava só por dataPagamento, excluindo PENDING/OVERDUE
+        // (que nunca foram pagas, dataPagamento=NULL). Resultado: banner
+        // "224 sem categoria" não batia com lista (mostrava 67) porque as
+        // 157 pendentes/vencidas sumiam silenciosamente. COALESCE bate com
+        // a ordenação `COALESCE(dataPagamento, vencimento) DESC` usada
+        // abaixo — agora o que aparece bate com o que é ordenado.
         if (input?.pagamentoInicio && input?.pagamentoFim) {
-          conditions.push(between(asaasCobrancas.dataPagamento, input.pagamentoInicio, input.pagamentoFim));
+          conditions.push(
+            sql`COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento})
+                BETWEEN ${input.pagamentoInicio} AND ${input.pagamentoFim}`,
+          );
         } else if (input?.pagamentoInicio) {
-          conditions.push(gte(asaasCobrancas.dataPagamento, input.pagamentoInicio));
+          conditions.push(
+            sql`COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento})
+                >= ${input.pagamentoInicio}`,
+          );
         } else if (input?.pagamentoFim) {
-          conditions.push(lte(asaasCobrancas.dataPagamento, input.pagamentoFim));
+          conditions.push(
+            sql`COALESCE(${asaasCobrancas.dataPagamento}, ${asaasCobrancas.vencimento})
+                <= ${input.pagamentoFim}`,
+          );
         }
 
         // Filtro por permissão: se verProprios only, só mostra cobranças
