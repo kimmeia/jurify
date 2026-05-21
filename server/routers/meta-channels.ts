@@ -123,6 +123,57 @@ function fbtrace_id_safe(id: string): string {
 }
 
 /**
+ * Traduz erros específicos do endpoint /{phone-number-id}/register para
+ * mensagens acionáveis. A Meta retorna códigos numéricos no envelope
+ * `error.code` / `error.error_subcode` — sem essa tradução o usuário
+ * vê só "Erro 100" e não sabe se é PIN errado, nome não aprovado ou
+ * número bloqueado.
+ *
+ * Códigos cobertos vêm da doc oficial:
+ *   https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/
+ */
+export function explicarErroRegister(err: unknown): string | null {
+  const e = err as {
+    response?: {
+      data?: {
+        error?: {
+          code?: number;
+          error_subcode?: number;
+          message?: string;
+        };
+      };
+    };
+  };
+  const fb = e?.response?.data?.error;
+  if (!fb) return null;
+  const code = fb.code;
+  const sub = fb.error_subcode;
+
+  if (code === 133006) {
+    return "PIN de verificação em duas etapas incorreto. Confira o PIN definido no WhatsApp Manager → Verificação em duas etapas e tente de novo.";
+  }
+  if (code === 133015) {
+    return "O nome de exibição foi alterado muitas vezes nas últimas 24h. Aguarde algumas horas antes de tentar novamente.";
+  }
+  if (code === 133005) {
+    return "Senha incorreta para esta conta WhatsApp. Se você ainda usa o número no app comum/Business, exclua a conta no app antes de registrar pela API.";
+  }
+  if (code === 133010) {
+    return "Número não verificado. Verifique o número via SMS/voz no WhatsApp Manager antes de registrar na Cloud API.";
+  }
+  if (code === 133016) {
+    return "Conta bloqueada pela Meta. Aguarde o período de cooldown ou contate o suporte da Meta.";
+  }
+  if (code === 100 && sub === 2388023) {
+    return "Nome de exibição ainda não aprovado pela Meta. Aguarde a aprovação (visível em WhatsApp Manager → Perfil) antes de registrar.";
+  }
+  if (code === 200) {
+    return "Permissão insuficiente. O token de acesso não tem o escopo whatsapp_business_management. Refaça a conexão.";
+  }
+  return null;
+}
+
+/**
  * Troca o `code` OAuth retornado pelo Facebook Login por um access_token
  * de longa duração usando o App Secret do admin.
  */
@@ -534,6 +585,115 @@ export const metaChannelsRouter = router({
 
       log.info({ escritorioId: esc.escritorio.id, pageName }, "Messenger conectado");
       return { success: true, pageName, canal: "messenger" as const };
+    }),
+
+  /**
+   * Registra o número WhatsApp na Cloud API (POST /{phone-number-id}/register).
+   *
+   * O Embedded Signup só vincula o número à WABA — não ativa pra envio de
+   * mensagens. Sem esta chamada, POST /messages falha com "phone number
+   * not registered for Cloud API" e o gerenciador da Meta mostra status
+   * "Pendente".
+   *
+   * O PIN é a chave da verificação em duas etapas: a Meta exige um PIN
+   * de 6 dígitos pra registrar. Guardamos criptografado no config — se
+   * o token expirar e precisarmos re-registrar, não pedimos de novo
+   * pro usuário.
+   */
+  registerWhatsAppNumber: protectedProcedure
+    .input(
+      z.object({
+        canalId: z.number(),
+        pin: z.string().regex(/^\d{6}$/, "PIN deve ter exatamente 6 dígitos numéricos"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const [canal] = await db
+        .select()
+        .from(canaisIntegrados)
+        .where(
+          and(
+            eq(canaisIntegrados.id, input.canalId),
+            eq(canaisIntegrados.escritorioId, esc.escritorio.id),
+          ),
+        )
+        .limit(1);
+
+      if (!canal) throw new Error("Canal não encontrado");
+      if (canal.tipo !== "whatsapp_api") {
+        throw new Error("Apenas canais WhatsApp Business API podem ser registrados na Cloud API.");
+      }
+      if (!canal.configEncrypted || !canal.configIv || !canal.configTag) {
+        throw new Error("Canal sem configuração. Reconecte o WhatsApp antes de registrar.");
+      }
+
+      const { decryptConfig, encryptConfig } = await import("../escritorio/crypto-utils");
+      const config = decryptConfig(canal.configEncrypted, canal.configIv, canal.configTag);
+      const phoneNumberId = (config as any).phoneNumberId;
+      const accessToken = (config as any).accessToken;
+
+      if (!phoneNumberId || !accessToken) {
+        throw new Error("Configuração do canal incompleta (phone_number_id ou access_token ausente).");
+      }
+
+      const axios = (await import("axios")).default;
+      try {
+        await axios.post(
+          `https://graph.facebook.com/v21.0/${phoneNumberId}/register`,
+          { messaging_product: "whatsapp", pin: input.pin },
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 15000,
+          },
+        );
+      } catch (err: any) {
+        const especifico = explicarErroRegister(err);
+        const generico = explicarErroFacebook(err, "Falha ao registrar número na Cloud API");
+        log.warn(
+          {
+            canalId: input.canalId,
+            status: err?.response?.status,
+            fbError: err?.response?.data?.error,
+          },
+          "[metaChannels] /register falhou",
+        );
+        // Persistir o erro pra UI mostrar — não fica só no response.
+        await db
+          .update(canaisIntegrados)
+          .set({ status: "erro", mensagemErro: (especifico || generico).slice(0, 500) })
+          .where(eq(canaisIntegrados.id, input.canalId));
+        throw new Error(especifico || generico);
+      }
+
+      // Guarda o PIN criptografado pra re-registrar sem novo input se o
+      // token expirar. PIN nunca é exposto de volta pro frontend.
+      const novoConfig = { ...(config as object), pin: input.pin };
+      const { encrypted, iv, tag } = encryptConfig(novoConfig);
+
+      await db
+        .update(canaisIntegrados)
+        .set({
+          configEncrypted: encrypted,
+          configIv: iv,
+          configTag: tag,
+          registradoCloudApi: true,
+          status: "conectado",
+          mensagemErro: null,
+          ultimaSync: new Date(),
+        })
+        .where(eq(canaisIntegrados.id, input.canalId));
+
+      log.info(
+        { escritorioId: esc.escritorio.id, canalId: input.canalId, phoneNumberId },
+        "WhatsApp registrado na Cloud API",
+      );
+      return { success: true };
     }),
 
   /**

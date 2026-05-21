@@ -47,6 +47,7 @@ export async function listarCanais(escritorioId: number) {
       ultimaSync: toIsoString(r.ultimaSync) ?? undefined,
       mensagemErro: r.mensagemErro || undefined,
       temConfig: !!(r.configEncrypted && r.configIv && r.configTag),
+      registradoCloudApi: !!r.registradoCloudApi,
       createdAt: toIsoString(r.createdAt) ?? "",
     }));
 }
