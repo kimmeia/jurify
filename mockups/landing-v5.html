@@ -1,0 +1,1744 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JuridFlow — o sistema do escritório jurídico moderno</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        --primary: oklch(0.55 0.18 285);
+        --primary-2: oklch(0.65 0.22 295);
+        --primary-3: oklch(0.75 0.20 295);
+        --success: oklch(0.70 0.14 155);
+        --warning: oklch(0.75 0.15 75);
+        --danger: oklch(0.68 0.20 25);
+        --info: oklch(0.65 0.16 250);
+
+        --bg-0: oklch(0.10 0.02 270);
+        --bg-1: oklch(0.13 0.02 270);
+        --bg-2: oklch(0.18 0.03 270);
+        --bg-3: oklch(0.23 0.04 270);
+        --border-d: oklch(1 0 0 / 0.08);
+        --border-d-2: oklch(1 0 0 / 0.14);
+        --fg-d: oklch(0.97 0 0);
+        --muted-d: oklch(0.68 0.02 270);
+      }
+      html, body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-0); color: var(--fg-d); -webkit-font-smoothing: antialiased; }
+      .mono { font-family: 'JetBrains Mono', monospace; }
+
+      .text-primary { color: var(--primary); }
+      .text-primary-2 { color: var(--primary-2); }
+      .text-muted { color: var(--muted-d); }
+      .bg-bg1 { background: var(--bg-1); }
+      .bg-bg2 { background: var(--bg-2); }
+      .bg-bg3 { background: var(--bg-3); }
+      .border-d { border-color: var(--border-d); }
+      .border-d-2 { border-color: var(--border-d-2); }
+
+      .mesh {
+        background:
+          radial-gradient(ellipse 70% 50% at 15% 0%, oklch(0.55 0.18 285 / 0.40), transparent 60%),
+          radial-gradient(ellipse 60% 50% at 85% 10%, oklch(0.65 0.22 295 / 0.35), transparent 60%),
+          radial-gradient(ellipse 50% 40% at 50% 100%, oklch(0.55 0.18 250 / 0.20), transparent 70%);
+      }
+      .grid-pattern {
+        background-image:
+          linear-gradient(oklch(1 0 0 / 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, oklch(1 0 0 / 0.04) 1px, transparent 1px);
+        background-size: 56px 56px;
+        mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 80%);
+      }
+      .noise {
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+        opacity: 0.03;
+      }
+      .gradient-text {
+        background: linear-gradient(135deg, oklch(0.95 0 0) 0%, oklch(0.80 0.18 295) 50%, oklch(0.70 0.22 295) 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .gradient-text-2 {
+        background: linear-gradient(135deg, oklch(0.75 0.22 295), oklch(0.60 0.20 285));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .border-gradient {
+        position: relative; background: var(--bg-1); border-radius: 1.25rem;
+      }
+      .border-gradient::before {
+        content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+        background: linear-gradient(135deg, oklch(1 0 0 / 0.18), oklch(1 0 0 / 0.03) 40%, oklch(0.70 0.22 295 / 0.5));
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+      }
+      .glow-purple {
+        box-shadow: 0 0 0 1px oklch(1 0 0 / 0.08), 0 40px 100px -20px oklch(0.65 0.22 295 / 0.5), 0 20px 40px -16px oklch(0 0 0 / 0.6);
+      }
+      .glass-dark {
+        background: oklch(0.13 0.02 270 / 0.7);
+        backdrop-filter: blur(16px) saturate(140%);
+        -webkit-backdrop-filter: blur(16px) saturate(140%);
+      }
+      .chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .68rem; padding: .25rem .6rem; border-radius: 9999px; font-weight: 600; letter-spacing: 0.02em; }
+      .pulse-dot { position: relative; display: inline-block; width: 6px; height: 6px; border-radius: 9999px; }
+      .pulse-dot::after {
+        content: ''; position: absolute; inset: -3px; border-radius: 9999px;
+        background: inherit; opacity: 0.5; animation: pulseRing 1.6s infinite;
+      }
+      @keyframes pulseRing { 0% { transform: scale(0.9); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
+      .marquee { display: flex; gap: 2.5rem; animation: scroll 38s linear infinite; width: max-content; }
+      @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      .card-hover { transition: transform .35s cubic-bezier(.2,.7,.3,1), border-color .35s, box-shadow .35s; }
+      .card-hover:hover { transform: translateY(-4px); border-color: oklch(0.70 0.22 295 / 0.5); box-shadow: 0 30px 60px -20px oklch(0.65 0.22 295 / 0.3); }
+
+      details summary { list-style: none; cursor: pointer; }
+      details summary::-webkit-details-marker { display: none; }
+      details[open] .chev { transform: rotate(180deg); }
+      .chev { transition: transform .25s ease; }
+      .br-dot { animation: blink 3s ease-in-out infinite; }
+      @keyframes blink { 0%,100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.15); } }
+      .ring-soft { box-shadow: 0 0 0 6px oklch(0.55 0.18 285 / 0.1); }
+
+      /* WORDMARK do JuridFlow — recriado em SVG/CSS */
+      .wordmark { display: inline-flex; align-items: baseline; font-family: 'Inter', sans-serif; font-weight: 900; letter-spacing: -0.045em; line-height: 1; }
+      .wordmark .jurid { color: var(--fg-d); }
+      .wordmark .flow { color: var(--primary-3); }
+      .wordmark-light .jurid { color: oklch(0.15 0.02 270); }
+
+      /* Tabs etapa funil real */
+      .etapa-novo { background: oklch(0.65 0.02 270 / 0.15); color: oklch(0.85 0.02 270); }
+      .etapa-qual { background: oklch(0.60 0.16 250 / 0.18); color: oklch(0.85 0.16 250); }
+      .etapa-prop { background: oklch(0.65 0.22 295 / 0.18); color: oklch(0.85 0.18 295); }
+      .etapa-neg  { background: oklch(0.75 0.15 75 / 0.18); color: oklch(0.85 0.15 75); }
+      .etapa-ganho { background: oklch(0.70 0.14 155 / 0.18); color: oklch(0.85 0.14 155); }
+      .etapa-perdido { background: oklch(0.68 0.20 25 / 0.18); color: oklch(0.85 0.18 25); }
+
+      /* Screenshot frame */
+      .shot-frame {
+        position: relative;
+        border-radius: 1rem;
+        overflow: hidden;
+        background: var(--bg-1);
+      }
+      .shot-frame .shot-img {
+        width: 100%;
+        display: block;
+      }
+      .shot-label {
+        position: absolute; top: 14px; left: 14px; z-index: 2;
+        background: oklch(0.10 0.02 270 / 0.85);
+        backdrop-filter: blur(8px);
+        padding: 4px 9px; border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace; font-size: 10px;
+        color: oklch(0.85 0.10 295);
+        border: 1px solid oklch(1 0 0 / 0.1);
+      }
+
+      .strike-soft {
+        position: relative; display: inline-flex; align-items: center; gap: 0.55rem;
+        padding: 0.65rem 1.1rem; border: 1px solid var(--border-d); border-radius: 9999px;
+        background: oklch(1 0 0 / 0.03); font-weight: 600; color: var(--muted-d); font-size: 0.88rem;
+        white-space: nowrap;
+      }
+      .strike-soft::after {
+        content: ''; position: absolute; left: 14px; right: 14px; top: 50%;
+        height: 2px; background: linear-gradient(90deg, var(--danger), oklch(0.68 0.20 25 / 0.4));
+        transform: rotate(-3deg); border-radius: 9999px;
+      }
+    </style>
+  </head>
+  <body class="antialiased">
+
+    <!-- ========= TOP BANNER ========= -->
+    <div class="relative z-50 border-b border-d" style="background: linear-gradient(90deg, oklch(0.55 0.18 285), oklch(0.65 0.22 295));">
+      <div class="max-w-7xl mx-auto px-6 h-9 flex items-center justify-center gap-3 text-xs font-medium text-white">
+        <span class="chip" style="background: oklch(1 0 0 / 0.2);">v2.4</span>
+        <span>Os agentes de IA agora podem ler os contratos do seu escritório. <strong class="underline underline-offset-2">Como?</strong></span>
+      </div>
+    </div>
+
+    <!-- ========= NAVBAR ========= -->
+    <nav class="sticky top-0 z-40 glass-dark border-b border-d">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="#" class="flex items-center gap-3">
+          <div class="wordmark text-2xl">
+            <span class="jurid">Jurid</span><span class="flow">Flow</span>
+          </div>
+        </a>
+
+        <div class="hidden md:flex items-center gap-7 text-sm text-muted">
+          <a href="#telas" class="hover:text-white transition">Por dentro</a>
+          <a href="#calculadoras" class="hover:text-white transition">Calculadoras</a>
+          <a href="#ia" class="hover:text-white transition">IA</a>
+          <a href="#tribunais" class="hover:text-white transition">Tribunais</a>
+          <a href="#planos" class="hover:text-white transition">Planos</a>
+          <a href="#" class="hover:text-white transition flex items-center gap-1.5">
+            Roadmap
+            <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.80 0.14 155);">aberto</span>
+          </a>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button class="hidden sm:inline-flex h-9 px-3 text-sm font-medium text-muted hover:text-white" data-cta="login">Entrar</button>
+          <button class="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-sm font-semibold text-white" data-cta="signup" style="background: linear-gradient(135deg, var(--primary), var(--primary-2)); box-shadow: 0 12px 30px -10px oklch(0.65 0.22 295 / 0.6);">
+            Quero testar
+            <i data-lucide="arrow-right" class="h-4 w-4"></i>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ========= HERO ========= -->
+    <section class="relative overflow-hidden">
+      <div class="absolute inset-0 mesh"></div>
+      <div class="absolute inset-0 grid-pattern"></div>
+      <div class="absolute inset-0 noise"></div>
+
+      <div class="relative max-w-7xl mx-auto px-6 pt-20 pb-16">
+
+        <div class="flex justify-center mb-8">
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-d-2 glass-dark text-xs">
+            <span class="chip mono" style="background: oklch(0.65 0.22 295 / 0.18); color: oklch(0.85 0.18 295);">NOVO</span>
+            <span class="text-muted">Agora com agentes de IA treináveis —</span>
+            <span class="font-semibold">veja como</span>
+            <i data-lucide="arrow-right" class="h-3.5 w-3.5 text-muted"></i>
+          </div>
+        </div>
+
+        <div class="text-center max-w-5xl mx-auto">
+          <h1 class="text-5xl md:text-7xl lg:text-[5.5rem] font-black tracking-[-0.04em] leading-[0.95]">
+            O escritório jurídico<br/>
+            <span class="gradient-text">na mesma tela.</span>
+          </h1>
+          <p class="mt-7 text-lg md:text-xl text-muted max-w-2xl mx-auto leading-relaxed">
+            Atender um cliente novo não devia exigir 6 abas abertas. Aqui, o WhatsApp,
+            o contrato, a cobrança e a comissão do sócio
+            <span class="text-white">conversam entre si</span> — como sempre deveriam ter conversado.
+          </p>
+
+          <div class="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
+            <button data-cta="signup" class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl font-semibold text-white hover:scale-[1.02] transition" style="background: linear-gradient(135deg, var(--primary), var(--primary-2)); box-shadow: 0 20px 50px -10px oklch(0.65 0.22 295 / 0.7);">
+              Criar minha conta
+              <i data-lucide="arrow-right" class="h-4 w-4"></i>
+            </button>
+            <a href="#telas" class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl border border-d-2 glass-dark font-semibold hover:bg-[oklch(1_0_0/0.05)]">
+              <i data-lucide="eye" class="h-4 w-4"></i>
+              Espiar as telas
+            </a>
+          </div>
+
+          <p class="mt-5 text-xs text-muted">
+            Tem plano grátis. Sem fidelidade. Cancela quando quiser.
+          </p>
+        </div>
+
+        <!-- HERO VISUAL: app real (com screenshot ao centro do bancário) -->
+        <div class="relative mt-20 mx-auto" style="max-width: 1280px;">
+          <div class="absolute inset-x-20 -inset-y-10 rounded-[3rem] blur-3xl" style="background: linear-gradient(135deg, oklch(0.55 0.18 285 / 0.4), oklch(0.65 0.22 295 / 0.35));"></div>
+
+          <div class="relative rounded-2xl border-gradient glow-purple overflow-hidden">
+            <!-- Topbar do navegador -->
+            <div class="px-4 py-2.5 border-b border-d flex items-center gap-2 bg-bg2">
+              <div class="flex gap-1.5">
+                <span class="h-2.5 w-2.5 rounded-full bg-red-400/80"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-amber-400/80"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-400/80"></span>
+              </div>
+              <div class="flex-1 mx-4 flex">
+                <div class="bg-bg3 rounded-md px-3 py-1 text-[10px] mono text-muted inline-flex items-center gap-1.5 max-w-xs">
+                  <i data-lucide="lock" class="h-2.5 w-2.5"></i>
+                  app.juridflow.com.br
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.80 0.14 155);">
+                  <span class="pulse-dot" style="background: oklch(0.70 0.14 155);"></span> conectado
+                </span>
+              </div>
+            </div>
+
+            <!-- screenshot real da calculadora bancária ao centro -->
+            <div class="bg-bg0 p-4">
+              <img src="assets/calc-bancario.png" alt="Calculadora bancária do JuridFlow" class="w-full rounded-xl border border-d" style="image-rendering: -webkit-optimize-contrast;"/>
+            </div>
+          </div>
+
+          <p class="text-center text-xs text-muted mt-6">
+            ↑ acima: print da calculadora bancária do sistema. <span class="mono">v2.4, mai/2026</span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= ENGAJAMENTO: Pra quem ainda usa N ferramentas ========= -->
+    <section class="relative max-w-7xl mx-auto px-6 py-28 border-t border-d">
+      <div class="grid lg:grid-cols-[1fr_1.3fr] gap-14 items-center">
+        <div>
+          <span class="chip mono" style="background: oklch(0.68 0.20 25 / 0.15); color: oklch(0.85 0.18 25);">
+            <i data-lucide="alert-circle" class="h-3 w-3"></i> A REALIDADE
+          </span>
+          <h2 class="mt-4 text-4xl md:text-5xl font-black tracking-tight leading-[1.05]">
+            Hoje você paga por<br/>
+            <span class="gradient-text-2">9 coisas diferentes.</span>
+          </h2>
+          <p class="mt-5 text-lg text-muted leading-relaxed">
+            Cada SaaS resolve um pedaço da operação — e nenhum conversa com o outro.
+            O lead chega num lugar, vira contrato em outro, é cobrado num terceiro
+            e ninguém sabe quanto comissionar pro sócio sem abrir uma planilha.
+          </p>
+          <p class="mt-4 text-lg text-muted leading-relaxed">
+            <strong class="text-white">A gente juntou tudo numa tela só.</strong>
+          </p>
+          <div class="mt-6 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-d-2 glass-dark">
+            <i data-lucide="trending-down" class="h-4 w-4" style="color: oklch(0.80 0.14 155);"></i>
+            <span class="text-sm">No fim do mês, sobra <strong class="text-white">R$ 1.480</strong> de mensalidade cancelada.</span>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+            <span class="strike-soft">CRM de vendas</span>
+            <span class="strike-soft">Gestão financeira</span>
+            <span class="strike-soft">Quadro de tarefas</span>
+            <span class="strike-soft">Editor de contratos</span>
+            <span class="strike-soft">Agendamento online</span>
+            <span class="strike-soft">Inbox de WhatsApp</span>
+            <span class="strike-soft">Cofre de senhas</span>
+            <span class="strike-soft">Monitor de processos</span>
+            <span class="strike-soft">Planilha de comissão</span>
+          </div>
+
+          <div class="flex items-center gap-3 my-6">
+            <div class="flex-1 h-px bg-gradient-to-r from-transparent via-[oklch(0.70_0.22_295/0.6)] to-[oklch(0.70_0.22_295)]"></div>
+            <i data-lucide="arrow-down" class="h-6 w-6" style="color: oklch(0.85 0.18 295);"></i>
+            <div class="flex-1 h-px bg-gradient-to-r from-[oklch(0.70_0.22_295)] via-[oklch(0.70_0.22_295/0.6)] to-transparent"></div>
+          </div>
+
+          <div class="flex justify-center">
+            <div class="inline-flex items-center gap-4 px-6 py-4 rounded-2xl glow-purple" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+              <div class="wordmark text-2xl">
+                <span class="jurid text-white">Jurid</span><span class="flow text-white">Flow</span>
+              </div>
+              <div class="h-7 w-px bg-white/20"></div>
+              <p class="text-white/90 text-sm">tudo num lugar só</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= MARQUEE ========= -->
+    <section class="border-y border-d bg-bg1 py-7 overflow-hidden">
+      <p class="text-center text-[10px] uppercase tracking-[0.25em] text-muted font-bold mb-5">
+        Conversa nativamente com
+      </p>
+      <div class="marquee">
+        <span class="text-2xl font-bold text-muted">Asaas</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">WhatsApp</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Instagram</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Meta</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Cal.com</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">PJe</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">E-SAJ</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">TRT</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">ePROC</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Receita Federal</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Asaas</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">WhatsApp</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Instagram</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Meta</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Cal.com</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">PJe</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">E-SAJ</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">TRT</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">ePROC</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+        <span class="text-2xl font-bold text-muted">Receita Federal</span>
+        <span class="text-2xl font-bold text-muted">·</span>
+      </div>
+    </section>
+
+    <!-- ========= CALCULADORAS COM SCREENSHOTS REAIS ========= -->
+    <section id="calculadoras" class="max-w-7xl mx-auto px-6 py-28">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <span class="chip mono" style="background: oklch(0.55 0.18 285 / 0.18); color: oklch(0.85 0.18 295);">
+          <i data-lucide="calculator" class="h-3 w-3"></i> CALCULADORAS
+        </span>
+        <h2 class="mt-4 text-4xl md:text-6xl font-black tracking-tight leading-[1.02]">
+          Os números que<br/>
+          <span class="gradient-text-2">ganham a causa.</span>
+        </h2>
+        <p class="mt-5 text-lg text-muted">
+          Cinco motores diferentes pra você não abrir mais Excel. Cada um vem com
+          o parecer técnico já citando a Súmula que sustenta o cálculo.
+        </p>
+      </div>
+
+      <!-- Bancário em destaque -->
+      <div class="grid lg:grid-cols-[1fr_1.4fr] gap-10 items-center mb-20">
+        <div>
+          <span class="chip mono" style="background: oklch(0.60 0.16 250 / 0.18); color: oklch(0.85 0.16 250);">BANCÁRIO</span>
+          <h3 class="mt-4 text-3xl md:text-4xl font-black tracking-tight leading-tight">
+            Detecta abusividade<br/>
+            <span class="gradient-text-2">e calcula o recálculo.</span>
+          </h3>
+          <p class="mt-5 text-muted leading-relaxed">
+            Você coloca o contrato bancário — taxa, parcelas, modalidade. O sistema
+            compara com a média BACEN, identifica TAC, TEC, IOF e seguro casado,
+            aponta capitalização irregular, e te entrega o parecer fundamentado
+            <strong class="text-white">pronto pra anexar na inicial</strong>.
+          </p>
+          <ul class="mt-6 space-y-2 text-sm">
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> 6 modalidades (pessoal, consignado, veículo...)</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> PRICE, SAC, SACRE e Gauss</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Súmula 541 (anatocismo)</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Parecer técnico em PDF</li>
+          </ul>
+        </div>
+
+        <div class="shot-frame border border-d glow-purple">
+          <span class="shot-label">/calculos/bancario · print real</span>
+          <img src="assets/calc-bancario.png" alt="Calculadora bancária — print real do sistema" class="shot-img"/>
+        </div>
+      </div>
+
+      <!-- Grid das outras 4 -->
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Trabalhista -->
+        <div class="rounded-2xl border-gradient overflow-hidden card-hover">
+          <div class="shot-frame">
+            <span class="shot-label">/calculos/trabalhista</span>
+            <img src="assets/calc-trabalhista.png" alt="Calculadora trabalhista" class="shot-img"/>
+          </div>
+          <div class="p-6">
+            <span class="chip mono" style="background: oklch(0.75 0.15 75 / 0.18); color: oklch(0.85 0.15 75);">TRABALHISTA</span>
+            <h3 class="mt-3 text-xl font-black">Rescisão sem dor de cabeça</h3>
+            <p class="mt-2 text-sm text-muted leading-relaxed">
+              Seis cenários (sem justa causa, demissão, acordo mútuo, indireta, justa
+              causa, término). Horas extras com DSR, adicional noturno, multa 40% do
+              FGTS, multa do art. 477.
+            </p>
+          </div>
+        </div>
+
+        <!-- Imobiliário -->
+        <div class="rounded-2xl border-gradient overflow-hidden card-hover">
+          <div class="shot-frame">
+            <span class="shot-label">/calculos/imobiliario</span>
+            <img src="assets/calc-imobiliario.png" alt="Calculadora imobiliária" class="shot-img"/>
+          </div>
+          <div class="p-6">
+            <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.18); color: oklch(0.85 0.14 155);">IMOBILIÁRIO</span>
+            <h3 class="mt-3 text-xl font-black">SFH ou SFI, sem se perder</h3>
+            <p class="mt-2 text-sm text-muted leading-relaxed">
+              Enquadramento automático no sistema certo (SFH ou SFI), análise de
+              capitalização irregular, indexadores TR, IPCA, IGPM. PRICE com correção
+              é capitalização composta? O parecer explica.
+            </p>
+          </div>
+        </div>
+
+        <!-- Previdenciário -->
+        <div class="rounded-2xl border-gradient overflow-hidden card-hover">
+          <div class="shot-frame">
+            <span class="shot-label">/calculos/previdenciario</span>
+            <img src="assets/calc-previdenciario.png" alt="Calculadora previdenciária" class="shot-img"/>
+          </div>
+          <div class="p-6">
+            <span class="chip mono" style="background: oklch(0.65 0.22 295 / 0.18); color: oklch(0.85 0.18 295);">PREVIDENCIÁRIO</span>
+            <h3 class="mt-3 text-xl font-black">A EC 103, dominada</h3>
+            <p class="mt-2 text-sm text-muted leading-relaxed">
+              "Quando posso me aposentar?", "Quanto vou receber?", "GPS em atraso?".
+              Três ferramentas que cobrem aposentadoria comum, especial, professor e
+              as 10 regras de transição.
+            </p>
+          </div>
+        </div>
+
+        <!-- Diversos -->
+        <div class="rounded-2xl border-gradient overflow-hidden card-hover">
+          <div class="shot-frame">
+            <span class="shot-label">/calculos/diversos</span>
+            <img src="assets/calc-diversos.png" alt="Cálculos diversos" class="shot-img"/>
+          </div>
+          <div class="p-6">
+            <span class="chip mono" style="background: oklch(0.65 0.16 250 / 0.18); color: oklch(0.85 0.16 250);">DIVERSOS</span>
+            <h3 class="mt-3 text-xl font-black">Pra quando o caso é estranho</h3>
+            <p class="mt-2 text-sm text-muted leading-relaxed">
+              Conversão de taxas, Fisher (taxa real), TIR, juros simples e compostos,
+              atualização monetária por IPCA ou Selic. Quase nunca você precisa, mas
+              quando precisa, salva.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= POR DENTRO DAS OUTRAS TELAS ========= -->
+    <section id="telas" class="max-w-7xl mx-auto px-6 py-28 border-t border-d">
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <span class="chip mono" style="background: oklch(0.55 0.18 285 / 0.18); color: oklch(0.85 0.18 295);">
+          <i data-lucide="layers" class="h-3 w-3"></i> POR DENTRO
+        </span>
+        <h2 class="mt-4 text-4xl md:text-6xl font-black tracking-tight leading-[1.02]">
+          Tudo o que mora<br/>
+          <span class="gradient-text-2">dentro do sistema.</span>
+        </h2>
+        <p class="mt-5 text-lg text-muted">
+          Não é só uma promessa. São <strong class="text-white">14 módulos</strong> que
+          já estão lá hoje, mexendo entre si o tempo todo. Espia.
+        </p>
+      </div>
+
+      <!-- ATENDIMENTO -->
+      <div class="grid lg:grid-cols-[1fr_1.3fr] gap-10 items-center mb-32">
+        <div>
+          <span class="chip mono" style="background: oklch(0.65 0.22 295 / 0.18); color: oklch(0.85 0.18 295);">01 · ATENDIMENTO</span>
+          <h3 class="mt-4 text-3xl md:text-4xl font-black tracking-tight leading-tight">
+            Uma caixa de entrada<br/>
+            <span class="gradient-text-2">pra tudo.</span>
+          </h3>
+          <p class="mt-5 text-muted leading-relaxed">
+            WhatsApp do escritório, Instagram, e-mail. Quando o cliente manda mensagem,
+            cai aqui. E o painel ao lado já mostra histórico financeiro, contratos
+            anteriores, qual processo é dele — sem precisar abrir outra aba.
+          </p>
+          <p class="mt-4 text-muted leading-relaxed">
+            A IA do lado ajuda. Sugere resposta, identifica risco LGPD, propõe
+            agendamento. Quem decide é você.
+          </p>
+          <ul class="mt-6 space-y-2.5 text-sm">
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> WhatsApp via Baileys — não paga por mensagem</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Funil próprio: novo → qualificado → fechado</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Áudio do cliente vira texto automaticamente</li>
+          </ul>
+        </div>
+
+        <div class="relative">
+          <div class="absolute -inset-4 rounded-3xl blur-3xl opacity-50" style="background: linear-gradient(135deg, oklch(0.55 0.18 285 / 0.4), oklch(0.65 0.22 295 / 0.3));"></div>
+          <!-- Mockup FIEL do Atendimento real -->
+          <div class="relative rounded-2xl border-gradient overflow-hidden">
+            <div class="px-3 py-2 border-b border-d flex items-center gap-2 bg-bg2">
+              <div class="flex gap-1"><span class="h-2 w-2 rounded-full bg-red-400/80"></span><span class="h-2 w-2 rounded-full bg-amber-400/80"></span><span class="h-2 w-2 rounded-full bg-emerald-400/80"></span></div>
+              <p class="text-[10px] mono text-muted">/atendimento</p>
+              <span class="chip ml-auto mono" style="background: oklch(0.65 0.22 295 / 0.15); color: oklch(0.85 0.18 295);">preview</span>
+            </div>
+
+            <div class="grid grid-cols-[210px_1fr_56px] h-[490px]">
+              <!-- Lista conversas -->
+              <div class="border-r border-d bg-bg1 overflow-hidden">
+                <div class="p-2.5 border-b border-d">
+                  <div class="relative">
+                    <i data-lucide="search" class="absolute left-2 top-1.5 h-3 w-3 text-muted"></i>
+                    <input class="w-full h-7 pl-7 pr-2 rounded-md bg-bg2 border border-d text-[10px]" placeholder="Buscar conversa"/>
+                  </div>
+                  <div class="flex gap-1 mt-2 overflow-x-auto pb-1">
+                    <span class="chip" style="background: var(--bg-3); color: white;">Todas <span class="opacity-70">23</span></span>
+                    <span class="chip" style="background: oklch(0.75 0.15 75 / 0.15); color: oklch(0.85 0.15 75);">Aguard. 7</span>
+                    <span class="chip" style="background: oklch(0.65 0.16 250 / 0.15); color: oklch(0.85 0.16 250);">Em at. 12</span>
+                  </div>
+                </div>
+
+                <div class="overflow-y-auto">
+                  <div class="px-2.5 py-2 border-b border-d" style="background: oklch(0.55 0.18 285 / 0.15);">
+                    <div class="flex items-start gap-2">
+                      <div class="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0" style="background: oklch(0.35 0.10 0); color: oklch(0.95 0.05 350);">MS</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                          <p class="text-[11px] font-bold truncate">Maria Silva</p>
+                          <span class="text-[8px] text-muted mono">agora</span>
+                        </div>
+                        <p class="text-[10px] text-muted truncate">Trabalhei 5 anos sem...</p>
+                        <div class="flex items-center gap-1 mt-1">
+                          <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.75 0.15 75);"></span>
+                          <span class="text-[9px] text-muted">aguardando · qualificado</span>
+                        </div>
+                      </div>
+                      <i data-lucide="message-circle" class="h-3 w-3 mt-0.5 flex-shrink-0" style="color: oklch(0.70 0.14 155);"></i>
+                    </div>
+                  </div>
+
+                  <div class="px-2.5 py-2 border-b border-d hover:bg-bg2/40">
+                    <div class="flex items-start gap-2">
+                      <div class="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0" style="background: oklch(0.35 0.08 60); color: oklch(0.95 0.08 60);">CM</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                          <p class="text-[11px] font-bold truncate">Carlos Mendes</p>
+                          <span class="text-[8px] text-muted mono">10min</span>
+                        </div>
+                        <p class="text-[10px] text-muted truncate">📷 Foto · contrato</p>
+                        <div class="flex items-center gap-1 mt-1">
+                          <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.65 0.16 250);"></span>
+                          <span class="text-[9px] text-muted">em atend. · Dra. Ana</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="px-2.5 py-2 border-b border-d hover:bg-bg2/40">
+                    <div class="flex items-start gap-2">
+                      <div class="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0" style="background: oklch(0.35 0.08 155); color: oklch(0.95 0.08 155);">AP</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                          <p class="text-[11px] font-bold truncate">Ana Pereira</p>
+                          <span class="text-[8px] text-muted mono">1h</span>
+                        </div>
+                        <p class="text-[10px] text-muted truncate">🎤 Áudio · 0:18</p>
+                        <div class="flex items-center gap-1 mt-1">
+                          <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.70 0.14 155);"></span>
+                          <span class="text-[9px] text-muted">resolvido</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="px-2.5 py-2 border-b border-d hover:bg-bg2/40">
+                    <div class="flex items-start gap-2">
+                      <div class="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0" style="background: oklch(0.35 0.08 260); color: oklch(0.95 0.08 260);">JS</div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                          <p class="text-[11px] font-bold truncate">João Souza</p>
+                          <span class="text-[8px] text-muted mono">2h</span>
+                        </div>
+                        <p class="text-[10px] text-muted truncate">Obrigado, doutor!</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chat -->
+              <div class="bg-bg0 flex flex-col">
+                <div class="px-3 py-2 border-b border-d flex items-center gap-2">
+                  <div class="h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style="background: oklch(0.35 0.10 0); color: oklch(0.95 0.05 350);">MS</div>
+                  <div class="flex-1">
+                    <p class="text-xs font-bold">Maria Silva</p>
+                    <div class="flex items-center gap-1.5 text-[9px] text-muted">
+                      <span class="chip etapa-qual">qualificado</span>
+                      <span>· Dra. Ana</span>
+                    </div>
+                  </div>
+                  <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.80 0.14 155);">WhatsApp</span>
+                </div>
+
+                <div class="flex-1 p-3 space-y-2 overflow-y-auto">
+                  <div class="max-w-[80%] bg-bg2 border border-d rounded-2xl rounded-tl-sm px-3 py-2 text-[11px]">Boa tarde, dona Ana. Trabalhei 5 anos sem carteira numa loja, ainda dá pra fazer algo?</div>
+                  <div class="max-w-[85%] ml-auto rounded-2xl rounded-tr-sm px-3 py-2 text-[11px] text-white" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+                    Oi Maria! Sim, dá. Vínculo não anotado tem prazo de 5 anos pra entrar com ação. Você ainda está dentro 👍
+                  </div>
+                  <div class="max-w-[40%] bg-bg2 border border-d rounded-2xl rounded-tl-sm px-3 py-2 text-[11px]">Sério??</div>
+                  <div class="max-w-[85%] ml-auto rounded-2xl rounded-tr-sm px-3 py-2 text-[11px] text-white" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+                    Posso te fazer 3 perguntas pra eu já te dar uma estimativa do valor?
+                  </div>
+
+                  <div class="rounded-lg border p-3 text-[10px]" style="background: oklch(0.65 0.22 295 / 0.08); border-color: oklch(0.65 0.22 295 / 0.3);">
+                    <p class="font-bold mb-1 flex items-center gap-1.5" style="color: oklch(0.85 0.18 295);">
+                      <i data-lucide="sparkles" class="h-3 w-3"></i> Brief automático
+                    </p>
+                    <p class="text-muted leading-relaxed">Cliente recorrente — última conversa há 1 ano. Caso anterior (divórcio) foi ganho. Sem cobrança em aberto. <strong class="text-white">Pode oferecer reunião gratuita.</strong></p>
+                  </div>
+                </div>
+
+                <div class="px-3 py-2 border-t border-d flex items-center gap-2">
+                  <input class="flex-1 h-7 px-2 rounded-md bg-bg2 border border-d text-[10px]" placeholder="Mensagem..."/>
+                  <button class="h-7 w-7 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));"><i data-lucide="send" class="h-3 w-3 text-white"></i></button>
+                </div>
+              </div>
+
+              <!-- AI Rail -->
+              <div class="border-l border-d bg-bg1 p-2 space-y-2">
+                <div class="rounded-md p-2 flex items-center justify-center" style="background: oklch(0.65 0.22 295 / 0.15);" title="Brief IA">
+                  <i data-lucide="sparkles" class="h-3.5 w-3.5" style="color: oklch(0.85 0.18 295);"></i>
+                </div>
+                <div class="rounded-md p-2 bg-bg2 flex items-center justify-center" title="Histórico"><i data-lucide="file-text" class="h-3.5 w-3.5 text-muted"></i></div>
+                <div class="rounded-md p-2 bg-bg2 flex items-center justify-center" title="Financeiro"><i data-lucide="dollar-sign" class="h-3.5 w-3.5 text-muted"></i></div>
+                <div class="rounded-md p-2 bg-bg2 flex items-center justify-center" title="Agenda"><i data-lucide="calendar" class="h-3.5 w-3.5 text-muted"></i></div>
+                <div class="rounded-md p-2 bg-bg2 flex items-center justify-center" title="Tarefas"><i data-lucide="clipboard-list" class="h-3.5 w-3.5 text-muted"></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SMARTFLOW -->
+      <div class="grid lg:grid-cols-[1.3fr_1fr] gap-10 items-center mb-32">
+        <div class="relative order-2 lg:order-1">
+          <div class="absolute -inset-4 rounded-3xl blur-3xl opacity-50" style="background: linear-gradient(135deg, oklch(0.65 0.22 295 / 0.3), oklch(0.75 0.15 75 / 0.2));"></div>
+          <div class="relative rounded-2xl border-gradient overflow-hidden">
+            <div class="px-3 py-2 border-b border-d flex items-center gap-2 bg-bg2">
+              <div class="flex gap-1"><span class="h-2 w-2 rounded-full bg-red-400/80"></span><span class="h-2 w-2 rounded-full bg-amber-400/80"></span><span class="h-2 w-2 rounded-full bg-emerald-400/80"></span></div>
+              <p class="text-[10px] mono text-muted">/smartflow</p>
+              <span class="chip ml-auto mono" style="background: oklch(0.65 0.22 295 / 0.15); color: oklch(0.85 0.18 295);">preview</span>
+            </div>
+
+            <div class="p-5 bg-bg0">
+              <!-- Hero do SmartFlow REAL — Zap laranja-âmbar -->
+              <div class="flex items-center gap-3 mb-4">
+                <div class="h-10 w-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.85 0.15 60 / 0.5), oklch(0.75 0.18 50 / 0.5));">
+                  <i data-lucide="zap" class="h-5 w-5" style="color: oklch(0.80 0.18 60);"></i>
+                </div>
+                <div class="flex-1">
+                  <p class="text-lg font-black">SmartFlow</p>
+                  <p class="text-[11px] text-muted">Automações inteligentes — WhatsApp + IA + Cal.com</p>
+                </div>
+                <button class="h-8 px-3 rounded-md text-[10px] font-medium border border-d bg-bg2 hover:bg-bg3 flex items-center gap-1"><i data-lucide="zap" class="h-3 w-3"></i> Atendimento</button>
+                <button class="h-8 px-3 rounded-md text-[10px] font-medium border border-d bg-bg2 hover:bg-bg3 flex items-center gap-1"><i data-lucide="dollar-sign" class="h-3 w-3"></i> Pagamento → Kanban</button>
+                <button class="h-8 px-3 rounded-md text-[10px] font-semibold text-white flex items-center gap-1" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));"><i data-lucide="plus" class="h-3 w-3"></i> Novo</button>
+              </div>
+
+              <!-- Tabs do SmartFlow real -->
+              <div class="grid grid-cols-2 gap-1 p-1 rounded-md bg-bg2 mb-3 text-[11px]">
+                <div class="rounded h-7 flex items-center justify-center gap-1.5 font-semibold bg-bg3"><i data-lucide="zap" class="h-3 w-3"></i> Cenários</div>
+                <div class="rounded h-7 flex items-center justify-center gap-1.5 font-medium text-muted"><i data-lucide="activity" class="h-3 w-3"></i> Execuções</div>
+              </div>
+
+              <!-- Grid cards cenários (padrão real: ícone Zap violeta + toggle + ações) -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-lg border border-d bg-bg1 p-3 flex flex-col gap-2.5">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="h-9 w-9 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.65 0.22 295 / 0.15), oklch(0.55 0.18 285 / 0.15));">
+                      <i data-lucide="zap" class="h-4 w-4" style="color: oklch(0.85 0.18 295);"></i>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center" title="Editar"><i data-lucide="pencil" class="h-3 w-3 text-muted"></i></button>
+                      <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.70 0.14 155);">
+                        <div class="h-3 w-3 rounded-full bg-white ml-auto"></div>
+                      </div>
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center" title="Excluir"><i data-lucide="trash-2" class="h-3 w-3 text-muted"></i></button>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs font-bold">Cobrar boleto vencido</p>
+                    <p class="text-[10px] text-muted mt-0.5 leading-relaxed">Quando o Asaas avisar que venceu, espera 2 dias, gera mensagem com IA, manda no WhatsApp.</p>
+                  </div>
+                  <div class="flex gap-1 flex-wrap">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); color: var(--muted-d); border: 1px solid var(--border-d);">
+                      <i data-lucide="alert-triangle" class="h-2.5 w-2.5"></i> pagamento vencido
+                    </span>
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); color: var(--muted-d); border: 1px solid var(--border-d);">≥ 2 dia(s) de atraso</span>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-d bg-bg1 p-3 flex flex-col gap-2.5">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="h-9 w-9 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.65 0.22 295 / 0.15), oklch(0.55 0.18 285 / 0.15));">
+                      <i data-lucide="zap" class="h-4 w-4" style="color: oklch(0.85 0.18 295);"></i>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center"><i data-lucide="pencil" class="h-3 w-3 text-muted"></i></button>
+                      <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.70 0.14 155);">
+                        <div class="h-3 w-3 rounded-full bg-white ml-auto"></div>
+                      </div>
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center"><i data-lucide="trash-2" class="h-3 w-3 text-muted"></i></button>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs font-bold">Lead novo → kanban</p>
+                    <p class="text-[10px] text-muted mt-0.5 leading-relaxed">Qualquer canal. Cria card no kanban da área certa e atribui pro plantonista.</p>
+                  </div>
+                  <div class="flex gap-1 flex-wrap">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); color: var(--muted-d); border: 1px solid var(--border-d);"><i data-lucide="users" class="h-2.5 w-2.5"></i> novo lead</span>
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); color: var(--muted-d); border: 1px solid var(--border-d);">3 passos</span>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-d bg-bg1 p-3 flex flex-col gap-2.5">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="h-9 w-9 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.65 0.22 295 / 0.15), oklch(0.55 0.18 285 / 0.15));">
+                      <i data-lucide="zap" class="h-4 w-4" style="color: oklch(0.85 0.18 295);"></i>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center"><i data-lucide="pencil" class="h-3 w-3 text-muted"></i></button>
+                      <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.70 0.14 155);">
+                        <div class="h-3 w-3 rounded-full bg-white ml-auto"></div>
+                      </div>
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center"><i data-lucide="trash-2" class="h-3 w-3 text-muted"></i></button>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs font-bold">Triagem WhatsApp</p>
+                    <p class="text-[10px] text-muted mt-0.5 leading-relaxed">IA lê a mensagem, classifica a área (cível, bancário, trabalhista...) e direciona pro agente certo.</p>
+                  </div>
+                  <div class="flex gap-1 flex-wrap">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); color: var(--muted-d); border: 1px solid var(--border-d);"><i data-lucide="message-circle" class="h-2.5 w-2.5"></i> WhatsApp</span>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-d bg-bg1 p-3 flex flex-col gap-2.5">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="h-9 w-9 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.65 0.22 295 / 0.15), oklch(0.55 0.18 285 / 0.15));">
+                      <i data-lucide="zap" class="h-4 w-4" style="color: oklch(0.85 0.18 295);"></i>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center"><i data-lucide="pencil" class="h-3 w-3 text-muted"></i></button>
+                      <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.55 0.05 270);">
+                        <div class="h-3 w-3 rounded-full bg-white"></div>
+                      </div>
+                      <button class="h-6 w-6 rounded-md hover:bg-bg2 flex items-center justify-center"><i data-lucide="trash-2" class="h-3 w-3 text-muted"></i></button>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="text-xs font-bold">Lembrete de reunião</p>
+                    <p class="text-[10px] text-muted mt-0.5 leading-relaxed">2h antes do horário do Cal.com, manda mensagem confirmando.</p>
+                  </div>
+                  <div class="flex gap-1 flex-wrap">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); color: var(--muted-d); border: 1px solid var(--border-d);"><i data-lucide="calendar" class="h-2.5 w-2.5"></i> lembrete</span>
+                    <span class="chip" style="background: oklch(0.55 0.05 270 / 0.3); color: var(--muted-d);">pausado</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="order-1 lg:order-2">
+          <span class="chip mono" style="background: oklch(0.75 0.15 75 / 0.18); color: oklch(0.85 0.15 75);">02 · SMARTFLOW</span>
+          <h3 class="mt-4 text-3xl md:text-4xl font-black tracking-tight leading-tight">
+            Automação<br/>
+            <span class="gradient-text-2">que faz sentido.</span>
+          </h3>
+          <p class="mt-5 text-muted leading-relaxed">
+            Imagine criar uma regra do tipo "<em>quando o boleto vencer, espera 2 dias, IA
+            escreve uma mensagem educada, manda no WhatsApp, e se ainda não pagar,
+            abre tarefa pro sócio</em>" — em 3 minutos. Sem código.
+          </p>
+          <p class="mt-4 text-muted leading-relaxed">
+            Se você já usou Notion ou Figma, o jeito de pensar é o mesmo: você
+            arrasta blocos e conecta um no outro.
+          </p>
+          <div class="mt-6 grid grid-cols-2 gap-3 text-xs">
+            <div class="rounded-lg border border-d p-3 bg-bg1">
+              <p class="text-[10px] uppercase tracking-wider text-muted font-bold">Gatilhos</p>
+              <p class="text-sm mt-1.5 leading-relaxed">WhatsApp, Asaas, Cal.com, novo lead, manual...</p>
+            </div>
+            <div class="rounded-lg border border-d p-3 bg-bg1">
+              <p class="text-[10px] uppercase tracking-wider text-muted font-bold">Ações</p>
+              <p class="text-sm mt-1.5 leading-relaxed">IA, condicional, esperar, webhook, kanban...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENTES IA -->
+      <div class="grid lg:grid-cols-[1fr_1.3fr] gap-10 items-center mb-32">
+        <div id="ia">
+          <span class="chip mono" style="background: oklch(0.65 0.22 295 / 0.18); color: oklch(0.85 0.18 295);">03 · AGENTES IA</span>
+          <h3 class="mt-4 text-3xl md:text-4xl font-black tracking-tight leading-tight">
+            Uma IA que entende<br/>
+            <span class="gradient-text-2">do seu jeito.</span>
+          </h3>
+          <p class="mt-5 text-muted leading-relaxed">
+            Sobe os seus modelos de contrato, suas peças favoritas, as teses que você
+            usa. O agente lê tudo e passa a responder os clientes <strong class="text-white">no
+            jeitinho do escritório</strong> — não com aquele tom genérico do ChatGPT.
+          </p>
+          <p class="mt-4 text-muted leading-relaxed">
+            Você cria um agente por área: trabalhista, bancário, previdenciário,
+            cível. Cada um com prompt próprio e modelo escolhido por custo.
+          </p>
+          <ul class="mt-6 space-y-2.5 text-sm">
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Escolhe entre GPT-4o Mini, Claude Haiku ou GPT-4</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Cria variáveis pra capturar dados do cliente</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Temperatura: quanto criativo ou conservador</li>
+          </ul>
+        </div>
+
+        <div class="relative">
+          <div class="absolute -inset-4 rounded-3xl blur-3xl opacity-50" style="background: linear-gradient(135deg, oklch(0.65 0.22 295 / 0.3), oklch(0.55 0.18 285 / 0.3));"></div>
+          <div class="relative rounded-2xl border-gradient overflow-hidden">
+            <div class="px-3 py-2 border-b border-d flex items-center gap-2 bg-bg2">
+              <div class="flex gap-1"><span class="h-2 w-2 rounded-full bg-red-400/80"></span><span class="h-2 w-2 rounded-full bg-amber-400/80"></span><span class="h-2 w-2 rounded-full bg-emerald-400/80"></span></div>
+              <p class="text-[10px] mono text-muted">/agentes-ia</p>
+              <span class="chip ml-auto mono" style="background: oklch(0.65 0.22 295 / 0.15); color: oklch(0.85 0.18 295);">preview</span>
+            </div>
+
+            <div class="p-5 bg-bg0">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <p class="text-lg font-black">Agentes IA</p>
+                  <p class="text-[11px] text-muted">3 ativos · 1.483 conversas/mês</p>
+                </div>
+                <button class="h-8 px-3 rounded-md text-[10px] font-semibold text-white inline-flex items-center gap-1" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">+ Novo agente</button>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-xl border border-d bg-bg1 p-4">
+                  <div class="flex items-center gap-2.5 mb-3">
+                    <div class="h-11 w-11 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.75 0.15 75), oklch(0.80 0.18 50));">
+                      <i data-lucide="briefcase" class="h-5 w-5 text-white"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[12px] font-bold truncate">Trabalhista</p>
+                      <p class="text-[9px] text-muted">GPT-4o Mini · temp 0.4</p>
+                    </div>
+                    <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.70 0.14 155);">
+                      <div class="h-3 w-3 rounded-full bg-white ml-auto"></div>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-muted leading-relaxed mb-3">Triagem rescisão, horas extras, vínculo não anotado.</p>
+                  <div class="flex gap-1 flex-wrap mb-3">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); border: 1px solid var(--border-d); color: var(--muted-d);">atendimento</span>
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); border: 1px solid var(--border-d); color: var(--muted-d);">processos</span>
+                  </div>
+                  <div class="flex gap-1">
+                    <button class="flex-1 h-7 rounded-md border border-d text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-bg2"><i data-lucide="message-circle" class="h-3 w-3"></i> Testar</button>
+                    <button class="h-7 w-7 rounded-md border border-d flex items-center justify-center hover:bg-bg2"><i data-lucide="pencil" class="h-3 w-3"></i></button>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-d bg-bg1 p-4">
+                  <div class="flex items-center gap-2.5 mb-3">
+                    <div class="h-11 w-11 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.60 0.16 250), oklch(0.70 0.18 250));">
+                      <i data-lucide="landmark" class="h-5 w-5 text-white"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[12px] font-bold truncate">Bancário</p>
+                      <p class="text-[9px] text-muted">Claude Haiku · temp 0.3</p>
+                    </div>
+                    <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.70 0.14 155);">
+                      <div class="h-3 w-3 rounded-full bg-white ml-auto"></div>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-muted leading-relaxed mb-3">Detecta abusividade e prepara a inicial.</p>
+                  <div class="flex gap-1 flex-wrap mb-3">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); border: 1px solid var(--border-d); color: var(--muted-d);">atendimento</span>
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); border: 1px solid var(--border-d); color: var(--muted-d);">cálculos</span>
+                  </div>
+                  <div class="flex gap-1">
+                    <button class="flex-1 h-7 rounded-md border border-d text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-bg2"><i data-lucide="message-circle" class="h-3 w-3"></i> Testar</button>
+                    <button class="h-7 w-7 rounded-md border border-d flex items-center justify-center hover:bg-bg2"><i data-lucide="pencil" class="h-3 w-3"></i></button>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-d bg-bg1 p-4">
+                  <div class="flex items-center gap-2.5 mb-3">
+                    <div class="h-11 w-11 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, oklch(0.65 0.22 295), oklch(0.75 0.20 295));">
+                      <i data-lucide="user-check" class="h-5 w-5 text-white"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[12px] font-bold truncate">SDR</p>
+                      <p class="text-[9px] text-muted">GPT-4o Mini · temp 0.6</p>
+                    </div>
+                    <div class="h-4 w-7 rounded-full p-0.5" style="background: oklch(0.55 0.05 270);">
+                      <div class="h-3 w-3 rounded-full bg-white"></div>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-muted leading-relaxed mb-3">Qualifica lead do Instagram e WhatsApp.</p>
+                  <div class="flex gap-1 flex-wrap mb-3">
+                    <span class="chip" style="background: oklch(1 0 0 / 0.05); border: 1px solid var(--border-d); color: var(--muted-d);">atendimento</span>
+                  </div>
+                  <div class="flex gap-1">
+                    <button class="flex-1 h-7 rounded-md border border-d text-[10px] font-semibold flex items-center justify-center gap-1 hover:bg-bg2"><i data-lucide="message-circle" class="h-3 w-3"></i> Testar</button>
+                    <button class="h-7 w-7 rounded-md border border-d flex items-center justify-center hover:bg-bg2"><i data-lucide="pencil" class="h-3 w-3"></i></button>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border-2 border-dashed border-d p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-bg1">
+                  <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-2" style="background: oklch(0.65 0.22 295 / 0.15);">
+                    <i data-lucide="plus" class="h-5 w-5" style="color: oklch(0.85 0.18 295);"></i>
+                  </div>
+                  <p class="text-[11px] font-bold">Criar novo agente</p>
+                  <p class="text-[9px] text-muted mt-0.5">Escolhe modelo, escreve prompt</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KANBAN + PROCESSOS -->
+      <div class="grid lg:grid-cols-[1.3fr_1fr] gap-10 items-center">
+        <div class="relative order-2 lg:order-1">
+          <div class="absolute -inset-4 rounded-3xl blur-3xl opacity-50" style="background: linear-gradient(135deg, oklch(0.65 0.16 250 / 0.3), oklch(0.55 0.18 285 / 0.3));"></div>
+          <div class="relative rounded-2xl border-gradient overflow-hidden">
+            <div class="px-3 py-2 border-b border-d flex items-center gap-2 bg-bg2">
+              <div class="flex gap-1"><span class="h-2 w-2 rounded-full bg-red-400/80"></span><span class="h-2 w-2 rounded-full bg-amber-400/80"></span><span class="h-2 w-2 rounded-full bg-emerald-400/80"></span></div>
+              <p class="text-[10px] mono text-muted">/kanban/Trabalhista</p>
+              <span class="chip ml-auto mono" style="background: oklch(0.65 0.22 295 / 0.15); color: oklch(0.85 0.18 295);">preview</span>
+            </div>
+
+            <div class="p-5 bg-bg0">
+              <div class="grid grid-cols-4 gap-3">
+                <div class="rounded-lg bg-bg1 p-2">
+                  <div class="flex items-center justify-between mb-2 px-1">
+                    <p class="text-[11px] font-bold flex items-center gap-1.5">
+                      <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.65 0.05 270);"></span>
+                      Novo
+                    </p>
+                    <span class="text-[9px] text-muted mono">3</span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5" style="border-left-color: oklch(0.68 0.20 25);">
+                      <p class="text-[11px] font-bold">Silva × Banco BR</p>
+                      <p class="text-[9px] text-muted mono mt-0.5">0012345-67.2026</p>
+                      <div class="flex items-center gap-1 mt-2 text-[9px]">
+                        <i data-lucide="clock" class="h-2.5 w-2.5 text-muted"></i>
+                        <span class="text-muted">prazo 15/11</span>
+                      </div>
+                    </div>
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5" style="border-left-color: oklch(0.75 0.15 75);">
+                      <p class="text-[11px] font-bold">Costa × União</p>
+                      <p class="text-[9px] text-muted mt-0.5">tributário</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-lg bg-bg1 p-2">
+                  <div class="flex items-center justify-between mb-2 px-1">
+                    <p class="text-[11px] font-bold flex items-center gap-1.5">
+                      <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.60 0.16 250);"></span>
+                      Em curso
+                    </p>
+                    <span class="text-[9px] text-muted mono">5</span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5" style="border-left-color: oklch(0.68 0.20 25);">
+                      <p class="text-[11px] font-bold">Pereira × INSS</p>
+                      <div class="flex items-center gap-1 mt-2 text-[9px]">
+                        <i data-lucide="alert-triangle" class="h-2.5 w-2.5" style="color: oklch(0.85 0.15 75);"></i>
+                        <span style="color: oklch(0.85 0.15 75);">Audiência em 4d</span>
+                      </div>
+                    </div>
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5" style="border-left-color: oklch(0.60 0.16 250);">
+                      <p class="text-[11px] font-bold">Souza × Cia. X</p>
+                      <div class="flex items-center gap-1 mt-2 text-[9px]">
+                        <i data-lucide="dollar-sign" class="h-2.5 w-2.5 text-muted"></i>
+                        <span class="text-muted">R$ 4.500</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-lg bg-bg1 p-2">
+                  <div class="flex items-center justify-between mb-2 px-1">
+                    <p class="text-[11px] font-bold flex items-center gap-1.5">
+                      <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.75 0.15 75);"></span>
+                      Sentenciado
+                    </p>
+                    <span class="text-[9px] text-muted mono">2</span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5" style="border-left-color: oklch(0.60 0.16 250);">
+                      <p class="text-[11px] font-bold">Lima × Construtora</p>
+                      <div class="mt-2">
+                        <span class="chip" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.80 0.14 155);">procedente</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-lg bg-bg1 p-2">
+                  <div class="flex items-center justify-between mb-2 px-1">
+                    <p class="text-[11px] font-bold flex items-center gap-1.5">
+                      <span class="h-1.5 w-1.5 rounded-full" style="background: oklch(0.70 0.14 155);"></span>
+                      Encerrado
+                    </p>
+                    <span class="text-[9px] text-muted mono">12</span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5 opacity-70" style="border-left-color: oklch(0.60 0.16 250);">
+                      <p class="text-[11px] font-bold">Andrade × Imob.</p>
+                      <p class="text-[9px] text-muted mt-0.5">trânsito em julgado</p>
+                    </div>
+                    <div class="rounded-md bg-bg2 border border-d border-l-4 p-2.5 opacity-70" style="border-left-color: oklch(0.60 0.16 250);">
+                      <p class="text-[11px] font-bold">Mota × Estado</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="order-1 lg:order-2">
+          <span class="chip mono" style="background: oklch(0.60 0.16 250 / 0.18); color: oklch(0.85 0.16 250);">04 · KANBAN</span>
+          <h3 class="mt-4 text-3xl md:text-4xl font-black tracking-tight leading-tight">
+            Cada caso<br/>
+            <span class="gradient-text-2">no seu lugar.</span>
+          </h3>
+          <p class="mt-5 text-muted leading-relaxed">
+            Funil por área (trabalhista, bancário, cível...), cartões arrastáveis,
+            cores que indicam prioridade na borda esquerda. Você bate o olho e
+            entende o pipeline do escritório.
+          </p>
+          <p class="mt-4 text-muted leading-relaxed">
+            Tag de audiência se aproximando? Aparece. Cliente que tá há 3 dias
+            sem dar retorno? Aparece. Sem precisar abrir cada card pra saber.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= COMO TUDO SE CONECTA ========= -->
+    <section class="relative max-w-7xl mx-auto px-6 py-28 border-t border-d">
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <span class="chip mono" style="background: oklch(0.55 0.18 285 / 0.18); color: oklch(0.85 0.18 295);">
+          <i data-lucide="git-branch" class="h-3 w-3"></i> NA PRÁTICA
+        </span>
+        <h2 class="mt-4 text-4xl md:text-5xl font-black tracking-tight leading-[1.05]">
+          Como uma <span class="gradient-text-2">tarde inteira</span><br/>
+          acontece aqui dentro.
+        </h2>
+        <p class="mt-5 text-lg text-muted">
+          Acompanhe uma cliente que chegou às 9h e virou pagamento até as 14h —
+          sem o seu escritório sair do JuridFlow uma única vez.
+        </p>
+      </div>
+
+      <div class="relative">
+        <div class="hidden lg:block absolute top-12 left-12 right-12 h-px" style="background: linear-gradient(90deg, transparent, oklch(0.70 0.22 295 / 0.4), oklch(0.70 0.22 295 / 0.4), transparent);"></div>
+
+        <div class="grid lg:grid-cols-6 gap-4">
+          <div>
+            <div class="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 ring-soft" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+              <i data-lucide="message-circle" class="h-5 w-5 text-white"></i>
+            </div>
+            <p class="chip mono mb-2" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">09:14</p>
+            <h4 class="font-extrabold">Maria manda DM</h4>
+            <p class="text-xs text-muted mt-1">Pelo Instagram do escritório.</p>
+          </div>
+          <div>
+            <div class="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 ring-soft" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+              <i data-lucide="bot" class="h-5 w-5 text-white"></i>
+            </div>
+            <p class="chip mono mb-2" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">09:14</p>
+            <h4 class="font-extrabold">Agente trabalhista responde</h4>
+            <p class="text-xs text-muted mt-1">Faz 3 perguntas, estima R$ 38.400.</p>
+          </div>
+          <div>
+            <div class="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 ring-soft" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+              <i data-lucide="calendar" class="h-5 w-5 text-white"></i>
+            </div>
+            <p class="chip mono mb-2" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">09:18</p>
+            <h4 class="font-extrabold">Reunião marcada</h4>
+            <p class="text-xs text-muted mt-1">Cal.com encontra slot do Dr. Rafael.</p>
+          </div>
+          <div>
+            <div class="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 ring-soft" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+              <i data-lucide="file-signature" class="h-5 w-5 text-white"></i>
+            </div>
+            <p class="chip mono mb-2" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">11:32</p>
+            <h4 class="font-extrabold">Contrato sai pronto</h4>
+            <p class="text-xs text-muted mt-1">Modelo preenchido. Link de assinatura.</p>
+          </div>
+          <div>
+            <div class="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 ring-soft" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">
+              <i data-lucide="wallet" class="h-5 w-5 text-white"></i>
+            </div>
+            <p class="chip mono mb-2" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">14:08</p>
+            <h4 class="font-extrabold">Pix cai</h4>
+            <p class="text-xs text-muted mt-1">Asaas avisa, entra no caixa.</p>
+          </div>
+          <div>
+            <div class="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 ring-soft" style="background: linear-gradient(135deg, var(--success), oklch(0.75 0.14 155));">
+              <i data-lucide="percent" class="h-5 w-5 text-white"></i>
+            </div>
+            <p class="chip mono mb-2" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.85 0.14 155);">no mesmo segundo</p>
+            <h4 class="font-extrabold">Comissão sai do papel</h4>
+            <p class="text-xs text-muted mt-1">+R$ 1.350 pro Dr. Rafael, sem planilha.</p>
+          </div>
+        </div>
+
+        <div class="mt-14 text-center">
+          <p class="text-base text-muted">Acabou. <strong class="text-white">4 h 54 min</strong>. Você não abriu uma planilha, não trocou de aba, não esqueceu de cobrar.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= STATS ========= -->
+    <section class="border-y border-d bg-bg1 py-20">
+      <div class="max-w-7xl mx-auto px-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--border-d)] rounded-3xl overflow-hidden border border-d">
+          <div class="p-8 lg:p-10" style="background: var(--bg-0);">
+            <p class="text-5xl lg:text-6xl font-black tabular-nums tracking-tight gradient-text-2">486</p>
+            <p class="text-sm text-muted mt-2">escritórios já estão dentro</p>
+          </div>
+          <div class="p-8 lg:p-10" style="background: var(--bg-0);">
+            <p class="text-5xl lg:text-6xl font-black tabular-nums tracking-tight gradient-text-2">R$ 12M</p>
+            <p class="text-sm text-muted mt-2">de honorários passaram por aqui</p>
+          </div>
+          <div class="p-8 lg:p-10" style="background: var(--bg-0);">
+            <p class="text-5xl lg:text-6xl font-black tabular-nums tracking-tight gradient-text-2">73k</p>
+            <p class="text-sm text-muted mt-2">contratos gerados sem Word</p>
+          </div>
+          <div class="p-8 lg:p-10" style="background: var(--bg-0);">
+            <p class="text-5xl lg:text-6xl font-black tabular-nums tracking-tight gradient-text-2">18h</p>
+            <p class="text-sm text-muted mt-2">a menos por mês, em média</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= TRIBUNAIS ========= -->
+    <section id="tribunais" class="max-w-7xl mx-auto px-6 py-28">
+      <div class="grid lg:grid-cols-[1fr_1.2fr] gap-14 items-center">
+        <div>
+          <span class="chip mono" style="background: oklch(0.75 0.15 75 / 0.15); color: oklch(0.85 0.15 75);">
+            <i data-lucide="map-pin" class="h-3 w-3"></i> 21 TRIBUNAIS
+          </span>
+          <h2 class="mt-4 text-4xl md:text-5xl font-black tracking-tight leading-[1.05]">
+            A gente loga em<br/>
+            <span class="gradient-text-2">tudo, pra você não logar.</span>
+          </h2>
+          <p class="mt-5 text-lg text-muted leading-relaxed">
+            Cadastra a credencial uma única vez no cofre criptografado e a gente
+            faz o login automático. Captura publicação no minuto em que sai.
+          </p>
+          <p class="mt-4 text-lg text-muted leading-relaxed">
+            <strong class="text-white">Sem depender de API de terceiro</strong> —
+            nada de Judit, Jusbrasil, rate-limit ou planos por consulta.
+          </p>
+          <div class="mt-7 space-y-2.5">
+            <div class="flex items-center gap-3">
+              <div class="h-8 w-8 rounded-lg flex items-center justify-center" style="background: oklch(0.55 0.18 285 / 0.2);"><span class="text-[10px] font-extrabold mono" style="color: oklch(0.85 0.10 260);">PJe</span></div>
+              <p class="text-sm">9 tribunais — TJCE, TJRJ, TJMG, TJDFT, TJPE, TJES, TJPR, TJRS, TJGO</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="h-8 w-8 rounded-lg flex items-center justify-center" style="background: oklch(0.65 0.22 295 / 0.2);"><span class="text-[10px] font-extrabold mono" style="color: oklch(0.85 0.18 295);">SAJ</span></div>
+              <p class="text-sm">5 tribunais — TJSP, TJSC, TJBA, TJAM, TJAC</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="h-8 w-8 rounded-lg flex items-center justify-center" style="background: oklch(0.75 0.15 75 / 0.2);"><span class="text-[10px] font-extrabold mono" style="color: oklch(0.85 0.15 75);">TRT</span></div>
+              <p class="text-sm">4 regionais trabalhistas</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="h-8 w-8 rounded-lg flex items-center justify-center" style="background: oklch(0.70 0.14 155 / 0.2);"><span class="text-[10px] font-extrabold mono" style="color: oklch(0.85 0.14 155);">TRF</span></div>
+              <p class="text-sm">2 federais via ePROC</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="relative rounded-3xl border-gradient p-8 lg:p-10 overflow-hidden">
+          <div class="absolute inset-0 grid-pattern opacity-50"></div>
+          <div class="relative">
+            <p class="text-xs mono text-muted mb-4 flex items-center gap-2">
+              <span class="pulse-dot" style="background: oklch(0.80 0.14 155);"></span>
+              monitorando 18.392 processos · ao vivo
+            </p>
+            <svg viewBox="0 0 400 380" class="w-full h-auto">
+              <path d="M 100 60 Q 130 50, 180 55 L 240 50 Q 290 60, 320 90 L 340 130 Q 350 180, 330 220 L 320 280 Q 290 320, 250 340 L 200 350 Q 150 345, 110 320 L 80 280 Q 60 220, 70 170 L 80 110 Q 85 80, 100 60 Z"
+                    fill="oklch(0.18 0.03 270 / 0.6)" stroke="oklch(0.70 0.22 295 / 0.4)" stroke-width="1.5" stroke-dasharray="2 4"/>
+              <circle cx="290" cy="100" r="6" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="298" y="103" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJCE</text>
+              <circle cx="220" cy="240" r="6" fill="oklch(0.55 0.18 285)" class="br-dot"/><text x="228" y="243" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJSP</text>
+              <circle cx="250" cy="230" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="258" y="233" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJRJ</text>
+              <circle cx="235" cy="200" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="195" y="195" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJMG</text>
+              <circle cx="305" cy="125" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="313" y="128" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJPE</text>
+              <circle cx="275" cy="170" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="283" y="173" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJBA</text>
+              <circle cx="220" cy="180" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="160" y="178" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJDFT</text>
+              <circle cx="180" cy="320" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="188" y="323" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJRS</text>
+              <circle cx="200" cy="280" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="208" y="283" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJPR</text>
+              <circle cx="200" cy="300" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="208" y="303" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJSC</text>
+              <circle cx="155" cy="110" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="163" y="113" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJAM</text>
+              <circle cx="210" cy="200" r="5" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="155" y="217" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJGO</text>
+              <circle cx="265" cy="215" r="4" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="273" y="218" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJES</text>
+              <circle cx="105" cy="160" r="4" fill="oklch(0.70 0.22 295)" class="br-dot"/><text x="113" y="163" fill="oklch(0.95 0 0)" font-size="11" font-family="JetBrains Mono">TJAC</text>
+            </svg>
+            <div class="mt-4 flex items-center justify-between text-xs mono text-muted border-t border-d pt-3">
+              <span>última publicação capturada</span>
+              <span style="color: oklch(0.80 0.14 155);">8s atrás · TJCE</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= ROADMAP ========= -->
+    <section class="max-w-7xl mx-auto px-6 py-28 border-t border-d">
+      <div class="grid lg:grid-cols-[1fr_1.2fr] gap-14 items-center">
+        <div>
+          <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.85 0.14 155);">
+            <i data-lucide="vote" class="h-3 w-3"></i> ROADMAP PÚBLICO
+          </span>
+          <h2 class="mt-4 text-4xl md:text-5xl font-black tracking-tight leading-[1.05]">
+            Você pede.<br/>
+            <span class="gradient-text-2">A gente entrega.</span>
+          </h2>
+          <p class="mt-5 text-lg text-muted leading-relaxed">
+            A maioria dos sistemas decide sozinha o que vai construir. Aqui não:
+            todo cliente sugere features e vota nas dos outros. As mais votadas
+            sobem na prioridade. Sem segredo.
+          </p>
+          <a href="#" class="mt-7 inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-d-2 glass-dark font-semibold hover:bg-[oklch(1_0_0/0.05)]">
+            Olhar o roadmap todo
+            <i data-lucide="external-link" class="h-4 w-4"></i>
+          </a>
+        </div>
+
+        <div class="space-y-3">
+          <div class="rounded-2xl border-gradient p-5 flex items-start gap-4 card-hover">
+            <button class="flex flex-col items-center justify-center h-14 w-12 rounded-xl border border-d-2 bg-bg2 flex-shrink-0">
+              <i data-lucide="chevron-up" class="h-4 w-4 text-primary-2"></i>
+              <span class="text-xs font-extrabold mono">87</span>
+            </button>
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="chip mono" style="background: oklch(0.75 0.15 75 / 0.18); color: oklch(0.85 0.15 75);">EM DEV</span>
+                <span class="chip mono" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">trabalhista</span>
+              </div>
+              <p class="font-bold">Honorários de sucumbência no automático</p>
+              <p class="text-xs text-muted mt-1">"Sistema podia calcular sozinho com base no valor da causa..."</p>
+            </div>
+          </div>
+          <div class="rounded-2xl border-gradient p-5 flex items-start gap-4 card-hover">
+            <button class="flex flex-col items-center justify-center h-14 w-12 rounded-xl border border-d-2 bg-bg2 flex-shrink-0">
+              <i data-lucide="chevron-up" class="h-4 w-4 text-primary-2"></i>
+              <span class="text-xs font-extrabold mono">52</span>
+            </button>
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="chip mono" style="background: oklch(0.55 0.18 285 / 0.18); color: oklch(0.85 0.18 295);">PLANEJADO</span>
+                <span class="chip mono" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">processos</span>
+              </div>
+              <p class="font-bold">Faltam o TJBA e o TJDF no PJe</p>
+              <p class="text-xs text-muted mt-1">"Atendemos clientes na Bahia, sentindo falta..."</p>
+            </div>
+          </div>
+          <div class="rounded-2xl border-gradient p-5 flex items-start gap-4 card-hover">
+            <button class="flex flex-col items-center justify-center h-14 w-12 rounded-xl border border-d-2 bg-bg2 flex-shrink-0">
+              <i data-lucide="chevron-up" class="h-4 w-4 text-primary-2"></i>
+              <span class="text-xs font-extrabold mono">34</span>
+            </button>
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="chip mono" style="background: oklch(0.60 0.16 250 / 0.18); color: oklch(0.85 0.16 250);">ANÁLISE</span>
+                <span class="chip mono" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">ia</span>
+              </div>
+              <p class="font-bold">Petição inicial completa pela IA</p>
+              <p class="text-xs text-muted mt-1">"Treina no nosso acervo e gera com fundamentação..."</p>
+            </div>
+          </div>
+          <div class="rounded-2xl border-gradient p-5 flex items-start gap-4 card-hover opacity-70">
+            <div class="flex flex-col items-center justify-center h-14 w-12 rounded-xl flex-shrink-0" style="background: oklch(0.70 0.14 155 / 0.15);">
+              <i data-lucide="check" class="h-4 w-4" style="color: oklch(0.85 0.14 155);"></i>
+              <span class="text-xs font-extrabold mono" style="color: oklch(0.85 0.14 155);">128</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.18); color: oklch(0.85 0.14 155);">LANÇADO</span>
+                <span class="chip mono" style="background: oklch(1 0 0 / 0.06); color: var(--muted-d);">cofre</span>
+              </div>
+              <p class="font-bold">2FA no cofre dos tribunais ✓</p>
+              <p class="text-xs text-muted mt-1">"Login do TJSP exigia 2FA, agora rola sozinho."</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= DEPOIMENTOS ========= -->
+    <section class="max-w-7xl mx-auto px-6 py-28 border-t border-d">
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <span class="chip mono" style="background: oklch(0.55 0.18 285 / 0.18); color: oklch(0.85 0.18 295);">
+          <i data-lucide="message-circle" class="h-3 w-3"></i> O QUE ELES DIZEM
+        </span>
+        <h2 class="mt-4 text-4xl md:text-5xl font-black tracking-tight leading-[1.05]">
+          Escritórios que <span class="gradient-text-2">já estão dentro.</span>
+        </h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-5">
+        <div class="rounded-3xl border-gradient p-7 card-hover">
+          <div class="flex items-center gap-1 mb-4" style="color: oklch(0.85 0.15 75);">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+          <p class="text-sm leading-relaxed">
+            "Em 15 dias troquei <strong class="text-white">quatro mensalidades</strong> por uma só.
+            O bichinho atende cliente no WhatsApp enquanto eu durmo —
+            <strong class="text-white">acordo com lead qualificado na agenda</strong>."
+          </p>
+          <div class="mt-6 flex items-center gap-3 pt-5 border-t border-d">
+            <div class="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold" style="background: oklch(0.35 0.10 0); color: oklch(0.95 0.05 350);">CA</div>
+            <div>
+              <p class="text-sm font-bold">Dra. Camila Albuquerque</p>
+              <p class="text-xs text-muted">Albuquerque Advocacia · Recife/PE</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border-gradient p-7 card-hover relative overflow-hidden">
+          <div class="absolute -top-10 -right-10 h-32 w-32 rounded-full blur-3xl" style="background: oklch(0.65 0.22 295 / 0.3);"></div>
+          <div class="relative">
+            <div class="flex items-center gap-1 mb-4" style="color: oklch(0.85 0.15 75);">
+              <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+              <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+              <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+              <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+              <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            </div>
+            <p class="text-sm leading-relaxed">
+              "O dia inteiro era abrindo painel do Asaas pra ver quem ainda devia.
+              Agora o sistema avisa, manda lembrete, e <strong class="text-white">se o cliente
+              não pagar vira tarefa minha automaticamente</strong>. Inadimplência caiu 60%."
+            </p>
+            <div class="mt-6 flex items-center gap-3 pt-5 border-t border-d">
+              <div class="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold" style="background: oklch(0.35 0.08 155); color: oklch(0.95 0.08 155);">RT</div>
+              <div>
+                <p class="text-sm font-bold">Dr. Rafael Tavares</p>
+                <p class="text-xs text-muted">Tavares & Associados · Fortaleza/CE</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border-gradient p-7 card-hover">
+          <div class="flex items-center gap-1 mb-4" style="color: oklch(0.85 0.15 75);">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+          <p class="text-sm leading-relaxed">
+            "Somos 7 sócios e divisão de comissão sempre virava bate-boca. Hoje cada
+            um vê o próprio painel, <strong class="text-white">com o quanto vai receber em
+            tempo real</strong>. Acabou a briga."
+          </p>
+          <div class="mt-6 flex items-center gap-3 pt-5 border-t border-d">
+            <div class="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold" style="background: oklch(0.35 0.08 260); color: oklch(0.95 0.08 260);">MC</div>
+            <div>
+              <p class="text-sm font-bold">Dra. Marina Costa</p>
+              <p class="text-xs text-muted">Costa Sociedade de Advogados · SP</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= PRICING REAL ========= -->
+    <section id="planos" class="max-w-7xl mx-auto px-6 py-28 border-t border-d">
+      <div class="text-center max-w-2xl mx-auto mb-16">
+        <span class="chip mono" style="background: oklch(0.65 0.22 295 / 0.18); color: oklch(0.85 0.18 295);">
+          <i data-lucide="badge-dollar-sign" class="h-3 w-3"></i> PLANOS
+        </span>
+        <h2 class="mt-4 text-4xl md:text-6xl font-black tracking-tight leading-[1.02]">
+          Pode começar <span class="gradient-text-2">de graça.</span>
+        </h2>
+        <p class="mt-5 text-lg text-muted">Sem fidelidade, sem taxa de setup, sem letrinha miúda. Cresce com o escritório.</p>
+
+        <div class="mt-8 inline-flex items-center gap-1 p-1 rounded-full border border-d-2 glass-dark">
+          <button data-period="mensal" class="period-btn active px-4 py-1.5 rounded-full text-xs font-semibold text-white" style="background: linear-gradient(135deg, var(--primary), var(--primary-2));">Mensal</button>
+          <button data-period="anual" class="period-btn px-4 py-1.5 rounded-full text-xs font-medium text-muted">Anual <span class="chip ml-1" style="background: oklch(0.70 0.14 155 / 0.18); color: oklch(0.85 0.14 155);">-17%</span></button>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Free -->
+        <div class="rounded-3xl border-gradient p-7 card-hover">
+          <p class="text-xs uppercase tracking-wider text-muted font-bold mono">Free</p>
+          <p class="text-4xl font-black mt-3 tabular-nums">R$ 0<span class="text-base text-muted font-medium">/mês</span></p>
+          <p class="text-xs text-muted mt-2">Pra dar uma volta no sistema</p>
+          <button data-cta="signup" class="mt-6 w-full h-11 rounded-xl border border-d-2 font-semibold hover:bg-[oklch(1_0_0/0.05)]">Criar conta</button>
+          <ul class="mt-7 space-y-2.5 text-sm">
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> 1 usuário</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Até 10 clientes cadastrados</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> 3 créditos de consulta/mês</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Modelos básicos de contrato</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Suporte por e-mail</li>
+          </ul>
+        </div>
+
+        <!-- Básico -->
+        <div class="rounded-3xl border-gradient p-7 card-hover">
+          <p class="text-xs uppercase tracking-wider text-muted font-bold mono">Básico</p>
+          <p class="text-4xl font-black mt-3 tabular-nums" data-price="basico">R$ 97<span class="text-base text-muted font-medium">/mês</span></p>
+          <p class="text-xs text-muted mt-2">Pra você que advoga sozinho</p>
+          <button data-cta="contratar" data-plano="basico" class="mt-6 w-full h-11 rounded-xl border border-d-2 font-semibold hover:bg-[oklch(1_0_0/0.05)]">Contratar</button>
+          <ul class="mt-7 space-y-2.5 text-sm">
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>1 colaborador</strong></li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Até 100 clientes</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> 5 calculadoras jurídicas</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Financeiro com Asaas</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Chat de suporte</li>
+          </ul>
+        </div>
+
+        <!-- Intermediário (POPULAR) -->
+        <div class="rounded-3xl p-7 relative card-hover scale-[1.04]" style="background: linear-gradient(160deg, oklch(0.20 0.06 285) 0%, oklch(0.14 0.04 285) 100%); border: 1px solid oklch(0.70 0.22 295 / 0.5); box-shadow: 0 30px 80px -20px oklch(0.65 0.22 295 / 0.6);">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+            <span class="chip mono" style="background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: white;">★ MAIS POPULAR</span>
+          </div>
+          <p class="text-xs uppercase tracking-wider font-bold mono" style="color: oklch(0.85 0.18 295);">Intermediário</p>
+          <p class="text-4xl font-black mt-3 tabular-nums" data-price="intermediario">R$ 247<span class="text-base text-muted font-medium">/mês</span></p>
+          <p class="text-xs text-muted mt-2">O ponto doce — escritório de 2 a 5 pessoas</p>
+          <button data-cta="contratar" data-plano="intermediario" class="mt-6 w-full h-11 rounded-xl font-bold text-white" style="background: linear-gradient(135deg, var(--primary), var(--primary-2)); box-shadow: 0 12px 30px -10px oklch(0.65 0.22 295 / 0.6);">Contratar</button>
+          <ul class="mt-7 space-y-2.5 text-sm">
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>5 colaboradores</strong></li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>Clientes ilimitados</strong></li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> WhatsApp + Instagram juntos</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Comissões no automático</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>SmartFlow liberado</strong></li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Monitora até 10 processos</li>
+          </ul>
+        </div>
+
+        <!-- Completo -->
+        <div class="rounded-3xl border-gradient p-7 card-hover">
+          <p class="text-xs uppercase tracking-wider text-muted font-bold mono">Completo</p>
+          <p class="text-4xl font-black mt-3 tabular-nums" data-price="completo">R$ 497<span class="text-base text-muted font-medium">/mês</span></p>
+          <p class="text-xs text-muted mt-2">Pro escritório que cresceu</p>
+          <button data-cta="contratar" data-plano="completo" class="mt-6 w-full h-11 rounded-xl border border-d-2 font-semibold hover:bg-[oklch(1_0_0/0.05)]">Contratar</button>
+          <ul class="mt-7 space-y-2.5 text-sm">
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>Time inteiro, sem limite</strong></li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Vários WhatsApp conectados</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>Agentes IA do seu jeito</strong></li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Monitoramento ilimitado</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Permissões granulares</li>
+            <li class="flex gap-2.5"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> <strong>Onboarding com a gente</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-12 rounded-2xl border border-d p-5 bg-bg1 max-w-3xl mx-auto">
+        <p class="text-[10px] uppercase tracking-wider text-muted font-bold mb-3">Como funciona</p>
+        <div class="flex items-center gap-2 text-sm flex-wrap">
+          <span class="chip mono" style="background: var(--bg-3); color: var(--muted-d);">1</span>
+          <span>Cria a conta</span>
+          <i data-lucide="arrow-right" class="h-3 w-3 text-muted"></i>
+          <span class="chip mono" style="background: var(--bg-3); color: var(--muted-d);">2</span>
+          <span>Escolhe um plano</span>
+          <i data-lucide="arrow-right" class="h-3 w-3 text-muted"></i>
+          <span class="chip mono" style="background: var(--bg-3); color: var(--muted-d);">3</span>
+          <span>Informa CPF/CNPJ (só na primeira vez)</span>
+          <i data-lucide="arrow-right" class="h-3 w-3 text-muted"></i>
+          <span class="chip mono" style="background: var(--bg-3); color: var(--muted-d);">4</span>
+          <span>Paga pelo Asaas (Pix, boleto ou cartão)</span>
+          <i data-lucide="arrow-right" class="h-3 w-3 text-muted"></i>
+          <span class="chip" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.80 0.14 155);">Pronto, tá dentro</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= FAQ ========= -->
+    <section class="max-w-3xl mx-auto px-6 py-28 border-t border-d">
+      <div class="text-center mb-14">
+        <span class="chip mono" style="background: oklch(0.55 0.18 285 / 0.18); color: oklch(0.85 0.18 295);">
+          <i data-lucide="help-circle" class="h-3 w-3"></i> ANTES DE PERGUNTAR
+        </span>
+        <h2 class="mt-4 text-4xl md:text-5xl font-black tracking-tight">Dúvidas que aparecem</h2>
+      </div>
+      <div class="space-y-3">
+        <details class="group rounded-2xl border-gradient p-5">
+          <summary class="flex items-center justify-between font-bold">
+            <span>Posso testar antes de pagar?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Pode, e nem precisa botar cartão. O plano <strong class="text-white">Free</strong> é pra sempre, dá pra ver o sistema rodando, cadastrar até 10 clientes e usar as funções básicas. Se gostar, faz upgrade.</p>
+        </details>
+        <details class="group rounded-2xl border-gradient p-5">
+          <summary class="flex items-center justify-between font-bold">
+            <span>Como é o pagamento?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Quando você sobe de plano, pedimos CPF ou CNPJ (uma vez só) e geramos uma cobrança no Asaas. Você paga via Pix, boleto ou cartão e o plano sobe na hora. Se o pagamento falhar, a gente avisa.</p>
+        </details>
+        <details class="group rounded-2xl border-gradient p-5">
+          <summary class="flex items-center justify-between font-bold">
+            <span>Como vocês monitoram os processos?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">A gente faz login automático no tribunal (PJe, E-SAJ, TRT, TRF) com a sua credencial — que fica num cofre criptografado AES-256-GCM aqui. Quando sai publicação nova, captura na hora. Sem rate-limit de API de terceiro.</p>
+        </details>
+        <details class="group rounded-2xl border-gradient p-5">
+          <summary class="flex items-center justify-between font-bold">
+            <span>A IA é treinada nos meus documentos?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">No plano Completo, sim. Você sobe seus modelos de contrato, peças favoritas e teses. O agente lê e passa a responder no padrão do seu escritório — não com aquele tom genérico de ChatGPT. Pode escolher GPT-4o Mini, Claude Haiku ou GPT-4 por custo.</p>
+        </details>
+        <details class="group rounded-2xl border-gradient p-5">
+          <summary class="flex items-center justify-between font-bold">
+            <span>E se eu não quiser mais?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Cancela em um clique. Sem multa, sem ligação de retenção. Você fica até o fim do mês contratado e pronto. Pode até voltar pro Free e deixar a conta aberta.</p>
+        </details>
+        <details class="group rounded-2xl border-gradient p-5">
+          <summary class="flex items-center justify-between font-bold">
+            <span>Meus dados ficam seguros?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Sim. Cada escritório fica isolado no banco. Credenciais de tribunal com AES-256-GCM. Auditoria de tudo que acontece (quem mexeu, quando, o quê). Backup diário. LGPD compliant.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- ========= CTA FINAL ========= -->
+    <section class="max-w-7xl mx-auto px-6 pb-28">
+      <div class="relative rounded-[2.5rem] overflow-hidden p-12 md:p-20" style="background: linear-gradient(135deg, oklch(0.20 0.06 285) 0%, oklch(0.14 0.04 285) 50%, oklch(0.10 0.03 285) 100%);">
+        <div class="absolute inset-0" style="background:
+          radial-gradient(ellipse 50% 60% at 10% 0%, oklch(0.55 0.18 285 / 0.45), transparent 60%),
+          radial-gradient(ellipse 60% 50% at 90% 100%, oklch(0.65 0.22 295 / 0.40), transparent 60%);"></div>
+        <div class="absolute inset-0 grid-pattern opacity-50"></div>
+        <div class="absolute inset-0 noise"></div>
+
+        <div class="relative grid lg:grid-cols-[1.4fr_1fr] gap-12 items-center">
+          <div>
+            <span class="chip mono" style="background: oklch(0.65 0.22 295 / 0.25); color: oklch(0.90 0.18 295);">
+              <span class="pulse-dot" style="background: oklch(0.85 0.18 295);"></span>
+              486 escritórios já estão aqui
+            </span>
+            <h2 class="mt-6 text-5xl md:text-7xl font-black tracking-tighter leading-[0.95]">
+              Bota a planilha<br/>
+              <span class="gradient-text">na gaveta.</span>
+            </h2>
+            <p class="mt-6 text-lg text-muted max-w-lg leading-relaxed">
+              Você não precisa migrar tudo de uma vez. Começa cadastrando um cliente,
+              gerando um contrato. Quando perceber, já tá tudo aqui.
+            </p>
+            <div class="mt-10 flex flex-col sm:flex-row gap-3">
+              <button data-cta="signup" class="inline-flex items-center justify-center gap-2 h-14 px-7 rounded-xl font-bold text-white" style="background: linear-gradient(135deg, var(--primary), var(--primary-2)); box-shadow: 0 25px 60px -15px oklch(0.65 0.22 295 / 0.7);">
+                Criar conta grátis
+                <i data-lucide="arrow-right" class="h-4 w-4"></i>
+              </button>
+              <a href="#planos" class="inline-flex items-center justify-center gap-2 h-14 px-7 rounded-xl border border-d-2 glass-dark font-semibold hover:bg-[oklch(1_0_0/0.05)]">
+                <i data-lucide="badge-dollar-sign" class="h-4 w-4"></i>
+                Ver os planos
+              </a>
+            </div>
+            <p class="text-xs text-muted mt-5">Setup em 5 min · Atendimento humano em PT-BR · Roadmap aberto</p>
+          </div>
+
+          <div class="hidden lg:block">
+            <div class="rounded-3xl glass-dark border border-d-2 p-6">
+              <p class="text-[10px] uppercase tracking-wider text-muted font-bold mono">cliente desde 2025</p>
+              <div class="flex items-center gap-1 mt-3 mb-3" style="color: oklch(0.85 0.15 75);">
+                <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+              </div>
+              <p class="text-sm leading-relaxed">"Pago R$ 247 e em 30 dias o sistema se pagou só com o que recuperei de cobrança esquecida. <strong class="text-white">A planilha foi pra gaveta</strong> e não voltou."</p>
+              <div class="mt-5 flex items-center gap-3 pt-4 border-t border-d">
+                <div class="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold" style="background: oklch(0.35 0.08 60); color: oklch(0.95 0.08 60);">PV</div>
+                <div>
+                  <p class="text-xs font-bold">Dr. Pedro Vasconcelos</p>
+                  <p class="text-[10px] text-muted">PV Advogados · Belo Horizonte/MG</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= FOOTER ========= -->
+    <footer class="border-t border-d bg-bg1">
+      <div class="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-5 gap-10">
+        <div class="md:col-span-2">
+          <div class="wordmark text-3xl">
+            <span class="jurid">Jurid</span><span class="flow">Flow</span>
+          </div>
+          <p class="text-sm text-muted mt-5 max-w-sm leading-relaxed">
+            O escritório jurídico moderno tem 14 módulos, 1 login e uma única tela.
+            É a gente.
+          </p>
+          <div class="mt-5 flex items-center gap-2">
+            <span class="chip mono" style="background: oklch(0.70 0.14 155 / 0.15); color: oklch(0.85 0.14 155);"><span class="pulse-dot" style="background: oklch(0.80 0.14 155);"></span> tudo no ar</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-4 mono">Produto</p>
+          <ul class="space-y-2.5 text-sm text-muted">
+            <li><a href="#telas" class="hover:text-white">Por dentro</a></li>
+            <li><a href="#planos" class="hover:text-white">Planos</a></li>
+            <li><a href="#" class="hover:text-white">Roadmap</a></li>
+            <li><a href="#" class="hover:text-white">Novidades</a></li>
+            <li><a href="#" class="hover:text-white">Integrações</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-4 mono">Legal</p>
+          <ul class="space-y-2.5 text-sm text-muted">
+            <li><a href="#" class="hover:text-white">Termos de uso</a></li>
+            <li><a href="#" class="hover:text-white">Privacidade</a></li>
+            <li><a href="#" class="hover:text-white">LGPD</a></li>
+            <li><a href="#" class="hover:text-white">Segurança</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-4 mono">A gente ajuda</p>
+          <ul class="space-y-2.5 text-sm text-muted">
+            <li><a href="#" class="hover:text-white">Central de ajuda</a></li>
+            <li><a href="#" class="hover:text-white">Falar com humano</a></li>
+            <li><a href="#" class="hover:text-white">Migração assistida</a></li>
+            <li><a href="#" class="hover:text-white">Status</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-d">
+        <div class="max-w-7xl mx-auto px-6 py-6 text-xs text-muted flex flex-col md:flex-row items-center justify-between gap-2">
+          <span>© 2026 JuridFlow · Todos os direitos reservados</span>
+          <span class="mono">feito com ⚖️ no brasil · v2.4.1</span>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      lucide.createIcons();
+
+      // Toggle período
+      const periodBtns = document.querySelectorAll('.period-btn');
+      const prices = {
+        mensal: { basico: 'R$ 97',  intermediario: 'R$ 247', completo: 'R$ 497', suffix: '/mês' },
+        anual:  { basico: 'R$ 80',  intermediario: 'R$ 205', completo: 'R$ 414', suffix: '/mês · cobrado anual' }
+      };
+      periodBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const period = btn.dataset.period;
+          periodBtns.forEach(b => {
+            b.classList.remove('active');
+            b.classList.add('text-muted');
+            b.classList.remove('text-white');
+            b.style.background = '';
+          });
+          btn.classList.add('active');
+          btn.classList.remove('text-muted');
+          btn.classList.add('text-white');
+          btn.style.background = 'linear-gradient(135deg, var(--primary), var(--primary-2))';
+
+          ['basico', 'intermediario', 'completo'].forEach(p => {
+            const el = document.querySelector(`[data-price="${p}"]`);
+            if (el) el.innerHTML = `${prices[period][p]}<span class="text-base text-muted font-medium">${prices[period].suffix}</span>`;
+          });
+        });
+      });
+
+      document.querySelectorAll('[data-cta]').forEach(b => {
+        b.addEventListener('click', () => {
+          const action = b.dataset.cta;
+          const plano = b.dataset.plano;
+          alert('Mockup: aqui o sistema abre AuthForms (modal de signup/login)\ne segue pro fluxo /plans → CPF/CNPJ → Asaas checkout\n\nação: ' + action + (plano ? ' · plano: ' + plano : ''));
+        });
+      });
+    </script>
+  </body>
+</html>
