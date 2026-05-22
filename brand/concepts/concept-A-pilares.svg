@@ -1,0 +1,28 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow A — Pilares">
+  <defs>
+    <linearGradient id="cA-bg" x1="24" y1="24" x2="232" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset=".45" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <radialGradient id="cA-shine" cx="40" cy="20" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#cA-bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#cA-shine)"/>
+
+  <g fill="#FFFFFF">
+    <!-- Capitel (topo do templo) -->
+    <rect x="40" y="62" width="176" height="20" rx="5"/>
+    <rect x="52" y="86" width="152" height="6" rx="3" opacity=".45"/>
+    <!-- 3 colunas verticais -->
+    <rect x="62" y="100" width="24" height="92" rx="4"/>
+    <rect x="116" y="100" width="24" height="92" rx="4"/>
+    <rect x="170" y="100" width="24" height="92" rx="4"/>
+    <!-- Base (estilóbato) -->
+    <rect x="52" y="194" width="152" height="6" rx="3" opacity=".45"/>
+    <rect x="40" y="200" width="176" height="20" rx="5"/>
+  </g>
+</svg>

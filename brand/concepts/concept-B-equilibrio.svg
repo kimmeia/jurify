@@ -1,0 +1,21 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow B — Equilíbrio">
+  <defs>
+    <linearGradient id="cB-bg" x1="24" y1="24" x2="232" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset=".45" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <radialGradient id="cB-shine" cx="40" cy="20" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#cB-bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#cB-shine)"/>
+
+  <!-- Curva S grossa conectando 2 pesos -->
+  <path d="M70 76 Q70 128 128 128 Q186 128 186 180"
+        stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" fill="none"/>
+  <circle cx="70" cy="76" r="20" fill="#FFFFFF"/>
+  <circle cx="186" cy="180" r="20" fill="#FFFFFF"/>
+</svg>

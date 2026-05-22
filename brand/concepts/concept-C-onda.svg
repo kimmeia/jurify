@@ -1,0 +1,21 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow C — Onda">
+  <defs>
+    <linearGradient id="cC-bg" x1="24" y1="24" x2="232" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset=".45" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <radialGradient id="cC-shine" cx="40" cy="20" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#cC-bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#cC-shine)"/>
+
+  <g stroke="#FFFFFF" stroke-linecap="round" fill="none">
+    <path d="M56 92 Q104 56 128 92 Q152 128 200 92" stroke-width="22"/>
+    <path d="M56 132 Q104 96 128 132 Q152 168 200 132" stroke-width="22" opacity=".7"/>
+    <path d="M56 172 Q104 136 128 172 Q152 208 200 172" stroke-width="22" opacity=".4"/>
+  </g>
+</svg>

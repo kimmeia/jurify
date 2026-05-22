@@ -1,0 +1,24 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow D — Diamond">
+  <defs>
+    <linearGradient id="cD-bg" x1="24" y1="24" x2="232" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset=".45" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <radialGradient id="cD-shine" cx="40" cy="20" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#cD-bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#cD-shine)"/>
+
+  <!-- Diamond (losango) -->
+  <path d="M128 50 L206 128 L128 206 L50 128 Z"
+        fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linejoin="round"/>
+  <!-- Barra horizontal central (balança) -->
+  <path d="M70 128 H186" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round"/>
+  <!-- Dois pesos nas extremidades -->
+  <circle cx="70" cy="128" r="10" fill="#FFFFFF"/>
+  <circle cx="186" cy="128" r="10" fill="#FFFFFF"/>
+</svg>
