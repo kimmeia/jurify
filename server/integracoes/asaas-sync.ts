@@ -218,9 +218,15 @@ export async function syncCobrancasDeCliente(
   const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   let offset = 0;
   let hasMore = true;
+  let paginas = 0;
+  // Cap defensivo contra runaway (bug no Asaas retornando hasMore=true
+  // sempre, base inconsistente). 200 páginas × 100 = 20k cobranças por
+  // customer — impossível na prática mesmo pra grandes contas.
+  const MAX_PAGINAS = 200;
   const idsAsaas = new Set<string>(); // Track all IDs from Asaas
 
-  while (hasMore) {
+  while (hasMore && paginas < MAX_PAGINAS) {
+    paginas++;
     // Quando `dateCreatedGe` está setado, usa o endpoint por janela
     // (suporta filtro de data + customer). Senão, lista tudo (modo
     // histórico — usado pelo cron throttled, não pelo botão UI).
@@ -336,6 +342,12 @@ export async function syncCobrancasDeCliente(
 
     hasMore = res.hasMore;
     offset += res.limit;
+  }
+  if (hasMore && paginas >= MAX_PAGINAS) {
+    log.error(
+      { escritorioId, asaasCustomerId, paginas, MAX_PAGINAS, statsParciais: stats },
+      "[Asaas Sync] cap de páginas atingido em syncCobrancasDeCliente — sync ficou parcial. Investigue o customer pode ter cobranças anormais ou bug no Asaas.",
+    );
   }
 
   // Remover cobranças locais que não existem mais no Asaas (orfãs).
@@ -795,8 +807,13 @@ export async function syncCobrancasPorVencimentoEscritorio(
   const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
   let offset = 0;
   let hasMore = true;
+  let paginas = 0;
+  // Cap defensivo: 500 páginas × 100 = 50k cobranças por sweep. Escritório
+  // com mais que isso em 180+30 dias é absurdo — provavelmente bug.
+  const MAX_PAGINAS = 500;
 
-  while (hasMore) {
+  while (hasMore && paginas < MAX_PAGINAS) {
+    paginas++;
     let res;
     try {
       res = await client.listarCobrancasPorJanela({
@@ -901,6 +918,12 @@ export async function syncCobrancasPorVencimentoEscritorio(
     hasMore = res.hasMore;
     offset += res.limit;
   }
+  if (hasMore && paginas >= MAX_PAGINAS) {
+    log.error(
+      { escritorioId, dueDateGe, dueDateLe, paginas, MAX_PAGINAS, statsParciais: stats },
+      "[Asaas Sync Vencimento] cap de páginas atingido — sweep ficou parcial.",
+    );
+  }
 
   log.info(
     { escritorioId, dueDateGe, dueDateLe, ...stats },
@@ -950,7 +973,12 @@ export async function reconciliarCobrancasFantasmasEscritorio(
   const idsAsaas = new Set<string>();
   let offset = 0;
   let hasMore = true;
-  while (hasMore) {
+  let paginas = 0;
+  // 5 anos retro + 1 ano frente = base inteira do escritório. 1000 × 100
+  // = 100k cobranças — cobre até as maiores contas Asaas conhecidas.
+  const MAX_PAGINAS = 1000;
+  while (hasMore && paginas < MAX_PAGINAS) {
+    paginas++;
     let res;
     try {
       res = await client.listarCobrancasPorJanela({
@@ -972,6 +1000,13 @@ export async function reconciliarCobrancasFantasmasEscritorio(
     }
     hasMore = res.hasMore;
     offset += res.limit;
+  }
+  if (hasMore && paginas >= MAX_PAGINAS) {
+    log.error(
+      { escritorioId, paginas, MAX_PAGINAS, idsAsaasCount: idsAsaas.size },
+      "[Asaas Reconciliação] cap de páginas atingido — Set incompleto, abortando reconciliação pra não gerar falsos positivos.",
+    );
+    return { ok: false, verificadas: 0, fantasmas: 0, motivo: "Set incompleto (cap atingido)" };
   }
 
   const candidatos = await db

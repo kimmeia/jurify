@@ -131,6 +131,10 @@ async function processarJanelaUm(
   let atualizadas = 0;
   let offset = 0;
   let hasMore = true;
+  let paginas = 0;
+  // Cap defensivo: janela é 1 dia. 50 × 100 = 5k cobranças num único dia
+  // é cenário absurdo — segura runaway sem prejudicar uso real.
+  const MAX_PAGINAS = 50;
 
   // Mapa em memória: asaasCustomerId → contatoId (do CRM). Resolvido
   // uma vez por janela pra evitar SELECTs repetidos por cobrança.
@@ -145,7 +149,8 @@ async function processarJanelaUm(
     vinculos.map((v) => [v.asaasCustomerId, v.contatoId]),
   );
 
-  while (hasMore) {
+  while (hasMore && paginas < MAX_PAGINAS) {
+    paginas++;
     let res;
     try {
       res = await client.listarCobrancasPorJanela({
@@ -246,6 +251,12 @@ async function processarJanelaUm(
 
     hasMore = res.hasMore;
     offset += res.limit;
+  }
+  if (hasMore && paginas >= MAX_PAGINAS) {
+    log.error(
+      { escritorioId, diaIso, paginas, MAX_PAGINAS, novas, atualizadas },
+      "[asaas-sync-historico] cap de páginas atingido numa janela 1-dia — janela ficou parcial.",
+    );
   }
 
   return { ok: true, novas, atualizadas };
