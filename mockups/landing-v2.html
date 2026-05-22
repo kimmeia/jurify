@@ -1,0 +1,1105 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JuridFlow — Landing Page v2 (Mockup)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        --bg: oklch(0.99 0 0);
+        --fg: oklch(0.15 0 0);
+        --muted: oklch(0.55 0 0);
+        --muted-bg: oklch(0.97 0 0);
+        --border: oklch(0.92 0 0);
+        --primary: oklch(0.45 0.18 260);
+        --primary-soft: oklch(0.45 0.18 260 / 0.1);
+        --primary-2: oklch(0.55 0.20 295);
+        --success: oklch(0.65 0.15 155);
+        --success-bg: oklch(0.65 0.15 155 / 0.12);
+        --warning: oklch(0.70 0.16 75);
+        --warning-bg: oklch(0.70 0.16 75 / 0.14);
+        --danger: oklch(0.62 0.22 25);
+        --danger-bg: oklch(0.62 0.22 25 / 0.12);
+        --info: oklch(0.55 0.18 250);
+      }
+      html, body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+      .text-primary { color: var(--primary); }
+      .bg-primary { background: var(--primary); }
+      .bg-primary-soft { background: var(--primary-soft); }
+      .border-primary { border-color: var(--primary); }
+      .ring-primary { --tw-ring-color: var(--primary); }
+      .text-muted { color: var(--muted); }
+      .bg-muted-bg { background: var(--muted-bg); }
+      .border-token { border-color: var(--border); }
+
+      /* Gradient mesh do hero */
+      .mesh {
+        background:
+          radial-gradient(ellipse 60% 40% at 20% 10%, oklch(0.45 0.18 260 / 0.18), transparent 60%),
+          radial-gradient(ellipse 50% 40% at 80% 0%, oklch(0.55 0.20 295 / 0.16), transparent 65%),
+          radial-gradient(ellipse 50% 30% at 50% 100%, oklch(0.55 0.18 250 / 0.10), transparent 70%);
+      }
+      .grid-pattern {
+        background-image:
+          linear-gradient(oklch(0.45 0.18 260 / 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, oklch(0.45 0.18 260 / 0.06) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: radial-gradient(ellipse 60% 50% at 50% 30%, black 30%, transparent 75%);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .glass {
+        background: oklch(1 0 0 / 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+
+      .glow {
+        box-shadow:
+          0 0 0 1px oklch(0.45 0.18 260 / 0.1),
+          0 30px 60px -20px oklch(0.45 0.18 260 / 0.3),
+          0 18px 36px -18px oklch(0 0 0 / 0.22);
+      }
+
+      .pulse-dot { position: relative; }
+      .pulse-dot::after {
+        content: '';
+        position: absolute; inset: -4px;
+        border-radius: 9999px;
+        background: var(--success);
+        opacity: 0.4;
+        animation: pulse 1.6s infinite;
+      }
+      @keyframes pulse {
+        0% { transform: scale(0.9); opacity: 0.5; }
+        100% { transform: scale(2.0); opacity: 0; }
+      }
+
+      .marquee {
+        display: flex;
+        gap: 3rem;
+        animation: scroll 30s linear infinite;
+        width: max-content;
+      }
+      @keyframes scroll {
+        from { transform: translateX(0); }
+        to   { transform: translateX(-50%); }
+      }
+
+      .card-hover { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+      .card-hover:hover { transform: translateY(-3px); box-shadow: 0 20px 40px -16px oklch(0 0 0 / 0.18); border-color: oklch(0.45 0.18 260 / 0.4); }
+
+      .bento-card {
+        background: linear-gradient(160deg, oklch(1 0 0) 0%, oklch(0.98 0.005 260) 100%);
+      }
+      .bento-card.dark {
+        background: linear-gradient(160deg, oklch(0.20 0.04 260) 0%, oklch(0.15 0.03 270) 100%);
+        color: oklch(0.95 0 0);
+      }
+
+      .ai-bg {
+        background:
+          radial-gradient(ellipse at top right, oklch(0.55 0.20 295 / 0.35), transparent 60%),
+          linear-gradient(160deg, oklch(0.22 0.06 270) 0%, oklch(0.13 0.04 280) 100%);
+      }
+
+      [data-tab].active {
+        background: var(--primary);
+        color: white;
+      }
+      .tab-panel { display: none; }
+      .tab-panel.active { display: block; animation: fadeIn .3s ease; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+      .chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .72rem; padding: .3rem .65rem; border-radius: 9999px; font-weight: 600; }
+
+      details summary { list-style: none; cursor: pointer; }
+      details summary::-webkit-details-marker { display: none; }
+      details[open] .chev { transform: rotate(180deg); }
+      .chev { transition: transform .2s ease; }
+
+      .float-1 { animation: float 6s ease-in-out infinite; }
+      .float-2 { animation: float 7s ease-in-out infinite -2s; }
+      @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-10px); }
+      }
+    </style>
+  </head>
+  <body class="antialiased">
+
+    <!-- ============ NAVBAR ============ -->
+    <nav class="sticky top-0 z-50 glass border-b border-token">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="#" class="flex items-center gap-2.5">
+          <div class="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-lg shadow-[oklch(0.45_0.18_260/0.35)]">
+            <i data-lucide="scale" class="h-5 w-5"></i>
+          </div>
+          <span class="font-extrabold text-lg tracking-tight">JuridFlow</span>
+          <span class="chip ml-2" style="background: var(--success-bg); color: var(--success);">
+            <span class="h-1.5 w-1.5 rounded-full pulse-dot" style="background: var(--success);"></span>
+            no ar
+          </span>
+        </a>
+
+        <div class="hidden md:flex items-center gap-7 text-sm text-muted">
+          <a href="#pilares" class="hover:text-[var(--fg)] transition">Recursos</a>
+          <a href="#demo" class="hover:text-[var(--fg)] transition">Demonstração</a>
+          <a href="#depoimentos" class="hover:text-[var(--fg)] transition">Clientes</a>
+          <a href="#pricing" class="hover:text-[var(--fg)] transition">Planos</a>
+          <a href="#" class="hover:text-[var(--fg)] transition">Roadmap</a>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button class="hidden sm:inline-flex h-9 px-3 text-sm font-medium text-muted hover:text-[var(--fg)]">Entrar</button>
+          <button class="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-primary text-white text-sm font-semibold shadow-lg shadow-[oklch(0.45_0.18_260/0.3)] hover:opacity-90">
+            Começar grátis
+            <i data-lucide="arrow-right" class="h-4 w-4"></i>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ============ HERO ============ -->
+    <section class="relative overflow-hidden">
+      <div class="absolute inset-0 mesh"></div>
+      <div class="absolute inset-0 grid-pattern"></div>
+
+      <div class="relative max-w-7xl mx-auto px-6 pt-20 pb-24">
+        <div class="grid lg:grid-cols-[1.05fr_1fr] gap-14 items-center">
+
+          <!-- Coluna esquerda: copy -->
+          <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-token bg-white/70 backdrop-blur text-xs font-semibold">
+              <span class="chip" style="background: var(--primary-soft); color: var(--primary); padding: .15rem .5rem;">NOVO</span>
+              <span class="text-muted">Agente IA treinado nos documentos do seu escritório</span>
+              <i data-lucide="arrow-right" class="h-3.5 w-3.5 text-muted"></i>
+            </div>
+
+            <h1 class="mt-6 text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.02]">
+              Seu escritório<br/>
+              jurídico em <span class="gradient-text">um único</span><br/>
+              sistema.
+            </h1>
+
+            <p class="mt-6 text-lg md:text-xl text-muted max-w-xl leading-relaxed">
+              Atendimento por WhatsApp com IA, contratos automáticos, financeiro
+              integrado ao Asaas, comissões sem Excel e monitoramento de
+              processos. <strong class="text-[var(--fg)]">Tudo conversando entre si.</strong>
+            </p>
+
+            <div class="mt-10 flex flex-col sm:flex-row gap-3">
+              <button class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-primary text-white font-semibold shadow-xl shadow-[oklch(0.45_0.18_260/0.35)] hover:scale-[1.02] transition">
+                Começar grátis por 7 dias
+                <i data-lucide="arrow-right" class="h-4 w-4"></i>
+              </button>
+              <button class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl border border-token bg-white hover:bg-muted-bg font-semibold">
+                <i data-lucide="play-circle" class="h-4 w-4"></i>
+                Ver demonstração (2 min)
+              </button>
+            </div>
+
+            <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
+              <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="h-3.5 w-3.5" style="color: var(--success);"></i> Sem cartão de crédito</div>
+              <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="h-3.5 w-3.5" style="color: var(--success);"></i> Configura em 5 minutos</div>
+              <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="h-3.5 w-3.5" style="color: var(--success);"></i> Suporte humano em PT-BR</div>
+            </div>
+
+            <!-- Avatars + nota -->
+            <div class="mt-8 flex items-center gap-4">
+              <div class="flex -space-x-2">
+                <div class="h-9 w-9 rounded-full border-2 border-white bg-gradient-to-br from-pink-400 to-red-500"></div>
+                <div class="h-9 w-9 rounded-full border-2 border-white bg-gradient-to-br from-amber-400 to-orange-500"></div>
+                <div class="h-9 w-9 rounded-full border-2 border-white bg-gradient-to-br from-emerald-400 to-teal-500"></div>
+                <div class="h-9 w-9 rounded-full border-2 border-white bg-gradient-to-br from-sky-400 to-indigo-500"></div>
+                <div class="h-9 w-9 rounded-full border-2 border-white bg-muted-bg flex items-center justify-center text-[10px] font-bold text-muted">+482</div>
+              </div>
+              <div>
+                <div class="flex items-center gap-0.5 text-amber-500 text-sm">
+                  <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                  <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                  <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                  <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                  <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+                  <span class="ml-1 font-semibold text-[var(--fg)]">4.9</span>
+                </div>
+                <p class="text-xs text-muted">486+ escritórios já testaram</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Coluna direita: stack de mockups -->
+          <div class="relative h-[560px]">
+            <!-- Card principal: Dashboard financeiro -->
+            <div class="absolute top-0 right-0 w-[88%] rounded-2xl border border-token bg-white glow overflow-hidden float-1">
+              <div class="px-4 py-2.5 border-b border-token flex items-center gap-2 bg-muted-bg">
+                <span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+                <div class="flex-1 text-center text-[10px] font-mono text-muted">juridflow.com.br/financeiro</div>
+              </div>
+              <div class="p-5">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <p class="text-[11px] text-muted">Financeiro</p>
+                    <h3 class="text-lg font-extrabold">Outubro 2026</h3>
+                  </div>
+                  <span class="chip" style="background: var(--success-bg); color: var(--success);">
+                    <span class="h-1.5 w-1.5 rounded-full" style="background: var(--success);"></span> Asaas conectado
+                  </span>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                  <div class="rounded-xl border border-token p-3">
+                    <div class="h-7 w-7 rounded-lg flex items-center justify-center mb-1.5" style="background: var(--success-bg); color: var(--success);">
+                      <i data-lucide="trending-up" class="h-3.5 w-3.5"></i>
+                    </div>
+                    <p class="text-[9px] text-muted uppercase tracking-wider">Recebido</p>
+                    <p class="text-base font-extrabold tabular-nums">R$ 47.350</p>
+                  </div>
+                  <div class="rounded-xl border border-token p-3">
+                    <div class="h-7 w-7 rounded-lg flex items-center justify-center mb-1.5" style="background: var(--warning-bg); color: var(--warning);">
+                      <i data-lucide="clock" class="h-3.5 w-3.5"></i>
+                    </div>
+                    <p class="text-[9px] text-muted uppercase tracking-wider">A receber</p>
+                    <p class="text-base font-extrabold tabular-nums">R$ 12.100</p>
+                  </div>
+                  <div class="rounded-xl border border-token p-3">
+                    <div class="h-7 w-7 rounded-lg flex items-center justify-center mb-1.5" style="background: var(--danger-bg); color: var(--danger);">
+                      <i data-lucide="alert-circle" class="h-3.5 w-3.5"></i>
+                    </div>
+                    <p class="text-[9px] text-muted uppercase tracking-wider">Vencido</p>
+                    <p class="text-base font-extrabold tabular-nums">R$ 1.800</p>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-token p-3">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-[11px] font-semibold">Fluxo de caixa</p>
+                    <div class="flex gap-1">
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-muted-bg">3m</span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-primary text-white">6m</span>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded bg-muted-bg">12m</span>
+                    </div>
+                  </div>
+                  <div class="h-20 flex items-end gap-1">
+                    <div style="height:40%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary), oklch(0.45 0.18 260 / 0.3)); height: 40%;"></div>
+                    <div style="height:55%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary), oklch(0.45 0.18 260 / 0.3)); height: 55%;"></div>
+                    <div style="height:30%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary), oklch(0.45 0.18 260 / 0.3)); height: 30%;"></div>
+                    <div style="height:70%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary), oklch(0.45 0.18 260 / 0.3)); height: 70%;"></div>
+                    <div style="height:85%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary), oklch(0.45 0.18 260 / 0.3)); height: 85%;"></div>
+                    <div style="height:65%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary), oklch(0.45 0.18 260 / 0.3)); height: 65%;"></div>
+                    <div style="height:95%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary-2), oklch(0.55 0.20 295 / 0.3)); height: 95%;"></div>
+                    <div style="height:100%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary-2), oklch(0.55 0.20 295 / 0.3)); height: 100%;"></div>
+                    <div style="height:90%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary-2), oklch(0.55 0.20 295 / 0.3)); height: 90%;"></div>
+                    <div style="height:60%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary-2), oklch(0.55 0.20 295 / 0.3)); height: 60%;"></div>
+                    <div style="height:75%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary-2), oklch(0.55 0.20 295 / 0.3)); height: 75%;"></div>
+                    <div style="height:85%" class="flex-1 rounded-sm" style="background: linear-gradient(to top, var(--primary-2), oklch(0.55 0.20 295 / 0.3)); height: 85%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card flutuante: Atendimento IA -->
+            <div class="absolute bottom-0 left-0 w-[60%] rounded-2xl border border-token bg-white glow overflow-hidden float-2 z-10">
+              <div class="px-3.5 py-3 border-b border-token flex items-center gap-2.5">
+                <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.55_0.20_295)] to-[oklch(0.45_0.18_260)] flex items-center justify-center">
+                  <i data-lucide="sparkles" class="h-4 w-4 text-white"></i>
+                </div>
+                <div class="flex-1">
+                  <p class="text-xs font-bold leading-tight">Agente JF</p>
+                  <p class="text-[10px] flex items-center gap-1" style="color: var(--success);">
+                    <span class="h-1.5 w-1.5 rounded-full pulse-dot" style="background: var(--success);"></span>
+                    online — respondendo
+                  </p>
+                </div>
+                <i data-lucide="more-horizontal" class="h-4 w-4 text-muted"></i>
+              </div>
+              <div class="p-3.5 space-y-2.5 bg-muted-bg/60">
+                <div class="max-w-[80%] bg-white rounded-2xl rounded-tl-sm px-3 py-2 text-[11px] border border-token">
+                  Oi! Posso ajudar com a separação de bens?
+                </div>
+                <div class="max-w-[85%] ml-auto rounded-2xl rounded-tr-sm px-3 py-2 text-[11px] bg-primary text-white">
+                  Claro 👋 Posso fazer 3 perguntas rápidas pra calcular sua viabilidade e já te passar pro Dr. Rafael?
+                </div>
+                <div class="max-w-[60%] bg-white rounded-2xl rounded-tl-sm px-3 py-2 text-[11px] border border-token">
+                  Pode!
+                </div>
+                <div class="flex items-center gap-1.5 px-2">
+                  <span class="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></span>
+                  <span class="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style="animation-delay: .15s"></span>
+                  <span class="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style="animation-delay: .3s"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mini card: Comissão calculada -->
+            <div class="absolute top-[55%] right-[-12px] w-[55%] rounded-2xl border border-token bg-white glow p-3.5 float-1" style="animation-delay: -1s">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="h-7 w-7 rounded-lg flex items-center justify-center" style="background: var(--success-bg); color: var(--success);">
+                  <i data-lucide="wallet" class="h-3.5 w-3.5"></i>
+                </div>
+                <div>
+                  <p class="text-[10px] text-muted">Comissão calculada</p>
+                  <p class="text-xs font-bold">Dra. Ana — Out/26</p>
+                </div>
+                <span class="ml-auto text-sm font-extrabold tabular-nums" style="color: var(--success);">+R$ 3.420</span>
+              </div>
+              <div class="h-1.5 w-full rounded-full bg-muted-bg overflow-hidden">
+                <div class="h-full rounded-full" style="width: 78%; background: linear-gradient(to right, var(--success), oklch(0.65 0.15 155 / 0.5));"></div>
+              </div>
+              <p class="text-[10px] text-muted mt-1.5">78% da meta do mês • 14 processos</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRUST STATS BAR -->
+        <div class="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="rounded-2xl border border-token bg-white/60 backdrop-blur p-5">
+            <p class="text-3xl font-extrabold gradient-text tabular-nums">486+</p>
+            <p class="text-sm text-muted mt-1">Escritórios ativos</p>
+          </div>
+          <div class="rounded-2xl border border-token bg-white/60 backdrop-blur p-5">
+            <p class="text-3xl font-extrabold gradient-text tabular-nums">R$ 12M</p>
+            <p class="text-sm text-muted mt-1">Processados via Asaas</p>
+          </div>
+          <div class="rounded-2xl border border-token bg-white/60 backdrop-blur p-5">
+            <p class="text-3xl font-extrabold gradient-text tabular-nums">73k</p>
+            <p class="text-sm text-muted mt-1">Contratos gerados</p>
+          </div>
+          <div class="rounded-2xl border border-token bg-white/60 backdrop-blur p-5">
+            <p class="text-3xl font-extrabold gradient-text tabular-nums">18h/mês</p>
+            <p class="text-sm text-muted mt-1">Economizadas em média</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LOGOS / SOCIAL PROOF MARQUEE ============ -->
+    <section class="border-y border-token bg-muted-bg/40 py-8 overflow-hidden">
+      <p class="text-center text-xs uppercase tracking-[0.2em] text-muted font-semibold mb-6">
+        Integrado com as ferramentas que você já usa
+      </p>
+      <div class="marquee">
+        <!-- duplicado pra loop -->
+        <span class="text-2xl font-bold text-muted/70">Asaas</span>
+        <span class="text-2xl font-bold text-muted/70">WhatsApp Business</span>
+        <span class="text-2xl font-bold text-muted/70">Instagram</span>
+        <span class="text-2xl font-bold text-muted/70">PJe</span>
+        <span class="text-2xl font-bold text-muted/70">TJCE • TJSP • TRF</span>
+        <span class="text-2xl font-bold text-muted/70">Google Drive</span>
+        <span class="text-2xl font-bold text-muted/70">Receita Federal</span>
+        <span class="text-2xl font-bold text-muted/70">Asaas</span>
+        <span class="text-2xl font-bold text-muted/70">WhatsApp Business</span>
+        <span class="text-2xl font-bold text-muted/70">Instagram</span>
+        <span class="text-2xl font-bold text-muted/70">PJe</span>
+        <span class="text-2xl font-bold text-muted/70">TJCE • TJSP • TRF</span>
+        <span class="text-2xl font-bold text-muted/70">Google Drive</span>
+        <span class="text-2xl font-bold text-muted/70">Receita Federal</span>
+      </div>
+    </section>
+
+    <!-- ============ PROBLEMAS / ANTES vs DEPOIS ============ -->
+    <section class="max-w-6xl mx-auto px-6 py-24">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <span class="chip" style="background: var(--danger-bg); color: var(--danger);">
+          <i data-lucide="alert-triangle" class="h-3.5 w-3.5"></i> O problema
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">
+          Seu escritório usa <span class="gradient-text">5 sistemas diferentes</span> que não se falam.
+        </h2>
+        <p class="mt-4 text-muted">
+          O cliente manda WhatsApp num lugar, o contrato está no Word, a cobrança no
+          Asaas, a comissão no Excel e o processo no PJe. Cada migração entre eles é
+          tempo perdido e oportunidade jogada fora.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- ANTES -->
+        <div class="rounded-3xl border-2 border-dashed border-[oklch(0.62_0.22_25/0.3)] p-8 bg-[oklch(0.62_0.22_25/0.03)]">
+          <div class="flex items-center gap-2 mb-6">
+            <span class="chip" style="background: var(--danger-bg); color: var(--danger);">ANTES</span>
+            <p class="text-sm text-muted">Caos operacional</p>
+          </div>
+          <div class="relative h-56 mb-4">
+            <div class="absolute top-0 left-2 px-3 py-2 rounded-lg bg-white border border-token shadow text-xs font-semibold rotate-[-8deg]">📱 WhatsApp Web</div>
+            <div class="absolute top-6 right-4 px-3 py-2 rounded-lg bg-white border border-token shadow text-xs font-semibold rotate-[5deg]">📊 Planilha de comissão</div>
+            <div class="absolute top-20 left-10 px-3 py-2 rounded-lg bg-white border border-token shadow text-xs font-semibold rotate-[-3deg]">📄 Word — modelo.docx</div>
+            <div class="absolute top-24 right-8 px-3 py-2 rounded-lg bg-white border border-token shadow text-xs font-semibold rotate-[7deg]">💳 Painel Asaas</div>
+            <div class="absolute bottom-2 left-6 px-3 py-2 rounded-lg bg-white border border-token shadow text-xs font-semibold rotate-[-4deg]">⚖️ Push PJe</div>
+            <div class="absolute bottom-4 right-2 px-3 py-2 rounded-lg bg-white border border-token shadow text-xs font-semibold rotate-[6deg]">📧 E-mail Gmail</div>
+          </div>
+          <ul class="space-y-2 text-sm">
+            <li class="flex items-start gap-2"><i data-lucide="x" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--danger);"></i> Lead esquecido entre WhatsApp e Instagram</li>
+            <li class="flex items-start gap-2"><i data-lucide="x" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--danger);"></i> Contrato refeito manualmente toda semana</li>
+            <li class="flex items-start gap-2"><i data-lucide="x" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--danger);"></i> Comissão calculada errada — sócio reclama</li>
+            <li class="flex items-start gap-2"><i data-lucide="x" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--danger);"></i> Inadimplência só descoberta no fim do mês</li>
+          </ul>
+        </div>
+
+        <!-- DEPOIS -->
+        <div class="rounded-3xl border-2 border-[oklch(0.45_0.18_260/0.4)] p-8 bg-[oklch(0.45_0.18_260/0.04)] relative overflow-hidden">
+          <div class="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-[oklch(0.45_0.18_260/0.15)] blur-2xl"></div>
+          <div class="relative">
+            <div class="flex items-center gap-2 mb-6">
+              <span class="chip" style="background: var(--primary-soft); color: var(--primary);">DEPOIS</span>
+              <p class="text-sm text-muted">Com JuridFlow</p>
+            </div>
+            <div class="h-56 mb-4 flex items-center justify-center">
+              <div class="relative">
+                <div class="h-32 w-32 rounded-3xl bg-gradient-to-br from-[oklch(0.45_0.18_260)] to-[oklch(0.55_0.20_295)] flex items-center justify-center shadow-2xl shadow-[oklch(0.45_0.18_260/0.4)]">
+                  <i data-lucide="scale" class="h-14 w-14 text-white"></i>
+                </div>
+                <div class="absolute -top-3 -left-8 h-10 w-10 rounded-full bg-white border border-token flex items-center justify-center shadow-md"><i data-lucide="message-circle" class="h-4 w-4 text-primary"></i></div>
+                <div class="absolute -top-2 -right-10 h-10 w-10 rounded-full bg-white border border-token flex items-center justify-center shadow-md"><i data-lucide="file-text" class="h-4 w-4 text-primary"></i></div>
+                <div class="absolute -bottom-2 -left-10 h-10 w-10 rounded-full bg-white border border-token flex items-center justify-center shadow-md"><i data-lucide="dollar-sign" class="h-4 w-4 text-primary"></i></div>
+                <div class="absolute -bottom-3 -right-8 h-10 w-10 rounded-full bg-white border border-token flex items-center justify-center shadow-md"><i data-lucide="gavel" class="h-4 w-4 text-primary"></i></div>
+              </div>
+            </div>
+            <ul class="space-y-2 text-sm">
+              <li class="flex items-start gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Inbox único pra WhatsApp + Instagram + e-mail</li>
+              <li class="flex items-start gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Contrato gerado em 1 clique a partir do CRM</li>
+              <li class="flex items-start gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Comissão calculada automaticamente por regra</li>
+              <li class="flex items-start gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 flex-shrink-0" style="color: var(--success);"></i> Alerta em tempo real de boleto vencido</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PILARES — BENTO GRID ============ -->
+    <section id="pilares" class="max-w-7xl mx-auto px-6 py-24">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <span class="chip" style="background: var(--primary-soft); color: var(--primary);">
+          <i data-lucide="layers" class="h-3.5 w-3.5"></i> Recursos
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">
+          Um sistema de verdade. <span class="gradient-text">Pensado pro jurídico.</span>
+        </h2>
+        <p class="mt-4 text-muted">
+          8 pilares que cobrem do primeiro contato com o lead até o pagamento da
+          comissão e o trânsito em julgado.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- BIG CARD: Atendimento IA (escuro) -->
+        <div class="md:col-span-2 md:row-span-2 rounded-3xl bento-card dark p-8 card-hover relative overflow-hidden ai-bg">
+          <div class="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[oklch(0.55_0.20_295/0.3)] blur-3xl"></div>
+          <div class="relative">
+            <span class="chip" style="background: oklch(0.55 0.20 295 / 0.25); color: oklch(0.85 0.10 295);">
+              <i data-lucide="sparkles" class="h-3.5 w-3.5"></i> Destaque
+            </span>
+            <h3 class="text-3xl font-extrabold mt-4 leading-tight">
+              Agentes de IA<br/>
+              <span class="text-[oklch(0.75_0.15_295)]">treinados nos seus documentos.</span>
+            </h3>
+            <p class="text-sm opacity-80 mt-3 max-w-md">
+              O agente lê contratos, peças e modelos do seu escritório, atende pelo
+              WhatsApp, qualifica o lead e passa pro advogado certo — com todo o
+              contexto.
+            </p>
+            <div class="mt-8 rounded-2xl bg-white/5 border border-white/10 p-4 max-w-md backdrop-blur">
+              <div class="flex items-center gap-2 mb-3">
+                <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-[oklch(0.65_0.18_295)] to-[oklch(0.55_0.20_260)] flex items-center justify-center"><i data-lucide="bot" class="h-4 w-4 text-white"></i></div>
+                <p class="text-xs font-semibold">Agente Trabalhista</p>
+                <span class="ml-auto chip" style="background: oklch(0.65 0.15 155 / 0.25); color: oklch(0.85 0.12 155);">▲ +34% leads qualificados</span>
+              </div>
+              <p class="text-xs opacity-90">"Identifiquei 3 vínculos não anotados. Quer que eu já calcule a rescisão indireta com base no modelo do Dr. Carlos?"</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Atendimento -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: var(--success-bg); color: var(--success);">
+            <i data-lucide="message-square" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">Inbox unificada</h3>
+          <p class="text-sm text-muted mt-1.5">WhatsApp + Instagram + e-mail num lugar só. O lead nunca se perde.</p>
+        </div>
+
+        <!-- CRM -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: var(--primary-soft); color: var(--primary);">
+            <i data-lucide="users" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">CRM jurídico</h3>
+          <p class="text-sm text-muted mt-1.5">Pipeline por área (trabalhista, cível...), com histórico de atendimento integrado.</p>
+        </div>
+
+        <!-- Financeiro -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: var(--success-bg); color: var(--success);">
+            <i data-lucide="wallet" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">Financeiro com Asaas</h3>
+          <p class="text-sm text-muted mt-1.5">Pix, boleto e cartão. Conciliação automática. Sem painel paralelo.</p>
+        </div>
+
+        <!-- Comissões -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: var(--warning-bg); color: var(--warning);">
+            <i data-lucide="percent" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">Comissões automáticas</h3>
+          <p class="text-sm text-muted mt-1.5">Regras por sócio, área e tipo de cliente. Adeus, planilha do Excel.</p>
+        </div>
+
+        <!-- Contratos -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: oklch(0.55 0.20 295 / 0.12); color: oklch(0.55 0.20 295);">
+            <i data-lucide="file-signature" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">Modelos de contrato</h3>
+          <p class="text-sm text-muted mt-1.5">Placeholders {{nome}}, {{valor}}. DOCX preenchido em 1 clique.</p>
+        </div>
+
+        <!-- Calculadoras -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: var(--primary-soft); color: var(--primary);">
+            <i data-lucide="calculator" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">Calculadoras jurídicas</h3>
+          <p class="text-sm text-muted mt-1.5">Bancário, trabalhista, tributário, previdenciário, imobiliário.</p>
+        </div>
+
+        <!-- SmartFlow -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover">
+          <div class="h-11 w-11 rounded-xl flex items-center justify-center mb-4" style="background: var(--success-bg); color: var(--success);">
+            <i data-lucide="workflow" class="h-5 w-5"></i>
+          </div>
+          <h3 class="font-extrabold">SmartFlow</h3>
+          <p class="text-sm text-muted mt-1.5">Automações visuais: "se cliente não respondeu em 2h → manda template X".</p>
+        </div>
+
+        <!-- Processos -->
+        <div class="rounded-3xl bento-card border border-token p-6 card-hover md:col-span-2">
+          <div class="flex items-start gap-5">
+            <div class="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background: var(--primary-soft); color: var(--primary);">
+              <i data-lucide="gavel" class="h-5 w-5"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-extrabold">Monitoramento de processos</h3>
+              <p class="text-sm text-muted mt-1.5">
+                Cadastra CPF/CNPJ e o sistema acompanha publicações, audiências e
+                prazos em todos os tribunais — kanban por andamento.
+              </p>
+              <div class="mt-4 flex gap-2 text-[10px]">
+                <span class="chip" style="background: var(--primary-soft); color: var(--primary);">TJCE</span>
+                <span class="chip" style="background: var(--primary-soft); color: var(--primary);">TJSP</span>
+                <span class="chip" style="background: var(--primary-soft); color: var(--primary);">TRF</span>
+                <span class="chip" style="background: var(--primary-soft); color: var(--primary);">TRT</span>
+                <span class="chip" style="background: var(--muted-bg); color: var(--muted);">+12</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DEMO INTERACTIVE ============ -->
+    <section id="demo" class="max-w-7xl mx-auto px-6 py-24">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <span class="chip" style="background: var(--primary-soft); color: var(--primary);">
+          <i data-lucide="play" class="h-3.5 w-3.5"></i> Veja funcionando
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">
+          Conheça por dentro <span class="gradient-text">em 30 segundos</span>.
+        </h2>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex flex-wrap justify-center gap-2 mb-8">
+        <button data-tab="financeiro" class="active px-4 py-2 rounded-full text-sm font-semibold border border-token transition">Financeiro</button>
+        <button data-tab="ia" class="px-4 py-2 rounded-full text-sm font-semibold border border-token transition">Agente IA</button>
+        <button data-tab="contrato" class="px-4 py-2 rounded-full text-sm font-semibold border border-token transition">Contratos</button>
+        <button data-tab="kanban" class="px-4 py-2 rounded-full text-sm font-semibold border border-token transition">Processos</button>
+      </div>
+
+      <!-- Painéis -->
+      <div class="rounded-3xl border border-token bg-white overflow-hidden glow">
+        <div class="px-5 py-3 bg-muted-bg border-b border-token flex items-center gap-2">
+          <span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+          <div class="flex-1 text-center text-[11px] font-mono text-muted">juridflow.com.br/<span id="route">financeiro</span></div>
+        </div>
+
+        <!-- Painel: Financeiro -->
+        <div data-panel="financeiro" class="tab-panel active p-8">
+          <div class="grid md:grid-cols-[260px_1fr] gap-6">
+            <aside class="space-y-1 text-sm">
+              <div class="px-3 py-2 rounded-lg flex items-center gap-2 font-semibold" style="background: var(--primary-soft); color: var(--primary);"><i data-lucide="wallet" class="h-4 w-4"></i> Financeiro</div>
+              <div class="px-3 py-2 rounded-lg flex items-center gap-2 text-muted"><i data-lucide="users" class="h-4 w-4"></i> Clientes</div>
+              <div class="px-3 py-2 rounded-lg flex items-center gap-2 text-muted"><i data-lucide="gavel" class="h-4 w-4"></i> Processos</div>
+              <div class="px-3 py-2 rounded-lg flex items-center gap-2 text-muted"><i data-lucide="file-text" class="h-4 w-4"></i> Contratos</div>
+              <div class="px-3 py-2 rounded-lg flex items-center gap-2 text-muted"><i data-lucide="message-square" class="h-4 w-4"></i> Atendimento</div>
+            </aside>
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-extrabold">Cobranças do mês</h3>
+                <button class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary text-white text-xs font-semibold">+ Nova cobrança</button>
+              </div>
+              <div class="rounded-xl border border-token overflow-hidden">
+                <table class="w-full text-sm">
+                  <thead class="bg-muted-bg text-xs uppercase text-muted">
+                    <tr><th class="text-left px-4 py-2.5 font-semibold">Cliente</th><th class="text-left px-4 py-2.5 font-semibold">Processo</th><th class="text-right px-4 py-2.5 font-semibold">Valor</th><th class="text-center px-4 py-2.5 font-semibold">Status</th><th></th></tr>
+                  </thead>
+                  <tbody class="divide-y divide-[color:var(--border)]">
+                    <tr><td class="px-4 py-3 font-medium">Maria Silva</td><td class="px-4 py-3 text-muted">0012345-67.2026</td><td class="px-4 py-3 text-right tabular-nums">R$ 1.500</td><td class="px-4 py-3 text-center"><span class="chip" style="background: var(--success-bg); color: var(--success);">Pago via Pix</span></td><td class="px-4 py-3 text-muted"><i data-lucide="more-horizontal" class="h-4 w-4"></i></td></tr>
+                    <tr><td class="px-4 py-3 font-medium">Carlos Mendes</td><td class="px-4 py-3 text-muted">0034567-89.2026</td><td class="px-4 py-3 text-right tabular-nums">R$ 3.200</td><td class="px-4 py-3 text-center"><span class="chip" style="background: var(--warning-bg); color: var(--warning);">Aguardando boleto</span></td><td class="px-4 py-3 text-muted"><i data-lucide="more-horizontal" class="h-4 w-4"></i></td></tr>
+                    <tr><td class="px-4 py-3 font-medium">Ana Pereira</td><td class="px-4 py-3 text-muted">0098765-43.2026</td><td class="px-4 py-3 text-right tabular-nums">R$ 850</td><td class="px-4 py-3 text-center"><span class="chip" style="background: var(--success-bg); color: var(--success);">Pago via Cartão</span></td><td class="px-4 py-3 text-muted"><i data-lucide="more-horizontal" class="h-4 w-4"></i></td></tr>
+                    <tr><td class="px-4 py-3 font-medium">João Souza</td><td class="px-4 py-3 text-muted">0011223-44.2026</td><td class="px-4 py-3 text-right tabular-nums">R$ 1.800</td><td class="px-4 py-3 text-center"><span class="chip" style="background: var(--danger-bg); color: var(--danger);">Vencido</span></td><td class="px-4 py-3 text-muted"><i data-lucide="more-horizontal" class="h-4 w-4"></i></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel: IA -->
+        <div data-panel="ia" class="tab-panel p-8">
+          <div class="grid md:grid-cols-2 gap-8">
+            <div>
+              <h3 class="text-2xl font-extrabold">Atendimento que responde como o melhor estagiário do seu escritório.</h3>
+              <p class="text-muted mt-3">
+                O agente JF lê seus documentos, conhece seus modelos e segue suas
+                regras. Qualifica leads, agenda reuniões e passa o cliente pro
+                advogado quando precisa.
+              </p>
+              <ul class="mt-6 space-y-2 text-sm">
+                <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Treinado nos seus contratos, modelos e FAQ</li>
+                <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Atende 24/7 pelo WhatsApp e Instagram</li>
+                <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Transfere com contexto pro advogado certo</li>
+                <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5" style="color: var(--success);"></i> Cobrança de inadimplentes com regras suas</li>
+              </ul>
+            </div>
+            <div class="rounded-2xl ai-bg p-5 text-white">
+              <div class="flex items-center gap-2 pb-3 border-b border-white/10 mb-3">
+                <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-[oklch(0.65_0.18_295)] to-[oklch(0.55_0.20_260)] flex items-center justify-center"><i data-lucide="sparkles" class="h-4 w-4"></i></div>
+                <div><p class="text-xs font-bold">Maria — Lead Trabalhista</p><p class="text-[10px] opacity-70">há 2 minutos</p></div>
+              </div>
+              <div class="space-y-2 text-xs">
+                <div class="bg-white/10 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[80%]">Trabalhei 5 anos sem carteira. Tem chance?</div>
+                <div class="bg-primary rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%] ml-auto">Tem sim! Casos de vínculo não anotado têm prazo de 5 anos. Você ainda está dentro. Posso te fazer 3 perguntas pra calcular o valor estimado?</div>
+                <div class="bg-white/10 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[60%]">Pode</div>
+                <div class="bg-primary rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%] ml-auto">1) Qual era seu salário médio?<br/>2) Trabalhava em qual horário?<br/>3) Tem testemunhas que confirmam?</div>
+                <div class="bg-white/10 rounded-2xl rounded-tl-sm px-3 py-2 text-[10px] mt-3 italic opacity-80">↑ valor estimado calculado: R$ 38.400 — encaminhando pro Dr. Rafael</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel: Contratos -->
+        <div data-panel="contrato" class="tab-panel p-8">
+          <div class="grid md:grid-cols-[1fr_1.2fr] gap-6">
+            <div class="rounded-2xl border border-token p-5">
+              <p class="text-xs font-semibold uppercase tracking-wider text-muted mb-3">Modelo: contrato_honorarios.docx</p>
+              <div class="bg-muted-bg rounded-lg p-4 text-xs font-mono leading-relaxed space-y-2">
+                <p>CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
+                <p>CONTRATANTE: <span class="bg-[oklch(0.45_0.18_260/0.2)] text-primary font-semibold px-1 rounded">{{cliente_nome}}</span></p>
+                <p>CPF: <span class="bg-[oklch(0.45_0.18_260/0.2)] text-primary font-semibold px-1 rounded">{{cliente_cpf}}</span></p>
+                <p>OBJETO: <span class="bg-[oklch(0.45_0.18_260/0.2)] text-primary font-semibold px-1 rounded">{{processo_descricao}}</span></p>
+                <p>HONORÁRIOS: <span class="bg-[oklch(0.55_0.20_295/0.2)] text-primary-2 font-semibold px-1 rounded">{{valor_honorarios}}</span></p>
+                <p>FORMA: <span class="bg-[oklch(0.55_0.20_295/0.2)] text-primary-2 font-semibold px-1 rounded">{{forma_pagamento}}</span></p>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-token p-5">
+              <div class="flex items-center justify-between mb-3">
+                <p class="text-xs font-semibold uppercase tracking-wider text-muted">Preview gerado</p>
+                <button class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary"><i data-lucide="download" class="h-3.5 w-3.5"></i> Baixar DOCX</button>
+              </div>
+              <div class="rounded-lg p-4 text-xs leading-relaxed space-y-2 bg-white border border-token shadow-inner">
+                <p class="font-bold">CONTRATO DE PRESTAÇÃO DE SERVIÇOS</p>
+                <p>CONTRATANTE: <strong>Maria Silva da Cunha</strong></p>
+                <p>CPF: <strong>123.456.789-00</strong></p>
+                <p>OBJETO: <strong>Ação de divórcio consensual com partilha de bens</strong></p>
+                <p>HONORÁRIOS: <strong style="color: var(--success);">R$ 4.500,00</strong></p>
+                <p>FORMA: <strong>3x de R$ 1.500 via Pix</strong></p>
+              </div>
+              <p class="text-[11px] text-muted mt-3 flex items-center gap-1.5"><i data-lucide="zap" class="h-3.5 w-3.5" style="color: var(--warning);"></i> Gerado em 0.8s a partir do CRM</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel: Kanban -->
+        <div data-panel="kanban" class="tab-panel p-8">
+          <div class="grid md:grid-cols-4 gap-3">
+            <div class="rounded-2xl bg-muted-bg p-3">
+              <div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold">📥 Distribuído</p><span class="text-[10px] text-muted">4</span></div>
+              <div class="space-y-2">
+                <div class="rounded-lg bg-white border border-token p-2.5"><p class="text-[11px] font-semibold">Silva × Banco BR</p><p class="text-[10px] text-muted mt-0.5">Bancário • Há 3 dias</p></div>
+                <div class="rounded-lg bg-white border border-token p-2.5"><p class="text-[11px] font-semibold">Costa × União</p><p class="text-[10px] text-muted mt-0.5">Tributário • Há 5 dias</p></div>
+              </div>
+            </div>
+            <div class="rounded-2xl bg-muted-bg p-3">
+              <div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold">⏳ Em curso</p><span class="text-[10px] text-muted">12</span></div>
+              <div class="space-y-2">
+                <div class="rounded-lg bg-white border border-token p-2.5"><p class="text-[11px] font-semibold">Pereira × INSS</p><p class="text-[10px] text-muted mt-0.5">Previdenciário</p><span class="chip mt-2 inline-flex" style="background: var(--warning-bg); color: var(--warning);">Audiência em 4d</span></div>
+                <div class="rounded-lg bg-white border border-token p-2.5"><p class="text-[11px] font-semibold">Souza × Cia. X</p><p class="text-[10px] text-muted mt-0.5">Trabalhista</p></div>
+              </div>
+            </div>
+            <div class="rounded-2xl bg-muted-bg p-3">
+              <div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold">⚖️ Sentenciado</p><span class="text-[10px] text-muted">8</span></div>
+              <div class="space-y-2">
+                <div class="rounded-lg bg-white border border-token p-2.5"><p class="text-[11px] font-semibold">Lima × Construtora</p><p class="text-[10px] text-muted mt-0.5">Imobiliário</p><span class="chip mt-2 inline-flex" style="background: var(--success-bg); color: var(--success);">Procedente</span></div>
+              </div>
+            </div>
+            <div class="rounded-2xl bg-muted-bg p-3">
+              <div class="flex items-center justify-between mb-2"><p class="text-xs font-semibold">✅ Encerrado</p><span class="text-[10px] text-muted">23</span></div>
+              <div class="space-y-2">
+                <div class="rounded-lg bg-white border border-token p-2.5 opacity-75"><p class="text-[11px] font-semibold">Andrade × Imobiliária</p><p class="text-[10px] text-muted mt-0.5">Trânsito em julgado</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMPARATIVO TABELA ============ -->
+    <section class="max-w-5xl mx-auto px-6 py-24">
+      <div class="text-center max-w-2xl mx-auto mb-12">
+        <span class="chip" style="background: var(--primary-soft); color: var(--primary);">
+          <i data-lucide="git-compare" class="h-3.5 w-3.5"></i> Comparativo
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">
+          O que <span class="gradient-text">só o JuridFlow</span> faz.
+        </h2>
+      </div>
+
+      <div class="rounded-3xl border border-token overflow-hidden glow">
+        <table class="w-full text-sm">
+          <thead class="bg-muted-bg">
+            <tr>
+              <th class="text-left px-6 py-4 font-semibold w-1/3">Recurso</th>
+              <th class="text-center px-6 py-4 font-semibold">Sistemas tradicionais</th>
+              <th class="text-center px-6 py-4 font-bold bg-primary-soft">
+                <span class="text-primary">JuridFlow</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[color:var(--border)]">
+            <tr><td class="px-6 py-4 font-medium">Asaas nativo (Pix + boleto + cartão)</td><td class="text-center text-muted">Integração frágil</td><td class="text-center bg-primary-soft/40"><i data-lucide="check" class="h-5 w-5 inline" style="color: var(--success);"></i></td></tr>
+            <tr><td class="px-6 py-4 font-medium">Agentes IA treinados nos seus docs</td><td class="text-center text-muted">—</td><td class="text-center bg-primary-soft/40"><i data-lucide="check" class="h-5 w-5 inline" style="color: var(--success);"></i></td></tr>
+            <tr><td class="px-6 py-4 font-medium">Roadmap público com votação</td><td class="text-center text-muted">—</td><td class="text-center bg-primary-soft/40"><i data-lucide="check" class="h-5 w-5 inline" style="color: var(--success);"></i></td></tr>
+            <tr><td class="px-6 py-4 font-medium">WhatsApp + Instagram unificados</td><td class="text-center text-muted">Apenas WhatsApp</td><td class="text-center bg-primary-soft/40"><i data-lucide="check" class="h-5 w-5 inline" style="color: var(--success);"></i></td></tr>
+            <tr><td class="px-6 py-4 font-medium">Comissões por regra automatizada</td><td class="text-center text-muted">Planilha externa</td><td class="text-center bg-primary-soft/40"><i data-lucide="check" class="h-5 w-5 inline" style="color: var(--success);"></i></td></tr>
+            <tr><td class="px-6 py-4 font-medium">Suporte humano em PT-BR</td><td class="text-center text-muted">Bot + ticket</td><td class="text-center bg-primary-soft/40"><i data-lucide="check" class="h-5 w-5 inline" style="color: var(--success);"></i></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ DEPOIMENTOS ============ -->
+    <section id="depoimentos" class="max-w-7xl mx-auto px-6 py-24">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <span class="chip" style="background: var(--primary-soft); color: var(--primary);">
+          <i data-lucide="message-circle" class="h-3.5 w-3.5"></i> Depoimentos
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">
+          Escritórios que <span class="gradient-text">já saíram do Excel.</span>
+        </h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-5">
+        <div class="rounded-3xl border border-token p-7 bg-white card-hover">
+          <div class="flex items-center gap-1 text-amber-500 mb-4">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+          <p class="text-sm leading-relaxed">
+            "Em 2 semanas troquei 4 ferramentas pelo JuridFlow. A parte do agente
+            IA atendendo no WhatsApp <strong>aumentou meu fechamento em 40%</strong>."
+          </p>
+          <div class="mt-5 flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-gradient-to-br from-pink-400 to-red-500"></div>
+            <div>
+              <p class="text-xs font-bold">Dra. Camila Albuquerque</p>
+              <p class="text-[11px] text-muted">Albuquerque Advocacia • Recife</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border border-token p-7 bg-white card-hover">
+          <div class="flex items-center gap-1 text-amber-500 mb-4">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+          <p class="text-sm leading-relaxed">
+            "A integração com Asaas é absurda. Boleto vence → cliente recebe lembrete →
+            se pagar entra no caixa, se não, vira tarefa pro associado. <strong>Inadimplência caiu 60%</strong>."
+          </p>
+          <div class="mt-5 flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500"></div>
+            <div>
+              <p class="text-xs font-bold">Dr. Rafael Tavares</p>
+              <p class="text-[11px] text-muted">Tavares & Associados • Fortaleza</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border border-token p-7 bg-white card-hover">
+          <div class="flex items-center gap-1 text-amber-500 mb-4">
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+            <i data-lucide="star" class="h-4 w-4 fill-current"></i>
+          </div>
+          <p class="text-sm leading-relaxed">
+            "Tenho 7 associados. A comissão automática <strong>resolveu nossa maior
+            briga interna</strong>: agora o sócio sabe exatamente o que vai receber,
+            e o caixa fecha sozinho."
+          </p>
+          <div class="mt-5 flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-gradient-to-br from-sky-400 to-indigo-500"></div>
+            <div>
+              <p class="text-xs font-bold">Dra. Marina Costa</p>
+              <p class="text-[11px] text-muted">Costa Sociedade de Advogados • SP</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PRICING ============ -->
+    <section id="pricing" class="max-w-6xl mx-auto px-6 py-24">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <span class="chip" style="background: var(--primary-soft); color: var(--primary);">
+          <i data-lucide="badge-dollar-sign" class="h-3.5 w-3.5"></i> Planos
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">
+          Comece grátis. <span class="gradient-text">Pague só se gostar.</span>
+        </h2>
+        <p class="mt-4 text-muted">7 dias livres. Sem cartão de crédito. Cancele em 1 clique.</p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-5">
+        <!-- Solo -->
+        <div class="rounded-3xl border border-token p-7 bg-white card-hover">
+          <p class="text-xs uppercase tracking-wider text-muted font-bold">Solo</p>
+          <p class="text-4xl font-extrabold mt-2">R$ 97<span class="text-base text-muted font-medium">/mês</span></p>
+          <p class="text-xs text-muted mt-1">para advogados autônomos</p>
+          <ul class="mt-6 space-y-2.5 text-sm">
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> 1 usuário</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> CRM + Financeiro Asaas</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> 50 contratos/mês</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> Monitoramento de processos</li>
+          </ul>
+          <button class="mt-7 w-full h-11 rounded-xl border border-token font-semibold hover:bg-muted-bg">Começar grátis</button>
+        </div>
+
+        <!-- Pro (destacado) -->
+        <div class="rounded-3xl p-7 relative bg-gradient-to-br from-[oklch(0.45_0.18_260)] to-[oklch(0.55_0.20_295)] text-white shadow-2xl shadow-[oklch(0.45_0.18_260/0.4)] scale-105">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+            <span class="chip" style="background: white; color: var(--primary);">★ MAIS POPULAR</span>
+          </div>
+          <p class="text-xs uppercase tracking-wider opacity-80 font-bold">Pro</p>
+          <p class="text-4xl font-extrabold mt-2">R$ 297<span class="text-base opacity-70 font-medium">/mês</span></p>
+          <p class="text-xs opacity-80 mt-1">para escritórios em crescimento</p>
+          <ul class="mt-6 space-y-2.5 text-sm">
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5"></i> Até 5 usuários</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5"></i> Tudo do Solo +</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5"></i> <strong>Agente IA no WhatsApp</strong></li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5"></i> Comissões automáticas</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5"></i> Contratos ilimitados</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5"></i> SmartFlow (automações)</li>
+          </ul>
+          <button class="mt-7 w-full h-11 rounded-xl bg-white text-primary font-bold hover:opacity-95">Começar grátis</button>
+        </div>
+
+        <!-- Banca -->
+        <div class="rounded-3xl border border-token p-7 bg-white card-hover">
+          <p class="text-xs uppercase tracking-wider text-muted font-bold">Banca</p>
+          <p class="text-4xl font-extrabold mt-2">R$ 697<span class="text-base text-muted font-medium">/mês</span></p>
+          <p class="text-xs text-muted mt-1">para bancas com associados</p>
+          <ul class="mt-6 space-y-2.5 text-sm">
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> Usuários ilimitados</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> Tudo do Pro +</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> Multi-agente IA por área</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> SLA dedicado + onboarding</li>
+            <li class="flex gap-2"><i data-lucide="check" class="h-4 w-4 mt-0.5 text-primary"></i> White-label</li>
+          </ul>
+          <button class="mt-7 w-full h-11 rounded-xl border border-token font-semibold hover:bg-muted-bg">Falar com vendas</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="max-w-3xl mx-auto px-6 py-24">
+      <div class="text-center mb-12">
+        <span class="chip" style="background: var(--primary-soft); color: var(--primary);">
+          <i data-lucide="help-circle" class="h-3.5 w-3.5"></i> FAQ
+        </span>
+        <h2 class="mt-4 text-3xl md:text-4xl font-extrabold tracking-tight">Perguntas frequentes</h2>
+      </div>
+      <div class="space-y-3">
+        <details class="group rounded-2xl border border-token bg-white p-5">
+          <summary class="flex items-center justify-between font-semibold">
+            <span>Substitui meu sistema atual?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Sim. JuridFlow cobre CRM, financeiro, contratos, comissões, processos e atendimento. A migração é guiada e leva em média 5 dias.</p>
+        </details>
+        <details class="group rounded-2xl border border-token bg-white p-5">
+          <summary class="flex items-center justify-between font-semibold">
+            <span>Como funciona a migração de dados?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Importação por CSV, planilha do Excel ou conector direto com sistemas comuns. Nossa equipe acompanha a primeira semana sem custo.</p>
+        </details>
+        <details class="group rounded-2xl border border-token bg-white p-5">
+          <summary class="flex items-center justify-between font-semibold">
+            <span>Funciona offline?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">É um sistema web, então requer internet. A geração de contratos e cálculos jurídicos rodam em segundos mesmo em redes ruins.</p>
+        </details>
+        <details class="group rounded-2xl border border-token bg-white p-5">
+          <summary class="flex items-center justify-between font-semibold">
+            <span>Tem suporte humano?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Sim. PT-BR, com gente que entende advocacia. Tempo médio de resposta de 18 minutos em horário comercial.</p>
+        </details>
+        <details class="group rounded-2xl border border-token bg-white p-5">
+          <summary class="flex items-center justify-between font-semibold">
+            <span>Preciso de cartão pra testar?</span>
+            <i data-lucide="chevron-down" class="h-5 w-5 chev text-muted"></i>
+          </summary>
+          <p class="mt-3 text-sm text-muted">Não. 7 dias completos sem cartão. Cancela em 1 clique se não fizer sentido.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============ CTA FINAL ============ -->
+    <section class="max-w-6xl mx-auto px-6 pb-24">
+      <div class="relative rounded-[2rem] overflow-hidden p-12 md:p-16 text-white" style="background: linear-gradient(135deg, oklch(0.35 0.18 270) 0%, oklch(0.45 0.18 260) 50%, oklch(0.55 0.20 295) 100%);">
+        <div class="absolute -top-20 -right-20 h-80 w-80 rounded-full bg-white/10 blur-3xl"></div>
+        <div class="absolute -bottom-20 -left-20 h-80 w-80 rounded-full bg-white/10 blur-3xl"></div>
+
+        <div class="relative grid md:grid-cols-[1.5fr_1fr] gap-10 items-center">
+          <div>
+            <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight leading-tight">
+              Seu escritório merece<br/>uma única tela.
+            </h2>
+            <p class="mt-5 text-lg opacity-90 max-w-lg">
+              Comece em 5 minutos. 7 dias grátis. Cancele quando quiser — mas você
+              não vai querer.
+            </p>
+            <div class="mt-8 flex flex-col sm:flex-row gap-3">
+              <button class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-white text-primary font-bold hover:opacity-95">
+                Criar conta grátis
+                <i data-lucide="arrow-right" class="h-4 w-4"></i>
+              </button>
+              <button class="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl border-2 border-white/30 hover:bg-white/10 font-semibold">
+                Falar com especialista
+              </button>
+            </div>
+            <p class="text-xs opacity-80 mt-5">Sem cartão de crédito • Migração assistida • Suporte humano PT-BR</p>
+          </div>
+
+          <div class="hidden md:block">
+            <div class="rounded-2xl bg-white/10 backdrop-blur border border-white/20 p-5">
+              <p class="text-xs uppercase tracking-wider opacity-80 font-bold">Cliente desde 2025</p>
+              <p class="mt-4 text-sm italic leading-relaxed">"Foi o melhor R$ 297 que gastei no ano. Em 30 dias paguei o sistema só com o que economizei de inadimplência."</p>
+              <div class="mt-5 flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500"></div>
+                <div>
+                  <p class="text-xs font-bold">Dr. Pedro Vasconcelos</p>
+                  <p class="text-[11px] opacity-70">Sócio • PV Advogados</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FOOTER ============ -->
+    <footer class="border-t border-token bg-muted-bg/50">
+      <div class="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-4 gap-8">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <div class="h-9 w-9 rounded-xl bg-primary text-white flex items-center justify-center"><i data-lucide="scale" class="h-5 w-5"></i></div>
+            <span class="font-extrabold text-lg tracking-tight">JuridFlow</span>
+          </div>
+          <p class="text-sm text-muted mt-4 max-w-xs">O sistema completo do escritório jurídico moderno.</p>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-3">Produto</p>
+          <ul class="space-y-2 text-sm text-muted">
+            <li><a href="#" class="hover:text-[var(--fg)]">Recursos</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">Planos</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">Roadmap</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">Mudanças</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-3">Legal</p>
+          <ul class="space-y-2 text-sm text-muted">
+            <li><a href="#" class="hover:text-[var(--fg)]">Termos de uso</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">Privacidade</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">LGPD</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider mb-3">Suporte</p>
+          <ul class="space-y-2 text-sm text-muted">
+            <li><a href="#" class="hover:text-[var(--fg)]">Central de ajuda</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">Contato</a></li>
+            <li><a href="#" class="hover:text-[var(--fg)]">Status</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-token">
+        <div class="max-w-7xl mx-auto px-6 py-6 text-xs text-muted flex flex-col md:flex-row items-center justify-between gap-2">
+          <span>© 2026 JuridFlow. Todos os direitos reservados.</span>
+          <span>Feito com ⚖️ no Brasil</span>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      lucide.createIcons();
+
+      // Tabs do demo
+      const tabs = document.querySelectorAll('[data-tab]');
+      const panels = document.querySelectorAll('[data-panel]');
+      const route = document.getElementById('route');
+      const routes = { financeiro: 'financeiro', ia: 'atendimento', contrato: 'contratos', kanban: 'processos' };
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          panels.forEach(p => p.classList.remove('active'));
+          tab.classList.add('active');
+          const target = tab.getAttribute('data-tab');
+          document.querySelector(`[data-panel="${target}"]`).classList.add('active');
+          if (route && routes[target]) route.textContent = routes[target];
+        });
+      });
+    </script>
+  </body>
+</html>
