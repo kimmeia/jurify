@@ -28,11 +28,18 @@ import {
   FileText,
   Loader2,
   Receipt,
+  Search,
   TrendingDown,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatBRL } from "./helpers";
 
 function inicioDoMesIso(): string {
@@ -88,6 +95,7 @@ export function RelatoriosTab() {
   const [preset, setPreset] = useState<"1m" | "3m" | "6m" | "12m" | "custom">("1m");
   const [dataInicio, setDataInicio] = useState(inicioDoMesIso());
   const [dataFim, setDataFim] = useState(fimDoMesIso());
+  const [diagnosticoOpen, setDiagnosticoOpen] = useState(false);
 
   // Sincroniza datas com preset quando preset muda (não-custom)
   function aplicarPreset(p: typeof preset) {
@@ -199,9 +207,26 @@ export function RelatoriosTab() {
               )}
               PDF
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDiagnosticoOpen(true)}
+              disabled={!dre}
+              title="Quebra o número 'Caixa Asaas' por status e mostra cobranças nas bordas — pra você identificar se a divergência com o painel Asaas vem de RECEIVED_IN_CASH (pagamento manual) ou timezone (cobrança paga 21h-23h do último dia do mês anterior)"
+            >
+              <Search className="h-3.5 w-3.5 mr-1.5" />
+              Diagnosticar divergência
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <DiagnosticoDivergenciaDialog
+        open={diagnosticoOpen}
+        onClose={() => setDiagnosticoOpen(false)}
+        dataInicio={dataInicio}
+        dataFim={dataFim}
+      />
 
       {dreQ?.isLoading && (
         <div className="flex justify-center py-12">
@@ -473,5 +498,226 @@ function DreSection({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Dialog de diagnóstico de divergência entre "Caixa Asaas" (Jurify) e o
+ * card "Recebidos" do painel Asaas. Mostra 3 cortes:
+ *  1. Total por status pago — RECEIVED_IN_CASH (suspeito #1) é dinheiro
+ *     marcado como recebido FORA do Asaas — painel Asaas pode excluir
+ *     do "Recebidos" porque não caiu na conta.
+ *  2. Lista detalhada de RECEIVED_IN_CASH — se a soma desses bate com
+ *     a diferença observada, hipótese A confirmada.
+ *  3. Cobranças nas BORDAS do período (±2 dias) — flagra timezone:
+ *     pagamento 23h do último dia do mês anterior em UTC vira primeiro
+ *     do mês em BRT.
+ */
+function DiagnosticoDivergenciaDialog({
+  open,
+  onClose,
+  dataInicio,
+  dataFim,
+}: {
+  open: boolean;
+  onClose: () => void;
+  dataInicio: string;
+  dataFim: string;
+}) {
+  const q = (trpc as any).financeiro?.diagnosticoCaixaAsaas?.useQuery?.(
+    { dataInicio, dataFim },
+    { enabled: open, retry: false },
+  );
+  const data = q?.data;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Diagnóstico de divergência — Caixa Asaas</DialogTitle>
+        </DialogHeader>
+
+        {q?.isLoading && (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+          </div>
+        )}
+
+        {data && (
+          <div className="space-y-6">
+            <p className="text-xs text-slate-600">
+              Período: <strong>{data.periodo.inicio}</strong> a{" "}
+              <strong>{data.periodo.fim}</strong>. Compare cada bloco abaixo
+              com o painel Asaas pra identificar a causa da diferença.
+            </p>
+
+            <section>
+              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                1. Total por status (Jurify)
+              </h3>
+              <p className="text-[11px] text-slate-500 mb-2">
+                Se a soma de <code>RECEIVED_IN_CASH</code> bate com a
+                diferença que você está vendo, é hipótese A confirmada — o
+                Asaas marca como pago mas o dinheiro não caiu na conta deles.
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Origem</TableHead>
+                    <TableHead className="text-xs text-right">Cobranças</TableHead>
+                    <TableHead className="text-xs text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.porStatus.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-xs text-slate-500 text-center">
+                        Sem dados no período.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {data.porStatus.map((r: any, i: number) => (
+                    <TableRow key={`${r.status}-${r.origem}-${i}`}>
+                      <TableCell className="text-xs font-mono">
+                        {r.status}
+                        {r.status === "RECEIVED_IN_CASH" && (
+                          <span className="ml-2 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                            suspeito #1
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">{r.origem}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">
+                        {r.count}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-medium">
+                        {formatBRL(r.valor)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </section>
+
+            {data.recebidoEmCash.count > 0 && (
+              <section>
+                <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                  2. Cobranças RECEIVED_IN_CASH no período
+                </h3>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Cobranças marcadas como "pago em dinheiro/manual" (via
+                  Jurify ou direto no Asaas). Total:{" "}
+                  <strong>{formatBRL(data.recebidoEmCash.total)}</strong> em{" "}
+                  {data.recebidoEmCash.count} cobranças.
+                </p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Data pagamento</TableHead>
+                      <TableHead className="text-xs">Descrição</TableHead>
+                      <TableHead className="text-xs">ID Asaas</TableHead>
+                      <TableHead className="text-xs text-right">Valor</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.recebidoEmCash.itens.map((c: any) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="text-xs">{c.dataPagamento ?? "—"}</TableCell>
+                        <TableCell className="text-xs">{c.descricao ?? "—"}</TableCell>
+                        <TableCell className="text-[10px] font-mono text-slate-500">
+                          {c.asaasPaymentId ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">
+                          {formatBRL(Number(c.valor || 0))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
+
+            <section>
+              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                3. Cobranças nas bordas do período (±2 dias)
+              </h3>
+              <p className="text-[11px] text-slate-500 mb-2">
+                Se aparecer cobrança paga no <strong>último dia do mês
+                anterior</strong> ou no <strong>primeiro dia do próximo
+                mês</strong>, pode ser timezone (UTC vs Brasília). Asaas
+                pode classificar essa cobrança num mês diferente do Jurify.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-700 mb-1">
+                    Borda do início ({dataInicio} ±2d)
+                  </p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px]">Data pag.</TableHead>
+                        <TableHead className="text-[10px]">Status</TableHead>
+                        <TableHead className="text-[10px] text-right">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.bordaInicio.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-[11px] text-slate-500 text-center">
+                            Nada na borda.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {data.bordaInicio.map((c: any) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="text-[11px]">{c.dataPagamento ?? "—"}</TableCell>
+                          <TableCell className="text-[10px] font-mono">{c.status}</TableCell>
+                          <TableCell className="text-[11px] text-right tabular-nums">
+                            {formatBRL(Number(c.valor || 0))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-700 mb-1">
+                    Borda do fim ({dataFim} ±2d)
+                  </p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px]">Data pag.</TableHead>
+                        <TableHead className="text-[10px]">Status</TableHead>
+                        <TableHead className="text-[10px] text-right">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.bordaFim.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-[11px] text-slate-500 text-center">
+                            Nada na borda.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {data.bordaFim.map((c: any) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="text-[11px]">{c.dataPagamento ?? "—"}</TableCell>
+                          <TableCell className="text-[10px] font-mono">{c.status}</TableCell>
+                          <TableCell className="text-[11px] text-right tabular-nums">
+                            {formatBRL(Number(c.valor || 0))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

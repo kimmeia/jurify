@@ -773,6 +773,151 @@ export const financeiroRouter = router({
     }),
 
   /**
+   * Diagnóstico de divergência entre "Caixa Asaas" e o painel Asaas.
+   *
+   * Retorna 3 cortes:
+   *  1. Total por status (RECEIVED, CONFIRMED, RECEIVED_IN_CASH, DUNNING_RECEIVED)
+   *     — separa o impacto de cada um. RECEIVED_IN_CASH é o suspeito
+   *     #1 quando há divergência: o Asaas marca como "pago" mas o
+   *     dinheiro não cai na conta deles, e o painel "Recebidos" do
+   *     Asaas pode excluir.
+   *  2. Cobranças nas bordas do início (5 dias antes/depois da
+   *     dataInicio) — captura erro de timezone (pagamento de 21h-23h
+   *     do último dia de abril pode virar primeiro de maio em UTC).
+   *  3. Cobranças nas bordas do fim — mesmo motivo.
+   */
+  diagnosticoCaixaAsaas: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+      const db = await getDb();
+      if (!db) return null;
+
+      const ampliar = (iso: string, dias: number): string => {
+        const dt = new Date(Date.UTC(
+          parseInt(iso.slice(0, 4), 10),
+          parseInt(iso.slice(5, 7), 10) - 1,
+          parseInt(iso.slice(8, 10), 10),
+        ));
+        dt.setUTCDate(dt.getUTCDate() + dias);
+        return dt.toISOString().slice(0, 10);
+      };
+
+      const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
+
+      // 1) Total por status no período
+      const porStatusRaw = await db
+        .select({
+          status: asaasCobrancas.status,
+          origem: asaasCobrancas.origem,
+          valor: sql<string>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.status, STATUS_PAGOS),
+          between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
+        ))
+        .groupBy(asaasCobrancas.status, asaasCobrancas.origem);
+
+      // 2) Bordas: cobranças com dataPagamento de [dataInicio-2, dataInicio+2]
+      const bordaInicio = await db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          status: asaasCobrancas.status,
+          origem: asaasCobrancas.origem,
+          valor: asaasCobrancas.valor,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          descricao: asaasCobrancas.descricao,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.status, STATUS_PAGOS),
+          between(
+            asaasCobrancas.dataPagamento,
+            ampliar(input.dataInicio, -2),
+            ampliar(input.dataInicio, 2),
+          ),
+        ))
+        .orderBy(asaasCobrancas.dataPagamento)
+        .limit(50);
+
+      // 3) Bordas: cobranças com dataPagamento de [dataFim-2, dataFim+2]
+      const bordaFim = await db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          status: asaasCobrancas.status,
+          origem: asaasCobrancas.origem,
+          valor: asaasCobrancas.valor,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          descricao: asaasCobrancas.descricao,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.status, STATUS_PAGOS),
+          between(
+            asaasCobrancas.dataPagamento,
+            ampliar(input.dataFim, -2),
+            ampliar(input.dataFim, 2),
+          ),
+        ))
+        .orderBy(asaasCobrancas.dataPagamento)
+        .limit(50);
+
+      // 4) Lista detalhada de RECEIVED_IN_CASH no período (suspeito #1)
+      const recebidoEmCash = await db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          origem: asaasCobrancas.origem,
+          valor: asaasCobrancas.valor,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          descricao: asaasCobrancas.descricao,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          eq(asaasCobrancas.status, "RECEIVED_IN_CASH"),
+          between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
+        ))
+        .orderBy(asaasCobrancas.dataPagamento)
+        .limit(100);
+
+      const totalRecebidoEmCash = recebidoEmCash.reduce(
+        (acc, c) => acc + Number(c.valor || 0),
+        0,
+      );
+
+      return {
+        periodo: { inicio: input.dataInicio, fim: input.dataFim },
+        porStatus: porStatusRaw.map((r) => ({
+          status: r.status,
+          origem: r.origem,
+          valor: Number(r.valor || 0),
+          count: Number(r.count || 0),
+        })),
+        bordaInicio,
+        bordaFim,
+        recebidoEmCash: {
+          itens: recebidoEmCash,
+          total: totalRecebidoEmCash,
+          count: recebidoEmCash.length,
+        },
+      };
+    }),
+
+  /**
    * Gera CSV do DRE pra download. Retorna `{ filename, content }` —
    * frontend cria Blob e faz download. Conteúdo já inclui BOM UTF-8
    * pra Excel reconhecer acentos.
