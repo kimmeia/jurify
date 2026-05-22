@@ -13,12 +13,17 @@
 
 import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, contatos, colaboradores, notificacoes } from "../../drizzle/schema";
-import { eq, and, inArray, isNull, ne, or } from "drizzle-orm";
+import { eq, and, inArray, isNull, ne, or, lt } from "drizzle-orm";
 import { decrypt } from "../escritorio/crypto-utils";
 import { AsaasClient, type AsaasPayment } from "./asaas-client";
 import { RateLimitError } from "./asaas-rate-guard";
 import { createLogger } from "../_core/logger";
+import { isDuplicateEntryError } from "../_core/sql-helpers";
 import { inferirAtendentePorCobranca, reconciliarCobrancasOrfas } from "../escritorio/db-financeiro";
+import {
+  STATUS_PENDENTE_ASAAS,
+  STATUS_VENCIDO_ASAAS,
+} from "../_core/asaas-status";
 
 /** Extrai a "data de pagamento" mais confiável da cobrança Asaas.
  *
@@ -148,8 +153,8 @@ export async function inserirVinculoAsaasIdempotente(
   try {
     await db.insert(asaasClientes).values(values);
     return true;
-  } catch (err: any) {
-    if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+  } catch (err: unknown) {
+    if (isDuplicateEntryError(err)) {
       // Race benigna: vínculo já existe. Bump sincronizadoEm pra
       // refletir "vi esse customer agora", sem mexer em contatoId/primario.
       await db
@@ -723,6 +728,349 @@ export async function syncCobrancasEscritorio(
   return { clientes: vinculos.length, ...totais };
 }
 
+/**
+ * Sweep por VENCIMENTO — passada complementar ao sync por cliente.
+ *
+ * O sync regular filtra por `dateCreated` nos últimos N dias e perde
+ * cobranças antigas que continuam pendentes/vencidas. Esta função pega
+ * tudo que vence entre `(hoje - diasParaTras)` e `(hoje + diasParaFrente)`,
+ * sem filtro de customer (1 paginação por escritório), e faz upsert
+ * resolvendo o vínculo customer→contatoId localmente.
+ *
+ * Defaults: 180d para trás + 30d para frente — cobre inadimplência crônica
+ * típica de escritório jurídico e vencimentos futuros próximos.
+ *
+ * NÃO deleta órfãs: cobrança que existe local mas sumiu do Asaas fica.
+ * Limpeza de fantasmas é do cron mensal de reconciliação (caro: GET por
+ * cobrança).
+ */
+export async function syncCobrancasPorVencimentoEscritorio(
+  escritorioId: number,
+  opts?: {
+    diasParaTras?: number;
+    diasParaFrente?: number;
+  },
+): Promise<SyncCobrancasStats> {
+  const zero: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return zero;
+
+  const db = await getDb();
+  if (!db) return zero;
+
+  const diasParaTras = opts?.diasParaTras ?? 180;
+  const diasParaFrente = opts?.diasParaFrente ?? 30;
+  const hoje = new Date();
+  const ge = new Date(hoje);
+  ge.setUTCDate(ge.getUTCDate() - diasParaTras);
+  const le = new Date(hoje);
+  le.setUTCDate(le.getUTCDate() + diasParaFrente);
+  const dueDateGe = ge.toISOString().slice(0, 10);
+  const dueDateLe = le.toISOString().slice(0, 10);
+
+  // Carrega vínculos customerId→contatoId localmente — uma query, não
+  // 100 GETs no Asaas. Cobranças com customerId fora do mapa entram
+  // como órfãs (contatoId=null) e aparecem na tela de órfãs do app.
+  const vinculos = await db
+    .select({
+      asaasCustomerId: asaasClientes.asaasCustomerId,
+      contatoId: asaasClientes.contatoId,
+      primario: asaasClientes.primario,
+    })
+    .from(asaasClientes)
+    .where(and(
+      eq(asaasClientes.escritorioId, escritorioId),
+      eq(asaasClientes.ativo, true),
+    ));
+  const vinculosDedup = deduplicarVinculosPorCustomer(
+    vinculos.map((v, idx) => ({ ...v, id: idx })),
+  );
+  const customerToContato = new Map<string, number>();
+  for (const v of vinculosDedup) {
+    customerToContato.set(v.asaasCustomerId, v.contatoId);
+  }
+
+  const stats: SyncCobrancasStats = { novas: 0, atualizadas: 0, removidas: 0 };
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    let res;
+    try {
+      res = await client.listarCobrancasPorJanela({
+        dueDateGe,
+        dueDateLe,
+        limit: 100,
+        offset,
+      });
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      if (err instanceof RateLimitError || status === 429) {
+        log.warn(
+          { escritorioId, offset, dueDateGe, dueDateLe },
+          "[Asaas Sync Vencimento] Rate limit — abortando sweep parcial",
+        );
+        return stats;
+      }
+      log.warn(
+        { escritorioId, err: err?.message },
+        "[Asaas Sync Vencimento] Erro inesperado — abortando sweep",
+      );
+      return stats;
+    }
+
+    for (const cob of res.data) {
+      if (cob.deleted) continue;
+      const contatoId = customerToContato.get(cob.customer) ?? null;
+
+      const [local] = await db
+        .select()
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          eq(asaasCobrancas.asaasPaymentId, cob.id),
+        ))
+        .limit(1);
+
+      if (local) {
+        const localDataPag = local.dataPagamento || null;
+        const remotaDataPag = extrairDataPagamento(cob);
+        const remotaNetValue = cob.netValue?.toString() || null;
+        const mudouStatus = local.status !== cob.status;
+        const mudouDataPag = localDataPag !== remotaDataPag;
+        const mudouNetValue = (local.valorLiquido || null) !== remotaNetValue;
+        const mudouContato = contatoId !== null && local.contatoId !== contatoId;
+
+        if (mudouStatus || mudouDataPag || mudouNetValue || mudouContato) {
+          const setObj: Record<string, unknown> = {
+            status: cob.status,
+            dataPagamento: remotaDataPag,
+            valorLiquido: remotaNetValue,
+          };
+          if (mudouContato) setObj.contatoId = contatoId;
+          await db.update(asaasCobrancas).set(setObj).where(eq(asaasCobrancas.id, local.id));
+          stats.atualizadas++;
+        }
+      } else {
+        const atendenteInferido = contatoId
+          ? await inferirAtendentePorCobranca(escritorioId, cob.externalReference || null, contatoId)
+          : null;
+        try {
+          await db
+            .insert(asaasCobrancas)
+            .values({
+              escritorioId,
+              contatoId,
+              asaasPaymentId: cob.id,
+              asaasCustomerId: cob.customer,
+              valor: cob.value.toString(),
+              valorLiquido: cob.netValue?.toString() || null,
+              vencimento: cob.dueDate,
+              formaPagamento: (cob.billingType as any) || "UNDEFINED",
+              status: cob.status,
+              descricao: cob.description || null,
+              invoiceUrl: cob.invoiceUrl,
+              bankSlipUrl: cob.bankSlipUrl || null,
+              dataPagamento: extrairDataPagamento(cob),
+              externalReference: cob.externalReference || null,
+              atendenteId: atendenteInferido,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                status: cob.status,
+                valor: cob.value.toString(),
+                valorLiquido: cob.netValue?.toString() || null,
+                vencimento: cob.dueDate,
+                formaPagamento: (cob.billingType as any) || "UNDEFINED",
+                descricao: cob.description || null,
+                invoiceUrl: cob.invoiceUrl,
+                bankSlipUrl: cob.bankSlipUrl || null,
+                dataPagamento: extrairDataPagamento(cob),
+              },
+            });
+          stats.novas++;
+        } catch (err) {
+          if (isDuplicateEntryError(err)) continue;
+          throw err;
+        }
+      }
+    }
+
+    hasMore = res.hasMore;
+    offset += res.limit;
+  }
+
+  log.info(
+    { escritorioId, dueDateGe, dueDateLe, ...stats },
+    "[Asaas Sync Vencimento] sweep concluído",
+  );
+  return stats;
+}
+
+/**
+ * Reconcilia cobranças "fantasmas": locais com status PENDING/OVERDUE
+ * (status pendentes/vencidos do Asaas) que foram apagadas no Asaas e o
+ * webhook PAYMENT_DELETED não chegou — race condition, downtime curto
+ * do webhook ou conta sem webhook configurado.
+ *
+ * Estratégia (segura por design):
+ *  1. Lista TUDO do Asaas no range generoso (5 anos retro + 1 ano futuro)
+ *  2. Constrói Set de IDs visíveis
+ *  3. Lista locais PENDING/OVERDUE de origem=asaas
+ *  4. Deleta apenas os que não aparecem no Set
+ *
+ * Aborta em qualquer erro no passo 1 — Set incompleto produziria falsos
+ * positivos massivos. NÃO mexe em cobranças pagas (RECEIVED/CONFIRMED) —
+ * essas não vão sumir do Asaas, e se sumissem o operador precisaria
+ * decidir manualmente o que fazer (auditoria).
+ *
+ * Cobranças com `origem != 'asaas'` (criadas manualmente no Jurify) são
+ * intocadas: nunca passaram pela API do Asaas, então não estão no Set
+ * e seriam falsamente classificadas como fantasmas.
+ */
+export async function reconciliarCobrancasFantasmasEscritorio(
+  escritorioId: number,
+): Promise<{ ok: boolean; verificadas: number; fantasmas: number; motivo?: string }> {
+  const client = await getAsaasClientForEscritorio(escritorioId);
+  if (!client) return { ok: false, verificadas: 0, fantasmas: 0, motivo: "sem credenciais" };
+
+  const db = await getDb();
+  if (!db) return { ok: false, verificadas: 0, fantasmas: 0, motivo: "db indisponível" };
+
+  const hoje = new Date();
+  const ge = new Date(hoje);
+  ge.setUTCDate(ge.getUTCDate() - 365 * 5);
+  const le = new Date(hoje);
+  le.setUTCDate(le.getUTCDate() + 365);
+  const dueDateGe = ge.toISOString().slice(0, 10);
+  const dueDateLe = le.toISOString().slice(0, 10);
+
+  const idsAsaas = new Set<string>();
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    let res;
+    try {
+      res = await client.listarCobrancasPorJanela({
+        dueDateGe,
+        dueDateLe,
+        limit: 100,
+        offset,
+      });
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.cause?.response?.status;
+      const motivo = status === 429 || err instanceof RateLimitError
+        ? "rate limit durante sweep — aborta"
+        : `erro durante sweep: ${err?.message ?? "desconhecido"}`;
+      log.warn({ escritorioId, motivo }, "[Asaas Reconciliação] sweep abortado");
+      return { ok: false, verificadas: 0, fantasmas: 0, motivo };
+    }
+    for (const c of res.data) {
+      if (!c.deleted) idsAsaas.add(c.id);
+    }
+    hasMore = res.hasMore;
+    offset += res.limit;
+  }
+
+  const candidatos = await db
+    .select({
+      id: asaasCobrancas.id,
+      asaasPaymentId: asaasCobrancas.asaasPaymentId,
+    })
+    .from(asaasCobrancas)
+    .where(and(
+      eq(asaasCobrancas.escritorioId, escritorioId),
+      eq(asaasCobrancas.origem, "asaas"),
+      inArray(
+        asaasCobrancas.status,
+        [...STATUS_PENDENTE_ASAAS, ...STATUS_VENCIDO_ASAAS] as unknown as string[],
+      ),
+    ));
+
+  let fantasmas = 0;
+  for (const c of candidatos) {
+    if (c.asaasPaymentId && !idsAsaas.has(c.asaasPaymentId)) {
+      await db.delete(asaasCobrancas).where(eq(asaasCobrancas.id, c.id));
+      fantasmas++;
+    }
+  }
+
+  log.info(
+    { escritorioId, verificadas: candidatos.length, fantasmas, idsAsaasCount: idsAsaas.size },
+    "[Asaas Reconciliação] concluída",
+  );
+  return { ok: true, verificadas: candidatos.length, fantasmas };
+}
+
+/**
+ * Orquestrador da reconciliação mensal — itera escritórios conectados e
+ * roda `reconciliarCobrancasFantasmasEscritorio` em cada um onde já
+ * passaram 30 dias desde a última rodada (ou nunca rodou).
+ *
+ * Roda só 1 escritório por chamada — distribui custo no tempo. Cron
+ * diário chama essa função; quando há 30+ escritórios, todos rodam
+ * dentro do mês.
+ */
+export async function executarReconciliacaoFantasmasJob(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const trintaDiasAtras = new Date();
+  trintaDiasAtras.setUTCDate(trintaDiasAtras.getUTCDate() - 30);
+
+  const candidatos = await db
+    .select({
+      escritorioId: asaasConfig.escritorioId,
+      ultima: asaasConfig.ultimaReconciliacaoFantasmasEm,
+    })
+    .from(asaasConfig)
+    .where(and(
+      eq(asaasConfig.status, "conectado"),
+      or(
+        isNull(asaasConfig.ultimaReconciliacaoFantasmasEm),
+        lt(asaasConfig.ultimaReconciliacaoFantasmasEm, trintaDiasAtras),
+      ),
+    ));
+
+  if (candidatos.length === 0) return;
+
+  // Roda 1 escritório por tick pra distribuir custo no tempo.
+  // Prioriza quem nunca rodou (NULL).
+  candidatos.sort((a, b) => {
+    if (a.ultima === null && b.ultima !== null) return -1;
+    if (a.ultima !== null && b.ultima === null) return 1;
+    if (a.ultima === null && b.ultima === null) return 0;
+    return (a.ultima!.getTime() ?? 0) - (b.ultima!.getTime() ?? 0);
+  });
+
+  const escolhido = candidatos[0];
+  try {
+    const r = await reconciliarCobrancasFantasmasEscritorio(escolhido.escritorioId);
+    if (r.ok) {
+      await db
+        .update(asaasConfig)
+        .set({ ultimaReconciliacaoFantasmasEm: new Date() })
+        .where(eq(asaasConfig.escritorioId, escolhido.escritorioId));
+      if (r.fantasmas > 0) {
+        log.info(
+          { escritorioId: escolhido.escritorioId, ...r },
+          `[Asaas Reconciliação] Escritório ${escolhido.escritorioId}: ${r.fantasmas} fantasmas removidos de ${r.verificadas} verificadas`,
+        );
+      }
+    } else {
+      log.warn(
+        { escritorioId: escolhido.escritorioId, ...r },
+        "[Asaas Reconciliação] sweep parcial — tenta de novo no próximo tick",
+      );
+    }
+  } catch (err: any) {
+    log.error(
+      { escritorioId: escolhido.escritorioId, err: err?.message },
+      "[Asaas Reconciliação] falha inesperada",
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // AGREGAÇÃO N:1 — vários asaas_clientes por contato do CRM
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -961,6 +1309,14 @@ export async function syncTodosEscritorios(opts?: {
       if (total > 0) {
         log.info(
           `[Asaas Sync] Escritório ${escritorioId}: ${result.novas} novas, ${result.atualizadas} atualizadas, ${result.removidas} removidas`,
+        );
+      }
+
+      const sweep = await syncCobrancasPorVencimentoEscritorio(escritorioId);
+      const sweepTotal = sweep.novas + sweep.atualizadas;
+      if (sweepTotal > 0) {
+        log.info(
+          `[Asaas Sync Vencimento] Escritório ${escritorioId}: ${sweep.novas} novas, ${sweep.atualizadas} atualizadas (sweep 180d retro + 30d futuro)`,
         );
       }
     } catch (err: any) {

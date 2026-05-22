@@ -225,6 +225,28 @@ describe("sincronizarExtratoAsaas — idempotência", () => {
     expect(r.duplicadas).toBe(1);
     expect(r.erros).toBe(0);
   });
+
+  it("ER_DUP_ENTRY empacotado pelo Drizzle (err.cause) → conta como duplicada", async () => {
+    selectQueue.push([{ id: 7 }]);
+    const wrapped = Object.assign(
+      new Error("Failed query: insert into `despesas` ...\nparams: ..."),
+      {
+        cause: Object.assign(new Error("Duplicate entry '10-ftn_001' for key 'desp_asaas_fintrans_uq'"), {
+          code: "ER_DUP_ENTRY",
+          errno: 1062,
+        }),
+      },
+    );
+    throwOnInsert = { table: "despesas", error: wrapped };
+    const client = fakeClient([{
+      data: [mov({ type: "INSTANT_TEXT_MESSAGE_FEE" })],
+      hasMore: false, limit: 100, offset: 0,
+    }]);
+
+    const r = await sincronizarExtratoAsaas(10, client, { criadoPorUserId: 5 });
+    expect(r.duplicadas).toBe(1);
+    expect(r.erros).toBe(0);
+  });
 });
 
 describe("sincronizarExtratoAsaas — paginação + abort", () => {

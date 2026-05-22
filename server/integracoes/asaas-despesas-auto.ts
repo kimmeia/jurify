@@ -23,6 +23,7 @@ import {
   despesas,
 } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { extractDbErrorMessage, isDuplicateEntryError } from "../_core/sql-helpers";
 
 const log = createLogger("integracoes-asaas-despesas-auto");
 
@@ -198,13 +199,15 @@ export async function gerarDespesaTaxaAsaas(params: {
       "[asaas-despesas-auto] despesa de taxa criada",
     );
     return { created: true, despesaId: novo?.id ?? null };
-  } catch (err: any) {
-    // ER_DUP_ENTRY (1062 MySQL) — UNIQUE bateu, despesa já existe
-    if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+  } catch (err: unknown) {
+    if (isDuplicateEntryError(err)) {
       return { created: false, despesaId: null };
     }
     log.warn(
-      { err: err.message, cobrancaOriginalId: params.cobrancaOriginalId },
+      {
+        err: extractDbErrorMessage(err),
+        cobrancaOriginalId: params.cobrancaOriginalId,
+      },
       "[asaas-despesas-auto] falha não-fatal ao criar despesa de taxa",
     );
     return { created: false, despesaId: null };

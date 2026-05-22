@@ -1270,6 +1270,13 @@ export const asaasConfig = mysqlTable("asaas_config", {
   historicoSyncUltimaJanelaEm: timestamp("historicoSyncUltimaJanelaEm"),
   historicoSyncConcluidoEm: timestamp("historicoSyncConcluidoEm"),
   historicoSyncErroMensagem: varchar("historicoSyncErroMensagem", { length: 512 }),
+  /**
+   * Timestamp da última rodada de reconciliação de cobranças fantasmas
+   * (locais PENDING/OVERDUE que foram apagadas no Asaas e o webhook
+   * PAYMENT_DELETED não chegou). Cron mensal só roda quando passaram
+   * 30 dias desde aqui; NULL = nunca rodou (roda na próxima oportunidade).
+   */
+  ultimaReconciliacaoFantasmasEm: timestamp("ultimaReconciliacaoFantasmasEm"),
   createdAt: timestamp("createdAtAsaasConfig").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAsaasConfig").defaultNow().onUpdateNow().notNull(),
 });

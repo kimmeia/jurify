@@ -28,6 +28,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { categoriasDespesa, despesas } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { extractDbErrorMessage, isDuplicateEntryError } from "../_core/sql-helpers";
 import type {
   AsaasClient,
   AsaasFinancialTransaction,
@@ -274,12 +275,17 @@ async function criarDespesaDeMovimentacao(opts: {
       criadoPorUserId,
     });
     return "novo";
-  } catch (err: any) {
-    if (err?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(err?.message ?? "")) {
+  } catch (err: unknown) {
+    if (isDuplicateEntryError(err)) {
       return "duplicado";
     }
     log.warn(
-      { escritorioId, asaasFinTransId: mov.id, type: tipo, err: err.message },
+      {
+        escritorioId,
+        asaasFinTransId: mov.id,
+        type: tipo,
+        err: extractDbErrorMessage(err),
+      },
       "[asaas-extrato] falha não-fatal ao salvar despesa",
     );
     return "erro";

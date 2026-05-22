@@ -263,6 +263,21 @@ export function iniciarJobs() {
     }
   }, 5 * 60 * 1000);
 
+  // 1x por dia: roda reconciliação de cobranças fantasmas em 1
+  // escritório (o mais defasado). Só dispara onde passaram 30+ dias
+  // desde a última. Detecta locais PENDING/OVERDUE que foram apagadas
+  // no Asaas e o webhook PAYMENT_DELETED não chegou.
+  setInterval(async () => {
+    try {
+      const { executarReconciliacaoFantasmasJob } = await import(
+        "../integracoes/asaas-sync"
+      );
+      await executarReconciliacaoFantasmasJob();
+    } catch (err: any) {
+      log.error("[Cron] executarReconciliacaoFantasmasJob falhou:", err.message);
+    }
+  }, 24 * 60 * 60 * 1000);
+
   // A cada 1h: gera próximas ocorrências de despesas recorrentes
   // (semanal/mensal/anual). Idempotente — pula vencimentos já existentes.
   setInterval(async () => {

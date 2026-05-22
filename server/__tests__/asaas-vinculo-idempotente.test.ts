@@ -107,4 +107,25 @@ describe("inserirVinculoAsaasIdempotente", () => {
     expect(r).toBe(false);
     expect(captured.map((c) => c.op)).toEqual(["insert", "update"]);
   });
+
+  it("detecta ER_DUP_ENTRY empacotado pelo Drizzle (err.cause)", async () => {
+    insertShouldThrow = Object.assign(
+      new Error("Failed query: insert into `asaas_clientes` ..."),
+      {
+        cause: Object.assign(
+          new Error("Duplicate entry 'cus_001' for key 'asaas_cli_escr_customer_uq'"),
+          { code: "ER_DUP_ENTRY", errno: 1062 },
+        ),
+      },
+    );
+    const r = await inserirVinculoAsaasIdempotente({
+      escritorioId: 1,
+      contatoId: 10,
+      asaasCustomerId: "cus_001",
+      cpfCnpj: "12345678900",
+      nome: "Cliente X",
+    });
+    expect(r).toBe(false);
+    expect(captured.map((c) => c.op)).toEqual(["insert", "update"]);
+  });
 });
