@@ -885,8 +885,11 @@ export const asaasRouter = router({
         dataInicio = input.dataInicio;
         dataFim = input.dataFim;
       } else if (input.periodo === "completo") {
+        // 10 anos retro cobre praticamente todo escritório. Janelas
+        // vazias (períodos sem cobrança) processam em ~1 request cada
+        // — não estoura cota mesmo no pior caso.
         const dt = new Date(hoje);
-        dt.setUTCDate(dt.getUTCDate() - (365 * 3 - 1));
+        dt.setUTCDate(dt.getUTCDate() - (365 * 10 - 1));
         dataInicio = dt.toISOString().slice(0, 10);
         dataFim = hojeIso;
         intervaloEfetivo = 5;
@@ -904,7 +907,7 @@ export const asaasRouter = router({
       const { contarDiasInclusivos } = await import("./asaas-sync-historico");
       const totalDias = contarDiasInclusivos(dataInicio, dataFim);
       // Limita teto pra evitar pedido absurdo (ex: 10 anos). Pode subir depois.
-      const MAX_DIAS = 365 * 3;
+      const MAX_DIAS = 365 * 10;
       if (totalDias > MAX_DIAS) {
         throw new TRPCError({
           code: "BAD_REQUEST",
