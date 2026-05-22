@@ -1040,20 +1040,25 @@ export async function reconciliarCobrancasFantasmasEscritorio(
 }
 
 /**
- * Orquestrador da reconciliação mensal — itera escritórios conectados e
+ * Orquestrador da reconciliação SEMANAL — itera escritórios conectados e
  * roda `reconciliarCobrancasFantasmasEscritorio` em cada um onde já
- * passaram 30 dias desde a última rodada (ou nunca rodou).
+ * passaram 7 dias desde a última rodada (ou nunca rodou).
+ *
+ * Antes era mensal (30d). Subiu pra semanal porque fantasma 30d divergia
+ * demais com o painel Asaas — caso típico: cobrança deletada no Asaas
+ * dia 1 só era apagada no Jurify dia 31. Painel financeiro mostrava
+ * "a receber" estagnado por um mês.
  *
  * Roda só 1 escritório por chamada — distribui custo no tempo. Cron
- * diário chama essa função; quando há 30+ escritórios, todos rodam
- * dentro do mês.
+ * diário chama essa função; com 7+ escritórios, todos rodam dentro da
+ * semana.
  */
 export async function executarReconciliacaoFantasmasJob(): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  const trintaDiasAtras = new Date();
-  trintaDiasAtras.setUTCDate(trintaDiasAtras.getUTCDate() - 30);
+  const seteDiasAtras = new Date();
+  seteDiasAtras.setUTCDate(seteDiasAtras.getUTCDate() - 7);
 
   const candidatos = await db
     .select({
@@ -1065,7 +1070,7 @@ export async function executarReconciliacaoFantasmasJob(): Promise<void> {
       eq(asaasConfig.status, "conectado"),
       or(
         isNull(asaasConfig.ultimaReconciliacaoFantasmasEm),
-        lt(asaasConfig.ultimaReconciliacaoFantasmasEm, trintaDiasAtras),
+        lt(asaasConfig.ultimaReconciliacaoFantasmasEm, seteDiasAtras),
       ),
     ));
 

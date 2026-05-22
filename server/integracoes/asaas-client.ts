@@ -64,6 +64,7 @@ export type AsaasPaymentStatus =
   | "CONFIRMED"
   | "OVERDUE"
   | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
   | "RECEIVED_IN_CASH"
   | "REFUND_REQUESTED"
   | "REFUND_IN_PROGRESS"
@@ -73,6 +74,7 @@ export type AsaasPaymentStatus =
   | "DUNNING_REQUESTED"
   | "DUNNING_RECEIVED"
   | "AWAITING_RISK_ANALYSIS"
+  | "ANTICIPATED"
   | "AUTHORIZED";
 
 export interface AsaasPayment {
