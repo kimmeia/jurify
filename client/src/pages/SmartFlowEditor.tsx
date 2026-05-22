@@ -101,6 +101,9 @@ import {
 import { EditorTopbar } from "./smartflow/editor-topbar";
 import { EditorPaleta } from "./smartflow/editor-paleta";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
+import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
+import { EditorPainelSaida } from "./smartflow/editor-painel-saida";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
 
@@ -1075,6 +1078,74 @@ export default function SmartFlowEditor() {
     marcarDirty();
   };
 
+  /**
+   * Auto-arranja todos os nós em layout top-down (BFS por nível a partir
+   * do gatilho). Ramos do condicional aparecem lado a lado.
+   */
+  const autoArranjar = () => {
+    const layout = calcularAutoLayout(
+      nodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
+      edges.map((e) => ({ source: e.source, target: e.target })),
+      GATILHO_NODE_ID,
+    );
+    setNodes((nds) =>
+      nds.map((n) => {
+        const pos = layout.get(n.id);
+        return pos ? { ...n, position: pos } : n;
+      }),
+    );
+    marcarDirty();
+    // Re-enquadra após o reflow do canvas.
+    setTimeout(() => rfInstance?.fitView?.({ padding: 0.15, duration: 400 }), 50);
+    toast.success("Nós reorganizados");
+  };
+
+  /**
+   * Roda `validarGrafo` (mesma função usada no save) sem persistir. Útil
+   * pra ver erros antes de tentar salvar — toast lista o problema.
+   */
+  const validarFluxo = () => {
+    const passosList = passoNodesOrdenados(nodes);
+    if (passosList.length === 0) {
+      toast.warning("Adicione pelo menos um passo pra validar o fluxo.");
+      return;
+    }
+    const proximoSePorNodeId = new Map<string, Record<string, string>>();
+    const nodeIdParaCliente = new Map<string, string>();
+    for (const n of passosList) nodeIdParaCliente.set(n.id, n.data.clienteId);
+    for (const e of edges) {
+      if (e.source === GATILHO_NODE_ID) continue;
+      const alvoCliente = nodeIdParaCliente.get(e.target);
+      if (!alvoCliente) continue;
+      const chave = e.sourceHandle || "default";
+      const atual = proximoSePorNodeId.get(e.source) ?? {};
+      atual[chave] = alvoCliente;
+      proximoSePorNodeId.set(e.source, atual);
+    }
+    const passosParaValidar = passosList.map((n) => ({
+      nodeId: n.id,
+      clienteId: n.data.clienteId,
+      tipo: n.data.tipo,
+      config: n.data.config,
+      temProximoSe: !!proximoSePorNodeId.get(n.id),
+    }));
+    const edgesParaValidar = edges.map((e) => ({
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle ?? null,
+    }));
+    const r = validarGrafo(GATILHO_NODE_ID, passosParaValidar, edgesParaValidar);
+    if (r.erros.length > 0) {
+      toast.error(r.erros.join(" "), { duration: 6000 });
+      return;
+    }
+    if (r.avisos.length > 0) {
+      toast.warning(r.avisos.join(" "), { duration: 5000 });
+      return;
+    }
+    toast.success("Fluxo válido — pronto pra salvar.");
+  };
+
   const atualizarConfigSelecionado = (patch: Record<string, unknown>) => {
     if (!selectedId) return;
     setNodes((nds) =>
@@ -1242,8 +1313,14 @@ export default function SmartFlowEditor() {
           onAdicionarPasso={adicionarPasso}
         />
 
-        {/* Canvas */}
-        <div className="flex-1 relative">
+        {/* Canvas — fundo sutil em gradiente pra dar hierarquia visual */}
+        <div
+          className="flex-1 relative"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(241, 245, 249, 0.4) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(237, 233, 254, 0.2) 100%)",
+          }}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1263,9 +1340,16 @@ export default function SmartFlowEditor() {
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <Controls showInteractive={false} />
             <MiniMap pannable zoomable className="!bg-background !border" />
           </ReactFlow>
+
+          <EditorCanvasToolbar
+            onZoomIn={() => rfInstance?.zoomIn?.()}
+            onZoomOut={() => rfInstance?.zoomOut?.()}
+            onFit={() => rfInstance?.fitView?.({ padding: 0.15, duration: 300 })}
+            onAutoArranjar={autoArranjar}
+            onValidar={validarFluxo}
+          />
 
           {passoNodesOrdenados(nodes).length === 0 && (
             // Hint discreto no rodapé do canvas — não cobre o nó de gatilho.
@@ -1314,15 +1398,36 @@ export default function SmartFlowEditor() {
           )}
         </div>
 
-        {/* Painel direito — config do nó selecionado */}
-        <div className="w-80 border-l bg-background overflow-y-auto">
+        {/* Painel direito — config do nó selecionado (com abas) */}
+        <div className="w-96 border-l bg-background overflow-y-auto flex flex-col">
           {selectedNode ? (
-            <PainelConfig
-              node={selectedNode}
-              onChange={atualizarConfigSelecionado}
-              onRemove={removerSelecionado}
-              onChangeGatilho={trocarGatilho}
-            />
+            <Tabs defaultValue="config" className="flex flex-col flex-1">
+              <TabsList className="grid grid-cols-2 mx-2 mt-2 h-8 shrink-0">
+                <TabsTrigger value="config" className="text-[11px] gap-1">
+                  ⚙ Configuração
+                </TabsTrigger>
+                <TabsTrigger value="saida" className="text-[11px] gap-1">
+                  📤 Saída
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="config" className="flex-1 mt-0 overflow-y-auto">
+                <PainelConfig
+                  node={selectedNode}
+                  onChange={atualizarConfigSelecionado}
+                  onRemove={removerSelecionado}
+                  onChangeGatilho={trocarGatilho}
+                />
+              </TabsContent>
+              <TabsContent value="saida" className="flex-1 mt-0 overflow-y-auto">
+                <EditorPainelSaida
+                  tipoPasso={isGatilhoNode(selectedNode) ? null : selectedNode.data.tipo}
+                  gatilho={gatilhoNode?.data.gatilho ?? "mensagem_canal"}
+                  configPasso={
+                    isGatilhoNode(selectedNode) ? undefined : (selectedNode.data.config as Record<string, unknown>)
+                  }
+                />
+              </TabsContent>
+            </Tabs>
           ) : (
             <div className="p-4 text-sm text-muted-foreground">
               <p className="font-medium mb-1">Nenhum passo selecionado</p>
