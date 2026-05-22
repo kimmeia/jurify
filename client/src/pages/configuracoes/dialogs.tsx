@@ -43,7 +43,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
   });
   const status = statusQ?.data;
 
-  const [periodo, setPeriodo] = useState<"24h" | "7d" | "30d" | "custom">("7d");
+  const [periodo, setPeriodo] = useState<"24h" | "7d" | "30d" | "completo" | "custom">("7d");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [intervaloMinutos, setIntervaloMinutos] = useState(60);
@@ -158,6 +158,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
                   <SelectItem value="24h">Últimas 24h</SelectItem>
                   <SelectItem value="7d">Últimos 7 dias</SelectItem>
                   <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="completo">3 anos (histórico completo)</SelectItem>
                   <SelectItem value="custom">Personalizado</SelectItem>
                 </SelectContent>
               </Select>
@@ -165,9 +166,9 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
             <div>
               <Label className="text-xs">Intervalo entre janelas</Label>
               <Select
-                value={String(intervaloMinutos)}
+                value={periodo === "completo" ? "5" : String(intervaloMinutos)}
                 onValueChange={(v) => setIntervaloMinutos(parseInt(v))}
-                disabled={!canEdit}
+                disabled={!canEdit || periodo === "completo"}
               >
                 <SelectTrigger className="h-9 text-xs mt-1">
                   <SelectValue />
@@ -182,6 +183,15 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
               </Select>
             </div>
           </div>
+
+          {periodo === "completo" && (
+            <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+              <strong>Atenção:</strong> a importação de 3 anos roda em modo
+              turbo (5min entre janelas, 7 dias por tick) e demora cerca de{" "}
+              <strong>13 horas</strong>. Inicie de noite — pela manhã estará
+              pronto. Pode pausar/retomar a qualquer momento.
+            </div>
+          )}
 
           {periodo === "custom" && (
             <div className="grid grid-cols-2 gap-2">

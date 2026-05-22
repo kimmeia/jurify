@@ -19,7 +19,11 @@ import { getDb } from "../db";
 import { asaasConfig, asaasClientes, asaasCobrancas, asaasConfigCobrancaPai, asaasWebhookEventos, categoriasCobranca, clienteProcessos, cobrancaAcoes, colaboradores, comissoesFechadas, comissoesFechadasItens, comissoesLancamentosLog, contatos, users } from "../../drizzle/schema";
 import { eq, and, desc, like, or, inArray, between, gte, lte, sql, isNull } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/mysql-core";
-import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
+import {
+  STATUS_PAGO_ASAAS,
+  STATUS_PENDENTE_ASAAS,
+  STATUS_VENCIDO_ASAAS,
+} from "../_core/asaas-status";
 import { TRPCError } from "@trpc/server";
 import { encrypt, decrypt, generateWebhookSecret, maskToken } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -30,6 +34,7 @@ import { calcularParcelas } from "./parcelamento-local";
 import {
   syncCobrancasDeCliente,
   syncCobrancasEscritorio,
+  syncCobrancasPorVencimentoEscritorio,
   syncTodasCobrancasDoContato,
   agregarVinculosPorContato,
   inserirVinculoAsaasIdempotente,
@@ -720,12 +725,14 @@ export const asaasRouter = router({
   iniciarSyncHistorico: protectedProcedure
     .input(
       z.object({
-        /** Preset rápido. Em "custom", `dataInicio` e `dataFim` são obrigatórios. */
-        periodo: z.enum(["24h", "7d", "30d", "custom"]),
+        /** Preset rápido. Em "custom", `dataInicio` e `dataFim` são obrigatórios.
+         *  Em "completo" pega 3 anos retro com config turbo (intervalo=5min,
+         *  diasPorTick=7) — ~13h de execução, pensado pra rodar de noite. */
+        periodo: z.enum(["24h", "7d", "30d", "completo", "custom"]),
         dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         /** Cooldown entre janelas. Default 60min — conservador pra evitar
-         *  saturar a cota Asaas. Min 5min. */
+         *  saturar a cota Asaas. Min 5min. Preset "completo" força 5. */
         intervaloMinutos: z.number().int().min(5).max(720).default(60),
       }),
     )
@@ -768,6 +775,10 @@ export const asaasRouter = router({
       const hojeIso = hoje.toISOString().slice(0, 10);
       let dataInicio: string;
       let dataFim: string;
+      // Preset "completo" sobrescreve intervalo/diasPorTick em modo turbo.
+      // Os demais respeitam o input do usuário.
+      let intervaloEfetivo = input.intervaloMinutos;
+      let diasPorTickEfetivo = 1;
       if (input.periodo === "custom") {
         if (!input.dataInicio || !input.dataFim) {
           throw new TRPCError({
@@ -783,6 +794,13 @@ export const asaasRouter = router({
         }
         dataInicio = input.dataInicio;
         dataFim = input.dataFim;
+      } else if (input.periodo === "completo") {
+        const dt = new Date(hoje);
+        dt.setUTCDate(dt.getUTCDate() - (365 * 3 - 1));
+        dataInicio = dt.toISOString().slice(0, 10);
+        dataFim = hojeIso;
+        intervaloEfetivo = 5;
+        diasPorTickEfetivo = 7;
       } else {
         const dias =
           input.periodo === "24h" ? 1 : input.periodo === "7d" ? 7 : 30;
@@ -815,7 +833,8 @@ export const asaasRouter = router({
           historicoSyncDiasFeitos: 0,
           historicoSyncCobrancasImportadas: 0,
           historicoSyncCobrancasAtualizadas: 0,
-          historicoSyncIntervaloMinutos: input.intervaloMinutos,
+          historicoSyncIntervaloMinutos: intervaloEfetivo,
+          historicoSyncDiasPorTick: diasPorTickEfetivo,
           historicoSyncIniciadoEm: new Date(),
           historicoSyncUltimaJanelaEm: null,
           historicoSyncConcluidoEm: null,
@@ -829,7 +848,8 @@ export const asaasRouter = router({
           dataInicio,
           dataFim,
           totalDias,
-          intervaloMinutos: input.intervaloMinutos,
+          intervaloMinutos: intervaloEfetivo,
+          diasPorTick: diasPorTickEfetivo,
         },
         "[Asaas] Sync histórica agendada",
       );
@@ -839,9 +859,11 @@ export const asaasRouter = router({
         dataInicio,
         dataFim,
         totalDias,
-        intervaloMinutos: input.intervaloMinutos,
-        // Estimativa pro usuário: totalDias × intervaloMinutos em horas
-        estimativaHoras: Math.ceil((totalDias * input.intervaloMinutos) / 60),
+        intervaloMinutos: intervaloEfetivo,
+        // Estimativa pro usuário: (totalDias / diasPorTick) × intervalo em horas
+        estimativaHoras: Math.ceil(
+          (totalDias / diasPorTickEfetivo) * intervaloEfetivo / 60,
+        ),
       };
     }),
 
@@ -2815,7 +2837,12 @@ export const asaasRouter = router({
       const result = await syncCobrancasEscritorio(esc.escritorio.id, {
         diasHistorico: input?.diasHistorico,
       });
-      return result;
+      const sweep = await syncCobrancasPorVencimentoEscritorio(esc.escritorio.id);
+      return {
+        ...result,
+        novas: result.novas + sweep.novas,
+        atualizadas: result.atualizadas + sweep.atualizadas,
+      };
     }),
 
   /** Sync rápido sob-demanda — janela curta (3 dias) + turbo (delay 500ms
@@ -2833,7 +2860,12 @@ export const asaasRouter = router({
       diasHistorico: 3,
       delayMs: 500,
     });
-    return result;
+    const sweep = await syncCobrancasPorVencimentoEscritorio(esc.escritorio.id);
+    return {
+      ...result,
+      novas: result.novas + sweep.novas,
+      atualizadas: result.atualizadas + sweep.atualizadas,
+    };
   }),
 
   // ─── KPIs ────────────────────────────────────────────────────────────────
@@ -2911,9 +2943,9 @@ export const asaasRouter = router({
         AND (${vencFim} IS NULL OR ${asaasCobrancas.vencimento} <= ${vencFim})`;
       const valorDec = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
       const valorLiquidoDec = sql`CAST(COALESCE(${asaasCobrancas.valorLiquido}, ${asaasCobrancas.valor}) AS DECIMAL(20,2))`;
-      const ehPago = sql`${asaasCobrancas.status} IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`;
-      const ehPending = sql`${asaasCobrancas.status} = 'PENDING'`;
-      const ehOverdue = sql`${asaasCobrancas.status} = 'OVERDUE'`;
+      const ehPago = inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]);
+      const ehPending = inArray(asaasCobrancas.status, STATUS_PENDENTE_ASAAS as unknown as string[]);
+      const ehOverdue = inArray(asaasCobrancas.status, STATUS_VENCIDO_ASAAS as unknown as string[]);
       const pendingNoFuturo = sql`${asaasCobrancas.vencimento} >= ${hojeStr}`;
       const pendingNoPassado = sql`${asaasCobrancas.vencimento} < ${hojeStr}`;
 
