@@ -38,17 +38,19 @@ describe("asaas-status — agrupamento dos cards do painel", () => {
     }
   });
 
-  it("estornos e chargebacks ficam FORA dos 3 cards (intencional)", () => {
+  it("estornos, chargebacks e antecipações ficam FORA dos 3 cards (intencional)", () => {
     const todos = new Set<string>([
       ...STATUS_PAGO_ASAAS,
       ...STATUS_PENDENTE_ASAAS,
       ...STATUS_VENCIDO_ASAAS,
     ]);
     expect(todos.has("REFUNDED")).toBe(false);
+    expect(todos.has("PARTIALLY_REFUNDED")).toBe(false);
     expect(todos.has("REFUND_REQUESTED")).toBe(false);
     expect(todos.has("REFUND_IN_PROGRESS")).toBe(false);
     expect(todos.has("CHARGEBACK_REQUESTED")).toBe(false);
     expect(todos.has("CHARGEBACK_DISPUTE")).toBe(false);
     expect(todos.has("AWAITING_CHARGEBACK_REVERSAL")).toBe(false);
+    expect(todos.has("ANTICIPATED")).toBe(false);
   });
 });

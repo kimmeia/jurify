@@ -47,9 +47,16 @@ export type StatusPendenteAsaas = (typeof STATUS_PENDENTE_ASAAS)[number];
  *  - DUNNING_REQUESTED: negativação/protesto solicitado pelo dono
  *
  * Chargebacks (CHARGEBACK_REQUESTED, CHARGEBACK_DISPUTE,
- * AWAITING_CHARGEBACK_REVERSAL) e estornos (REFUNDED, REFUND_REQUESTED,
- * REFUND_IN_PROGRESS) NÃO entram em nenhum dos 3 cards — são casos
- * excepcionais que precisam ser tratados em fluxo separado.
+ * AWAITING_CHARGEBACK_REVERSAL), estornos (REFUNDED, PARTIALLY_REFUNDED,
+ * REFUND_REQUESTED, REFUND_IN_PROGRESS) e antecipações (ANTICIPATED)
+ * NÃO entram em nenhum dos 3 cards — são casos excepcionais que precisam
+ * ser tratados em fluxo separado. Especificamente:
+ *  - ANTICIPATED: Asaas pagou adiantado, cliente ainda não confirmou.
+ *    Contar como recebido inflaria o DRE se o cliente não pagar
+ *    (vira estorno automático). Quando confirma, vira RECEIVED.
+ *  - PARTIALLY_REFUNDED: parte do valor estornado. Contar valor cheio
+ *    em "Recebido" superestima. Pra fidelidade exata seria preciso
+ *    olhar netValue, não value — refatoração futura.
  */
 export const STATUS_VENCIDO_ASAAS = [
   "OVERDUE",
