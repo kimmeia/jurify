@@ -30,6 +30,8 @@ export interface Notificacao {
     | "assinatura_concluida"
     | "movimentacao_processo"
     | "nova_acao"
+    | "credencial_erro"
+    | "credencial_recuperada"
     | "info";
   titulo: string;
   mensagem: string;

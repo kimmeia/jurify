@@ -178,3 +178,22 @@ export function extrairCodigoTribunal(cnj: string): string | null {
 export function temAdapterMotorProprio(cnj: string): boolean {
   return parseCnjTribunal(cnj)?.temMotorProprio ?? false;
 }
+
+/**
+ * Extrai o ano do CNJ (posição 9-12 do padrão NNNNNNN-DD.AAAA.J.TR.OOOO).
+ *
+ * Retorna `null` se CNJ inválido ou ano fora do intervalo plausível
+ * (1990..ano-atual+1). Útil como salvaguarda quando o monitoramento de
+ * novas ações roda sem `dataReferenciaCadastro` — sem esta proteção,
+ * um scrape por CPF/CNPJ traz o histórico inteiro do cliente (incluindo
+ * processos de 2015) e cada um vira "nova ação".
+ */
+export function extrairAnoCnj(cnj: string): number | null {
+  const limpo = normalizarCnj(cnj);
+  if (limpo.length !== 20) return null;
+  const ano = parseInt(limpo.slice(9, 13), 10);
+  if (Number.isNaN(ano)) return null;
+  const anoAtual = new Date().getUTCFullYear();
+  if (ano < 1990 || ano > anoAtual + 1) return null;
+  return ano;
+}

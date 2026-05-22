@@ -38,14 +38,20 @@ export async function revalidarCofreCredenciais(
 
   const corte = new Date(Date.now() - IDADE_MAXIMA_MS);
 
-  // Inclui status="erro" pra recuperação automática: quando o PJe falha
-  // temporariamente (instabilidade, timeout) a credencial cai em "erro"
-  // — sem este OR, o user precisava revalidar manualmente no Cofre, e
-  // o monitoramento parava silenciosamente. Agora o cron tenta de novo
-  // a cada 60min até voltar (atualizarStatusAposLogin restaura "ativa"
-  // no sucesso). Se a senha mudou de fato, a credencial fica em "erro"
-  // (warning logado) até intervenção manual — mas reabre tentativa
-  // toda hora. Status "removida" continua sendo excluído.
+  // Inclui status="erro" E status="expirada" pra recuperação automática:
+  // quando o PJe falha temporariamente (instabilidade, timeout) a credencial
+  // cai em "erro"; quando a sessão expira durante consulta vai pra "expirada".
+  // Sem este OR, o user precisava revalidar manualmente no Cofre, e o
+  // monitoramento parava silenciosamente. O cron tenta de novo a cada 60min
+  // até voltar (atualizarStatusAposLogin restaura "ativa" no sucesso).
+  // Se a senha mudou de fato, a credencial fica em "erro" (warning logado)
+  // até intervenção manual — mas reabre tentativa toda hora. Status
+  // "removida" continua sendo excluído.
+  //
+  // BUG histórico (corrigido 22/05/2026): "expirada" estava de fora do filtro.
+  // Quando motor-proprio detectava sessão caída marcava "expirada" e o cron
+  // nunca mais tocava nela — credencial ficava presa sem revalidação até o
+  // user manualmente apertar "Validar".
   //
   // `force: true` ignora o filtro de idade — usado no boot pós-deploy
   // pra garantir que TODAS as sessões PJe TJCE são renovadas, mesmo as
@@ -57,25 +63,17 @@ export async function revalidarCofreCredenciais(
         lt(cofreCredenciais.ultimoLoginTentativaEm, corte),
       );
 
+  const filtroStatus = or(
+    eq(cofreCredenciais.status, "ativa"),
+    eq(cofreCredenciais.status, "validando"),
+    eq(cofreCredenciais.status, "erro"),
+    eq(cofreCredenciais.status, "expirada"),
+  );
+
   const candidatas = await db
     .select()
     .from(cofreCredenciais)
-    .where(
-      filtroIdade
-        ? and(
-            or(
-              eq(cofreCredenciais.status, "ativa"),
-              eq(cofreCredenciais.status, "validando"),
-              eq(cofreCredenciais.status, "erro"),
-            ),
-            filtroIdade,
-          )
-        : or(
-            eq(cofreCredenciais.status, "ativa"),
-            eq(cofreCredenciais.status, "validando"),
-            eq(cofreCredenciais.status, "erro"),
-          ),
-    );
+    .where(filtroIdade ? and(filtroStatus, filtroIdade) : filtroStatus);
 
   log.info(
     { candidatas: candidatas.length, corte: corte.toISOString(), force: !!options.force },
@@ -94,8 +92,9 @@ export async function revalidarCofreCredenciais(
       continue;
     }
 
+    const statusAnterior = c.status;
     try {
-      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao } =
+      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao, notificarCredencialCaiu, notificarCredencialRecuperada } =
         await import("./cofre-helpers");
       const cred = await buscarCredencialDecriptada(c.id);
       if (!cred) {
@@ -126,12 +125,39 @@ export async function revalidarCofreCredenciais(
         await salvarSessao(c.id, resultado.storageStateJson, expira);
         okeis++;
         log.info({ credencialId: c.id, escritorioId: c.escritorioId }, "[cron-cofre] sessão renovada");
+
+        // Transição "expirada"/"erro" → "ativa" = recuperação automática
+        // bem-sucedida. Notifica o user pra fechar o loop (ele viu o
+        // alerta de queda e agora vê que voltou sozinho).
+        if (statusAnterior === "expirada" || statusAnterior === "erro") {
+          await notificarCredencialRecuperada({
+            credencialId: c.id,
+            userId: c.criadoPor,
+            apelido: c.apelido,
+            sistema: c.sistema,
+          });
+        }
       } else if (!resultado.ok) {
         erros++;
         log.warn(
           { credencialId: c.id, escritorioId: c.escritorioId, motivo: resultado.mensagem },
           "[cron-cofre] revalidação falhou — credencial marcada como erro",
         );
+
+        // Transição "ativa"/"validando" → "erro" = credencial acaba de cair
+        // (durante o cron, ainda não havia consulta do user). Notifica
+        // ANTES que o user tente consultar e veja erro vermelho sem aviso
+        // prévio. Em transições "erro"→"erro" não notifica de novo (ruído).
+        if (statusAnterior === "ativa" || statusAnterior === "validando") {
+          await notificarCredencialCaiu({
+            credencialId: c.id,
+            userId: c.criadoPor,
+            apelido: c.apelido,
+            sistema: c.sistema,
+            motivo: `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
+            novoStatus: "erro",
+          });
+        }
       }
 
       revalidadas++;
