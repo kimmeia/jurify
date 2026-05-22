@@ -754,6 +754,63 @@ export class AsaasClient {
     return res.data;
   }
 
+  // ─── RATE GUARD — INTROSPECTION & RESET ────────────────────────────────────
+
+  /**
+   * Snapshot do rate guard local pra mostrar na UI (badge "Cota: X/Y, libera em Z").
+   * Não chama o Asaas — leitura puramente local.
+   */
+  getRateGuardSnapshot() {
+    return this.guard.snapshot();
+  }
+
+  /**
+   * Testa se a cota REAL no Asaas tem folga, lendo `RateLimit-Remaining`
+   * de 1 GET (`/finance/balance` — endpoint leve e idempotente). Bypassa o
+   * guard local via axios cru — interessa medir o Asaas, não o estado do
+   * Jurify. Retorna a cota REAL pra UI decidir se permite reset.
+   *
+   * Se o Asaas retornar 429, sinaliza `estouradoNoAsaas=true` — não permite
+   * reset (resetar a Camada 2 local sem a Asaas estar livre só atrasa o
+   * mesmo bloqueio).
+   */
+  async testarCotaRealAsaas(): Promise<{
+    estouradoNoAsaas: boolean;
+    remaining: number | null;
+    limit: number | null;
+    resetSec: number | null;
+    httpStatus: number;
+  }> {
+    const baseURL = this.api.defaults.baseURL ?? "";
+    const apiKey = (this.api.defaults.headers as any).access_token as string;
+    const resp = await axios.get(`${baseURL}/finance/balance`, {
+      headers: { access_token: apiKey, "Content-Type": "application/json" },
+      timeout: 10_000,
+      validateStatus: () => true,
+    });
+    const headers = resp.headers as Record<string, unknown>;
+    const remainingRaw =
+      headers["ratelimit-remaining"] ?? headers["RateLimit-Remaining"];
+    const limitRaw = headers["ratelimit-limit"] ?? headers["RateLimit-Limit"];
+    const resetRaw = headers["ratelimit-reset"] ?? headers["RateLimit-Reset"];
+    return {
+      estouradoNoAsaas: resp.status === 429,
+      remaining: remainingRaw != null ? Number(remainingRaw) : null,
+      limit: limitRaw != null ? Number(limitRaw) : null,
+      resetSec: resetRaw != null ? Number(resetRaw) : null,
+      httpStatus: resp.status,
+    };
+  }
+
+  /**
+   * Reset manual da Camada 2 (cota 12h local). NÃO chama o Asaas. Caller
+   * deve ter validado via `testarCotaRealAsaas()` antes — resetar sem
+   * validação só atrasa o 429 real.
+   */
+  async resetarRateGuardLocal(motivo: string) {
+    return this.guard.forcarResetCamada2(motivo);
+  }
+
   // ─── EXTRATO FINANCEIRO ───────────────────────────────────────────────────
 
   /**
