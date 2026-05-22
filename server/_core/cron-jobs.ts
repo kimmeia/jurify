@@ -264,7 +264,7 @@ export function iniciarJobs() {
   }, 5 * 60 * 1000);
 
   // 1x por dia: roda reconciliação de cobranças fantasmas em 1
-  // escritório (o mais defasado). Só dispara onde passaram 30+ dias
+  // escritório (o mais defasado). Só dispara onde passaram 7+ dias
   // desde a última. Detecta locais PENDING/OVERDUE que foram apagadas
   // no Asaas e o webhook PAYMENT_DELETED não chegou.
   setInterval(async () => {
