@@ -26,6 +26,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   ia_responder: [
     { path: "respostaIA", label: "Resposta gerada pela IA", tipo: "texto" },
   ],
+  // Variáveis publicadas por ia_extrair_campos são dinâmicas (chaves da config).
+  // O componente resolve isso especialmente — array vazio aqui só satisfaz o tipo.
+  ia_extrair_campos: [],
   calcom_horarios: [
     { path: "horariosDisponiveis", label: "Lista de horários disponíveis", tipo: "lista" },
   ],
@@ -182,6 +185,32 @@ export function EditorPainelSaida({
         { path: `cliente.campos.${chave}`, label: "Campo personalizado salvo no cadastro", tipo: "texto" as const },
       ];
     }
+    if (tipoPasso === "ia_extrair_campos") {
+      // Variáveis vêm dinamicamente da config — cada campo extraído gera
+      // `{{extracao.<chave>}}`; quando `persistir=true`, também publica
+      // `{{cliente.campos.<chave>}}` (porque o handler espelha no contexto).
+      const campos = Array.isArray(configPasso?.campos)
+        ? (configPasso!.campos as Array<{ chave: string; tipo?: string; persistir?: boolean }>)
+        : [];
+      const out: VarSaida[] = [];
+      for (const c of campos) {
+        const chave = String(c.chave || "").trim();
+        if (!chave) continue;
+        out.push({
+          path: `extracao.${chave}`,
+          label: `Valor extraído (${c.tipo || "texto"})`,
+          tipo: mapearTipo(c.tipo),
+        });
+        if (c.persistir) {
+          out.push({
+            path: `cliente.campos.${chave}`,
+            label: "Persistido no cadastro do cliente",
+            tipo: mapearTipo(c.tipo),
+          });
+        }
+      }
+      return out;
+    }
     return SAIDA_POR_TIPO[tipoPasso] || [];
   }, [tipoPasso, configPasso]);
 
@@ -222,6 +251,14 @@ export function EditorPainelSaida({
       </p>
     </div>
   );
+}
+
+/** Heurística pra mapear tipo lógico do campo extraído → tipo de exibição. */
+function mapearTipo(tipo?: string): VarSaida["tipo"] {
+  if (tipo === "numero") return "número";
+  if (tipo === "boolean") return "booleano";
+  if (tipo === "lista_texto") return "lista";
+  return "texto";
 }
 
 function SecaoVariaveis({

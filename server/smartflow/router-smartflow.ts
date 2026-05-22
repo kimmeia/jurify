@@ -32,6 +32,7 @@ const GATILHOS = [
 const TIPOS_PASSO = [
   "ia_classificar",
   "ia_responder",
+  "ia_extrair_campos",
   "calcom_horarios",
   "calcom_agendar",
   "calcom_listar",

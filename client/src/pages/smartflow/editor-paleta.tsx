@@ -58,6 +58,7 @@ import {
 const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_classificar: Brain,
   ia_responder: Bot,
+  ia_extrair_campos: Sparkles,
   calcom_horarios: Calendar,
   calcom_agendar: CheckCircle2,
   calcom_listar: CalendarSearch,

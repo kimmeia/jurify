@@ -103,6 +103,7 @@ import { EditorPaleta } from "./smartflow/editor-paleta";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
 import { EditorPainelSaida } from "./smartflow/editor-painel-saida";
+import { validarPasso, ValidacaoPassoPanel } from "./smartflow/editor-validacao-passo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
@@ -110,6 +111,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_classificar: Brain,
   ia_responder: Bot,
+  ia_extrair_campos: Sparkles,
   calcom_horarios: Calendar,
   calcom_agendar: CheckCircle2,
   calcom_listar: CalendarSearch,
@@ -1554,7 +1556,7 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
   const Icon = TIPO_ICON[node.data.tipo] ?? Zap;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-3">
       <div className="flex items-center gap-2">
         <div className={`p-1.5 rounded ${meta.cor}`}>
           <Icon className="h-4 w-4" />
@@ -1565,6 +1567,8 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
         </div>
       </div>
 
+      <ValidacaoPainel node={node} />
+
       <ConfigFields node={node} onChange={onChange} />
 
       <div className="pt-2 border-t">
@@ -1574,6 +1578,20 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
       </div>
     </div>
   );
+}
+
+/**
+ * Renderiza os avisos de validação do passo selecionado, consultando o
+ * gatilho atual via contexto do ReactFlow. Componente fino — só liga
+ * o validador ao painel.
+ */
+function ValidacaoPainel({ node }: { node: PassoNode }) {
+  const { getNodes } = useReactFlow();
+  const allNodes = getNodes() as AnyNode[];
+  const gatilhoNode = allNodes.find(isGatilhoNode);
+  const gatilho = gatilhoNode?.data.gatilho ?? "mensagem_canal";
+  const itens = validarPasso(node.data.tipo, gatilho, node.data.config);
+  return <ValidacaoPassoPanel itens={itens} />;
 }
 
 /**
@@ -1846,6 +1864,228 @@ function ConfigIaResponderFields({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Config do passo `ia_extrair_campos`. Lista de campos a extrair (cada um
+ * tem chave + tipo + descrição + obrigatório + persistir). UI:
+ *   - Linha por campo, com botão remover.
+ *   - Seletor de "tipo" (texto, número, data, email, etc.).
+ *   - Checkbox "Persistir no cadastro do cliente" — quando marcado, integra
+ *     com camposPersonalizadosCliente (precisa que a chave exista no catálogo).
+ *   - Quick-add "Importar do catálogo" que adiciona campos pré-configurados
+ *     a partir do catálogo do escritório (`camposPersonalizadosCliente`).
+ */
+function ConfigIaExtrairCamposFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  interface CampoLocal {
+    chave: string;
+    tipo: "texto" | "numero" | "boolean" | "data" | "email" | "cpf" | "cnpj" | "telefone" | "lista_texto";
+    descricao?: string;
+    obrigatorio?: boolean;
+    persistir?: boolean;
+  }
+  const campos: CampoLocal[] = Array.isArray(cfg.campos)
+    ? (cfg.campos as CampoLocal[]).map((c) => ({ ...c, tipo: c.tipo || "texto" }))
+    : [];
+
+  const { data: camposCatalogo } = (trpc as any).camposCliente.listar.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const opcoesDoCatalogo: Array<{ chave: string; label: string; tipo: string }> = Array.isArray(camposCatalogo)
+    ? camposCatalogo.map((c: any) => ({ chave: c.chave, label: c.label || c.chave, tipo: c.tipo || "texto" }))
+    : [];
+
+  // Tipos no catálogo (texto/numero/data/textarea/select/boolean) precisam
+  // ser normalizados pros tipos da extração. textarea/select → texto.
+  const normalizarTipo = (catalogoTipo: string): CampoLocal["tipo"] => {
+    if (catalogoTipo === "numero") return "numero";
+    if (catalogoTipo === "boolean") return "boolean";
+    if (catalogoTipo === "data") return "data";
+    return "texto";
+  };
+
+  const atualizarCampo = (i: number, patch: Partial<CampoLocal>) => {
+    const novo = campos.slice();
+    novo[i] = { ...novo[i], ...patch };
+    onChange({ campos: novo });
+  };
+  const removerCampo = (i: number) => {
+    onChange({ campos: campos.filter((_, j) => j !== i) });
+  };
+  const adicionarCampo = (preset?: Partial<CampoLocal>) => {
+    const novoCampo: CampoLocal = {
+      chave: preset?.chave || "",
+      tipo: preset?.tipo || "texto",
+      descricao: preset?.descricao || "",
+      persistir: preset?.persistir ?? false,
+    };
+    onChange({ campos: [...campos, novoCampo] });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">De onde vem a mensagem?</Label>
+        <Input
+          value={String(cfg.fonteMensagem || "mensagem")}
+          onChange={(e) => onChange({ fonteMensagem: e.target.value })}
+          placeholder="mensagem"
+          className="font-mono text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Caminho no contexto. Default <code>mensagem</code>. Quando vier
+          depois de "aguardar resposta", troque pra <code>respostaUsuario</code>.
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Campos a extrair</Label>
+          <span className="text-[10px] text-muted-foreground">{campos.length} campo(s)</span>
+        </div>
+
+        {campos.length === 0 && (
+          <p className="text-[10px] text-muted-foreground italic mb-2">
+            Adicione pelo menos 1 campo abaixo. A IA vai ler a mensagem e tentar
+            preencher cada um — campos que ela não achar ficam vazios.
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {campos.map((c, i) => (
+            <div key={i} className="border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-muted/20 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={c.chave}
+                  onChange={(e) => atualizarCampo(i, { chave: e.target.value })}
+                  placeholder="cpf"
+                  className="font-mono text-xs h-7 flex-1"
+                />
+                <Select
+                  value={c.tipo}
+                  onValueChange={(v) => atualizarCampo(i, { tipo: v as CampoLocal["tipo"] })}
+                >
+                  <SelectTrigger className="h-7 text-xs w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="texto">Texto</SelectItem>
+                    <SelectItem value="numero">Número</SelectItem>
+                    <SelectItem value="boolean">Verdadeiro/Falso</SelectItem>
+                    <SelectItem value="data">Data</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="cpf">CPF</SelectItem>
+                    <SelectItem value="cnpj">CNPJ</SelectItem>
+                    <SelectItem value="telefone">Telefone</SelectItem>
+                    <SelectItem value="lista_texto">Lista de textos</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-destructive"
+                  onClick={() => removerCampo(i)}
+                  title="Remover campo"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+              <Input
+                value={c.descricao || ""}
+                onChange={(e) => atualizarCampo(i, { descricao: e.target.value })}
+                placeholder="Descrição (opcional) — ajuda a IA a entender o que extrair"
+                className="text-[11px] h-7"
+              />
+              <div className="flex items-center gap-3 flex-wrap text-[10px]">
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <Checkbox
+                    checked={!!c.obrigatorio}
+                    onCheckedChange={(v) => atualizarCampo(i, { obrigatorio: !!v })}
+                  />
+                  Obrigatório
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer" title="Salva no cadastro do cliente (precisa de contatoId e que a chave exista no catálogo)">
+                  <Checkbox
+                    checked={!!c.persistir}
+                    onCheckedChange={(v) => atualizarCampo(i, { persistir: !!v })}
+                  />
+                  Salvar no cadastro
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-1.5 mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => adicionarCampo()}
+            className="h-7 text-xs gap-1"
+          >
+            <Plus className="h-3 w-3" />
+            Adicionar campo
+          </Button>
+          {opcoesDoCatalogo.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  Importar do catálogo
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1.5 px-1">
+                  Campos personalizados do escritório
+                </p>
+                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                  {opcoesDoCatalogo.map((opt) => {
+                    const jaAdded = campos.some((c) => c.chave === opt.chave);
+                    return (
+                      <button
+                        key={opt.chave}
+                        onClick={() =>
+                          adicionarCampo({
+                            chave: opt.chave,
+                            tipo: normalizarTipo(opt.tipo),
+                            descricao: opt.label,
+                            persistir: true,
+                          })
+                        }
+                        disabled={jaAdded}
+                        className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-900/50 ${
+                          jaAdded ? "opacity-40 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        <p className="font-medium">{opt.label}</p>
+                        <p className="text-[9px] text-muted-foreground font-mono">{opt.chave} · {opt.tipo}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[10px] text-blue-900 dark:text-blue-200 leading-snug">
+        <strong>Como funciona:</strong> a IA recebe a mensagem e devolve um objeto
+        com os campos que conseguiu extrair (campos não mencionados ficam fora —
+        sem invenção). Os valores ficam em <code>{`{{extracao.<chave>}}`}</code>.
+        Quando "Salvar no cadastro" estiver ✅ e o contexto tiver <code>contatoId</code>,
+        também grava em <code>{`{{cliente.campos.<chave>}}`}</code>.
+      </div>
     </div>
   );
 }
@@ -2981,6 +3221,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
     }
     case "ia_responder":
       return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
+    case "ia_extrair_campos":
+      return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
     case "calcom_horarios":
       return (
         <div>

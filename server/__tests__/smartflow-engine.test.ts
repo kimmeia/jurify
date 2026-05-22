@@ -24,6 +24,7 @@ import {
 function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): SmartflowExecutores {
   return {
     chamarIA: vi.fn().mockResolvedValue("duvida"),
+    extrairCamposIA: vi.fn().mockResolvedValue({}),
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
@@ -173,6 +174,224 @@ describe("SmartFlow Engine", () => {
 
       expect(resultado.sucesso).toBe(false);
       expect(resultado.erro).toContain("Agente inativo");
+    });
+  });
+
+  describe("ia_extrair_campos", () => {
+    it("salva campos extraídos em ctx.extracao", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({
+        cpf: "123.456.789-00",
+        email: "joao@example.com",
+      });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: {
+            campos: [
+              { chave: "cpf", tipo: "cpf" },
+              { chave: "email", tipo: "email" },
+            ],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { mensagem: "meu CPF é 123.456.789-00 e email joao@example.com" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.extracao).toEqual({
+        cpf: "123.456.789-00",
+        email: "joao@example.com",
+      });
+      // chamou o extrator com os campos certos
+      expect(extrairCamposIA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mensagem: "meu CPF é 123.456.789-00 e email joao@example.com",
+          campos: [
+            expect.objectContaining({ chave: "cpf", tipo: "cpf" }),
+            expect.objectContaining({ chave: "email", tipo: "email" }),
+          ],
+        }),
+      );
+    });
+
+    it("falha graciosamente sem campos configurados", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_extrair_campos", config: { campos: [] } },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("pelo menos 1 campo");
+    });
+
+    it("falha quando a mensagem-fonte está vazia", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "cpf", tipo: "cpf" }] },
+        },
+      ];
+
+      // sem `mensagem` no contexto
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("vazia");
+    });
+
+    it("usa fonteMensagem customizada (ex: respostaUsuario)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ cpf: "999" });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: {
+            fonteMensagem: "respostaUsuario",
+            campos: [{ chave: "cpf", tipo: "cpf" }],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { respostaUsuario: "999", mensagem: "outra coisa" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(extrairCamposIA).toHaveBeenCalledWith(
+        expect.objectContaining({ mensagem: "999" }),
+      );
+    });
+
+    it("persiste campos com persistir=true quando há contatoId", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({
+        cpf: "123",
+        nomeFantasia: "Joaquim",
+      });
+      const definirCampoPersonalizadoCliente = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: {
+            campos: [
+              { chave: "cpf", tipo: "cpf", persistir: true },
+              { chave: "nomeFantasia", tipo: "texto", persistir: false },
+            ],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { mensagem: "...", contatoId: 42 },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // Só cpf foi persistido (persistir=true); nomeFantasia não.
+      expect(definirCampoPersonalizadoCliente).toHaveBeenCalledTimes(1);
+      expect(definirCampoPersonalizadoCliente).toHaveBeenCalledWith({
+        contatoId: 42,
+        chave: "cpf",
+        valor: "123",
+      });
+      // Espelha em cliente.campos
+      const cliente = resultado.contexto.cliente as any;
+      expect(cliente?.campos?.cpf).toBe("123");
+    });
+
+    it("não persiste quando não há contatoId no contexto (não falha, só pula)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ cpf: "123" });
+      const definirCampoPersonalizadoCliente = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "cpf", tipo: "cpf", persistir: true }] },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "..." }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(definirCampoPersonalizadoCliente).not.toHaveBeenCalled();
+      // Mas ainda salva em ctx.extracao
+      expect(resultado.contexto.extracao).toEqual({ cpf: "123" });
+    });
+
+    it("não derruba o passo quando persistência falha (catálogo não tem chave)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ chaveDesconhecida: "valor" });
+      const definirCampoPersonalizadoCliente = vi
+        .fn()
+        .mockRejectedValue(new Error("Campo personalizado \"chaveDesconhecida\" não existe"));
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "chaveDesconhecida", tipo: "texto", persistir: true }] },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { mensagem: "...", contatoId: 42 },
+        exec,
+      );
+
+      // Extração funcionou — persistência opcional, falha silenciosa.
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.extracao).toEqual({ chaveDesconhecida: "valor" });
+    });
+
+    it("mescla com extração anterior (não sobrescreve campos já no contexto)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ email: "novo@ex.com" });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "email", tipo: "email" }] },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        {
+          mensagem: "...",
+          extracao: { cpf: "123" },
+        },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // CPF anterior preservado + novo email adicionado
+      expect(resultado.contexto.extracao).toEqual({
+        cpf: "123",
+        email: "novo@ex.com",
+      });
     });
   });
 

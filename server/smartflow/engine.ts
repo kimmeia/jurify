@@ -152,6 +152,22 @@ export interface SmartflowExecutores {
    */
   chamarIA: (prompt: string, mensagem: string, contatoId?: number) => Promise<string>;
   /**
+   * Extração estruturada via tool calling. Recebe a mensagem + lista de
+   * campos a extrair; devolve um objeto chave→valor com o que a IA achou.
+   * Campos não encontrados na mensagem são omitidos do retorno (não viram
+   * `null` — ficam fora do objeto), pra não sobrescrever dados pré-existentes.
+   */
+  extrairCamposIA: (params: {
+    mensagem: string;
+    campos: Array<{
+      chave: string;
+      tipo: "texto" | "numero" | "boolean" | "data" | "email" | "cpf" | "cnpj" | "telefone" | "lista_texto";
+      descricao?: string;
+      obrigatorio?: boolean;
+    }>;
+    contatoId?: number;
+  }) => Promise<Record<string, unknown>>;
+  /**
    * Executa um agente IA pré-configurado (prompt + modelo + docs RAG salvos
    * em `agentesIa`) e retorna a resposta textual. Usado por `ia_responder`
    * quando o passo tem `config.agenteId`. `contatoId` é injetado no system
@@ -307,6 +323,118 @@ async function handleIAClassificar(
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `IA: ${err.message}` };
   }
+}
+
+/**
+ * Handler do passo `ia_extrair_campos` — IA lê uma mensagem e extrai
+ * campos estruturados via tool calling. Salva em `ctx.extracao.<chave>`
+ * pra que próximos passos possam usar via `{{extracao.cpf}}` etc.
+ *
+ * Quando o campo tem `persistir: true` e `ctx.contatoId` existe, também
+ * grava em `contatos.camposPersonalizados` via `definirCampoPersonalizadoCliente`.
+ * Falha de persistência NÃO derruba o passo — só loga aviso, porque a
+ * extração em si funcionou.
+ */
+async function handleIAExtrairCampos(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    campos?: Array<{
+      chave: string;
+      tipo: "texto" | "numero" | "boolean" | "data" | "email" | "cpf" | "cnpj" | "telefone" | "lista_texto";
+      descricao?: string;
+      obrigatorio?: boolean;
+      persistir?: boolean;
+    }>;
+    fonteMensagem?: string;
+  };
+  const campos = Array.isArray(cfg.campos) ? cfg.campos : [];
+  if (campos.length === 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Configure pelo menos 1 campo a extrair." };
+  }
+  // Resolve a mensagem-fonte: por default vem de ctx.mensagem, mas a config
+  // pode apontar pra outra chave (ex: 'respostaUsuario' depois de aguardar).
+  const fonteKey = (cfg.fonteMensagem || "mensagem").trim();
+  const partes = fonteKey.split(".");
+  let mensagemRaw: any = ctx;
+  for (const p of partes) {
+    if (mensagemRaw == null || typeof mensagemRaw !== "object") {
+      mensagemRaw = undefined;
+      break;
+    }
+    mensagemRaw = (mensagemRaw as any)[p];
+  }
+  const mensagem = typeof mensagemRaw === "string" ? mensagemRaw : "";
+  if (!mensagem) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: `Mensagem vazia em "${fonteKey}" — nada pra extrair.`,
+    };
+  }
+
+  let extraidos: Record<string, unknown>;
+  try {
+    extraidos = await exec.extrairCamposIA({
+      mensagem,
+      campos: campos.map((c) => ({
+        chave: c.chave,
+        tipo: c.tipo,
+        descricao: c.descricao,
+        obrigatorio: c.obrigatorio,
+      })),
+      contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+    });
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Extração IA: ${err.message}` };
+  }
+
+  // Mescla com extração anterior (se chamado múltiplas vezes no fluxo,
+  // mantém o que já foi achado e adiciona/sobrescreve com o novo).
+  const extracaoAnterior = (ctx.extracao as Record<string, unknown>) || {};
+  const novaExtracao = { ...extracaoAnterior, ...extraidos };
+
+  // Espelha em ctx.cliente.campos pra próximos passos lerem via {{cliente.campos.X}}
+  // — só pros campos marcados como persistir (semântica: "isso é dado do cliente").
+  const clienteAtual = (ctx.cliente as Record<string, any>) || {};
+  const camposClienteAtuais = (clienteAtual.campos as Record<string, any>) || {};
+  const novosCamposCliente = { ...camposClienteAtuais };
+
+  // Persistir no contato quando aplicável. Continua o fluxo mesmo se um campo
+  // específico falhar (loga via mensagemErro só se TODOS falharem).
+  const persistRequests = campos.filter((c) => c.persistir && c.chave in extraidos);
+  const contatoIdNum = typeof ctx.contatoId === "number" ? ctx.contatoId : null;
+  if (persistRequests.length > 0 && contatoIdNum == null) {
+    // Não temos contatoId — não dá pra persistir; só pula sem dar erro.
+    // O dado fica em ctx.extracao do mesmo jeito.
+  } else if (persistRequests.length > 0 && contatoIdNum != null) {
+    for (const c of persistRequests) {
+      const valor = extraidos[c.chave];
+      if (valor == null || valor === "") continue;
+      try {
+        await exec.definirCampoPersonalizadoCliente({
+          contatoId: contatoIdNum,
+          chave: c.chave,
+          valor: String(valor),
+        });
+        novosCamposCliente[c.chave] = String(valor);
+      } catch {
+        // Campo provavelmente não existe no catálogo do escritório. Não falha
+        // o passo inteiro — extração funcionou, persistência opcional.
+      }
+    }
+  }
+
+  return {
+    sucesso: true,
+    contexto: {
+      ...ctx,
+      extracao: novaExtracao,
+      cliente: { ...clienteAtual, campos: novosCamposCliente },
+    },
+  };
 }
 
 async function handleIAResponder(
@@ -1142,6 +1270,7 @@ async function handleDefinirCampoPersonalizado(
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
   ia_classificar: handleIAClassificar,
   ia_responder: handleIAResponder,
+  ia_extrair_campos: handleIAExtrairCampos,
   calcom_horarios: handleCalcomHorarios,
   calcom_agendar: handleCalcomAgendar,
   calcom_listar: handleCalcomListar,

@@ -216,6 +216,34 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       );
     },
 
+    async extrairCamposIA(params): Promise<Record<string, unknown>> {
+      // Reusa a mesma config do chatbot pra escolher provider + key + modelo.
+      // Tool calling é suportado por OpenAI e Anthropic; o módulo llm-extracao
+      // monta o request específico de cada um.
+      const { obterConfigChatBot } = await import("../integracoes/chatbot-openai");
+      const config = await obterConfigChatBot(escritorioId);
+      if (!config || !config.provider) {
+        throw new Error("Nenhuma IA configurada. Configure em Integrações → ChatGPT ou Claude.");
+      }
+      const { extrairCamposEstruturados } = await import("../integracoes/llm-extracao");
+      const contextoCliente = await resolverContextoCliente(escritorioId, params.contatoId);
+      const r = await extrairCamposEstruturados(
+        {
+          provider: config.provider,
+          modelo: config.modelo,
+          openaiApiKey: config.openaiApiKey,
+          anthropicApiKey: config.anthropicApiKey,
+          // Extração é determinística — força 0 mesmo se config tem temp maior.
+          temperatura: 0,
+          maxTokens: config.maxTokens ?? 1024,
+        },
+        params.mensagem,
+        params.campos,
+        contextoCliente || undefined,
+      );
+      return r.campos;
+    },
+
     async executarAgente(agenteId: number, mensagem: string, contatoId?: number): Promise<string> {
       const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
       const cfg = await obterAgentePorId(escritorioId, agenteId);

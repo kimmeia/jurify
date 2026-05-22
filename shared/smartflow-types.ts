@@ -61,6 +61,7 @@ export function getGrupoMeta(id: string): GrupoMeta | null {
 export type TipoPasso =
   | "ia_classificar"
   | "ia_responder"
+  | "ia_extrair_campos"
   | "calcom_horarios"
   | "calcom_agendar"
   | "calcom_listar"
@@ -178,6 +179,53 @@ export interface ConfigIaResponder {
   agenteId?: number;
   /** Fallback: prompt textual livre quando não há agente selecionado. */
   prompt?: string;
+}
+
+/**
+ * Tipos suportados pela extração estruturada. Espelham `TipoCampoExtracao`
+ * em `server/integracoes/llm-extracao.ts` — mantenha em sincronia.
+ */
+export type TipoCampoExtracao =
+  | "texto"
+  | "numero"
+  | "boolean"
+  | "data"
+  | "email"
+  | "cpf"
+  | "cnpj"
+  | "telefone"
+  | "lista_texto";
+
+export interface CampoExtracao {
+  /** Chave do campo no objeto retornado (camelCase recomendado). */
+  chave: string;
+  /** Tipo lógico — gera schema JSON correspondente. */
+  tipo: TipoCampoExtracao;
+  /** Descrição passada pra IA — quanto mais clara, melhor extração. */
+  descricao?: string;
+  /** Se true, vai no `required[]` do schema. IA ainda pode omitir se não achou. */
+  obrigatorio?: boolean;
+  /**
+   * Se true, salva em `contatos.camposPersonalizados[chave]` quando há
+   * `contatoId` no contexto. Requer que a `chave` exista no catálogo
+   * `camposPersonalizadosCliente` do escritório.
+   */
+  persistir?: boolean;
+}
+
+/**
+ * Config do passo `ia_extrair_campos` — IA usa tool calling pra preencher
+ * cada campo da lista. Resultado vai pra `ctx.extracao.<chave>`.
+ */
+export interface ConfigIaExtrairCampos {
+  /** Lista de campos a extrair. Mínimo 1. */
+  campos?: CampoExtracao[];
+  /**
+   * Caminho no contexto da mensagem a analisar. Default `mensagem`. Pode
+   * apontar pra outras variáveis tipo `respostaUsuario` (quando vem depois
+   * de `whatsapp_aguardar_resposta`).
+   */
+  fonteMensagem?: string;
 }
 export interface ConfigCalcomHorarios {
   duracao?: number;
@@ -360,6 +408,7 @@ export interface ConfigDefinirCampoPersonalizado {
 export type PassoConfigByTipo =
   | { tipo: "ia_classificar"; config: ConfigIaClassificar }
   | { tipo: "ia_responder"; config: ConfigIaResponder }
+  | { tipo: "ia_extrair_campos"; config: ConfigIaExtrairCampos }
   | { tipo: "calcom_horarios"; config: ConfigCalcomHorarios }
   | { tipo: "calcom_agendar"; config: ConfigCalcomAgendar }
   | { tipo: "calcom_listar"; config: ConfigCalcomListar }
@@ -498,6 +547,7 @@ export type ConfigGatilhoByTipo =
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
+  { id: "ia_extrair_campos", label: "Extrair dados (IA)", descricao: "IA lê a mensagem e extrai campos estruturados (CPF, email, datas...). Salva no contexto e opcionalmente no cadastro do cliente.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "ia" },
   { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "acoes" },
   { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "acoes" },
   { id: "calcom_listar", label: "Listar agendamentos", descricao: "Busca bookings no Cal.com e grava no contexto.", cor: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300", grupo: "acoes" },

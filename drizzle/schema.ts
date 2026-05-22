@@ -1975,6 +1975,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
   tipo: mysqlEnum("tipoPasso", [
     "ia_classificar",                // IA classifica intenção da mensagem
     "ia_responder",                  // IA gera resposta contextual
+    "ia_extrair_campos",             // IA extrai dados estruturados via tool calling
     "calcom_horarios",               // busca horários disponíveis no Cal.com
     "calcom_agendar",                // cria agendamento no Cal.com
     "calcom_listar",                 // lista bookings do Cal.com (contexto)
