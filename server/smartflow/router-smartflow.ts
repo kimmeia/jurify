@@ -494,4 +494,71 @@ export const smartflowRouter = router({
         cenario: cenario || null,
       };
     }),
+
+  /**
+   * KPIs do hero da listagem — métricas agregadas do escritório.
+   * Sempre retorna shape consistente (zeros quando vazio) pra evitar
+   * undefined no front durante o loading.
+   */
+  metricasResumo: protectedProcedure.query(async ({ ctx }) => {
+    const vazio = {
+      cenariosAtivos: 0,
+      execucoes30d: 0,
+      taxaSucessoPct: 0,
+      tempoMedioSeg: 0,
+    };
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return vazio;
+    const db = await getDb();
+    if (!db) return vazio;
+
+    const { sql, gte } = await import("drizzle-orm");
+
+    const desde = new Date();
+    desde.setDate(desde.getDate() - 30);
+
+    const [ativosRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(smartflowCenarios)
+      .where(
+        and(
+          eq(smartflowCenarios.escritorioId, esc.escritorio.id),
+          eq(smartflowCenarios.ativo, true),
+        ),
+      );
+
+    const [statsRow] = await db
+      .select({
+        total: sql<number>`count(*)`,
+        concluidos: sql<number>`sum(case when ${smartflowExecucoes.status} = 'concluido' then 1 else 0 end)`,
+        // Tempo médio em segundos para execuções concluídas (createdAt → updatedAt).
+        // Filtro pra não puxar 'rodando' (delay artificial) nem 'erro' (anormal).
+        tempoMedioSeg: sql<number>`coalesce(
+          avg(
+            case when ${smartflowExecucoes.status} = 'concluido'
+              then timestampdiff(second, ${smartflowExecucoes.createdAt}, ${smartflowExecucoes.updatedAt})
+              else null
+            end
+          ), 0
+        )`,
+      })
+      .from(smartflowExecucoes)
+      .where(
+        and(
+          eq(smartflowExecucoes.escritorioId, esc.escritorio.id),
+          gte(smartflowExecucoes.createdAt, desde),
+        ),
+      );
+
+    const total = Number(statsRow?.total || 0);
+    const concluidos = Number(statsRow?.concluidos || 0);
+    const taxaSucessoPct = total > 0 ? Math.round((concluidos / total) * 100) : 0;
+
+    return {
+      cenariosAtivos: Number(ativosRow?.count || 0),
+      execucoes30d: total,
+      taxaSucessoPct,
+      tempoMedioSeg: Math.round(Number(statsRow?.tempoMedioSeg || 0)),
+    };
+  }),
 });
