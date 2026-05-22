@@ -1,16 +1,15 @@
 /**
  * SmartFlow — página de listagem de cenários + execuções.
- * A criação/edição acontece na rota dedicada /smartflow/:id/editar,
- * com um editor visual (canvas ReactFlow).
+ * Criação/edição acontece na rota dedicada /smartflow/:id/editar
+ * (editor visual ReactFlow).
  */
 
-import { useState } from "react";
-import { Link } from "wouter";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -32,11 +31,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Zap, Plus, Trash2, Loader2, MessageCircle, Calendar,
-  Play, Clock,
-  Users, CheckCircle2, Activity, AlertTriangle, XCircle,
-  DollarSign, Pencil, FileText,
-  CalendarCheck, CalendarX, CalendarClock,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Activity, AlertTriangle, CheckCircle2, Clock,
+  FileText, Filter, Loader2, Search, XCircle, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -44,10 +43,15 @@ import {
   TIPO_PASSO_META,
   GATILHO_META,
   TIPO_CANAL_META,
-  getGatilhoMeta,
-  type GatilhoSmartflow,
   type StatusExecucao,
 } from "@shared/smartflow-types";
+import { SmartFlowHero } from "./smartflow/smartflow-hero";
+import {
+  CenarioCard,
+  categoriaDoGatilho,
+  legendaCoresGatilho,
+  type CenarioCardData,
+} from "./smartflow/cenario-card";
 
 function resumirGatilho(c: any): string | null {
   if (!c) return null;
@@ -77,21 +81,6 @@ function resumirGatilho(c: any): string | null {
   return null;
 }
 
-// Ícone por gatilho (local ao frontend).
-const GATILHO_ICON: Record<GatilhoSmartflow, LucideIcon> = {
-  whatsapp_mensagem: MessageCircle,
-  mensagem_canal: MessageCircle,
-  pagamento_recebido: DollarSign,
-  pagamento_vencido: AlertTriangle,
-  pagamento_proximo_vencimento: Clock,
-  novo_lead: Users,
-  agendamento_criado: CalendarCheck,
-  agendamento_cancelado: CalendarX,
-  agendamento_remarcado: CalendarClock,
-  agendamento_lembrete: Clock,
-  manual: Play,
-};
-
 const STATUS_EXEC: Record<StatusExecucao, { label: string; cor: string; icon: LucideIcon }> = {
   rodando: { label: "Rodando", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", icon: Activity },
   concluido: { label: "Concluído", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", icon: CheckCircle2 },
@@ -99,14 +88,20 @@ const STATUS_EXEC: Record<StatusExecucao, { label: string; cor: string; icon: Lu
   cancelado: { label: "Cancelado", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", icon: AlertTriangle },
 };
 
+type FiltroCategoria = "todas" | "mensagem" | "asaas" | "calcom" | "crm" | "manual";
+
 export default function SmartFlow() {
   const [tab, setTab] = useState("cenarios");
   const [detalheId, setDetalheId] = useState<number | null>(null);
   const [excluirCenario, setExcluirCenario] = useState<{ id: number; nome: string } | null>(null);
+  const [busca, setBusca] = useState("");
+  const [categoriaFilter, setCategoriaFilter] = useState<FiltroCategoria>("todas");
+  const [statusFilter, setStatusFilter] = useState<"todos" | StatusExecucao>("todos");
+  const [cenarioFilter, setCenarioFilter] = useState<number | "todos">("todos");
 
   const { data: cenarios, isLoading, refetch } = (trpc as any).smartflow.listar.useQuery();
   const { data: execucoes } = (trpc as any).smartflow.execucoes.useQuery(
-    { limite: 50 },
+    { limite: 200 },
     { refetchInterval: 10000 },
   );
 
@@ -138,144 +133,262 @@ export default function SmartFlow() {
   const lista = cenarios || [];
   const execs = execucoes || [];
 
+  /**
+   * Métricas agregadas por cenário (execuções e taxa de sucesso últimos 7 dias).
+   * Computadas no client a partir da lista já buscada — economiza N queries.
+   * Para escritórios com >200 execuções/dia o `execucoes` retorna no máx 200
+   * itens, então a métrica vai subestimar; aceitável pra um dashboard de
+   * "saúde rápida".
+   */
+  const metricasPorCenario = useMemo(() => {
+    const seteDiasAtras = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const map = new Map<number, { execucoes7d: number; concluidos7d: number }>();
+    for (const e of execs) {
+      const ts = e.createdAt instanceof Date ? e.createdAt.getTime() : new Date(e.createdAt).getTime();
+      if (!Number.isFinite(ts) || ts < seteDiasAtras) continue;
+      const cur = map.get(e.cenarioId) ?? { execucoes7d: 0, concluidos7d: 0 };
+      cur.execucoes7d++;
+      if (e.status === "concluido") cur.concluidos7d++;
+      map.set(e.cenarioId, cur);
+    }
+    return map;
+  }, [execs]);
+
+  const cenariosVisiveis: CenarioCardData[] = useMemo(() => {
+    const buscaNorm = busca.trim().toLowerCase();
+    return lista
+      .filter((c: any) => {
+        if (categoriaFilter !== "todas" && categoriaDoGatilho(c.gatilho) !== categoriaFilter) return false;
+        if (buscaNorm) {
+          const nome = (c.nome || "").toLowerCase();
+          const desc = (c.descricao || "").toLowerCase();
+          if (!nome.includes(buscaNorm) && !desc.includes(buscaNorm)) return false;
+        }
+        return true;
+      })
+      .map((c: any) => {
+        const m = metricasPorCenario.get(c.id);
+        const exec7d = m?.execucoes7d ?? 0;
+        const taxaSucesso = exec7d > 0 ? Math.round(((m?.concluidos7d ?? 0) / exec7d) * 100) : 0;
+        return {
+          id: c.id,
+          nome: c.nome,
+          descricao: c.descricao,
+          gatilho: c.gatilho,
+          ativo: !!c.ativo,
+          resumoGatilho: resumirGatilho(c),
+          qtdPassos: Array.isArray(c.passos) ? c.passos.length : 0,
+          execucoes7d: exec7d,
+          taxaSucessoPct: taxaSucesso,
+        };
+      });
+  }, [lista, busca, categoriaFilter, metricasPorCenario]);
+
+  const execucoesVisiveis = useMemo(() => {
+    return execs.filter((e: any) => {
+      if (statusFilter !== "todos" && e.status !== statusFilter) return false;
+      if (cenarioFilter !== "todos" && e.cenarioId !== cenarioFilter) return false;
+      return true;
+    });
+  }, [execs, statusFilter, cenarioFilter]);
+
+  const nomePorCenario = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of lista) m.set(c.id, c.nome);
+    return m;
+  }, [lista]);
+
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40">
-          <Zap className="h-6 w-6 text-amber-600" />
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <h1 className="text-2xl font-bold tracking-tight">SmartFlow</h1>
-          <p className="text-sm text-muted-foreground">Automações inteligentes — WhatsApp + IA + Cal.com</p>
-        </div>
-        <Button size="sm" variant="outline" onClick={() => criarTemplateMut.mutate()} disabled={criarTemplateMut.isPending}>
-          {criarTemplateMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1" />}
-          Atendimento
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => criarPgtoKanbanMut.mutate()} disabled={criarPgtoKanbanMut.isPending}>
-          {criarPgtoKanbanMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1" />}
-          Pagamento → Kanban
-        </Button>
-        <Button size="sm" asChild>
-          <Link href="/smartflow/novo">
-            <Plus className="h-3.5 w-3.5 mr-1" /> Novo cenário
-          </Link>
-        </Button>
-      </div>
+      <SmartFlowHero
+        onCriarAtendimento={() => criarTemplateMut.mutate()}
+        onCriarPagamentoKanban={() => criarPgtoKanbanMut.mutate()}
+        pendingAtendimento={criarTemplateMut.isPending}
+        pendingPagamento={criarPgtoKanbanMut.isPending}
+      />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-2 h-9">
-          <TabsTrigger value="cenarios" className="text-xs gap-1"><Zap className="h-3 w-3" /> Cenários</TabsTrigger>
-          <TabsTrigger value="execucoes" className="text-xs gap-1"><Activity className="h-3 w-3" /> Execuções</TabsTrigger>
+          <TabsTrigger value="cenarios" className="text-xs gap-1">
+            <Zap className="h-3 w-3" /> Cenários
+            {lista.length > 0 && (
+              <span className="bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 px-1.5 py-0.5 rounded text-[10px] ml-0.5">
+                {lista.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="execucoes" className="text-xs gap-1">
+            <Activity className="h-3 w-3" /> Execuções
+            {execs.length > 0 && (
+              <span className="text-muted-foreground text-[10px] ml-0.5">{execs.length}</span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="cenarios" className="mt-4">
+        {/* ─── Aba Cenários ───────────────────────────────────────────── */}
+        <TabsContent value="cenarios" className="mt-4 space-y-4">
+          {!isLoading && lista.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px] max-w-xs">
+                <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar cenário..."
+                  className="h-9 pl-8 text-xs"
+                />
+              </div>
+              <Select value={categoriaFilter} onValueChange={(v) => setCategoriaFilter(v as FiltroCategoria)}>
+                <SelectTrigger className="h-9 w-44 text-xs">
+                  <Filter className="h-3.5 w-3.5 mr-1.5" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as categorias</SelectItem>
+                  <SelectItem value="mensagem">💬 Mensagem</SelectItem>
+                  <SelectItem value="asaas">💰 Asaas (financeiro)</SelectItem>
+                  <SelectItem value="calcom">📅 Cal.com (agenda)</SelectItem>
+                  <SelectItem value="crm">👥 CRM</SelectItem>
+                  <SelectItem value="manual">▶ Manual</SelectItem>
+                </SelectContent>
+              </Select>
+              {cenariosVisiveis.length !== lista.length && (
+                <span className="text-[11px] text-muted-foreground">
+                  {cenariosVisiveis.length} de {lista.length} cenários
+                </span>
+              )}
+            </div>
+          )}
+
           {isLoading ? (
-            <div className="space-y-3"><Skeleton className="h-32" /><Skeleton className="h-32" /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <Skeleton className="h-48" />
+              <Skeleton className="h-48" />
+              <Skeleton className="h-48" />
+              <Skeleton className="h-48" />
+            </div>
           ) : lista.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-16 text-center">
                 <Zap className="h-12 w-12 text-muted-foreground/20 mb-4" />
                 <h3 className="text-lg font-semibold">Nenhum cenário criado</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                  Use um template rápido acima ou clique em <strong>Novo cenário</strong> para abrir o editor visual.
+                  Use um template rápido no topo ou clique em <strong>Novo cenário</strong> para abrir o editor visual.
+                </p>
+              </CardContent>
+            </Card>
+          ) : cenariosVisiveis.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center py-12 text-center">
+                <Search className="h-10 w-10 text-muted-foreground/20 mb-3" />
+                <p className="text-sm font-medium">Nenhum cenário corresponde aos filtros</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Limpe a busca ou troque a categoria pra ver os cenários disponíveis.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => { setBusca(""); setCategoriaFilter("todas"); }}
+                >
+                  Limpar filtros
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {cenariosVisiveis.map((c) => (
+                  <CenarioCard
+                    key={c.id}
+                    cenario={c}
+                    onToggleAtivo={(id, ativo) => toggleMut.mutate({ id, ativo })}
+                    onExcluir={(c) => setExcluirCenario({ id: c.id, nome: c.nome })}
+                    onExecutar={(id) => executarMut.mutate({ cenarioId: id })}
+                    onAbrirHistorico={(id) => {
+                      setCenarioFilter(id);
+                      setStatusFilter("todos");
+                      setTab("execucoes");
+                    }}
+                    togglePending={toggleMut.isPending}
+                    executarPending={executarMut.isPending}
+                  />
+                ))}
+              </div>
+
+              <LegendaCores />
+            </>
+          )}
+        </TabsContent>
+
+        {/* ─── Aba Execuções ──────────────────────────────────────────── */}
+        <TabsContent value="execucoes" className="mt-4 space-y-3">
+          {execs.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                <SelectTrigger className="h-9 w-40 text-xs">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="concluido">✓ Concluído</SelectItem>
+                  <SelectItem value="rodando">⏵ Rodando</SelectItem>
+                  <SelectItem value="erro">✗ Erro</SelectItem>
+                  <SelectItem value="cancelado">⊘ Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(cenarioFilter)}
+                onValueChange={(v) => setCenarioFilter(v === "todos" ? "todos" : Number(v))}
+              >
+                <SelectTrigger className="h-9 w-56 text-xs">
+                  <SelectValue placeholder="Cenário" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os cenários</SelectItem>
+                  {lista.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(statusFilter !== "todos" || cenarioFilter !== "todos") && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 text-xs"
+                  onClick={() => { setStatusFilter("todos"); setCenarioFilter("todos"); }}
+                >
+                  Limpar filtros
+                </Button>
+              )}
+              {execucoesVisiveis.length !== execs.length && (
+                <span className="text-[11px] text-muted-foreground ml-auto">
+                  {execucoesVisiveis.length} de {execs.length}
+                </span>
+              )}
+            </div>
+          )}
+
+          {execucoesVisiveis.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center py-12 text-center">
+                <Activity className="h-10 w-10 text-muted-foreground/20 mb-3" />
+                <p className="text-sm font-medium">
+                  {execs.length === 0 ? "Nenhuma execução registrada" : "Nenhuma execução com esses filtros"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {execs.length === 0
+                    ? "Quando um cenário for acionado, os logs aparecerão aqui."
+                    : "Tente limpar os filtros pra ver mais resultados."}
                 </p>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {lista.map((c: any) => {
-                const gatilho = getGatilhoMeta(c.gatilho);
-                const GIcon = GATILHO_ICON[c.gatilho as GatilhoSmartflow] ?? Play;
-                const resumoGat = resumirGatilho(c);
-                return (
-                  <Card key={c.id} className="hover:shadow-sm transition-all flex flex-col">
-                    <CardContent className="pt-4 pb-4 flex flex-col gap-3 h-full">
-                      {/* Header: ícone + ações (editar, toggle ativo, excluir) */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500/10 to-indigo-500/10 flex items-center justify-center shrink-0">
-                          <Zap className="h-4 w-4 text-violet-600" />
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Editar" asChild>
-                            <Link href={`/smartflow/${c.id}/editar`}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                          <Switch
-                            checked={c.ativo}
-                            onCheckedChange={(v: boolean) => toggleMut.mutate({ id: c.id, ativo: v })}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive"
-                            onClick={() => setExcluirCenario({ id: c.id, nome: c.nome })}
-                            disabled={deletarMut.isPending}
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Nome + descrição */}
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate" title={c.nome}>{c.nome}</p>
-                        {c.descricao && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.descricao}</p>
-                        )}
-                      </div>
-
-                      {/* Badges (gatilho + config + ativo) — alinhadas no rodapé via mt-auto */}
-                      <div className="flex items-center gap-1.5 flex-wrap mt-auto">
-                        <Badge variant="outline" className="text-[9px] gap-1">
-                          <GIcon className="h-2.5 w-2.5" />{gatilho.label}
-                        </Badge>
-                        {resumoGat && (
-                          <Badge variant="secondary" className="text-[9px]">{resumoGat}</Badge>
-                        )}
-                        {c.ativo
-                          ? <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px]">Ativo</Badge>
-                          : <Badge variant="outline" className="text-[9px] text-muted-foreground">Inativo</Badge>}
-                      </div>
-
-                      {/* Botão "Executar agora" só pra gatilho manual */}
-                      {c.gatilho === "manual" && c.ativo && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1 text-xs w-full"
-                          onClick={() => executarMut.mutate({ cenarioId: c.id })}
-                          disabled={executarMut.isPending}
-                          title="Executar este cenário agora"
-                        >
-                          {executarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                          Executar agora
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="execucoes" className="mt-4">
-          {execs.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center py-12 text-center">
-                <Activity className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-sm font-medium">Nenhuma execução registrada</p>
-                <p className="text-xs text-muted-foreground mt-1">Quando um cenário for acionado, os logs aparecerão aqui.</p>
-              </CardContent>
-            </Card>
-          ) : (
             <div className="space-y-2">
-              {execs.map((e: any) => {
+              {execucoesVisiveis.map((e: any) => {
                 const st = STATUS_EXEC[e.status as StatusExecucao] || { label: e.status, cor: "bg-gray-100", icon: Clock };
                 const StIcon = st.icon;
+                const nomeCenario = nomePorCenario.get(e.cenarioId) || `Cenário #${e.cenarioId}`;
                 return (
                   <Card
                     key={e.id}
@@ -291,7 +404,9 @@ export default function SmartFlow() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge className={`text-[9px] ${st.cor}`}>{st.label}</Badge>
-                            <span className="text-xs text-muted-foreground">Cenário #{e.cenarioId}</span>
+                            <span className="text-xs font-medium truncate max-w-[280px]" title={nomeCenario}>
+                              {nomeCenario}
+                            </span>
                             <span className="text-xs text-muted-foreground">Passo {e.passoAtual}</span>
                             {e.retomarEm && (
                               <Badge variant="outline" className="text-[9px] gap-1 border-amber-500/30 text-amber-700">
@@ -339,12 +454,34 @@ export default function SmartFlow() {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deletarMut.isPending ? "Excluindo..." : "Excluir"}
+              {deletarMut.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Excluindo...</>
+              ) : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function LegendaCores() {
+  return (
+    <Card>
+      <CardContent className="pt-3 pb-3">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+          Legenda das cores
+        </p>
+        <div className="flex flex-wrap gap-3 text-xs">
+          {legendaCoresGatilho().map((l) => (
+            <div key={l.label} className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded ${l.cor}`}></div>
+              <span className="text-muted-foreground">{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
