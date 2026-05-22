@@ -412,6 +412,38 @@ class AsaasRateGuardImpl {
       janelaCurtaCount: this.janelaCurtaCount,
     };
   }
+
+  /**
+   * Reseta o contador da Camada 2 (cota 12h LOCAL).
+   *
+   * IMPORTANTE: isto só destrava o bloqueio preemptivo do Jurify. NÃO
+   * destrava a cota REAL no Asaas — se o Asaas estiver em 429, a próxima
+   * chamada vai falhar igual, e a Camada 1 (via headers) bloqueia de novo.
+   *
+   * Use APENAS depois de validar via GET de teste que `RateLimit-Remaining`
+   * do Asaas devolveu valor saudável. Caller é responsável por essa
+   * validação — este método não consulta o Asaas.
+   *
+   * Persiste no DB pra outras instâncias verem o reset.
+   */
+  async forcarResetCamada2(motivo: string): Promise<{
+    quotaCountAntes: number;
+    quotaCountDepois: number;
+  }> {
+    const anterior = this.quotaCount;
+    this.quotaCount = 0;
+    this.quotaWindowStart = agora();
+    this.endpointLimits.clear();
+    this.janelaCurtaCount = 0;
+    this.janelaCurtaInicio = agora();
+    this.flushPendingCount = 0;
+    await this.flushToDb();
+    log.warn(
+      { motivo, quotaCountAntes: anterior },
+      "[Rate Guard] Camada 2 resetada manualmente",
+    );
+    return { quotaCountAntes: anterior, quotaCountDepois: 0 };
+  }
 }
 
 // ─── Singleton por API key ─────────────────────────────────────────────────

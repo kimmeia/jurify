@@ -17,12 +17,152 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Loader2, Plus, MessageCircle, Wifi, WifiOff, Eye, EyeOff, X,
   Bot, Plug, Shield, CheckCircle, AlertTriangle, Link2, Clock, Pause, Play, Square,
-  History, RotateCcw, Receipt,
+  History, RotateCcw, Receipt, Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
 import WhatsappQR from "@/components/integracoes/WhatsappQR";
+
+/**
+ * Sub-seção do AsaasDialog: visibilidade da cota local do rate guard e
+ * reset manual quando o Asaas REAL tiver folga.
+ *
+ * O rate guard local impede o Jurify de mandar requisições além da cota
+ * 12h do Asaas (25k/12h). Mas quando ele bloqueia preemptivamente, todos
+ * os syncs (regular + histórico + sweep) abortam — operador fica cego
+ * sem saber quando libera. Esta seção mostra X/20k usadas + janela e
+ * permite reset manual com proteção: GET de teste lê `RateLimit-Remaining`
+ * real do Asaas antes — se o Asaas em si está estourado, o backend
+ * recusa o reset (resetar local sem o Asaas estar livre só atrasa o 429).
+ */
+function RateGuardSection({ canEdit }: { canEdit: boolean }) {
+  const utils = trpc.useUtils();
+  const statusQ = (trpc as any).asaas?.statusRateGuard?.useQuery?.(undefined, {
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const status = statusQ?.data;
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const resetMut = (trpc as any).asaas?.resetarRateGuard?.useMutation?.({
+    onSuccess: (r: any) => {
+      if (r?.sucesso) {
+        toast.success("Rate guard resetado", {
+          description: `Cota local zerada. Asaas tem ${r.remaining ?? "?"} requests restantes.`,
+        });
+      } else {
+        toast.error("Reset não permitido", {
+          description: r?.motivo ?? "Tente novamente mais tarde.",
+        });
+      }
+      utils.asaas.statusRateGuard?.invalidate?.();
+    },
+    onError: (err: any) => toast.error("Erro", { description: err.message }),
+  });
+
+  if (!status?.conectado) return null;
+
+  const bloqueado = status.bloqueado;
+  const percent = status.quotaPercent ?? 0;
+  const corBarra = bloqueado
+    ? "bg-red-500"
+    : percent > 80
+      ? "bg-amber-500"
+      : "bg-emerald-500";
+
+  return (
+    <>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/30 p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <Gauge className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Cota do Asaas
+          </span>
+          {bloqueado && (
+            <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] ml-auto">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Bloqueado
+            </Badge>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[11px] text-slate-700 dark:text-slate-300">
+            <span>{status.quotaUsada.toLocaleString("pt-BR")} / {status.quotaLimite.toLocaleString("pt-BR")} usadas</span>
+            <span>{percent}%</span>
+          </div>
+          <div className="h-2 bg-slate-200/60 dark:bg-slate-700/60 rounded-full overflow-hidden">
+            <div className={`h-full transition-all ${corBarra}`} style={{ width: `${percent}%` }} />
+          </div>
+          <p className="text-[10px] text-slate-600 dark:text-slate-400 flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Janela libera em ~{status.horasAteExpirar}h
+          </p>
+        </div>
+
+        {bloqueado && (
+          <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+            <strong>Sync não progride enquanto bloqueado.</strong> Tentar resetar verifica
+            antes se o Asaas real liberou — se sim, libera a fila do Jurify.
+            Se a cota REAL do Asaas estourou, o sistema recusa o reset (resetar
+            agora só queimaria o bloqueio real de 12h).
+          </div>
+        )}
+
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full text-xs"
+          disabled={!canEdit || resetMut?.isPending}
+          onClick={() => setConfirmOpen(true)}
+        >
+          {resetMut?.isPending ? (
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          ) : (
+            <RotateCcw className="h-3 w-3 mr-1" />
+          )}
+          Resetar cota local (com validação)
+        </Button>
+      </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar cota local do Asaas?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Vou consultar o Asaas pra ver quantos requests sua conta ainda tem
+                disponíveis na janela atual. Se houver folga, libero a fila local
+                do Jurify e os syncs voltam a rodar.
+              </span>
+              <span className="block">
+                <strong>Se o Asaas em si estiver estourado</strong>, o reset é
+                recusado — resetar agora só atrasaria o bloqueio real de 12h.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmOpen(false);
+                resetMut?.mutate?.();
+              }}
+            >
+              Verificar e resetar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
 
 /**
  * Sub-seção do AsaasDialog: controla a importação histórica de cobranças.
@@ -658,6 +798,8 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
                 {reconfWebhookMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wifi className="h-3 w-3 mr-1" />}
                 Reconfigurar Webhook (sync em tempo real)
               </Button>
+
+              <RateGuardSection canEdit={canEdit} />
 
               <ImportarHistoricoSection canEdit={canEdit} />
 

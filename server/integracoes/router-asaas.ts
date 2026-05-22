@@ -441,6 +441,96 @@ export const asaasRouter = router({
     }
   }),
 
+  /**
+   * Estado do rate guard local pra mostrar na UI ("Cota: X/20k usadas, libera
+   * em Yh"). Leitura puramente local — não chama o Asaas.
+   *
+   * Retorna `bloqueado=true` quando a Camada 2 está esgotada e nenhum sync
+   * vai progredir até o reset (manual ou automático em 12h da janela).
+   */
+  statusRateGuard: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await getEscritorioPorUsuario(ctx.user.id);
+    if (!esc) return { conectado: false } as const;
+    const client = await getAsaasClient(esc.escritorio.id);
+    if (!client) return { conectado: false } as const;
+
+    const snap = client.getRateGuardSnapshot();
+    const QUOTA_LIMITE = 20_000;
+    const QUOTA_JANELA_MS = 12 * 60 * 60 * 1000;
+    const janelaExpira = snap.quotaWindowStart + QUOTA_JANELA_MS;
+    const agora = Date.now();
+    const msAteExpirar = Math.max(0, janelaExpira - agora);
+    return {
+      conectado: true,
+      quotaUsada: snap.quotaCount,
+      quotaLimite: QUOTA_LIMITE,
+      quotaPercent: Math.min(100, Math.round((snap.quotaCount / QUOTA_LIMITE) * 100)),
+      bloqueado: snap.quotaCount >= QUOTA_LIMITE,
+      janelaCurta: snap.janelaCurtaCount,
+      inflight: snap.inflight,
+      msAteExpirar,
+      horasAteExpirar: Math.ceil(msAteExpirar / (60 * 60 * 1000)),
+    };
+  }),
+
+  /**
+   * Reset manual do rate guard local (Camada 2). Antes de zerar o contador,
+   * faz 1 GET ao /finance/balance do Asaas (bypassa o guard) pra ler
+   * `RateLimit-Remaining`. Se o Asaas devolver 429 ou remaining muito baixo,
+   * NÃO reseta — informar isso à UI evita queimar 12h de bloqueio real ao
+   * tentar a próxima chamada logo após reset.
+   *
+   * Só dono/gestor (gate financeiro `editar`) pode resetar — operador comum
+   * não deve poder.
+   */
+  resetarRateGuard: protectedProcedure.mutation(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "financeiro", "editar");
+    if (!perm.editar) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sem permissão para resetar o rate guard.",
+      });
+    }
+    const esc = await requireEscritorio(ctx.user.id);
+    const client = await getAsaasClient(esc.escritorio.id);
+    if (!client) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Asaas não está conectado.",
+      });
+    }
+
+    const teste = await client.testarCotaRealAsaas();
+    if (teste.estouradoNoAsaas) {
+      return {
+        sucesso: false,
+        motivo:
+          "O Asaas REAL está em 429 (cota global estourada). Resetar agora só vai cair no mesmo bloqueio — aguarde a liberação da janela.",
+        resetSec: teste.resetSec,
+        remaining: teste.remaining,
+      };
+    }
+    // Margem conservadora: se a cota real está com menos de 1000 reqs
+    // restantes (5% de 20k), também recusa pra dar folga ao próximo sync.
+    if (teste.remaining !== null && teste.remaining < 1000) {
+      return {
+        sucesso: false,
+        motivo: `O Asaas só tem ${teste.remaining} requests restantes na janela atual. Resetar agora arrisca estourar de novo em segundos. Aguarde a janela rodar.`,
+        resetSec: teste.resetSec,
+        remaining: teste.remaining,
+      };
+    }
+
+    const r = await client.resetarRateGuardLocal(
+      `manual por user=${ctx.user.id} (Asaas remaining=${teste.remaining ?? "?"})`,
+    );
+    return {
+      sucesso: true,
+      quotaCountAntes: r.quotaCountAntes,
+      remaining: teste.remaining,
+    };
+  }),
+
   /** Conecta o Asaas com a API key do escritório */
   conectar: protectedProcedure
     .input(z.object({ apiKey: z.string().min(10), webhookUrl: z.string().url().optional() }))
