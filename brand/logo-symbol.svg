@@ -1,0 +1,29 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow">
+  <defs>
+    <linearGradient id="jf-bg" x1="24" y1="24" x2="232" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset=".45" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <radialGradient id="jf-shine" cx="40" cy="20" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="jf-mark" x1="0" y1="56" x2="0" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9E5FF"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#jf-bg)"/>
+  <rect width="256" height="256" rx="56" fill="url(#jf-shine)"/>
+
+  <g stroke="url(#jf-mark)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M58 72 H198"/>
+    <path d="M128 72 V162"/>
+    <path d="M128 162 Q128 202 88 202 Q48 202 48 162"/>
+  </g>
+
+  <circle cx="58" cy="72" r="13" fill="url(#jf-mark)"/>
+  <circle cx="198" cy="72" r="13" fill="url(#jf-mark)"/>
+</svg>

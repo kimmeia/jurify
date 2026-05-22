@@ -1,0 +1,10 @@
+<svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow">
+  <rect width="256" height="256" rx="56" fill="#0B0A1F"/>
+  <g stroke="#FFFFFF" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M58 72 H198"/>
+    <path d="M128 72 V162"/>
+    <path d="M128 162 Q128 202 88 202 Q48 202 48 162"/>
+  </g>
+  <circle cx="58" cy="72" r="13" fill="#FFFFFF"/>
+  <circle cx="198" cy="72" r="13" fill="#FFFFFF"/>
+</svg>

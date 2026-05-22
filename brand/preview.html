@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JuridFlow — Identidade Visual</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F7F6FB;
+      --panel: #FFFFFF;
+      --ink: #0B0A1F;
+      --ink-soft: #5C5A75;
+      --line: #E6E3F2;
+      --primary: #4F46E5;
+      --primary-deep: #1E1B4B;
+      --accent: #7C3AED;
+      --accent-soft: #A78BFA;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-feature-settings: 'ss01' on, 'cv11' on;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
+    }
+    .container { max-width: 1180px; margin: 0 auto; padding: 64px 28px; }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 50%, #7C3AED 100%);
+      color: white;
+      border-radius: 32px;
+      padding: 72px 48px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 30px 60px -20px rgba(76, 70, 229, .4);
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 0%, rgba(255,255,255,.18), transparent 50%);
+      pointer-events: none;
+    }
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 56px;
+      align-items: center;
+      position: relative;
+    }
+    .hero img { width: 100%; display: block; filter: drop-shadow(0 10px 30px rgba(0,0,0,.3)); }
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 800;
+      margin: 0 0 12px;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .hero h1 .light { font-weight: 300; color: #DDD6FE; }
+    .hero p { opacity: .85; font-size: 18px; margin: 0; max-width: 520px; line-height: 1.5; }
+    .hero .tag {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(255,255,255,.12);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    /* Section */
+    .section { margin-top: 72px; }
+    .section-head { margin-bottom: 28px; }
+    .section-head h2 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin: 0 0 8px;
+    }
+    .section-head h3 {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+    .section-head p { color: var(--ink-soft); font-size: 16px; margin: 0; max-width: 640px; line-height: 1.55; }
+
+    /* Grid de variantes */
+    .variants {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .variant {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 220px;
+      position: relative;
+      transition: transform .2s ease;
+    }
+    .variant:hover { transform: translateY(-2px); }
+    .variant.dark { background: #0B0A1F; }
+    .variant.gradient {
+      background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 50%, #7C3AED 100%);
+    }
+    .variant img { max-width: 100%; max-height: 120px; }
+    .variant .label {
+      position: absolute;
+      bottom: 14px;
+      left: 16px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+    }
+    .variant.dark .label, .variant.gradient .label { color: rgba(255,255,255,.6); }
+
+    /* Tamanhos */
+    .sizes {
+      display: flex;
+      align-items: flex-end;
+      gap: 32px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 40px;
+      flex-wrap: wrap;
+    }
+    .size-item { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .size-item .label { font-size: 11px; font-weight: 500; color: var(--ink-soft); letter-spacing: .04em; }
+
+    /* Paleta */
+    .palette { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+    .swatch { border-radius: 16px; padding: 18px; height: 130px; display: flex; flex-direction: column; justify-content: flex-end; color: white; position: relative; overflow: hidden; }
+    .swatch.light { color: var(--ink); border: 1px solid var(--line); }
+    .swatch .name { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+    .swatch .hex { font-size: 11px; opacity: .8; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+    /* Tipografia */
+    .typography {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 40px;
+    }
+    .type-row { display: flex; align-items: baseline; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .type-row:last-child { border-bottom: 0; }
+    .type-row .meta { width: 180px; font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+    .type-row .sample { flex: 1; color: var(--ink); }
+
+    /* Aplicações */
+    .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .app-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .app-card .body { padding: 22px; }
+    .app-card h4 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+    .app-card p { margin: 0; color: var(--ink-soft); font-size: 13px; }
+
+    .browser-mock {
+      background: #F1EFF8;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .browser-mock .dots { display: flex; gap: 6px; }
+    .browser-mock .dots span { width: 10px; height: 10px; border-radius: 50%; background: #CFCBE0; }
+    .browser-mock .tab {
+      background: white;
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--ink-soft);
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .browser-mock .tab img { width: 14px; height: 14px; }
+
+    .navbar-mock {
+      background: white;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .navbar-mock img { height: 32px; }
+    .navbar-mock .links { display: flex; gap: 20px; font-size: 13px; color: var(--ink-soft); }
+    .navbar-mock .cta { background: var(--accent); color: white; padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+
+    .app-icon-mock {
+      background: linear-gradient(180deg, #F7F6FB 0%, #E9E5F8 100%);
+      padding: 36px;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    .app-icon-mock img { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 8px 20px -4px rgba(76, 70, 229, .35); }
+    .app-icon-mock img.r-large { width: 96px; height: 96px; border-radius: 22px; }
+    .app-icon-mock img.r-small { width: 48px; height: 48px; border-radius: 12px; }
+
+    /* Footer */
+    .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 13px; display: flex; justify-content: space-between; }
+
+    @media (max-width: 820px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .variants, .apps { grid-template-columns: 1fr 1fr; }
+      .palette { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-inner">
+        <img src="logo-symbol.svg" alt="JuridFlow" />
+        <div>
+          <div class="tag">Identidade Visual · 2026</div>
+          <h1>Jurid<span class="light">Flow</span></h1>
+          <p>O sistema jurídico que une autoridade e fluxo. Uma marca pensada para escritórios que querem peso institucional e agilidade tecnológica no mesmo gesto.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEITO -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Conceito</h2>
+        <h3>O "J" Monumental em Fluxo</h3>
+        <p>Um <strong>J geométrico</strong> que sintetiza três ideias em uma forma: a <strong>barra superior</strong> com pesos nas extremidades evoca o equilíbrio da balança da justiça, a <strong>haste vertical</strong> é o pilar / coluna dos tribunais, e o <strong>gancho fluido</strong> na base representa o movimento, a automação, o <em>Flow</em>. Sem ornamentos: a marca confia na própria geometria.</p>
+      </div>
+    </div>
+
+    <!-- VARIAÇÕES PRINCIPAIS -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Variações do símbolo</h2>
+        <h3>Como a marca aparece em diferentes contextos</h3>
+      </div>
+      <div class="variants">
+        <div class="variant gradient">
+          <img src="logo-symbol.svg" alt="" />
+          <div class="label">Primária · Gradiente</div>
+        </div>
+        <div class="variant">
+          <img src="logo-symbol-mono-light.svg" alt="" />
+          <div class="label">Mono · Light</div>
+        </div>
+        <div class="variant dark">
+          <img src="logo-symbol-mono-dark.svg" alt="" />
+          <div class="label">Mono · Dark</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGO HORIZONTAL -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Logo composta</h2>
+        <h3>Símbolo + wordmark lado a lado</h3>
+        <p>Use a versão horizontal em assinatura de e-mail, cabeçalho do app, documentos e materiais institucionais. O contraste tipográfico entre <strong>Jurid</strong> (ExtraBold) e <strong>Flow</strong> (Light) reforça o conceito.</p>
+      </div>
+      <div class="variants" style="grid-template-columns: 1fr 1fr;">
+        <div class="variant" style="min-height: 200px;">
+          <img src="logo-horizontal.svg" alt="" style="max-height: 130px;" />
+          <div class="label">Light</div>
+        </div>
+        <div class="variant dark" style="min-height: 200px;">
+          <img src="logo-horizontal-dark.svg" alt="" style="max-height: 130px;" />
+          <div class="label">Dark</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAMANHOS -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Escala</h2>
+        <h3>Comportamento em diferentes tamanhos</h3>
+        <p>O símbolo permanece legível de favicon (16px) a outdoor. Tamanho mínimo recomendado: 24px para uso digital.</p>
+      </div>
+      <div class="sizes">
+        <div class="size-item"><img src="favicon.svg" width="16" height="16" alt="" /><div class="label">16px</div></div>
+        <div class="size-item"><img src="favicon.svg" width="24" height="24" alt="" /><div class="label">24px</div></div>
+        <div class="size-item"><img src="logo-symbol.svg" width="40" height="40" alt="" /><div class="label">40px</div></div>
+        <div class="size-item"><img src="logo-symbol.svg" width="64" height="64" alt="" /><div class="label">64px</div></div>
+        <div class="size-item"><img src="logo-symbol.svg" width="96" height="96" alt="" /><div class="label">96px</div></div>
+        <div class="size-item"><img src="logo-symbol.svg" width="144" height="144" alt="" /><div class="label">144px</div></div>
+      </div>
+    </div>
+
+    <!-- PALETA -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Paleta cromática</h2>
+        <h3>Cores oficiais da marca</h3>
+        <p>Construída sobre <strong>OKLCH</strong> (alinhada ao tema atual do app) com gradiente primário que vai do índigo profundo ao violeta vibrante — confiança institucional encontra energia tecnológica.</p>
+      </div>
+      <div class="palette">
+        <div class="swatch" style="background: #1E1B4B;"><div class="name">Indigo Deep</div><div class="hex">#1E1B4B</div></div>
+        <div class="swatch" style="background: #4F46E5;"><div class="name">Primary</div><div class="hex">#4F46E5</div></div>
+        <div class="swatch" style="background: #7C3AED;"><div class="name">Accent</div><div class="hex">#7C3AED</div></div>
+        <div class="swatch" style="background: #A78BFA;"><div class="name">Accent Soft</div><div class="hex">#A78BFA</div></div>
+        <div class="swatch" style="background: #0B0A1F;"><div class="name">Ink</div><div class="hex">#0B0A1F</div></div>
+        <div class="swatch light" style="background: #F7F6FB;"><div class="name">Canvas</div><div class="hex">#F7F6FB</div></div>
+      </div>
+    </div>
+
+    <!-- TIPOGRAFIA -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Tipografia</h2>
+        <h3>Inter — pesos institucionais</h3>
+        <p>Mantendo a fonte do produto, exploramos o contraste entre pesos para criar hierarquia: ExtraBold para o lado "Jurid", Light para "Flow".</p>
+      </div>
+      <div class="typography">
+        <div class="type-row">
+          <div class="meta">ExtraBold · 800<br>Wordmark "Jurid"</div>
+          <div class="sample" style="font-size: 48px; font-weight: 800; letter-spacing: -.03em;">Jurid</div>
+        </div>
+        <div class="type-row">
+          <div class="meta">Light · 300<br>Wordmark "Flow"</div>
+          <div class="sample" style="font-size: 48px; font-weight: 300; letter-spacing: -.02em; color: var(--accent);">Flow</div>
+        </div>
+        <div class="type-row">
+          <div class="meta">Bold · 700<br>Headlines</div>
+          <div class="sample" style="font-size: 28px; font-weight: 700; letter-spacing: -.02em;">Operações jurídicas, em fluxo.</div>
+        </div>
+        <div class="type-row">
+          <div class="meta">Regular · 400<br>Texto corrido</div>
+          <div class="sample" style="font-size: 16px; font-weight: 400; line-height: 1.55;">Do primeiro atendimento à última cobrança, tudo conversando na mesma plataforma. Sem planilha, sem perda de comissão, sem CRM que não conhece prazo processual.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- APLICAÇÕES -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Aplicação</h2>
+        <h3>A marca em uso real</h3>
+      </div>
+      <div class="apps">
+        <div class="app-card">
+          <div class="browser-mock">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="tab"><img src="favicon.svg" alt="" /> JuridFlow</div>
+          </div>
+          <div class="body">
+            <h4>Favicon</h4>
+            <p>Símbolo simplificado, legível em 16px.</p>
+          </div>
+        </div>
+        <div class="app-card">
+          <div class="navbar-mock">
+            <img src="logo-horizontal.svg" alt="" />
+            <div class="links">Recursos · Preços · Login</div>
+            <div class="cta">Entrar</div>
+          </div>
+          <div class="body">
+            <h4>Header do app</h4>
+            <p>Logo composta em layout institucional.</p>
+          </div>
+        </div>
+        <div class="app-card">
+          <div class="app-icon-mock">
+            <img src="logo-symbol.svg" class="r-small" alt="" />
+            <img src="logo-symbol.svg" alt="" />
+            <img src="logo-symbol.svg" class="r-large" alt="" />
+          </div>
+          <div class="body">
+            <h4>App icon · iOS / Android</h4>
+            <p>Selo único em diferentes raios.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARQUIVOS -->
+    <div class="section">
+      <div class="section-head">
+        <h2>Arquivos</h2>
+        <h3>Tudo em SVG, vetorial e leve</h3>
+      </div>
+      <div class="typography">
+        <div class="type-row"><div class="meta">brand/logo-symbol.svg</div><div class="sample" style="font-size: 14px;">Símbolo principal com gradiente — uso geral</div></div>
+        <div class="type-row"><div class="meta">brand/logo-symbol-mono-dark.svg</div><div class="sample" style="font-size: 14px;">Selo escuro com símbolo branco — fundos claros institucionais</div></div>
+        <div class="type-row"><div class="meta">brand/logo-symbol-mono-light.svg</div><div class="sample" style="font-size: 14px;">Selo branco com símbolo escuro — impressão monocromática</div></div>
+        <div class="type-row"><div class="meta">brand/logo-horizontal.svg</div><div class="sample" style="font-size: 14px;">Composta horizontal (light) — site, e-mail, app</div></div>
+        <div class="type-row"><div class="meta">brand/logo-horizontal-dark.svg</div><div class="sample" style="font-size: 14px;">Composta horizontal (dark) — fundos escuros</div></div>
+        <div class="type-row"><div class="meta">brand/logo-wordmark.svg</div><div class="sample" style="font-size: 14px;">Apenas wordmark — uso secundário, rodapé</div></div>
+        <div class="type-row"><div class="meta">brand/favicon.svg</div><div class="sample" style="font-size: 14px;">Versão otimizada para favicon (64x64 viewBox)</div></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>JuridFlow · Sistema de operações jurídicas</div>
+      <div>Identidade visual v1 · 2026</div>
+    </div>
+  </div>
+</body>
+</html>
