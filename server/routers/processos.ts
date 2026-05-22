@@ -1742,6 +1742,21 @@ export const processosRouter = router({
       // Pedimos limite+1 pra detectar se há mais páginas sem precisar de
       // segunda query de COUNT(*). Se vier limite+1, fatiamos e marcamos
       // hasMore=true.
+      //
+      // apenasNaoLidas filtra `lido=false`. O cron grava `lido=true` em
+      // três casos que NÃO devem alertar: baseline (primeira execução do
+      // monitoramento), cliente como polo ativo (autor) e ajuizado antes
+      // do cadastro do cliente. Sem este filtro, esses eventos silenciados
+      // apareciam como cards "novos" e processos antigos (ex: 2015)
+      // contavam como alerta porque `createdAt` é a hora do INSERT.
+      const condicoes = [
+        eq(eventosProcesso.escritorioId, esc.escritorio.id),
+        eq(eventosProcesso.tipo, "nova_acao"),
+      ];
+      if (input.apenasNaoLidas) {
+        condicoes.push(eq(eventosProcesso.lido, false));
+      }
+
       const acoesRaw = await db
         .select({
           id: eventosProcesso.id,
@@ -1761,12 +1776,7 @@ export const processosRouter = router({
           motorMonitoramentos,
           eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId),
         )
-        .where(
-          and(
-            eq(eventosProcesso.escritorioId, esc.escritorio.id),
-            eq(eventosProcesso.tipo, "nova_acao"),
-          ),
-        )
+        .where(and(...condicoes))
         .orderBy(desc(eventosProcesso.createdAt))
         .offset(input.cursor)
         .limit(input.limite + 1);
@@ -1798,7 +1808,21 @@ export const processosRouter = router({
         ? acoesFiltradas.slice(0, input.limite)
         : acoesFiltradas;
 
-      const naoLidas = acoesValidas.filter((a) => !a.lido).length;
+      // totalNaoLidas precisa ser o contador GLOBAL (não da página), porque
+      // o badge no cabeçalho da aba mostra esse número e a UI faz query
+      // separada com limite=1 só pra ele. COUNT separado é mais barato que
+      // varrer todas as páginas e é preciso.
+      const [contagem] = await db
+        .select({ total: sql<number>`count(*)` })
+        .from(eventosProcesso)
+        .where(
+          and(
+            eq(eventosProcesso.escritorioId, esc.escritorio.id),
+            eq(eventosProcesso.tipo, "nova_acao"),
+            eq(eventosProcesso.lido, false),
+          ),
+        );
+      const naoLidas = Number(contagem?.total ?? 0);
       return {
         acoes: acoesValidas,
         monitoramentos,

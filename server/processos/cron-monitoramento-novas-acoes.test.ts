@@ -636,3 +636,153 @@ describe("pollMonitoramentosNovasAcoes — filtro combinado polo + data", () => 
     expect(upd!.set!.totalNovasAcoes).toBe(1);
   });
 });
+
+describe("pollMonitoramentosNovasAcoes — salvaguarda CNJ antigo sem dataRef", () => {
+  // Bug em produção (22/05/2026): monitoramentos legados sem
+  // `dataReferenciaCadastro` puxavam o histórico inteiro do CPF do PJe.
+  // Cliente com processo de 2015 + processos recentes gerava 3 cards
+  // "Nova ação detectada", incluindo o de 11 anos atrás.
+  //
+  // Fix: quando dataRef=NULL, usa o ano do próprio CNJ como salvaguarda —
+  // se >3 anos atrás, silencia mesmo sem detail scrape resolver polo.
+
+  const CPF = MON_BASE.searchKey;
+  const APELIDO = MON_BASE.apelido;
+
+  function detalhe(cnj: string, dataDist: string | null, polo: "ativo" | "passivo" | "terceiro" | null) {
+    return {
+      ok: true,
+      tribunal: "tjce",
+      cnj,
+      latenciaMs: 100,
+      capa: {
+        cnj,
+        classe: null,
+        assuntos: [],
+        orgaoJulgador: null,
+        juiz: null,
+        comarca: null,
+        uf: "CE",
+        valorCausaCentavos: null,
+        dataDistribuicao: dataDist,
+        status: null,
+        partes: polo ? [{ nome: APELIDO, polo, tipo: "fisica" as const, documento: CPF, advogados: [] }] : [],
+        segredoJustica: false,
+      },
+      movimentacoes: [],
+      categoriaErro: null,
+      mensagemErro: null,
+      screenshotPath: null,
+      finalizadoEm: new Date().toISOString(),
+    };
+  }
+
+  it("CNJ de 2015 + dataRef NULL + polo passivo → silencia por ano antigo (NÃO alerta)", async () => {
+    const CNJ_2015 = "0140340-27.2015.8.06.0001";
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_2015] });
+    consultarTjce.mockResolvedValue(detalhe(CNJ_2015, "2015-03-27T00:00:00.000Z", "passivo"));
+    selectQueue.push([
+      { ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]), dataReferenciaCadastro: null },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(1);
+    expect((eventos[0].values as any).lido).toBe(true); // SILENCIADO
+    expect((eventos[0].values as any).conteudo).toMatch(/Processo antigo/);
+    const json = JSON.parse((eventos[0].values as any).conteudoJson);
+    expect(json.motivoSilencio).toBe("cnj_antigo");
+    expect(json.filtradoPorAnoCnj).toBe(true);
+
+    // SEM notificação no sino + SEM SSE
+    const notifs = captured.filter((c) => c.op === "insert" && c.table === "notificacoes");
+    expect(notifs).toHaveLength(0);
+    expect(emitirNotificacao).not.toHaveBeenCalled();
+  });
+
+  it("CNJ recente (2026) + dataRef NULL + polo passivo → alerta normal", async () => {
+    const CNJ_2026 = "3026436-89.2026.8.06.0001";
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_2026] });
+    consultarTjce.mockResolvedValue(detalhe(CNJ_2026, "2026-05-15T00:00:00.000Z", "passivo"));
+    selectQueue.push([
+      { ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]), dataReferenciaCadastro: null },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(1);
+    expect((eventos[0].values as any).lido).toBe(false); // ALERTA
+    expect(JSON.parse((eventos[0].values as any).conteudoJson).motivoSilencio).toBeNull();
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+  });
+
+  it("mix 2015 (antigo) + 2026 (recente) com dataRef NULL → só 2026 alerta", async () => {
+    // Cenário real reportado: cliente Diego Aguiar, 3 CNJs (2 de 2026 + 1 de 2015)
+    const CNJ_2015 = "0140340-27.2015.8.06.0001";
+    const CNJ_2026A = "3026436-89.2026.8.06.0001";
+    const CNJ_2026B = "3025486-80.2026.8.06.0001";
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({
+      ok: true,
+      cnjs: ["existente-1", CNJ_2015, CNJ_2026A, CNJ_2026B],
+    });
+    consultarTjce.mockImplementation(async (cnj: string) => {
+      if (cnj === CNJ_2015) return detalhe(CNJ_2015, "2015-03-27T00:00:00.000Z", "passivo");
+      if (cnj === CNJ_2026A) return detalhe(CNJ_2026A, "2026-05-10T00:00:00.000Z", "passivo");
+      return detalhe(CNJ_2026B, "2026-05-12T00:00:00.000Z", "passivo");
+    });
+    selectQueue.push([
+      { ...MON_BASE, cnjsConhecidos: JSON.stringify(["existente-1"]), dataReferenciaCadastro: null },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(3);
+
+    const ev2015 = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_2015);
+    const ev2026a = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_2026A);
+    const ev2026b = eventos.find((e) => (e.values as any).cnjAfetado === CNJ_2026B);
+
+    expect((ev2015!.values as any).lido).toBe(true); // SILENCIADO
+    expect(JSON.parse((ev2015!.values as any).conteudoJson).motivoSilencio).toBe("cnj_antigo");
+
+    expect((ev2026a!.values as any).lido).toBe(false); // ALERTA
+    expect((ev2026b!.values as any).lido).toBe(false); // ALERTA
+
+    // Apenas 1 notificação consolidada com os 2 CNJs relevantes
+    const notifs = captured.filter((c) => c.op === "insert" && c.table === "notificacoes");
+    expect(notifs).toHaveLength(1);
+    expect(emitirNotificacao).toHaveBeenCalledOnce();
+
+    const upd = captured.find((c) => c.op === "update" && c.table === "motor_monitoramentos");
+    expect(upd!.set!.totalNovasAcoes).toBe(2); // só os 2 recentes
+  });
+
+  it("dataRef PRESENTE (mais precisa que ano CNJ) → usa filtro de data, não ano", async () => {
+    // Quando dataRef existe, é a fonte de verdade. CNJ antigo NÃO entra
+    // na regra do ano — vai pelo filtro `anterior_cadastro`.
+    const CNJ_2015 = "0140340-27.2015.8.06.0001";
+    recuperarSessao.mockResolvedValue("storage-state-json");
+    consultarTjcePorCpf.mockResolvedValue({ ok: true, cnjs: ["existente-1", CNJ_2015] });
+    consultarTjce.mockResolvedValue(detalhe(CNJ_2015, "2015-03-27T00:00:00.000Z", "passivo"));
+    selectQueue.push([
+      {
+        ...MON_BASE,
+        cnjsConhecidos: JSON.stringify(["existente-1"]),
+        dataReferenciaCadastro: new Date("2025-01-01T00:00:00.000Z"),
+      },
+    ]);
+
+    await pollMonitoramentosNovasAcoes();
+
+    const eventos = captured.filter((c) => c.op === "insert" && c.table === "eventos_processo");
+    expect(eventos).toHaveLength(1);
+    expect((eventos[0].values as any).lido).toBe(true);
+    expect(JSON.parse((eventos[0].values as any).conteudoJson).motivoSilencio).toBe("anterior_cadastro");
+  });
+});
