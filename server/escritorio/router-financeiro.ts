@@ -811,13 +811,16 @@ export const financeiroRouter = router({
 
       const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
 
-      // 1) Total por status no período
+      // 1) Total por status no período — bruto + líquido + diferença (taxa)
       const porStatusRaw = await db
         .select({
           status: asaasCobrancas.status,
           origem: asaasCobrancas.origem,
+          formaPagamento: asaasCobrancas.formaPagamento,
           valor: sql<string>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))), 0)`,
+          valorLiquido: sql<string>`COALESCE(SUM(CAST(COALESCE(${asaasCobrancas.valorLiquido}, ${asaasCobrancas.valor}) AS DECIMAL(20,2))), 0)`,
           count: sql<number>`COUNT(*)`,
+          comValorLiquido: sql<number>`SUM(CASE WHEN ${asaasCobrancas.valorLiquido} IS NOT NULL THEN 1 ELSE 0 END)`,
         })
         .from(asaasCobrancas)
         .where(and(
@@ -825,7 +828,7 @@ export const financeiroRouter = router({
           inArray(asaasCobrancas.status, STATUS_PAGOS),
           between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
         ))
-        .groupBy(asaasCobrancas.status, asaasCobrancas.origem);
+        .groupBy(asaasCobrancas.status, asaasCobrancas.origem, asaasCobrancas.formaPagamento);
 
       // 2) Bordas: cobranças com dataPagamento de [dataInicio-2, dataInicio+2]
       const bordaInicio = await db
@@ -899,13 +902,36 @@ export const financeiroRouter = router({
         0,
       );
 
+      // Agregados pra resumo (totais)
+      const totalBruto = porStatusRaw.reduce((acc, r) => acc + Number(r.valor || 0), 0);
+      const totalLiquido = porStatusRaw.reduce((acc, r) => acc + Number(r.valorLiquido || 0), 0);
+      const totalTaxas = totalBruto - totalLiquido;
+      const totalCount = porStatusRaw.reduce((acc, r) => acc + Number(r.count || 0), 0);
+      const totalComLiquido = porStatusRaw.reduce(
+        (acc, r) => acc + Number(r.comValorLiquido || 0),
+        0,
+      );
+
       return {
         periodo: { inicio: input.dataInicio, fim: input.dataFim },
+        resumo: {
+          totalBruto,
+          totalLiquido,
+          totalTaxas,
+          totalCount,
+          // Quantas cobranças têm netValue preenchido (vs null). Se baixo,
+          // a hipótese de taxa fica menos confiável — pode ser sync incompleto.
+          comValorLiquido: totalComLiquido,
+        },
         porStatus: porStatusRaw.map((r) => ({
           status: r.status,
           origem: r.origem,
+          formaPagamento: r.formaPagamento,
           valor: Number(r.valor || 0),
+          valorLiquido: Number(r.valorLiquido || 0),
+          taxa: Number(r.valor || 0) - Number(r.valorLiquido || 0),
           count: Number(r.count || 0),
+          comValorLiquido: Number(r.comValorLiquido || 0),
         })),
         bordaInicio,
         bordaFim,
