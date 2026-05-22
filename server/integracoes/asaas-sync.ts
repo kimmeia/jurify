@@ -696,19 +696,21 @@ export async function syncCobrancasEscritorio(
         return { clientes: vinculos.length, ...totais };
       }
 
-      // 403: API key sem permissão de ler esse customer. Consumir cota
-      // a cada 10min sem efeito é desperdício — soft-disable. Admin
-      // recebe notif e pode reativar via SQL/UI quando resolver.
-      // Passa errData (err.response.data) pra captura de mensagem
-      // específica do Asaas quando vier; helper faz GET /customers/{id}
-      // adicional pra distinguir customer deletado vs sem permissão.
-      if (status === 403) {
+      // 403/404: vínculo "zumbi" — customer não acessível ou deletado no
+      // Asaas. Cron iterava infinitamente nessas linhas, queimando ~1
+      // request/cron/customer-zumbi até estourar a cota 12h. Soft-disable
+      // (ou remoção em caso de deleção) elimina esse desperdício.
+      // O helper investiga via GET /customers/{id} adicional e decide:
+      //  - 404 confirmado → remove vínculo local
+      //  - 200 (existe mas sem permissão de cobrança) → desativa + notif
+      //  - 403 geral → desativa + notif
+      if (status === 403 || status === 404) {
         const errData = err?.response?.data ?? err?.cause?.response?.data;
         await desativarVinculoPor403(
           client,
           escritorioId,
           vinculo,
-          err?.message ?? "HTTP 403",
+          err?.message ?? `HTTP ${status}`,
           errData,
         );
         continue;
