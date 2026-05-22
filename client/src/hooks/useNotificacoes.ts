@@ -25,6 +25,9 @@ const ICONES_TIPO: Record<string, string> = {
   conversa_atribuida: "📋",
   assinatura_concluida: "✅",
   movimentacao_processo: "⚖️",
+  nova_acao: "🚨",
+  credencial_erro: "🔒",
+  credencial_recuperada: "🔓",
   info: "ℹ️",
 };
 

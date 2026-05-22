@@ -1976,6 +1976,7 @@ export default function Processos() {
       : "consultar";
   })();
   const [tab, setTab] = useState(tabInicial);
+  const utils = trpc.useUtils();
   // Compatibilidade com link antigo `?abrirMonitor=1` sem `?tab=`: força
   // ir pra movimentacoes pra que o MonitorarTab abra o modal.
   useEffect(() => {
@@ -1985,6 +1986,27 @@ export default function Processos() {
   }, [tab]);
   const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
+
+  // SSE global de credencial: quando o backend detecta que uma credencial
+  // caiu (motor-proprio ou cron-revalidar) emite `credencial_erro`. Sem
+  // este listener, o badge "ativa" no cofre + dropdown de credenciais
+  // ficava com cache stale até o user recarregar a página. Listener
+  // mora aqui (top-level) porque cobre todas as abas — inclusive a
+  // Cofre, MonitorarTab e NovasAcoesTab que mostram status. Após
+  // invalidate, o cron-revalidar pode emitir `credencial_recuperada` —
+  // mesma invalidação fecha o loop pro user.
+  useEffect(() => {
+    const onNotif = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail;
+      if (!detail) return;
+      if (detail.tipo === "credencial_erro" || detail.tipo === "credencial_recuperada") {
+        (utils.cofreCredenciais as any).listarMinhas?.invalidate?.();
+        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+      }
+    };
+    window.addEventListener("jurify:notif", onNotif);
+    return () => window.removeEventListener("jurify:notif", onNotif);
+  }, [utils]);
 
   // Cofre é restrito a admin do módulo (verTodos em processos = dono/gestor).
   // Atendente/SDR/estagiário não veem a aba nem as credenciais.
@@ -2356,7 +2378,12 @@ function AlertasBadge() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function NovasAcoesTab() {
-  const [apenasNaoLidas, setApenasNaoLidas] = useState(false);
+  // Default `true`: a aba mostra só ações com `lido=false` (não-silenciadas).
+  // Eventos silenciados (baseline da primeira execução, polo ativo, ajuizado
+  // antes do cadastro do cliente) ficam acessíveis pelo toggle no header.
+  // Sem este default, processos antigos da baseline apareciam confundindo
+  // o user como se fossem detecções recentes.
+  const [apenasNaoLidas, setApenasNaoLidas] = useState(true);
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);

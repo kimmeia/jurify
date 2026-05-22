@@ -37,6 +37,22 @@ import {
   identificarPoloDoCliente,
   type PoloIdentificado,
 } from "./polo-matcher";
+import { extrairAnoCnj } from "./cnj-parser";
+
+/**
+ * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
+ * quando o monitoramento não tem `dataReferenciaCadastro` populado.
+ *
+ * Sem essa salvaguarda, monitoramentos legados (ou de clientes sem data
+ * de cadastro) puxam o histórico completo do CPF/CNPJ no PJe — incluindo
+ * processos de >10 anos — e cada um vira card "Nova ação detectada".
+ *
+ * 3 anos cobre o cenário comum (cliente novo no escritório com histórico
+ * de litígio recente) sem alertar processos arqueológicos. Quando o
+ * cliente TEM data de cadastro, esse fallback nem é usado — usa a data
+ * real (regra mais precisa).
+ */
+const ANOS_MAXIMOS_SEM_DATA_REF = 3;
 
 const log = createLogger("motor-cron");
 
@@ -622,11 +638,11 @@ export async function pollarUmMonitoramentoNovasAcoes(
       // segurança (FP é menos pior que perder ação real).
       const dataRef = mon.dataReferenciaCadastro;
       const cnjsRelevantes: string[] = [];
-      const cnjsSilenciados: Array<{ cnj: string; motivo: "polo_ativo" | "anterior_cadastro" }> = [];
+      const cnjsSilenciados: Array<{ cnj: string; motivo: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" }> = [];
 
       for (const cnj of cnjsNovos) {
         let isRelevante = true;
-        let motivoSilencio: "polo_ativo" | "anterior_cadastro" | null = null;
+        let motivoSilencio: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" | null = null;
         let dataDistribuicao: Date | null = null;
         let poloDoCliente: PoloIdentificado = "desconhecido";
 
@@ -667,6 +683,21 @@ export async function pollarUmMonitoramentoNovasAcoes(
           }
         }
 
+        // Regra 3 (salvaguarda): sem dataRef do cadastro, o sistema não
+        // sabe o que é "novo" pro cliente — mas um CNJ com ano >3 anos
+        // atrás é arqueologia: o cliente ou o escritório já sabem dele,
+        // não faz sentido virar alerta. Usa o ano do próprio CNJ (sempre
+        // presente no padrão NNNNNNN-DD.AAAA...) como fonte confiável —
+        // independente de `dataDistribuicao` do detail scrape.
+        if (isRelevante && !dataRef) {
+          const anoCnj = extrairAnoCnj(cnj);
+          const anoAtual = new Date().getUTCFullYear();
+          if (anoCnj !== null && anoAtual - anoCnj > ANOS_MAXIMOS_SEM_DATA_REF) {
+            isRelevante = false;
+            motivoSilencio = "cnj_antigo";
+          }
+        }
+
         const dedup = hashEvento(["nova_acao", String(mon.id), cnj]);
         try {
           await db.insert(eventosProcesso).values({
@@ -679,7 +710,9 @@ export async function pollarUmMonitoramentoNovasAcoes(
               ? `Nova ação detectada: ${cnj} contra ${mon.apelido ?? mon.searchKey}`
               : motivoSilencio === "polo_ativo"
                 ? `Cliente é autor (polo ativo): ${cnj}`
-                : `Baseline antigo (anterior ao cadastro): ${cnj}`,
+                : motivoSilencio === "cnj_antigo"
+                  ? `Processo antigo (>${ANOS_MAXIMOS_SEM_DATA_REF}a, sem data de cadastro): ${cnj}`
+                  : `Baseline antigo (anterior ao cadastro): ${cnj}`,
             conteudoJson: JSON.stringify({
               cnj,
               dataDistribuicao: dataDistribuicao?.toISOString() ?? null,
@@ -687,6 +720,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
               motivoSilencio,
               filtradoPorData: motivoSilencio === "anterior_cadastro",
               filtradoPorPolo: motivoSilencio === "polo_ativo",
+              filtradoPorAnoCnj: motivoSilencio === "cnj_antigo",
               searchKey: mon.searchKey,
               searchType: mon.searchType,
               tribunal: mon.tribunal,
@@ -717,9 +751,10 @@ export async function pollarUmMonitoramentoNovasAcoes(
       if (cnjsSilenciados.length > 0) {
         const porPolo = cnjsSilenciados.filter((c) => c.motivo === "polo_ativo").length;
         const porData = cnjsSilenciados.filter((c) => c.motivo === "anterior_cadastro").length;
+        const porAnoCnj = cnjsSilenciados.filter((c) => c.motivo === "cnj_antigo").length;
         log.info(
-          { monId: mon.id, silenciadosPorPolo: porPolo, silenciadosPorData: porData, dataRef: dataRef?.toISOString() },
-          "[motor-cron] CNJs silenciados (cliente polo ativo OU anterior ao cadastro)",
+          { monId: mon.id, silenciadosPorPolo: porPolo, silenciadosPorData: porData, silenciadosPorAnoCnj: porAnoCnj, dataRef: dataRef?.toISOString() },
+          "[motor-cron] CNJs silenciados (polo ativo, anterior ao cadastro ou CNJ muito antigo sem dataRef)",
         );
       }
 

@@ -302,6 +302,12 @@ async function tentarReloginAutomatico(credencialId: number): Promise<string | n
  * usado quando a sessão estava ativa mas caiu durante uso (cookies
  * expiraram, tribunal forçou relogin, etc). UI mostra com mesma cor
  * vermelha que erro, mas mensagem distinta convidando a renovar.
+ *
+ * Além de mudar o status, dispara notificação in-app (sino + SSE) pra
+ * o dono da credencial — sem isso, o user só descobre que a credencial
+ * caiu na próxima vez que tenta consultar (e fica achando que o sistema
+ * está quebrado). Notificação é best-effort: falhas logam mas não bloqueiam
+ * o UPDATE de status.
  */
 export async function marcarCredencialExpirada(
   credencialId: number,
@@ -309,6 +315,22 @@ export async function marcarCredencialExpirada(
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
+
+  // Captura estado anterior pra decidir se gera notificação. Quando a
+  // credencial já estava "expirada" ou "erro", uma segunda detecção é
+  // ruído (cron + consulta detectam quase simultaneamente). Só notifica
+  // em transição de "saudável" pra "caída".
+  const [anterior] = await db
+    .select({
+      status: cofreCredenciais.status,
+      apelido: cofreCredenciais.apelido,
+      sistema: cofreCredenciais.sistema,
+      criadoPor: cofreCredenciais.criadoPor,
+    })
+    .from(cofreCredenciais)
+    .where(eq(cofreCredenciais.id, credencialId))
+    .limit(1);
+
   await db
     .update(cofreCredenciais)
     .set({
@@ -318,6 +340,110 @@ export async function marcarCredencialExpirada(
     })
     .where(eq(cofreCredenciais.id, credencialId));
   log.warn({ credencialId, motivo: motivo.slice(0, 200) }, "[cofre] credencial marcada como expirada");
+
+  if (anterior && (anterior.status === "ativa" || anterior.status === "validando")) {
+    await notificarCredencialCaiu({
+      credencialId,
+      userId: anterior.criadoPor,
+      apelido: anterior.apelido,
+      sistema: anterior.sistema,
+      motivo,
+      novoStatus: "expirada",
+    });
+  }
+}
+
+/**
+ * Notifica o dono da credencial que ela caiu (status "expirada" ou "erro").
+ *
+ * Persiste em `notificacoes` (sino do app) E emite SSE (toast em tempo real
+ * + invalida cache de credenciais no frontend). Resiliente: falhas são
+ * logadas mas não propagam — manter o caller (cron/runner) seguindo seu
+ * fluxo importa mais que notificar 100% das vezes.
+ */
+export async function notificarCredencialCaiu(params: {
+  credencialId: number;
+  userId: number;
+  apelido: string;
+  sistema: string;
+  motivo: string;
+  novoStatus: "expirada" | "erro";
+}): Promise<void> {
+  try {
+    const { notificacoes } = await import("../../drizzle/schema");
+    const { emitirNotificacao } = await import("../_core/sse-notifications");
+    const db = await getDb();
+    const titulo =
+      params.novoStatus === "expirada"
+        ? `Credencial ${params.apelido} caiu — sessão expirou`
+        : `Credencial ${params.apelido} com erro de login`;
+    const mensagem = `${params.motivo.slice(0, 240)}${
+      params.motivo.length > 240 ? "…" : ""
+    } — vá em Processos → Cofre pra revalidar.`;
+    if (db) {
+      await db.insert(notificacoes).values({
+        userId: params.userId,
+        titulo,
+        mensagem,
+        tipo: "sistema",
+      });
+    }
+    emitirNotificacao(params.userId, {
+      tipo: "credencial_erro",
+      titulo,
+      mensagem,
+      dados: {
+        credencialId: params.credencialId,
+        sistema: params.sistema,
+        novoStatus: params.novoStatus,
+      },
+    });
+  } catch (err) {
+    log.error(
+      { credencialId: params.credencialId, err: err instanceof Error ? err.message : String(err) },
+      "[cofre] notificarCredencialCaiu falhou (best-effort)",
+    );
+  }
+}
+
+/**
+ * Notifica o dono da credencial que ela voltou a funcionar após estar
+ * "expirada" ou "erro". Usado pelo cron de revalidação quando consegue
+ * recuperar sessão automaticamente — fecha o loop do user (vê "caiu" →
+ * vê "voltou" sem precisar checar manualmente).
+ */
+export async function notificarCredencialRecuperada(params: {
+  credencialId: number;
+  userId: number;
+  apelido: string;
+  sistema: string;
+}): Promise<void> {
+  try {
+    const { notificacoes } = await import("../../drizzle/schema");
+    const { emitirNotificacao } = await import("../_core/sse-notifications");
+    const db = await getDb();
+    const titulo = `Credencial ${params.apelido} reconectada`;
+    const mensagem = `O sistema renovou a sessão automaticamente — o monitoramento voltou a funcionar.`;
+    if (db) {
+      await db.insert(notificacoes).values({
+        userId: params.userId,
+        titulo,
+        mensagem,
+        tipo: "sistema",
+      });
+    }
+    emitirNotificacao(params.userId, {
+      tipo: "credencial_recuperada",
+      titulo,
+      mensagem,
+      dados: { credencialId: params.credencialId, sistema: params.sistema },
+    });
+  } catch (err) {
+    log.error(
+      { credencialId: params.credencialId, err: err instanceof Error ? err.message : String(err) },
+      "[cofre] notificarCredencialRecuperada falhou (best-effort)",
+    );
+  }
 }
 
 // `buscarCredencialDecriptada` é definida mais abaixo no arquivo
