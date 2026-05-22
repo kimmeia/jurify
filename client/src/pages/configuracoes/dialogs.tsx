@@ -298,7 +298,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
                   <SelectItem value="24h">Últimas 24h</SelectItem>
                   <SelectItem value="7d">Últimos 7 dias</SelectItem>
                   <SelectItem value="30d">Últimos 30 dias</SelectItem>
-                  <SelectItem value="completo">3 anos (histórico completo)</SelectItem>
+                  <SelectItem value="completo">Histórico completo</SelectItem>
                   <SelectItem value="custom">Personalizado</SelectItem>
                 </SelectContent>
               </Select>
@@ -326,10 +326,11 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
 
           {periodo === "completo" && (
             <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
-              <strong>Atenção:</strong> a importação de 3 anos roda em modo
-              turbo (5min entre janelas, 7 dias por tick) e demora cerca de{" "}
-              <strong>13 horas</strong>. Inicie de noite — pela manhã estará
-              pronto. Pode pausar/retomar a qualquer momento.
+              <strong>Atenção:</strong> traz cobranças dos últimos 10 anos em
+              modo turbo (5min entre janelas, 7 dias por tick). Inicie de noite
+              — pela manhã o painel reflete tudo. Pode pausar/retomar a
+              qualquer momento. Períodos sem cobrança no Asaas rodam
+              instantâneo, então o tempo real varia conforme seu histórico.
             </div>
           )}
 
