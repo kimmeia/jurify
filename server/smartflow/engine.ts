@@ -168,6 +168,59 @@ export interface SmartflowExecutores {
     contatoId?: number;
   }) => Promise<Record<string, unknown>>;
   /**
+   * Busca contato no CRM por telefone/email/cpf. Retorna `null` quando
+   * não encontra (caller decide ramo). Quando encontra, devolve dados
+   * completos do contato pra popular contexto.
+   */
+  buscarContatoCrm: (params: {
+    tipoBusca: "telefone" | "email" | "cpfCnpj";
+    valor: string;
+  }) => Promise<{
+    contatoId: number;
+    nome: string;
+    telefone: string | null;
+    email: string | null;
+    atendenteResponsavelId: number | null;
+    camposPersonalizados: Record<string, unknown>;
+  } | null>;
+  /**
+   * Lista ações (cliente_processos) do contato — com filtros opcionais
+   * por tipo (litigioso/extrajudicial) e polo (ativo/passivo/interessado).
+   */
+  listarAcoesCliente: (params: {
+    contatoId: number;
+    tipoFiltro?: "litigioso" | "extrajudicial";
+    poloFiltro?: "ativo" | "passivo" | "interessado";
+    limite?: number;
+  }) => Promise<Array<{
+    id: number;
+    numeroCnj: string | null;
+    apelido: string | null;
+    classe: string | null;
+    tipo: string;
+    polo: string | null;
+    valorCausa: number | null;
+    createdAt: Date | string;
+  }>>;
+  /**
+   * Histórico de eventos de um processo. `processoRef` pode ser o ID
+   * numérico de `cliente_processos` ou um CNJ — o executor resolve
+   * o CNJ a partir do ID quando precisar.
+   */
+  buscarMovimentacoesProcesso: (params: {
+    processoRef: number | string;
+    tipos?: string[];
+    diasJanela?: number;
+    limite?: number;
+  }) => Promise<Array<{
+    id: number;
+    tipo: string;
+    dataEvento: Date | string;
+    conteudo: string;
+    fonte: string;
+    cnjAfetado: string | null;
+  }>>;
+  /**
    * Executa um agente IA pré-configurado (prompt + modelo + docs RAG salvos
    * em `agentesIa`) e retorna a resposta textual. Usado por `ia_responder`
    * quando o passo tem `config.agenteId`. `contatoId` é injetado no system
@@ -435,6 +488,178 @@ async function handleIAExtrairCampos(
       cliente: { ...clienteAtual, campos: novosCamposCliente },
     },
   };
+}
+
+/**
+ * Handler do passo `crm_buscar_contato`. Resolve um cliente pelo telefone,
+ * email ou CPF/CNPJ. Quando acha, popula contexto com dados do contato
+ * (sem sobrescrever `contatoId` original se ele já existe, exceto quando
+ * a busca encontrou outro — aí prefere o novo, é a intenção do passo).
+ *
+ * `contatoEncontrado` (boolean) é publicado pra permitir ramos condicionais
+ * — fluxo típico: condição com base no resultado → ramo "achou" vs "não achou".
+ */
+async function handleCrmBuscarContato(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { tipoBusca?: "telefone" | "email" | "cpfCnpj"; valor?: string };
+  const tipoBusca = cfg.tipoBusca || "telefone";
+  const { interpolarVariaveis } = await import("./interpolar");
+  const valor = interpolarVariaveis(String(cfg.valor || ""), ctx as any).trim();
+
+  if (!valor) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Configure o valor a buscar (suporta interpolação tipo `{{telefoneCliente}}`).",
+    };
+  }
+
+  let contato: Awaited<ReturnType<SmartflowExecutores["buscarContatoCrm"]>>;
+  try {
+    contato = await exec.buscarContatoCrm({ tipoBusca, valor });
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `CRM buscar contato: ${err.message}` };
+  }
+
+  if (!contato) {
+    // Não achou — sucesso (não é erro), mas marca flag pra próximo passo decidir.
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        contatoEncontrado: false,
+        contatoBuscado: { tipoBusca, valor },
+      },
+    };
+  }
+
+  // Achou — popula contexto.
+  const clienteAtual = (ctx.cliente as Record<string, any>) || {};
+  return {
+    sucesso: true,
+    contexto: {
+      ...ctx,
+      contatoEncontrado: true,
+      contatoId: contato.contatoId,
+      nomeCliente: contato.nome,
+      telefoneCliente: contato.telefone || ctx.telefoneCliente,
+      emailCliente: contato.email || ctx.emailCliente,
+      atendenteResponsavelId: contato.atendenteResponsavelId ?? ctx.atendenteResponsavelId,
+      cliente: { ...clienteAtual, campos: contato.camposPersonalizados },
+    },
+  };
+}
+
+/**
+ * Handler do passo `crm_listar_acoes_cliente`. Lista os processos vinculados
+ * ao contato (`cliente_processos.contatoId`). Publica `acoes` + `acoesQuantidade`.
+ *
+ * `contatoId` vem do contexto (campo pré-existente). Se não tiver, falha.
+ */
+async function handleCrmListarAcoesCliente(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    tipoFiltro?: "todos" | "litigioso" | "extrajudicial";
+    poloFiltro?: "todos" | "ativo" | "passivo" | "interessado";
+    limite?: number;
+  };
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Sem `contatoId` no contexto — use um passo de gatilho com contato vinculado ou `crm_buscar_contato` antes.",
+    };
+  }
+
+  const tipoFiltro = cfg.tipoFiltro && cfg.tipoFiltro !== "todos" ? cfg.tipoFiltro : undefined;
+  const poloFiltro = cfg.poloFiltro && cfg.poloFiltro !== "todos" ? cfg.poloFiltro : undefined;
+  const limite = Math.max(1, Math.min(50, Number(cfg.limite) || 10));
+
+  try {
+    const acoes = await exec.listarAcoesCliente({ contatoId, tipoFiltro, poloFiltro, limite });
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        acoes,
+        acoesQuantidade: acoes.length,
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `CRM listar ações: ${err.message}` };
+  }
+}
+
+/**
+ * Handler do passo `processo_buscar_movimentacoes`. Lê `eventos_processo`
+ * filtrando por janela de dias e tipos. `processoId` aceita interpolação
+ * (default `{{acaoId}}` se não configurado).
+ */
+async function handleProcessoBuscarMovimentacoes(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    processoId?: string;
+    tipos?: string[];
+    diasJanela?: number;
+    limite?: number;
+  };
+  const { interpolarVariaveis } = await import("./interpolar");
+  const raw = String(cfg.processoId || "").trim();
+  let processoRef: number | string;
+  if (raw) {
+    const interpolado = interpolarVariaveis(raw, ctx as any).trim();
+    if (!interpolado) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "processoId interpola pra string vazia." };
+    }
+    const asNum = Number(interpolado);
+    processoRef = Number.isFinite(asNum) && asNum > 0 ? asNum : interpolado;
+  } else {
+    // Default: tenta `acaoId` do contexto (dispatcher popula em pagamento
+    // recebido com cobrança vinculada a ação).
+    const acaoId = (ctx as any).acaoId;
+    if (typeof acaoId !== "number") {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: "Sem processo a consultar — configure `processoId` ou use depois de um passo que popule `acaoId`.",
+      };
+    }
+    processoRef = acaoId;
+  }
+
+  const diasJanela = Math.max(1, Math.min(365, Number(cfg.diasJanela) || 30));
+  const limite = Math.max(1, Math.min(50, Number(cfg.limite) || 10));
+  const tipos = Array.isArray(cfg.tipos) && cfg.tipos.length > 0 ? cfg.tipos : undefined;
+
+  try {
+    const movs = await exec.buscarMovimentacoesProcesso({
+      processoRef,
+      tipos,
+      diasJanela,
+      limite,
+    });
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        movimentacoes: movs,
+        movimentacoesQuantidade: movs.length,
+        movimentacaoMaisRecente: movs[0] || null,
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Processo movimentações: ${err.message}` };
+  }
 }
 
 async function handleIAResponder(
@@ -1271,6 +1496,9 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   ia_classificar: handleIAClassificar,
   ia_responder: handleIAResponder,
   ia_extrair_campos: handleIAExtrairCampos,
+  crm_buscar_contato: handleCrmBuscarContato,
+  crm_listar_acoes_cliente: handleCrmListarAcoesCliente,
+  processo_buscar_movimentacoes: handleProcessoBuscarMovimentacoes,
   calcom_horarios: handleCalcomHorarios,
   calcom_agendar: handleCalcomAgendar,
   calcom_listar: handleCalcomListar,

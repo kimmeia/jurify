@@ -216,6 +216,186 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       );
     },
 
+    async buscarContatoCrm(params) {
+      try {
+        const { getDb } = await import("../db");
+        const { contatos } = await import("../../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return null;
+
+        // Coluna alvo varia conforme tipo de busca.
+        const coluna =
+          params.tipoBusca === "email"
+            ? contatos.email
+            : params.tipoBusca === "cpfCnpj"
+            ? contatos.cpfCnpj
+            : contatos.telefone;
+
+        // Normaliza pra string trimada — buscas exatas; em telefone, pode
+        // ser que cliente cadastrou com 55 e gatilho veio sem (ou vice-versa).
+        // Aqui mantemos exact match — o passo `ia_extrair_campos` cuida da
+        // normalização semântica antes (IA entende variações).
+        const valor = params.valor.trim();
+        if (!valor) return null;
+
+        const [c] = await db
+          .select({
+            id: contatos.id,
+            nome: contatos.nome,
+            telefone: contatos.telefone,
+            email: contatos.email,
+            atendenteResponsavelId: contatos.atendenteResponsavelId,
+            camposPersonalizados: contatos.camposPersonalizados,
+          })
+          .from(contatos)
+          .where(and(eq(contatos.escritorioId, escritorioId), eq(coluna, valor)))
+          .limit(1);
+        if (!c) return null;
+
+        let campos: Record<string, unknown> = {};
+        if (c.camposPersonalizados) {
+          try {
+            const parsed = JSON.parse(c.camposPersonalizados);
+            if (parsed && typeof parsed === "object") campos = parsed;
+          } catch {
+            /* JSON inválido — ignora */
+          }
+        }
+        return {
+          contatoId: c.id,
+          nome: c.nome || "",
+          telefone: c.telefone || null,
+          email: c.email || null,
+          atendenteResponsavelId: c.atendenteResponsavelId ?? null,
+          camposPersonalizados: campos,
+        };
+      } catch (err: any) {
+        log.warn({ err: err.message, tipoBusca: params.tipoBusca }, "SmartFlow: falha em buscarContatoCrm");
+        return null;
+      }
+    },
+
+    async listarAcoesCliente(params) {
+      try {
+        const { getDb } = await import("../db");
+        const { clienteProcessos } = await import("../../drizzle/schema");
+        const { eq, and, desc } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return [];
+
+        const conds: any[] = [
+          eq(clienteProcessos.escritorioId, escritorioId),
+          eq(clienteProcessos.contatoId, params.contatoId),
+        ];
+        if (params.tipoFiltro) conds.push(eq(clienteProcessos.tipo, params.tipoFiltro));
+        if (params.poloFiltro) conds.push(eq(clienteProcessos.polo, params.poloFiltro));
+
+        const linhas = await db
+          .select({
+            id: clienteProcessos.id,
+            numeroCnj: clienteProcessos.numeroCnj,
+            apelido: clienteProcessos.apelido,
+            classe: clienteProcessos.classe,
+            tipo: clienteProcessos.tipo,
+            polo: clienteProcessos.polo,
+            valorCausa: clienteProcessos.valorCausa,
+            createdAt: clienteProcessos.createdAt,
+          })
+          .from(clienteProcessos)
+          .where(and(...conds))
+          .orderBy(desc(clienteProcessos.createdAt))
+          .limit(params.limite || 10);
+
+        return linhas.map((l) => ({
+          id: l.id,
+          numeroCnj: l.numeroCnj,
+          apelido: l.apelido,
+          classe: l.classe,
+          tipo: l.tipo,
+          polo: l.polo,
+          valorCausa: l.valorCausa,
+          createdAt: l.createdAt,
+        }));
+      } catch (err: any) {
+        log.warn({ err: err.message, contatoId: params.contatoId }, "SmartFlow: falha em listarAcoesCliente");
+        return [];
+      }
+    },
+
+    async buscarMovimentacoesProcesso(params) {
+      try {
+        const { getDb } = await import("../db");
+        const { eventosProcesso, clienteProcessos } = await import("../../drizzle/schema");
+        const { eq, and, gte, inArray, desc } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return [];
+
+        // Resolve o CNJ. Quando `processoRef` é número, busca em
+        // cliente_processos pra extrair o `numeroCnj`. Quando é string,
+        // assume que já é um CNJ.
+        let cnj: string | null = null;
+        if (typeof params.processoRef === "number") {
+          const [proc] = await db
+            .select({ numeroCnj: clienteProcessos.numeroCnj })
+            .from(clienteProcessos)
+            .where(
+              and(
+                eq(clienteProcessos.id, params.processoRef),
+                eq(clienteProcessos.escritorioId, escritorioId),
+              ),
+            )
+            .limit(1);
+          if (!proc?.numeroCnj) {
+            log.debug({ processoId: params.processoRef }, "Processo sem CNJ — sem eventos");
+            return [];
+          }
+          cnj = proc.numeroCnj;
+        } else {
+          cnj = String(params.processoRef).trim();
+          if (!cnj) return [];
+        }
+
+        const desde = new Date();
+        desde.setDate(desde.getDate() - (params.diasJanela || 30));
+
+        const conds: any[] = [
+          eq(eventosProcesso.escritorioId, escritorioId),
+          eq(eventosProcesso.cnjAfetado, cnj),
+          gte(eventosProcesso.dataEvento, desde),
+        ];
+        if (params.tipos && params.tipos.length > 0) {
+          conds.push(inArray(eventosProcesso.tipo, params.tipos as any));
+        }
+
+        const linhas = await db
+          .select({
+            id: eventosProcesso.id,
+            tipo: eventosProcesso.tipo,
+            dataEvento: eventosProcesso.dataEvento,
+            conteudo: eventosProcesso.conteudo,
+            fonte: eventosProcesso.fonte,
+            cnjAfetado: eventosProcesso.cnjAfetado,
+          })
+          .from(eventosProcesso)
+          .where(and(...conds))
+          .orderBy(desc(eventosProcesso.dataEvento))
+          .limit(params.limite || 10);
+
+        return linhas.map((l) => ({
+          id: l.id,
+          tipo: l.tipo,
+          dataEvento: l.dataEvento,
+          conteudo: l.conteudo,
+          fonte: l.fonte,
+          cnjAfetado: l.cnjAfetado,
+        }));
+      } catch (err: any) {
+        log.warn({ err: err.message }, "SmartFlow: falha em buscarMovimentacoesProcesso");
+        return [];
+      }
+    },
+
     async extrairCamposIA(params): Promise<Record<string, unknown>> {
       // Reusa a mesma config do chatbot pra escolher provider + key + modelo.
       // Tool calling é suportado por OpenAI e Anthropic; o módulo llm-extracao

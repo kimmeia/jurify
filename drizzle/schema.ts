@@ -1976,6 +1976,9 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "ia_classificar",                // IA classifica intenção da mensagem
     "ia_responder",                  // IA gera resposta contextual
     "ia_extrair_campos",             // IA extrai dados estruturados via tool calling
+    "crm_buscar_contato",            // resolve contato por telefone/email/cpf
+    "crm_listar_acoes_cliente",     // lista cliente_processos do contato
+    "processo_buscar_movimentacoes", // lê histórico de eventos_processo
     "calcom_horarios",               // busca horários disponíveis no Cal.com
     "calcom_agendar",                // cria agendamento no Cal.com
     "calcom_listar",                 // lista bookings do Cal.com (contexto)

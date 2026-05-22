@@ -25,6 +25,9 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
   return {
     chamarIA: vi.fn().mockResolvedValue("duvida"),
     extrairCamposIA: vi.fn().mockResolvedValue({}),
+    buscarContatoCrm: vi.fn().mockResolvedValue(null),
+    listarAcoesCliente: vi.fn().mockResolvedValue([]),
+    buscarMovimentacoesProcesso: vi.fn().mockResolvedValue([]),
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
@@ -392,6 +395,240 @@ describe("SmartFlow Engine", () => {
         cpf: "123",
         email: "novo@ex.com",
       });
+    });
+  });
+
+  describe("crm_buscar_contato", () => {
+    it("popula contexto quando encontra", async () => {
+      const buscarContatoCrm = vi.fn().mockResolvedValue({
+        contatoId: 99,
+        nome: "Joana",
+        telefone: "11999",
+        email: "joana@ex.com",
+        atendenteResponsavelId: 7,
+        camposPersonalizados: { cpf: "111" },
+      });
+      const exec = criarMockExecutores({ buscarContatoCrm });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_buscar_contato",
+          config: { tipoBusca: "cpfCnpj", valor: "{{extracao.cpf}}" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { extracao: { cpf: "111.222.333-44" } },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.contatoEncontrado).toBe(true);
+      expect(resultado.contexto.contatoId).toBe(99);
+      expect(resultado.contexto.nomeCliente).toBe("Joana");
+      // Interpolação foi feita antes da chamada
+      expect(buscarContatoCrm).toHaveBeenCalledWith({
+        tipoBusca: "cpfCnpj",
+        valor: "111.222.333-44",
+      });
+      const cliente = resultado.contexto.cliente as any;
+      expect(cliente?.campos?.cpf).toBe("111");
+    });
+
+    it("marca contatoEncontrado=false sem ramificar erro quando não acha", async () => {
+      const buscarContatoCrm = vi.fn().mockResolvedValue(null);
+      const exec = criarMockExecutores({ buscarContatoCrm });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_buscar_contato",
+          config: { tipoBusca: "telefone", valor: "11999" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.contatoEncontrado).toBe(false);
+      expect(resultado.contexto.contatoId).toBeUndefined();
+    });
+
+    it("falha quando valor a buscar é vazio (mesmo após interpolação)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_buscar_contato",
+          // Variável inexistente no contexto → string vazia.
+          config: { tipoBusca: "telefone", valor: "{{naoExisteNoCtx}}" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("valor a buscar");
+    });
+  });
+
+  describe("crm_listar_acoes_cliente", () => {
+    it("popula contexto com acoes + acoesQuantidade", async () => {
+      const listarAcoesCliente = vi.fn().mockResolvedValue([
+        { id: 1, numeroCnj: "0000001-00.2024.8.05.0001", apelido: "Trabalhista", classe: "Reclamação", tipo: "litigioso", polo: "ativo", valorCausa: 50000, createdAt: new Date() },
+        { id: 2, numeroCnj: null, apelido: "Contrato", classe: null, tipo: "extrajudicial", polo: "interessado", valorCausa: null, createdAt: new Date() },
+      ]);
+      const exec = criarMockExecutores({ listarAcoesCliente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "crm_listar_acoes_cliente", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { contatoId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      const acoes = resultado.contexto.acoes as any[];
+      expect(acoes).toHaveLength(2);
+      expect(resultado.contexto.acoesQuantidade).toBe(2);
+      expect(listarAcoesCliente).toHaveBeenCalledWith(
+        expect.objectContaining({ contatoId: 42, limite: 10 }),
+      );
+    });
+
+    it("aplica filtros tipoFiltro e poloFiltro (omite quando 'todos')", async () => {
+      const listarAcoesCliente = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ listarAcoesCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_listar_acoes_cliente",
+          config: { tipoFiltro: "litigioso", poloFiltro: "todos", limite: 5 },
+        },
+      ];
+
+      await executarCenario(passos, { contatoId: 42 }, exec);
+
+      expect(listarAcoesCliente).toHaveBeenCalledWith({
+        contatoId: 42,
+        tipoFiltro: "litigioso",
+        // poloFiltro 'todos' não é enviado
+        poloFiltro: undefined,
+        limite: 5,
+      });
+    });
+
+    it("falha quando contatoId está ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "crm_listar_acoes_cliente", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("contatoId");
+    });
+  });
+
+  describe("processo_buscar_movimentacoes", () => {
+    it("usa acaoId do contexto como default e retorna movimentações", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([
+        { id: 1, tipo: "sentenca", dataEvento: new Date("2026-04-01"), conteudo: "Procedente", fonte: "judit", cnjAfetado: "X" },
+        { id: 2, tipo: "movimentacao", dataEvento: new Date("2026-03-15"), conteudo: "Conclusos", fonte: "judit", cnjAfetado: "X" },
+      ]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "processo_buscar_movimentacoes", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { acaoId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      const movs = resultado.contexto.movimentacoes as any[];
+      expect(movs).toHaveLength(2);
+      expect(resultado.contexto.movimentacoesQuantidade).toBe(2);
+      const maisRecente = resultado.contexto.movimentacaoMaisRecente as any;
+      expect(maisRecente.tipo).toBe("sentenca");
+      // Default: 30 dias, sem filtro de tipo, limite 10
+      expect(buscarMovimentacoesProcesso).toHaveBeenCalledWith(
+        expect.objectContaining({
+          processoRef: 42,
+          diasJanela: 30,
+          limite: 10,
+          tipos: undefined,
+        }),
+      );
+    });
+
+    it("interpola processoId customizado", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "processo_buscar_movimentacoes",
+          config: { processoId: "{{acaoEscolhida.id}}" },
+        },
+      ];
+
+      await executarCenario(
+        passos,
+        { acaoEscolhida: { id: 99 } },
+        exec,
+      );
+
+      expect(buscarMovimentacoesProcesso).toHaveBeenCalledWith(
+        expect.objectContaining({ processoRef: 99 }),
+      );
+    });
+
+    it("aceita CNJ como string", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "processo_buscar_movimentacoes",
+          config: { processoId: "0000001-00.2024.8.05.0001" },
+        },
+      ];
+
+      await executarCenario(passos, {}, exec);
+
+      expect(buscarMovimentacoesProcesso).toHaveBeenCalledWith(
+        expect.objectContaining({ processoRef: "0000001-00.2024.8.05.0001" }),
+      );
+    });
+
+    it("falha quando não há processoId nem acaoId", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "processo_buscar_movimentacoes", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("processo a consultar");
+    });
+
+    it("movimentacaoMaisRecente é null quando lista vazia", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "processo_buscar_movimentacoes", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { acaoId: 1 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.movimentacaoMaisRecente).toBeNull();
+      expect(resultado.contexto.movimentacoesQuantidade).toBe(0);
     });
   });
 

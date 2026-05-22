@@ -29,6 +29,23 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   // Variáveis publicadas por ia_extrair_campos são dinâmicas (chaves da config).
   // O componente resolve isso especialmente — array vazio aqui só satisfaz o tipo.
   ia_extrair_campos: [],
+  crm_buscar_contato: [
+    { path: "contatoEncontrado", label: "True se achou o contato, false se não", tipo: "booleano" },
+    { path: "contatoId", label: "ID do contato encontrado (substitui o anterior)", tipo: "número" },
+    { path: "nomeCliente", label: "Nome do contato", tipo: "texto" },
+    { path: "telefoneCliente", label: "Telefone do contato", tipo: "texto" },
+    { path: "emailCliente", label: "Email do contato", tipo: "texto" },
+    { path: "cliente.campos", label: "Campos personalizados do contato (objeto)", tipo: "objeto" },
+  ],
+  crm_listar_acoes_cliente: [
+    { path: "acoes", label: "Lista de processos do cliente (id, CNJ, classe, polo, tipo, valorCausa)", tipo: "lista" },
+    { path: "acoesQuantidade", label: "Quantidade de ações listadas", tipo: "número" },
+  ],
+  processo_buscar_movimentacoes: [
+    { path: "movimentacoes", label: "Lista de eventos (tipo, dataEvento, conteudo, fonte)", tipo: "lista" },
+    { path: "movimentacoesQuantidade", label: "Quantidade de eventos retornados", tipo: "número" },
+    { path: "movimentacaoMaisRecente", label: "Primeiro evento (mais recente) ou null", tipo: "objeto" },
+  ],
   calcom_horarios: [
     { path: "horariosDisponiveis", label: "Lista de horários disponíveis", tipo: "lista" },
   ],

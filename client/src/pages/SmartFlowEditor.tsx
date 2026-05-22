@@ -112,6 +112,9 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_classificar: Brain,
   ia_responder: Bot,
   ia_extrair_campos: Sparkles,
+  crm_buscar_contato: Users,
+  crm_listar_acoes_cliente: BookOpen,
+  processo_buscar_movimentacoes: BookOpen,
   calcom_horarios: Calendar,
   calcom_agendar: CheckCircle2,
   calcom_listar: CalendarSearch,
@@ -2090,6 +2093,260 @@ function ConfigIaExtrairCamposFields({
   );
 }
 
+/**
+ * Config do passo `crm_buscar_contato` — escolha do campo + valor interpolável.
+ * Mostra exemplos de variáveis típicas (`{{telefoneCliente}}`, `{{extracao.cpf}}`)
+ * pra ensinar o uso.
+ */
+function ConfigCrmBuscarContatoFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const tipoBusca = String(cfg.tipoBusca || "telefone");
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.valor || "");
+    onChange({ valor: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Buscar por</Label>
+        <Select value={tipoBusca} onValueChange={(v) => onChange({ tipoBusca: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="telefone">Telefone</SelectItem>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="cpfCnpj">CPF / CNPJ</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Valor a buscar</Label>
+          <VariableTrigger
+            inputId="cfg-crm-buscar-valor"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-crm-buscar-valor"
+          value={String(cfg.valor || "")}
+          onChange={(v) => onChange({ valor: v })}
+          variaveis={variaveis}
+          placeholder={
+            tipoBusca === "cpfCnpj"
+              ? "{{extracao.cpf}}"
+              : tipoBusca === "email"
+              ? "{{extracao.email}}"
+              : "{{telefoneCliente}}"
+          }
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Suporta interpolação. Match exato — se o cliente cadastrou com 55 mas
+          o gatilho veio sem (ou vice-versa), use <code>ia_extrair_campos</code> antes
+          pra normalizar.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[10px] text-blue-900 dark:text-blue-200 leading-snug">
+        <strong>Resultado:</strong> se achar, popula <code>contatoId</code>,{" "}
+        <code>nomeCliente</code>, <code>telefoneCliente</code>,{" "}
+        <code>cliente.campos.*</code>. Use <code>contatoEncontrado</code> num
+        passo condicional pra ramificar.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `crm_listar_acoes_cliente` — filtros opcionais por tipo
+ * de processo (litigioso/extrajudicial), polo do cliente e limite.
+ */
+function ConfigCrmListarAcoesClienteFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Filtrar por tipo</Label>
+        <Select
+          value={String(cfg.tipoFiltro || "todos")}
+          onValueChange={(v) => onChange({ tipoFiltro: v })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="litigioso">Litigiosos (judicial)</SelectItem>
+            <SelectItem value="extrajudicial">Extrajudiciais</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Filtrar por polo do cliente</Label>
+        <Select
+          value={String(cfg.poloFiltro || "todos")}
+          onValueChange={(v) => onChange({ poloFiltro: v })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="ativo">Ativo (autor)</SelectItem>
+            <SelectItem value="passivo">Passivo (réu)</SelectItem>
+            <SelectItem value="interessado">Interessado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Limite</Label>
+        <Input
+          type="number"
+          min={1}
+          max={50}
+          value={Number(cfg.limite ?? 10)}
+          onChange={(e) => onChange({ limite: Math.max(1, Math.min(50, Number(e.target.value) || 10)) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Ações vão pra <code>{`{{acoes}}`}</code> (lista) e{" "}
+          <code>{`{{acoesQuantidade}}`}</code>. Use{" "}
+          <strong>"Para cada item"</strong> pra iterar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `processo_buscar_movimentacoes` — interpolação no
+ * processoId (default `{{acaoId}}`), multiselect de tipos de evento,
+ * janela de dias e limite.
+ */
+function ConfigProcessoBuscarMovimentacoesFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => onChange({ processoId: `{{${path}}}` });
+  const tiposAtuais = Array.isArray(cfg.tipos) ? (cfg.tipos as string[]) : [];
+
+  const TIPOS_OPCOES = [
+    { id: "movimentacao", label: "Movimentação" },
+    { id: "publicacao_dje", label: "Publicação DJE" },
+    { id: "sentenca", label: "Sentença" },
+    { id: "despacho", label: "Despacho" },
+    { id: "audiencia", label: "Audiência" },
+    { id: "intimacao", label: "Intimação" },
+    { id: "citacao", label: "Citação" },
+    { id: "mandado", label: "Mandado" },
+    { id: "nova_acao", label: "Nova ação" },
+    { id: "outro", label: "Outro" },
+  ];
+
+  const toggleTipo = (id: string) => {
+    const novo = tiposAtuais.includes(id)
+      ? tiposAtuais.filter((t) => t !== id)
+      : [...tiposAtuais, id];
+    onChange({ tipos: novo });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Processo a consultar</Label>
+          <VariableTrigger
+            inputId="cfg-mov-processo"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-mov-processo"
+          value={String(cfg.processoId || "")}
+          onChange={(v) => onChange({ processoId: v })}
+          variaveis={variaveis}
+          placeholder="{{acaoEscolhida.id}} ou número CNJ"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Pode ser ID (cliente_processos.id), CNJ ou variável. Default se vazio:{" "}
+          <code>{`{{acaoId}}`}</code> do contexto.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Tipos a incluir (vazio = todos)</Label>
+        <div className="grid grid-cols-2 gap-1 mt-1 max-h-40 overflow-y-auto border rounded p-1.5 bg-muted/10">
+          {TIPOS_OPCOES.map((opt) => (
+            <label
+              key={opt.id}
+              className="flex items-center gap-1.5 text-[11px] cursor-pointer px-1 py-0.5 rounded hover:bg-muted/40"
+            >
+              <Checkbox
+                checked={tiposAtuais.includes(opt.id)}
+                onCheckedChange={() => toggleTipo(opt.id)}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Janela (dias)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={365}
+            value={Number(cfg.diasJanela ?? 30)}
+            onChange={(e) =>
+              onChange({ diasJanela: Math.max(1, Math.min(365, Number(e.target.value) || 30)) })
+            }
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Limite</Label>
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            value={Number(cfg.limite ?? 10)}
+            onChange={(e) =>
+              onChange({ limite: Math.max(1, Math.min(50, Number(e.target.value) || 10)) })
+            }
+          />
+        </div>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        Eventos vão pra <code>{`{{movimentacoes}}`}</code>; o mais recente
+        fica em <code>{`{{movimentacaoMaisRecente}}`}</code>.
+      </p>
+    </div>
+  );
+}
+
 interface CondicaoItem {
   id: string;
   label?: string;
@@ -3223,6 +3480,12 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
     case "ia_extrair_campos":
       return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
+    case "crm_buscar_contato":
+      return <ConfigCrmBuscarContatoFields cfg={cfg} onChange={onChange} />;
+    case "crm_listar_acoes_cliente":
+      return <ConfigCrmListarAcoesClienteFields cfg={cfg} onChange={onChange} />;
+    case "processo_buscar_movimentacoes":
+      return <ConfigProcessoBuscarMovimentacoesFields cfg={cfg} onChange={onChange} />;
     case "calcom_horarios":
       return (
         <div>

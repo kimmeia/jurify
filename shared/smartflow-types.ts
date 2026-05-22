@@ -62,6 +62,9 @@ export type TipoPasso =
   | "ia_classificar"
   | "ia_responder"
   | "ia_extrair_campos"
+  | "crm_buscar_contato"
+  | "crm_listar_acoes_cliente"
+  | "processo_buscar_movimentacoes"
   | "calcom_horarios"
   | "calcom_agendar"
   | "calcom_listar"
@@ -226,6 +229,65 @@ export interface ConfigIaExtrairCampos {
    * de `whatsapp_aguardar_resposta`).
    */
   fonteMensagem?: string;
+}
+
+/**
+ * Config do passo `crm_buscar_contato` — resolve um contato pelo telefone,
+ * email ou CPF/CNPJ. Útil quando o cliente está num número novo mas se
+ * identifica via outro dado na conversa.
+ */
+export interface ConfigCrmBuscarContato {
+  /** Por qual campo buscar — default `telefone`. */
+  tipoBusca?: "telefone" | "email" | "cpfCnpj";
+  /** Valor a buscar (interpolável: `{{telefoneCliente}}`, `{{extracao.cpf}}`...). */
+  valor?: string;
+}
+
+/**
+ * Config do passo `crm_listar_acoes_cliente` — busca processos vinculados
+ * ao contato (`cliente_processos.contatoId`). Filtros opcionais por tipo e polo.
+ */
+export interface ConfigCrmListarAcoesCliente {
+  /** Filtra por tipo de processo. Default: todos. */
+  tipoFiltro?: "todos" | "litigioso" | "extrajudicial";
+  /** Filtra por polo do cliente. Default: todos. */
+  poloFiltro?: "todos" | "ativo" | "passivo" | "interessado";
+  /** Limite de resultados. Default: 10. */
+  limite?: number;
+}
+
+/**
+ * Tipos de evento que o passo `processo_buscar_movimentacoes` aceita filtrar.
+ * Espelha o enum `eventos_processo.tipoEvento` em `drizzle/schema.ts`.
+ */
+export type TipoEventoProcesso =
+  | "movimentacao"
+  | "publicacao_dje"
+  | "nova_acao"
+  | "mandado"
+  | "intimacao"
+  | "citacao"
+  | "sentenca"
+  | "despacho"
+  | "audiencia"
+  | "outro";
+
+/**
+ * Config do passo `processo_buscar_movimentacoes` — lê de `eventos_processo`
+ * o histórico de um processo (ou CNJ) por janela de dias e tipos.
+ */
+export interface ConfigProcessoBuscarMovimentacoes {
+  /**
+   * ID do processo (cliente_processos.id) ou CNJ. Interpolável.
+   * Default: `{{acaoId}}` ou `{{acaoEscolhida.id}}`.
+   */
+  processoId?: string;
+  /** Tipos de evento a incluir (multiselect). Vazio = todos. */
+  tipos?: TipoEventoProcesso[];
+  /** Janela em dias (a partir de hoje). Default: 30. */
+  diasJanela?: number;
+  /** Limite de eventos retornados. Default: 10. */
+  limite?: number;
 }
 export interface ConfigCalcomHorarios {
   duracao?: number;
@@ -409,6 +471,9 @@ export type PassoConfigByTipo =
   | { tipo: "ia_classificar"; config: ConfigIaClassificar }
   | { tipo: "ia_responder"; config: ConfigIaResponder }
   | { tipo: "ia_extrair_campos"; config: ConfigIaExtrairCampos }
+  | { tipo: "crm_buscar_contato"; config: ConfigCrmBuscarContato }
+  | { tipo: "crm_listar_acoes_cliente"; config: ConfigCrmListarAcoesCliente }
+  | { tipo: "processo_buscar_movimentacoes"; config: ConfigProcessoBuscarMovimentacoes }
   | { tipo: "calcom_horarios"; config: ConfigCalcomHorarios }
   | { tipo: "calcom_agendar"; config: ConfigCalcomAgendar }
   | { tipo: "calcom_listar"; config: ConfigCalcomListar }
@@ -548,6 +613,9 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
   { id: "ia_extrair_campos", label: "Extrair dados (IA)", descricao: "IA lê a mensagem e extrai campos estruturados (CPF, email, datas...). Salva no contexto e opcionalmente no cadastro do cliente.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "ia" },
+  { id: "crm_buscar_contato", label: "Buscar contato (CRM)", descricao: "Resolve um cliente pelo telefone, email ou CPF. Popula contatoId, nome e campos personalizados.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
+  { id: "crm_listar_acoes_cliente", label: "Listar ações do cliente", descricao: "Lista os processos vinculados ao contato — útil pra IA saber sobre quais ações ele tem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
+  { id: "processo_buscar_movimentacoes", label: "Buscar movimentações", descricao: "Histórico de movimentações, publicações, sentenças e audiências de um processo. Filtros por tipo e janela.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
   { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "acoes" },
   { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "acoes" },
   { id: "calcom_listar", label: "Listar agendamentos", descricao: "Busca bookings no Cal.com e grava no contexto.", cor: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300", grupo: "acoes" },
