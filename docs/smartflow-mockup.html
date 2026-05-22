@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — Mockup de redesign</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --background: #ffffff;
+      --foreground: #0f172a;
+      --card: #ffffff;
+      --muted: #f1f5f9;
+      --muted-foreground: #64748b;
+      --border: #e2e8f0;
+    }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    .bg-card { background-color: var(--card); }
+    .text-muted-foreground { color: var(--muted-foreground); }
+    .bg-muted\/30 { background-color: rgba(241, 245, 249, 0.3); }
+    .bg-muted\/20 { background-color: rgba(241, 245, 249, 0.2); }
+    .border-border { border-color: var(--border); }
+    .border-border\/60 { border-color: rgba(226, 232, 240, 0.6); }
+    /* Hero AgentesIA-style gradient */
+    .hero-gradient {
+      background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.06) 100%);
+      border-color: rgba(139,92,246,0.18);
+    }
+    /* Canvas background sutil */
+    .canvas-bg {
+      background:
+        linear-gradient(135deg, rgba(241, 245, 249, 0.4) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(237, 233, 254, 0.2) 100%),
+        radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.18) 1px, transparent 0);
+      background-size: auto, 16px 16px;
+    }
+    /* Connector lines do canvas */
+    .connector {
+      position: absolute;
+      width: 2px;
+      background: linear-gradient(to bottom, #c4b5fd 0%, #a78bfa 100%);
+    }
+    .connector-arrow {
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid #a78bfa;
+    }
+    /* Switch */
+    .switch {
+      width: 36px; height: 20px; background: #10b981; border-radius: 999px; position: relative; cursor: pointer;
+    }
+    .switch::after {
+      content: ''; position: absolute; top: 2px; left: 18px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: all 0.2s;
+    }
+    .switch.off { background: #cbd5e1; }
+    .switch.off::after { left: 2px; }
+    /* Sidebar app mock */
+    .sidebar-item { @apply flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs text-slate-600 cursor-default; }
+    .sidebar-item.active { @apply bg-violet-50 text-violet-700 font-semibold; }
+    /* Section divider */
+    .section-divider {
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+      height: 1px;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+
+  <!-- ════════════════════ TOPO DA DEMO ════════════════════ -->
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 px-6 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center">
+        <i data-lucide="zap" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold">Mockup de redesign</p>
+        <h1 class="text-lg font-bold">SmartFlow — Proposta visual</h1>
+      </div>
+      <div class="flex gap-2 text-xs">
+        <a href="#tela-lista" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 transition">📋 Lista</a>
+        <a href="#tela-editor" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 transition">🛠 Editor</a>
+        <a href="#perguntas" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 transition">❓ Perguntas</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto p-6 space-y-12">
+
+    <!-- ════════════════════ NOTA EXPLICATIVA ════════════════════ -->
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+      <p class="font-semibold mb-1 flex items-center gap-1.5">
+        <i data-lucide="info" class="w-4 h-4"></i> Sobre este mockup
+      </p>
+      <p class="text-xs">
+        Esta é uma <strong>representação visual</strong> de como as telas do SmartFlow vão ficar após o redesign.
+        As cores, espaçamentos e disposição dos elementos são fiéis ao que será implementado.
+        <strong>Nenhum botão funciona</strong> aqui — é só pra você ver e aprovar/reprovar antes de eu codar.
+      </p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- ════════════════════ TELA 1 — LISTA ════════════════════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <section id="tela-lista" class="space-y-4">
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Tela 1</p>
+          <h2 class="text-2xl font-bold">📋 Lista de cenários</h2>
+          <p class="text-sm text-muted-foreground mt-1">Rota: <code class="bg-slate-100 px-1 py-0.5 rounded text-xs">/smartflow</code></p>
+        </div>
+        <div class="text-xs text-muted-foreground">
+          Padrão visual alinhado com: <strong>Agentes IA</strong>, <strong>Clientes</strong>, <strong>Kanban</strong>
+        </div>
+      </div>
+
+      <!-- Frame simulando o navegador -->
+      <div class="rounded-2xl border-2 border-slate-300 shadow-2xl overflow-hidden bg-white">
+        <!-- Fake browser bar -->
+        <div class="bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center gap-2">
+          <div class="flex gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+            <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+            <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+          </div>
+          <div class="flex-1 mx-2 bg-white rounded-md px-3 py-1 text-xs text-slate-500 flex items-center gap-1.5">
+            <i data-lucide="lock" class="w-3 h-3"></i>
+            juridflow.com.br/smartflow
+          </div>
+        </div>
+
+        <!-- Layout do app: sidebar + main -->
+        <div class="flex" style="min-height: 720px;">
+          <!-- ═══════ Sidebar app (mock simplificado) ═══════ -->
+          <aside class="w-56 bg-white border-r border-slate-200 p-3 space-y-1">
+            <div class="px-2 py-2 mb-2 flex items-center gap-2">
+              <div class="w-7 h-7 rounded bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+                <i data-lucide="scale" class="w-4 h-4 text-white"></i>
+              </div>
+              <span class="font-bold text-sm">JuridFlow</span>
+            </div>
+            <div class="sidebar-item"><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> Dashboard</div>
+            <div class="sidebar-item"><i data-lucide="users" class="w-3.5 h-3.5"></i> Clientes</div>
+            <div class="sidebar-item"><i data-lucide="briefcase" class="w-3.5 h-3.5"></i> Processos</div>
+            <div class="sidebar-item"><i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> Kanban</div>
+            <div class="sidebar-item"><i data-lucide="dollar-sign" class="w-3.5 h-3.5"></i> Financeiro</div>
+            <div class="sidebar-item"><i data-lucide="bot" class="w-3.5 h-3.5"></i> Agentes IA</div>
+            <div class="sidebar-item active"><i data-lucide="zap" class="w-3.5 h-3.5"></i> SmartFlow</div>
+            <div class="sidebar-item"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Atendimento</div>
+            <div class="sidebar-item"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Agenda</div>
+            <div class="sidebar-item"><i data-lucide="settings" class="w-3.5 h-3.5"></i> Configurações</div>
+          </aside>
+
+          <!-- ═══════ Main content da página SmartFlow ═══════ -->
+          <main class="flex-1 p-6 bg-slate-50/40">
+            <div class="max-w-6xl mx-auto space-y-5">
+
+              <!-- ╔════════ HERO CARD com KPIs ════════╗ -->
+              <div class="relative overflow-hidden rounded-2xl p-5 border hero-gradient">
+                <div class="flex items-center gap-3 mb-4 flex-wrap">
+                  <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md">
+                    <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl font-bold tracking-tight">SmartFlow</h1>
+                    <p class="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                      <i data-lucide="sparkles" class="w-3 h-3 text-violet-500"></i>
+                      <span>Automações inteligentes · WhatsApp · Asaas · Cal.com</span>
+                    </p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button class="text-xs h-9 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-50 font-medium flex items-center gap-1.5">
+                      <i data-lucide="zap" class="w-3.5 h-3.5"></i> Atendimento
+                    </button>
+                    <button class="text-xs h-9 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-50 font-medium flex items-center gap-1.5">
+                      <i data-lucide="dollar-sign" class="w-3.5 h-3.5"></i> Pgto → Kanban
+                    </button>
+                    <button class="text-xs h-9 px-3 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-medium flex items-center gap-1.5 shadow-md">
+                      <i data-lucide="plus" class="w-4 h-4"></i> Novo cenário
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <!-- KPI 1 -->
+                  <div class="bg-card rounded-xl border border-border/60 px-3 py-2.5 flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-violet-100 text-violet-700">
+                      <i data-lucide="zap" class="w-4 h-4"></i>
+                    </div>
+                    <div class="leading-tight min-w-0">
+                      <p class="text-base font-bold leading-none tabular-nums truncate text-violet-700">7</p>
+                      <p class="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-1">Cenários ativos</p>
+                    </div>
+                  </div>
+                  <!-- KPI 2 -->
+                  <div class="bg-card rounded-xl border border-border/60 px-3 py-2.5 flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-100 text-emerald-700">
+                      <i data-lucide="activity" class="w-4 h-4"></i>
+                    </div>
+                    <div class="leading-tight min-w-0">
+                      <p class="text-base font-bold leading-none tabular-nums truncate text-emerald-700">142</p>
+                      <p class="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-1">Execuções · 30d</p>
+                    </div>
+                  </div>
+                  <!-- KPI 3 -->
+                  <div class="bg-card rounded-xl border border-border/60 px-3 py-2.5 flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-amber-100 text-amber-700">
+                      <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    </div>
+                    <div class="leading-tight min-w-0">
+                      <p class="text-base font-bold leading-none tabular-nums truncate text-amber-700">96%</p>
+                      <p class="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-1">Taxa de sucesso</p>
+                    </div>
+                  </div>
+                  <!-- KPI 4 -->
+                  <div class="bg-card rounded-xl border border-border/60 px-3 py-2.5 flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-lg flex items-center justify-center bg-fuchsia-100 text-fuchsia-700">
+                      <i data-lucide="clock" class="w-4 h-4"></i>
+                    </div>
+                    <div class="leading-tight min-w-0">
+                      <p class="text-base font-bold leading-none tabular-nums truncate text-fuchsia-700">1.2s</p>
+                      <p class="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-1">Tempo médio · passo</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ╔════════ Tabs + Toolbar ════════╗ -->
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="bg-slate-100 rounded-lg p-1 flex gap-1">
+                  <button class="text-xs px-3 py-1.5 rounded-md bg-white shadow-sm font-semibold flex items-center gap-1.5">
+                    <i data-lucide="zap" class="w-3 h-3"></i> Cenários <span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded text-[10px] ml-1">7</span>
+                  </button>
+                  <button class="text-xs px-3 py-1.5 rounded-md text-slate-600 hover:bg-white/50 flex items-center gap-1.5">
+                    <i data-lucide="activity" class="w-3 h-3"></i> Execuções <span class="text-slate-400 text-[10px] ml-1">142</span>
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" placeholder="Buscar cenário..." class="text-xs h-9 pl-8 pr-3 rounded-md border border-slate-300 bg-white w-56 focus:outline-none focus:border-violet-400">
+                  </div>
+                  <button class="text-xs h-9 px-3 rounded-md border border-slate-300 bg-white font-medium flex items-center gap-1.5">
+                    <i data-lucide="filter" class="w-3.5 h-3.5"></i> Categoria <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- ╔════════ Grid de cenários ════════╗ -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+
+                <!-- Card 1: WhatsApp / mensagem (azul) -->
+                <div class="relative rounded-xl border border-l-4 border-l-blue-500 bg-card p-4 hover:shadow-md hover:-translate-y-px transition-all">
+                  <div class="absolute top-3 right-3"><div class="switch"></div></div>
+                  <div class="flex items-start gap-2.5 mb-2 pr-12">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-blue-500 to-cyan-500">
+                      <i data-lucide="message-circle" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-bold truncate">Atendimento + Agendamento</p>
+                      <p class="text-[10px] text-muted-foreground truncate">Mensagem recebida (WhatsApp)</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">
+                    Atende cliente via WhatsApp, classifica intenção e oferece horários do Cal.com.
+                  </p>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">5 passos</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">💬 WhatsApp QR</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground border-t pt-2.5 mb-2.5">
+                    <div class="flex items-center gap-1"><strong class="text-foreground">28</strong> exec · 7d</div>
+                    <div class="flex items-center gap-1 text-emerald-700"><i data-lucide="check-circle-2" class="w-3 h-3"></i> 100%</div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button class="flex-1 text-[11px] h-7 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-medium flex items-center justify-center gap-1">
+                      <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50" title="Histórico">
+                      <i data-lucide="history" class="w-3 h-3"></i>
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md text-red-600 hover:bg-red-50" title="Excluir">
+                      <i data-lucide="trash-2" class="w-3 h-3"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Card 2: Asaas / pagamento (verde) -->
+                <div class="relative rounded-xl border border-l-4 border-l-emerald-500 bg-card p-4 hover:shadow-md hover:-translate-y-px transition-all">
+                  <div class="absolute top-3 right-3"><div class="switch"></div></div>
+                  <div class="flex items-start gap-2.5 mb-2 pr-12">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-emerald-500 to-teal-600">
+                      <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-bold truncate">Pagamento → Kanban</p>
+                      <p class="text-[10px] text-muted-foreground truncate">Pagamento recebido (Asaas)</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">
+                    Quando cliente paga, cria card no Kanban e envia WhatsApp de obrigado.
+                  </p>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">3 passos</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">💰 Asaas</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground border-t pt-2.5 mb-2.5">
+                    <div class="flex items-center gap-1"><strong class="text-foreground">14</strong> exec · 7d</div>
+                    <div class="flex items-center gap-1 text-emerald-700"><i data-lucide="check-circle-2" class="w-3 h-3"></i> 100%</div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button class="flex-1 text-[11px] h-7 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-medium flex items-center justify-center gap-1">
+                      <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md border border-slate-300"><i data-lucide="history" class="w-3 h-3"></i></button>
+                    <button class="text-[11px] h-7 px-2 rounded-md text-red-600 hover:bg-red-50"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                  </div>
+                </div>
+
+                <!-- Card 3: Asaas / vencido (verde) -->
+                <div class="relative rounded-xl border border-l-4 border-l-emerald-500 bg-card p-4 hover:shadow-md hover:-translate-y-px transition-all">
+                  <div class="absolute top-3 right-3"><div class="switch"></div></div>
+                  <div class="flex items-start gap-2.5 mb-2 pr-12">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-amber-500 to-red-500">
+                      <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-bold truncate">Cobrança vencida — aviso</p>
+                      <p class="text-[10px] text-muted-foreground truncate">Pagamento vencido (Asaas)</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">
+                    Dispara 3 dias após vencimento, manda WhatsApp educado com link de pagamento.
+                  </p>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">4 passos</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">⚠️ Vencido ≥3d</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">🕐 09:00</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground border-t pt-2.5 mb-2.5">
+                    <div class="flex items-center gap-1"><strong class="text-foreground">7</strong> exec · 7d</div>
+                    <div class="flex items-center gap-1 text-emerald-700"><i data-lucide="check-circle-2" class="w-3 h-3"></i> 100%</div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button class="flex-1 text-[11px] h-7 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-medium flex items-center justify-center gap-1">
+                      <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md border border-slate-300"><i data-lucide="history" class="w-3 h-3"></i></button>
+                    <button class="text-[11px] h-7 px-2 rounded-md text-red-600 hover:bg-red-50"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                  </div>
+                </div>
+
+                <!-- Card 4: Cal.com lembrete (laranja) -->
+                <div class="relative rounded-xl border border-l-4 border-l-orange-500 bg-card p-4 hover:shadow-md hover:-translate-y-px transition-all opacity-60">
+                  <div class="absolute top-3 right-3"><div class="switch off"></div></div>
+                  <div class="flex items-start gap-2.5 mb-2 pr-12">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-orange-500 to-amber-500">
+                      <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-bold truncate">Lembrete de reunião</p>
+                      <p class="text-[10px] text-muted-foreground truncate">Lembrete de agendamento</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">
+                    1 dia antes do horário, dispara WhatsApp lembrando o cliente.
+                  </p>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">2 passos</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">Inativo</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground border-t pt-2.5 mb-2.5">
+                    <div class="flex items-center gap-1"><strong class="text-foreground">0</strong> exec · 7d</div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button class="flex-1 text-[11px] h-7 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-medium flex items-center justify-center gap-1">
+                      <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md border border-slate-300"><i data-lucide="history" class="w-3 h-3"></i></button>
+                    <button class="text-[11px] h-7 px-2 rounded-md text-red-600 hover:bg-red-50"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                  </div>
+                </div>
+
+                <!-- Card 5: CRM novo lead (violeta) -->
+                <div class="relative rounded-xl border border-l-4 border-l-violet-500 bg-card p-4 hover:shadow-md hover:-translate-y-px transition-all">
+                  <div class="absolute top-3 right-3"><div class="switch"></div></div>
+                  <div class="flex items-start gap-2.5 mb-2 pr-12">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-violet-500 to-pink-500">
+                      <i data-lucide="user-plus" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-bold truncate">Lead novo · saudação</p>
+                      <p class="text-[10px] text-muted-foreground truncate">Novo lead no CRM</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">
+                    Lead novo → envia saudação personalizada + cria card no Kanban "Triagem".
+                  </p>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">3 passos</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground border-t pt-2.5 mb-2.5">
+                    <div class="flex items-center gap-1"><strong class="text-foreground">19</strong> exec · 7d</div>
+                    <div class="flex items-center gap-1 text-emerald-700"><i data-lucide="check-circle-2" class="w-3 h-3"></i> 95%</div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button class="flex-1 text-[11px] h-7 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-medium flex items-center justify-center gap-1">
+                      <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md border border-slate-300"><i data-lucide="history" class="w-3 h-3"></i></button>
+                    <button class="text-[11px] h-7 px-2 rounded-md text-red-600 hover:bg-red-50"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                  </div>
+                </div>
+
+                <!-- Card 6: Manual (cinza) -->
+                <div class="relative rounded-xl border border-l-4 border-l-slate-500 bg-card p-4 hover:shadow-md hover:-translate-y-px transition-all">
+                  <div class="absolute top-3 right-3"><div class="switch"></div></div>
+                  <div class="flex items-start gap-2.5 mb-2 pr-12">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-gradient-to-br from-slate-600 to-slate-800">
+                      <i data-lucide="play" class="w-5 h-5"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-bold truncate">Cobrança em lote — manual</p>
+                      <p class="text-[10px] text-muted-foreground truncate">Acionado manualmente</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground line-clamp-2 mb-3 leading-snug">
+                    Gera cobranças mensais pra todos os clientes do plano X (apertar o botão).
+                  </p>
+                  <div class="flex flex-wrap gap-1 mb-3">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">5 passos</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground border-t pt-2.5 mb-2.5">
+                    <div class="flex items-center gap-1"><strong class="text-foreground">2</strong> exec · 7d</div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button class="flex-1 text-[11px] h-7 rounded-md bg-gradient-to-br from-emerald-600 to-teal-600 text-white font-medium flex items-center justify-center gap-1">
+                      <i data-lucide="play" class="w-3 h-3"></i> Executar agora
+                    </button>
+                    <button class="text-[11px] h-7 px-2 rounded-md border border-slate-300"><i data-lucide="edit" class="w-3 h-3"></i></button>
+                    <button class="text-[11px] h-7 px-2 rounded-md text-red-600 hover:bg-red-50"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Legenda das cores -->
+              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+                <p class="font-semibold mb-2 text-slate-700">🎨 Legenda das cores das bordas:</p>
+                <div class="flex flex-wrap gap-3">
+                  <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-blue-500"></div> Mensagem (WhatsApp/IG/Facebook)</div>
+                  <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-emerald-500"></div> Asaas (recebido/vencido/próximo)</div>
+                  <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-orange-500"></div> Cal.com (agendamento)</div>
+                  <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-violet-500"></div> CRM (novo lead)</div>
+                  <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded bg-slate-500"></div> Manual</div>
+                </div>
+              </div>
+
+            </div>
+          </main>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- ════════════════════ TELA 2 — EDITOR ════════════════════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <section id="tela-editor" class="space-y-4">
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Tela 2</p>
+          <h2 class="text-2xl font-bold">🛠 Construtor de fluxo (editor)</h2>
+          <p class="text-sm text-muted-foreground mt-1">Rota: <code class="bg-slate-100 px-1 py-0.5 rounded text-xs">/smartflow/:id/editar</code></p>
+        </div>
+        <div class="text-xs text-muted-foreground text-right">
+          Editor visual com canvas ReactFlow.<br>
+          Layout: <strong>3 colunas</strong> — paleta · canvas · painel de config
+        </div>
+      </div>
+
+      <!-- Frame simulando navegador (editor ocupa viewport inteiro) -->
+      <div class="rounded-2xl border-2 border-slate-300 shadow-2xl overflow-hidden bg-white">
+        <!-- Fake browser bar -->
+        <div class="bg-slate-100 border-b border-slate-200 px-4 py-2 flex items-center gap-2">
+          <div class="flex gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+            <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+            <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+          </div>
+          <div class="flex-1 mx-2 bg-white rounded-md px-3 py-1 text-xs text-slate-500 flex items-center gap-1.5">
+            <i data-lucide="lock" class="w-3 h-3"></i>
+            juridflow.com.br/smartflow/12/editar
+          </div>
+        </div>
+
+        <!-- ═══════ Editor: viewport-altura ═══════ -->
+        <div class="flex flex-col" style="height: 820px;">
+
+          <!-- ╔════════ Top bar nova ════════╗ -->
+          <div class="flex items-center gap-3 px-4 py-3 border-b bg-white">
+            <button class="text-xs h-8 px-2 rounded-md text-slate-600 hover:bg-slate-100 flex items-center gap-1">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+            </button>
+            <div class="h-6 w-px bg-slate-200"></div>
+            <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-sm shrink-0">
+              <i data-lucide="zap" class="w-4 h-4 text-white"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <input value="Atendimento + Agendamento" class="text-base font-bold bg-transparent border-none w-full focus:outline-none focus:bg-slate-50 px-1 rounded">
+              <div class="flex items-center gap-2 text-[11px] text-slate-500 px-1 mt-0.5 flex-wrap">
+                <span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-3 h-3 text-blue-500"></i> Mensagem recebida</span>
+                <span class="text-slate-300">·</span>
+                <span>5 passos</span>
+                <span class="text-slate-300">·</span>
+                <span class="flex items-center gap-1 text-emerald-600"><div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Salvo há 2 min</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200">
+                <div class="switch" style="height: 16px; width: 28px;"></div>
+                <span class="text-[11px] font-semibold text-emerald-700">Ativo</span>
+              </div>
+              <button class="text-xs h-9 px-3 rounded-md border border-slate-300 bg-white font-medium flex items-center gap-1.5 hover:bg-slate-50">
+                <i data-lucide="play" class="w-3.5 h-3.5"></i> Testar
+              </button>
+              <button class="text-xs h-9 px-2 rounded-md text-red-600 hover:bg-red-50" title="Excluir cenário">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+              <button class="text-xs h-9 px-4 rounded-md bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-semibold flex items-center gap-1.5 shadow-md">
+                <i data-lucide="save" class="w-4 h-4"></i> Salvar
+              </button>
+            </div>
+          </div>
+
+          <!-- ╔════════ Workspace 3 colunas ════════╗ -->
+          <div class="flex flex-1 min-h-0">
+
+            <!-- ═══ Paleta esquerda (280px) ═══ -->
+            <aside class="w-72 border-r bg-slate-50/60 overflow-y-auto">
+
+              <!-- Seção GATILHO -->
+              <div class="p-3">
+                <div class="flex items-center gap-1.5 mb-2">
+                  <i data-lucide="zap" class="w-3 h-3 text-amber-600"></i>
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Gatilho do fluxo</p>
+                </div>
+                <div class="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-3">
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-sm">
+                      <i data-lucide="message-circle" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs font-bold truncate">Mensagem recebida</p>
+                      <p class="text-[10px] text-slate-500">Mensagem (canal)</p>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-slate-600 mb-2 leading-snug">
+                    Dispara quando chega mensagem em qualquer canal conectado.
+                  </p>
+                  <button class="w-full text-[11px] h-7 rounded-md bg-white border border-blue-300 text-blue-700 font-medium hover:bg-blue-50 flex items-center justify-center gap-1">
+                    <i data-lucide="repeat" class="w-3 h-3"></i> Trocar gatilho
+                  </button>
+                </div>
+              </div>
+
+              <div class="px-3"><div class="border-t border-slate-200"></div></div>
+
+              <!-- Seção AÇÕES -->
+              <div class="p-3 space-y-3">
+                <div class="flex items-center justify-between mb-1">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="layers" class="w-3 h-3 text-violet-600"></i>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Ações disponíveis</p>
+                  </div>
+                </div>
+                <div class="relative">
+                  <i data-lucide="search" class="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                  <input type="text" placeholder="Buscar passo..." class="text-[11px] h-7 pl-7 pr-2 rounded-md border border-slate-300 bg-white w-full focus:outline-none focus:border-violet-400">
+                </div>
+
+                <!-- Grupo IA (expandido — exemplo) -->
+                <div class="border border-slate-200 rounded-lg bg-white">
+                  <button class="w-full flex items-center justify-between px-2.5 py-1.5 text-left">
+                    <div class="flex items-center gap-1.5">
+                      <i data-lucide="bot" class="w-3.5 h-3.5 text-violet-600"></i>
+                      <span class="text-xs font-bold">Inteligência artificial</span>
+                      <span class="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">2</span>
+                    </div>
+                    <i data-lucide="chevron-up" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </button>
+                  <div class="px-1 pb-1 space-y-0.5">
+                    <button class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-violet-50 transition">
+                      <i data-lucide="brain" class="w-3.5 h-3.5 text-violet-600"></i>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-[11px] font-semibold">Classificar intenção</p>
+                        <p class="text-[9px] text-slate-500 truncate">Usa IA para categorizar</p>
+                      </div>
+                      <i data-lucide="plus" class="w-3 h-3 text-slate-400"></i>
+                    </button>
+                    <button class="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-blue-50 transition">
+                      <i data-lucide="bot" class="w-3.5 h-3.5 text-blue-600"></i>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-[11px] font-semibold">Responder com IA</p>
+                        <p class="text-[9px] text-slate-500 truncate">Gera resposta com agente</p>
+                      </div>
+                      <i data-lucide="plus" class="w-3 h-3 text-slate-400"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Grupo Mensagem (recolhido) -->
+                <button class="w-full flex items-center justify-between px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-left">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="message-circle" class="w-3.5 h-3.5 text-teal-600"></i>
+                    <span class="text-xs font-bold">Mensagem</span>
+                    <span class="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded">2</span>
+                  </div>
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                </button>
+
+                <!-- Grupo Kanban (recolhido) -->
+                <button class="w-full flex items-center justify-between px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-left">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-indigo-600"></i>
+                    <span class="text-xs font-bold">Kanban</span>
+                    <span class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">4</span>
+                  </div>
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                </button>
+
+                <!-- Grupo Asaas (recolhido) -->
+                <button class="w-full flex items-center justify-between px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-left">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-emerald-600"></i>
+                    <span class="text-xs font-bold">Asaas</span>
+                    <span class="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">4</span>
+                  </div>
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                </button>
+
+                <!-- Grupo Cal.com (recolhido) -->
+                <button class="w-full flex items-center justify-between px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-left">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5 text-orange-600"></i>
+                    <span class="text-xs font-bold">Cal.com</span>
+                    <span class="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">5</span>
+                  </div>
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                </button>
+
+                <!-- Grupo Fluxo (recolhido) -->
+                <button class="w-full flex items-center justify-between px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white text-left">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="git-branch" class="w-3.5 h-3.5 text-amber-600"></i>
+                    <span class="text-xs font-bold">Controle de fluxo</span>
+                    <span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">3</span>
+                  </div>
+                  <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                </button>
+              </div>
+
+            </aside>
+
+            <!-- ═══ Canvas (centro) ═══ -->
+            <div class="flex-1 relative canvas-bg overflow-hidden">
+
+              <!-- Nó: Gatilho -->
+              <div class="absolute" style="top: 60px; left: 50%; transform: translateX(-50%);">
+                <div class="rounded-xl border-2 border-blue-400 bg-gradient-to-br from-blue-50 to-cyan-50 shadow-md min-w-[220px]">
+                  <div class="flex items-center gap-1.5 px-3 py-2 rounded-t-[10px] bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
+                    <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                    <span class="text-xs font-bold">Gatilho · Mensagem recebida</span>
+                  </div>
+                  <div class="px-3 py-2 text-[10px] text-slate-600">
+                    WhatsApp QR · Instagram · Facebook
+                  </div>
+                  <div class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white"></div>
+                </div>
+              </div>
+
+              <!-- Connector 1 -->
+              <div class="connector" style="top: 158px; left: 50%; transform: translateX(-50%); height: 35px;"></div>
+              <div class="connector-arrow" style="position: absolute; top: 193px; left: 50%; transform: translateX(-50%);"></div>
+
+              <!-- Nó: Classificar intenção -->
+              <div class="absolute" style="top: 205px; left: 50%; transform: translateX(-50%);">
+                <div class="rounded-xl border-2 border-violet-300 bg-white shadow-md min-w-[220px] ring-2 ring-violet-200">
+                  <div class="flex items-center gap-1.5 px-3 py-2 rounded-t-[10px] bg-violet-100 text-violet-700">
+                    <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                    <span class="text-xs font-bold">Classificar intenção (IA)</span>
+                  </div>
+                  <div class="px-3 py-2 text-[10px] text-slate-600 border-t bg-slate-50/50">
+                    Categorias: agendar, dúvida, emergência
+                  </div>
+                  <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-slate-300 border-2 border-white"></div>
+                  <div class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-violet-500 border-2 border-white"></div>
+                </div>
+              </div>
+
+              <!-- Connector 2 -->
+              <div class="connector" style="top: 305px; left: 50%; transform: translateX(-50%); height: 35px;"></div>
+              <div class="connector-arrow" style="position: absolute; top: 340px; left: 50%; transform: translateX(-50%);"></div>
+
+              <!-- Nó: Condicional (selecionado — borda violeta destacada) -->
+              <div class="absolute" style="top: 352px; left: 50%; transform: translateX(-50%);">
+                <div class="rounded-xl border-2 border-violet-600 bg-white shadow-lg min-w-[220px] ring-4 ring-violet-200">
+                  <div class="flex items-center gap-1.5 px-3 py-2 rounded-t-[10px] bg-orange-100 text-orange-700">
+                    <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+                    <span class="text-xs font-bold">Condição (if/else)</span>
+                  </div>
+                  <div class="px-3 py-2 border-t bg-slate-50/30 space-y-1">
+                    <div class="flex items-center gap-1.5 px-2 py-1 text-[10px]">
+                      <span class="flex-1">Quer agendar</span>
+                      <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                    </div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 text-[10px]">
+                      <span class="flex-1">Tem dúvida</span>
+                      <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                    </div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 text-[10px] italic text-slate-500">
+                      <span class="flex-1">fallback</span>
+                      <div class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                    </div>
+                  </div>
+                  <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-slate-300 border-2 border-white"></div>
+                </div>
+              </div>
+
+              <!-- Hint adicionar passo abaixo -->
+              <div class="absolute" style="top: 510px; left: 50%; transform: translateX(-50%);">
+                <button class="text-[11px] px-3 py-1.5 rounded-full border border-dashed border-slate-400 bg-white text-slate-600 hover:border-violet-400 hover:text-violet-600 flex items-center gap-1.5 shadow-sm">
+                  <i data-lucide="plus" class="w-3 h-3"></i> Adicionar passo conectado
+                </button>
+              </div>
+
+              <!-- Mini-toolbar flutuante (canto inferior direito) -->
+              <div class="absolute bottom-4 right-4 bg-white rounded-lg border border-slate-200 shadow-lg p-1 flex items-center gap-0.5">
+                <button class="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center" title="Zoom +">
+                  <i data-lucide="zoom-in" class="w-3.5 h-3.5 text-slate-600"></i>
+                </button>
+                <button class="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center" title="Zoom -">
+                  <i data-lucide="zoom-out" class="w-3.5 h-3.5 text-slate-600"></i>
+                </button>
+                <div class="w-px h-5 bg-slate-200 mx-0.5"></div>
+                <button class="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center" title="Centrar">
+                  <i data-lucide="maximize" class="w-3.5 h-3.5 text-slate-600"></i>
+                </button>
+                <button class="w-7 h-7 rounded hover:bg-violet-50 flex items-center justify-center" title="Auto-arranjar (NOVO)">
+                  <i data-lucide="layout-list" class="w-3.5 h-3.5 text-violet-600"></i>
+                </button>
+                <div class="w-px h-5 bg-slate-200 mx-0.5"></div>
+                <button class="text-[11px] h-7 px-2 rounded hover:bg-emerald-50 text-emerald-700 font-medium flex items-center gap-1" title="Validar grafo (NOVO)">
+                  <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Validar
+                </button>
+              </div>
+
+              <!-- Mini-mapa (canto inferior esquerdo) -->
+              <div class="absolute bottom-4 left-4 w-32 h-20 bg-white/80 backdrop-blur border border-slate-200 rounded shadow-md p-1">
+                <div class="text-[9px] text-slate-400 mb-0.5">Mapa</div>
+                <div class="bg-slate-50 h-full rounded-sm relative">
+                  <div class="absolute w-2 h-2 bg-blue-500 rounded-sm" style="top: 10%; left: 45%;"></div>
+                  <div class="absolute w-2 h-2 bg-violet-400 rounded-sm" style="top: 35%; left: 45%;"></div>
+                  <div class="absolute w-2 h-2 bg-orange-400 rounded-sm" style="top: 60%; left: 45%;"></div>
+                  <div class="absolute inset-0 border-2 border-violet-500 rounded-sm opacity-40"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ═══ Painel direito (360px) — config do nó selecionado ═══ -->
+            <aside class="w-96 border-l bg-white overflow-y-auto">
+              <!-- Header do painel -->
+              <div class="p-4 border-b bg-gradient-to-br from-orange-50 to-amber-50">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="p-1.5 rounded bg-orange-100 text-orange-700">
+                    <i data-lucide="git-branch" class="w-4 h-4"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Passo selecionado</p>
+                    <p class="text-sm font-bold truncate">Condição (if/else)</p>
+                  </div>
+                </div>
+                <p class="text-[10px] text-slate-500">Avalia condições em ordem; primeira que bate define o caminho.</p>
+              </div>
+
+              <!-- Abas internas -->
+              <div class="flex border-b bg-slate-50/50">
+                <button class="flex-1 text-[11px] py-2 font-semibold border-b-2 border-violet-600 text-violet-700 bg-white flex items-center justify-center gap-1">
+                  <i data-lucide="settings" class="w-3 h-3"></i> Configuração
+                </button>
+                <button class="flex-1 text-[11px] py-2 font-medium text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1">
+                  <i data-lucide="sliders" class="w-3 h-3"></i> Avançado
+                </button>
+                <button class="flex-1 text-[11px] py-2 font-medium text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1">
+                  <i data-lucide="arrow-right-from-line" class="w-3 h-3"></i> Saída
+                </button>
+              </div>
+
+              <!-- Conteúdo aba Configuração -->
+              <div class="p-4 space-y-3">
+                <div>
+                  <label class="text-[11px] font-semibold text-slate-700 mb-1 block">Condições</label>
+                  <div class="space-y-2">
+                    <!-- Condição 1 -->
+                    <div class="border border-slate-200 rounded-lg p-2 bg-emerald-50/30">
+                      <div class="flex items-center gap-1.5 mb-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                        <input class="text-[11px] font-semibold bg-transparent border-none flex-1 focus:outline-none focus:bg-white px-1 rounded" value="Quer agendar">
+                        <button class="text-slate-400 hover:text-red-600"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                      </div>
+                      <div class="grid grid-cols-3 gap-1">
+                        <select class="text-[10px] h-7 px-1 rounded border border-slate-300 bg-white">
+                          <option>intencao</option>
+                        </select>
+                        <select class="text-[10px] h-7 px-1 rounded border border-slate-300 bg-white">
+                          <option>= igual</option>
+                        </select>
+                        <input class="text-[10px] h-7 px-1.5 rounded border border-slate-300 bg-white" value="agendar">
+                      </div>
+                    </div>
+                    <!-- Condição 2 -->
+                    <div class="border border-slate-200 rounded-lg p-2 bg-emerald-50/30">
+                      <div class="flex items-center gap-1.5 mb-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                        <input class="text-[11px] font-semibold bg-transparent border-none flex-1 focus:outline-none focus:bg-white px-1 rounded" value="Tem dúvida">
+                        <button class="text-slate-400 hover:text-red-600"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                      </div>
+                      <div class="grid grid-cols-3 gap-1">
+                        <select class="text-[10px] h-7 px-1 rounded border border-slate-300 bg-white">
+                          <option>intencao</option>
+                        </select>
+                        <select class="text-[10px] h-7 px-1 rounded border border-slate-300 bg-white">
+                          <option>= igual</option>
+                        </select>
+                        <input class="text-[10px] h-7 px-1.5 rounded border border-slate-300 bg-white" value="duvida">
+                      </div>
+                    </div>
+                    <button class="w-full text-[11px] h-8 rounded-lg border border-dashed border-slate-300 text-slate-600 hover:border-violet-400 hover:text-violet-600 flex items-center justify-center gap-1 font-medium">
+                      <i data-lucide="plus" class="w-3 h-3"></i> Nova condição
+                    </button>
+                  </div>
+                </div>
+
+                <div class="border-t pt-3">
+                  <button class="w-full text-[11px] h-8 rounded-md bg-red-50 text-red-700 hover:bg-red-100 font-medium flex items-center justify-center gap-1">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remover passo
+                  </button>
+                </div>
+              </div>
+
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- Anotações sobre as mudanças do editor -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          <p class="font-bold text-emerald-800 mb-1 flex items-center gap-1"><i data-lucide="sparkles" class="w-3.5 h-3.5"></i> NOVO no topo</p>
+          <ul class="text-emerald-900/80 space-y-0.5 text-[11px]">
+            <li>• Switch <strong>Ativo</strong> direto no editor</li>
+            <li>• <strong>Indicador "Salvo há X min"</strong></li>
+            <li>• Botão <strong>"▶ Testar"</strong> sem sair</li>
+            <li>• Identidade visual do módulo</li>
+          </ul>
+        </div>
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p class="font-bold text-blue-800 mb-1 flex items-center gap-1"><i data-lucide="sparkles" class="w-3.5 h-3.5"></i> NOVO na paleta</p>
+          <ul class="text-blue-900/80 space-y-0.5 text-[11px]">
+            <li>• <strong>Gatilho destacado</strong> no topo (card)</li>
+            <li>• Ações <strong>colapsáveis</strong> por grupo</li>
+            <li>• <strong>Busca inline</strong> dos passos</li>
+            <li>• Contador de operações por grupo</li>
+          </ul>
+        </div>
+        <div class="bg-violet-50 border border-violet-200 rounded-lg p-3">
+          <p class="font-bold text-violet-800 mb-1 flex items-center gap-1"><i data-lucide="sparkles" class="w-3.5 h-3.5"></i> NOVO no canvas + painel</p>
+          <ul class="text-violet-900/80 space-y-0.5 text-[11px]">
+            <li>• <strong>Auto-arranjar</strong> nós</li>
+            <li>• <strong>Validar grafo</strong> antes de salvar</li>
+            <li>• Painel mais largo (320→360 px)</li>
+            <li>• <strong>3 abas</strong>: Config / Avançado / Saída</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- ════════════════════ PERGUNTAS ════════════════════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <section id="perguntas" class="space-y-4">
+      <h2 class="text-2xl font-bold flex items-center gap-2">❓ Antes de eu codar, me confirma:</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 1</p>
+          <p class="text-sm font-semibold mb-2">Os 4 KPIs do hero estão bons?</p>
+          <p class="text-xs text-slate-600">Hoje: <strong>Ativos · Execuções 30d · Taxa sucesso · Tempo médio</strong>. Quer trocar algum? Ex: "Cenários com erro 24h" ou "Cliente mais ativo".</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 2</p>
+          <p class="text-sm font-semibold mb-2">Borda colorida por categoria de gatilho?</p>
+          <p class="text-xs text-slate-600">Cards na Tela 1 têm faixa lateral colorida (azul/verde/laranja...). Te ajuda a achar visualmente ou prefere todos os cards iguais como hoje?</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 3</p>
+          <p class="text-sm font-semibold mb-2">Botão "▶ Testar" dentro do editor?</p>
+          <p class="text-xs text-slate-600">Útil pra testar sem sair pra lista. Abre um modal pequeno com input de contexto e mostra o resultado da execução. Você usaria?</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 4</p>
+          <p class="text-sm font-semibold mb-2">3 abas no painel direito ou coluna única?</p>
+          <p class="text-xs text-slate-600">Abas (Config / Avançado / Saída) deixam organizado mas exige clicar. Coluna única scrollável é mais simples mas comprida. Qual prefere?</p>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-4">
+        <p class="text-sm font-bold text-violet-900 mb-1">Quando você aprovar, eu sigo nesta ordem:</p>
+        <ol class="text-xs text-violet-900/80 space-y-1 list-decimal list-inside">
+          <li><strong>PR-1 (Tela 1)</strong> — Lista com hero + KPIs + cards coloridos</li>
+          <li><strong>PR-2 (Editor topo + paleta)</strong> — Top bar nova, paleta reorganizada, switch ativo, indicador salvo</li>
+          <li><strong>PR-3 (Canvas + painel)</strong> — Mini-toolbar, validar/auto-arranjar, abas no painel</li>
+        </ol>
+        <p class="text-[11px] text-violet-700 mt-2">Cada PR roda <code>pnpm check + test</code> verde antes de seguir pro próximo. Risco baixo: <strong>zero alteração</strong> no motor/dispatcher/schedulers.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="bg-slate-900 text-slate-400 text-center py-4 text-xs">
+    Mockup do redesign do SmartFlow · JuridFlow
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
