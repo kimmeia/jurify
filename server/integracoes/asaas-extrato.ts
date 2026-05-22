@@ -176,8 +176,13 @@ export async function sincronizarExtratoAsaas(
   let offset = 0;
   const limit = 100;
   let hasMore = true;
+  let paginas = 0;
+  // Cap defensivo: extrato pode crescer rápido (taxas, notificações, etc).
+  // 1000 × 100 = 100k movimentações por janela — cobre o pior caso.
+  const MAX_PAGINAS = 1000;
 
-  while (hasMore) {
+  while (hasMore && paginas < MAX_PAGINAS) {
+    paginas++;
     let pagina;
     try {
       pagina = await client.listarMovimentacoes({
@@ -224,6 +229,13 @@ export async function sincronizarExtratoAsaas(
 
     hasMore = pagina.hasMore;
     offset += pagina.limit;
+  }
+  if (hasMore && paginas >= MAX_PAGINAS) {
+    log.error(
+      { escritorioId, paginas, MAX_PAGINAS, resultadoParcial: resultado },
+      "[asaas-extrato] cap de páginas atingido — sincronização ficou parcial.",
+    );
+    resultado.parcial = true;
   }
 
   log.info(
