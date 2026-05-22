@@ -42,6 +42,7 @@ const TIPOS_PASSO = [
   "calcom_cancelar",
   "calcom_remarcar",
   "whatsapp_enviar",
+  "whatsapp_aguardar_resposta",
   "transferir",
   "condicional",
   "esperar",

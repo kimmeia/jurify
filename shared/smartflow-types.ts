@@ -71,6 +71,7 @@ export type TipoPasso =
   | "calcom_cancelar"
   | "calcom_remarcar"
   | "whatsapp_enviar"
+  | "whatsapp_aguardar_resposta"
   | "transferir"
   | "condicional"
   | "esperar"
@@ -321,6 +322,40 @@ export interface ConfigCalcomRemarcar {
 export interface ConfigWhatsappEnviar {
   template?: string;
 }
+
+/**
+ * Config do passo `whatsapp_aguardar_resposta` — envia mensagem e pausa
+ * o fluxo até o contato responder. Quando configurado com `opcoes`, formata
+ * a mensagem como menu numerado e parseia a resposta do cliente pra
+ * popular `opcaoEscolhida` no contexto.
+ *
+ * Limitação por desenho: só **uma** execução por (cenário, contato) pode
+ * estar aguardando ao mesmo tempo. Mensagem nova do mesmo contato retoma
+ * a execução pendente — pra começar fluxo do zero, expire/cancele a antiga.
+ */
+export interface ConfigWhatsappAguardarResposta {
+  /**
+   * Template da mensagem (suporta interpolação `{{...}}` igual ao
+   * `whatsapp_enviar`). Quando há `opcoes`, o menu é anexado automaticamente
+   * no final.
+   */
+  template?: string;
+  /**
+   * Quanto tempo aguardar antes de desistir. Default 1440 (24h).
+   * Quando expira, a execução continua pelo ramo `"timeout"` no `proximoSe`
+   * (se configurado); senão termina.
+   */
+  timeoutMinutos?: number;
+  /**
+   * Quando informada (lista de strings), vira menu numerado:
+   *   1. opção 1
+   *   2. opção 2
+   * O parser tenta achar a escolha do cliente (número OU substring case-insensitive
+   * com a opção) e popula `opcaoEscolhida = {indice, texto, numero}`.
+   * Lista vazia / ausente = pergunta aberta (qualquer resposta serve).
+   */
+  opcoes?: string[];
+}
 export interface ConfigTransferir {
   /** reservado */
 }
@@ -480,6 +515,7 @@ export type PassoConfigByTipo =
   | { tipo: "calcom_cancelar"; config: ConfigCalcomCancelar }
   | { tipo: "calcom_remarcar"; config: ConfigCalcomRemarcar }
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
+  | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "condicional"; config: ConfigCondicional }
   | { tipo: "esperar"; config: ConfigEsperar }
@@ -622,6 +658,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "calcom_cancelar", label: "Cancelar agendamento", descricao: "Cancela um booking pelo ID.", cor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300", grupo: "acoes" },
   { id: "calcom_remarcar", label: "Remarcar agendamento", descricao: "Reagenda um booking para novo horário.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
+  { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Envia mensagem e pausa o fluxo esperando o cliente responder. Suporta menu de opções automático.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },

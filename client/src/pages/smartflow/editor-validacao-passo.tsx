@@ -18,8 +18,12 @@ export interface ItemValidacao {
  * ou esconde problema real (chave não existe lá mas validador diz que sim).
  */
 const VARS_DO_GATILHO: Record<GatilhoSmartflow, string[]> = {
-  whatsapp_mensagem: ["mensagem", "contatoId", "telefoneCliente", "canalId", "conversaId", "canalTipo"],
-  mensagem_canal: ["mensagem", "contatoId", "telefoneCliente", "canalId", "conversaId", "canalTipo"],
+  // `respostaUsuario` aparece quando o fluxo é retomado por uma execução
+  // que estava em `whatsapp_aguardar_resposta` — não é variável "do gatilho"
+  // estrito senso, mas o validador trata como tal pra evitar falso positivo
+  // em fluxos que usam isso.
+  whatsapp_mensagem: ["mensagem", "contatoId", "telefoneCliente", "canalId", "conversaId", "canalTipo", "respostaUsuario"],
+  mensagem_canal: ["mensagem", "contatoId", "telefoneCliente", "canalId", "conversaId", "canalTipo", "respostaUsuario"],
   novo_lead: ["contatoId", "nomeCliente", "telefoneCliente", "emailCliente", "origemLead"],
   pagamento_recebido: ["pagamentoId", "contatoId", "nomeCliente", "telefoneCliente", "emailCliente", "pagamentoValor", "primeiraCobrancaDoCliente"],
   pagamento_vencido: ["pagamentoId", "contatoId", "nomeCliente", "telefoneCliente", "pagamentoValor", "vencimento", "diasAtraso"],
@@ -100,6 +104,22 @@ export function validarPasso(
     case "ia_classificar":
       requerVar("mensagem", "Precisa de uma mensagem pra classificar");
       break;
+
+    case "whatsapp_aguardar_resposta": {
+      requerVar("contatoId", "Pra aguardar resposta, precisa do contato");
+      if (!varsGatilho.has("canalId") && !varsGatilho.has("telefoneCliente")) {
+        itens.push({
+          severidade: gatilhoIsManual ? "aviso" : "erro",
+          mensagem: "Sem canal nem telefone no contexto — não há onde enviar a pergunta.",
+        });
+      }
+      const tpl = String((config as any).template || "").trim();
+      const opcs = Array.isArray((config as any).opcoes) ? ((config as any).opcoes as string[]) : [];
+      if (!tpl && opcs.filter((o) => o.trim()).length === 0) {
+        itens.push({ severidade: "erro", mensagem: "Configure a mensagem ou pelo menos 1 opção." });
+      }
+      break;
+    }
 
     case "whatsapp_enviar": {
       // Funciona com canalId OU telefoneCliente. Pra gatilhos que não têm

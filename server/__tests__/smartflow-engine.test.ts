@@ -632,6 +632,160 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("whatsapp_aguardar_resposta", () => {
+    it("envia mensagem e pausa fluxo com flags de aguardando", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: {
+            template: "Sobre qual ação?",
+            timeoutMinutos: 60,
+          },
+        },
+        // não deve executar
+        { id: 2, ordem: 2, tipo: "ia_responder", config: {} },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, telefoneCliente: "11999" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.passosExecutados).toBe(1); // não passou pro ia_responder
+      expect(resultado.contexto.aguardandoMensagem).toBe(true);
+      expect(resultado.contexto.aguardandoContatoId).toBe(42);
+      expect(resultado.contexto.aguardandoTimeoutMinutos).toBe(60);
+      expect(enviarWhatsApp).toHaveBeenCalledWith("11999", "Sobre qual ação?");
+    });
+
+    it("anexa menu numerado quando há opções", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: {
+            template: "Escolha:",
+            opcoes: ["Agendar consulta", "Tirar dúvida", "Falar com humano"],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, telefoneCliente: "11999" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      const enviadoTo = (enviarWhatsApp as any).mock.calls[0][1] as string;
+      expect(enviadoTo).toContain("Escolha:");
+      expect(enviadoTo).toContain("1. Agendar consulta");
+      expect(enviadoTo).toContain("2. Tirar dúvida");
+      expect(enviadoTo).toContain("3. Falar com humano");
+      expect(resultado.contexto.aguardandoOpcoes).toEqual([
+        "Agendar consulta",
+        "Tirar dúvida",
+        "Falar com humano",
+      ]);
+    });
+
+    it("falha sem contatoId no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: { template: "Oi", timeoutMinutos: 60 },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("contatoId");
+    });
+
+    it("não envia direto quando há canalId no contexto (delega ao handler)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: { template: "Oi", timeoutMinutos: 60 },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, telefoneCliente: "11999", canalId: 7 },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // Quando há canal, executor não envia — a resposta vai pelo retorno
+      // pro whatsapp-handler chamar do canal aberto.
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      expect(resultado.respostas).toContain("Oi");
+    });
+  });
+
+  describe("parsearOpcaoResposta", () => {
+    it("acha por número", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("2", ["A", "B", "C"]);
+      expect(r).toEqual({ indice: 1, texto: "B", numero: "2" });
+    });
+
+    it("acha por número em meio de texto", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("a opção 3 pra mim", ["X", "Y", "Z"]);
+      expect(r).toEqual({ indice: 2, texto: "Z", numero: "3" });
+    });
+
+    it("acha por texto exato case-insensitive", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("agendar", ["Agendar", "Dúvida"]);
+      expect(r).toEqual({ indice: 0, texto: "Agendar", numero: "1" });
+    });
+
+    it("acha por substring", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("quero agendar uma consulta", ["Agendar", "Dúvida"]);
+      expect(r).toEqual({ indice: 0, texto: "Agendar", numero: "1" });
+    });
+
+    it("retorna null quando não bate", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("xyz", ["A", "B"]);
+      expect(r).toBeNull();
+    });
+
+    it("retorna null quando lista vazia", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("qualquer coisa", []);
+      expect(r).toBeNull();
+    });
+
+    it("ignora número fora do range", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("5", ["A", "B"]);
+      // Não há opção 5 — não usa o número, tenta substring (não bate) → null
+      expect(r).toBeNull();
+    });
+  });
+
   describe("calcom_horarios", () => {
     it("retorna horários formatados", async () => {
       const exec = criarMockExecutores();

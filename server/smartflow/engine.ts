@@ -912,6 +912,143 @@ async function handleWhatsAppEnviar(
   };
 }
 
+/**
+ * Handler do passo `whatsapp_aguardar_resposta`. Envia a mensagem (igual
+ * ao `whatsapp_enviar`) e sinaliza ao dispatcher que esta execução está
+ * aguardando próxima mensagem do contato.
+ *
+ * Sinalização via flags no contexto:
+ *   - `aguardandoMensagem` (boolean): finalizarExecucao detecta e grava
+ *     `aguardandoMensagemContatoId` na execução.
+ *   - `aguardandoContatoId`: pra qual contato esperamos.
+ *   - `aguardandoTimeoutMinutos`: deadline (vira `retomarEm`).
+ *   - `aguardandoOpcoes`: lista pro parser interpretar a resposta quando
+ *     ela vier.
+ *
+ * Retorna `parar: true` — engine fecha a execução nesse passo. O fluxo
+ * só continua quando o dispatcher detectar a próxima mensagem do contato
+ * E chamar `retomarExecucaoComResposta`.
+ */
+async function handleWhatsappAguardarResposta(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    template?: string;
+    timeoutMinutos?: number;
+    opcoes?: string[];
+  };
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Sem `contatoId` no contexto — não dá pra saber de quem aguardar resposta.",
+    };
+  }
+
+  const opcoes = Array.isArray(cfg.opcoes) ? cfg.opcoes.filter((o) => typeof o === "string" && o.trim()) : [];
+  const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 1440)); // 1min ~ 7 dias
+
+  // Monta template — base + menu numerado se houver opções
+  let template = String(cfg.template ?? "").trim();
+  if (opcoes.length > 0) {
+    const menu = opcoes.map((o, i) => `${i + 1}. ${o}`).join("\n");
+    template = template ? `${template}\n\n${menu}` : menu;
+  }
+  if (!template) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Configure o template da mensagem (ou pelo menos uma opção)." };
+  }
+
+  const { interpolarVariaveis } = await import("./interpolar");
+  const mensagem = interpolarVariaveis(template, ctx as any);
+
+  // Envia. Mesma lógica do whatsapp_enviar — usa canalId do contexto se
+  // presente (mensagem veio via canal), senão executor real busca canal
+  // ativo do escritório.
+  const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
+  const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
+  if (!temCanal && telefone) {
+    try {
+      const ok = await exec.enviarWhatsApp(telefone, mensagem);
+      if (!ok) {
+        return {
+          sucesso: false,
+          contexto: ctx,
+          mensagemErro: "Falha ao enviar WhatsApp — verifique se há canal conectado.",
+        };
+      }
+    } catch (err: any) {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: `WhatsApp: ${err?.message || String(err)}`,
+      };
+    }
+  }
+  // Se temCanal=true, mensagem volta na lista `respostas` e o whatsapp-handler
+  // que invocou o cenário envia direto pelo canal já estabelecido.
+
+  const enviadas = ctx.mensagensEnviadas || [];
+  return {
+    sucesso: true,
+    parar: true, // ← pausa o fluxo aqui
+    resposta: mensagem,
+    contexto: {
+      ...ctx,
+      mensagensEnviadas: [...enviadas, mensagem],
+      // Flags que o dispatcher.finalizarExecucao consome pra persistir
+      // o estado de espera-mensagem na linha da execução.
+      aguardandoMensagem: true,
+      aguardandoContatoId: contatoId,
+      aguardandoTimeoutMinutos: timeoutMinutos,
+      aguardandoOpcoes: opcoes,
+    },
+  };
+}
+
+/**
+ * Helper: parseia a resposta do cliente contra a lista de opções configurada.
+ * Tenta primeiro como número (1, 2, 3...), depois como substring case-insensitive
+ * contra cada opção. Retorna a opção escolhida ou `null` se nenhuma bate
+ * (ramo "opcao_invalida" no `proximoSe` cobre esse caso).
+ */
+export function parsearOpcaoResposta(
+  resposta: string,
+  opcoes: string[],
+): { indice: number; texto: string; numero: string } | null {
+  const trimmed = resposta.trim();
+  if (!trimmed || opcoes.length === 0) return null;
+
+  // 1. Tentativa numérica — extrai primeiro número da resposta
+  const matchNum = trimmed.match(/\d+/);
+  if (matchNum) {
+    const n = Number(matchNum[0]);
+    if (n >= 1 && n <= opcoes.length) {
+      return { indice: n - 1, texto: opcoes[n - 1], numero: String(n) };
+    }
+  }
+
+  // 2. Match exato (case-insensitive)
+  const lower = trimmed.toLowerCase();
+  for (let i = 0; i < opcoes.length; i++) {
+    if (opcoes[i].toLowerCase() === lower) {
+      return { indice: i, texto: opcoes[i], numero: String(i + 1) };
+    }
+  }
+
+  // 3. Substring (resposta contém ou está contida na opção)
+  for (let i = 0; i < opcoes.length; i++) {
+    const opc = opcoes[i].toLowerCase();
+    if (opc.length >= 3 && (lower.includes(opc) || opc.includes(lower))) {
+      return { indice: i, texto: opcoes[i], numero: String(i + 1) };
+    }
+  }
+
+  return null;
+}
+
 function handleTransferir(
   _passo: Passo,
   ctx: SmartflowContexto,
@@ -1505,6 +1642,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   calcom_cancelar: handleCalcomCancelar,
   calcom_remarcar: handleCalcomRemarcar,
   whatsapp_enviar: handleWhatsAppEnviar,
+  whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   transferir: handleTransferir,
   condicional: handleCondicional,
   esperar: handleEsperar,

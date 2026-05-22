@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
   CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle,
-  Move, PhoneCall, Play, Plus, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
+  Move, Pause, PhoneCall, Play, Plus, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
   CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
@@ -121,6 +121,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   calcom_cancelar: CalendarX,
   calcom_remarcar: CalendarClock,
   whatsapp_enviar: MessageCircle,
+  whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
   condicional: GitBranch,
   esperar: Clock,
@@ -2655,6 +2656,136 @@ function ConfigWhatsappEnviarFields({
   );
 }
 
+/**
+ * Config do passo `whatsapp_aguardar_resposta`. Envia mensagem + lista
+ * opcional de opções (vira menu numerado) + timeout. O fluxo pausa até
+ * o cliente responder; quando há opções, a resposta é parseada pra
+ * `opcaoEscolhida`.
+ */
+function ConfigWhatsappAguardarRespostaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const opcoes: string[] = Array.isArray(cfg.opcoes) ? (cfg.opcoes as string[]) : [];
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.template || "");
+    onChange({ template: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  const atualizarOpcao = (i: number, valor: string) => {
+    const novo = opcoes.slice();
+    novo[i] = valor;
+    onChange({ opcoes: novo });
+  };
+  const removerOpcao = (i: number) => {
+    onChange({ opcoes: opcoes.filter((_, j) => j !== i) });
+  };
+  const adicionarOpcao = () => {
+    onChange({ opcoes: [...opcoes, ""] });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Mensagem (pergunta ao cliente)</Label>
+          <VariableTrigger
+            inputId="cfg-aguardar-template"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-aguardar-template"
+          as="textarea"
+          rows={3}
+          value={String(cfg.template || "")}
+          onChange={(v) => onChange({ template: v })}
+          variaveis={variaveis}
+          placeholder="Sobre qual das suas ações você quer saber?"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          O menu de opções (se preenchido) é anexado automaticamente abaixo da mensagem.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">
+          Opções (vira menu numerado — vazio = pergunta aberta)
+        </Label>
+        <div className="space-y-1.5 mt-1">
+          {opcoes.map((o, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}.</span>
+              <Input
+                value={o}
+                onChange={(e) => atualizarOpcao(i, e.target.value)}
+                placeholder="Texto da opção"
+                className="text-xs h-7"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-destructive"
+                onClick={() => removerOpcao(i)}
+                title="Remover opção"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={adicionarOpcao}
+            className="h-7 text-xs gap-1 w-full"
+          >
+            <Plus className="h-3 w-3" />
+            Adicionar opção
+          </Button>
+        </div>
+        {opcoes.length > 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Resposta do cliente vai pra <code>{`{{respostaUsuario}}`}</code>.
+            Quando bate com uma opção, <code>{`{{opcaoEscolhida}}`}</code> é populado{" "}
+            (<code>indice</code>, <code>texto</code>, <code>numero</code>).
+          </p>
+        )}
+      </div>
+
+      <div>
+        <Label className="text-xs">Timeout (minutos)</Label>
+        <Input
+          type="number"
+          min={1}
+          max={7 * 24 * 60}
+          value={Number(cfg.timeoutMinutos ?? 1440)}
+          onChange={(e) =>
+            onChange({
+              timeoutMinutos: Math.max(1, Math.min(7 * 24 * 60, Number(e.target.value) || 1440)),
+            })
+          }
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Quanto esperar antes de desistir. Default 1440 (24h). Quando expira,
+          o fluxo continua pelo ramo <code>timeout</code> do <code>proximoSe</code>{" "}
+          (se configurado) ou termina.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+        <strong>Limitação:</strong> só 1 execução por (cenário + contato) pode
+        aguardar ao mesmo tempo. Mensagens novas do cliente retomam essa
+        execução pendente — pra começar fluxo do zero, espere o timeout
+        ou pause/exclua o cenário.
+      </div>
+    </div>
+  );
+}
+
 function ConfigKanbanCriarCardFields({
   cfg,
   onChange,
@@ -3480,6 +3611,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
     case "ia_extrair_campos":
       return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
+    case "whatsapp_aguardar_resposta":
+      return <ConfigWhatsappAguardarRespostaFields cfg={cfg} onChange={onChange} />;
     case "crm_buscar_contato":
       return <ConfigCrmBuscarContatoFields cfg={cfg} onChange={onChange} />;
     case "crm_listar_acoes_cliente":

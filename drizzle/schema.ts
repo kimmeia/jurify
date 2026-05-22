@@ -1985,6 +1985,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "calcom_cancelar",               // cancela booking no Cal.com
     "calcom_remarcar",               // reagenda booking no Cal.com
     "whatsapp_enviar",               // envia mensagem no WhatsApp
+    "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "transferir",                    // transfere pra humano
     "condicional",                   // if/else baseado em condição
     "esperar",                       // delay (follow-up)
@@ -2043,6 +2044,14 @@ export const smartflowExecucoes = mysqlTable("smartflow_execucoes", {
    * aguardando delay.
    */
   retomarEm: timestamp("retomarEmExec"),
+  /**
+   * Quando a execução está em passo `whatsapp_aguardar_resposta`, guarda
+   * o contatoId que o fluxo está esperando responder. Combinado com
+   * `retomarEm` (deadline do timeout), o dispatcher de mensagem retoma
+   * essa execução em vez de criar uma nova quando o contato responder.
+   * Null = não está aguardando mensagem.
+   */
+  aguardandoMensagemContatoId: int("aguardandoMensagemContatoIdExec"),
   createdAt: timestamp("createdAtExec").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtExec").defaultNow().onUpdateNow().notNull(),
 });

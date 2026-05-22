@@ -65,6 +65,11 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   whatsapp_enviar: [
     { path: "mensagensEnviadas", label: "Lista de mensagens enviadas", tipo: "lista" },
   ],
+  whatsapp_aguardar_resposta: [
+    { path: "respostaUsuario", label: "Texto da resposta do cliente (após retomar)", tipo: "texto" },
+    { path: "opcaoEscolhida", label: "{indice, texto, numero} quando há menu de opções", tipo: "objeto" },
+    { path: "mensagensEnviadas", label: "Mensagens enviadas no fluxo", tipo: "lista" },
+  ],
   transferir: [
     { path: "transferir", label: "Sinaliza transferência pra humano (encerra)", tipo: "booleano" },
   ],
