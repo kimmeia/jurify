@@ -1,0 +1,12 @@
+<svg viewBox="0 0 540 160" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow">
+  <defs>
+    <linearGradient id="jfwd-flow" x1="280" y1="40" x2="520" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#C4B5FD"/>
+    </linearGradient>
+  </defs>
+  <g font-family="Inter, 'Helvetica Neue', Arial, sans-serif">
+    <text x="20" y="110" font-size="100" font-weight="800" letter-spacing="-5" fill="#FFFFFF">Jurid</text>
+    <text x="265" y="110" font-size="100" font-weight="300" letter-spacing="-3" fill="url(#jfwd-flow)">Flow</text>
+  </g>
+</svg>

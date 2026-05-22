@@ -1,0 +1,32 @@
+<svg viewBox="0 0 680 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JuridFlow B">
+  <defs>
+    <linearGradient id="cBhd-bg" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset=".45" stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <radialGradient id="cBhd-shine" cx="50" cy="20" r="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cBhd-flow" x1="430" y1="60" x2="640" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#C4B5FD"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="20" y="20" width="160" height="160" rx="36" fill="url(#cBhd-bg)"/>
+  <rect x="20" y="20" width="160" height="160" rx="36" fill="url(#cBhd-shine)"/>
+
+  <g transform="translate(20 20) scale(0.625)">
+    <path d="M70 76 Q70 128 128 128 Q186 128 186 180"
+          stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" fill="none"/>
+    <circle cx="70" cy="76" r="20" fill="#FFFFFF"/>
+    <circle cx="186" cy="180" r="20" fill="#FFFFFF"/>
+  </g>
+
+  <g font-family="Inter, 'Helvetica Neue', Arial, sans-serif">
+    <text x="206" y="130" font-size="96" font-weight="800" letter-spacing="-4.5" fill="#FFFFFF">Jurid</text>
+    <text x="441" y="130" font-size="96" font-weight="300" letter-spacing="-3" fill="url(#cBhd-flow)">Flow</text>
+  </g>
+</svg>
