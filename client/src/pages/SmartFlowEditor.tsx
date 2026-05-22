@@ -94,6 +94,13 @@ import { validarGrafo } from "@shared/smartflow-graph-validation";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
 import { TagsChipPicker } from "@/components/TagsChipPicker";
 import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { EditorTopbar } from "./smartflow/editor-topbar";
+import { EditorPaleta } from "./smartflow/editor-paleta";
+import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
 
@@ -725,6 +732,21 @@ export default function SmartFlowEditor() {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
 
+  // Estado de "alterações não salvas". Cada handler de mutação no canvas
+  // chama `marcarDirty()`. Reseta ao carregar o cenário e após save OK.
+  // `loadedRef` evita marcar dirty durante o load inicial (o setNodes do
+  // useEffect disparado pelo `cenario` não deve ser interpretado como edição).
+  const [dirty, setDirty] = useState(false);
+  const [ultimoSalvado, setUltimoSalvado] = useState<Date | null>(null);
+  const loadedRef = useRef(false);
+  const marcarDirty = useCallback(() => {
+    if (loadedRef.current) setDirty(true);
+  }, []);
+
+  // Dialogs do editor
+  const [testarOpen, setTestarOpen] = useState(false);
+  const [excluirOpen, setExcluirOpen] = useState(false);
+
   // Canvas começa com um nó de gatilho default (mensagem_canal).
   // O nó de gatilho tem ID fixo e não é deletável — usuário só troca o tipo
   // clicando na paleta.
@@ -842,14 +864,33 @@ export default function SmartFlowEditor() {
 
     setNodes([gatilhoNode, ...passosNodes]);
     setEdges(es);
+
+    // Snapshot do estado salvo — referência pra "Salvo há X" e dirty.
+    setDirty(false);
+    setUltimoSalvado(cenario.updatedAt ? new Date(cenario.updatedAt as any) : new Date());
+    // Defer setting loadedRef até o próximo tick pra evitar que o próprio
+    // setNodes/setEdges acima dispare callbacks que marquem dirty.
+    requestAnimationFrame(() => { loadedRef.current = true; });
   }, [cenario]);
+
+  // Em cenário novo, libera o gating de dirty no mount (não tem load assíncrono).
+  useEffect(() => {
+    if (novo) {
+      requestAnimationFrame(() => { loadedRef.current = true; });
+    }
+  }, [novo]);
 
   // Mutations
   const criarMut = (trpc as any).smartflow.criar.useMutation({
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       toast.success("Cenário criado!");
       utils?.smartflow?.listar?.invalidate();
-      navigate("/smartflow");
+      setDirty(false);
+      setUltimoSalvado(new Date());
+      // Em vez de voltar pra lista, fica no editor agora editando o cenário
+      // recém-criado — assim o usuário pode ativar/testar sem 2 navegações.
+      if (r?.id) navigate(`/smartflow/${r.id}/editar`);
+      else navigate("/smartflow");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -858,6 +899,22 @@ export default function SmartFlowEditor() {
       toast.success("Cenário atualizado!");
       utils?.smartflow?.listar?.invalidate();
       utils?.smartflow?.detalhe?.invalidate({ id: editandoId });
+      setDirty(false);
+      setUltimoSalvado(new Date());
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const toggleAtivoMut = (trpc as any).smartflow.toggleAtivo.useMutation({
+    onSuccess: () => {
+      utils?.smartflow?.detalhe?.invalidate({ id: editandoId });
+      utils?.smartflow?.listar?.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deletarMut = (trpc as any).smartflow.deletar.useMutation({
+    onSuccess: () => {
+      toast.success("Cenário excluído");
+      utils?.smartflow?.listar?.invalidate();
       navigate("/smartflow");
     },
     onError: (e: any) => toast.error(e.message),
@@ -866,17 +923,28 @@ export default function SmartFlowEditor() {
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
   const gatilhoNode = nodes.find(isGatilhoNode) || null;
 
-  // Callbacks canvas
+  // Callbacks canvas. Drag/move/select também passa por `onNodesChange`,
+  // mas só os tipos com efeito persistente marcam dirty (skip "select").
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds) as AnyNode[]),
-    [],
+    (changes: NodeChange[]) => {
+      setNodes((nds) => applyNodeChanges(changes, nds) as AnyNode[]);
+      const algumPersistente = changes.some(
+        (c) => c.type !== "select" && c.type !== "dimensions",
+      );
+      if (algumPersistente) marcarDirty();
+    },
+    [marcarDirty],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [],
+    (changes: EdgeChange[]) => {
+      setEdges((eds) => applyEdgeChanges(changes, eds));
+      const algumPersistente = changes.some((c) => c.type !== "select");
+      if (algumPersistente) marcarDirty();
+    },
+    [marcarDirty],
   );
   const onConnect = useCallback(
-    (conn: Connection) =>
+    (conn: Connection) => {
       setEdges((eds) =>
         addEdge(
           {
@@ -894,8 +962,10 @@ export default function SmartFlowEditor() {
           },
           eds,
         ),
-      ),
-    [],
+      );
+      marcarDirty();
+    },
+    [marcarDirty],
   );
 
   /** Guarda a origem da conexão pra reaproveitar no `onConnectEnd`. */
@@ -955,6 +1025,7 @@ export default function SmartFlowEditor() {
       },
     ]);
     setSelectedId(novoNode.id);
+    marcarDirty();
   };
 
   /**
@@ -973,6 +1044,7 @@ export default function SmartFlowEditor() {
       ),
     );
     setSelectedId(GATILHO_NODE_ID);
+    marcarDirty();
   };
 
   /**
@@ -1000,6 +1072,7 @@ export default function SmartFlowEditor() {
     setNodes((nds) => nds.filter((n) => n.id !== selectedId));
     setEdges((eds) => eds.filter((e) => e.source !== selectedId && e.target !== selectedId));
     setSelectedId(null);
+    marcarDirty();
   };
 
   const atualizarConfigSelecionado = (patch: Record<string, unknown>) => {
@@ -1016,6 +1089,7 @@ export default function SmartFlowEditor() {
         return { ...n, data: { ...n.data, config: { ...n.data.config, ...patch } } };
       }),
     );
+    marcarDirty();
   };
 
   const salvar = () => {
@@ -1129,33 +1203,31 @@ export default function SmartFlowEditor() {
     // (menos o header mobile h-14). Sem altura explícita o ReactFlow
     // colapsa pra 0px e o canvas fica invisível.
     <div className="-m-6 flex flex-col h-[calc(100vh-3.5rem)] md:h-screen bg-background">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-background">
-        <Button variant="ghost" size="sm" className="gap-1" asChild>
-          <Link href="/smartflow">
-            <ArrowLeft className="h-4 w-4" /> Voltar
-          </Link>
-        </Button>
-        <div className="h-8 w-px bg-border" />
-        <div className="flex-1 flex items-center gap-2 min-w-0">
-          <Input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Nome do cenário"
-            className="max-w-xs font-semibold"
-          />
-        </div>
-        <Button onClick={salvar} disabled={salvando} size="sm" className="gap-1">
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {novo ? "Criar" : "Salvar"}
-        </Button>
-      </div>
+      <EditorTopbar
+        nome={nome}
+        onNomeChange={(n) => { setNome(n); marcarDirty(); }}
+        gatilho={gatilhoNode?.data.gatilho ?? "mensagem_canal"}
+        nPassos={nodes.filter((n) => n.type === "passo").length}
+        dirty={dirty}
+        ultimoSalvado={ultimoSalvado}
+        ativo={!!cenario?.ativo}
+        cenarioId={editandoId}
+        salvando={salvando}
+        togglePending={toggleAtivoMut.isPending}
+        onSalvar={salvar}
+        onAtivoChange={(novoAtivo) => {
+          if (!editandoId) return;
+          toggleAtivoMut.mutate({ id: editandoId, ativo: novoAtivo });
+        }}
+        onTestar={() => setTestarOpen(true)}
+        onExcluir={() => setExcluirOpen(true)}
+      />
 
-      {/* Descrição */}
+      {/* Descrição (sub-bar) */}
       <div className="px-4 py-2 border-b bg-muted/30">
         <Input
           value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
+          onChange={(e) => { setDescricao(e.target.value); marcarDirty(); }}
           placeholder="Descrição (opcional) — explique o que o cenário faz"
           className="bg-transparent border-none shadow-none text-sm"
         />
@@ -1163,80 +1235,12 @@ export default function SmartFlowEditor() {
 
       {/* Workspace */}
       <div className="flex flex-1 min-h-0">
-        {/* Paleta esquerda */}
-        <div className="w-60 border-r bg-muted/20 p-3 overflow-y-auto">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Gatilho</p>
-          <div className="mb-5 space-y-1.5">
-            {/*
-              Paleta lista CATEGORIAS, não operações. Ao clicar, se o gatilho
-              atual já está na categoria, só re-seleciona o nó (a troca de
-              operação acontece no painel direito). Se está em outra, troca
-              pro primeiro gatilho da categoria.
-            */}
-            {GRUPO_META.filter((g) => operacoesDaCategoria(g.id).length > 0).map((grupo) => {
-              const Icon = GRUPO_ICON[grupo.id];
-              const grupoAtualGatilho = gatilhoNode ? getGatilhoMeta(gatilhoNode.data.gatilho).grupo : null;
-              const ativo = grupoAtualGatilho === grupo.id;
-              return (
-                <button
-                  key={grupo.id}
-                  onClick={() => trocarCategoria(grupo.id)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded border transition-all text-left ${
-                    ativo
-                      ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-sm"
-                      : "border-dashed border-border hover:border-solid hover:shadow-sm bg-background"
-                  }`}
-                  title={`Categoria ${grupo.label} — ${operacoesDaCategoria(grupo.id).length} operação(ões)`}
-                >
-                  <Icon className="h-4 w-4 shrink-0 text-amber-600" />
-                  <span className="text-xs font-semibold leading-tight flex-1">{grupo.label}</span>
-                  {ativo && <Zap className="h-3.5 w-3.5 shrink-0 text-amber-500 fill-amber-500" />}
-                </button>
-              );
-            })}
-          </div>
-
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Adicionar passo</p>
-          <div className="space-y-3">
-            {agrupar<TipoPassoMeta>(TIPO_PASSO_META).map((g) => {
-              // Itens diretos (sem categoria popover) e categorias do grupo.
-              const diretos = g.itens.filter((t) => !getCategoriaDoTipo(t.id));
-              const categorias = CATEGORIAS_PASSO.filter((c) => c.grupo === g.id);
-              if (diretos.length === 0 && categorias.length === 0) return null;
-              return (
-                <div key={g.id}>
-                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1 font-semibold px-0.5">
-                    {g.label}
-                  </p>
-                  <div className="space-y-1.5">
-                    {diretos.map((t) => {
-                      const Icon = TIPO_ICON[t.id];
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => adicionarPasso(t.id)}
-                          className={`w-full flex items-start gap-2 px-2.5 py-1.5 rounded border border-dashed hover:border-solid hover:shadow-sm transition-all text-left ${t.cor}`}
-                          title={t.descricao}
-                        >
-                          <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <span className="text-xs font-medium leading-tight">{t.label}</span>
-                          <Plus className="h-3 w-3 shrink-0 ml-auto mt-0.5 opacity-60" />
-                        </button>
-                      );
-                    })}
-                    {categorias.map((cat) => (
-                      <CategoriaPopoverButton
-                        key={cat.id}
-                        categoria={cat}
-                        onPick={(tipo) => adicionarPasso(tipo)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <EditorPaleta
+          gatilhoAtual={gatilhoNode?.data.gatilho ?? "mensagem_canal"}
+          onTrocarGatilho={trocarGatilho}
+          onFocarGatilho={() => setSelectedId(GATILHO_NODE_ID)}
+          onAdicionarPasso={adicionarPasso}
+        />
 
         {/* Canvas */}
         <div className="flex-1 relative">
@@ -1304,6 +1308,7 @@ export default function SmartFlowEditor() {
                 ]);
                 setSelectedId(novoNode.id);
                 setMenuConexao(null);
+                marcarDirty();
               }}
             />
           )}
@@ -1326,6 +1331,46 @@ export default function SmartFlowEditor() {
           )}
         </div>
       </div>
+
+      {/* Dialog de teste — só faz sentido em cenário já salvo. */}
+      {editandoId && gatilhoNode && (
+        <EditorTestarDialog
+          open={testarOpen}
+          onOpenChange={setTestarOpen}
+          cenarioId={editandoId}
+          gatilho={gatilhoNode.data.gatilho}
+          dirty={dirty}
+        />
+      )}
+
+      {/* AlertDialog de exclusão — confirma antes de remover do banco. */}
+      <AlertDialog open={excluirOpen} onOpenChange={setExcluirOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este cenário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O cenário <strong>{nome || "sem nome"}</strong> será removido
+              permanentemente. As execuções históricas continuam no log, mas
+              o cenário não vai mais disparar. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarMut.isPending || !editandoId}
+              onClick={(e) => {
+                e.preventDefault();
+                if (editandoId) deletarMut.mutate({ id: editandoId });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarMut.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Excluindo...</>
+              ) : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
