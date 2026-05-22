@@ -551,48 +551,96 @@ function DiagnosticoDivergenciaDialog({
               com o painel Asaas pra identificar a causa da diferença.
             </p>
 
+            {data.resumo && (
+              <section className="rounded-lg border border-amber-200 bg-amber-50/40 dark:bg-amber-950/20 p-3">
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
+                  Resumo bruto vs líquido (hipótese: taxas Asaas)
+                </h3>
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <p className="text-amber-700 dark:text-amber-300">Total bruto (Jurify)</p>
+                    <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                      {formatBRL(data.resumo.totalBruto)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-amber-700 dark:text-amber-300">Total líquido (após taxas)</p>
+                    <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                      {formatBRL(data.resumo.totalLiquido)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-amber-700 dark:text-amber-300">Taxas (bruto − líquido)</p>
+                    <p className="text-base font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                      {formatBRL(data.resumo.totalTaxas)}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-200 mt-2 leading-relaxed">
+                  Se o "Total líquido" bate com o "Recebidos" do painel Asaas, o painel deles mostra
+                  valor pós-taxas e nosso "Caixa Asaas" mostra bruto.{" "}
+                  {data.resumo.comValorLiquido < data.resumo.totalCount && (
+                    <span className="block mt-1 text-amber-700 dark:text-amber-300">
+                      ⚠ Apenas {data.resumo.comValorLiquido} de {data.resumo.totalCount} cobranças
+                      têm valor líquido preenchido — sync incompleto pode estar mascarando a taxa real.
+                    </span>
+                  )}
+                </p>
+              </section>
+            )}
+
             <section>
               <h3 className="text-sm font-semibold text-slate-800 mb-2">
-                1. Total por status (Jurify)
+                1. Total por status (Jurify) — bruto vs líquido por forma de pagamento
               </h3>
               <p className="text-[11px] text-slate-500 mb-2">
                 Se a soma de <code>RECEIVED_IN_CASH</code> bate com a
-                diferença que você está vendo, é hipótese A confirmada — o
-                Asaas marca como pago mas o dinheiro não caiu na conta deles.
+                diferença que você está vendo, é hipótese A. Se a coluna "Taxa"
+                bate, é hipótese das taxas (Asaas mostra líquido, Jurify mostra bruto).
               </p>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Status</TableHead>
                     <TableHead className="text-xs">Origem</TableHead>
-                    <TableHead className="text-xs text-right">Cobranças</TableHead>
-                    <TableHead className="text-xs text-right">Total</TableHead>
+                    <TableHead className="text-xs">Forma</TableHead>
+                    <TableHead className="text-xs text-right">Qtd</TableHead>
+                    <TableHead className="text-xs text-right">Bruto</TableHead>
+                    <TableHead className="text-xs text-right">Líquido</TableHead>
+                    <TableHead className="text-xs text-right">Taxa</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.porStatus.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-xs text-slate-500 text-center">
+                      <TableCell colSpan={7} className="text-xs text-slate-500 text-center">
                         Sem dados no período.
                       </TableCell>
                     </TableRow>
                   )}
                   {data.porStatus.map((r: any, i: number) => (
-                    <TableRow key={`${r.status}-${r.origem}-${i}`}>
+                    <TableRow key={`${r.status}-${r.origem}-${r.formaPagamento}-${i}`}>
                       <TableCell className="text-xs font-mono">
                         {r.status}
                         {r.status === "RECEIVED_IN_CASH" && (
-                          <span className="ml-2 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                            suspeito #1
+                          <span className="ml-1 text-[9px] text-amber-700 bg-amber-50 px-1 rounded">
+                            cash
                           </span>
                         )}
                       </TableCell>
                       <TableCell className="text-xs">{r.origem}</TableCell>
+                      <TableCell className="text-[11px]">{r.formaPagamento ?? "—"}</TableCell>
                       <TableCell className="text-xs text-right tabular-nums">
                         {r.count}
                       </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums font-medium">
+                      <TableCell className="text-xs text-right tabular-nums">
                         {formatBRL(r.valor)}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">
+                        {formatBRL(r.valorLiquido)}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700">
+                        {formatBRL(r.taxa)}
                       </TableCell>
                     </TableRow>
                   ))}
