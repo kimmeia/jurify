@@ -87,7 +87,26 @@ export interface CatalogoVariavel {
   path: string;
   label: string;
   exemplo: string;
+  /**
+   * Categoria semântica pra agrupar no drawer "Informações" do editor.
+   * Opcional pra compat com código que monta variáveis sem categoria.
+   */
+  categoria?: CategoriaVariavel;
 }
+
+/**
+ * Categorias semânticas das variáveis — usadas pra agrupar visualmente no
+ * drawer do editor. Cada uma tem um label humano + ícone (no frontend).
+ */
+export type CategoriaVariavel =
+  | "cliente"
+  | "campos_personalizados"
+  | "mensagem"
+  | "pagamento"
+  | "acao"
+  | "agendamento"
+  | "ia"
+  | "passos";
 
 export interface CatalogoGatilho {
   gatilho: string;
@@ -95,44 +114,125 @@ export interface CatalogoGatilho {
   variaveis: CatalogoVariavel[];
 }
 
+// ─── Blocos reusáveis (compostos por gatilho abaixo) ────────────────────────
+
+const VARS_CLIENTE: CatalogoVariavel[] = [
+  { path: "nomeCliente", label: "Nome do cliente", exemplo: "João Silva", categoria: "cliente" },
+  { path: "telefoneCliente", label: "Telefone do cliente", exemplo: "(11) 99999-0000", categoria: "cliente" },
+  { path: "emailCliente", label: "Email do cliente", exemplo: "joao@example.com", categoria: "cliente" },
+  { path: "contatoId", label: "ID interno do contato", exemplo: "42", categoria: "cliente" },
+  { path: "atendenteResponsavelId", label: "Atendente responsável", exemplo: "7", categoria: "cliente" },
+];
+
+const VARS_MENSAGEM: CatalogoVariavel[] = [
+  { path: "mensagem", label: "Mensagem original do cliente", exemplo: "Quero agendar", categoria: "mensagem" },
+  { path: "respostaUsuario", label: "Resposta do cliente (após aguardar)", exemplo: "Sim, pode ser 14h", categoria: "mensagem" },
+  { path: "canalTipo", label: "Canal de origem", exemplo: "whatsapp_qr", categoria: "mensagem" },
+];
+
+const VARS_PAGAMENTO_RECEBIDO: CatalogoVariavel[] = [
+  { path: "pagamentoValor", label: "Valor do pagamento", exemplo: "1500.00", categoria: "pagamento" },
+  { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
+  { path: "pagamentoTipo", label: "Forma de pagamento", exemplo: "PIX", categoria: "pagamento" },
+  { path: "valorTotalCliente", label: "Total já pago pelo cliente", exemplo: "5000.00", categoria: "pagamento" },
+  { path: "percentualPago", label: "Percentual quitado do contrato", exemplo: "50", categoria: "pagamento" },
+  { path: "primeiraCobrancaDoCliente", label: "É a primeira cobrança do cliente?", exemplo: "true", categoria: "pagamento" },
+];
+
+const VARS_PAGAMENTO_VENCIDO: CatalogoVariavel[] = [
+  { path: "pagamentoValor", label: "Valor da cobrança vencida", exemplo: "1500.00", categoria: "pagamento" },
+  { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
+  { path: "vencimento", label: "Data de vencimento", exemplo: "2026-04-01", categoria: "pagamento" },
+  { path: "diasAtraso", label: "Dias de atraso", exemplo: "5", categoria: "pagamento" },
+];
+
+const VARS_PAGAMENTO_PROXIMO: CatalogoVariavel[] = [
+  { path: "pagamentoValor", label: "Valor da cobrança", exemplo: "1500.00", categoria: "pagamento" },
+  { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários", categoria: "pagamento" },
+  { path: "vencimento", label: "Data de vencimento", exemplo: "2026-05-25", categoria: "pagamento" },
+  { path: "diasAteVencer", label: "Dias até vencer", exemplo: "3", categoria: "pagamento" },
+];
+
+const VARS_ACAO: CatalogoVariavel[] = [
+  { path: "acaoApelido", label: "Apelido da ação", exemplo: "Revisional Banco X", categoria: "acao" },
+  { path: "acaoNumeroCnj", label: "Número CNJ", exemplo: "0000001-00.2024.8.05.0001", categoria: "acao" },
+  { path: "acaoClasse", label: "Classe processual", exemplo: "Reclamação Trabalhista", categoria: "acao" },
+  { path: "acaoTipo", label: "Tipo (litigioso/extrajudicial)", exemplo: "litigioso", categoria: "acao" },
+  { path: "acaoPolo", label: "Polo do cliente", exemplo: "ativo", categoria: "acao" },
+  { path: "acaoValorCausa", label: "Valor da causa", exemplo: "50000", categoria: "acao" },
+];
+
+const VARS_AGENDAMENTO: CatalogoVariavel[] = [
+  { path: "horarioEscolhido", label: "Horário do agendamento", exemplo: "10/05 às 14h", categoria: "agendamento" },
+  { path: "agendamentoFim", label: "Fim do agendamento", exemplo: "10/05 às 15h", categoria: "agendamento" },
+  { path: "emailCliente", label: "Email do participante", exemplo: "joao@example.com", categoria: "agendamento" },
+  { path: "nomeCliente", label: "Nome do participante", exemplo: "João Silva", categoria: "cliente" },
+];
+
 export const CATALOGO_VARIAVEIS: CatalogoGatilho[] = [
+  {
+    gatilho: "mensagem_canal",
+    label: "Mensagem recebida (qualquer canal)",
+    variaveis: [...VARS_CLIENTE, ...VARS_MENSAGEM],
+  },
+  {
+    gatilho: "whatsapp_mensagem",
+    label: "Mensagem WhatsApp (legado)",
+    variaveis: [...VARS_CLIENTE, ...VARS_MENSAGEM],
+  },
+  {
+    gatilho: "novo_lead",
+    label: "Novo lead no CRM",
+    variaveis: [
+      ...VARS_CLIENTE,
+      { path: "origemLead", label: "Origem do lead", exemplo: "site", categoria: "mensagem" },
+    ],
+  },
   {
     gatilho: "pagamento_recebido",
     label: "Pagamento recebido (Asaas)",
-    variaveis: [
-      { path: "nomeCliente", label: "Nome do cliente", exemplo: "João Silva" },
-      { path: "telefoneCliente", label: "Telefone do cliente", exemplo: "(11) 99999-0000" },
-      { path: "emailCliente", label: "Email do cliente", exemplo: "joao@example.com" },
-      { path: "contatoId", label: "ID do contato no CRM", exemplo: "42" },
-      { path: "pagamentoValor", label: "Valor do pagamento", exemplo: "1500.00" },
-      { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários" },
-      { path: "pagamentoTipo", label: "Tipo (BOLETO/PIX/...)", exemplo: "PIX" },
-      { path: "valorTotalCliente", label: "Valor total já pago pelo cliente", exemplo: "5000.00" },
-      { path: "percentualPago", label: "Percentual pago do total contratado", exemplo: "50" },
-    ],
+    variaveis: [...VARS_CLIENTE, ...VARS_PAGAMENTO_RECEBIDO, ...VARS_ACAO],
   },
   {
     gatilho: "pagamento_vencido",
     label: "Pagamento vencido (Asaas)",
+    variaveis: [...VARS_CLIENTE, ...VARS_PAGAMENTO_VENCIDO],
+  },
+  {
+    gatilho: "pagamento_proximo_vencimento",
+    label: "Vencimento próximo (Asaas)",
+    variaveis: [...VARS_CLIENTE, ...VARS_PAGAMENTO_PROXIMO],
+  },
+  {
+    gatilho: "agendamento_criado",
+    label: "Agendamento criado (Cal.com)",
+    variaveis: VARS_AGENDAMENTO,
+  },
+  {
+    gatilho: "agendamento_cancelado",
+    label: "Agendamento cancelado (Cal.com)",
     variaveis: [
-      { path: "nomeCliente", label: "Nome do cliente", exemplo: "João Silva" },
-      { path: "telefoneCliente", label: "Telefone do cliente", exemplo: "(11) 99999-0000" },
-      { path: "emailCliente", label: "Email do cliente", exemplo: "joao@example.com" },
-      { path: "contatoId", label: "ID do contato no CRM", exemplo: "42" },
-      { path: "pagamentoValor", label: "Valor do pagamento vencido", exemplo: "1500.00" },
-      { path: "pagamentoDescricao", label: "Descrição da cobrança", exemplo: "Honorários" },
+      ...VARS_AGENDAMENTO,
+      { path: "motivoCancelamento", label: "Motivo do cancelamento", exemplo: "Cliente pediu", categoria: "agendamento" },
     ],
   },
   {
-    gatilho: "mensagem_recebida",
-    label: "Mensagem recebida (WhatsApp)",
+    gatilho: "agendamento_remarcado",
+    label: "Agendamento remarcado (Cal.com)",
     variaveis: [
-      { path: "nomeCliente", label: "Nome do cliente", exemplo: "João Silva" },
-      { path: "telefoneCliente", label: "Telefone do cliente", exemplo: "(11) 99999-0000" },
-      { path: "mensagem", label: "Mensagem original do cliente", exemplo: "Quero agendar" },
-      { path: "intencao", label: "Intenção detectada (IA)", exemplo: "agendamento" },
-      { path: "horarioEscolhido", label: "Horário escolhido (após Cal.com)", exemplo: "10/05 às 14h" },
+      ...VARS_AGENDAMENTO,
+      { path: "horarioAnterior", label: "Horário antigo (antes de remarcar)", exemplo: "08/05 às 10h", categoria: "agendamento" },
     ],
+  },
+  {
+    gatilho: "agendamento_lembrete",
+    label: "Lembrete de agendamento (Cal.com)",
+    variaveis: VARS_AGENDAMENTO,
+  },
+  {
+    gatilho: "manual",
+    label: "Acionado manualmente",
+    variaveis: [...VARS_CLIENTE],
   },
 ];
 

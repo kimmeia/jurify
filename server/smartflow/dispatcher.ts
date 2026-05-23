@@ -198,23 +198,38 @@ async function finalizarExecucao(
   const db = await getDb();
   if (!db) return;
 
-  // Se o engine sinalizou "esperando" (passo esperar), gravamos retomarEm
-  // e mantemos status=rodando pra que o scheduler retome depois.
-  const esperando = !!resultado.contexto.esperando && resultado.sucesso;
-  const delayMinutos = Number(resultado.contexto.delayMinutos ?? 0);
+  // Duas formas de "rodando aguardando":
+  //   1. `esperar` clássico — `retomarEm` futuro, scheduler retoma na hora.
+  //   2. `whatsapp_aguardar_resposta` — `aguardandoMensagemContatoId` setado;
+  //      dispatcher de mensagem retoma quando o contato responde.
+  //      `retomarEm` aqui é o DEADLINE de timeout (scheduler retoma então
+  //      com `respostaUsuario=null` pra ramo de timeout no `proximoSe`).
+  const esperandoTempo = !!resultado.contexto.esperando && resultado.sucesso;
+  const aguardandoMsg = !!resultado.contexto.aguardandoMensagem && resultado.sucesso;
+  const pausada = esperandoTempo || aguardandoMsg;
 
-  const retomarEm = esperando && delayMinutos > 0
-    ? new Date(Date.now() + delayMinutos * 60 * 1000)
+  let retomarEm: Date | null = null;
+  if (esperandoTempo) {
+    const delayMinutos = Number(resultado.contexto.delayMinutos ?? 0);
+    if (delayMinutos > 0) retomarEm = new Date(Date.now() + delayMinutos * 60 * 1000);
+  } else if (aguardandoMsg) {
+    const timeoutMin = Number(resultado.contexto.aguardandoTimeoutMinutos ?? 1440);
+    retomarEm = new Date(Date.now() + timeoutMin * 60 * 1000);
+  }
+
+  const aguardandoContato = aguardandoMsg && typeof resultado.contexto.aguardandoContatoId === "number"
+    ? (resultado.contexto.aguardandoContatoId as number)
     : null;
 
   await db
     .update(smartflowExecucoes)
     .set({
-      status: esperando ? "rodando" : resultado.sucesso ? "concluido" : "erro",
+      status: pausada ? "rodando" : resultado.sucesso ? "concluido" : "erro",
       passoAtual: resultado.passosExecutados,
       contexto: JSON.stringify(resultado.contexto),
       erro: resultado.erro || null,
       retomarEm,
+      aguardandoMensagemContatoId: aguardandoContato,
     })
     .where(eq(smartflowExecucoes.id, execId));
 }
@@ -963,6 +978,16 @@ export async function dispararMensagemCanal(
       }
     }
 
+    // PRIORIDADE: existe execução pendente aguardando resposta desse contato?
+    // Se sim, retoma ela com `respostaUsuario` = mensagem nova. Evita criar
+    // execução nova pra mesma conversa e mantém fluxo multi-turn.
+    const pendente = await acharExecucaoAguardando(escritorioId, params.contatoId);
+    if (pendente) {
+      log.info({ execId: pendente.id, contatoId: params.contatoId }, "SmartFlow: retomando execução aguardando");
+      const respostas = await retomarComResposta(pendente.id, params.mensagem);
+      return { executou: true, respostas, execId: pendente.id };
+    }
+
     // Lê campos personalizados do cliente (definidos em Configurações)
     // pra disponibilizar como `cliente.campos.<chave>` no contexto.
     const camposCliente = await lerCamposPersonalizados(escritorioId, params.contatoId);
@@ -1258,6 +1283,10 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     // como se tivesse pedido outra pausa.
     delete (contextoBase as any).esperando;
     delete (contextoBase as any).delayMinutos;
+    delete (contextoBase as any).aguardandoMensagem;
+    delete (contextoBase as any).aguardandoContatoId;
+    delete (contextoBase as any).aguardandoTimeoutMinutos;
+    delete (contextoBase as any).aguardandoOpcoes;
 
     const executores = criarExecutoresReais(exec.escritorioId);
     const resultado = await executarCenario(passosRestantes, contextoBase, executores);
@@ -1277,11 +1306,112 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     try {
       await db
         .update(smartflowExecucoes)
-        .set({ status: "erro", erro: err.message, retomarEm: null })
+        .set({ status: "erro", erro: err.message, retomarEm: null, aguardandoMensagemContatoId: null })
         .where(eq(smartflowExecucoes.id, execId));
     } catch {
       /* ignore */
     }
     return { retomada: false, erro: err.message };
   }
+}
+
+/**
+ * Procura execução de cenário aguardando mensagem do contato. Existe no
+ * máximo 1 por (escritorio, contato) — limitação por desenho pra evitar
+ * race condition entre múltiplos fluxos esperando o mesmo cliente.
+ *
+ * Filtra também por `retomarEm > now` — execuções com timeout vencido
+ * já viraram problema do scheduler; aqui só nos interessam as ativas.
+ */
+async function acharExecucaoAguardando(
+  escritorioId: number,
+  contatoId: number,
+): Promise<{ id: number } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const agora = new Date();
+  const [pendente] = await db
+    .select({ id: smartflowExecucoes.id })
+    .from(smartflowExecucoes)
+    .where(
+      and(
+        eq(smartflowExecucoes.escritorioId, escritorioId),
+        eq(smartflowExecucoes.aguardandoMensagemContatoId, contatoId),
+        eq(smartflowExecucoes.status, "rodando"),
+        gte(smartflowExecucoes.retomarEm, agora),
+      ),
+    )
+    .limit(1);
+  return pendente ?? null;
+}
+
+/**
+ * Retoma execução pendente injetando a resposta do cliente em
+ * `ctx.respostaUsuario` e (se houver `aguardandoOpcoes`) também
+ * `ctx.opcaoEscolhida = {indice, texto, numero}` quando a resposta bate
+ * com alguma opção (via `parsearOpcaoResposta`). Caller é o dispatcher
+ * de mensagem; scheduler usa `retomarExecucao` clássico (timeout).
+ */
+async function retomarComResposta(
+  execId: number,
+  respostaTexto: string,
+): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const [exec] = await db
+    .select()
+    .from(smartflowExecucoes)
+    .where(eq(smartflowExecucoes.id, execId))
+    .limit(1);
+  if (!exec || exec.status !== "rodando") return [];
+
+  const cenario = await carregarCenarioPorId(exec.escritorioId, exec.cenarioId);
+  if (!cenario) return [];
+
+  const contextoBase: SmartflowContexto = exec.contexto ? JSON.parse(exec.contexto) : {};
+  const opcoes = Array.isArray(contextoBase.aguardandoOpcoes)
+    ? (contextoBase.aguardandoOpcoes as string[])
+    : [];
+
+  // Limpa flags de espera + injeta a resposta nova
+  delete (contextoBase as any).esperando;
+  delete (contextoBase as any).delayMinutos;
+  delete (contextoBase as any).aguardandoMensagem;
+  delete (contextoBase as any).aguardandoContatoId;
+  delete (contextoBase as any).aguardandoTimeoutMinutos;
+  delete (contextoBase as any).aguardandoOpcoes;
+  contextoBase.respostaUsuario = respostaTexto;
+
+  // Parseia opção se aplicável
+  if (opcoes.length > 0) {
+    const { parsearOpcaoResposta } = await import("./engine");
+    const escolha = parsearOpcaoResposta(respostaTexto, opcoes);
+    if (escolha) {
+      (contextoBase as any).opcaoEscolhida = escolha;
+    }
+  }
+
+  const passosRestantes = cenario.passos
+    .slice()
+    .sort((a, b) => a.ordem - b.ordem)
+    .slice(exec.passoAtual);
+
+  if (passosRestantes.length === 0) {
+    await db
+      .update(smartflowExecucoes)
+      .set({ status: "concluido", retomarEm: null, aguardandoMensagemContatoId: null })
+      .where(eq(smartflowExecucoes.id, execId));
+    return [];
+  }
+
+  const executores = criarExecutoresReais(exec.escritorioId);
+  const resultado = await executarCenario(passosRestantes, contextoBase, executores);
+
+  const totalResultado: ExecutarCenarioResultado = {
+    ...resultado,
+    passosExecutados: exec.passoAtual + resultado.passosExecutados,
+  };
+  await finalizarExecucao(execId, totalResultado);
+  return resultado.respostas;
 }

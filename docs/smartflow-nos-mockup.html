@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — Nós universais (mockup)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Nó atual (antes) — chato */
+    .no-antigo {
+      border-radius: 8px;
+      border: 2px solid #e2e8f0;
+      background: white;
+      min-width: 220px;
+      max-width: 260px;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    }
+
+    /* Nó novo — header colorido + corpo com preview + footer com chips */
+    .no-novo {
+      border-radius: 12px;
+      border: 2px solid;
+      background: white;
+      min-width: 260px;
+      max-width: 300px;
+      box-shadow: 0 2px 6px rgb(0 0 0 / 0.08);
+      overflow: hidden;
+    }
+    .no-novo .header {
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: white;
+    }
+    .no-novo .body {
+      padding: 8px 12px;
+      font-size: 10.5px;
+      background: white;
+      color: #475569;
+    }
+    .no-novo .body strong { color: #1e293b; }
+    .no-novo .footer {
+      padding: 6px 10px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      font-size: 9px;
+    }
+    .chip-var {
+      padding: 2px 6px;
+      background: #ede9fe;
+      color: #6d28d9;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    .chip-warn {
+      padding: 2px 6px;
+      background: #fef3c7;
+      color: #b45309;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    /* Cores por categoria */
+    .cat-mensagem { border-color: #93c5fd; }
+    .cat-mensagem .header { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+    .cat-ia { border-color: #c4b5fd; }
+    .cat-ia .header { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+    .cat-asaas { border-color: #6ee7b7; }
+    .cat-asaas .header { background: linear-gradient(135deg, #10b981, #0d9488); }
+    .cat-calcom { border-color: #fdba74; }
+    .cat-calcom .header { background: linear-gradient(135deg, #f97316, #f59e0b); }
+    .cat-crm { border-color: #c4b5fd; }
+    .cat-crm .header { background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+    .cat-processos { border-color: #a5b4fc; }
+    .cat-processos .header { background: linear-gradient(135deg, #6366f1, #2563eb); }
+    .cat-fluxo { border-color: #fcd34d; }
+    .cat-fluxo .header { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .cat-kanban { border-color: #a5b4fc; }
+    .cat-kanban .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+    .cat-gatilho { border-color: #93c5fd; border-width: 3px; border-style: dashed; }
+    .cat-gatilho .header { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+
+    /* Connector arrow */
+    .arrow-down {
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid #a78bfa;
+      margin: 0 auto;
+    }
+    .line-v {
+      width: 3px;
+      background: linear-gradient(to bottom, #c4b5fd, #a78bfa);
+      margin: 0 auto;
+      border-radius: 2px;
+    }
+
+    .section-divider {
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+      height: 1px;
+    }
+
+    /* Pulse status */
+    .dot-ok { width: 8px; height: 8px; background: #10b981; border-radius: 50%; }
+    .dot-warn { width: 8px; height: 8px; background: #f59e0b; border-radius: 50%; }
+    .dot-err { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+
+  <!-- Top bar -->
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 px-6 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center">
+        <i data-lucide="boxes" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold">Fase 2 do redesign</p>
+        <h1 class="text-lg font-bold">SmartFlow — Nós universais</h1>
+      </div>
+      <div class="flex gap-2 text-xs">
+        <a href="#bug" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🐞 Bug campo personalizado</a>
+        <a href="#nos-novos" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🧩 6 nós novos</a>
+        <a href="#visual" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🎨 Visual</a>
+        <a href="#fluxo-exemplo" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">📋 Fluxo exemplo</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto p-6 space-y-12">
+
+    <!-- ════════════════ NOTA ════════════════ -->
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+      <p class="font-semibold mb-1 flex items-center gap-1.5">
+        <i data-lucide="info" class="w-4 h-4"></i> Sobre este mockup
+      </p>
+      <p class="text-xs">
+        Mockup do <strong>passo 2 do redesign</strong> — destrava cenários complexos com 6 nós novos universais
+        + visual repaginado pros nós + bug do campo personalizado resolvido.
+        <strong>Plano completo em texto:</strong>
+        <code class="bg-amber-100 px-1 py-0.5 rounded text-[11px]">docs/smartflow-nos-plano.md</code>.
+      </p>
+    </div>
+
+    <!-- ════════════════ BUG ════════════════ -->
+    <section id="bug" class="space-y-3">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-rose-600 font-bold">Diagnóstico</p>
+        <h2 class="text-2xl font-bold">🐞 Bug do "campo personalizado"</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <p class="text-sm font-bold text-slate-700">O que você esperava</p>
+          <div class="bg-slate-50 rounded-lg p-3 text-xs space-y-2">
+            <p>Cliente diz: <em>"meu CPF é 123.456.789-00, nasci em 12/05/1985"</em></p>
+            <p class="text-violet-700 font-bold">↓ IA entende sozinha ↓</p>
+            <p>Sistema salva <code>cpf</code> e <code>dataNascimento</code> no cadastro do cliente.</p>
+          </div>
+          <p class="text-xs text-slate-600">
+            Mas hoje a IA <strong>só gera texto bruto</strong> — quem decide salvar é um nó manual
+            <code class="text-[10px]">definir_campo_personalizado</code> com chave fixa e valor de variável.
+            Não tem variável estruturada (<code>{{cpf}}</code>) porque a IA não retorna JSON.
+          </p>
+        </div>
+
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+          <p class="text-sm font-bold text-emerald-800">A solução (novo nó)</p>
+          <div class="space-y-2">
+            <div class="no-novo cat-ia">
+              <div class="header">
+                <i data-lucide="brain" class="w-3 h-3"></i> IA EXTRAIR CAMPOS
+              </div>
+              <div class="body">
+                <p><strong>Campos a extrair:</strong></p>
+                <ul class="list-disc ml-4 text-[10px]">
+                  <li>cpf <span class="text-slate-400">(cpf)</span></li>
+                  <li>dataNascimento <span class="text-slate-400">(data)</span></li>
+                </ul>
+                <p class="mt-1.5"><strong>Persistir:</strong> ✅ todos</p>
+              </div>
+              <div class="footer">
+                <span class="chip-var">{{extracao.cpf}}</span>
+                <span class="chip-var">{{extracao.dataNascimento}}</span>
+              </div>
+            </div>
+            <p class="text-xs text-emerald-900">
+              IA recebe a mensagem + lista do que extrair + tipo de cada campo. Devolve um objeto
+              estruturado via <strong>tool calling</strong> (suportado por Anthropic e OpenAI).
+              Salva direto. Sem invenção.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ 6 NÓS NOVOS ════════════════ -->
+    <section id="nos-novos" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Fundação</p>
+        <h2 class="text-2xl font-bold">🧩 6 nós universais novos</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Esses 6 blocos cobrem 99% dos cenários que você descreveu. Combinados, dão fluxos infinitos.
+      </p>
+
+      <div class="grid lg:grid-cols-3 gap-5">
+
+        <!-- Card 1: ia_extrair_campos -->
+        <div class="bg-white rounded-xl border border-violet-200 p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+              <i data-lucide="brain" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-violet-600">IA</p>
+              <p class="text-sm font-bold mono">ia_extrair_campos</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600">
+            IA lê uma mensagem + esquema de campos → devolve <strong>JSON estruturado</strong>.
+            Salva no contexto e/ou em campos personalizados do cliente.
+          </p>
+          <div class="bg-slate-50 rounded-lg p-2 text-[10px] space-y-1">
+            <div><strong>Recebe:</strong> mensagem, lista de campos com tipo</div>
+            <div><strong>Publica:</strong> <code>{{extracao.&lt;chave&gt;}}</code> por campo</div>
+            <div><strong>Tech:</strong> tool calling (Anthropic/OpenAI)</div>
+          </div>
+        </div>
+
+        <!-- Card 2: crm_buscar_contato -->
+        <div class="bg-white rounded-xl border border-violet-200 p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
+              <i data-lucide="search" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-violet-600">CRM</p>
+              <p class="text-sm font-bold mono">crm_buscar_contato</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600">
+            Busca contato por telefone, email ou CPF. Útil quando o telefone do gatilho não bate
+            mas o cliente se identificou na conversa.
+          </p>
+          <div class="bg-slate-50 rounded-lg p-2 text-[10px] space-y-1">
+            <div><strong>Recebe:</strong> tipo de busca + valor</div>
+            <div><strong>Publica:</strong> <code>contatoEncontrado</code>, <code>contatoId</code>, <code>nomeCliente</code>, <code>cliente.campos.*</code></div>
+            <div><strong>Caso:</strong> "Cliente liga de número novo mas informa CPF"</div>
+          </div>
+        </div>
+
+        <!-- Card 3: crm_listar_acoes_cliente -->
+        <div class="bg-white rounded-xl border border-violet-200 p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
+              <i data-lucide="folder-open" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-violet-600">CRM</p>
+              <p class="text-sm font-bold mono">crm_listar_acoes_cliente</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600">
+            Lista as ações (processos) do cliente. Filtros por tipo, polo, limite.
+            Resultado vai no contexto pra iterar ou exibir.
+          </p>
+          <div class="bg-slate-50 rounded-lg p-2 text-[10px] space-y-1">
+            <div><strong>Recebe:</strong> contatoId, filtros</div>
+            <div><strong>Publica:</strong> <code>{{acoes}}</code> (lista), <code>{{acoesQuantidade}}</code></div>
+            <div><strong>Caso:</strong> "Quantas ações esse cliente tem?"</div>
+          </div>
+        </div>
+
+        <!-- Card 4: processo_buscar_movimentacoes -->
+        <div class="bg-white rounded-xl border border-indigo-200 p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center">
+              <i data-lucide="history" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-indigo-600">PROCESSOS</p>
+              <p class="text-sm font-bold mono">processo_buscar_movimentacoes</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600">
+            Histórico do processo: movimentações, publicações DJE, sentenças, audiências.
+            Filtros por tipo e janela (últimos N dias / N eventos).
+          </p>
+          <div class="bg-slate-50 rounded-lg p-2 text-[10px] space-y-1">
+            <div><strong>Recebe:</strong> processoId ou CNJ + filtros</div>
+            <div><strong>Publica:</strong> <code>{{movimentacoes}}</code>, <code>{{movimentacaoMaisRecente}}</code></div>
+            <div><strong>Caso:</strong> "Houve novidade no meu processo?"</div>
+          </div>
+        </div>
+
+        <!-- Card 5: whatsapp_aguardar_resposta -->
+        <div class="bg-white rounded-xl border border-blue-200 p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+              <i data-lucide="message-circle" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-blue-600">MENSAGEM</p>
+              <p class="text-sm font-bold mono">whatsapp_aguardar_resposta</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600">
+            Envia mensagem e <strong>pausa o fluxo</strong> aguardando o cliente responder.
+            Timeout configurável (default 24h). Permite conversa multi-turn.
+          </p>
+          <div class="bg-slate-50 rounded-lg p-2 text-[10px] space-y-1">
+            <div><strong>Recebe:</strong> mensagem + timeout</div>
+            <div><strong>Publica:</strong> <code>{{respostaUsuario}}</code></div>
+            <div><strong>Caso:</strong> "Qual horário prefere? <em>→</em> espera resposta <em>→</em> confirma"</div>
+          </div>
+        </div>
+
+        <!-- Card 6: para_cada_item -->
+        <div class="bg-white rounded-xl border border-amber-200 p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+              <i data-lucide="repeat-2" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase font-bold text-amber-600">FLUXO</p>
+              <p class="text-sm font-bold mono">para_cada_item</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600">
+            Loop sobre lista do contexto (ex: cada ação do cliente). Executa subfluxo pra cada,
+            com <code>{{item}}</code> e <code>{{indice}}</code> disponíveis.
+          </p>
+          <div class="bg-slate-50 rounded-lg p-2 text-[10px] space-y-1">
+            <div><strong>Recebe:</strong> caminho da lista + limite</div>
+            <div><strong>Saídas:</strong> 2 handles (corpo do loop + depois do loop)</div>
+            <div><strong>Caso:</strong> "Pra cada ação → cria card no Kanban"</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ VISUAL NOVO DOS NÓS ════════════════ -->
+    <section id="visual" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Repaginação</p>
+        <h2 class="text-2xl font-bold">🎨 Visual repaginado dos nós</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Antes era um cartãozinho chato. Agora cada nó mostra de relance o que faz, como está
+        configurado e que variáveis publica.
+      </p>
+
+      <div class="grid md:grid-cols-2 gap-8">
+        <!-- ANTES -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold px-2 py-1 rounded bg-slate-200 text-slate-700">ANTES</span>
+            <p class="text-sm text-slate-600">o que está em produção hoje</p>
+          </div>
+          <div class="bg-slate-100 rounded-xl p-6 flex justify-center" style="min-height: 320px;">
+            <div class="no-antigo">
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-md bg-violet-100 text-violet-700">
+                <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                <span class="text-xs font-semibold">Classificar intenção (IA)</span>
+              </div>
+              <div class="px-2.5 py-1.5 text-[10px] text-slate-600 border-t bg-slate-50">
+                3 categorias
+              </div>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-600 mt-3 space-y-1">
+            <li>• Cor padrão (violeta) — não diferencia por categoria</li>
+            <li>• "3 categorias" — não diz <em>quais</em></li>
+            <li>• Não mostra que variável publica</li>
+            <li>• Sem indicação de erro/aviso de config</li>
+          </ul>
+        </div>
+
+        <!-- DEPOIS -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold px-2 py-1 rounded bg-violet-600 text-white">DEPOIS</span>
+            <p class="text-sm text-slate-600">com preview e chips de variáveis</p>
+          </div>
+          <div class="bg-slate-100 rounded-xl p-6 flex justify-center" style="min-height: 320px;">
+            <div class="no-novo cat-ia">
+              <div class="header">
+                <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                <span class="flex-1">CLASSIFICAR INTENÇÃO</span>
+                <span class="dot-ok"></span>
+              </div>
+              <div class="body">
+                <p><strong>Categorias:</strong> agendar, dúvida, emergência</p>
+                <p><strong>Modelo:</strong> Claude Haiku</p>
+              </div>
+              <div class="footer">
+                <span class="chip-var">{{intencao}}</span>
+              </div>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-600 mt-3 space-y-1">
+            <li>• Header com <strong>gradient da categoria</strong> (cada categoria sua cor)</li>
+            <li>• <strong>Preview da config</strong> no corpo — bate o olho e entende</li>
+            <li>• <strong>Chips de variáveis publicadas</strong> — clique copia <code>{{intencao}}</code></li>
+            <li>• Bolinha verde/âmbar/vermelha = status de config</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Galeria de nós por categoria -->
+      <div class="mt-8">
+        <p class="text-sm font-bold text-slate-700 mb-3">Galeria dos nós com o visual novo (categorias)</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+
+          <div class="no-novo cat-gatilho">
+            <div class="header">
+              <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">GATILHO · MENSAGEM</span>
+            </div>
+            <div class="body">
+              <p>Canais aceitos: <strong>todos</strong></p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{mensagem}}</span>
+              <span class="chip-var">{{contatoId}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-mensagem">
+            <div class="header">
+              <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">ENVIAR WHATSAPP</span>
+              <span class="dot-ok"></span>
+            </div>
+            <div class="body">
+              <p>"Olá {{nomeCliente}}, sobre seu processo..."</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{mensagensEnviadas}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-mensagem">
+            <div class="header">
+              <i data-lucide="pause" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">AGUARDAR RESPOSTA</span>
+            </div>
+            <div class="body">
+              <p>"Qual horário prefere?"</p>
+              <p class="text-[9px] text-slate-400">⏰ timeout 24h</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{respostaUsuario}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-ia">
+            <div class="header">
+              <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">EXTRAIR CAMPOS</span>
+              <span class="dot-ok"></span>
+            </div>
+            <div class="body">
+              <p>De <strong>{{mensagem}}</strong> extrai:</p>
+              <p>cpf, email, dataNasc</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{extracao.cpf}}</span>
+              <span class="chip-var">{{extracao.email}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-crm">
+            <div class="header">
+              <i data-lucide="search" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">BUSCAR CONTATO</span>
+              <span class="dot-ok"></span>
+            </div>
+            <div class="body">
+              <p>Por: <strong>cpfCnpj</strong></p>
+              <p>Valor: <code class="text-[9px]">{{extracao.cpf}}</code></p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{contatoEncontrado}}</span>
+              <span class="chip-var">{{contatoId}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-crm">
+            <div class="header">
+              <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">LISTAR AÇÕES</span>
+            </div>
+            <div class="body">
+              <p>Cliente: <code>{{contatoId}}</code></p>
+              <p>Tipo: todos · limite 10</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{acoes}}</span>
+              <span class="chip-var">{{acoesQuantidade}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-processos">
+            <div class="header">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">BUSCAR MOVIMENTAÇÕES</span>
+              <span class="dot-ok"></span>
+            </div>
+            <div class="body">
+              <p>Processo: <code>{{acaoEscolhida.id}}</code></p>
+              <p>Últimos <strong>30 dias</strong></p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{movimentacoes}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-fluxo">
+            <div class="header">
+              <i data-lucide="repeat-2" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">PARA CADA ITEM</span>
+            </div>
+            <div class="body">
+              <p>Iterar <code>{{acoes}}</code></p>
+              <p>Limite: 20</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{item}}</span>
+              <span class="chip-var">{{indice}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-fluxo">
+            <div class="header">
+              <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">CONDIÇÃO</span>
+              <span class="dot-warn"></span>
+            </div>
+            <div class="body">
+              <p>3 ramos · 1 fallback</p>
+              <p class="text-amber-700">⚠ ramo "outro" sem destino</p>
+            </div>
+            <div class="footer">
+              <span class="chip-warn">⚠ saída faltando</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-kanban">
+            <div class="header">
+              <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">CRIAR CARD KANBAN</span>
+              <span class="dot-ok"></span>
+            </div>
+            <div class="body">
+              <p>Funil: <strong>Atendimento</strong></p>
+              <p>Coluna: <strong>Triagem</strong></p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{kanbanCardId}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-asaas">
+            <div class="header">
+              <i data-lucide="banknote" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">GERAR COBRANÇA</span>
+            </div>
+            <div class="body">
+              <p>R$ <strong>{{pagamentoValor}}</strong></p>
+              <p>PIX · vence em 7 dias</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{pagamentoId}}</span>
+              <span class="chip-var">{{pagamentoLink}}</span>
+            </div>
+          </div>
+
+          <div class="no-novo cat-calcom">
+            <div class="header">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">BUSCAR HORÁRIOS</span>
+            </div>
+            <div class="body">
+              <p>Duração: <strong>30 min</strong></p>
+              <p>Próximos 7 dias</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{horariosDisponiveis}}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ FLUXO EXEMPLO ════════════════ -->
+    <section id="fluxo-exemplo" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-emerald-600 font-bold">Caso real</p>
+        <h2 class="text-2xl font-bold">📋 Fluxo "Cliente pergunta sobre sua ação"</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Aqui está o cenário que você descreveu, montado com os nós novos. Ele <strong>verifica</strong>
+        se o número bate, <strong>busca</strong> as ações do cliente, <strong>pergunta</strong> qual,
+        <strong>lê</strong> as movimentações e <strong>responde</strong>.
+      </p>
+
+      <div class="bg-gradient-to-br from-slate-50 to-violet-50/30 rounded-2xl border border-violet-200 p-8">
+        <div class="flex flex-col items-center gap-1 max-w-md mx-auto">
+
+          <!-- Gatilho -->
+          <div class="no-novo cat-gatilho w-full">
+            <div class="header">
+              <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">GATILHO · MENSAGEM RECEBIDA</span>
+            </div>
+            <div class="body">
+              <p>Cliente: <em>"oi, quero saber da minha ação"</em></p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{mensagem}}</span>
+              <span class="chip-var">{{contatoId}}</span>
+              <span class="chip-var">{{telefoneCliente}}</span>
+            </div>
+          </div>
+
+          <div class="line-v" style="height: 24px;"></div>
+          <div class="arrow-down"></div>
+
+          <!-- Verificação inicial: telefone bate com cadastro? -->
+          <div class="no-novo cat-fluxo w-full">
+            <div class="header">
+              <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">CONDIÇÃO · TELEFONE CADASTRADO?</span>
+            </div>
+            <div class="body">
+              <p>contatoId <strong>existe</strong>? (do gatilho)</p>
+              <p class="text-[10px] text-slate-400">↳ sim · não</p>
+            </div>
+          </div>
+
+          <div class="flex gap-4 items-start mt-4 w-full">
+            <!-- Ramo "não": pede CPF -->
+            <div class="flex-1 space-y-1">
+              <p class="text-[10px] font-bold text-rose-700 text-center">não · pede identificação</p>
+              <div class="line-v" style="height: 12px;"></div>
+              <div class="arrow-down"></div>
+              <div class="no-novo cat-mensagem">
+                <div class="header">
+                  <i data-lucide="pause" class="w-3.5 h-3.5"></i>
+                  <span class="flex-1">AGUARDAR RESPOSTA</span>
+                </div>
+                <div class="body">
+                  <p>"Você ainda não está cadastrado neste número. Pode me passar seu CPF?"</p>
+                </div>
+              </div>
+              <div class="line-v" style="height: 12px;"></div>
+              <div class="arrow-down"></div>
+              <div class="no-novo cat-ia">
+                <div class="header">
+                  <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                  <span class="flex-1">EXTRAIR CAMPOS</span>
+                </div>
+                <div class="body">
+                  <p>De: <code>{{respostaUsuario}}</code></p>
+                  <p>Extrai: <strong>cpf</strong></p>
+                </div>
+              </div>
+              <div class="line-v" style="height: 12px;"></div>
+              <div class="arrow-down"></div>
+              <div class="no-novo cat-crm">
+                <div class="header">
+                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                  <span class="flex-1">BUSCAR CONTATO</span>
+                </div>
+                <div class="body">
+                  <p>Por cpfCnpj: <code>{{extracao.cpf}}</code></p>
+                </div>
+              </div>
+              <p class="text-[10px] text-center text-slate-500 italic mt-2">
+                (se ainda assim não achar → transferir pra humano)
+              </p>
+            </div>
+
+            <!-- Ramo "sim": segue direto -->
+            <div class="flex-1 space-y-1">
+              <p class="text-[10px] font-bold text-emerald-700 text-center">sim · continua</p>
+              <div class="line-v" style="height: 12px;"></div>
+              <div class="arrow-down"></div>
+              <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-center text-[10px] text-emerald-800">
+                ↓ junta com ramo "não"
+              </div>
+            </div>
+          </div>
+
+          <div class="line-v" style="height: 32px;"></div>
+          <div class="arrow-down"></div>
+
+          <!-- Lista ações -->
+          <div class="no-novo cat-crm w-full">
+            <div class="header">
+              <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">LISTAR AÇÕES DO CLIENTE</span>
+            </div>
+            <div class="body">
+              <p>Cliente: <code>{{contatoId}}</code></p>
+              <p>Filtros: todas · limite 10</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{acoes}}</span>
+              <span class="chip-var">{{acoesQuantidade}}</span>
+            </div>
+          </div>
+
+          <div class="line-v" style="height: 24px;"></div>
+          <div class="arrow-down"></div>
+
+          <!-- Pergunta qual ação -->
+          <div class="no-novo cat-mensagem w-full">
+            <div class="header">
+              <i data-lucide="pause" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">AGUARDAR RESPOSTA · MENU</span>
+            </div>
+            <div class="body">
+              <p>"Você tem <strong>{{acoesQuantidade}}</strong> ações. Qual quer saber?"</p>
+              <p class="text-[10px] text-slate-400">↳ formatado automaticamente como menu numerado</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{respostaUsuario}}</span>
+              <span class="chip-var">{{acaoEscolhida}}</span>
+            </div>
+          </div>
+
+          <div class="line-v" style="height: 24px;"></div>
+          <div class="arrow-down"></div>
+
+          <!-- Busca movimentações -->
+          <div class="no-novo cat-processos w-full">
+            <div class="header">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">BUSCAR MOVIMENTAÇÕES</span>
+            </div>
+            <div class="body">
+              <p>Processo: <code>{{acaoEscolhida.id}}</code></p>
+              <p>Últimos <strong>30 dias</strong> · todos os tipos</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{movimentacoes}}</span>
+              <span class="chip-var">{{movimentacaoMaisRecente}}</span>
+            </div>
+          </div>
+
+          <div class="line-v" style="height: 24px;"></div>
+          <div class="arrow-down"></div>
+
+          <!-- Responde -->
+          <div class="no-novo cat-ia w-full">
+            <div class="header">
+              <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">RESPONDER COM IA</span>
+            </div>
+            <div class="body">
+              <p>Agente: <strong>"Atendimento processual"</strong></p>
+              <p>Contexto: ação + movimentações</p>
+            </div>
+            <div class="footer">
+              <span class="chip-var">{{respostaIA}}</span>
+            </div>
+          </div>
+
+          <div class="line-v" style="height: 24px;"></div>
+          <div class="arrow-down"></div>
+
+          <!-- Envia -->
+          <div class="no-novo cat-mensagem w-full">
+            <div class="header">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span class="flex-1">ENVIAR WHATSAPP</span>
+            </div>
+            <div class="body">
+              <p>"{{respostaIA}}"</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm">
+        <p class="font-bold text-violet-900 mb-2">🎯 Por que isso destrava infinitos cenários</p>
+        <ul class="text-xs text-violet-800 space-y-1 list-disc list-inside">
+          <li>Os mesmos nós podem ser <strong>recombinados</strong> pra fluxos completamente diferentes</li>
+          <li><strong>Aguardar resposta</strong> permite conversas multi-turn (ida-e-volta) — não só "IA responde e fim"</li>
+          <li><strong>Para cada</strong> + qualquer nó vira processamento em lote</li>
+          <li><strong>Buscar contato/ações/movimentações</strong> dá inteligência real — IA não inventa, lê do banco</li>
+          <li><strong>Extrair campos</strong> com tool calling = IA estruturada, não texto bruto</li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ PERGUNTAS ════════════════ -->
+    <section id="perguntas" class="space-y-4">
+      <h2 class="text-2xl font-bold flex items-center gap-2">❓ Antes de eu codar</h2>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 1</p>
+          <p class="text-sm font-semibold mb-2">O bug do campo personalizado era esse mesmo?</p>
+          <p class="text-xs text-slate-600">
+            Hipótese: você queria que <strong>a IA salvasse sozinha</strong>, mas hoje precisa
+            de passo manual. <code>ia_extrair_campos</code> resolve. Se era outro caso, me diz qual.
+          </p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 2</p>
+          <p class="text-sm font-semibold mb-2">Os 6 nós cobrem seus cenários?</p>
+          <p class="text-xs text-slate-600">
+            Pensei em casos genéricos. Tem algum caso específico seu que ainda não tá coberto?
+            Ex: "IA precisa <em>X</em> ação que não vi aqui".
+          </p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 3</p>
+          <p class="text-sm font-semibold mb-2">Tool calling agora ou depois?</p>
+          <p class="text-xs text-slate-600">
+            <strong>Com</strong> tool calling = IA estruturada confiável.
+            <strong>Sem</strong> tool calling = JSON-mode (funciona mas inventa às vezes).
+            Recomendo COM — pouca coisa a mais.
+          </p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Pergunta 4</p>
+          <p class="text-sm font-semibold mb-2">Visual do nó: ok ou ajustes?</p>
+          <p class="text-xs text-slate-600">
+            Header colorido + preview + chips. Pode ficar muito ocupado se nó tem muita config.
+            Quer manter assim ou simplificar?
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-4">
+        <p class="text-sm font-bold text-violet-900 mb-1">Plano de execução em 4 PRs (~1 dia cada)</p>
+        <ol class="text-xs text-violet-900/80 space-y-1 list-decimal list-inside">
+          <li><strong>PR-4</strong> — <code>ia_extrair_campos</code> + tool calling + avisos visuais quando config inconsistente. Resolve o bug.</li>
+          <li><strong>PR-5</strong> — <code>crm_buscar_contato</code>, <code>crm_listar_acoes_cliente</code>, <code>processo_buscar_movimentacoes</code>.</li>
+          <li><strong>PR-6</strong> — <code>whatsapp_aguardar_resposta</code>, <code>para_cada_item</code>, menu de opções automático.</li>
+          <li><strong>PR-7</strong> — Visual repaginado dos nós + tooltips ricos + validação inline + wizard primeiro fluxo.</li>
+        </ol>
+        <p class="text-[11px] text-violet-700 mt-2">
+          Cada PR roda <code>pnpm check + test</code> verde antes de seguir. Motor existente não muda
+          (zero regressão garantida).
+        </p>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="bg-slate-900 text-slate-400 text-center py-4 text-xs">
+    Mockup nós universais · SmartFlow · JuridFlow
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>

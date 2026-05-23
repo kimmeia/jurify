@@ -12,7 +12,7 @@
  * via prop `as`.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Braces } from "lucide-react";
@@ -21,6 +21,51 @@ export interface Variavel {
   path: string;
   label: string;
   exemplo: string;
+  /** Categoria semântica pra agrupar no drawer "Informações". Opcional. */
+  categoria?: string;
+}
+
+/** Label humano de cada categoria — usado pra agrupar o dropdown de variáveis. */
+const CATEGORIA_LABEL: Record<string, string> = {
+  passos: "Resultados de passos anteriores",
+  cliente: "Dados do cliente",
+  campos_personalizados: "Campos personalizados",
+  mensagem: "Mensagem / conversa",
+  pagamento: "Pagamento / cobrança",
+  acao: "Ação / processo",
+  agendamento: "Agendamento",
+  ia: "Resultados da IA",
+  outros: "Outras informações",
+};
+
+const CATEGORIA_ORDEM = [
+  "passos", "cliente", "campos_personalizados", "mensagem",
+  "pagamento", "acao", "agendamento", "ia", "outros",
+];
+
+/** Agrupa variáveis por categoria, na ordem canônica, pra render em seções. */
+function agruparPorCategoria(vars: Variavel[]): Array<{ categoria: string; label: string; itens: Variavel[] }> {
+  const mapa = new Map<string, Variavel[]>();
+  for (const v of vars) {
+    const cat = v.categoria || "outros";
+    const lista = mapa.get(cat) ?? [];
+    lista.push(v);
+    mapa.set(cat, lista);
+  }
+  const out: Array<{ categoria: string; label: string; itens: Variavel[] }> = [];
+  for (const cat of CATEGORIA_ORDEM) {
+    const itens = mapa.get(cat);
+    if (itens && itens.length > 0) {
+      out.push({ categoria: cat, label: CATEGORIA_LABEL[cat] || cat, itens });
+    }
+  }
+  // Categorias desconhecidas (não na ordem) vão no fim.
+  for (const [cat, itens] of mapa) {
+    if (!CATEGORIA_ORDEM.includes(cat) && itens.length > 0) {
+      out.push({ categoria: cat, label: CATEGORIA_LABEL[cat] || cat, itens });
+    }
+  }
+  return out;
 }
 
 interface VariableInputProps {
@@ -37,6 +82,43 @@ interface VariableInputProps {
   maxLength?: number;
   /** id do input pra label associar */
   id?: string;
+  /**
+   * Destaca as variáveis `{{...}}` com pill colorida no próprio campo
+   * (overlay sobre o textarea). Só funciona com `as="textarea"`.
+   */
+  highlight?: boolean;
+  /**
+   * Mostra abaixo do campo um preview do texto com as variáveis trocadas
+   * pelos exemplos — ajuda o usuário a ver como a mensagem real vai sair.
+   */
+  preview?: boolean;
+}
+
+/** Quebra o texto em partes, marcando os trechos `{{...}}` como variável. */
+function partesComVariaveis(texto: string): Array<{ tipo: "texto" | "var"; valor: string }> {
+  const out: Array<{ tipo: "texto" | "var"; valor: string }> = [];
+  const re = /\{\{[^}]+\}\}/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(texto)) !== null) {
+    if (m.index > last) out.push({ tipo: "texto", valor: texto.slice(last, m.index) });
+    out.push({ tipo: "var", valor: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < texto.length) out.push({ tipo: "texto", valor: texto.slice(last) });
+  return out;
+}
+
+/**
+ * Substitui `{{path}}` pelo exemplo da variável (ou pelo label) — usado no
+ * preview ao vivo. Variável desconhecida fica como está.
+ */
+function montarPreview(texto: string, variaveis: Variavel[]): string {
+  return texto.replace(/\{\{([^}]+)\}\}/g, (full, path: string) => {
+    const v = variaveis.find((x) => x.path === path.trim());
+    if (!v) return full;
+    return v.exemplo || v.label;
+  });
 }
 
 /**
@@ -68,10 +150,15 @@ export function VariableTrigger({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const filtrados = variaveis.filter(
-    (v) => v.path.toLowerCase().includes(filtro.toLowerCase()) ||
-           v.label.toLowerCase().includes(filtro.toLowerCase()),
-  );
+  const grupos = useMemo(() => {
+    const f = filtro.toLowerCase();
+    const filtrados = variaveis.filter(
+      (v) => v.path.toLowerCase().includes(f) || v.label.toLowerCase().includes(f),
+    );
+    return agruparPorCategoria(filtrados);
+  }, [variaveis, filtro]);
+
+  const total = grupos.reduce((s, g) => s + g.itens.length, 0);
 
   return (
     <div className="relative inline-block">
@@ -82,43 +169,48 @@ export function VariableTrigger({
           setOpen((v) => !v);
           setFiltro("");
         }}
-        title="Inserir variável"
-        className="inline-flex items-center justify-center h-5 w-5 rounded text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
+        title="Inserir informação"
+        className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
       >
         <Braces className="h-3 w-3" />
+        Inserir
       </button>
       {open && (
-        <div className="absolute z-50 right-0 top-full mt-1 w-72 max-h-64 overflow-auto rounded-md border bg-popover shadow-md">
-          <div className="sticky top-0 bg-popover border-b p-2">
+        <div className="absolute z-50 right-0 top-full mt-1 w-72 max-h-80 overflow-auto rounded-md border bg-popover shadow-lg">
+          <div className="sticky top-0 bg-popover border-b p-2 z-10">
             <input
               autoFocus
               type="text"
-              placeholder="Filtrar..."
+              placeholder="Buscar informação (ex: nome, cpf...)"
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
               className="w-full text-xs px-2 py-1 rounded border bg-background outline-none focus:ring-1 focus:ring-violet-400"
             />
           </div>
-          {filtrados.length === 0 ? (
-            <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma variável encontrada.</p>
+          {total === 0 ? (
+            <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma informação encontrada.</p>
           ) : (
-            <div className="py-1">
-              {filtrados.map((v) => (
-                <button
-                  key={v.path}
-                  type="button"
-                  onClick={() => {
-                    onInsert(v.path);
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-accent transition-colors"
-                >
-                  <code className="text-[11px] text-violet-600 font-mono">{`{{${v.path}}}`}</code>
-                  <p className="text-[11px] text-foreground mt-0.5">{v.label}</p>
-                  <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>
-                </button>
-              ))}
-            </div>
+            grupos.map((g) => (
+              <div key={g.categoria}>
+                <p className="px-3 py-1 text-[9px] uppercase tracking-wider font-bold text-muted-foreground bg-muted/40 sticky top-[41px]">
+                  {g.label}
+                </p>
+                {g.itens.map((v) => (
+                  <button
+                    key={v.path}
+                    type="button"
+                    onClick={() => {
+                      onInsert(v.path);
+                      setOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-colors"
+                  >
+                    <p className="text-[11.5px] text-foreground font-medium">{v.label}</p>
+                    {v.exemplo && <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>}
+                  </button>
+                ))}
+              </div>
+            ))
           )}
         </div>
       )}
@@ -136,11 +228,28 @@ export function VariableInput({
   rows = 3,
   maxLength,
   id,
+  highlight = false,
+  preview = false,
 }: VariableInputProps) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const [autocompleteOpen, setAutocompleteOpen] = useState(false);
   const [autocompleteFiltro, setAutocompleteFiltro] = useState("");
   const [posicaoCaret, setPosicaoCaret] = useState(0);
+
+  // Highlight só faz sentido em textarea. Métricas idênticas às do
+  // componente Textarea (px-3 py-2 text-base md:text-sm) garantem que o
+  // texto do backdrop alinhe exatamente com o do textarea por cima.
+  const usarHighlight = highlight && as === "textarea";
+  const metricasTextarea = "min-h-16 w-full rounded-md border px-3 py-2 text-base md:text-sm leading-normal";
+
+  // Mantém o scroll do backdrop sincronizado com o textarea (texto longo).
+  function syncScroll() {
+    if (backdropRef.current && inputRef.current) {
+      backdropRef.current.scrollTop = inputRef.current.scrollTop;
+      backdropRef.current.scrollLeft = inputRef.current.scrollLeft;
+    }
+  }
 
   // Detecta `{{...` na posição atual do caret pra abrir autocomplete.
   function detectarTrigger(novoValor: string, posCaret: number) {
@@ -204,21 +313,64 @@ export function VariableInput({
            v.label.toLowerCase().includes(autocompleteFiltro.toLowerCase()),
   );
 
+  const temVariavel = /\{\{[^}]+\}\}/.test(value);
+
   return (
     <div className="relative">
       {as === "textarea" ? (
-        <Textarea
-          ref={inputRef as any}
-          id={id}
-          value={value}
-          onChange={handleChange}
-          onKeyUp={handleKeyUp}
-          onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
-          placeholder={placeholder}
-          className={className}
-          rows={rows}
-          maxLength={maxLength}
-        />
+        usarHighlight ? (
+          <div className="relative">
+            {/* Backdrop: mesmo texto do textarea, mas com {{...}} em pill.
+                Mantém os MESMOS caracteres (não troca {{x}} por label) pra
+                não desalinhar o caret do textarea por cima. */}
+            <div
+              ref={backdropRef}
+              aria-hidden
+              className={`${metricasTextarea} ${className ?? ""} absolute inset-0 overflow-auto whitespace-pre-wrap break-words pointer-events-none border-transparent text-foreground`}
+            >
+              {partesComVariaveis(value).map((p, i) =>
+                p.tipo === "var" ? (
+                  <span
+                    key={i}
+                    className="rounded bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 ring-1 ring-violet-300/50"
+                  >
+                    {p.valor}
+                  </span>
+                ) : (
+                  <span key={i}>{p.valor}</span>
+                ),
+              )}
+              {/* newline final pra altura bater quando texto termina em \n */}
+              {"\n"}
+            </div>
+            <Textarea
+              ref={inputRef as any}
+              id={id}
+              value={value}
+              onChange={handleChange}
+              onKeyUp={handleKeyUp}
+              onScroll={syncScroll}
+              onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
+              placeholder={placeholder}
+              className={`${className ?? ""} relative bg-transparent text-transparent caret-foreground selection:bg-violet-200/40`}
+              rows={rows}
+              maxLength={maxLength}
+            />
+          </div>
+        ) : (
+          <Textarea
+            ref={inputRef as any}
+            id={id}
+            value={value}
+            onChange={handleChange}
+            onKeyUp={handleKeyUp}
+            onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
+            placeholder={placeholder}
+            className={className}
+            rows={rows}
+            maxLength={maxLength}
+          />
+        )
       ) : (
         <Input
           ref={inputRef as any}
@@ -233,6 +385,17 @@ export function VariableInput({
         />
       )}
 
+      {preview && temVariavel && (
+        <div className="mt-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-muted/40 px-2.5 py-1.5">
+          <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-0.5">
+            👁 Como vai sair pro cliente
+          </p>
+          <p className="text-[11px] text-foreground/80 italic leading-snug whitespace-pre-wrap">
+            {montarPreview(value, variaveis)}
+          </p>
+        </div>
+      )}
+
       {autocompleteOpen && filtrados.length > 0 && (
         <div className="absolute z-50 left-0 top-full mt-1 w-full max-h-48 overflow-auto rounded-md border bg-popover shadow-md">
           <div className="py-1">
@@ -242,10 +405,10 @@ export function VariableInput({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()} // evita blur do input
                 onClick={() => inserirVariavel(v.path)}
-                className="w-full text-left px-3 py-1.5 hover:bg-accent transition-colors"
+                className="w-full text-left px-3 py-1.5 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-colors"
               >
-                <code className="text-[11px] text-violet-600 font-mono">{v.path}</code>
-                <p className="text-[10px] text-muted-foreground">{v.label}</p>
+                <p className="text-[11.5px] text-foreground font-medium">{v.label}</p>
+                {v.exemplo && <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>}
               </button>
             ))}
           </div>

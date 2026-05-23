@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — Visual dos nós (PR-7)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* ───── Nó atual (ANTES) ───── */
+    .no-antigo {
+      border-radius: 8px;
+      border: 2px solid #e2e8f0;
+      background: white;
+      min-width: 220px;
+      max-width: 260px;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    }
+
+    /* ───── Nó novo (DEPOIS) ───── */
+    .no-novo {
+      border-radius: 12px;
+      border: 2px solid transparent;
+      background: white;
+      min-width: 240px;
+      max-width: 280px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
+      overflow: hidden;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .no-novo:hover {
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+      transform: translateY(-1px);
+    }
+    .no-novo.selecionado {
+      box-shadow: 0 0 0 3px rgb(139 92 246 / 0.3), 0 4px 12px rgb(0 0 0 / 0.1);
+    }
+    .no-novo .header {
+      padding: 8px 10px 8px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: white;
+      letter-spacing: 0.025em;
+    }
+    .no-novo .header .titulo {
+      flex: 1;
+      text-transform: uppercase;
+      font-size: 10.5px;
+    }
+    .no-novo .body {
+      padding: 10px 12px;
+      font-size: 11px;
+      background: white;
+      color: #475569;
+      line-height: 1.5;
+    }
+    .no-novo .body strong { color: #1e293b; font-weight: 600; }
+    .no-novo .body .config-row {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      font-size: 10.5px;
+    }
+    .no-novo .body .config-key {
+      color: #94a3b8;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      min-width: 55px;
+    }
+    .no-novo .footer {
+      padding: 6px 10px 8px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .no-novo .footer-label {
+      font-size: 8.5px;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 2px;
+    }
+    .chip-var {
+      padding: 2px 6px;
+      background: rgb(237 233 254);
+      color: rgb(109 40 217);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip-var:hover {
+      background: rgb(196 181 253);
+      transform: scale(1.05);
+    }
+    /* Status dot */
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.4);
+    }
+    .dot-ok { background: #10b981; }
+    .dot-warn { background: #f59e0b; }
+    .dot-err { background: #ef4444; }
+
+    /* ───── Cores por categoria ───── */
+    .cat-gatilho .header { background: linear-gradient(135deg, #3b82f6, #06b6d4); }
+    .cat-gatilho { border-color: #93c5fd; border-style: dashed; }
+    .cat-mensagem .header { background: linear-gradient(135deg, #14b8a6, #0891b2); }
+    .cat-mensagem { border-color: #5eead4; }
+    .cat-ia .header { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+    .cat-ia { border-color: #c4b5fd; }
+    .cat-asaas .header { background: linear-gradient(135deg, #10b981, #0d9488); }
+    .cat-asaas { border-color: #6ee7b7; }
+    .cat-calcom .header { background: linear-gradient(135deg, #f97316, #f59e0b); }
+    .cat-calcom { border-color: #fdba74; }
+    .cat-crm .header { background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+    .cat-crm { border-color: #d8b4fe; }
+    .cat-processos .header { background: linear-gradient(135deg, #6366f1, #2563eb); }
+    .cat-processos { border-color: #a5b4fc; }
+    .cat-kanban .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+    .cat-kanban { border-color: #c7d2fe; }
+    .cat-fluxo .header { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .cat-fluxo { border-color: #fcd34d; }
+
+    /* Handles */
+    .handle-top, .handle-bottom {
+      width: 10px; height: 10px;
+      background: white;
+      border: 2px solid #94a3b8;
+      border-radius: 50%;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .handle-top { top: -6px; }
+    .handle-bottom { bottom: -6px; }
+
+    /* Handles laterais (condicional/loop) */
+    .handle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 12px;
+      font-size: 10px;
+      position: relative;
+    }
+    .handle-row .label {
+      flex: 1;
+      color: #475569;
+    }
+    .handle-row .label.italic {
+      font-style: italic;
+      color: #94a3b8;
+    }
+    .handle-right {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      border: 2px solid white;
+    }
+
+    /* Connector linhas */
+    .arrow-down {
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid #a78bfa;
+      margin: 0 auto;
+    }
+    .line-v {
+      width: 2px;
+      background: linear-gradient(to bottom, #c4b5fd, #a78bfa);
+      margin: 0 auto;
+      border-radius: 2px;
+    }
+    .section-divider {
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+      height: 1px;
+    }
+
+    /* Validação inline */
+    .validacao {
+      padding: 4px 8px;
+      font-size: 9.5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border-top: 1px solid;
+      line-height: 1.4;
+    }
+    .validacao-erro { background: rgb(254 226 226); color: rgb(153 27 27); border-top-color: rgb(252 165 165); }
+    .validacao-aviso { background: rgb(254 243 199); color: rgb(146 64 14); border-top-color: rgb(252 211 77); }
+
+    /* Tooltip rich */
+    .tooltip {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100%);
+      background: rgb(15 23 42);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      max-width: 280px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+      pointer-events: none;
+    }
+    .tooltip code {
+      background: rgba(255,255,255,0.15);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 10px;
+    }
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid rgb(15 23 42);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 px-6 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center">
+        <i data-lucide="layout-template" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold">PR-7</p>
+        <h1 class="text-lg font-bold">SmartFlow — Visual repaginado dos nós</h1>
+      </div>
+      <div class="flex gap-2 text-xs">
+        <a href="#comparacao" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">📐 Antes vs Depois</a>
+        <a href="#galeria" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🎨 Galeria</a>
+        <a href="#estados" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">⚡ Estados</a>
+        <a href="#tooltips" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">💡 Tooltips</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto p-6 space-y-12">
+
+    <!-- ════════════════ NOTA ════════════════ -->
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+      <p class="font-semibold mb-1 flex items-center gap-1.5">
+        <i data-lucide="info" class="w-4 h-4"></i> Sobre este mockup
+      </p>
+      <p class="text-xs">
+        Visual proposto pros nós do canvas. <strong>Header colorido por categoria</strong>
+        (em vez de chip pálido), <strong>preview da configuração</strong> dentro do nó
+        (em vez de "3 categorias" genérico), e <strong>chips das variáveis</strong>
+        que ele publica (clica e copia <code>{`{{var}}`}</code>). Status dot + validação
+        inline pra mostrar problemas de config sem precisar abrir o painel.
+        <strong>Zero alteração no motor</strong> — só fachada visual.
+      </p>
+    </div>
+
+    <!-- ════════════════ ANTES vs DEPOIS ════════════════ -->
+    <section id="comparacao" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Comparação</p>
+        <h2 class="text-2xl font-bold">📐 Antes vs Depois (lado a lado)</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- ANTES -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold px-2 py-1 rounded bg-slate-300 text-slate-800">ANTES</span>
+            <p class="text-sm text-slate-600">o que está em produção hoje</p>
+          </div>
+
+          <!-- Canvas mock -->
+          <div class="rounded-xl border border-slate-300 bg-slate-100 p-8 space-y-6">
+            <div class="flex justify-center">
+              <div class="no-antigo relative">
+                <div class="handle-top"></div>
+                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-md bg-violet-100 text-violet-700">
+                  <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                  <span class="text-xs font-semibold">Classificar intenção (IA)</span>
+                </div>
+                <div class="px-2.5 py-1.5 text-[10px] text-slate-600 border-t bg-slate-50">
+                  3 categorias
+                </div>
+                <div class="handle-bottom"></div>
+              </div>
+            </div>
+            <div class="flex justify-center">
+              <div class="no-antigo relative">
+                <div class="handle-top"></div>
+                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-md bg-teal-100 text-teal-700">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                  <span class="text-xs font-semibold">Enviar mensagem</span>
+                </div>
+                <div class="px-2.5 py-1.5 text-[10px] text-slate-600 border-t bg-slate-50">
+                  Sem template
+                </div>
+                <div class="handle-bottom"></div>
+              </div>
+            </div>
+            <div class="flex justify-center">
+              <div class="no-antigo relative">
+                <div class="handle-top"></div>
+                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-md bg-indigo-100 text-indigo-700">
+                  <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                  <span class="text-xs font-semibold">Criar card Kanban</span>
+                </div>
+                <div class="px-2.5 py-1.5 text-[10px] text-slate-600 border-t bg-slate-50">
+                  Sem funil/coluna
+                </div>
+                <div class="handle-bottom"></div>
+              </div>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-600 mt-3 space-y-1">
+            <li>• <strong>Tudo a mesma cor pálida</strong> — não diferencia categoria</li>
+            <li>• "3 categorias" — não diz <em>quais</em></li>
+            <li>• "Sem template" — sinal mudo de problema</li>
+            <li>• <strong>Não mostra que variável publica</strong> — usuário precisa decorar</li>
+            <li>• Sem indicação de erro/aviso de config</li>
+          </ul>
+        </div>
+
+        <!-- DEPOIS -->
+        <div>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs font-bold px-2 py-1 rounded bg-violet-600 text-white">DEPOIS</span>
+            <p class="text-sm text-slate-600">visual repaginado proposto</p>
+          </div>
+
+          <div class="rounded-xl border border-slate-300 bg-gradient-to-br from-slate-100 via-white to-violet-50/20 p-8 space-y-6">
+            <div class="flex justify-center">
+              <div class="no-novo cat-ia">
+                <div class="handle-top"></div>
+                <div class="header">
+                  <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                  <span class="titulo">Classificar intenção · IA</span>
+                  <span class="status-dot dot-ok"></span>
+                </div>
+                <div class="body">
+                  <div class="config-row">
+                    <span class="config-key">Categorias</span>
+                    <span><strong>agendar</strong>, dúvida, emergência</span>
+                  </div>
+                  <div class="config-row mt-1">
+                    <span class="config-key">Modelo</span>
+                    <span>Claude Haiku</span>
+                  </div>
+                </div>
+                <div class="footer">
+                  <span class="footer-label">📤 publica</span>
+                  <span class="chip-var">{{intencao}}</span>
+                </div>
+                <div class="handle-bottom"></div>
+              </div>
+            </div>
+            <div class="flex justify-center">
+              <div class="no-novo cat-mensagem">
+                <div class="handle-top"></div>
+                <div class="header">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                  <span class="titulo">Enviar mensagem · WhatsApp</span>
+                  <span class="status-dot dot-warn"></span>
+                </div>
+                <div class="body">
+                  <div class="config-row">
+                    <span class="config-key">Template</span>
+                    <span class="italic text-amber-700">— vazio —</span>
+                  </div>
+                </div>
+                <div class="validacao validacao-aviso">
+                  <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                  Template vazio — vai enviar <code class="text-[9px] bg-amber-100 px-1 rounded">{{respostaIA}}</code> se houver
+                </div>
+                <div class="footer">
+                  <span class="footer-label">📤 publica</span>
+                  <span class="chip-var">{{mensagensEnviadas}}</span>
+                </div>
+                <div class="handle-bottom"></div>
+              </div>
+            </div>
+            <div class="flex justify-center">
+              <div class="no-novo cat-kanban">
+                <div class="handle-top"></div>
+                <div class="header">
+                  <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                  <span class="titulo">Criar card · Kanban</span>
+                  <span class="status-dot dot-warn"></span>
+                </div>
+                <div class="body">
+                  <div class="config-row">
+                    <span class="config-key">Funil</span>
+                    <span class="italic text-amber-700">— usa o primeiro —</span>
+                  </div>
+                </div>
+                <div class="footer">
+                  <span class="footer-label">📤 publica</span>
+                  <span class="chip-var">{{kanbanCardId}}</span>
+                </div>
+                <div class="handle-bottom"></div>
+              </div>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-600 mt-3 space-y-1">
+            <li>• <strong>Header com gradient da categoria</strong> (violeta=IA, ciano=mensagem, índigo=Kanban)</li>
+            <li>• <strong>Preview da config</strong> com chave + valor — bate o olho e entende</li>
+            <li>• <strong>Chips de variáveis publicadas</strong> — clica e copia <code>{`{{var}}`}</code></li>
+            <li>• <strong>Status dot</strong> (verde/âmbar/vermelho) + <strong>validação inline</strong></li>
+            <li>• Tipografia e espaçamento melhores — respira mais</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ GALERIA POR CATEGORIA ════════════════ -->
+    <section id="galeria" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Galeria</p>
+        <h2 class="text-2xl font-bold">🎨 Todos os nós com visual novo</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Mostra cada categoria do app com config preenchida realista. Cada cor
+        identifica de relance o tipo do bloco.
+      </p>
+
+      <div class="bg-gradient-to-br from-slate-100 via-white to-violet-50/20 rounded-2xl border border-slate-200 p-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 justify-items-center">
+
+          <!-- GATILHO -->
+          <div class="no-novo cat-gatilho">
+            <div class="header">
+              <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+              <span class="titulo">⚡ Gatilho · Mensagem</span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Canais</span><span><strong>Todos</strong></span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{mensagem}}</span>
+              <span class="chip-var">{{contatoId}}</span>
+              <span class="chip-var">+3</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- IA — Classificar -->
+          <div class="no-novo cat-ia">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Classificar intenção · IA</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Categorias</span><span><strong>agendar</strong>, dúvida, emergência</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{intencao}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- IA — Responder -->
+          <div class="no-novo cat-ia">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Responder · IA</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Agente</span><span><strong>"Atendimento processual"</strong></span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{respostaIA}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- IA — Extrair Campos -->
+          <div class="no-novo cat-ia">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Extrair campos · IA</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">De</span><span><code class="text-[9.5px]">{{mensagem}}</code></span></div>
+              <div class="config-row"><span class="config-key">Campos</span><span><strong>cpf</strong>, email, dataNasc</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{extracao.cpf}}</span>
+              <span class="chip-var">{{extracao.email}}</span>
+              <span class="chip-var">+1</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- MENSAGEM — Enviar -->
+          <div class="no-novo cat-mensagem">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Enviar · WhatsApp</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Texto</span><span>"Olá <strong>{{nomeCliente}}</strong>, sobre seu processo..."</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{mensagensEnviadas}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- MENSAGEM — Aguardar -->
+          <div class="no-novo cat-mensagem">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="pause" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Aguardar resposta</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Pergunta</span><span>"Qual horário prefere?"</span></div>
+              <div class="config-row"><span class="config-key">Opções</span><span><strong>3</strong> · timeout <strong>24h</strong></span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{respostaUsuario}}</span>
+              <span class="chip-var">{{opcaoEscolhida}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- CRM — Buscar Contato -->
+          <div class="no-novo cat-crm">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="user-search" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Buscar contato · CRM</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Por</span><span><strong>CPF/CNPJ</strong></span></div>
+              <div class="config-row"><span class="config-key">Valor</span><span><code class="text-[9.5px]">{{extracao.cpf}}</code></span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{contatoEncontrado}}</span>
+              <span class="chip-var">{{contatoId}}</span>
+              <span class="chip-var">+3</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- CRM — Listar ações -->
+          <div class="no-novo cat-crm">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Listar ações · CRM</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Cliente</span><span><code class="text-[9.5px]">{{contatoId}}</code></span></div>
+              <div class="config-row"><span class="config-key">Filtro</span><span><strong>todos</strong> · limite 10</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{acoes}}</span>
+              <span class="chip-var">{{acoesQuantidade}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- PROCESSOS — Movimentações -->
+          <div class="no-novo cat-processos">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Buscar movimentações</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Processo</span><span><code class="text-[9.5px]">{{acaoEscolhida.id}}</code></span></div>
+              <div class="config-row"><span class="config-key">Janela</span><span><strong>30 dias</strong> · todos os tipos</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{movimentacoes}}</span>
+              <span class="chip-var">+2</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- FLUXO — Condicional -->
+          <div class="no-novo cat-fluxo">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Condição · Fluxo</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Condições</span><span><strong>3 ramos</strong> + fallback</span></div>
+            </div>
+            <div class="border-t bg-muted/20 py-1">
+              <div class="handle-row">
+                <span class="label">Quer agendar</span>
+                <span class="handle-right" style="background: #22c55e;"></span>
+              </div>
+              <div class="handle-row">
+                <span class="label">Tem dúvida</span>
+                <span class="handle-right" style="background: #22c55e;"></span>
+              </div>
+              <div class="handle-row">
+                <span class="label italic">fallback</span>
+                <span class="handle-right" style="background: #f59e0b;"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- FLUXO — Para Cada Item -->
+          <div class="no-novo cat-fluxo">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="repeat-2" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Para cada item · Loop</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Lista</span><span><code class="text-[9.5px]">{{acoes}}</code></span></div>
+              <div class="config-row"><span class="config-key">Variável</span><span><code class="text-[9.5px]">item</code> · limite 20</span></div>
+            </div>
+            <div class="border-t bg-muted/20 py-1">
+              <div class="handle-row">
+                <span class="label">🔁 corpo do loop</span>
+                <span class="handle-right" style="background: #f59e0b;"></span>
+              </div>
+              <div class="handle-row">
+                <span class="label">depois (terminou)</span>
+                <span class="handle-right" style="background: #3b82f6;"></span>
+              </div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{item}}</span>
+              <span class="chip-var">{{indice}}</span>
+            </div>
+          </div>
+
+          <!-- ASAAS — Gerar Cobrança -->
+          <div class="no-novo cat-asaas">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="banknote" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Gerar cobrança · Asaas</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Valor</span><span>R$ <strong>{{pagamentoValor}}</strong></span></div>
+              <div class="config-row"><span class="config-key">Tipo</span><span><strong>PIX</strong> · vence em 7d</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{pagamentoId}}</span>
+              <span class="chip-var">{{pagamentoLink}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- CAL.COM — Buscar horários -->
+          <div class="no-novo cat-calcom">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Buscar horários · Cal.com</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Duração</span><span><strong>30 min</strong></span></div>
+              <div class="config-row"><span class="config-key">Janela</span><span>próximos 7 dias</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{horariosDisponiveis}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+          <!-- KANBAN — Criar Card -->
+          <div class="no-novo cat-kanban">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Criar card · Kanban</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Funil</span><span><strong>Atendimento</strong></span></div>
+              <div class="config-row"><span class="config-key">Coluna</span><span><strong>Triagem</strong></span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤 publica</span>
+              <span class="chip-var">{{kanbanCardId}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ ESTADOS (selecionado/erro/warn) ════════════════ -->
+    <section id="estados" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Estados</p>
+        <h2 class="text-2xl font-bold">⚡ Como os 4 estados aparecem no canvas</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Estado visual ajuda o usuário a entender o que precisa de atenção.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+
+        <!-- OK -->
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-emerald-700 uppercase">Pronto · OK</p>
+          <div class="no-novo cat-ia">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Extrair campos · IA</span>
+              <span class="status-dot dot-ok" title="OK"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Campos</span><span><strong>cpf</strong>, email</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤</span>
+              <span class="chip-var">{{extracao.cpf}}</span>
+              <span class="chip-var">+1</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+          <p class="text-[10px] text-slate-500">Config completa, sem alertas.</p>
+        </div>
+
+        <!-- WARN -->
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-amber-700 uppercase">Aviso · Verificar</p>
+          <div class="no-novo cat-asaas">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="banknote" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Gerar cobrança · Asaas</span>
+              <span class="status-dot dot-warn"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Valor</span><span class="italic text-amber-700">— sem valor —</span></div>
+            </div>
+            <div class="validacao validacao-aviso">
+              <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+              Valor vazio — vai falhar
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+          <p class="text-[10px] text-slate-500">Funciona, mas tem ressalva.</p>
+        </div>
+
+        <!-- ERRO -->
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-red-700 uppercase">Erro · Não vai rodar</p>
+          <div class="no-novo cat-crm" style="border-color: rgb(252 165 165);">
+            <div class="handle-top"></div>
+            <div class="header" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+              <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Listar ações · CRM</span>
+              <span class="status-dot dot-err"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Cliente</span><span class="italic text-red-700">— sem contatoId —</span></div>
+            </div>
+            <div class="validacao validacao-erro">
+              <i data-lucide="alert-circle" class="w-3 h-3"></i>
+              Gatilho atual não popula <code class="text-[9px] bg-red-100 px-1 rounded">contatoId</code>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+          <p class="text-[10px] text-slate-500">Vai dar erro em runtime.</p>
+        </div>
+
+        <!-- SELECIONADO -->
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-violet-700 uppercase">Selecionado</p>
+          <div class="no-novo cat-mensagem selecionado">
+            <div class="handle-top"></div>
+            <div class="header">
+              <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+              <span class="titulo">Enviar · WhatsApp</span>
+              <span class="status-dot dot-ok"></span>
+            </div>
+            <div class="body">
+              <div class="config-row"><span class="config-key">Texto</span><span>"Olá <strong>{{nomeCliente}}</strong>!"</span></div>
+            </div>
+            <div class="footer">
+              <span class="footer-label">📤</span>
+              <span class="chip-var">{{mensagensEnviadas}}</span>
+            </div>
+            <div class="handle-bottom"></div>
+          </div>
+          <p class="text-[10px] text-slate-500">Sombra violeta + painel direito aberto.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ TOOLTIPS ════════════════ -->
+    <section id="tooltips" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">UX</p>
+        <h2 class="text-2xl font-bold">💡 Tooltips ricos no painel de config</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Hover em qualquer label do painel direito mostra a explicação completa
+        com exemplo. Não precisa decorar nem abrir docs.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Tooltip 1 -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <p class="text-sm font-bold mb-3 text-slate-700">Antes (sem tooltip)</p>
+          <div class="bg-slate-50 p-4 rounded">
+            <label class="text-xs font-medium text-slate-700">Chave</label>
+            <input type="text" placeholder="cpf" class="mt-1 w-full px-2 py-1 text-xs border border-slate-300 rounded" disabled>
+            <p class="text-[10px] text-slate-500 mt-1">Nome do campo personalizado.</p>
+          </div>
+          <p class="text-xs text-slate-600 mt-3">Usuário fica perdido: "que chaves existem? camelCase? com underscore?"</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <p class="text-sm font-bold mb-3 text-violet-700">Depois (hover na label)</p>
+          <div class="bg-slate-50 p-4 rounded relative" style="margin-top: 80px;">
+            <div class="tooltip" style="top: -8px;">
+              <p class="font-bold mb-1">Chave do campo personalizado</p>
+              <p>Nome técnico do campo, em <code>camelCase</code>. Ex: <code>cpf</code>, <code>dataAniversario</code>, <code>numeroOAB</code>.</p>
+              <p class="mt-1">Cadastre em <strong>Configurações → Campos personalizados</strong>.</p>
+            </div>
+            <label class="text-xs font-medium text-violet-700 flex items-center gap-1 cursor-help">
+              Chave <i data-lucide="help-circle" class="w-3 h-3"></i>
+            </label>
+            <input type="text" placeholder="cpf" class="mt-1 w-full px-2 py-1 text-xs border border-violet-300 rounded">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sneak preview do wizard -->
+      <div class="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-6">
+        <p class="text-sm font-bold mb-2 text-violet-900 flex items-center gap-1.5">
+          <i data-lucide="wand-sparkles" class="w-4 h-4"></i>
+          Wizard "Primeiro cenário"
+        </p>
+        <p class="text-xs text-violet-800 mb-3">
+          Cenário novo abre num modal de 3 passos em vez de canvas em branco.
+          Quem nunca usou monta o primeiro fluxo sem precisar ler nada.
+        </p>
+        <div class="bg-white rounded-lg p-4 grid grid-cols-3 gap-2 text-xs">
+          <div class="border border-violet-300 rounded p-3 bg-violet-50">
+            <p class="font-bold text-violet-900 mb-1">1. Quando rodar?</p>
+            <p class="text-violet-700">Mensagem chega? Cliente paga? Hora marcada?</p>
+          </div>
+          <div class="border border-slate-200 rounded p-3">
+            <p class="font-bold text-slate-700 mb-1">2. Fazer o quê?</p>
+            <p class="text-slate-500">Responder · Criar card · Cobrar · Custom</p>
+          </div>
+          <div class="border border-slate-200 rounded p-3">
+            <p class="font-bold text-slate-700 mb-1">3. Pronto!</p>
+            <p class="text-slate-500">Cenário criado com template editável</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ RESUMO ════════════════ -->
+    <section class="space-y-4">
+      <h2 class="text-2xl font-bold flex items-center gap-2">📦 Resumo do PR-7</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Componente</p>
+          <p class="text-sm font-semibold mb-2">PassoNodeView repaginado</p>
+          <p class="text-xs text-slate-600">
+            Header gradient por categoria + body com preview da config (chave/valor
+            formatado) + footer com chips das variáveis publicadas (clica e copia
+            <code>{`{{var}}`}</code>) + status dot + validação inline.
+          </p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">UX</p>
+          <p class="text-sm font-semibold mb-2">Tooltips + validação visível</p>
+          <p class="text-xs text-slate-600">
+            Cada label do painel direito ganha tooltip com exemplo. Validação
+            que hoje só aparece no painel também vira chip vermelho/âmbar no
+            próprio nó — usuário vê problema sem clicar.
+          </p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4">
+          <p class="text-xs uppercase font-bold text-violet-600 mb-1">Onboarding</p>
+          <p class="text-sm font-semibold mb-2">Wizard "primeiro fluxo"</p>
+          <p class="text-xs text-slate-600">
+            Cenário novo abre num modal de 3 passos guiados em vez de canvas em
+            branco. Cria um cenário pré-configurado que o usuário só edita.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-4 text-sm">
+        <p class="font-bold text-violet-900 mb-1">Zero alteração no motor</p>
+        <p class="text-xs text-violet-800">
+          Tudo é frontend — função pura <code>resumirConfigParaNo(tipo, config)</code>
+          que devolve as linhas de preview, mesma estrutura que o painel direito
+          usa pra renderizar. Os 2085 testes do backend continuam intocados.
+        </p>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-xl p-4 text-sm">
+        <p class="font-bold mb-2 text-slate-700">Pergunta antes de eu codar</p>
+        <ol class="text-xs text-slate-600 space-y-1 list-decimal list-inside">
+          <li>Visual proposto (header gradient + preview + chips) — <strong>aprovado?</strong></li>
+          <li>Status dot + validação inline (vermelho/âmbar) — <strong>aprovado?</strong></li>
+          <li>Tooltips ricos no painel direito — <strong>aprovado?</strong></li>
+          <li>Wizard "primeiro fluxo" — <strong>quer agora ou deixa pra depois?</strong></li>
+        </ol>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="bg-slate-900 text-slate-400 text-center py-4 text-xs">
+    PR-7 mockup · SmartFlow · JuridFlow
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
