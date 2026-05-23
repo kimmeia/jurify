@@ -648,6 +648,62 @@ function DiagnosticoDivergenciaDialog({
               </Table>
             </section>
 
+            {data.saudeValorLiquido && (
+              <section className="rounded-lg border border-red-200 bg-red-50/40 dark:bg-red-950/20 p-3">
+                <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-2">
+                  Saúde do valor líquido (netValue)
+                </h3>
+                <div className="grid grid-cols-4 gap-2 text-xs mb-3">
+                  <div>
+                    <p className="text-red-700 dark:text-red-300">Sem líquido (null)</p>
+                    <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoNull}</p>
+                  </div>
+                  <div>
+                    <p className="text-red-700 dark:text-red-300">Líquido = 0</p>
+                    <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoZero}</p>
+                  </div>
+                  <div>
+                    <p className="text-red-700 dark:text-red-300">Suspeitos (&lt;80% do bruto)</p>
+                    <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoSuspeito}</p>
+                  </div>
+                  <div>
+                    <p className="text-red-700 dark:text-red-300">OK</p>
+                    <p className="font-bold tabular-nums">{data.saudeValorLiquido.nLiquidoOk}</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-red-800 dark:text-red-200 mb-2">
+                  Se "Suspeitos" for alto, o netValue desses está corrompido (gravado errado no
+                  sync/webhook). Top 20 cobranças com maior diferença bruto−líquido:
+                </p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-[10px]">Status</TableHead>
+                      <TableHead className="text-[10px]">Forma</TableHead>
+                      <TableHead className="text-[10px]">Descrição</TableHead>
+                      <TableHead className="text-[10px] text-right">Bruto</TableHead>
+                      <TableHead className="text-[10px] text-right">Líquido</TableHead>
+                      <TableHead className="text-[10px] text-right">Gap %</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.saudeValorLiquido.topOutliers.map((o: any) => (
+                      <TableRow key={o.id}>
+                        <TableCell className="text-[10px] font-mono">{o.status}</TableCell>
+                        <TableCell className="text-[10px]">{o.formaPagamento ?? "—"}</TableCell>
+                        <TableCell className="text-[10px] max-w-[160px] truncate">{o.descricao ?? "—"}</TableCell>
+                        <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(o.valor)}</TableCell>
+                        <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(o.valorLiquido ?? 0)}</TableCell>
+                        <TableCell className="text-[10px] text-right tabular-nums font-medium text-red-700">
+                          {o.gapPercent.toFixed(1)}%
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
+
             {data.recebidoEmCash.count > 0 && (
               <section>
                 <h3 className="text-sm font-semibold text-slate-800 mb-2">
