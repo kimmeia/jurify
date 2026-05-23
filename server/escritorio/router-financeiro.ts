@@ -1105,6 +1105,17 @@ export const financeiroRouter = router({
         0,
       );
 
+      // Quebra das cobranças da API por status — revela quantas são
+      // RECEIVED (caem em "Recebidas" do painel) vs RECEIVED_IN_CASH
+      // (pago manual, painel não conta). Explica a diferença API vs painel.
+      const asaasPorStatus = new Map<string, { count: number; value: number }>();
+      for (const c of asaasMap.values()) {
+        const cur = asaasPorStatus.get(c.status) ?? { count: 0, value: 0 };
+        cur.count++;
+        cur.value += c.value;
+        asaasPorStatus.set(c.status, cur);
+      }
+
       // 2) Jurify: cobranças com status pago + dataPagamento no período
       const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
       const jurifyRows = await db
@@ -1174,6 +1185,9 @@ export const financeiroRouter = router({
         periodo: { inicio: input.dataInicio, fim: input.dataFim },
         totalAsaas: { value: totalAsaasValue, count: asaasMap.size },
         totalJurify: { value: totalJurifyValue, count: jurifyRows.length },
+        asaasPorStatus: Array.from(asaasPorStatus.entries())
+          .map(([status, v]) => ({ status, count: v.count, value: v.value }))
+          .sort((a, b) => b.value - a.value),
         diferenca: totalJurifyValue - totalAsaasValue,
         soNoJurify: {
           itens: soNoJurify.slice(0, 100),
