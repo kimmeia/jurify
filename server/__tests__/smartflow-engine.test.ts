@@ -24,6 +24,10 @@ import {
 function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): SmartflowExecutores {
   return {
     chamarIA: vi.fn().mockResolvedValue("duvida"),
+    extrairCamposIA: vi.fn().mockResolvedValue({}),
+    buscarContatoCrm: vi.fn().mockResolvedValue(null),
+    listarAcoesCliente: vi.fn().mockResolvedValue([]),
+    buscarMovimentacoesProcesso: vi.fn().mockResolvedValue([]),
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
@@ -173,6 +177,935 @@ describe("SmartFlow Engine", () => {
 
       expect(resultado.sucesso).toBe(false);
       expect(resultado.erro).toContain("Agente inativo");
+    });
+  });
+
+  describe("ia_extrair_campos", () => {
+    it("salva campos extraídos em ctx.extracao", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({
+        cpf: "123.456.789-00",
+        email: "joao@example.com",
+      });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: {
+            campos: [
+              { chave: "cpf", tipo: "cpf" },
+              { chave: "email", tipo: "email" },
+            ],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { mensagem: "meu CPF é 123.456.789-00 e email joao@example.com" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.extracao).toEqual({
+        cpf: "123.456.789-00",
+        email: "joao@example.com",
+      });
+      // chamou o extrator com os campos certos
+      expect(extrairCamposIA).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mensagem: "meu CPF é 123.456.789-00 e email joao@example.com",
+          campos: [
+            expect.objectContaining({ chave: "cpf", tipo: "cpf" }),
+            expect.objectContaining({ chave: "email", tipo: "email" }),
+          ],
+        }),
+      );
+    });
+
+    it("falha graciosamente sem campos configurados", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_extrair_campos", config: { campos: [] } },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("pelo menos 1 campo");
+    });
+
+    it("falha quando a mensagem-fonte está vazia", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "cpf", tipo: "cpf" }] },
+        },
+      ];
+
+      // sem `mensagem` no contexto
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("vazia");
+    });
+
+    it("usa fonteMensagem customizada (ex: respostaUsuario)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ cpf: "999" });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: {
+            fonteMensagem: "respostaUsuario",
+            campos: [{ chave: "cpf", tipo: "cpf" }],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { respostaUsuario: "999", mensagem: "outra coisa" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(extrairCamposIA).toHaveBeenCalledWith(
+        expect.objectContaining({ mensagem: "999" }),
+      );
+    });
+
+    it("persiste campos com persistir=true quando há contatoId", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({
+        cpf: "123",
+        nomeFantasia: "Joaquim",
+      });
+      const definirCampoPersonalizadoCliente = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: {
+            campos: [
+              { chave: "cpf", tipo: "cpf", persistir: true },
+              { chave: "nomeFantasia", tipo: "texto", persistir: false },
+            ],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { mensagem: "...", contatoId: 42 },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // Só cpf foi persistido (persistir=true); nomeFantasia não.
+      expect(definirCampoPersonalizadoCliente).toHaveBeenCalledTimes(1);
+      expect(definirCampoPersonalizadoCliente).toHaveBeenCalledWith({
+        contatoId: 42,
+        chave: "cpf",
+        valor: "123",
+      });
+      // Espelha em cliente.campos
+      const cliente = resultado.contexto.cliente as any;
+      expect(cliente?.campos?.cpf).toBe("123");
+    });
+
+    it("não persiste quando não há contatoId no contexto (não falha, só pula)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ cpf: "123" });
+      const definirCampoPersonalizadoCliente = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "cpf", tipo: "cpf", persistir: true }] },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "..." }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(definirCampoPersonalizadoCliente).not.toHaveBeenCalled();
+      // Mas ainda salva em ctx.extracao
+      expect(resultado.contexto.extracao).toEqual({ cpf: "123" });
+    });
+
+    it("não derruba o passo quando persistência falha (catálogo não tem chave)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ chaveDesconhecida: "valor" });
+      const definirCampoPersonalizadoCliente = vi
+        .fn()
+        .mockRejectedValue(new Error("Campo personalizado \"chaveDesconhecida\" não existe"));
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "chaveDesconhecida", tipo: "texto", persistir: true }] },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { mensagem: "...", contatoId: 42 },
+        exec,
+      );
+
+      // Extração funcionou — persistência opcional, falha silenciosa.
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.extracao).toEqual({ chaveDesconhecida: "valor" });
+    });
+
+    it("mescla com extração anterior (não sobrescreve campos já no contexto)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ email: "novo@ex.com" });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "email", tipo: "email" }] },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        {
+          mensagem: "...",
+          extracao: { cpf: "123" },
+        },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // CPF anterior preservado + novo email adicionado
+      expect(resultado.contexto.extracao).toEqual({
+        cpf: "123",
+        email: "novo@ex.com",
+      });
+    });
+  });
+
+  describe("crm_buscar_contato", () => {
+    it("popula contexto quando encontra", async () => {
+      const buscarContatoCrm = vi.fn().mockResolvedValue({
+        contatoId: 99,
+        nome: "Joana",
+        telefone: "11999",
+        email: "joana@ex.com",
+        atendenteResponsavelId: 7,
+        camposPersonalizados: { cpf: "111" },
+      });
+      const exec = criarMockExecutores({ buscarContatoCrm });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_buscar_contato",
+          config: { tipoBusca: "cpfCnpj", valor: "{{extracao.cpf}}" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { extracao: { cpf: "111.222.333-44" } },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.contatoEncontrado).toBe(true);
+      expect(resultado.contexto.contatoId).toBe(99);
+      expect(resultado.contexto.nomeCliente).toBe("Joana");
+      // Interpolação foi feita antes da chamada
+      expect(buscarContatoCrm).toHaveBeenCalledWith({
+        tipoBusca: "cpfCnpj",
+        valor: "111.222.333-44",
+      });
+      const cliente = resultado.contexto.cliente as any;
+      expect(cliente?.campos?.cpf).toBe("111");
+    });
+
+    it("marca contatoEncontrado=false sem ramificar erro quando não acha", async () => {
+      const buscarContatoCrm = vi.fn().mockResolvedValue(null);
+      const exec = criarMockExecutores({ buscarContatoCrm });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_buscar_contato",
+          config: { tipoBusca: "telefone", valor: "11999" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.contatoEncontrado).toBe(false);
+      expect(resultado.contexto.contatoId).toBeUndefined();
+    });
+
+    it("falha quando valor a buscar é vazio (mesmo após interpolação)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_buscar_contato",
+          // Variável inexistente no contexto → string vazia.
+          config: { tipoBusca: "telefone", valor: "{{naoExisteNoCtx}}" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("valor a buscar");
+    });
+  });
+
+  describe("crm_listar_acoes_cliente", () => {
+    it("popula contexto com acoes + acoesQuantidade", async () => {
+      const listarAcoesCliente = vi.fn().mockResolvedValue([
+        { id: 1, numeroCnj: "0000001-00.2024.8.05.0001", apelido: "Trabalhista", classe: "Reclamação", tipo: "litigioso", polo: "ativo", valorCausa: 50000, createdAt: new Date() },
+        { id: 2, numeroCnj: null, apelido: "Contrato", classe: null, tipo: "extrajudicial", polo: "interessado", valorCausa: null, createdAt: new Date() },
+      ]);
+      const exec = criarMockExecutores({ listarAcoesCliente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "crm_listar_acoes_cliente", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { contatoId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      const acoes = resultado.contexto.acoes as any[];
+      expect(acoes).toHaveLength(2);
+      expect(resultado.contexto.acoesQuantidade).toBe(2);
+      expect(listarAcoesCliente).toHaveBeenCalledWith(
+        expect.objectContaining({ contatoId: 42, limite: 10 }),
+      );
+    });
+
+    it("aplica filtros tipoFiltro e poloFiltro (omite quando 'todos')", async () => {
+      const listarAcoesCliente = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ listarAcoesCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "crm_listar_acoes_cliente",
+          config: { tipoFiltro: "litigioso", poloFiltro: "todos", limite: 5 },
+        },
+      ];
+
+      await executarCenario(passos, { contatoId: 42 }, exec);
+
+      expect(listarAcoesCliente).toHaveBeenCalledWith({
+        contatoId: 42,
+        tipoFiltro: "litigioso",
+        // poloFiltro 'todos' não é enviado
+        poloFiltro: undefined,
+        limite: 5,
+      });
+    });
+
+    it("falha quando contatoId está ausente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "crm_listar_acoes_cliente", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("contatoId");
+    });
+  });
+
+  describe("processo_buscar_movimentacoes", () => {
+    it("usa acaoId do contexto como default e retorna movimentações", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([
+        { id: 1, tipo: "sentenca", dataEvento: new Date("2026-04-01"), conteudo: "Procedente", fonte: "judit", cnjAfetado: "X" },
+        { id: 2, tipo: "movimentacao", dataEvento: new Date("2026-03-15"), conteudo: "Conclusos", fonte: "judit", cnjAfetado: "X" },
+      ]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "processo_buscar_movimentacoes", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { acaoId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      const movs = resultado.contexto.movimentacoes as any[];
+      expect(movs).toHaveLength(2);
+      expect(resultado.contexto.movimentacoesQuantidade).toBe(2);
+      const maisRecente = resultado.contexto.movimentacaoMaisRecente as any;
+      expect(maisRecente.tipo).toBe("sentenca");
+      // Default: 30 dias, sem filtro de tipo, limite 10
+      expect(buscarMovimentacoesProcesso).toHaveBeenCalledWith(
+        expect.objectContaining({
+          processoRef: 42,
+          diasJanela: 30,
+          limite: 10,
+          tipos: undefined,
+        }),
+      );
+    });
+
+    it("interpola processoId customizado", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "processo_buscar_movimentacoes",
+          config: { processoId: "{{acaoEscolhida.id}}" },
+        },
+      ];
+
+      await executarCenario(
+        passos,
+        { acaoEscolhida: { id: 99 } },
+        exec,
+      );
+
+      expect(buscarMovimentacoesProcesso).toHaveBeenCalledWith(
+        expect.objectContaining({ processoRef: 99 }),
+      );
+    });
+
+    it("aceita CNJ como string", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "processo_buscar_movimentacoes",
+          config: { processoId: "0000001-00.2024.8.05.0001" },
+        },
+      ];
+
+      await executarCenario(passos, {}, exec);
+
+      expect(buscarMovimentacoesProcesso).toHaveBeenCalledWith(
+        expect.objectContaining({ processoRef: "0000001-00.2024.8.05.0001" }),
+      );
+    });
+
+    it("falha quando não há processoId nem acaoId", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "processo_buscar_movimentacoes", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("processo a consultar");
+    });
+
+    it("movimentacaoMaisRecente é null quando lista vazia", async () => {
+      const buscarMovimentacoesProcesso = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ buscarMovimentacoesProcesso });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "processo_buscar_movimentacoes", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { acaoId: 1 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.movimentacaoMaisRecente).toBeNull();
+      expect(resultado.contexto.movimentacoesQuantidade).toBe(0);
+    });
+  });
+
+  describe("whatsapp_aguardar_resposta", () => {
+    it("envia mensagem e pausa fluxo com flags de aguardando", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: {
+            template: "Sobre qual ação?",
+            timeoutMinutos: 60,
+          },
+        },
+        // não deve executar
+        { id: 2, ordem: 2, tipo: "ia_responder", config: {} },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, telefoneCliente: "11999" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.passosExecutados).toBe(1); // não passou pro ia_responder
+      expect(resultado.contexto.aguardandoMensagem).toBe(true);
+      expect(resultado.contexto.aguardandoContatoId).toBe(42);
+      expect(resultado.contexto.aguardandoTimeoutMinutos).toBe(60);
+      expect(enviarWhatsApp).toHaveBeenCalledWith("11999", "Sobre qual ação?");
+    });
+
+    it("anexa menu numerado quando há opções", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: {
+            template: "Escolha:",
+            opcoes: ["Agendar consulta", "Tirar dúvida", "Falar com humano"],
+          },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, telefoneCliente: "11999" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      const enviadoTo = (enviarWhatsApp as any).mock.calls[0][1] as string;
+      expect(enviadoTo).toContain("Escolha:");
+      expect(enviadoTo).toContain("1. Agendar consulta");
+      expect(enviadoTo).toContain("2. Tirar dúvida");
+      expect(enviadoTo).toContain("3. Falar com humano");
+      expect(resultado.contexto.aguardandoOpcoes).toEqual([
+        "Agendar consulta",
+        "Tirar dúvida",
+        "Falar com humano",
+      ]);
+    });
+
+    it("falha sem contatoId no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: { template: "Oi", timeoutMinutos: 60 },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("contatoId");
+    });
+
+    it("não envia direto quando há canalId no contexto (delega ao handler)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "whatsapp_aguardar_resposta",
+          config: { template: "Oi", timeoutMinutos: 60 },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { contatoId: 42, telefoneCliente: "11999", canalId: 7 },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // Quando há canal, executor não envia — a resposta vai pelo retorno
+      // pro whatsapp-handler chamar do canal aberto.
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      expect(resultado.respostas).toContain("Oi");
+    });
+  });
+
+  describe("parsearOpcaoResposta", () => {
+    it("acha por número", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("2", ["A", "B", "C"]);
+      expect(r).toEqual({ indice: 1, texto: "B", numero: "2" });
+    });
+
+    it("acha por número em meio de texto", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("a opção 3 pra mim", ["X", "Y", "Z"]);
+      expect(r).toEqual({ indice: 2, texto: "Z", numero: "3" });
+    });
+
+    it("acha por texto exato case-insensitive", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("agendar", ["Agendar", "Dúvida"]);
+      expect(r).toEqual({ indice: 0, texto: "Agendar", numero: "1" });
+    });
+
+    it("acha por substring", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("quero agendar uma consulta", ["Agendar", "Dúvida"]);
+      expect(r).toEqual({ indice: 0, texto: "Agendar", numero: "1" });
+    });
+
+    it("retorna null quando não bate", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("xyz", ["A", "B"]);
+      expect(r).toBeNull();
+    });
+
+    it("retorna null quando lista vazia", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("qualquer coisa", []);
+      expect(r).toBeNull();
+    });
+
+    it("ignora número fora do range", async () => {
+      const { parsearOpcaoResposta } = await import("../smartflow/engine");
+      const r = parsearOpcaoResposta("5", ["A", "B"]);
+      // Não há opção 5 — não usa o número, tenta substring (não bate) → null
+      expect(r).toBeNull();
+    });
+  });
+
+  describe("para_cada_item", () => {
+    it("itera 0 vezes quando lista está vazia (não falha)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          proximoSe: { corpo: "envia", depois: "fim" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ação {{item.id}}" },
+          proximoSe: { default: "loop" },
+        },
+        {
+          id: 3, ordem: 3, tipo: "ia_responder",
+          clienteId: "fim",
+          config: {},
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { acoes: [], telefoneCliente: "1199" }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      // ia_responder NÃO roda porque mensagem não está no ctx (handler falha)
+      // mas isso é outra história — o que importa: chegou no fim sem erro.
+    });
+
+    it("itera 0 vezes sem erro quando caminhoLista não existe no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "naoExisteNoCtx" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ola" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+    });
+
+    it("falha quando lista existe mas não é array", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ola" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { acoes: "string em vez de lista" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("não é uma lista");
+    });
+
+    it("falha quando não tem proximoSe.corpo configurado", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          proximoSe: {},
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { acoes: [1, 2, 3] }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("corpo conectado");
+    });
+
+    it("itera 3 vezes executando 1 passo no corpo a cada", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          // corpo aponta pro whatsapp; whatsapp aponta de volta pro loop
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ação {{item.apelido}}" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        {
+          acoes: [
+            { id: 1, apelido: "Trabalhista" },
+            { id: 2, apelido: "Cível" },
+            { id: 3, apelido: "Família" },
+          ],
+          telefoneCliente: "1199",
+        },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(3);
+      // Cada chamada com o template interpolado pro item da iteração
+      expect((enviarWhatsApp as any).mock.calls[0][1]).toBe("ação Trabalhista");
+      expect((enviarWhatsApp as any).mock.calls[1][1]).toBe("ação Cível");
+      expect((enviarWhatsApp as any).mock.calls[2][1]).toBe("ação Família");
+    });
+
+    it("respeita o limite de iterações truncando a lista", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const lista = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens", limite: 5 },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: lista, telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(5);
+    });
+
+    it("usa nomeVarItem custom (ex: 'acao' em vez de 'item')", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes", nomeVarItem: "acao" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "Processo {{acao.cnj}}" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      await executarCenario(
+        passos,
+        {
+          acoes: [{ cnj: "111" }, { cnj: "222" }],
+          telefoneCliente: "1199",
+        },
+        exec,
+      );
+
+      expect((enviarWhatsApp as any).mock.calls[0][1]).toBe("Processo 111");
+      expect((enviarWhatsApp as any).mock.calls[1][1]).toBe("Processo 222");
+    });
+
+    it("continua pelo ramo 'depois' após terminar as iterações", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const chamarIA = vi.fn().mockResolvedValue("resumo");
+      const exec = criarMockExecutores({ enviarWhatsApp, chamarIA });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens" },
+          proximoSe: { corpo: "envia", depois: "depoisLoop" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "{{item}}" },
+          proximoSe: { default: "loop" },
+        },
+        {
+          id: 3, ordem: 3, tipo: "ia_responder",
+          clienteId: "depoisLoop",
+          config: {},
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: ["a", "b"], telefoneCliente: "1199", mensagem: "fim" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(2);
+      // ia_responder rodou ("depois" do loop)
+      expect(chamarIA).toHaveBeenCalled();
+      expect(resultado.contexto.respostaIA).toBe("resumo");
+    });
+
+    it("limpa item/indice do contexto após o loop terminar", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: ["a", "b"], telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // Após o loop, item/indice não vazam pro contexto global
+      expect(resultado.contexto.item).toBeUndefined();
+      expect(resultado.contexto.indice).toBeUndefined();
+    });
+
+    it("aborta com erro quando excede MAX_PASSOS_EXECUCAO no corpo", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      // 60 itens × 1 passo/item = 60 — passa do limite de 50
+      const lista = Array.from({ length: 60 }, (_, i) => i);
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens", limite: 60 },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: lista, telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toMatch(/Limite de \d+ passos/);
+    });
+
+    it("erros dentro do corpo abortam o loop inteiro", async () => {
+      // Mock que falha na 2ª chamada
+      const enviarWhatsApp = vi.fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: ["a", "b", "c"], telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("WhatsApp");
+      // Só rodou 2x (a 2ª falhou e abortou; 3ª não rodou)
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(2);
     });
   });
 

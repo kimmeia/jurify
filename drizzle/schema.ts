@@ -1975,14 +1975,20 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
   tipo: mysqlEnum("tipoPasso", [
     "ia_classificar",                // IA classifica intenção da mensagem
     "ia_responder",                  // IA gera resposta contextual
+    "ia_extrair_campos",             // IA extrai dados estruturados via tool calling
+    "crm_buscar_contato",            // resolve contato por telefone/email/cpf
+    "crm_listar_acoes_cliente",     // lista cliente_processos do contato
+    "processo_buscar_movimentacoes", // lê histórico de eventos_processo
     "calcom_horarios",               // busca horários disponíveis no Cal.com
     "calcom_agendar",                // cria agendamento no Cal.com
     "calcom_listar",                 // lista bookings do Cal.com (contexto)
     "calcom_cancelar",               // cancela booking no Cal.com
     "calcom_remarcar",               // reagenda booking no Cal.com
     "whatsapp_enviar",               // envia mensagem no WhatsApp
+    "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "transferir",                    // transfere pra humano
     "condicional",                   // if/else baseado em condição
+    "para_cada_item",                // loop sobre lista no contexto
     "esperar",                       // delay (follow-up)
     "webhook",
     "kanban_criar_card",             // cria card no Kanban
@@ -2039,6 +2045,14 @@ export const smartflowExecucoes = mysqlTable("smartflow_execucoes", {
    * aguardando delay.
    */
   retomarEm: timestamp("retomarEmExec"),
+  /**
+   * Quando a execução está em passo `whatsapp_aguardar_resposta`, guarda
+   * o contatoId que o fluxo está esperando responder. Combinado com
+   * `retomarEm` (deadline do timeout), o dispatcher de mensagem retoma
+   * essa execução em vez de criar uma nova quando o contato responder.
+   * Null = não está aguardando mensagem.
+   */
+  aguardandoMensagemContatoId: int("aguardandoMensagemContatoIdExec"),
   createdAt: timestamp("createdAtExec").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtExec").defaultNow().onUpdateNow().notNull(),
 });

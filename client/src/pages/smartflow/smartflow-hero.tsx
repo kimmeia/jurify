@@ -1,6 +1,5 @@
-import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Zap, Activity, CheckCircle2, Clock, Plus, Sparkles, DollarSign } from "lucide-react";
+import { Zap, Activity, CheckCircle2, Clock, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function formatTempo(seg: number): string {
@@ -11,15 +10,9 @@ function formatTempo(seg: number): string {
 }
 
 export function SmartFlowHero({
-  onCriarAtendimento,
-  onCriarPagamentoKanban,
-  pendingAtendimento,
-  pendingPagamento,
+  onNovoCenario,
 }: {
-  onCriarAtendimento: () => void;
-  onCriarPagamentoKanban: () => void;
-  pendingAtendimento: boolean;
-  pendingPagamento: boolean;
+  onNovoCenario: () => void;
 }) {
   const { data } = (trpc as any).smartflow.metricasResumo.useQuery(undefined, {
     refetchInterval: 60_000,
@@ -49,31 +42,11 @@ export function SmartFlowHero({
         <div className="flex gap-2 flex-wrap">
           <Button
             size="sm"
-            variant="outline"
-            onClick={onCriarAtendimento}
-            disabled={pendingAtendimento}
-          >
-            <Zap className="h-3.5 w-3.5 mr-1" />
-            Atendimento
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onCriarPagamentoKanban}
-            disabled={pendingPagamento}
-          >
-            <DollarSign className="h-3.5 w-3.5 mr-1" />
-            Pgto → Kanban
-          </Button>
-          <Button
-            size="sm"
-            asChild
+            onClick={onNovoCenario}
             className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md"
           >
-            <Link href="/smartflow/novo">
-              <Plus className="h-4 w-4 mr-1.5" />
-              Novo cenário
-            </Link>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Novo cenário
           </Button>
         </div>
       </div>

@@ -152,6 +152,75 @@ export interface SmartflowExecutores {
    */
   chamarIA: (prompt: string, mensagem: string, contatoId?: number) => Promise<string>;
   /**
+   * Extração estruturada via tool calling. Recebe a mensagem + lista de
+   * campos a extrair; devolve um objeto chave→valor com o que a IA achou.
+   * Campos não encontrados na mensagem são omitidos do retorno (não viram
+   * `null` — ficam fora do objeto), pra não sobrescrever dados pré-existentes.
+   */
+  extrairCamposIA: (params: {
+    mensagem: string;
+    campos: Array<{
+      chave: string;
+      tipo: "texto" | "numero" | "boolean" | "data" | "email" | "cpf" | "cnpj" | "telefone" | "lista_texto";
+      descricao?: string;
+      obrigatorio?: boolean;
+    }>;
+    contatoId?: number;
+  }) => Promise<Record<string, unknown>>;
+  /**
+   * Busca contato no CRM por telefone/email/cpf. Retorna `null` quando
+   * não encontra (caller decide ramo). Quando encontra, devolve dados
+   * completos do contato pra popular contexto.
+   */
+  buscarContatoCrm: (params: {
+    tipoBusca: "telefone" | "email" | "cpfCnpj";
+    valor: string;
+  }) => Promise<{
+    contatoId: number;
+    nome: string;
+    telefone: string | null;
+    email: string | null;
+    atendenteResponsavelId: number | null;
+    camposPersonalizados: Record<string, unknown>;
+  } | null>;
+  /**
+   * Lista ações (cliente_processos) do contato — com filtros opcionais
+   * por tipo (litigioso/extrajudicial) e polo (ativo/passivo/interessado).
+   */
+  listarAcoesCliente: (params: {
+    contatoId: number;
+    tipoFiltro?: "litigioso" | "extrajudicial";
+    poloFiltro?: "ativo" | "passivo" | "interessado";
+    limite?: number;
+  }) => Promise<Array<{
+    id: number;
+    numeroCnj: string | null;
+    apelido: string | null;
+    classe: string | null;
+    tipo: string;
+    polo: string | null;
+    valorCausa: number | null;
+    createdAt: Date | string;
+  }>>;
+  /**
+   * Histórico de eventos de um processo. `processoRef` pode ser o ID
+   * numérico de `cliente_processos` ou um CNJ — o executor resolve
+   * o CNJ a partir do ID quando precisar.
+   */
+  buscarMovimentacoesProcesso: (params: {
+    processoRef: number | string;
+    tipos?: string[];
+    diasJanela?: number;
+    limite?: number;
+  }) => Promise<Array<{
+    id: number;
+    tipo: string;
+    dataEvento: Date | string;
+    conteudo: string;
+    fonte: string;
+    cnjAfetado: string | null;
+  }>>;
+  /**
    * Executa um agente IA pré-configurado (prompt + modelo + docs RAG salvos
    * em `agentesIa`) e retorna a resposta textual. Usado por `ia_responder`
    * quando o passo tem `config.agenteId`. `contatoId` é injetado no system
@@ -306,6 +375,290 @@ async function handleIAClassificar(
     };
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `IA: ${err.message}` };
+  }
+}
+
+/**
+ * Handler do passo `ia_extrair_campos` — IA lê uma mensagem e extrai
+ * campos estruturados via tool calling. Salva em `ctx.extracao.<chave>`
+ * pra que próximos passos possam usar via `{{extracao.cpf}}` etc.
+ *
+ * Quando o campo tem `persistir: true` e `ctx.contatoId` existe, também
+ * grava em `contatos.camposPersonalizados` via `definirCampoPersonalizadoCliente`.
+ * Falha de persistência NÃO derruba o passo — só loga aviso, porque a
+ * extração em si funcionou.
+ */
+async function handleIAExtrairCampos(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    campos?: Array<{
+      chave: string;
+      tipo: "texto" | "numero" | "boolean" | "data" | "email" | "cpf" | "cnpj" | "telefone" | "lista_texto";
+      descricao?: string;
+      obrigatorio?: boolean;
+      persistir?: boolean;
+    }>;
+    fonteMensagem?: string;
+  };
+  const campos = Array.isArray(cfg.campos) ? cfg.campos : [];
+  if (campos.length === 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Configure pelo menos 1 campo a extrair." };
+  }
+  // Resolve a mensagem-fonte: por default vem de ctx.mensagem, mas a config
+  // pode apontar pra outra chave (ex: 'respostaUsuario' depois de aguardar).
+  const fonteKey = (cfg.fonteMensagem || "mensagem").trim();
+  const partes = fonteKey.split(".");
+  let mensagemRaw: any = ctx;
+  for (const p of partes) {
+    if (mensagemRaw == null || typeof mensagemRaw !== "object") {
+      mensagemRaw = undefined;
+      break;
+    }
+    mensagemRaw = (mensagemRaw as any)[p];
+  }
+  const mensagem = typeof mensagemRaw === "string" ? mensagemRaw : "";
+  if (!mensagem) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: `Mensagem vazia em "${fonteKey}" — nada pra extrair.`,
+    };
+  }
+
+  let extraidos: Record<string, unknown>;
+  try {
+    extraidos = await exec.extrairCamposIA({
+      mensagem,
+      campos: campos.map((c) => ({
+        chave: c.chave,
+        tipo: c.tipo,
+        descricao: c.descricao,
+        obrigatorio: c.obrigatorio,
+      })),
+      contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+    });
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Extração IA: ${err.message}` };
+  }
+
+  // Mescla com extração anterior (se chamado múltiplas vezes no fluxo,
+  // mantém o que já foi achado e adiciona/sobrescreve com o novo).
+  const extracaoAnterior = (ctx.extracao as Record<string, unknown>) || {};
+  const novaExtracao = { ...extracaoAnterior, ...extraidos };
+
+  // Espelha em ctx.cliente.campos pra próximos passos lerem via {{cliente.campos.X}}
+  // — só pros campos marcados como persistir (semântica: "isso é dado do cliente").
+  const clienteAtual = (ctx.cliente as Record<string, any>) || {};
+  const camposClienteAtuais = (clienteAtual.campos as Record<string, any>) || {};
+  const novosCamposCliente = { ...camposClienteAtuais };
+
+  // Persistir no contato quando aplicável. Continua o fluxo mesmo se um campo
+  // específico falhar (loga via mensagemErro só se TODOS falharem).
+  const persistRequests = campos.filter((c) => c.persistir && c.chave in extraidos);
+  const contatoIdNum = typeof ctx.contatoId === "number" ? ctx.contatoId : null;
+  if (persistRequests.length > 0 && contatoIdNum == null) {
+    // Não temos contatoId — não dá pra persistir; só pula sem dar erro.
+    // O dado fica em ctx.extracao do mesmo jeito.
+  } else if (persistRequests.length > 0 && contatoIdNum != null) {
+    for (const c of persistRequests) {
+      const valor = extraidos[c.chave];
+      if (valor == null || valor === "") continue;
+      try {
+        await exec.definirCampoPersonalizadoCliente({
+          contatoId: contatoIdNum,
+          chave: c.chave,
+          valor: String(valor),
+        });
+        novosCamposCliente[c.chave] = String(valor);
+      } catch {
+        // Campo provavelmente não existe no catálogo do escritório. Não falha
+        // o passo inteiro — extração funcionou, persistência opcional.
+      }
+    }
+  }
+
+  return {
+    sucesso: true,
+    contexto: {
+      ...ctx,
+      extracao: novaExtracao,
+      cliente: { ...clienteAtual, campos: novosCamposCliente },
+    },
+  };
+}
+
+/**
+ * Handler do passo `crm_buscar_contato`. Resolve um cliente pelo telefone,
+ * email ou CPF/CNPJ. Quando acha, popula contexto com dados do contato
+ * (sem sobrescrever `contatoId` original se ele já existe, exceto quando
+ * a busca encontrou outro — aí prefere o novo, é a intenção do passo).
+ *
+ * `contatoEncontrado` (boolean) é publicado pra permitir ramos condicionais
+ * — fluxo típico: condição com base no resultado → ramo "achou" vs "não achou".
+ */
+async function handleCrmBuscarContato(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { tipoBusca?: "telefone" | "email" | "cpfCnpj"; valor?: string };
+  const tipoBusca = cfg.tipoBusca || "telefone";
+  const { interpolarVariaveis } = await import("./interpolar");
+  const valor = interpolarVariaveis(String(cfg.valor || ""), ctx as any).trim();
+
+  if (!valor) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Configure o valor a buscar (suporta interpolação tipo `{{telefoneCliente}}`).",
+    };
+  }
+
+  let contato: Awaited<ReturnType<SmartflowExecutores["buscarContatoCrm"]>>;
+  try {
+    contato = await exec.buscarContatoCrm({ tipoBusca, valor });
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `CRM buscar contato: ${err.message}` };
+  }
+
+  if (!contato) {
+    // Não achou — sucesso (não é erro), mas marca flag pra próximo passo decidir.
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        contatoEncontrado: false,
+        contatoBuscado: { tipoBusca, valor },
+      },
+    };
+  }
+
+  // Achou — popula contexto.
+  const clienteAtual = (ctx.cliente as Record<string, any>) || {};
+  return {
+    sucesso: true,
+    contexto: {
+      ...ctx,
+      contatoEncontrado: true,
+      contatoId: contato.contatoId,
+      nomeCliente: contato.nome,
+      telefoneCliente: contato.telefone || ctx.telefoneCliente,
+      emailCliente: contato.email || ctx.emailCliente,
+      atendenteResponsavelId: contato.atendenteResponsavelId ?? ctx.atendenteResponsavelId,
+      cliente: { ...clienteAtual, campos: contato.camposPersonalizados },
+    },
+  };
+}
+
+/**
+ * Handler do passo `crm_listar_acoes_cliente`. Lista os processos vinculados
+ * ao contato (`cliente_processos.contatoId`). Publica `acoes` + `acoesQuantidade`.
+ *
+ * `contatoId` vem do contexto (campo pré-existente). Se não tiver, falha.
+ */
+async function handleCrmListarAcoesCliente(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    tipoFiltro?: "todos" | "litigioso" | "extrajudicial";
+    poloFiltro?: "todos" | "ativo" | "passivo" | "interessado";
+    limite?: number;
+  };
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Sem `contatoId` no contexto — use um passo de gatilho com contato vinculado ou `crm_buscar_contato` antes.",
+    };
+  }
+
+  const tipoFiltro = cfg.tipoFiltro && cfg.tipoFiltro !== "todos" ? cfg.tipoFiltro : undefined;
+  const poloFiltro = cfg.poloFiltro && cfg.poloFiltro !== "todos" ? cfg.poloFiltro : undefined;
+  const limite = Math.max(1, Math.min(50, Number(cfg.limite) || 10));
+
+  try {
+    const acoes = await exec.listarAcoesCliente({ contatoId, tipoFiltro, poloFiltro, limite });
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        acoes,
+        acoesQuantidade: acoes.length,
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `CRM listar ações: ${err.message}` };
+  }
+}
+
+/**
+ * Handler do passo `processo_buscar_movimentacoes`. Lê `eventos_processo`
+ * filtrando por janela de dias e tipos. `processoId` aceita interpolação
+ * (default `{{acaoId}}` se não configurado).
+ */
+async function handleProcessoBuscarMovimentacoes(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    processoId?: string;
+    tipos?: string[];
+    diasJanela?: number;
+    limite?: number;
+  };
+  const { interpolarVariaveis } = await import("./interpolar");
+  const raw = String(cfg.processoId || "").trim();
+  let processoRef: number | string;
+  if (raw) {
+    const interpolado = interpolarVariaveis(raw, ctx as any).trim();
+    if (!interpolado) {
+      return { sucesso: false, contexto: ctx, mensagemErro: "processoId interpola pra string vazia." };
+    }
+    const asNum = Number(interpolado);
+    processoRef = Number.isFinite(asNum) && asNum > 0 ? asNum : interpolado;
+  } else {
+    // Default: tenta `acaoId` do contexto (dispatcher popula em pagamento
+    // recebido com cobrança vinculada a ação).
+    const acaoId = (ctx as any).acaoId;
+    if (typeof acaoId !== "number") {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: "Sem processo a consultar — configure `processoId` ou use depois de um passo que popule `acaoId`.",
+      };
+    }
+    processoRef = acaoId;
+  }
+
+  const diasJanela = Math.max(1, Math.min(365, Number(cfg.diasJanela) || 30));
+  const limite = Math.max(1, Math.min(50, Number(cfg.limite) || 10));
+  const tipos = Array.isArray(cfg.tipos) && cfg.tipos.length > 0 ? cfg.tipos : undefined;
+
+  try {
+    const movs = await exec.buscarMovimentacoesProcesso({
+      processoRef,
+      tipos,
+      diasJanela,
+      limite,
+    });
+    return {
+      sucesso: true,
+      contexto: {
+        ...ctx,
+        movimentacoes: movs,
+        movimentacoesQuantidade: movs.length,
+        movimentacaoMaisRecente: movs[0] || null,
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Processo movimentações: ${err.message}` };
   }
 }
 
@@ -557,6 +910,143 @@ async function handleWhatsAppEnviar(
     contexto: { ...ctx, mensagensEnviadas: [...enviadas, mensagem] },
     resposta: mensagem,
   };
+}
+
+/**
+ * Handler do passo `whatsapp_aguardar_resposta`. Envia a mensagem (igual
+ * ao `whatsapp_enviar`) e sinaliza ao dispatcher que esta execução está
+ * aguardando próxima mensagem do contato.
+ *
+ * Sinalização via flags no contexto:
+ *   - `aguardandoMensagem` (boolean): finalizarExecucao detecta e grava
+ *     `aguardandoMensagemContatoId` na execução.
+ *   - `aguardandoContatoId`: pra qual contato esperamos.
+ *   - `aguardandoTimeoutMinutos`: deadline (vira `retomarEm`).
+ *   - `aguardandoOpcoes`: lista pro parser interpretar a resposta quando
+ *     ela vier.
+ *
+ * Retorna `parar: true` — engine fecha a execução nesse passo. O fluxo
+ * só continua quando o dispatcher detectar a próxima mensagem do contato
+ * E chamar `retomarExecucaoComResposta`.
+ */
+async function handleWhatsappAguardarResposta(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    template?: string;
+    timeoutMinutos?: number;
+    opcoes?: string[];
+  };
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Sem `contatoId` no contexto — não dá pra saber de quem aguardar resposta.",
+    };
+  }
+
+  const opcoes = Array.isArray(cfg.opcoes) ? cfg.opcoes.filter((o) => typeof o === "string" && o.trim()) : [];
+  const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 1440)); // 1min ~ 7 dias
+
+  // Monta template — base + menu numerado se houver opções
+  let template = String(cfg.template ?? "").trim();
+  if (opcoes.length > 0) {
+    const menu = opcoes.map((o, i) => `${i + 1}. ${o}`).join("\n");
+    template = template ? `${template}\n\n${menu}` : menu;
+  }
+  if (!template) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Configure o template da mensagem (ou pelo menos uma opção)." };
+  }
+
+  const { interpolarVariaveis } = await import("./interpolar");
+  const mensagem = interpolarVariaveis(template, ctx as any);
+
+  // Envia. Mesma lógica do whatsapp_enviar — usa canalId do contexto se
+  // presente (mensagem veio via canal), senão executor real busca canal
+  // ativo do escritório.
+  const telefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente.trim() : "";
+  const temCanal = typeof ctx.canalId === "number" && ctx.canalId > 0;
+  if (!temCanal && telefone) {
+    try {
+      const ok = await exec.enviarWhatsApp(telefone, mensagem);
+      if (!ok) {
+        return {
+          sucesso: false,
+          contexto: ctx,
+          mensagemErro: "Falha ao enviar WhatsApp — verifique se há canal conectado.",
+        };
+      }
+    } catch (err: any) {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: `WhatsApp: ${err?.message || String(err)}`,
+      };
+    }
+  }
+  // Se temCanal=true, mensagem volta na lista `respostas` e o whatsapp-handler
+  // que invocou o cenário envia direto pelo canal já estabelecido.
+
+  const enviadas = ctx.mensagensEnviadas || [];
+  return {
+    sucesso: true,
+    parar: true, // ← pausa o fluxo aqui
+    resposta: mensagem,
+    contexto: {
+      ...ctx,
+      mensagensEnviadas: [...enviadas, mensagem],
+      // Flags que o dispatcher.finalizarExecucao consome pra persistir
+      // o estado de espera-mensagem na linha da execução.
+      aguardandoMensagem: true,
+      aguardandoContatoId: contatoId,
+      aguardandoTimeoutMinutos: timeoutMinutos,
+      aguardandoOpcoes: opcoes,
+    },
+  };
+}
+
+/**
+ * Helper: parseia a resposta do cliente contra a lista de opções configurada.
+ * Tenta primeiro como número (1, 2, 3...), depois como substring case-insensitive
+ * contra cada opção. Retorna a opção escolhida ou `null` se nenhuma bate
+ * (ramo "opcao_invalida" no `proximoSe` cobre esse caso).
+ */
+export function parsearOpcaoResposta(
+  resposta: string,
+  opcoes: string[],
+): { indice: number; texto: string; numero: string } | null {
+  const trimmed = resposta.trim();
+  if (!trimmed || opcoes.length === 0) return null;
+
+  // 1. Tentativa numérica — extrai primeiro número da resposta
+  const matchNum = trimmed.match(/\d+/);
+  if (matchNum) {
+    const n = Number(matchNum[0]);
+    if (n >= 1 && n <= opcoes.length) {
+      return { indice: n - 1, texto: opcoes[n - 1], numero: String(n) };
+    }
+  }
+
+  // 2. Match exato (case-insensitive)
+  const lower = trimmed.toLowerCase();
+  for (let i = 0; i < opcoes.length; i++) {
+    if (opcoes[i].toLowerCase() === lower) {
+      return { indice: i, texto: opcoes[i], numero: String(i + 1) };
+    }
+  }
+
+  // 3. Substring (resposta contém ou está contida na opção)
+  for (let i = 0; i < opcoes.length; i++) {
+    const opc = opcoes[i].toLowerCase();
+    if (opc.length >= 3 && (lower.includes(opc) || opc.includes(lower))) {
+      return { indice: i, texto: opcoes[i], numero: String(i + 1) };
+    }
+  }
+
+  return null;
 }
 
 function handleTransferir(
@@ -1142,12 +1632,17 @@ async function handleDefinirCampoPersonalizado(
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
   ia_classificar: handleIAClassificar,
   ia_responder: handleIAResponder,
+  ia_extrair_campos: handleIAExtrairCampos,
+  crm_buscar_contato: handleCrmBuscarContato,
+  crm_listar_acoes_cliente: handleCrmListarAcoesCliente,
+  processo_buscar_movimentacoes: handleProcessoBuscarMovimentacoes,
   calcom_horarios: handleCalcomHorarios,
   calcom_agendar: handleCalcomAgendar,
   calcom_listar: handleCalcomListar,
   calcom_cancelar: handleCalcomCancelar,
   calcom_remarcar: handleCalcomRemarcar,
   whatsapp_enviar: handleWhatsAppEnviar,
+  whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   transferir: handleTransferir,
   condicional: handleCondicional,
   esperar: handleEsperar,
@@ -1204,13 +1699,9 @@ export async function executarCenario(
   contextoInicial: SmartflowContexto,
   executores: SmartflowExecutores,
 ): Promise<ExecutarCenarioResultado> {
-  let contexto = { ...contextoInicial };
-  const respostas: string[] = [];
-  let passosExecutados = 0;
-
   const passosOrdenados = [...passos].sort((a, b) => a.ordem - b.ordem);
   if (passosOrdenados.length === 0) {
-    return { sucesso: true, contexto, passosExecutados, respostas };
+    return { sucesso: true, contexto: { ...contextoInicial }, passosExecutados: 0, respostas: [] };
   }
 
   // Detecção de modo:
@@ -1231,18 +1722,93 @@ export async function executarCenario(
   const indicePorId = new Map<number, number>();
   passosOrdenados.forEach((p, i) => indicePorId.set(p.id, i));
 
-  let atual: Passo | null = passosOrdenados[0];
+  // Contador global de passos executados — compartilhado entre o walk
+  // principal e os sub-walks de loop pra que MAX_PASSOS_EXECUCAO valha
+  // pra execução inteira (não por iteração de loop).
+  const estadoGlobal = { passosExecutados: 0 };
+
+  return walkInterno({
+    passos: passosOrdenados,
+    porClienteId,
+    indicePorId,
+    modoGrafo,
+    startNode: passosOrdenados[0],
+    contexto: { ...contextoInicial },
+    stopAt: new Set<number>(),
+    estadoGlobal,
+    executores,
+    respostas: [],
+  });
+}
+
+/**
+ * Walker reusável: anda pelo grafo a partir de `startNode`, parando quando:
+ *   - Acaba o caminho (sem próximo passo).
+ *   - Encontra um nó cujo id está em `stopAt` (usado por loops pra fechar
+ *     a iteração quando o corpo aponta de volta pro `para_cada_item`).
+ *   - `MAX_PASSOS_EXECUCAO` excedido (proteção global).
+ *   - Handler retornou erro ou `parar: true`.
+ *
+ * Pra `para_cada_item`: lê a lista do contexto, e pra cada item chama
+ * recursivamente o walker do nó apontado por `proximoSe.corpo`, com `stopAt`
+ * estendido com o id do loop atual — fechando naturalmente a iteração ao
+ * voltar ao loop. Depois de iterar, segue pelo `proximoSe.depois`.
+ */
+async function walkInterno(opts: {
+  passos: Passo[];
+  porClienteId: Map<string, Passo>;
+  indicePorId: Map<number, number>;
+  modoGrafo: boolean;
+  startNode: Passo | null;
+  contexto: SmartflowContexto;
+  stopAt: Set<number>;
+  estadoGlobal: { passosExecutados: number };
+  executores: SmartflowExecutores;
+  respostas: string[];
+}): Promise<ExecutarCenarioResultado> {
+  const { passos, porClienteId, indicePorId, modoGrafo, stopAt, estadoGlobal, executores } = opts;
+  let contexto = opts.contexto;
+  const respostas = opts.respostas;
+  let atual: Passo | null = opts.startNode;
 
   while (atual !== null) {
-    const passoAtual: Passo = atual;
-    if (passosExecutados >= MAX_PASSOS_EXECUCAO) {
+    if (stopAt.has(atual.id)) {
+      // Voltou pra origem do loop (ou outro nó marcado como "pare"). Encerra
+      // este sub-walk sem erro — o caller (loop) parte pra próxima iteração.
+      return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+    }
+    if (estadoGlobal.passosExecutados >= MAX_PASSOS_EXECUCAO) {
       return {
         sucesso: false,
         contexto,
-        passosExecutados,
+        passosExecutados: estadoGlobal.passosExecutados,
         respostas,
         erro: `Limite de ${MAX_PASSOS_EXECUCAO} passos excedido — possível loop no cenário.`,
       };
+    }
+
+    const passoAtual: Passo = atual;
+
+    // Caso especial: para_cada_item — não passa pelo HANDLERS, é resolvido
+    // aqui no walker (precisa de acesso ao grafo de passos).
+    if (passoAtual.tipo === "para_cada_item") {
+      const r = await executarParaCadaItem({
+        passo: passoAtual,
+        contexto,
+        passos,
+        porClienteId,
+        indicePorId,
+        modoGrafo,
+        stopAt,
+        estadoGlobal,
+        executores,
+        respostas,
+      });
+      if (!r.sucesso) return r;
+      contexto = r.contexto;
+      // Continua pelo próximo do loop (proximoSe.depois ou ordem linear)
+      atual = resolverProximo(passoAtual, "depois", porClienteId, indicePorId, modoGrafo, passos);
+      continue;
     }
 
     const handler = HANDLERS[passoAtual.tipo];
@@ -1250,14 +1816,14 @@ export async function executarCenario(
       return {
         sucesso: false,
         contexto,
-        passosExecutados,
+        passosExecutados: estadoGlobal.passosExecutados,
         respostas,
         erro: `Tipo de passo desconhecido: ${passoAtual.tipo}`,
       };
     }
 
     const resultado: PassoResultado = await handler(passoAtual, contexto, executores);
-    passosExecutados++;
+    estadoGlobal.passosExecutados++;
     contexto = resultado.contexto;
 
     if (resultado.resposta) respostas.push(resultado.resposta);
@@ -1266,7 +1832,7 @@ export async function executarCenario(
       return {
         sucesso: false,
         contexto,
-        passosExecutados,
+        passosExecutados: estadoGlobal.passosExecutados,
         respostas,
         erro: resultado.mensagemErro || "Erro no passo " + passoAtual.tipo,
       };
@@ -1274,27 +1840,173 @@ export async function executarCenario(
 
     if (resultado.parar) break;
 
-    // Próximo passo.
-    //   modo grafo: só segue se `proximoSe` declarar o ramo — senão encerra.
-    //   modo linear: sempre tenta a próxima `ordem` (comportamento legado).
-    let proximo: Passo | null = null;
-    const mapa: Record<string, string> | null | undefined = passoAtual.proximoSe;
-
-    if (mapa && typeof mapa === "object") {
-      const chave: string = resultado.proximoRamoId || "default";
-      const alvoClienteId: string | undefined = mapa[chave];
-      if (alvoClienteId) {
-        proximo = porClienteId.get(alvoClienteId) ?? null;
-      }
-    } else if (!modoGrafo) {
-      const idx = indicePorId.get(passoAtual.id);
-      if (idx != null && idx + 1 < passosOrdenados.length) {
-        proximo = passosOrdenados[idx + 1];
-      }
-    }
-
-    atual = proximo;
+    atual = resolverProximo(
+      passoAtual,
+      resultado.proximoRamoId,
+      porClienteId,
+      indicePorId,
+      modoGrafo,
+      passos,
+    );
   }
 
-  return { sucesso: true, contexto, passosExecutados, respostas };
+  return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+}
+
+/**
+ * Resolve qual é o próximo passo dado o atual + a chave do ramo retornada
+ * pelo handler. Encapsula a lógica antes inline no walker pra ser reusada
+ * pelo `para_cada_item`.
+ *
+ * Regras:
+ *   - Se passo tem `proximoSe`: usa `proximoSe[chave]` (default `"default"`
+ *     quando handler não retorna `proximoRamoId`). Sem entrada → encerra fluxo.
+ *   - Senão, em modo linear: próxima `ordem` (legado).
+ *   - Em modo grafo sem `proximoSe`: fim do ramo.
+ */
+function resolverProximo(
+  passoAtual: Passo,
+  proximoRamoId: string | undefined,
+  porClienteId: Map<string, Passo>,
+  indicePorId: Map<number, number>,
+  modoGrafo: boolean,
+  passos: Passo[],
+): Passo | null {
+  const mapa = passoAtual.proximoSe;
+  if (mapa && typeof mapa === "object") {
+    const chave = proximoRamoId || "default";
+    const alvoClienteId = mapa[chave];
+    if (alvoClienteId) {
+      return porClienteId.get(alvoClienteId) ?? null;
+    }
+    return null;
+  }
+  if (!modoGrafo) {
+    const idx = indicePorId.get(passoAtual.id);
+    if (idx != null && idx + 1 < passos.length) {
+      return passos[idx + 1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Executa o passo `para_cada_item`. Lê a lista do contexto, itera até o
+ * limite, e pra cada iteração chama `walkInterno` começando pelo nó do
+ * "corpo" do loop — com `stopAt` estendido com o id do `para_cada_item`
+ * atual pra fechar a iteração quando o corpo voltar pro próprio loop.
+ *
+ * Cada iteração trabalha numa cópia do contexto e mescla resultado de
+ * volta no acumulado (excluindo `item`/`indice` — esses só vivem dentro
+ * da iteração). Loops aninhados funcionam naturalmente porque cada um
+ * adiciona seu id ao `stopAt` recebido.
+ */
+async function executarParaCadaItem(opts: {
+  passo: Passo;
+  contexto: SmartflowContexto;
+  passos: Passo[];
+  porClienteId: Map<string, Passo>;
+  indicePorId: Map<number, number>;
+  modoGrafo: boolean;
+  stopAt: Set<number>;
+  estadoGlobal: { passosExecutados: number };
+  executores: SmartflowExecutores;
+  respostas: string[];
+}): Promise<ExecutarCenarioResultado> {
+  const { passo, passos, porClienteId, indicePorId, modoGrafo, stopAt, estadoGlobal, executores, respostas } = opts;
+  let contexto = opts.contexto;
+  const cfg = passo.config as { caminhoLista?: string; nomeVarItem?: string; limite?: number };
+  const caminho = (cfg.caminhoLista || "acoes").trim();
+  const nomeVar = (cfg.nomeVarItem || "item").trim();
+  const limite = Math.max(1, Math.min(200, Number(cfg.limite) || 20));
+
+  // Resolve lista via dot-notation (suporta `acoes`, `cliente.processos`, etc.)
+  const partes = caminho.split(".");
+  let listaRaw: any = contexto;
+  for (const p of partes) {
+    if (listaRaw == null || typeof listaRaw !== "object") { listaRaw = undefined; break; }
+    listaRaw = listaRaw[p];
+  }
+  if (listaRaw == null) {
+    // Lista ausente — tratado como zero iterações, NÃO erro. Permite usar
+    // o passo sem garantir que a lista exista.
+    estadoGlobal.passosExecutados++;
+    return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+  }
+  if (!Array.isArray(listaRaw)) {
+    return {
+      sucesso: false,
+      contexto,
+      passosExecutados: estadoGlobal.passosExecutados,
+      respostas,
+      erro: `\`${caminho}\` não é uma lista — não dá pra iterar.`,
+    };
+  }
+
+  estadoGlobal.passosExecutados++; // conta o próprio loop como 1 passo
+  const lista = listaRaw.slice(0, limite);
+  if (lista.length === 0) {
+    return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+  }
+
+  // Resolve nó-corpo a partir de `proximoSe.corpo` no editor.
+  const mapaProx = passo.proximoSe || {};
+  const corpoClienteId = mapaProx.corpo;
+  if (!corpoClienteId) {
+    return {
+      sucesso: false,
+      contexto,
+      passosExecutados: estadoGlobal.passosExecutados,
+      respostas,
+      erro: "Loop sem corpo conectado — conecte a saída 'corpo' a um passo.",
+    };
+  }
+  const corpoStart = porClienteId.get(corpoClienteId);
+  if (!corpoStart) {
+    return {
+      sucesso: false,
+      contexto,
+      passosExecutados: estadoGlobal.passosExecutados,
+      respostas,
+      erro: "Corpo do loop aponta pra um passo que não existe.",
+    };
+  }
+
+  const stopComLoop = new Set(stopAt);
+  stopComLoop.add(passo.id);
+
+  for (let i = 0; i < lista.length; i++) {
+    if (estadoGlobal.passosExecutados >= MAX_PASSOS_EXECUCAO) {
+      return {
+        sucesso: false,
+        contexto,
+        passosExecutados: estadoGlobal.passosExecutados,
+        respostas,
+        erro: `Limite de ${MAX_PASSOS_EXECUCAO} passos excedido — possível loop infinito.`,
+      };
+    }
+    const subContexto: SmartflowContexto = { ...contexto, [nomeVar]: lista[i], indice: i };
+    const sub = await walkInterno({
+      passos,
+      porClienteId,
+      indicePorId,
+      modoGrafo,
+      startNode: corpoStart,
+      contexto: subContexto,
+      stopAt: stopComLoop,
+      estadoGlobal,
+      executores,
+      respostas,
+    });
+    if (!sub.sucesso) return sub;
+
+    // Mescla contexto resultante de volta no global. Remove `item` (ou
+    // nome configurado) e `indice` — eles só fazem sentido durante a iteração.
+    const proxCtx = { ...sub.contexto } as Record<string, unknown>;
+    delete proxCtx[nomeVar];
+    delete proxCtx.indice;
+    contexto = proxCtx as SmartflowContexto;
+  }
+
+  return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
 }

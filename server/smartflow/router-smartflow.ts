@@ -32,14 +32,20 @@ const GATILHOS = [
 const TIPOS_PASSO = [
   "ia_classificar",
   "ia_responder",
+  "ia_extrair_campos",
+  "crm_buscar_contato",
+  "crm_listar_acoes_cliente",
+  "processo_buscar_movimentacoes",
   "calcom_horarios",
   "calcom_agendar",
   "calcom_listar",
   "calcom_cancelar",
   "calcom_remarcar",
   "whatsapp_enviar",
+  "whatsapp_aguardar_resposta",
   "transferir",
   "condicional",
+  "para_cada_item",
   "esperar",
   "webhook",
   "kanban_criar_card",
@@ -98,7 +104,7 @@ export const smartflowRouter = router({
     const { CATALOGO_VARIAVEIS } = await import("./interpolar");
     // Enriquece com os campos personalizados do escritório — ficam
     // disponíveis pra todos os gatilhos que tenham `contatoId` no contexto.
-    let camposExtras: { path: string; label: string; exemplo: string }[] = [];
+    let camposExtras: { path: string; label: string; exemplo: string; categoria: string }[] = [];
     try {
       const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -117,6 +123,7 @@ export const smartflowRouter = router({
             path: `cliente.campos.${r.chave}`,
             label: r.label,
             exemplo: r.tipo === "data" ? "2025-04-01" : r.tipo === "numero" ? "123" : r.label.toLowerCase(),
+            categoria: "campos_personalizados",
           }));
         }
       }
@@ -367,71 +374,71 @@ export const smartflowRouter = router({
       return { success: r.executou, execId: r.execId, erro: r.erro, respostas: r.respostas };
     }),
 
-  /** Cria cenário template "Atendimento + Agendamento" */
-  criarTemplateAtendimento: protectedProcedure.mutation(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  /**
+   * Cria um cenário a partir de um template da galeria (shared/smartflow-templates).
+   * Materializa gatilho + configGatilho + passos prontos. Aceita customizações
+   * do wizard (nome, configGatilho, config por passo) que sobrescrevem o
+   * template antes de gravar — assim o cenário já sai pronto pra usar.
+   * Retorna o id pra navegar pro editor.
+   */
+  criarDeTemplate: requireModulo("smartflow")
+    .input(z.object({
+      templateId: z.string().max(64),
+      /** Sobrescreve o nome do template. */
+      nome: z.string().min(2).max(128).optional(),
+      /** Merge sobre o configGatilho do template (ex: diasAtraso ajustado). */
+      configGatilho: z.record(z.any()).optional(),
+      /** Map clienteId do passo → patch de config (merge). Ex: editar mensagem. */
+      passosConfig: z.record(z.record(z.any())).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "smartflow", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar cenários SmartFlow." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    const [result] = await db.insert(smartflowCenarios).values({
-      escritorioId: esc.escritorio.id,
-      nome: "Atendimento + Agendamento",
-      descricao: "Atende cliente via WhatsApp, tira dúvidas iniciais e agenda reunião automaticamente pelo Cal.com.",
-      gatilho: "whatsapp_mensagem",
-      criadoPor: ctx.user.id,
-    });
-    const cenarioId = (result as { insertId: number }).insertId;
+      const { getTemplate } = await import("../../shared/smartflow-templates");
+      const tpl = getTemplate(input.templateId);
+      if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
 
-    const passos = [
-      { ordem: 1, tipo: "ia_classificar", config: { categorias: ["agendar", "duvida", "emergencia", "outro"] } },
-      { ordem: 2, tipo: "ia_responder", config: { prompt: "Você é recepcionista de um escritório de advocacia. Se o cliente quer agendar, diga que vai verificar os horários. Se tem dúvida, responda de forma educada. Se é emergência, diga que vai transferir." } },
-      { ordem: 3, tipo: "calcom_horarios", config: { duracao: 30 } },
-    ];
+      const nomeFinal = input.nome?.trim() || tpl.nome;
+      const configGatilhoFinal = {
+        ...(tpl.configGatilho || {}),
+        ...(input.configGatilho || {}),
+      };
+      const temConfigGatilho = Object.keys(configGatilhoFinal).length > 0;
 
-    for (const p of passos) {
-      await db.insert(smartflowPassos).values({
-        cenarioId,
-        ordem: p.ordem,
-        tipo: p.tipo as any,
-        config: JSON.stringify(p.config),
+      const [result] = await db.insert(smartflowCenarios).values({
+        escritorioId: perm.escritorioId,
+        nome: nomeFinal,
+        descricao: tpl.descricao,
+        gatilho: tpl.gatilho,
+        configGatilho: temConfigGatilho ? JSON.stringify(configGatilhoFinal) : null,
+        criadoPor: ctx.user.id,
+        // Templates nascem inativos — usuário revisa e ativa quando estiver pronto.
+        ativo: false,
       });
-    }
+      const cenarioId = (result as { insertId: number }).insertId;
 
-    return { id: cenarioId, nome: "Atendimento + Agendamento" };
-  }),
+      for (let i = 0; i < tpl.passos.length; i++) {
+        const p = tpl.passos[i];
+        // Aplica patch de config do wizard (merge raso sobre a config do template).
+        const patch = input.passosConfig?.[p.clienteId];
+        const configFinal = patch ? { ...p.config, ...patch } : p.config;
+        await db.insert(smartflowPassos).values({
+          cenarioId,
+          ordem: i + 1,
+          tipo: p.tipo as any,
+          config: JSON.stringify(configFinal),
+          clienteId: p.clienteId || null,
+          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
+            ? JSON.stringify(p.proximoSe)
+            : null,
+        });
+      }
 
-  /** Cria cenário template "Pagamento → Kanban" */
-  criarTemplatePagamentoKanban: protectedProcedure.mutation(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-    const [result] = await db.insert(smartflowCenarios).values({
-      escritorioId: esc.escritorio.id,
-      nome: "Pagamento → Kanban",
-      descricao: "Quando cliente paga a primeira cobrança (não assinatura), cria card automático no Kanban na coluna 'Dar entrada'.",
-      gatilho: "pagamento_recebido",
-      criadoPor: ctx.user.id,
-    });
-    const cenarioId = (result as { insertId: number }).insertId;
-
-    const passos = [
-      { ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
-      { ordem: 2, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
-      { ordem: 3, tipo: "kanban_criar_card", config: { prioridade: "media" } },
-    ];
-
-    for (const p of passos) {
-      await db.insert(smartflowPassos).values({
-        cenarioId, ordem: p.ordem, tipo: p.tipo as any,
-        config: JSON.stringify(p.config),
-      });
-    }
-
-    return { id: cenarioId, nome: "Pagamento → Kanban" };
-  }),
+      return { id: cenarioId, nome: nomeFinal };
+    }),
 
   /** Execuções recentes (lista) */
   execucoes: protectedProcedure

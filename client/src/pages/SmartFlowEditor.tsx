@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
   CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle,
-  Move, PhoneCall, Play, Plus, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
+  Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
   CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
@@ -102,7 +102,11 @@ import { EditorTopbar } from "./smartflow/editor-topbar";
 import { EditorPaleta } from "./smartflow/editor-paleta";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
-import { EditorPainelSaida } from "./smartflow/editor-painel-saida";
+import { variaveisPublicadasPorPasso } from "./smartflow/editor-painel-saida";
+import { PainelVariaveis } from "./smartflow/editor-painel-variaveis";
+import { validarPasso, ValidacaoPassoPanel } from "./smartflow/editor-validacao-passo";
+import { VariaveisFluxoContext } from "@/hooks/useSmartFlowVariaveis";
+import type { Variavel } from "@/components/VariableInput";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
@@ -110,14 +114,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_classificar: Brain,
   ia_responder: Bot,
+  ia_extrair_campos: Sparkles,
+  crm_buscar_contato: Users,
+  crm_listar_acoes_cliente: BookOpen,
+  processo_buscar_movimentacoes: BookOpen,
   calcom_horarios: Calendar,
   calcom_agendar: CheckCircle2,
   calcom_listar: CalendarSearch,
   calcom_cancelar: CalendarX,
   calcom_remarcar: CalendarClock,
   whatsapp_enviar: MessageCircle,
+  whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
   condicional: GitBranch,
+  para_cada_item: Repeat,
   esperar: Clock,
   webhook: Webhook,
   kanban_criar_card: LayoutGrid,
@@ -212,10 +222,62 @@ const GATILHO_NODE_ID = "__gatilho__";
 
 // ─── Nós visuais ───────────────────────────────────────────────────────────
 
+/**
+ * Gradiente do header + cor da borda por "família visual" do passo.
+ * Agrupa tipos relacionados na mesma cor pra bater o olho e identificar.
+ */
+const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
+  ia_classificar: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
+  ia_responder: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
+  ia_extrair_campos: { grad: "from-fuchsia-500 to-purple-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
+  crm_buscar_contato: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
+  crm_listar_acoes_cliente: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
+  processo_buscar_movimentacoes: { grad: "from-indigo-500 to-blue-500", border: "border-indigo-300 dark:border-indigo-800" },
+  calcom_horarios: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
+  calcom_agendar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
+  calcom_listar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
+  calcom_cancelar: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
+  calcom_remarcar: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
+  whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
+  whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
+  transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  para_cada_item: { grad: "from-amber-500 to-yellow-500", border: "border-amber-300 dark:border-amber-800" },
+  esperar: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+  webhook: { grad: "from-pink-500 to-rose-500", border: "border-pink-300 dark:border-pink-800" },
+  kanban_criar_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  kanban_mover_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  kanban_atribuir_responsavel: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  kanban_tags: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  asaas_gerar_cobranca: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
+  asaas_cancelar_cobranca: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
+  asaas_consultar_valor_aberto: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
+  asaas_marcar_recebida: { grad: "from-emerald-500 to-green-600", border: "border-emerald-300 dark:border-emerald-800" },
+  definir_variavel: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+  definir_campo_personalizado: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+};
+
 function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
   const resumo = resumirConfig(data.tipo, data.config);
+  const cor = FAMILIA_COR_NO[data.tipo] ?? { grad: "from-slate-500 to-slate-600", border: "border-border" };
+
+  // Gatilho atual (pra validar). Lido direto do ReactFlow a cada render —
+  // sem memo, senão o valor congela no mount e não acompanha troca de gatilho.
+  const { getNodes } = useReactFlow();
+  const gatilho = (getNodes() as AnyNode[]).find(isGatilhoNode)?.data.gatilho ?? "mensagem_canal";
+
+  // Validação → status dot + mensagem inline.
+  const validacoes = validarPasso(data.tipo, gatilho, data.config);
+  const temErro = validacoes.some((v) => v.severidade === "erro");
+  const temAviso = !temErro && validacoes.some((v) => v.severidade === "aviso");
+  const statusCor = temErro ? "bg-red-400" : temAviso ? "bg-amber-400" : "bg-emerald-400";
+  const primeiroProblema = validacoes.find((v) => v.severidade === "erro")
+    ?? validacoes.find((v) => v.severidade === "aviso");
+
+  // Variáveis publicadas pra mostrar como chips no rodapé.
+  const publicadas = variaveisPublicadasPorPasso(data.tipo, data.config);
 
   // O condicional ganha um handle por ramo. Cada condição tem um id estável
   // (`config.condicoes[i].id`), mais o "fallback". Pros demais passos basta
@@ -227,23 +289,65 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
 
   return (
     <div
-      className={`rounded-lg border-2 shadow-sm bg-card min-w-[220px] max-w-[280px] ${
-        selected ? "border-primary" : "border-border"
+      className={`rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-hidden transition-shadow ${
+        selected ? "ring-2 ring-violet-400 ring-offset-1 border-violet-400" : cor.border
       }`}
     >
       <Handle type="target" position={Position.Top} className="!bg-muted-foreground/40" />
-      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-[6px] ${meta.cor}`}>
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-xs font-semibold truncate">{meta.label}</span>
+
+      {/* Header com gradiente da família + status dot */}
+      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r ${cor.grad} text-white`}>
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="text-[11px] font-bold truncate flex-1 uppercase tracking-wide">{meta.label}</span>
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${statusCor}`}
+          title={temErro ? "Tem erro de configuração" : temAviso ? "Tem aviso" : "Configuração OK"}
+          style={{ boxShadow: "0 0 0 2px rgba(255,255,255,0.5)" }}
+        />
       </div>
+
+      {/* Body: preview da config */}
       {resumo && (
-        <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground border-t bg-muted/30 rounded-b-[6px]">
+        <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground border-t bg-card">
           {resumo}
         </div>
       )}
 
+      {/* Validação inline (só erro/aviso, compacto) */}
+      {primeiroProblema && (
+        <div
+          className={`px-2.5 py-1 text-[9.5px] flex items-start gap-1 border-t leading-snug ${
+            temErro
+              ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+              : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300"
+          }`}
+        >
+          <AlertTriangle className="h-2.5 w-2.5 shrink-0 mt-0.5" />
+          <span className="line-clamp-2">{primeiroProblema.mensagem}</span>
+        </div>
+      )}
+
+      {/* Footer: chips de variáveis publicadas */}
+      {publicadas.length > 0 && (
+        <div className="px-2 py-1.5 bg-muted/40 border-t flex flex-wrap items-center gap-1">
+          <span className="text-[8.5px] uppercase tracking-wider text-muted-foreground font-bold">dá</span>
+          {publicadas.slice(0, 2).map((v) => (
+            <span
+              key={v.path}
+              className="text-[8.5px] font-mono font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 truncate max-w-[110px]"
+              title={v.label}
+            >
+              {`{{${v.path}}}`}
+            </span>
+          ))}
+          {publicadas.length > 2 && (
+            <span className="text-[8.5px] text-muted-foreground">+{publicadas.length - 2}</span>
+          )}
+        </div>
+      )}
+
       {isCondicional ? (
-        <div className="border-t bg-muted/20 rounded-b-[6px] py-1">
+        <div className="border-t bg-muted/20 py-1">
           {condicoes.map((c, idx) => (
             <HandleRow
               key={c.id}
@@ -253,6 +357,13 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
             />
           ))}
           <HandleRow handleId="fallback" label="fallback" italic cor="#f59e0b" />
+        </div>
+      ) : data.tipo === "para_cada_item" ? (
+        // Loop tem 2 saídas: "corpo" (subfluxo da iteração) e "depois"
+        // (continuação após o loop terminar).
+        <div className="border-t bg-muted/20 py-1">
+          <HandleRow handleId="corpo" label="🔁 corpo do loop" cor="#f59e0b" />
+          <HandleRow handleId="depois" label="depois (terminou)" cor="#3b82f6" />
         </div>
       ) : (
         <Handle type="source" position={Position.Bottom} id="default" className="!bg-muted-foreground/40" />
@@ -926,6 +1037,44 @@ export default function SmartFlowEditor() {
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
   const gatilhoNode = nodes.find(isGatilhoNode) || null;
 
+  // Catálogo de variáveis do backend (gatilho + campos personalizados).
+  const { data: catalogoVars } = (trpc as any).smartflow.catalogoVariaveis.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
+
+  // Lista COMPLETA de variáveis do fluxo: variáveis do gatilho atual +
+  // campos personalizados (do backend) + variáveis publicadas por cada
+  // passo no canvas (categoria "passos"). Provida via Context pra todos os
+  // VariableInput/Trigger e pro drawer "Informações".
+  const variaveisCompletas: Variavel[] = useMemo(() => {
+    const gatilhoAtual = gatilhoNode?.data.gatilho ?? "mensagem_canal";
+    const doGatilho: Variavel[] = Array.isArray(catalogoVars)
+      ? ((catalogoVars.find((c: any) => c.gatilho === gatilhoAtual)?.variaveis as Variavel[]) ?? [])
+      : [];
+    const vistos = new Set(doGatilho.map((v) => v.path));
+    const dosPassos: Variavel[] = [];
+    for (const node of nodes) {
+      if (node.type !== "passo") continue;
+      const pn = node as PassoNode;
+      const pub = variaveisPublicadasPorPasso(pn.data.tipo, pn.data.config);
+      for (const v of pub) {
+        if (vistos.has(v.path)) continue;
+        vistos.add(v.path);
+        dosPassos.push({
+          path: v.path,
+          label: v.label,
+          exemplo: "",
+          // Campos personalizados persistidos viram categoria própria;
+          // resto é "resultado de passo anterior".
+          categoria: v.path.startsWith("cliente.campos.") ? "campos_personalizados" : "passos",
+        });
+      }
+    }
+    return [...doGatilho, ...dosPassos];
+  }, [catalogoVars, gatilhoNode, nodes]);
+
   // Callbacks canvas. Drag/move/select também passa por `onNodesChange`,
   // mas só os tipos com efeito persistente marcam dirty (skip "select").
   const onNodesChange = useCallback(
@@ -1273,6 +1422,9 @@ export default function SmartFlowEditor() {
     // Anula o padding p-6 do <main> do AppLayout e ocupa toda a viewport
     // (menos o header mobile h-14). Sem altura explícita o ReactFlow
     // colapsa pra 0px e o canvas fica invisível.
+    // Provê a lista completa de variáveis pra todos os VariableInput/Trigger
+    // do editor (inclui variáveis publicadas pelos passos do fluxo).
+    <VariaveisFluxoContext.Provider value={variaveisCompletas}>
     <div className="-m-6 flex flex-col h-[calc(100vh-3.5rem)] md:h-screen bg-background">
       <EditorTopbar
         nome={nome}
@@ -1404,10 +1556,10 @@ export default function SmartFlowEditor() {
             <Tabs defaultValue="config" className="flex flex-col flex-1">
               <TabsList className="grid grid-cols-2 mx-2 mt-2 h-8 shrink-0">
                 <TabsTrigger value="config" className="text-[11px] gap-1">
-                  ⚙ Configuração
+                  ⚙ Configurar
                 </TabsTrigger>
-                <TabsTrigger value="saida" className="text-[11px] gap-1">
-                  📤 Saída
+                <TabsTrigger value="info" className="text-[11px] gap-1">
+                  📚 Informações
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="config" className="flex-1 mt-0 overflow-y-auto">
@@ -1418,14 +1570,8 @@ export default function SmartFlowEditor() {
                   onChangeGatilho={trocarGatilho}
                 />
               </TabsContent>
-              <TabsContent value="saida" className="flex-1 mt-0 overflow-y-auto">
-                <EditorPainelSaida
-                  tipoPasso={isGatilhoNode(selectedNode) ? null : selectedNode.data.tipo}
-                  gatilho={gatilhoNode?.data.gatilho ?? "mensagem_canal"}
-                  configPasso={
-                    isGatilhoNode(selectedNode) ? undefined : (selectedNode.data.config as Record<string, unknown>)
-                  }
-                />
+              <TabsContent value="info" className="flex-1 mt-0 overflow-y-auto p-0 data-[state=active]:flex data-[state=active]:flex-col">
+                <PainelVariaveis variaveis={variaveisCompletas} />
               </TabsContent>
             </Tabs>
           ) : (
@@ -1477,6 +1623,7 @@ export default function SmartFlowEditor() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </VariaveisFluxoContext.Provider>
   );
 }
 
@@ -1554,7 +1701,7 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
   const Icon = TIPO_ICON[node.data.tipo] ?? Zap;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-3">
       <div className="flex items-center gap-2">
         <div className={`p-1.5 rounded ${meta.cor}`}>
           <Icon className="h-4 w-4" />
@@ -1565,6 +1712,8 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
         </div>
       </div>
 
+      <ValidacaoPainel node={node} />
+
       <ConfigFields node={node} onChange={onChange} />
 
       <div className="pt-2 border-t">
@@ -1574,6 +1723,20 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
       </div>
     </div>
   );
+}
+
+/**
+ * Renderiza os avisos de validação do passo selecionado, consultando o
+ * gatilho atual via contexto do ReactFlow. Componente fino — só liga
+ * o validador ao painel.
+ */
+function ValidacaoPainel({ node }: { node: PassoNode }) {
+  const { getNodes } = useReactFlow();
+  const allNodes = getNodes() as AnyNode[];
+  const gatilhoNode = allNodes.find(isGatilhoNode);
+  const gatilho = gatilhoNode?.data.gatilho ?? "mensagem_canal";
+  const itens = validarPasso(node.data.tipo, gatilho, node.data.config);
+  return <ValidacaoPassoPanel itens={itens} />;
 }
 
 /**
@@ -1846,6 +2009,482 @@ function ConfigIaResponderFields({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Config do passo `ia_extrair_campos`. Lista de campos a extrair (cada um
+ * tem chave + tipo + descrição + obrigatório + persistir). UI:
+ *   - Linha por campo, com botão remover.
+ *   - Seletor de "tipo" (texto, número, data, email, etc.).
+ *   - Checkbox "Persistir no cadastro do cliente" — quando marcado, integra
+ *     com camposPersonalizadosCliente (precisa que a chave exista no catálogo).
+ *   - Quick-add "Importar do catálogo" que adiciona campos pré-configurados
+ *     a partir do catálogo do escritório (`camposPersonalizadosCliente`).
+ */
+function ConfigIaExtrairCamposFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  interface CampoLocal {
+    chave: string;
+    tipo: "texto" | "numero" | "boolean" | "data" | "email" | "cpf" | "cnpj" | "telefone" | "lista_texto";
+    descricao?: string;
+    obrigatorio?: boolean;
+    persistir?: boolean;
+  }
+  const campos: CampoLocal[] = Array.isArray(cfg.campos)
+    ? (cfg.campos as CampoLocal[]).map((c) => ({ ...c, tipo: c.tipo || "texto" }))
+    : [];
+
+  const { data: camposCatalogo } = (trpc as any).camposCliente.listar.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const opcoesDoCatalogo: Array<{ chave: string; label: string; tipo: string }> = Array.isArray(camposCatalogo)
+    ? camposCatalogo.map((c: any) => ({ chave: c.chave, label: c.label || c.chave, tipo: c.tipo || "texto" }))
+    : [];
+
+  // Tipos no catálogo (texto/numero/data/textarea/select/boolean) precisam
+  // ser normalizados pros tipos da extração. textarea/select → texto.
+  const normalizarTipo = (catalogoTipo: string): CampoLocal["tipo"] => {
+    if (catalogoTipo === "numero") return "numero";
+    if (catalogoTipo === "boolean") return "boolean";
+    if (catalogoTipo === "data") return "data";
+    return "texto";
+  };
+
+  const atualizarCampo = (i: number, patch: Partial<CampoLocal>) => {
+    const novo = campos.slice();
+    novo[i] = { ...novo[i], ...patch };
+    onChange({ campos: novo });
+  };
+  const removerCampo = (i: number) => {
+    onChange({ campos: campos.filter((_, j) => j !== i) });
+  };
+  const adicionarCampo = (preset?: Partial<CampoLocal>) => {
+    const novoCampo: CampoLocal = {
+      chave: preset?.chave || "",
+      tipo: preset?.tipo || "texto",
+      descricao: preset?.descricao || "",
+      persistir: preset?.persistir ?? false,
+    };
+    onChange({ campos: [...campos, novoCampo] });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">De onde vem a mensagem?</Label>
+        <Input
+          value={String(cfg.fonteMensagem || "mensagem")}
+          onChange={(e) => onChange({ fonteMensagem: e.target.value })}
+          placeholder="mensagem"
+          className="font-mono text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Caminho no contexto. Default <code>mensagem</code>. Quando vier
+          depois de "aguardar resposta", troque pra <code>respostaUsuario</code>.
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Campos a extrair</Label>
+          <span className="text-[10px] text-muted-foreground">{campos.length} campo(s)</span>
+        </div>
+
+        {campos.length === 0 && (
+          <p className="text-[10px] text-muted-foreground italic mb-2">
+            Adicione pelo menos 1 campo abaixo. A IA vai ler a mensagem e tentar
+            preencher cada um — campos que ela não achar ficam vazios.
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {campos.map((c, i) => (
+            <div key={i} className="border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-muted/20 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={c.chave}
+                  onChange={(e) => atualizarCampo(i, { chave: e.target.value })}
+                  placeholder="cpf"
+                  className="font-mono text-xs h-7 flex-1"
+                />
+                <Select
+                  value={c.tipo}
+                  onValueChange={(v) => atualizarCampo(i, { tipo: v as CampoLocal["tipo"] })}
+                >
+                  <SelectTrigger className="h-7 text-xs w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="texto">Texto</SelectItem>
+                    <SelectItem value="numero">Número</SelectItem>
+                    <SelectItem value="boolean">Verdadeiro/Falso</SelectItem>
+                    <SelectItem value="data">Data</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="cpf">CPF</SelectItem>
+                    <SelectItem value="cnpj">CNPJ</SelectItem>
+                    <SelectItem value="telefone">Telefone</SelectItem>
+                    <SelectItem value="lista_texto">Lista de textos</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-destructive"
+                  onClick={() => removerCampo(i)}
+                  title="Remover campo"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+              <Input
+                value={c.descricao || ""}
+                onChange={(e) => atualizarCampo(i, { descricao: e.target.value })}
+                placeholder="Descrição (opcional) — ajuda a IA a entender o que extrair"
+                className="text-[11px] h-7"
+              />
+              <div className="flex items-center gap-3 flex-wrap text-[10px]">
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <Checkbox
+                    checked={!!c.obrigatorio}
+                    onCheckedChange={(v) => atualizarCampo(i, { obrigatorio: !!v })}
+                  />
+                  Obrigatório
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer" title="Salva no cadastro do cliente (precisa de contatoId e que a chave exista no catálogo)">
+                  <Checkbox
+                    checked={!!c.persistir}
+                    onCheckedChange={(v) => atualizarCampo(i, { persistir: !!v })}
+                  />
+                  Salvar no cadastro
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-1.5 mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => adicionarCampo()}
+            className="h-7 text-xs gap-1"
+          >
+            <Plus className="h-3 w-3" />
+            Adicionar campo
+          </Button>
+          {opcoesDoCatalogo.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  Importar do catálogo
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1.5 px-1">
+                  Campos personalizados do escritório
+                </p>
+                <div className="space-y-0.5 max-h-72 overflow-y-auto">
+                  {opcoesDoCatalogo.map((opt) => {
+                    const jaAdded = campos.some((c) => c.chave === opt.chave);
+                    return (
+                      <button
+                        key={opt.chave}
+                        onClick={() =>
+                          adicionarCampo({
+                            chave: opt.chave,
+                            tipo: normalizarTipo(opt.tipo),
+                            descricao: opt.label,
+                            persistir: true,
+                          })
+                        }
+                        disabled={jaAdded}
+                        className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-900/50 ${
+                          jaAdded ? "opacity-40 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        <p className="font-medium">{opt.label}</p>
+                        <p className="text-[9px] text-muted-foreground font-mono">{opt.chave} · {opt.tipo}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[10px] text-blue-900 dark:text-blue-200 leading-snug">
+        <strong>Como funciona:</strong> a IA recebe a mensagem e devolve um objeto
+        com os campos que conseguiu extrair (campos não mencionados ficam fora —
+        sem invenção). Os valores ficam em <code>{`{{extracao.<chave>}}`}</code>.
+        Quando "Salvar no cadastro" estiver ✅ e o contexto tiver <code>contatoId</code>,
+        também grava em <code>{`{{cliente.campos.<chave>}}`}</code>.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `crm_buscar_contato` — escolha do campo + valor interpolável.
+ * Mostra exemplos de variáveis típicas (`{{telefoneCliente}}`, `{{extracao.cpf}}`)
+ * pra ensinar o uso.
+ */
+function ConfigCrmBuscarContatoFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const tipoBusca = String(cfg.tipoBusca || "telefone");
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.valor || "");
+    onChange({ valor: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Buscar por</Label>
+        <Select value={tipoBusca} onValueChange={(v) => onChange({ tipoBusca: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="telefone">Telefone</SelectItem>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="cpfCnpj">CPF / CNPJ</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Valor a buscar</Label>
+          <VariableTrigger
+            inputId="cfg-crm-buscar-valor"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-crm-buscar-valor"
+          value={String(cfg.valor || "")}
+          onChange={(v) => onChange({ valor: v })}
+          variaveis={variaveis}
+          placeholder={
+            tipoBusca === "cpfCnpj"
+              ? "{{extracao.cpf}}"
+              : tipoBusca === "email"
+              ? "{{extracao.email}}"
+              : "{{telefoneCliente}}"
+          }
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Suporta interpolação. Match exato — se o cliente cadastrou com 55 mas
+          o gatilho veio sem (ou vice-versa), use <code>ia_extrair_campos</code> antes
+          pra normalizar.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[10px] text-blue-900 dark:text-blue-200 leading-snug">
+        <strong>Resultado:</strong> se achar, popula <code>contatoId</code>,{" "}
+        <code>nomeCliente</code>, <code>telefoneCliente</code>,{" "}
+        <code>cliente.campos.*</code>. Use <code>contatoEncontrado</code> num
+        passo condicional pra ramificar.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `crm_listar_acoes_cliente` — filtros opcionais por tipo
+ * de processo (litigioso/extrajudicial), polo do cliente e limite.
+ */
+function ConfigCrmListarAcoesClienteFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Filtrar por tipo</Label>
+        <Select
+          value={String(cfg.tipoFiltro || "todos")}
+          onValueChange={(v) => onChange({ tipoFiltro: v })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="litigioso">Litigiosos (judicial)</SelectItem>
+            <SelectItem value="extrajudicial">Extrajudiciais</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Filtrar por polo do cliente</Label>
+        <Select
+          value={String(cfg.poloFiltro || "todos")}
+          onValueChange={(v) => onChange({ poloFiltro: v })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="ativo">Ativo (autor)</SelectItem>
+            <SelectItem value="passivo">Passivo (réu)</SelectItem>
+            <SelectItem value="interessado">Interessado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="text-xs">Limite</Label>
+        <Input
+          type="number"
+          min={1}
+          max={50}
+          value={Number(cfg.limite ?? 10)}
+          onChange={(e) => onChange({ limite: Math.max(1, Math.min(50, Number(e.target.value) || 10)) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Ações vão pra <code>{`{{acoes}}`}</code> (lista) e{" "}
+          <code>{`{{acoesQuantidade}}`}</code>. Use{" "}
+          <strong>"Para cada item"</strong> pra iterar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `processo_buscar_movimentacoes` — interpolação no
+ * processoId (default `{{acaoId}}`), multiselect de tipos de evento,
+ * janela de dias e limite.
+ */
+function ConfigProcessoBuscarMovimentacoesFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => onChange({ processoId: `{{${path}}}` });
+  const tiposAtuais = Array.isArray(cfg.tipos) ? (cfg.tipos as string[]) : [];
+
+  const TIPOS_OPCOES = [
+    { id: "movimentacao", label: "Movimentação" },
+    { id: "publicacao_dje", label: "Publicação DJE" },
+    { id: "sentenca", label: "Sentença" },
+    { id: "despacho", label: "Despacho" },
+    { id: "audiencia", label: "Audiência" },
+    { id: "intimacao", label: "Intimação" },
+    { id: "citacao", label: "Citação" },
+    { id: "mandado", label: "Mandado" },
+    { id: "nova_acao", label: "Nova ação" },
+    { id: "outro", label: "Outro" },
+  ];
+
+  const toggleTipo = (id: string) => {
+    const novo = tiposAtuais.includes(id)
+      ? tiposAtuais.filter((t) => t !== id)
+      : [...tiposAtuais, id];
+    onChange({ tipos: novo });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Processo a consultar</Label>
+          <VariableTrigger
+            inputId="cfg-mov-processo"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-mov-processo"
+          value={String(cfg.processoId || "")}
+          onChange={(v) => onChange({ processoId: v })}
+          variaveis={variaveis}
+          placeholder="{{acaoEscolhida.id}} ou número CNJ"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Pode ser ID (cliente_processos.id), CNJ ou variável. Default se vazio:{" "}
+          <code>{`{{acaoId}}`}</code> do contexto.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Tipos a incluir (vazio = todos)</Label>
+        <div className="grid grid-cols-2 gap-1 mt-1 max-h-40 overflow-y-auto border rounded p-1.5 bg-muted/10">
+          {TIPOS_OPCOES.map((opt) => (
+            <label
+              key={opt.id}
+              className="flex items-center gap-1.5 text-[11px] cursor-pointer px-1 py-0.5 rounded hover:bg-muted/40"
+            >
+              <Checkbox
+                checked={tiposAtuais.includes(opt.id)}
+                onCheckedChange={() => toggleTipo(opt.id)}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Janela (dias)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={365}
+            value={Number(cfg.diasJanela ?? 30)}
+            onChange={(e) =>
+              onChange({ diasJanela: Math.max(1, Math.min(365, Number(e.target.value) || 30)) })
+            }
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Limite</Label>
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            value={Number(cfg.limite ?? 10)}
+            onChange={(e) =>
+              onChange({ limite: Math.max(1, Math.min(50, Number(e.target.value) || 10)) })
+            }
+          />
+        </div>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        Eventos vão pra <code>{`{{movimentacoes}}`}</code>; o mais recente
+        fica em <code>{`{{movimentacaoMaisRecente}}`}</code>.
+      </p>
     </div>
   );
 }
@@ -2145,6 +2784,8 @@ function ConfigWhatsappEnviarFields({
         id="cfg-whatsapp-template"
         as="textarea"
         rows={4}
+        highlight
+        preview
         value={String(cfg.template || "")}
         onChange={(v) => onChange({ template: v })}
         variaveis={variaveis}
@@ -2154,6 +2795,212 @@ function ConfigWhatsappEnviarFields({
         Use <code>{"{{"}</code> pra inserir variável dinâmica. Aliases legado
         (<code>{"{nome}"}</code>, <code>{"{intencao}"}</code>, <code>{"{horario}"}</code>) continuam funcionando.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `whatsapp_aguardar_resposta`. Envia mensagem + lista
+ * opcional de opções (vira menu numerado) + timeout. O fluxo pausa até
+ * o cliente responder; quando há opções, a resposta é parseada pra
+ * `opcaoEscolhida`.
+ */
+function ConfigWhatsappAguardarRespostaFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const opcoes: string[] = Array.isArray(cfg.opcoes) ? (cfg.opcoes as string[]) : [];
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.template || "");
+    onChange({ template: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  const atualizarOpcao = (i: number, valor: string) => {
+    const novo = opcoes.slice();
+    novo[i] = valor;
+    onChange({ opcoes: novo });
+  };
+  const removerOpcao = (i: number) => {
+    onChange({ opcoes: opcoes.filter((_, j) => j !== i) });
+  };
+  const adicionarOpcao = () => {
+    onChange({ opcoes: [...opcoes, ""] });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Mensagem (pergunta ao cliente)</Label>
+          <VariableTrigger
+            inputId="cfg-aguardar-template"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-aguardar-template"
+          as="textarea"
+          rows={3}
+          highlight
+          preview
+          value={String(cfg.template || "")}
+          onChange={(v) => onChange({ template: v })}
+          variaveis={variaveis}
+          placeholder="Sobre qual das suas ações você quer saber?"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          O menu de opções (se preenchido) é anexado automaticamente abaixo da mensagem.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">
+          Opções (vira menu numerado — vazio = pergunta aberta)
+        </Label>
+        <div className="space-y-1.5 mt-1">
+          {opcoes.map((o, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}.</span>
+              <Input
+                value={o}
+                onChange={(e) => atualizarOpcao(i, e.target.value)}
+                placeholder="Texto da opção"
+                className="text-xs h-7"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-destructive"
+                onClick={() => removerOpcao(i)}
+                title="Remover opção"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={adicionarOpcao}
+            className="h-7 text-xs gap-1 w-full"
+          >
+            <Plus className="h-3 w-3" />
+            Adicionar opção
+          </Button>
+        </div>
+        {opcoes.length > 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Resposta do cliente vai pra <code>{`{{respostaUsuario}}`}</code>.
+            Quando bate com uma opção, <code>{`{{opcaoEscolhida}}`}</code> é populado{" "}
+            (<code>indice</code>, <code>texto</code>, <code>numero</code>).
+          </p>
+        )}
+      </div>
+
+      <div>
+        <Label className="text-xs">Timeout (minutos)</Label>
+        <Input
+          type="number"
+          min={1}
+          max={7 * 24 * 60}
+          value={Number(cfg.timeoutMinutos ?? 1440)}
+          onChange={(e) =>
+            onChange({
+              timeoutMinutos: Math.max(1, Math.min(7 * 24 * 60, Number(e.target.value) || 1440)),
+            })
+          }
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Quanto esperar antes de desistir. Default 1440 (24h). Quando expira,
+          o fluxo continua pelo ramo <code>timeout</code> do <code>proximoSe</code>{" "}
+          (se configurado) ou termina.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+        <strong>Limitação:</strong> só 1 execução por (cenário + contato) pode
+        aguardar ao mesmo tempo. Mensagens novas do cliente retomam essa
+        execução pendente — pra começar fluxo do zero, espere o timeout
+        ou pause/exclua o cenário.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Config do passo `para_cada_item` — loop sobre lista do contexto.
+ *  - caminhoLista: ex "acoes", "movimentacoes", "cliente.processos"
+ *  - nomeVarItem: nome da variável dentro da iteração (default "item")
+ *  - limite: máximo de iterações (default 20, max 200)
+ *
+ * No canvas, o nó tem 2 saídas: "corpo" (subfluxo da iteração) e "depois"
+ * (continuação). O editor visual cuida das edges; aqui só a config.
+ */
+function ConfigParaCadaItemFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Caminho da lista no contexto</Label>
+        <Input
+          value={String(cfg.caminhoLista || "")}
+          onChange={(e) => onChange({ caminhoLista: e.target.value })}
+          placeholder="acoes"
+          className="font-mono text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Ex: <code>acoes</code> (do passo "Listar ações"), <code>movimentacoes</code>{" "}
+          (de "Buscar movimentações") ou <code>cliente.processos</code> (dot-notation).
+          Lista ausente = zero iterações sem erro.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Nome da variável do item</Label>
+        <Input
+          value={String(cfg.nomeVarItem || "")}
+          onChange={(e) => onChange({ nomeVarItem: e.target.value })}
+          placeholder="item"
+          className="font-mono text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Default <code>item</code>. Dentro do corpo do loop você acessa via{" "}
+          <code>{`{{item.id}}`}</code>, <code>{`{{item.apelido}}`}</code>, etc.
+          Trocar é útil em loops aninhados.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Limite de iterações</Label>
+        <Input
+          type="number"
+          min={1}
+          max={200}
+          value={Number(cfg.limite ?? 20)}
+          onChange={(e) =>
+            onChange({ limite: Math.max(1, Math.min(200, Number(e.target.value) || 20)) })
+          }
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Default 20. Lista maior é truncada — protege contra loops infinitos.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+        <strong>Como conectar no canvas:</strong> arraste a saída <strong>"corpo"</strong>{" "}
+        pro primeiro passo da iteração. O último passo do corpo deve conectar
+        de volta neste loop (ou simplesmente terminar). A saída{" "}
+        <strong>"depois"</strong> continua quando o loop terminar.
+      </div>
     </div>
   );
 }
@@ -2277,6 +3124,7 @@ function ConfigKanbanCriarCardFields({
           id="cfg-descricao"
           as="textarea"
           rows={2}
+          highlight
           value={String(cfg.descricao || "")}
           onChange={(v) => onChange({ descricao: v })}
           variaveis={variaveis}
@@ -2981,6 +3829,18 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
     }
     case "ia_responder":
       return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
+    case "ia_extrair_campos":
+      return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
+    case "whatsapp_aguardar_resposta":
+      return <ConfigWhatsappAguardarRespostaFields cfg={cfg} onChange={onChange} />;
+    case "para_cada_item":
+      return <ConfigParaCadaItemFields cfg={cfg} onChange={onChange} />;
+    case "crm_buscar_contato":
+      return <ConfigCrmBuscarContatoFields cfg={cfg} onChange={onChange} />;
+    case "crm_listar_acoes_cliente":
+      return <ConfigCrmListarAcoesClienteFields cfg={cfg} onChange={onChange} />;
+    case "processo_buscar_movimentacoes":
+      return <ConfigProcessoBuscarMovimentacoesFields cfg={cfg} onChange={onChange} />;
     case "calcom_horarios":
       return (
         <div>

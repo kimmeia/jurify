@@ -61,14 +61,20 @@ export function getGrupoMeta(id: string): GrupoMeta | null {
 export type TipoPasso =
   | "ia_classificar"
   | "ia_responder"
+  | "ia_extrair_campos"
+  | "crm_buscar_contato"
+  | "crm_listar_acoes_cliente"
+  | "processo_buscar_movimentacoes"
   | "calcom_horarios"
   | "calcom_agendar"
   | "calcom_listar"
   | "calcom_cancelar"
   | "calcom_remarcar"
   | "whatsapp_enviar"
+  | "whatsapp_aguardar_resposta"
   | "transferir"
   | "condicional"
+  | "para_cada_item"
   | "esperar"
   | "webhook"
   | "kanban_criar_card"
@@ -179,6 +185,112 @@ export interface ConfigIaResponder {
   /** Fallback: prompt textual livre quando não há agente selecionado. */
   prompt?: string;
 }
+
+/**
+ * Tipos suportados pela extração estruturada. Espelham `TipoCampoExtracao`
+ * em `server/integracoes/llm-extracao.ts` — mantenha em sincronia.
+ */
+export type TipoCampoExtracao =
+  | "texto"
+  | "numero"
+  | "boolean"
+  | "data"
+  | "email"
+  | "cpf"
+  | "cnpj"
+  | "telefone"
+  | "lista_texto";
+
+export interface CampoExtracao {
+  /** Chave do campo no objeto retornado (camelCase recomendado). */
+  chave: string;
+  /** Tipo lógico — gera schema JSON correspondente. */
+  tipo: TipoCampoExtracao;
+  /** Descrição passada pra IA — quanto mais clara, melhor extração. */
+  descricao?: string;
+  /** Se true, vai no `required[]` do schema. IA ainda pode omitir se não achou. */
+  obrigatorio?: boolean;
+  /**
+   * Se true, salva em `contatos.camposPersonalizados[chave]` quando há
+   * `contatoId` no contexto. Requer que a `chave` exista no catálogo
+   * `camposPersonalizadosCliente` do escritório.
+   */
+  persistir?: boolean;
+}
+
+/**
+ * Config do passo `ia_extrair_campos` — IA usa tool calling pra preencher
+ * cada campo da lista. Resultado vai pra `ctx.extracao.<chave>`.
+ */
+export interface ConfigIaExtrairCampos {
+  /** Lista de campos a extrair. Mínimo 1. */
+  campos?: CampoExtracao[];
+  /**
+   * Caminho no contexto da mensagem a analisar. Default `mensagem`. Pode
+   * apontar pra outras variáveis tipo `respostaUsuario` (quando vem depois
+   * de `whatsapp_aguardar_resposta`).
+   */
+  fonteMensagem?: string;
+}
+
+/**
+ * Config do passo `crm_buscar_contato` — resolve um contato pelo telefone,
+ * email ou CPF/CNPJ. Útil quando o cliente está num número novo mas se
+ * identifica via outro dado na conversa.
+ */
+export interface ConfigCrmBuscarContato {
+  /** Por qual campo buscar — default `telefone`. */
+  tipoBusca?: "telefone" | "email" | "cpfCnpj";
+  /** Valor a buscar (interpolável: `{{telefoneCliente}}`, `{{extracao.cpf}}`...). */
+  valor?: string;
+}
+
+/**
+ * Config do passo `crm_listar_acoes_cliente` — busca processos vinculados
+ * ao contato (`cliente_processos.contatoId`). Filtros opcionais por tipo e polo.
+ */
+export interface ConfigCrmListarAcoesCliente {
+  /** Filtra por tipo de processo. Default: todos. */
+  tipoFiltro?: "todos" | "litigioso" | "extrajudicial";
+  /** Filtra por polo do cliente. Default: todos. */
+  poloFiltro?: "todos" | "ativo" | "passivo" | "interessado";
+  /** Limite de resultados. Default: 10. */
+  limite?: number;
+}
+
+/**
+ * Tipos de evento que o passo `processo_buscar_movimentacoes` aceita filtrar.
+ * Espelha o enum `eventos_processo.tipoEvento` em `drizzle/schema.ts`.
+ */
+export type TipoEventoProcesso =
+  | "movimentacao"
+  | "publicacao_dje"
+  | "nova_acao"
+  | "mandado"
+  | "intimacao"
+  | "citacao"
+  | "sentenca"
+  | "despacho"
+  | "audiencia"
+  | "outro";
+
+/**
+ * Config do passo `processo_buscar_movimentacoes` — lê de `eventos_processo`
+ * o histórico de um processo (ou CNJ) por janela de dias e tipos.
+ */
+export interface ConfigProcessoBuscarMovimentacoes {
+  /**
+   * ID do processo (cliente_processos.id) ou CNJ. Interpolável.
+   * Default: `{{acaoId}}` ou `{{acaoEscolhida.id}}`.
+   */
+  processoId?: string;
+  /** Tipos de evento a incluir (multiselect). Vazio = todos. */
+  tipos?: TipoEventoProcesso[];
+  /** Janela em dias (a partir de hoje). Default: 30. */
+  diasJanela?: number;
+  /** Limite de eventos retornados. Default: 10. */
+  limite?: number;
+}
 export interface ConfigCalcomHorarios {
   duracao?: number;
 }
@@ -210,6 +322,40 @@ export interface ConfigCalcomRemarcar {
 }
 export interface ConfigWhatsappEnviar {
   template?: string;
+}
+
+/**
+ * Config do passo `whatsapp_aguardar_resposta` — envia mensagem e pausa
+ * o fluxo até o contato responder. Quando configurado com `opcoes`, formata
+ * a mensagem como menu numerado e parseia a resposta do cliente pra
+ * popular `opcaoEscolhida` no contexto.
+ *
+ * Limitação por desenho: só **uma** execução por (cenário, contato) pode
+ * estar aguardando ao mesmo tempo. Mensagem nova do mesmo contato retoma
+ * a execução pendente — pra começar fluxo do zero, expire/cancele a antiga.
+ */
+export interface ConfigWhatsappAguardarResposta {
+  /**
+   * Template da mensagem (suporta interpolação `{{...}}` igual ao
+   * `whatsapp_enviar`). Quando há `opcoes`, o menu é anexado automaticamente
+   * no final.
+   */
+  template?: string;
+  /**
+   * Quanto tempo aguardar antes de desistir. Default 1440 (24h).
+   * Quando expira, a execução continua pelo ramo `"timeout"` no `proximoSe`
+   * (se configurado); senão termina.
+   */
+  timeoutMinutos?: number;
+  /**
+   * Quando informada (lista de strings), vira menu numerado:
+   *   1. opção 1
+   *   2. opção 2
+   * O parser tenta achar a escolha do cliente (número OU substring case-insensitive
+   * com a opção) e popula `opcaoEscolhida = {indice, texto, numero}`.
+   * Lista vazia / ausente = pergunta aberta (qualquer resposta serve).
+   */
+  opcoes?: string[];
 }
 export interface ConfigTransferir {
   /** reservado */
@@ -259,6 +405,38 @@ export interface ConfigCondicional {
 export type ProximoSe = Record<string, string> | null;
 export interface ConfigEsperar {
   delayMinutos?: number;
+}
+
+/**
+ * Config do passo `para_cada_item` — itera sobre uma lista no contexto
+ * executando um subfluxo pra cada item. O nó tem 2 saídas no `proximoSe`:
+ *   - `corpo`: primeiro nó do subfluxo de iteração
+ *   - `depois`: continuação depois do loop terminar
+ *
+ * O subfluxo do corpo deve EVENTUALMENTE retornar ao próprio nó
+ * `para_cada_item` (loop natural) OU ter um nó terminal sem `proximoSe`.
+ * O engine detecta a volta e parte pra próxima iteração — sem stack overflow.
+ *
+ * Variáveis adicionadas ao contexto durante cada iteração:
+ *   - `{{item}}` (ou nome configurado): item atual
+ *   - `{{indice}}`: 0-indexed da iteração
+ */
+export interface ConfigParaCadaItem {
+  /**
+   * Caminho no contexto da lista a iterar. Suporta dot-notation
+   * (ex: `acoes`, `cliente.processos`). Default: `acoes`.
+   */
+  caminhoLista?: string;
+  /**
+   * Nome da variável que recebe o item atual. Default `item`. Permite
+   * trocar pra `acao`, `movimentacao`, etc. — útil em loops aninhados.
+   */
+  nomeVarItem?: string;
+  /**
+   * Limite máximo de iterações — guarda contra listas absurdamente grandes
+   * e loops infinitos por bugs de config. Default 20, max 200.
+   */
+  limite?: number;
 }
 export interface ConfigWebhook {
   url?: string;
@@ -360,15 +538,21 @@ export interface ConfigDefinirCampoPersonalizado {
 export type PassoConfigByTipo =
   | { tipo: "ia_classificar"; config: ConfigIaClassificar }
   | { tipo: "ia_responder"; config: ConfigIaResponder }
+  | { tipo: "ia_extrair_campos"; config: ConfigIaExtrairCampos }
+  | { tipo: "crm_buscar_contato"; config: ConfigCrmBuscarContato }
+  | { tipo: "crm_listar_acoes_cliente"; config: ConfigCrmListarAcoesCliente }
+  | { tipo: "processo_buscar_movimentacoes"; config: ConfigProcessoBuscarMovimentacoes }
   | { tipo: "calcom_horarios"; config: ConfigCalcomHorarios }
   | { tipo: "calcom_agendar"; config: ConfigCalcomAgendar }
   | { tipo: "calcom_listar"; config: ConfigCalcomListar }
   | { tipo: "calcom_cancelar"; config: ConfigCalcomCancelar }
   | { tipo: "calcom_remarcar"; config: ConfigCalcomRemarcar }
   | { tipo: "whatsapp_enviar"; config: ConfigWhatsappEnviar }
+  | { tipo: "whatsapp_aguardar_resposta"; config: ConfigWhatsappAguardarResposta }
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "condicional"; config: ConfigCondicional }
   | { tipo: "esperar"; config: ConfigEsperar }
+  | { tipo: "para_cada_item"; config: ConfigParaCadaItem }
   | { tipo: "webhook"; config: ConfigWebhook }
   | { tipo: "kanban_criar_card"; config: ConfigKanbanCriarCard }
   | { tipo: "kanban_mover_card"; config: ConfigKanbanMoverCard }
@@ -498,14 +682,20 @@ export type ConfigGatilhoByTipo =
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
+  { id: "ia_extrair_campos", label: "Extrair dados (IA)", descricao: "IA lê a mensagem e extrai campos estruturados (CPF, email, datas...). Salva no contexto e opcionalmente no cadastro do cliente.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "ia" },
+  { id: "crm_buscar_contato", label: "Buscar contato (CRM)", descricao: "Resolve um cliente pelo telefone, email ou CPF. Popula contatoId, nome e campos personalizados.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
+  { id: "crm_listar_acoes_cliente", label: "Listar ações do cliente", descricao: "Lista os processos vinculados ao contato — útil pra IA saber sobre quais ações ele tem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
+  { id: "processo_buscar_movimentacoes", label: "Buscar movimentações", descricao: "Histórico de movimentações, publicações, sentenças e audiências de um processo. Filtros por tipo e janela.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
   { id: "calcom_horarios", label: "Buscar horários (Cal.com)", descricao: "Busca slots disponíveis no Cal.com.", cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300", grupo: "acoes" },
   { id: "calcom_agendar", label: "Criar agendamento", descricao: "Confirma o horário no Cal.com.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "acoes" },
   { id: "calcom_listar", label: "Listar agendamentos", descricao: "Busca bookings no Cal.com e grava no contexto.", cor: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300", grupo: "acoes" },
   { id: "calcom_cancelar", label: "Cancelar agendamento", descricao: "Cancela um booking pelo ID.", cor: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300", grupo: "acoes" },
   { id: "calcom_remarcar", label: "Remarcar agendamento", descricao: "Reagenda um booking para novo horário.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
+  { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Envia mensagem e pausa o fluxo esperando o cliente responder. Suporta menu de opções automático.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
+  { id: "para_cada_item", label: "Para cada item (loop)", descricao: "Itera sobre uma lista do contexto e executa o subfluxo do corpo pra cada item.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
   { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300", grupo: "fluxo" },
   { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },
