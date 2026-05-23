@@ -134,7 +134,7 @@ export function GaleriaTemplatesDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
         {etapa === "galeria" ? (
           <>
             <DialogHeader>
