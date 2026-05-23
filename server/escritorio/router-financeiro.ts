@@ -757,6 +757,7 @@ export const financeiroRouter = router({
       z.object({
         dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        criterioReceita: z.enum(["pagamento", "vencimento"]).default("pagamento"),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -769,7 +770,84 @@ export const financeiroRouter = router({
         });
       }
       const { calcularDRE } = await import("./dre");
-      return calcularDRE(esc.escritorio.id, input.dataInicio, input.dataFim);
+      return calcularDRE(esc.escritorio.id, input.dataInicio, input.dataFim, input.criterioReceita);
+    }),
+
+  /**
+   * Espelho do painel "Situação das cobranças" do Asaas: os 4 cards
+   * (Recebidas / Confirmadas / Aguardando / Vencidas) com bruto E líquido,
+   * filtrados por VENCIMENTO no período + origem=asaas — exatamente o
+   * critério do painel deles. Permite conferência card-a-card.
+   */
+  situacaoCobrancasAsaas: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+      const db = await getDb();
+      const ZERO = { bruto: 0, liquido: 0, count: 0 };
+      if (!db) {
+        return { recebidas: ZERO, confirmadas: ZERO, aguardando: ZERO, vencidas: ZERO };
+      }
+      const { dataHojeBR } = await import("../../shared/escritorio-types");
+      const hoje = dataHojeBR();
+
+      const bruto = sql`CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))`;
+      const liquido = sql`CAST(COALESCE(${asaasCobrancas.valorLiquido}, ${asaasCobrancas.valor}) AS DECIMAL(20,2))`;
+      // Status alinhados ao painel Asaas:
+      //  - Recebidas: dinheiro creditado (RECEIVED / RECEIVED_IN_CASH / DUNNING_RECEIVED)
+      //  - Confirmadas: pago mas não creditado (CONFIRMED)
+      //  - Aguardando: a vencer não pago (PENDING/AWAITING_* + venc >= hoje)
+      //  - Vencidas: OVERDUE/DUNNING_REQUESTED, ou PENDING já vencido
+      const ehRecebida = sql`${asaasCobrancas.status} IN ('RECEIVED','RECEIVED_IN_CASH','DUNNING_RECEIVED')`;
+      const ehConfirmada = sql`${asaasCobrancas.status} = 'CONFIRMED'`;
+      const ehPendente = sql`${asaasCobrancas.status} IN ('PENDING','AWAITING_RISK_ANALYSIS','AUTHORIZED')`;
+      const ehVencidoStatus = sql`${asaasCobrancas.status} IN ('OVERDUE','DUNNING_REQUESTED')`;
+      const vencFuturo = sql`${asaasCobrancas.vencimento} >= ${hoje}`;
+      const vencPassado = sql`${asaasCobrancas.vencimento} < ${hoje}`;
+
+      const condRecebidas = sql`${ehRecebida}`;
+      const condConfirmadas = sql`${ehConfirmada}`;
+      const condAguardando = sql`(${ehPendente} AND ${vencFuturo})`;
+      const condVencidas = sql`(${ehVencidoStatus} OR (${ehPendente} AND ${vencPassado}))`;
+      const somaBruto = (c: ReturnType<typeof sql>) => sql<string>`COALESCE(SUM(CASE WHEN ${c} THEN ${bruto} ELSE 0 END), 0)`;
+      const somaLiq = (c: ReturnType<typeof sql>) => sql<string>`COALESCE(SUM(CASE WHEN ${c} THEN ${liquido} ELSE 0 END), 0)`;
+      const somaCount = (c: ReturnType<typeof sql>) => sql<number>`COALESCE(SUM(CASE WHEN ${c} THEN 1 ELSE 0 END), 0)`;
+
+      const [agg] = await db
+        .select({
+          recBruto: somaBruto(condRecebidas),
+          recLiquido: somaLiq(condRecebidas),
+          recCount: somaCount(condRecebidas),
+          confBruto: somaBruto(condConfirmadas),
+          confLiquido: somaLiq(condConfirmadas),
+          confCount: somaCount(condConfirmadas),
+          aguBruto: somaBruto(condAguardando),
+          aguLiquido: somaLiq(condAguardando),
+          aguCount: somaCount(condAguardando),
+          vencBruto: somaBruto(condVencidas),
+          vencLiquido: somaLiq(condVencidas),
+          vencCount: somaCount(condVencidas),
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          eq(asaasCobrancas.origem, "asaas"),
+          between(asaasCobrancas.vencimento, input.dataInicio, input.dataFim),
+        ));
+
+      const n = (v: unknown) => Number(v ?? 0);
+      return {
+        recebidas: { bruto: n(agg?.recBruto), liquido: n(agg?.recLiquido), count: n(agg?.recCount) },
+        confirmadas: { bruto: n(agg?.confBruto), liquido: n(agg?.confLiquido), count: n(agg?.confCount) },
+        aguardando: { bruto: n(agg?.aguBruto), liquido: n(agg?.aguLiquido), count: n(agg?.aguCount) },
+        vencidas: { bruto: n(agg?.vencBruto), liquido: n(agg?.vencLiquido), count: n(agg?.vencCount) },
+      };
     }),
 
   /**
