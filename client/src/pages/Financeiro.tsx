@@ -2785,6 +2785,11 @@ function HeroFinanceiro({
   onPeriodoChange: (v: 3 | 6 | 12) => void;
 }) {
   const recebido = kpis?.recebidoLiquido ?? 0;
+  // "Entrou no caixa" = bruto pago no período (asaas + manual). Discrimina
+  // Asaas vs Caixa Manual (recebido por fora do Asaas).
+  const entrouCaixa = kpis?.recebido ?? 0;
+  const recebidoManual = kpis?.recebidoManual ?? 0;
+  const recebidoAsaas = entrouCaixa - recebidoManual;
   const pendente = kpis?.pendente ?? 0;
   const vencido = kpis?.vencido ?? 0;
   const saldoAtual = saldo?.balance ?? 0;
@@ -2842,9 +2847,17 @@ function HeroFinanceiro({
           {/* 4 KPIs em grid 2x2 (esquerda) */}
           <div className="lg:col-span-6 grid grid-cols-2 gap-3">
             <KPIHero
-              label="Recebido"
-              value={formatBRLShort(recebido)}
-              hint={recebido !== (kpis?.recebido ?? 0) ? `${formatBRLShort(kpis?.recebido ?? 0)} bruto` : undefined}
+              label="Entrou no caixa"
+              value={formatBRLShort(entrouCaixa)}
+              breakdown={
+                recebidoManual > 0
+                  ? [
+                      { label: "Asaas", valor: formatBRL(recebidoAsaas) },
+                      { label: "Manual", valor: formatBRL(recebidoManual) },
+                    ]
+                  : undefined
+              }
+              hint={recebidoManual > 0 ? undefined : `${recebido < entrouCaixa ? formatBRLShort(recebido) + " líquido" : ""}`}
               icon={CheckCircle2}
               tone="emerald"
             />
@@ -2940,6 +2953,7 @@ function KPIHero({
   icon: Icon,
   tone,
   alert,
+  breakdown,
 }: {
   label: string;
   value: string;
@@ -2947,6 +2961,8 @@ function KPIHero({
   icon: any;
   tone: "emerald" | "blue" | "rose" | "neutral";
   alert?: boolean;
+  /** Sub-linhas opcionais (ex: Asaas / Manual no card "Entrou no caixa"). */
+  breakdown?: Array<{ label: string; valor: string }>;
 }) {
   const numColor =
     tone === "emerald" ? "text-emerald-100"
@@ -2960,6 +2976,16 @@ function KPIHero({
         {label}
       </div>
       <p className={`text-2xl font-bold tabular-nums leading-none ${numColor}`}>{value}</p>
+      {breakdown && breakdown.length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          {breakdown.map((b) => (
+            <div key={b.label} className="flex items-center justify-between text-[11px] text-white/70 tabular-nums">
+              <span>{b.label}</span>
+              <span>{b.valor}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {hint && <p className="text-[11px] text-white/65 mt-1 tabular-nums">{hint}</p>}
     </div>
   );
