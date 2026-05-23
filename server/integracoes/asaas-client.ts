@@ -95,6 +95,13 @@ export interface AsaasPayment {
   deleted: boolean;
   paymentDate?: string;
   clientPaymentDate?: string;
+  /** Data em que o valor foi/será creditado na conta Asaas. PIX credita
+   *  no mesmo dia (== paymentDate); boleto credita D+1 útil; cartão D+30.
+   *  O painel "Recebidas Este mês" do Asaas filtra por esta data, não por
+   *  paymentDate — origem da divergência com o "Caixa Asaas" (que usa
+   *  paymentDate). */
+  creditDate?: string;
+  estimatedCreditDate?: string;
   /** Data de confirmação no Asaas — preenchido quando status=CONFIRMED
    *  (PIX confirmado, cartão autorizado, boleto registrado) antes do
    *  crédito ser efetivado em conta. Pra status=RECEIVED, prefira
