@@ -99,6 +99,11 @@ export async function calcularDRE(
   escritorioId: number,
   dataInicio: string,
   dataFim: string,
+  /** Critério de data das RECEITAS:
+   *  - 'pagamento' (caixa): conta quando o cliente pagou (dataPagamento)
+   *  - 'vencimento' (competência): conta quando venceu — bate com o painel
+   *    Asaas "Recebidas". Default 'pagamento' (compat). */
+  criterioReceita: "pagamento" | "vencimento" = "pagamento",
 ): Promise<DREResultado> {
   const db = await getDb();
   if (!db) {
@@ -134,7 +139,11 @@ export async function calcularDRE(
       and(
         eq(asaasCobrancas.escritorioId, escritorioId),
         inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
-        between(asaasCobrancas.dataPagamento, dataInicio, dataFim),
+        // Caixa filtra por data de pagamento; competência por vencimento
+        // (bate com o painel Asaas "Recebidas").
+        criterioReceita === "vencimento"
+          ? between(asaasCobrancas.vencimento, dataInicio, dataFim)
+          : between(asaasCobrancas.dataPagamento, dataInicio, dataFim),
       ),
     );
 

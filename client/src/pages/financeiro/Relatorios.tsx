@@ -96,6 +96,9 @@ export function RelatoriosTab() {
   const [dataInicio, setDataInicio] = useState(inicioDoMesIso());
   const [dataFim, setDataFim] = useState(fimDoMesIso());
   const [diagnosticoOpen, setDiagnosticoOpen] = useState(false);
+  // Critério de data das receitas: caixa (quando pagou) ou competência
+  // (quando venceu = bate com o painel Asaas).
+  const [criterio, setCriterio] = useState<"pagamento" | "vencimento">("vencimento");
 
   // Sincroniza datas com preset quando preset muda (não-custom)
   function aplicarPreset(p: typeof preset) {
@@ -108,10 +111,17 @@ export function RelatoriosTab() {
   }
 
   const dreQ = (trpc as any).financeiro?.dre?.useQuery?.(
-    { dataInicio, dataFim },
+    { dataInicio, dataFim, criterioReceita: criterio },
     { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
   );
   const dre = dreQ?.data;
+
+  // Espelho do painel "Situação das cobranças" do Asaas (4 cards bruto/líquido)
+  const situacaoQ = (trpc as any).financeiro?.situacaoCobrancasAsaas?.useQuery?.(
+    { dataInicio, dataFim },
+    { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
+  );
+  const situacao = situacaoQ?.data;
 
   // KPIs com discriminação por situação de prazo — usa o mesmo range como
   // período de pagamento E de vencimento, pra separar no prazo / atraso /
@@ -202,6 +212,25 @@ export function RelatoriosTab() {
                 </div>
               </>
             )}
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">Critério</Label>
+              <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs h-9 items-center">
+                <button
+                  onClick={() => setCriterio("vencimento")}
+                  className={`px-2.5 py-1.5 rounded-md font-medium transition-colors ${criterio === "vencimento" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-slate-100" : "text-slate-500"}`}
+                  title="Conta a receita pelo vencimento — bate com o painel Asaas"
+                >
+                  Competência (Asaas)
+                </button>
+                <button
+                  onClick={() => setCriterio("pagamento")}
+                  className={`px-2.5 py-1.5 rounded-md font-medium transition-colors ${criterio === "pagamento" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-slate-100" : "text-slate-500"}`}
+                  title="Conta a receita quando o dinheiro entrou (fluxo de caixa real)"
+                >
+                  Caixa
+                </button>
+              </div>
+            </div>
             <div className="flex-1" />
             <Button
               size="sm"
@@ -291,9 +320,13 @@ export function RelatoriosTab() {
             />
           </div>
 
-          {/* Recebido: por vencimento (= Asaas) + discriminação de prazo + caixa real */}
-          {kpis && (kpis.recebido > 0 || kpis.recebidoAsaasPorVencimento > 0) && (
-            <RecebidoPorPrazoSection kpis={kpis} formaVenc={formaVenc} />
+          {/* Conferência com o Asaas: espelho dos 4 cards (bruto + líquido) */}
+          {situacao && (
+            <ConferenciaAsaasSection
+              situacao={situacao}
+              kpis={kpis}
+              formaVenc={formaVenc}
+            />
           )}
 
           {/* Tabela receitas */}
@@ -1029,121 +1062,82 @@ function DiagnosticoDivergenciaDialog({
 }
 
 /**
- * Seção "Recebido" com o caixa real (por data de pagamento) discriminado
- * por situação de prazo, mais a ponte com o painel Asaas (por vencimento).
- *
- * O número principal é o CAIXA REAL — quando o dinheiro entrou. As
- * sub-linhas mostram quanto entrou no prazo / em atraso / adiantado. A
- * tabela de reconciliação no fim mostra como o caixa vira o número do
- * Asaas (que conta por vencimento): tira o atraso, soma o pago adiantado
- * que vence no período.
+ * Conferência com o Asaas: espelha os 4 cards do painel "Situação das
+ * cobranças" (Recebidas / Confirmadas / Aguardando / Vencidas) com bruto
+ * e líquido, por vencimento — o cliente compara card a card. Detalhe por
+ * forma de pagamento e caixa manual ficam atrás de "Ver detalhe".
  */
-function RecebidoPorPrazoSection({ kpis, formaVenc }: { kpis: any; formaVenc?: any }) {
-  const caixaTotal = kpis.recebido ?? 0;          // tudo pago no período (asaas + manual)
-  const caixaCount = kpis.recebidoCount ?? 0;
-  const manual = kpis.recebidoManual ?? 0;        // origem=manual (Caixa Escritório)
-  const manualCount = kpis.recebidoManualCount ?? 0;
-  const caixaAsaas = caixaTotal - manual;         // origem=asaas pago no período
-  const caixaAsaasCount = caixaCount - manualCount;
-  // Recebido POR VENCIMENTO (bate com o painel Asaas "Recebidas")
-  const porVencimento = kpis.recebidoAsaasPorVencimento ?? 0;
-  const porVencimentoCount = kpis.recebidoAsaasPorVencimentoCount ?? 0;
-  // Discriminação por situação de prazo (pagamento vs vencimento), dentro do
-  // recebido por vencimento — soma = porVencimento.
-  const adiantado = kpis.recebidoAdiantado ?? 0;
-  const adiantadoCount = kpis.recebidoAdiantadoCount ?? 0;
-  const noPrazo = kpis.recebidoNoPrazo ?? 0;
-  const noPrazoCount = kpis.recebidoNoPrazoCount ?? 0;
-  const atraso = kpis.recebidoAtraso ?? 0;
-  const atrasoCount = kpis.recebidoAtrasoCount ?? 0;
-  // Diferença caixa Asaas (pago no período) x por vencimento — cobranças
-  // pagas neste mês mas que vencem em outro (e vice-versa).
-  const difCaixaVenc = caixaAsaas - porVencimento;
+function ConferenciaAsaasSection({ situacao, kpis, formaVenc }: { situacao: any; kpis?: any; formaVenc?: any }) {
+  const fmt = (v: number) => formatBRL(v);
+  const cards = [
+    { key: "recebidas", label: "Recebidas", cor: "text-emerald-600", data: situacao.recebidas },
+    { key: "confirmadas", label: "Confirmadas", cor: "text-sky-600", data: situacao.confirmadas },
+    { key: "aguardando", label: "Aguardando pagam.", cor: "text-amber-600", data: situacao.aguardando },
+    { key: "vencidas", label: "Vencidas", cor: "text-rose-600", data: situacao.vencidas },
+  ];
+  const manual = kpis?.recebidoManual ?? 0;
+  const manualCount = kpis?.recebidoManualCount ?? 0;
+  const [detalhe, setDetalhe] = useState(false);
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-emerald-600" />
-          Recebido — caixa real e comparação com Asaas
+          <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">✓</span>
+          Conferência com o Asaas
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Recebido por vencimento (bate com Asaas) + discriminação de prazo */}
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/20 p-4">
-            <p className="text-xs text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-              Recebido por vencimento <span className="normal-case">(= painel Asaas "Recebidas")</span>
-            </p>
-            <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{formatBRL(porVencimento)}</p>
-            <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80 mb-3">{porVencimentoCount} cobranças · vencimento no período</p>
-            <div className="border-t border-indigo-100 dark:border-indigo-900 pt-3 space-y-2">
-              <p className="text-[11px] font-medium text-slate-500">Por situação de prazo (pagamento vs vencimento):</p>
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-sky-400" />
-                  Adiantado <span className="text-slate-400">(pagou antes do venc.)</span>
-                </span>
-                <span className="font-semibold tabular-nums">{formatBRL(adiantado)} · {adiantadoCount}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  No prazo <span className="text-slate-400">(pagou no dia do venc.)</span>
-                </span>
-                <span className="font-semibold tabular-nums">{formatBRL(noPrazo)} · {noPrazoCount}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Em atraso <span className="text-slate-400">(pagou após o venc.)</span>
-                </span>
-                <span className="font-semibold tabular-nums">{formatBRL(atraso)} · {atrasoCount}</span>
-              </div>
-            </div>
-            {formaVenc?.itens?.length > 0 && (
-              <div className="border-t border-indigo-100 dark:border-indigo-900 pt-3 mt-3 space-y-1.5">
-                <p className="text-[11px] font-medium text-slate-500">Por forma de pagamento (bate com Asaas):</p>
-                {formaVenc.itens.map((f: any) => (
-                  <div key={f.forma} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-700 dark:text-slate-300">{f.forma}</span>
-                    <span className="font-semibold tabular-nums">{formatBRL(f.valor)} · {f.count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        <p className="text-xs text-slate-500">
+          Abra o Asaas em "Situação das cobranças → Este mês" e compare card a card.
+          Mesmos valores (bruto e líquido), mesmo critério (por vencimento).
+        </p>
 
-          {/* Caixa real (fluxo de caixa) */}
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20 p-4">
-            <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
-              Caixa real <span className="normal-case">(quando o dinheiro entrou)</span>
-            </p>
-            <p className="text-2xl font-bold text-emerald-600 tabular-nums">{formatBRL(caixaTotal)}</p>
-            <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mb-3">{caixaCount} cobranças pagas no período</p>
-            <div className="border-t border-emerald-100 dark:border-emerald-900 pt-3 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Cobranças Asaas
-                </span>
-                <span className="font-semibold tabular-nums">{formatBRL(caixaAsaas)} · {caixaAsaasCount}</span>
-              </div>
-              {manual > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-slate-400" />
-                    Caixa Escritório <span className="text-slate-400">(manual)</span>
-                  </span>
-                  <span className="font-semibold tabular-nums">{formatBRL(manual)} · {manualCount}</span>
-                </div>
-              )}
-              <p className="text-[11px] text-slate-400 pt-1 leading-relaxed">
-                Caixa Asaas ({formatBRL(caixaAsaas)}) difere do "por vencimento" em {formatBRL(Math.abs(difCaixaVenc))}: são cobranças pagas neste mês mas que vencem em outro (e vice-versa).
-              </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {cards.map((c) => (
+            <div key={c.key} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+              <p className="text-xs text-slate-500">{c.label}</p>
+              <p className={`text-lg font-bold tabular-nums ${c.cor}`}>{fmt(c.data.bruto)}</p>
+              <p className="text-[11px] text-slate-400">{fmt(c.data.liquido)} líquido</p>
+              <p className="text-[10px] text-slate-400 mt-1">{c.data.count} cobranças</p>
             </div>
-          </div>
+          ))}
         </div>
+
+        {manual > 0 && (
+          <div className="rounded-lg bg-slate-50 dark:bg-slate-900/40 p-3 flex items-center justify-between text-xs">
+            <span className="text-slate-600 dark:text-slate-300">
+              <strong>Caixa Manual</strong> <span className="text-slate-400">(recebido por fora do Asaas — não aparece no painel deles)</span>
+            </span>
+            <span className="font-semibold tabular-nums">{fmt(manual)} · {manualCount}</span>
+          </div>
+        )}
+
+        <button
+          onClick={() => setDetalhe((d) => !d)}
+          className="text-xs text-indigo-600 hover:underline"
+        >
+          {detalhe ? "Ocultar detalhe por forma ›" : "Ver detalhe por forma de pagamento ›"}
+        </button>
+
+        {detalhe && formaVenc?.itens?.length > 0 && (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Recebidas por forma de pagamento (bate com Asaas)</p>
+            </div>
+            <table className="w-full text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {formaVenc.itens.map((f: any) => (
+                  <tr key={f.forma}>
+                    <td className="px-4 py-2 text-slate-700 dark:text-slate-300">{f.forma}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-slate-500">{f.count} cobr.</td>
+                    <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmt(f.valor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
