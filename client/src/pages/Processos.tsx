@@ -1487,7 +1487,14 @@ function MonitorarTab() {
       setAtualDrawerOpen(true);
       toast.success(`Atualizando ${d.total} monitoramento(s)…`);
     },
-    onError: (e: any) => toast.error("Falha ao iniciar atualização", { description: e.message }),
+    onError: (e: any) => {
+      const msg = e?.message ?? "";
+      if (/nenhum monitoramento/i.test(msg)) {
+        toast.info("Nenhum monitoramento pra atualizar no momento.");
+      } else {
+        toast.error("Falha ao iniciar atualização", { description: msg });
+      }
+    },
   });
 
   const { data: progresso } = trpc.processos.progressoAtualizacao.useQuery(
@@ -1607,23 +1614,21 @@ function MonitorarTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {totalAtualizaveis > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
-                disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-                onClick={() => atualizarTodosMut.mutate({})}
-                title="Roda os polls de todos os monitoramentos ativos em paralelo (limit 3). Sem custo de créditos."
-              >
-                {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-3.5 w-3.5 mr-1" />
-                )}
-                Atualizar todos
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
+              title="Roda os polls de todos os monitoramentos (inclui os com erro, pra reprocessar) em paralelo (limit 3). Sem custo de créditos."
+            >
+              {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+              )}
+              Atualizar todos
+            </Button>
             <Button
               size="sm"
               className="h-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
@@ -2601,7 +2606,14 @@ function NovasAcoesTab() {
       setAtualDrawerOpen(true);
       toast.success(`Atualizando ${d.total} monitoramento(s) de novas ações…`);
     },
-    onError: (e: any) => toast.error("Falha ao iniciar atualização", { description: e.message }),
+    onError: (e: any) => {
+      const msg = e?.message ?? "";
+      if (/nenhum monitoramento/i.test(msg)) {
+        toast.info("Nenhum monitoramento pra atualizar no momento.");
+      } else {
+        toast.error("Falha ao iniciar atualização", { description: msg });
+      }
+    },
   });
 
   const { data: progresso } = trpc.processos.progressoAtualizacao.useQuery(
@@ -2678,23 +2690,21 @@ function NovasAcoesTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {totalAtualizaveisNovas > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
-                disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-                onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
-                title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
-              >
-                {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-3.5 w-3.5 mr-1" />
-                )}
-                Atualizar todos
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
+              title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
+            >
+              {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+              )}
+              Atualizar todos
+            </Button>
             <Button
               size="sm"
               className="h-9 rounded-lg bg-gradient-to-br from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 shadow-sm"
