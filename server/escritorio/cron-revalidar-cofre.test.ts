@@ -19,6 +19,7 @@ const atualizarStatusAposLogin = vi.fn();
 const salvarSessao = vi.fn();
 const notificarCredencialCaiu = vi.fn();
 const notificarCredencialRecuperada = vi.fn();
+const marcarCredencialExpirada = vi.fn();
 
 vi.mock("./cofre-helpers", () => ({
   buscarCredencialDecriptada,
@@ -26,6 +27,7 @@ vi.mock("./cofre-helpers", () => ({
   salvarSessao,
   notificarCredencialCaiu,
   notificarCredencialRecuperada,
+  marcarCredencialExpirada,
 }));
 
 const testarLoginMock = vi.fn();
@@ -73,6 +75,7 @@ beforeEach(() => {
   salvarSessao.mockReset();
   notificarCredencialCaiu.mockReset();
   notificarCredencialRecuperada.mockReset();
+  marcarCredencialExpirada.mockReset();
   testarLoginMock.mockReset();
   candidatasMock = [];
 });
@@ -215,5 +218,25 @@ describe("revalidarCofreCredenciais — segurança", () => {
 
     expect(resultado.erros).toBe(1);
     expect(testarLoginMock).not.toHaveBeenCalled();
+  });
+
+  it("exceção técnica no login (ex: Chromium indisponível) marca credencial caída + persiste motivo — NÃO some só no log", async () => {
+    candidatasMock = [{ ...CRED_BASE, status: "ativa" }];
+    buscarCredencialDecriptada.mockResolvedValue({ id: 1, username: "u", password: "p", totpSecret: null });
+    testarLoginMock.mockRejectedValue(
+      new Error("browserType.launch: Executable doesn't exist"),
+    );
+
+    const resultado = await revalidarCofreCredenciais();
+
+    expect(resultado.erros).toBe(1);
+    // O bug que isto cobre: antes, uma exceção só incrementava `erros` e
+    // logava — a credencial ficava "ativa" no DB, sem ultimoErro e sem
+    // notificação, e o monitoramento parava em silêncio.
+    expect(marcarCredencialExpirada).toHaveBeenCalledOnce();
+    expect(marcarCredencialExpirada).toHaveBeenCalledWith(
+      1,
+      expect.stringContaining("Erro técnico"),
+    );
   });
 });
