@@ -20,6 +20,7 @@
 
 import type { Express, Request, Response } from "express";
 import { createLogger } from "./logger";
+import { sdk } from "./sdk";
 const log = createLogger("_core-sse-notifications");
 
 export interface Notificacao {
@@ -44,10 +45,20 @@ const conexoes = new Map<number, Response[]>();
 
 /** Registra as rotas SSE no Express */
 export function registrarSSE(app: Express) {
-  app.get("/api/events", (req: Request, res: Response) => {
-    const userId = parseInt(req.query.userId as string);
-    if (!userId || isNaN(userId)) {
-      res.status(400).json({ error: "userId obrigatório" });
+  app.get("/api/events", async (req: Request, res: Response) => {
+    // Autentica pela sessão (cookie) — NUNCA confia no `userId` da query.
+    // O EventSource do browser envia o cookie de sessão automaticamente em
+    // requests same-origin, então derivamos o usuário do próprio cookie.
+    // Sem isso, qualquer um abriria /api/events?userId=N (IDs sequenciais) e
+    // receberia em tempo real as notificações de outro usuário — vazamento
+    // entre escritórios (mensagens, leads, movimentações de processo) e
+    // violação de LGPD.
+    let userId: number;
+    try {
+      const user = await sdk.authenticateRequest(req);
+      userId = user.id;
+    } catch {
+      res.status(401).json({ error: "não autenticado" });
       return;
     }
 

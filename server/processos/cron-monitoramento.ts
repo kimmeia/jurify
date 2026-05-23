@@ -38,6 +38,7 @@ import {
   type PoloIdentificado,
 } from "./polo-matcher";
 import { extrairAnoCnj } from "./cnj-parser";
+import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 
 /**
  * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
@@ -57,6 +58,20 @@ const ANOS_MAXIMOS_SEM_DATA_REF = 3;
 const log = createLogger("motor-cron");
 
 /**
+ * Guardas de concorrência em-processo. O cron dispara via setInterval(60min)
+ * sem lock; se um ciclo demora mais que o intervalo (cenário plausível com
+ * Playwright + muitos monitoramentos), o próximo tick iniciava EM PARALELO,
+ * causando: scrape duplicado do mesmo processo (carga dobrada no tribunal,
+ * risco de ban) e corrida no `hashUltimasMovs`/`ultimaConsultaEm`. Estas
+ * flags fazem o tick sobreposto ser ignorado até o anterior terminar.
+ *
+ * Escopo: processo único (a app roda 1 instância). Se um dia escalar
+ * horizontalmente, trocar por lock distribuído (Redis NX / advisory lock).
+ */
+let pollMovsRodando = false;
+let pollNovasAcoesRodando = false;
+
+/**
  * Hash determinístico das movimentações pra detectar mudanças rápido.
  * Usa só (data + texto) de cada mov pra ignorar variações de
  * formatação/encoding.
@@ -70,11 +85,92 @@ function hashMovimentacoes(
   return crypto.createHash("sha256").update(concat).digest("hex");
 }
 
+/**
+ * Hash de dedup de evento. Agora NORMALIZA acento/caixa/espaço (via
+ * parser-utils) antes do SHA-256 — antes a versão do cron não normalizava,
+ * então a MESMA movimentação re-renderizada pelo PJe com uma diferença
+ * cosmética nos 200 primeiros chars (espaço duplo, acento, maiúscula) gerava
+ * hash diferente e entrava como "nova" → movimentação + notificação
+ * duplicadas. Para componentes sem texto livre (ex: nova_acao =
+ * ["nova_acao", monId, cnj]) o resultado é IDÊNTICO ao hash antigo, então só
+ * a dedup de `movimentacao` muda de fato.
+ */
 export function hashEvento(componentes: string[]): string {
-  return crypto
+  return hashEventoNorm(componentes);
+}
+
+/**
+ * Como `hashEvento` mudou, os `hashDedup` de movimentações já gravados (sob o
+ * hash LEGADO, sem normalização) não batem mais com o hash novo. Sem cuidado,
+ * o próximo poll veria todas como "novas" → enxurrada de eventos/notificações.
+ *
+ * Solução sem migração de dados arriscada: migração PREGUIÇOSA. Ao reprocessar
+ * uma movimentação, se já existe um evento sob o hash legado, atualizamos o
+ * `hashDedup` dele pro novo e tratamos como já conhecida (não reinsere nem
+ * notifica). Depois do 1º reprocessamento de cada processo, tudo fica sob o
+ * hash normalizado e o falso-positivo de re-render some — self-healing.
+ *
+ * @returns `true` se havia registro legado (logo, NÃO é nova).
+ */
+async function migrarMovLegadaSeExistir(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  searchKey: string,
+  data: string,
+  texto: string,
+  hashNovo: string,
+): Promise<boolean> {
+  const hashLegado = crypto
     .createHash("sha256")
-    .update(componentes.join("|"))
+    .update(["movimentacao", searchKey, data, texto.slice(0, 200)].join("|"))
     .digest("hex");
+  // Texto sem acento/caixa/espaço a normalizar → hash legado == novo, nada a migrar.
+  if (hashLegado === hashNovo) return false;
+  const [legado] = await db
+    .select({ id: eventosProcesso.id })
+    .from(eventosProcesso)
+    .where(
+      and(
+        eq(eventosProcesso.escritorioId, escritorioId),
+        eq(eventosProcesso.hashDedup, hashLegado),
+      ),
+    )
+    .limit(1);
+  if (!legado) return false;
+  try {
+    await db
+      .update(eventosProcesso)
+      .set({ hashDedup: hashNovo })
+      .where(eq(eventosProcesso.id, legado.id));
+  } catch {
+    // hashNovo já existe (mesma mov duplicada no legado) → ignora; segue
+    // tratando como já conhecida.
+  }
+  return true;
+}
+
+/**
+ * Resolve o hash de dedup de uma movimentação e migra preguiçosamente o
+ * registro legado, se houver. Centraliza a lógica usada pelo baseline, pelo
+ * poll e pelo "Histórico" (buscarProcessoCompleto) pra não divergirem.
+ */
+export async function resolverDedupMovimentacao(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  searchKey: string,
+  data: string,
+  texto: string,
+): Promise<{ dedup: string; jaConhecida: boolean }> {
+  const dedup = hashEvento(["movimentacao", searchKey, data, texto.slice(0, 200)]);
+  const jaConhecida = await migrarMovLegadaSeExistir(
+    db,
+    escritorioId,
+    searchKey,
+    data,
+    texto,
+    dedup,
+  );
+  return { dedup, jaConhecida };
 }
 
 /**
@@ -156,12 +252,14 @@ export async function pollarUmMonitoramentoMovs(
 
     if (isPrimeiraExecucao) {
       for (const mov of resultado.movimentacoes) {
-        const dedup = hashEvento([
-          "movimentacao",
+        const { dedup, jaConhecida } = await resolverDedupMovimentacao(
+          db,
+          mon.escritorioId,
           mon.searchKey,
           mov.data,
-          mov.texto.slice(0, 200),
-        ]);
+          mov.texto,
+        );
+        if (jaConhecida) continue; // já gravada sob hash legado (migrada) — não reinsere
         try {
           await db.insert(eventosProcesso).values({
             monitoramentoId: mon.id,
@@ -215,12 +313,14 @@ export async function pollarUmMonitoramentoMovs(
         eventoId: number;
       }> = [];
       for (const mov of resultado.movimentacoes) {
-        const dedup = hashEvento([
-          "movimentacao",
+        const { dedup, jaConhecida } = await resolverDedupMovimentacao(
+          db,
+          mon.escritorioId,
           mon.searchKey,
           mov.data,
-          mov.texto.slice(0, 200),
-        ]);
+          mov.texto,
+        );
+        if (jaConhecida) continue; // já gravada sob hash legado (migrada) — não é nova
         try {
           const [result] = await db.insert(eventosProcesso).values({
             monitoramentoId: mon.id,
@@ -369,42 +469,51 @@ export async function pollarUmMonitoramentoMovs(
 }
 
 export async function pollMonitoramentosMovs(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
+  if (pollMovsRodando) {
+    log.warn("[motor-cron] poll movimentações já em execução — tick ignorado (anti-sobreposição)");
+    return;
+  }
+  pollMovsRodando = true;
+  try {
+    const db = await getDb();
+    if (!db) return;
 
-  const pendentes = await db
-    .select()
-    .from(motorMonitoramentos)
-    .where(
-      and(
-        eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
-        eq(motorMonitoramentos.status, "ativo"),
-        or(
-          isNull(motorMonitoramentos.ultimaConsultaEm),
-          lt(
-            motorMonitoramentos.ultimaConsultaEm,
-            sql`DATE_SUB(NOW(), INTERVAL recurrence_horas HOUR)`,
+    const pendentes = await db
+      .select()
+      .from(motorMonitoramentos)
+      .where(
+        and(
+          eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
+          eq(motorMonitoramentos.status, "ativo"),
+          or(
+            isNull(motorMonitoramentos.ultimaConsultaEm),
+            lt(
+              motorMonitoramentos.ultimaConsultaEm,
+              sql`DATE_SUB(NOW(), INTERVAL recurrence_horas HOUR)`,
+            ),
           ),
         ),
-      ),
+      );
+
+    if (pendentes.length === 0) return;
+
+    log.info({ total: pendentes.length }, "[motor-cron] poll movimentações iniciado");
+
+    let detectadas = 0;
+    let erros = 0;
+    for (const mon of pendentes) {
+      const r = await pollarUmMonitoramentoMovs(mon);
+      detectadas += r.detectadas;
+      if (!r.ok) erros++;
+    }
+
+    log.info(
+      { total: pendentes.length, detectadas, erros },
+      "[motor-cron] poll movimentações concluído",
     );
-
-  if (pendentes.length === 0) return;
-
-  log.info({ total: pendentes.length }, "[motor-cron] poll movimentações iniciado");
-
-  let detectadas = 0;
-  let erros = 0;
-  for (const mon of pendentes) {
-    const r = await pollarUmMonitoramentoMovs(mon);
-    detectadas += r.detectadas;
-    if (!r.ok) erros++;
+  } finally {
+    pollMovsRodando = false;
   }
-
-  log.info(
-    { total: pendentes.length, detectadas, erros },
-    "[motor-cron] poll movimentações concluído",
-  );
 }
 
 export async function cobrarMonitoramentosMensais(): Promise<void> {
@@ -807,40 +916,49 @@ export async function pollarUmMonitoramentoNovasAcoes(
 }
 
 export async function pollMonitoramentosNovasAcoes(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
+  if (pollNovasAcoesRodando) {
+    log.warn("[motor-cron] poll novas ações já em execução — tick ignorado (anti-sobreposição)");
+    return;
+  }
+  pollNovasAcoesRodando = true;
+  try {
+    const db = await getDb();
+    if (!db) return;
 
-  const pendentes = await db
-    .select()
-    .from(motorMonitoramentos)
-    .where(
-      and(
-        eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
-        eq(motorMonitoramentos.status, "ativo"),
-        or(
-          isNull(motorMonitoramentos.ultimaConsultaEm),
-          lt(
-            motorMonitoramentos.ultimaConsultaEm,
-            sql`DATE_SUB(NOW(), INTERVAL recurrence_horas HOUR)`,
+    const pendentes = await db
+      .select()
+      .from(motorMonitoramentos)
+      .where(
+        and(
+          eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          eq(motorMonitoramentos.status, "ativo"),
+          or(
+            isNull(motorMonitoramentos.ultimaConsultaEm),
+            lt(
+              motorMonitoramentos.ultimaConsultaEm,
+              sql`DATE_SUB(NOW(), INTERVAL recurrence_horas HOUR)`,
+            ),
           ),
         ),
-      ),
+      );
+
+    if (pendentes.length === 0) return;
+
+    log.info({ total: pendentes.length }, "[motor-cron] poll novas ações iniciado");
+
+    let detectadas = 0;
+    let erros = 0;
+    for (const mon of pendentes) {
+      const r = await pollarUmMonitoramentoNovasAcoes(mon);
+      detectadas += r.detectadas;
+      if (!r.ok) erros++;
+    }
+
+    log.info(
+      { total: pendentes.length, detectadas, erros },
+      "[motor-cron] poll novas ações concluído",
     );
-
-  if (pendentes.length === 0) return;
-
-  log.info({ total: pendentes.length }, "[motor-cron] poll novas ações iniciado");
-
-  let detectadas = 0;
-  let erros = 0;
-  for (const mon of pendentes) {
-    const r = await pollarUmMonitoramentoNovasAcoes(mon);
-    detectadas += r.detectadas;
-    if (!r.ok) erros++;
+  } finally {
+    pollNovasAcoesRodando = false;
   }
-
-  log.info(
-    { total: pendentes.length, detectadas, erros },
-    "[motor-cron] poll novas ações concluído",
-  );
 }
