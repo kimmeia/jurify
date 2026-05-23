@@ -1049,14 +1049,32 @@ export function parsearOpcaoResposta(
   return null;
 }
 
-function handleTransferir(
-  _passo: Passo,
+async function handleTransferir(
+  passo: Passo,
   ctx: SmartflowContexto,
-): PassoResultado {
+): Promise<PassoResultado> {
+  // `transferir: true` no contexto sinaliza ao dispatcher pra marcar a
+  // conversa como em_atendimento (humano assume) — o que PARA o bot de
+  // responder novas mensagens dessa conversa.
+  const cfg = passo.config as { mensagem?: string };
+  // Mensagem configurável: se o usuário definiu (mesmo vazia), respeita.
+  // Vazia = só para o bot, sem enviar nada. Não definida = texto padrão.
+  let resposta: string | undefined;
+  if (typeof cfg.mensagem === "string") {
+    const texto = cfg.mensagem.trim();
+    if (texto) {
+      const { interpolarVariaveis } = await import("./interpolar");
+      resposta = interpolarVariaveis(texto, ctx as any);
+    } else {
+      resposta = undefined; // explicitamente vazio → silêncio
+    }
+  } else {
+    resposta = "Vou transferir você para um de nossos advogados. Um momento, por favor.";
+  }
   return {
     sucesso: true,
     contexto: { ...ctx, transferir: true },
-    resposta: "Vou transferir você para um de nossos advogados. Um momento, por favor.",
+    resposta,
     parar: true,
   };
 }

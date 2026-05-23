@@ -1343,6 +1343,32 @@ describe("SmartFlow Engine", () => {
       expect(resultado.passosExecutados).toBe(1);
       expect(resultado.respostas[0]).toContain("transferir");
     });
+
+    it("usa mensagem customizada interpolando variáveis", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "transferir", config: { mensagem: "Até já, {{nomeCliente}}!" } },
+      ];
+
+      const resultado = await executarCenario(passos, { nomeCliente: "Ana" }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.transferir).toBe(true);
+      expect(resultado.respostas[0]).toBe("Até já, Ana!");
+    });
+
+    it("mensagem vazia pausa o bot em silêncio (sem resposta)", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "transferir", config: { mensagem: "   " } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.transferir).toBe(true);
+      expect(resultado.respostas).toEqual([]);
+    });
   });
 
   describe("whatsapp_enviar", () => {

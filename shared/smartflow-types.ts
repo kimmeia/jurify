@@ -615,6 +615,12 @@ export interface GatilhoMeta {
   descricao: string;
   /** Grupo para agrupar visualmente na paleta. */
   grupo: GrupoSmartflow;
+  /**
+   * true = gatilho legado/descontinuado. Continua válido (validação do
+   * router e cenários antigos seguem funcionando), mas NÃO aparece como
+   * opção pra criar/trocar gatilho na UI.
+   */
+  oculto?: boolean;
 }
 
 export interface TipoCanalMeta {
@@ -693,7 +699,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "calcom_remarcar", label: "Remarcar agendamento", descricao: "Reagenda um booking para novo horário.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "acoes" },
   { id: "whatsapp_enviar", label: "Enviar mensagem", descricao: "Envia mensagem pelo WhatsApp.", cor: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300", grupo: "mensagem" },
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Envia mensagem e pausa o fluxo esperando o cliente responder. Suporta menu de opções automático.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
-  { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
+  { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e PARA o bot de responder (conversa fica 'em atendimento'). Use no fim de um caminho pra passar pro atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
   { id: "para_cada_item", label: "Para cada item (loop)", descricao: "Itera sobre uma lista do contexto e executa o subfluxo do corpo pra cada item.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
@@ -712,7 +718,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem em qualquer canal (WhatsApp, Instagram, Facebook).", grupo: "mensagem" },
-  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo, específico de WhatsApp QR. Prefira 'Mensagem recebida'.", grupo: "mensagem" },
+  { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo, específico de WhatsApp QR (Baileys). Descontinuado — use 'Mensagem recebida'.", grupo: "mensagem", oculto: true },
   { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", descricao: "Dispara no webhook do Asaas.", grupo: "asaas" },
   { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias.", grupo: "asaas" },
   { id: "pagamento_proximo_vencimento", label: "Vencimento próximo (Asaas)", descricao: "Dispara N dias antes da cobrança vencer.", grupo: "asaas" },
@@ -724,8 +730,11 @@ export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
   { id: "manual", label: "Acionado manualmente", descricao: "Executado pelo botão 'Executar agora'.", grupo: "fluxo" },
 ];
 
+// `whatsapp_qr` (Baileys) foi REMOVIDO da seleção de canais do gatilho —
+// está sendo descontinuado em favor da API oficial (whatsapp_api). O tipo
+// `whatsapp_qr` continua no union TipoCanalMensagem pra não quebrar cenários
+// e código legados; só não aparece mais como opção pra criar/configurar.
 export const TIPO_CANAL_META: ReadonlyArray<TipoCanalMeta> = [
-  { id: "whatsapp_qr", label: "WhatsApp QR (Baileys)" },
   { id: "whatsapp_api", label: "WhatsApp API (Meta Cloud)" },
   { id: "instagram", label: "Instagram", emBreve: true },
   { id: "facebook", label: "Facebook", emBreve: true },
