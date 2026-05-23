@@ -773,6 +773,49 @@ export const financeiroRouter = router({
     }),
 
   /**
+   * Recebido Asaas POR VENCIMENTO, quebrado por forma de pagamento.
+   * Mesmo critério do painel Asaas "Recebidas" (origem=asaas, status pago,
+   * vencimento no período) — bate em quantidade e valor por forma. Usado
+   * na seção de reconciliação pra o operador comparar PIX/Boleto direto
+   * com o Asaas.
+   */
+  recebidoVencimentoPorForma: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+      const db = await getDb();
+      if (!db) return { itens: [] as Array<{ forma: string; count: number; valor: number }> };
+
+      const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
+      const rows = await db
+        .select({
+          forma: asaasCobrancas.formaPagamento,
+          count: sql<number>`COUNT(*)`,
+          valor: sql<string>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))), 0)`,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          eq(asaasCobrancas.origem, "asaas"),
+          inArray(asaasCobrancas.status, STATUS_PAGOS),
+          between(asaasCobrancas.vencimento, input.dataInicio, input.dataFim),
+        ))
+        .groupBy(asaasCobrancas.formaPagamento);
+
+      return {
+        itens: rows
+          .map((r) => ({ forma: r.forma ?? "(não informado)", count: Number(r.count || 0), valor: Number(r.valor || 0) }))
+          .sort((a, b) => b.valor - a.valor),
+      };
+    }),
+
+  /**
    * Diagnóstico de divergência entre "Caixa Asaas" e o painel Asaas.
    *
    * Retorna 3 cortes:
