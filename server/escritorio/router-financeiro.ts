@@ -811,13 +811,16 @@ export const financeiroRouter = router({
 
       const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
 
-      // 1) Total por status no período
+      // 1) Total por status no período — bruto + líquido + diferença (taxa)
       const porStatusRaw = await db
         .select({
           status: asaasCobrancas.status,
           origem: asaasCobrancas.origem,
+          formaPagamento: asaasCobrancas.formaPagamento,
           valor: sql<string>`COALESCE(SUM(CAST(${asaasCobrancas.valor} AS DECIMAL(20,2))), 0)`,
+          valorLiquido: sql<string>`COALESCE(SUM(CAST(COALESCE(${asaasCobrancas.valorLiquido}, ${asaasCobrancas.valor}) AS DECIMAL(20,2))), 0)`,
           count: sql<number>`COUNT(*)`,
+          comValorLiquido: sql<number>`SUM(CASE WHEN ${asaasCobrancas.valorLiquido} IS NOT NULL THEN 1 ELSE 0 END)`,
         })
         .from(asaasCobrancas)
         .where(and(
@@ -825,7 +828,7 @@ export const financeiroRouter = router({
           inArray(asaasCobrancas.status, STATUS_PAGOS),
           between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
         ))
-        .groupBy(asaasCobrancas.status, asaasCobrancas.origem);
+        .groupBy(asaasCobrancas.status, asaasCobrancas.origem, asaasCobrancas.formaPagamento);
 
       // 2) Bordas: cobranças com dataPagamento de [dataInicio-2, dataInicio+2]
       const bordaInicio = await db
@@ -899,13 +902,106 @@ export const financeiroRouter = router({
         0,
       );
 
+      // 5) Saúde do valorLiquido — investiga netValue corrompido.
+      // Asaas cobra <1% de taxa; se "líquido" implica taxa absurda,
+      // é dado errado (parcela vs total, centavos vs reais, zerado).
+      const todasPagas = await db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          status: asaasCobrancas.status,
+          formaPagamento: asaasCobrancas.formaPagamento,
+          valor: asaasCobrancas.valor,
+          valorLiquido: asaasCobrancas.valorLiquido,
+          descricao: asaasCobrancas.descricao,
+          dataPagamento: asaasCobrancas.dataPagamento,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.status, STATUS_PAGOS),
+          between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
+        ));
+
+      let nLiquidoNull = 0;
+      let nLiquidoZero = 0;
+      let nLiquidoSuspeito = 0; // líquido < 80% do bruto (taxa real é <3%)
+      let nLiquidoOk = 0;
+      const outliers: Array<{
+        id: number;
+        asaasPaymentId: string | null;
+        status: string;
+        formaPagamento: string | null;
+        valor: number;
+        valorLiquido: number | null;
+        gap: number;
+        gapPercent: number;
+        descricao: string | null;
+        dataPagamento: string | null;
+      }> = [];
+      for (const c of todasPagas) {
+        const bruto = Number(c.valor || 0);
+        if (c.valorLiquido === null || c.valorLiquido === undefined) {
+          nLiquidoNull++;
+          continue;
+        }
+        const liq = Number(c.valorLiquido);
+        if (liq === 0) {
+          nLiquidoZero++;
+        } else if (bruto > 0 && liq < bruto * 0.8) {
+          nLiquidoSuspeito++;
+        } else {
+          nLiquidoOk++;
+        }
+        const gap = bruto - liq;
+        if (bruto > 0 && gap > bruto * 0.05) {
+          outliers.push({
+            id: c.id,
+            asaasPaymentId: c.asaasPaymentId,
+            status: c.status,
+            formaPagamento: c.formaPagamento,
+            valor: bruto,
+            valorLiquido: liq,
+            gap,
+            gapPercent: (gap / bruto) * 100,
+            descricao: c.descricao,
+            dataPagamento: c.dataPagamento,
+          });
+        }
+      }
+      outliers.sort((a, b) => b.gap - a.gap);
+      const topOutliers = outliers.slice(0, 20);
+
+      // Agregados pra resumo (totais)
+      const totalBruto = porStatusRaw.reduce((acc, r) => acc + Number(r.valor || 0), 0);
+      const totalLiquido = porStatusRaw.reduce((acc, r) => acc + Number(r.valorLiquido || 0), 0);
+      const totalTaxas = totalBruto - totalLiquido;
+      const totalCount = porStatusRaw.reduce((acc, r) => acc + Number(r.count || 0), 0);
+      const totalComLiquido = porStatusRaw.reduce(
+        (acc, r) => acc + Number(r.comValorLiquido || 0),
+        0,
+      );
+
       return {
         periodo: { inicio: input.dataInicio, fim: input.dataFim },
+        resumo: {
+          totalBruto,
+          totalLiquido,
+          totalTaxas,
+          totalCount,
+          // Quantas cobranças têm netValue preenchido (vs null). Se baixo,
+          // a hipótese de taxa fica menos confiável — pode ser sync incompleto.
+          comValorLiquido: totalComLiquido,
+        },
         porStatus: porStatusRaw.map((r) => ({
           status: r.status,
           origem: r.origem,
+          formaPagamento: r.formaPagamento,
           valor: Number(r.valor || 0),
+          valorLiquido: Number(r.valorLiquido || 0),
+          taxa: Number(r.valor || 0) - Number(r.valorLiquido || 0),
           count: Number(r.count || 0),
+          comValorLiquido: Number(r.comValorLiquido || 0),
         })),
         bordaInicio,
         bordaFim,
@@ -913,6 +1009,14 @@ export const financeiroRouter = router({
           itens: recebidoEmCash,
           total: totalRecebidoEmCash,
           count: recebidoEmCash.length,
+        },
+        saudeValorLiquido: {
+          nLiquidoNull,
+          nLiquidoZero,
+          nLiquidoSuspeito,
+          nLiquidoOk,
+          totalGapOutliers: outliers.reduce((acc, o) => acc + o.gap, 0),
+          topOutliers,
         },
       };
     }),
