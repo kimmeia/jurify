@@ -2988,7 +2988,15 @@ export const asaasRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-    const ZERO = { recebido: 0, recebidoLiquido: 0, pendente: 0, vencido: 0, recebidoComVencimentoNoPeriodo: 0, totalCobrancas: 0 };
+    const ZERO = {
+      recebido: 0, recebidoLiquido: 0, recebidoCount: 0,
+      pendente: 0, vencido: 0,
+      recebidoComVencimentoNoPeriodo: 0, recebidoComVencimentoNoPeriodoCount: 0,
+      recebidoNoPrazo: 0, recebidoNoPrazoCount: 0,
+      recebidoAtraso: 0, recebidoAtrasoCount: 0,
+      recebidoAdiantado: 0, recebidoAdiantadoCount: 0,
+      totalCobrancas: 0,
+    };
     const esc = await getEscritorioPorUsuario(ctx.user.id);
     if (!esc) return ZERO;
 
@@ -3041,6 +3049,16 @@ export const asaasRouter = router({
       const ehOverdue = inArray(asaasCobrancas.status, STATUS_VENCIDO_ASAAS as unknown as string[]);
       const pendingNoFuturo = sql`${asaasCobrancas.vencimento} >= ${hojeStr}`;
       const pendingNoPassado = sql`${asaasCobrancas.vencimento} < ${hojeStr}`;
+      // Discriminação do recebido (caixa real, pago no período) por situação
+      // de prazo, comparando o vencimento com o período de pagamento. Só faz
+      // sentido quando pagIni/pagFim estão definidos (filtro de período).
+      //  - no prazo: venceu dentro do período
+      //  - atraso: venceu ANTES do período (pago em atraso neste período)
+      //  - adiantado: vence DEPOIS do período (pago adiantado neste período)
+      const vencNoPrazo = sql`(${pagIni} IS NOT NULL AND ${pagFim} IS NOT NULL
+        AND ${asaasCobrancas.vencimento} >= ${pagIni} AND ${asaasCobrancas.vencimento} <= ${pagFim})`;
+      const vencAtraso = sql`(${pagIni} IS NOT NULL AND ${asaasCobrancas.vencimento} < ${pagIni})`;
+      const vencAdiantado = sql`(${pagFim} IS NOT NULL AND ${asaasCobrancas.vencimento} > ${pagFim})`;
 
       const [agg] = await db
         .select({
@@ -3050,7 +3068,17 @@ export const asaasRouter = router({
           vencido: sql<string>`COALESCE(SUM(CASE WHEN ((${ehPending} AND ${pendingNoPassado}) OR ${ehOverdue}) AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
           // Cobranças pagas cujo VENCIMENTO foi no período (independente de quando o pagamento ocorreu).
           // Usado pra calcular taxa de inadimplência exata: do que deveria ser pago no período, quanto foi.
+          // É também a "ponte com o Asaas": o painel deles conta por vencimento.
           recebidoComVencimentoNoPeriodo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoComVencimentoNoPeriodoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN 1 ELSE 0 END), 0)`,
+          // Discriminação do caixa real por situação de prazo
+          recebidoNoPrazo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencNoPrazo} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoNoPrazoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencNoPrazo} THEN 1 ELSE 0 END), 0)`,
+          recebidoAtraso: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAtraso} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAtrasoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAtraso} THEN 1 ELSE 0 END), 0)`,
+          recebidoAdiantado: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAdiantado} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAdiantadoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAdiantado} THEN 1 ELSE 0 END), 0)`,
+          recebidoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN 1 ELSE 0 END), 0)`,
           totalCobrancas: sql<number>`COALESCE(SUM(CASE
             WHEN ${ehPago} AND ${inRangePag} THEN 1
             WHEN ${ehPending} AND ${inRangeVenc} THEN 1
@@ -3063,9 +3091,17 @@ export const asaasRouter = router({
       return {
         recebido: Number(agg?.recebido ?? 0),
         recebidoLiquido: Number(agg?.recebidoLiquido ?? 0),
+        recebidoCount: Number(agg?.recebidoCount ?? 0),
         pendente: Number(agg?.pendente ?? 0),
         vencido: Number(agg?.vencido ?? 0),
         recebidoComVencimentoNoPeriodo: Number(agg?.recebidoComVencimentoNoPeriodo ?? 0),
+        recebidoComVencimentoNoPeriodoCount: Number(agg?.recebidoComVencimentoNoPeriodoCount ?? 0),
+        recebidoNoPrazo: Number(agg?.recebidoNoPrazo ?? 0),
+        recebidoNoPrazoCount: Number(agg?.recebidoNoPrazoCount ?? 0),
+        recebidoAtraso: Number(agg?.recebidoAtraso ?? 0),
+        recebidoAtrasoCount: Number(agg?.recebidoAtrasoCount ?? 0),
+        recebidoAdiantado: Number(agg?.recebidoAdiantado ?? 0),
+        recebidoAdiantadoCount: Number(agg?.recebidoAdiantadoCount ?? 0),
         totalCobrancas: Number(agg?.totalCobrancas ?? 0),
       };
     } catch {
