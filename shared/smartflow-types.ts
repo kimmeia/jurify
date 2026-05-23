@@ -74,6 +74,7 @@ export type TipoPasso =
   | "whatsapp_aguardar_resposta"
   | "transferir"
   | "condicional"
+  | "para_cada_item"
   | "esperar"
   | "webhook"
   | "kanban_criar_card"
@@ -405,6 +406,38 @@ export type ProximoSe = Record<string, string> | null;
 export interface ConfigEsperar {
   delayMinutos?: number;
 }
+
+/**
+ * Config do passo `para_cada_item` — itera sobre uma lista no contexto
+ * executando um subfluxo pra cada item. O nó tem 2 saídas no `proximoSe`:
+ *   - `corpo`: primeiro nó do subfluxo de iteração
+ *   - `depois`: continuação depois do loop terminar
+ *
+ * O subfluxo do corpo deve EVENTUALMENTE retornar ao próprio nó
+ * `para_cada_item` (loop natural) OU ter um nó terminal sem `proximoSe`.
+ * O engine detecta a volta e parte pra próxima iteração — sem stack overflow.
+ *
+ * Variáveis adicionadas ao contexto durante cada iteração:
+ *   - `{{item}}` (ou nome configurado): item atual
+ *   - `{{indice}}`: 0-indexed da iteração
+ */
+export interface ConfigParaCadaItem {
+  /**
+   * Caminho no contexto da lista a iterar. Suporta dot-notation
+   * (ex: `acoes`, `cliente.processos`). Default: `acoes`.
+   */
+  caminhoLista?: string;
+  /**
+   * Nome da variável que recebe o item atual. Default `item`. Permite
+   * trocar pra `acao`, `movimentacao`, etc. — útil em loops aninhados.
+   */
+  nomeVarItem?: string;
+  /**
+   * Limite máximo de iterações — guarda contra listas absurdamente grandes
+   * e loops infinitos por bugs de config. Default 20, max 200.
+   */
+  limite?: number;
+}
 export interface ConfigWebhook {
   url?: string;
 }
@@ -519,6 +552,7 @@ export type PassoConfigByTipo =
   | { tipo: "transferir"; config: ConfigTransferir }
   | { tipo: "condicional"; config: ConfigCondicional }
   | { tipo: "esperar"; config: ConfigEsperar }
+  | { tipo: "para_cada_item"; config: ConfigParaCadaItem }
   | { tipo: "webhook"; config: ConfigWebhook }
   | { tipo: "kanban_criar_card"; config: ConfigKanbanCriarCard }
   | { tipo: "kanban_mover_card"; config: ConfigKanbanMoverCard }
@@ -661,6 +695,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "whatsapp_aguardar_resposta", label: "Aguardar resposta", descricao: "Envia mensagem e pausa o fluxo esperando o cliente responder. Suporta menu de opções automático.", cor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300", grupo: "mensagem" },
   { id: "transferir", label: "Transferir p/ humano", descricao: "Encerra o fluxo e notifica atendente.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "mensagem" },
   { id: "condicional", label: "Condição (if/else)", descricao: "Continua só se a condição for atendida.", cor: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", grupo: "fluxo" },
+  { id: "para_cada_item", label: "Para cada item (loop)", descricao: "Itera sobre uma lista do contexto e executa o subfluxo do corpo pra cada item.", cor: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", grupo: "fluxo" },
   { id: "esperar", label: "Esperar (delay)", descricao: "Pausa o fluxo por N minutos.", cor: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300", grupo: "fluxo" },
   { id: "webhook", label: "Webhook externo", descricao: "POST para uma URL externa.", cor: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300", grupo: "fluxo" },
   { id: "kanban_criar_card", label: "Criar card Kanban", descricao: "Cria card no funil/coluna escolhido.", cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300", grupo: "acoes" },

@@ -74,6 +74,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
     { path: "transferir", label: "Sinaliza transferência pra humano (encerra)", tipo: "booleano" },
   ],
   condicional: [],
+  // para_cada_item publica `item` e `indice` DENTRO do corpo do loop —
+  // resolução dinâmica abaixo cuida (config tem `nomeVarItem`).
+  para_cada_item: [],
   esperar: [],
   webhook: [
     { path: "webhookResultado", label: "Resposta JSON do webhook chamado", tipo: "objeto" },
@@ -205,6 +208,16 @@ export function EditorPainelSaida({
       if (!chave) return [];
       return [
         { path: `cliente.campos.${chave}`, label: "Campo personalizado salvo no cadastro", tipo: "texto" as const },
+      ];
+    }
+    if (tipoPasso === "para_cada_item") {
+      // Variáveis ficam disponíveis SÓ dentro do corpo do loop. Mostramos
+      // assim mesmo pra ensinar — o usuário precisa entender que pode usar
+      // {{item.X}} no passo seguinte (conectado pelo handle "corpo").
+      const nomeVar = String(configPasso?.nomeVarItem || "item").trim() || "item";
+      return [
+        { path: nomeVar, label: "Item atual da iteração (objeto da lista)", tipo: "objeto" as const },
+        { path: "indice", label: "Posição na lista (0-indexed)", tipo: "número" as const },
       ];
     }
     if (tipoPasso === "ia_extrair_campos") {

@@ -72,6 +72,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
   condicional: GitBranch,
+  para_cada_item: Repeat,
   esperar: Clock,
   webhook: Webhook,
   kanban_criar_card: LayoutGrid,

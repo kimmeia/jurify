@@ -786,6 +786,329 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("para_cada_item", () => {
+    it("itera 0 vezes quando lista está vazia (não falha)", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          proximoSe: { corpo: "envia", depois: "fim" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ação {{item.id}}" },
+          proximoSe: { default: "loop" },
+        },
+        {
+          id: 3, ordem: 3, tipo: "ia_responder",
+          clienteId: "fim",
+          config: {},
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { acoes: [], telefoneCliente: "1199" }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).not.toHaveBeenCalled();
+      // ia_responder NÃO roda porque mensagem não está no ctx (handler falha)
+      // mas isso é outra história — o que importa: chegou no fim sem erro.
+    });
+
+    it("itera 0 vezes sem erro quando caminhoLista não existe no contexto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "naoExisteNoCtx" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ola" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+    });
+
+    it("falha quando lista existe mas não é array", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ola" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { acoes: "string em vez de lista" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("não é uma lista");
+    });
+
+    it("falha quando não tem proximoSe.corpo configurado", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          proximoSe: {},
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { acoes: [1, 2, 3] }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("corpo conectado");
+    });
+
+    it("itera 3 vezes executando 1 passo no corpo a cada", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes" },
+          // corpo aponta pro whatsapp; whatsapp aponta de volta pro loop
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "ação {{item.apelido}}" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        {
+          acoes: [
+            { id: 1, apelido: "Trabalhista" },
+            { id: 2, apelido: "Cível" },
+            { id: 3, apelido: "Família" },
+          ],
+          telefoneCliente: "1199",
+        },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(3);
+      // Cada chamada com o template interpolado pro item da iteração
+      expect((enviarWhatsApp as any).mock.calls[0][1]).toBe("ação Trabalhista");
+      expect((enviarWhatsApp as any).mock.calls[1][1]).toBe("ação Cível");
+      expect((enviarWhatsApp as any).mock.calls[2][1]).toBe("ação Família");
+    });
+
+    it("respeita o limite de iterações truncando a lista", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const lista = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens", limite: 5 },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: lista, telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(5);
+    });
+
+    it("usa nomeVarItem custom (ex: 'acao' em vez de 'item')", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "acoes", nomeVarItem: "acao" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "Processo {{acao.cnj}}" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      await executarCenario(
+        passos,
+        {
+          acoes: [{ cnj: "111" }, { cnj: "222" }],
+          telefoneCliente: "1199",
+        },
+        exec,
+      );
+
+      expect((enviarWhatsApp as any).mock.calls[0][1]).toBe("Processo 111");
+      expect((enviarWhatsApp as any).mock.calls[1][1]).toBe("Processo 222");
+    });
+
+    it("continua pelo ramo 'depois' após terminar as iterações", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const chamarIA = vi.fn().mockResolvedValue("resumo");
+      const exec = criarMockExecutores({ enviarWhatsApp, chamarIA });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens" },
+          proximoSe: { corpo: "envia", depois: "depoisLoop" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "{{item}}" },
+          proximoSe: { default: "loop" },
+        },
+        {
+          id: 3, ordem: 3, tipo: "ia_responder",
+          clienteId: "depoisLoop",
+          config: {},
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: ["a", "b"], telefoneCliente: "1199", mensagem: "fim" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(2);
+      // ia_responder rodou ("depois" do loop)
+      expect(chamarIA).toHaveBeenCalled();
+      expect(resultado.contexto.respostaIA).toBe("resumo");
+    });
+
+    it("limpa item/indice do contexto após o loop terminar", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: ["a", "b"], telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      // Após o loop, item/indice não vazam pro contexto global
+      expect(resultado.contexto.item).toBeUndefined();
+      expect(resultado.contexto.indice).toBeUndefined();
+    });
+
+    it("aborta com erro quando excede MAX_PASSOS_EXECUCAO no corpo", async () => {
+      const enviarWhatsApp = vi.fn().mockResolvedValue(true);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      // 60 itens × 1 passo/item = 60 — passa do limite de 50
+      const lista = Array.from({ length: 60 }, (_, i) => i);
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens", limite: 60 },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: lista, telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toMatch(/Limite de \d+ passos/);
+    });
+
+    it("erros dentro do corpo abortam o loop inteiro", async () => {
+      // Mock que falha na 2ª chamada
+      const enviarWhatsApp = vi.fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      const exec = criarMockExecutores({ enviarWhatsApp });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "para_cada_item",
+          clienteId: "loop",
+          config: { caminhoLista: "itens" },
+          proximoSe: { corpo: "envia" },
+        },
+        {
+          id: 2, ordem: 2, tipo: "whatsapp_enviar",
+          clienteId: "envia",
+          config: { template: "x" },
+          proximoSe: { default: "loop" },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { itens: ["a", "b", "c"], telefoneCliente: "1199" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("WhatsApp");
+      // Só rodou 2x (a 2ª falhou e abortou; 3ª não rodou)
+      expect(enviarWhatsApp).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("calcom_horarios", () => {
     it("retorna horários formatados", async () => {
       const exec = criarMockExecutores();

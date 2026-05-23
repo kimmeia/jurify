@@ -45,6 +45,7 @@ const TIPOS_PASSO = [
   "whatsapp_aguardar_resposta",
   "transferir",
   "condicional",
+  "para_cada_item",
   "esperar",
   "webhook",
   "kanban_criar_card",

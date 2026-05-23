@@ -1699,13 +1699,9 @@ export async function executarCenario(
   contextoInicial: SmartflowContexto,
   executores: SmartflowExecutores,
 ): Promise<ExecutarCenarioResultado> {
-  let contexto = { ...contextoInicial };
-  const respostas: string[] = [];
-  let passosExecutados = 0;
-
   const passosOrdenados = [...passos].sort((a, b) => a.ordem - b.ordem);
   if (passosOrdenados.length === 0) {
-    return { sucesso: true, contexto, passosExecutados, respostas };
+    return { sucesso: true, contexto: { ...contextoInicial }, passosExecutados: 0, respostas: [] };
   }
 
   // Detecção de modo:
@@ -1726,18 +1722,93 @@ export async function executarCenario(
   const indicePorId = new Map<number, number>();
   passosOrdenados.forEach((p, i) => indicePorId.set(p.id, i));
 
-  let atual: Passo | null = passosOrdenados[0];
+  // Contador global de passos executados — compartilhado entre o walk
+  // principal e os sub-walks de loop pra que MAX_PASSOS_EXECUCAO valha
+  // pra execução inteira (não por iteração de loop).
+  const estadoGlobal = { passosExecutados: 0 };
+
+  return walkInterno({
+    passos: passosOrdenados,
+    porClienteId,
+    indicePorId,
+    modoGrafo,
+    startNode: passosOrdenados[0],
+    contexto: { ...contextoInicial },
+    stopAt: new Set<number>(),
+    estadoGlobal,
+    executores,
+    respostas: [],
+  });
+}
+
+/**
+ * Walker reusável: anda pelo grafo a partir de `startNode`, parando quando:
+ *   - Acaba o caminho (sem próximo passo).
+ *   - Encontra um nó cujo id está em `stopAt` (usado por loops pra fechar
+ *     a iteração quando o corpo aponta de volta pro `para_cada_item`).
+ *   - `MAX_PASSOS_EXECUCAO` excedido (proteção global).
+ *   - Handler retornou erro ou `parar: true`.
+ *
+ * Pra `para_cada_item`: lê a lista do contexto, e pra cada item chama
+ * recursivamente o walker do nó apontado por `proximoSe.corpo`, com `stopAt`
+ * estendido com o id do loop atual — fechando naturalmente a iteração ao
+ * voltar ao loop. Depois de iterar, segue pelo `proximoSe.depois`.
+ */
+async function walkInterno(opts: {
+  passos: Passo[];
+  porClienteId: Map<string, Passo>;
+  indicePorId: Map<number, number>;
+  modoGrafo: boolean;
+  startNode: Passo | null;
+  contexto: SmartflowContexto;
+  stopAt: Set<number>;
+  estadoGlobal: { passosExecutados: number };
+  executores: SmartflowExecutores;
+  respostas: string[];
+}): Promise<ExecutarCenarioResultado> {
+  const { passos, porClienteId, indicePorId, modoGrafo, stopAt, estadoGlobal, executores } = opts;
+  let contexto = opts.contexto;
+  const respostas = opts.respostas;
+  let atual: Passo | null = opts.startNode;
 
   while (atual !== null) {
-    const passoAtual: Passo = atual;
-    if (passosExecutados >= MAX_PASSOS_EXECUCAO) {
+    if (stopAt.has(atual.id)) {
+      // Voltou pra origem do loop (ou outro nó marcado como "pare"). Encerra
+      // este sub-walk sem erro — o caller (loop) parte pra próxima iteração.
+      return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+    }
+    if (estadoGlobal.passosExecutados >= MAX_PASSOS_EXECUCAO) {
       return {
         sucesso: false,
         contexto,
-        passosExecutados,
+        passosExecutados: estadoGlobal.passosExecutados,
         respostas,
         erro: `Limite de ${MAX_PASSOS_EXECUCAO} passos excedido — possível loop no cenário.`,
       };
+    }
+
+    const passoAtual: Passo = atual;
+
+    // Caso especial: para_cada_item — não passa pelo HANDLERS, é resolvido
+    // aqui no walker (precisa de acesso ao grafo de passos).
+    if (passoAtual.tipo === "para_cada_item") {
+      const r = await executarParaCadaItem({
+        passo: passoAtual,
+        contexto,
+        passos,
+        porClienteId,
+        indicePorId,
+        modoGrafo,
+        stopAt,
+        estadoGlobal,
+        executores,
+        respostas,
+      });
+      if (!r.sucesso) return r;
+      contexto = r.contexto;
+      // Continua pelo próximo do loop (proximoSe.depois ou ordem linear)
+      atual = resolverProximo(passoAtual, "depois", porClienteId, indicePorId, modoGrafo, passos);
+      continue;
     }
 
     const handler = HANDLERS[passoAtual.tipo];
@@ -1745,14 +1816,14 @@ export async function executarCenario(
       return {
         sucesso: false,
         contexto,
-        passosExecutados,
+        passosExecutados: estadoGlobal.passosExecutados,
         respostas,
         erro: `Tipo de passo desconhecido: ${passoAtual.tipo}`,
       };
     }
 
     const resultado: PassoResultado = await handler(passoAtual, contexto, executores);
-    passosExecutados++;
+    estadoGlobal.passosExecutados++;
     contexto = resultado.contexto;
 
     if (resultado.resposta) respostas.push(resultado.resposta);
@@ -1761,7 +1832,7 @@ export async function executarCenario(
       return {
         sucesso: false,
         contexto,
-        passosExecutados,
+        passosExecutados: estadoGlobal.passosExecutados,
         respostas,
         erro: resultado.mensagemErro || "Erro no passo " + passoAtual.tipo,
       };
@@ -1769,27 +1840,173 @@ export async function executarCenario(
 
     if (resultado.parar) break;
 
-    // Próximo passo.
-    //   modo grafo: só segue se `proximoSe` declarar o ramo — senão encerra.
-    //   modo linear: sempre tenta a próxima `ordem` (comportamento legado).
-    let proximo: Passo | null = null;
-    const mapa: Record<string, string> | null | undefined = passoAtual.proximoSe;
-
-    if (mapa && typeof mapa === "object") {
-      const chave: string = resultado.proximoRamoId || "default";
-      const alvoClienteId: string | undefined = mapa[chave];
-      if (alvoClienteId) {
-        proximo = porClienteId.get(alvoClienteId) ?? null;
-      }
-    } else if (!modoGrafo) {
-      const idx = indicePorId.get(passoAtual.id);
-      if (idx != null && idx + 1 < passosOrdenados.length) {
-        proximo = passosOrdenados[idx + 1];
-      }
-    }
-
-    atual = proximo;
+    atual = resolverProximo(
+      passoAtual,
+      resultado.proximoRamoId,
+      porClienteId,
+      indicePorId,
+      modoGrafo,
+      passos,
+    );
   }
 
-  return { sucesso: true, contexto, passosExecutados, respostas };
+  return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+}
+
+/**
+ * Resolve qual é o próximo passo dado o atual + a chave do ramo retornada
+ * pelo handler. Encapsula a lógica antes inline no walker pra ser reusada
+ * pelo `para_cada_item`.
+ *
+ * Regras:
+ *   - Se passo tem `proximoSe`: usa `proximoSe[chave]` (default `"default"`
+ *     quando handler não retorna `proximoRamoId`). Sem entrada → encerra fluxo.
+ *   - Senão, em modo linear: próxima `ordem` (legado).
+ *   - Em modo grafo sem `proximoSe`: fim do ramo.
+ */
+function resolverProximo(
+  passoAtual: Passo,
+  proximoRamoId: string | undefined,
+  porClienteId: Map<string, Passo>,
+  indicePorId: Map<number, number>,
+  modoGrafo: boolean,
+  passos: Passo[],
+): Passo | null {
+  const mapa = passoAtual.proximoSe;
+  if (mapa && typeof mapa === "object") {
+    const chave = proximoRamoId || "default";
+    const alvoClienteId = mapa[chave];
+    if (alvoClienteId) {
+      return porClienteId.get(alvoClienteId) ?? null;
+    }
+    return null;
+  }
+  if (!modoGrafo) {
+    const idx = indicePorId.get(passoAtual.id);
+    if (idx != null && idx + 1 < passos.length) {
+      return passos[idx + 1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Executa o passo `para_cada_item`. Lê a lista do contexto, itera até o
+ * limite, e pra cada iteração chama `walkInterno` começando pelo nó do
+ * "corpo" do loop — com `stopAt` estendido com o id do `para_cada_item`
+ * atual pra fechar a iteração quando o corpo voltar pro próprio loop.
+ *
+ * Cada iteração trabalha numa cópia do contexto e mescla resultado de
+ * volta no acumulado (excluindo `item`/`indice` — esses só vivem dentro
+ * da iteração). Loops aninhados funcionam naturalmente porque cada um
+ * adiciona seu id ao `stopAt` recebido.
+ */
+async function executarParaCadaItem(opts: {
+  passo: Passo;
+  contexto: SmartflowContexto;
+  passos: Passo[];
+  porClienteId: Map<string, Passo>;
+  indicePorId: Map<number, number>;
+  modoGrafo: boolean;
+  stopAt: Set<number>;
+  estadoGlobal: { passosExecutados: number };
+  executores: SmartflowExecutores;
+  respostas: string[];
+}): Promise<ExecutarCenarioResultado> {
+  const { passo, passos, porClienteId, indicePorId, modoGrafo, stopAt, estadoGlobal, executores, respostas } = opts;
+  let contexto = opts.contexto;
+  const cfg = passo.config as { caminhoLista?: string; nomeVarItem?: string; limite?: number };
+  const caminho = (cfg.caminhoLista || "acoes").trim();
+  const nomeVar = (cfg.nomeVarItem || "item").trim();
+  const limite = Math.max(1, Math.min(200, Number(cfg.limite) || 20));
+
+  // Resolve lista via dot-notation (suporta `acoes`, `cliente.processos`, etc.)
+  const partes = caminho.split(".");
+  let listaRaw: any = contexto;
+  for (const p of partes) {
+    if (listaRaw == null || typeof listaRaw !== "object") { listaRaw = undefined; break; }
+    listaRaw = listaRaw[p];
+  }
+  if (listaRaw == null) {
+    // Lista ausente — tratado como zero iterações, NÃO erro. Permite usar
+    // o passo sem garantir que a lista exista.
+    estadoGlobal.passosExecutados++;
+    return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+  }
+  if (!Array.isArray(listaRaw)) {
+    return {
+      sucesso: false,
+      contexto,
+      passosExecutados: estadoGlobal.passosExecutados,
+      respostas,
+      erro: `\`${caminho}\` não é uma lista — não dá pra iterar.`,
+    };
+  }
+
+  estadoGlobal.passosExecutados++; // conta o próprio loop como 1 passo
+  const lista = listaRaw.slice(0, limite);
+  if (lista.length === 0) {
+    return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
+  }
+
+  // Resolve nó-corpo a partir de `proximoSe.corpo` no editor.
+  const mapaProx = passo.proximoSe || {};
+  const corpoClienteId = mapaProx.corpo;
+  if (!corpoClienteId) {
+    return {
+      sucesso: false,
+      contexto,
+      passosExecutados: estadoGlobal.passosExecutados,
+      respostas,
+      erro: "Loop sem corpo conectado — conecte a saída 'corpo' a um passo.",
+    };
+  }
+  const corpoStart = porClienteId.get(corpoClienteId);
+  if (!corpoStart) {
+    return {
+      sucesso: false,
+      contexto,
+      passosExecutados: estadoGlobal.passosExecutados,
+      respostas,
+      erro: "Corpo do loop aponta pra um passo que não existe.",
+    };
+  }
+
+  const stopComLoop = new Set(stopAt);
+  stopComLoop.add(passo.id);
+
+  for (let i = 0; i < lista.length; i++) {
+    if (estadoGlobal.passosExecutados >= MAX_PASSOS_EXECUCAO) {
+      return {
+        sucesso: false,
+        contexto,
+        passosExecutados: estadoGlobal.passosExecutados,
+        respostas,
+        erro: `Limite de ${MAX_PASSOS_EXECUCAO} passos excedido — possível loop infinito.`,
+      };
+    }
+    const subContexto: SmartflowContexto = { ...contexto, [nomeVar]: lista[i], indice: i };
+    const sub = await walkInterno({
+      passos,
+      porClienteId,
+      indicePorId,
+      modoGrafo,
+      startNode: corpoStart,
+      contexto: subContexto,
+      stopAt: stopComLoop,
+      estadoGlobal,
+      executores,
+      respostas,
+    });
+    if (!sub.sucesso) return sub;
+
+    // Mescla contexto resultante de volta no global. Remove `item` (ou
+    // nome configurado) e `indice` — eles só fazem sentido durante a iteração.
+    const proxCtx = { ...sub.contexto } as Record<string, unknown>;
+    delete proxCtx[nomeVar];
+    delete proxCtx.indice;
+    contexto = proxCtx as SmartflowContexto;
+  }
+
+  return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };
 }

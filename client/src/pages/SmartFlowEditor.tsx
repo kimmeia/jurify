@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
   CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle,
-  Move, Pause, PhoneCall, Play, Plus, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
+  Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
   CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
@@ -124,6 +124,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
   condicional: GitBranch,
+  para_cada_item: Repeat,
   esperar: Clock,
   webhook: Webhook,
   kanban_criar_card: LayoutGrid,
@@ -259,6 +260,13 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
             />
           ))}
           <HandleRow handleId="fallback" label="fallback" italic cor="#f59e0b" />
+        </div>
+      ) : data.tipo === "para_cada_item" ? (
+        // Loop tem 2 saídas: "corpo" (subfluxo da iteração) e "depois"
+        // (continuação após o loop terminar).
+        <div className="border-t bg-muted/20 rounded-b-[6px] py-1">
+          <HandleRow handleId="corpo" label="🔁 corpo do loop" cor="#f59e0b" />
+          <HandleRow handleId="depois" label="depois (terminou)" cor="#3b82f6" />
         </div>
       ) : (
         <Handle type="source" position={Position.Bottom} id="default" className="!bg-muted-foreground/40" />
@@ -2786,6 +2794,80 @@ function ConfigWhatsappAguardarRespostaFields({
   );
 }
 
+/**
+ * Config do passo `para_cada_item` — loop sobre lista do contexto.
+ *  - caminhoLista: ex "acoes", "movimentacoes", "cliente.processos"
+ *  - nomeVarItem: nome da variável dentro da iteração (default "item")
+ *  - limite: máximo de iterações (default 20, max 200)
+ *
+ * No canvas, o nó tem 2 saídas: "corpo" (subfluxo da iteração) e "depois"
+ * (continuação). O editor visual cuida das edges; aqui só a config.
+ */
+function ConfigParaCadaItemFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-xs">Caminho da lista no contexto</Label>
+        <Input
+          value={String(cfg.caminhoLista || "")}
+          onChange={(e) => onChange({ caminhoLista: e.target.value })}
+          placeholder="acoes"
+          className="font-mono text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Ex: <code>acoes</code> (do passo "Listar ações"), <code>movimentacoes</code>{" "}
+          (de "Buscar movimentações") ou <code>cliente.processos</code> (dot-notation).
+          Lista ausente = zero iterações sem erro.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Nome da variável do item</Label>
+        <Input
+          value={String(cfg.nomeVarItem || "")}
+          onChange={(e) => onChange({ nomeVarItem: e.target.value })}
+          placeholder="item"
+          className="font-mono text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Default <code>item</code>. Dentro do corpo do loop você acessa via{" "}
+          <code>{`{{item.id}}`}</code>, <code>{`{{item.apelido}}`}</code>, etc.
+          Trocar é útil em loops aninhados.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Limite de iterações</Label>
+        <Input
+          type="number"
+          min={1}
+          max={200}
+          value={Number(cfg.limite ?? 20)}
+          onChange={(e) =>
+            onChange({ limite: Math.max(1, Math.min(200, Number(e.target.value) || 20)) })
+          }
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Default 20. Lista maior é truncada — protege contra loops infinitos.
+        </p>
+      </div>
+
+      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+        <strong>Como conectar no canvas:</strong> arraste a saída <strong>"corpo"</strong>{" "}
+        pro primeiro passo da iteração. O último passo do corpo deve conectar
+        de volta neste loop (ou simplesmente terminar). A saída{" "}
+        <strong>"depois"</strong> continua quando o loop terminar.
+      </div>
+    </div>
+  );
+}
+
 function ConfigKanbanCriarCardFields({
   cfg,
   onChange,
@@ -3613,6 +3695,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_aguardar_resposta":
       return <ConfigWhatsappAguardarRespostaFields cfg={cfg} onChange={onChange} />;
+    case "para_cada_item":
+      return <ConfigParaCadaItemFields cfg={cfg} onChange={onChange} />;
     case "crm_buscar_contato":
       return <ConfigCrmBuscarContatoFields cfg={cfg} onChange={onChange} />;
     case "crm_listar_acoes_cliente":

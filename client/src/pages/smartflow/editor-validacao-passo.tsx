@@ -190,6 +190,24 @@ export function validarPasso(
       break;
     }
 
+    case "para_cada_item": {
+      const caminho = String((config as any).caminhoLista || "").trim();
+      if (!caminho) {
+        itens.push({
+          severidade: "aviso",
+          mensagem: "Caminho da lista vazio — vai usar `acoes` por default; se a lista não existir, loop não executa.",
+        });
+      }
+      const limite = Number((config as any).limite || 0);
+      if (limite > 50) {
+        itens.push({
+          severidade: "aviso",
+          mensagem: `Limite alto (${limite}) — cuidado pra não estourar MAX_PASSOS_EXECUCAO (50) se o corpo for grande.`,
+        });
+      }
+      break;
+    }
+
     case "esperar": {
       const delay = Number((config as any).delayMinutos || 0);
       if (delay <= 0) {

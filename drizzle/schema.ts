@@ -1988,6 +1988,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "transferir",                    // transfere pra humano
     "condicional",                   // if/else baseado em condição
+    "para_cada_item",                // loop sobre lista no contexto
     "esperar",                       // delay (follow-up)
     "webhook",
     "kanban_criar_card",             // cria card no Kanban
