@@ -205,3 +205,76 @@ export const TEMPLATES_SMARTFLOW: ReadonlyArray<TemplateSmartflow> = [
 export function getTemplate(id: string): TemplateSmartflow | null {
   return TEMPLATES_SMARTFLOW.find((t) => t.id === id) ?? null;
 }
+
+/**
+ * Campo editável no wizard de personalização. Cada um aponta pra uma chave
+ * de config (do gatilho ou de um passo) que o usuário ajusta antes de criar.
+ */
+export interface CampoWizard {
+  /** Onde o valor vai: config do gatilho ou config de um passo. */
+  alvo: "gatilho" | "passo";
+  /** clienteId do passo alvo (quando alvo="passo"). */
+  clienteId?: string;
+  /** Chave dentro da config (ex: "template", "diasAtraso"). */
+  chave: string;
+  /** Label humano exibido no wizard. */
+  label: string;
+  /** Tipo de campo da UI. */
+  tipo: "mensagem" | "texto" | "numero" | "hora";
+  /** Valor atual (default do template). */
+  valorAtual: string | number;
+  /** Texto de ajuda curto. */
+  ajuda?: string;
+}
+
+/**
+ * Extrai os campos que valem a pena personalizar no wizard antes de criar
+ * o cenário — basicamente: textos de mensagem (whatsapp) e parâmetros do
+ * gatilho (dias de atraso/antecedência, horário). Passos sem nada a ajustar
+ * (ex: criar card) não geram campo — o usuário ajusta no editor depois.
+ *
+ * Retorna lista vazia quando o template não tem nada óbvio a personalizar
+ * (aí o wizard cria direto sem etapa extra).
+ */
+export function camposWizardDoTemplate(tpl: TemplateSmartflow): CampoWizard[] {
+  const campos: CampoWizard[] = [];
+
+  // 1. Parâmetros do gatilho (configGatilho).
+  const cg = tpl.configGatilho || {};
+  if (typeof cg.diasAtraso === "number") {
+    campos.push({
+      alvo: "gatilho", chave: "diasAtraso", label: "Dias após o vencimento pra disparar",
+      tipo: "numero", valorAtual: cg.diasAtraso, ajuda: "Quantos dias de atraso até a mensagem ser enviada.",
+    });
+  }
+  if (typeof cg.diasAntes === "number") {
+    campos.push({
+      alvo: "gatilho", chave: "diasAntes", label: "Dias antes pra avisar",
+      tipo: "numero", valorAtual: cg.diasAntes, ajuda: "Com quantos dias de antecedência avisar.",
+    });
+  }
+  if (typeof cg.horario === "string") {
+    campos.push({
+      alvo: "gatilho", chave: "horario", label: "Horário do aviso",
+      tipo: "hora", valorAtual: cg.horario, ajuda: "Hora do dia em que o aviso é enviado.",
+    });
+  }
+
+  // 2. Mensagens dos passos (whatsapp_enviar / whatsapp_aguardar_resposta).
+  let nMsg = 0;
+  for (const p of tpl.passos) {
+    const tpltext = (p.config as any)?.template;
+    if ((p.tipo === "whatsapp_enviar" || p.tipo === "whatsapp_aguardar_resposta") && typeof tpltext === "string") {
+      nMsg++;
+      const ehPergunta = p.tipo === "whatsapp_aguardar_resposta";
+      campos.push({
+        alvo: "passo", clienteId: p.clienteId, chave: "template",
+        label: ehPergunta ? "Pergunta ao cliente" : (nMsg > 1 ? `Mensagem ${nMsg}` : "Mensagem enviada ao cliente"),
+        tipo: "mensagem", valorAtual: tpltext,
+        ajuda: "Use o botão 'Inserir' pra colocar dados do cliente (nome, etc.).",
+      });
+    }
+  }
+
+  return campos;
+}

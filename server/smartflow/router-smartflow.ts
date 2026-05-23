@@ -376,11 +376,21 @@ export const smartflowRouter = router({
 
   /**
    * Cria um cenário a partir de um template da galeria (shared/smartflow-templates).
-   * Materializa gatilho + configGatilho + passos prontos. Retorna o id pra
-   * navegar pro editor e ajustar.
+   * Materializa gatilho + configGatilho + passos prontos. Aceita customizações
+   * do wizard (nome, configGatilho, config por passo) que sobrescrevem o
+   * template antes de gravar — assim o cenário já sai pronto pra usar.
+   * Retorna o id pra navegar pro editor.
    */
   criarDeTemplate: requireModulo("smartflow")
-    .input(z.object({ templateId: z.string().max(64) }))
+    .input(z.object({
+      templateId: z.string().max(64),
+      /** Sobrescreve o nome do template. */
+      nome: z.string().min(2).max(128).optional(),
+      /** Merge sobre o configGatilho do template (ex: diasAtraso ajustado). */
+      configGatilho: z.record(z.any()).optional(),
+      /** Map clienteId do passo → patch de config (merge). Ex: editar mensagem. */
+      passosConfig: z.record(z.record(z.any())).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "smartflow", "criar");
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar cenários SmartFlow." });
@@ -391,12 +401,19 @@ export const smartflowRouter = router({
       const tpl = getTemplate(input.templateId);
       if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
 
+      const nomeFinal = input.nome?.trim() || tpl.nome;
+      const configGatilhoFinal = {
+        ...(tpl.configGatilho || {}),
+        ...(input.configGatilho || {}),
+      };
+      const temConfigGatilho = Object.keys(configGatilhoFinal).length > 0;
+
       const [result] = await db.insert(smartflowCenarios).values({
         escritorioId: perm.escritorioId,
-        nome: tpl.nome,
+        nome: nomeFinal,
         descricao: tpl.descricao,
         gatilho: tpl.gatilho,
-        configGatilho: tpl.configGatilho ? JSON.stringify(tpl.configGatilho) : null,
+        configGatilho: temConfigGatilho ? JSON.stringify(configGatilhoFinal) : null,
         criadoPor: ctx.user.id,
         // Templates nascem inativos — usuário revisa e ativa quando estiver pronto.
         ativo: false,
@@ -405,11 +422,14 @@ export const smartflowRouter = router({
 
       for (let i = 0; i < tpl.passos.length; i++) {
         const p = tpl.passos[i];
+        // Aplica patch de config do wizard (merge raso sobre a config do template).
+        const patch = input.passosConfig?.[p.clienteId];
+        const configFinal = patch ? { ...p.config, ...patch } : p.config;
         await db.insert(smartflowPassos).values({
           cenarioId,
           ordem: i + 1,
           tipo: p.tipo as any,
-          config: JSON.stringify(p.config),
+          config: JSON.stringify(configFinal),
           clienteId: p.clienteId || null,
           proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
             ? JSON.stringify(p.proximoSe)
@@ -417,7 +437,7 @@ export const smartflowRouter = router({
         });
       }
 
-      return { id: cenarioId, nome: tpl.nome };
+      return { id: cenarioId, nome: nomeFinal };
     }),
 
   /** Execuções recentes (lista) */
