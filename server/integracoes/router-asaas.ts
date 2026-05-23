@@ -2991,7 +2991,7 @@ export const asaasRouter = router({
     const ZERO = {
       recebido: 0, recebidoLiquido: 0, recebidoCount: 0,
       pendente: 0, vencido: 0,
-      recebidoComVencimentoNoPeriodo: 0,
+      recebidoComVencimentoNoPeriodo: 0, recebidoComVencimentoNoPeriodoCount: 0,
       recebidoAsaasPorVencimento: 0, recebidoAsaasPorVencimentoCount: 0,
       recebidoManual: 0, recebidoManualCount: 0,
       recebidoNoPrazo: 0, recebidoNoPrazoCount: 0,
@@ -3081,6 +3081,7 @@ export const asaasRouter = router({
           // Cobranças pagas cujo VENCIMENTO foi no período (independente de quando o pagamento ocorreu).
           // Usado pra calcular taxa de inadimplência exata: do que deveria ser pago no período, quanto foi.
           recebidoComVencimentoNoPeriodo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoComVencimentoNoPeriodoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN 1 ELSE 0 END), 0)`,
           // PONTE COM ASAAS: cobranças Asaas (origem=asaas) pagas com vencimento
           // no período. É o que o painel "Recebidas" do Asaas conta (por venc).
           recebidoAsaasPorVencimento: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
@@ -3113,6 +3114,7 @@ export const asaasRouter = router({
         pendente: Number(agg?.pendente ?? 0),
         vencido: Number(agg?.vencido ?? 0),
         recebidoComVencimentoNoPeriodo: Number(agg?.recebidoComVencimentoNoPeriodo ?? 0),
+        recebidoComVencimentoNoPeriodoCount: Number(agg?.recebidoComVencimentoNoPeriodoCount ?? 0),
         recebidoAsaasPorVencimento: Number(agg?.recebidoAsaasPorVencimento ?? 0),
         recebidoAsaasPorVencimentoCount: Number(agg?.recebidoAsaasPorVencimentoCount ?? 0),
         recebidoManual: Number(agg?.recebidoManual ?? 0),

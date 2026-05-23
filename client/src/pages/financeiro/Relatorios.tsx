@@ -96,9 +96,6 @@ export function RelatoriosTab() {
   const [dataInicio, setDataInicio] = useState(inicioDoMesIso());
   const [dataFim, setDataFim] = useState(fimDoMesIso());
   const [diagnosticoOpen, setDiagnosticoOpen] = useState(false);
-  // Critério de data das receitas: caixa (quando pagou) ou competência
-  // (quando venceu = bate com o painel Asaas).
-  const [criterio, setCriterio] = useState<"pagamento" | "vencimento">("vencimento");
 
   // Sincroniza datas com preset quando preset muda (não-custom)
   function aplicarPreset(p: typeof preset) {
@@ -110,8 +107,10 @@ export function RelatoriosTab() {
     }
   }
 
+  // Relatório sempre por VENCIMENTO (competência) — bate com o painel
+  // Asaas. A diferença pro caixa aparece na seção "Composição do recebido".
   const dreQ = (trpc as any).financeiro?.dre?.useQuery?.(
-    { dataInicio, dataFim, criterioReceita: criterio },
+    { dataInicio, dataFim, criterioReceita: "vencimento" },
     { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
   );
   const dre = dreQ?.data;
@@ -212,25 +211,6 @@ export function RelatoriosTab() {
                 </div>
               </>
             )}
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">Critério</Label>
-              <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs h-9 items-center">
-                <button
-                  onClick={() => setCriterio("vencimento")}
-                  className={`px-2.5 py-1.5 rounded-md font-medium transition-colors ${criterio === "vencimento" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-slate-100" : "text-slate-500"}`}
-                  title="Conta a receita pelo vencimento — bate com o painel Asaas"
-                >
-                  Competência (Asaas)
-                </button>
-                <button
-                  onClick={() => setCriterio("pagamento")}
-                  className={`px-2.5 py-1.5 rounded-md font-medium transition-colors ${criterio === "pagamento" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-slate-100" : "text-slate-500"}`}
-                  title="Conta a receita quando o dinheiro entrou (fluxo de caixa real)"
-                >
-                  Caixa
-                </button>
-              </div>
-            </div>
             <div className="flex-1" />
             <Button
               size="sm"
@@ -319,6 +299,10 @@ export function RelatoriosTab() {
               accent={positivo ? "text-emerald-600" : "text-red-600"}
             />
           </div>
+
+          {/* Composição do recebido: ponte entre competência (relatório) e
+              caixa (Financeiro) — discrimina o que entrou de outros meses. */}
+          {kpis && <ComposicaoRecebidoSection kpis={kpis} />}
 
           {/* Conferência com o Asaas: espelho dos 4 cards (bruto + líquido) */}
           {situacao && (
@@ -1058,6 +1042,66 @@ function DiagnosticoDivergenciaDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Composição do recebido: ponte entre o relatório (competência, por
+ * vencimento) e o Financeiro (caixa, por pagamento). Discrimina o que
+ * entrou de competência do mês vs o que veio de outros meses (pago agora).
+ *   competência + outros meses = caixa real (= Financeiro)
+ */
+function ComposicaoRecebidoSection({ kpis }: { kpis: any }) {
+  const caixa = kpis.recebido ?? 0;
+  const caixaCount = kpis.recebidoCount ?? 0;
+  const competencia = kpis.recebidoComVencimentoNoPeriodo ?? 0;
+  const competenciaCount = kpis.recebidoComVencimentoNoPeriodoCount ?? 0;
+  const outrosMeses = caixa - competencia;
+  const outrosMesesCount = caixaCount - competenciaCount;
+  if (caixa <= 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Composição do recebido</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <table className="w-full text-sm">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tr>
+              <td className="py-2.5">
+                <span className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Com vencimento neste mês
+                  <span className="text-[11px] text-slate-400">(competência = tabelas abaixo = Asaas)</span>
+                </span>
+              </td>
+              <td className="py-2.5 text-right tabular-nums text-slate-500">{competenciaCount}</td>
+              <td className="py-2.5 text-right tabular-nums font-medium">{formatBRL(competencia)}</td>
+            </tr>
+            <tr className="bg-amber-50/40 dark:bg-amber-950/10">
+              <td className="py-2.5 px-1">
+                <span className="inline-flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  + Recebido de outros meses
+                  <span className="text-[11px] text-slate-400">(venceu antes, pago agora)</span>
+                </span>
+              </td>
+              <td className="py-2.5 text-right tabular-nums text-slate-500">{outrosMesesCount}</td>
+              <td className="py-2.5 text-right tabular-nums font-medium text-amber-700">{formatBRL(outrosMeses)}</td>
+            </tr>
+            <tr className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
+              <td className="py-2.5 px-1 text-slate-900 dark:text-slate-100">
+                = Entrou no caixa no período
+                <span className="text-[11px] font-normal text-slate-400 ml-1">(= Financeiro)</span>
+              </td>
+              <td className="py-2.5 text-right tabular-nums text-slate-600">{caixaCount}</td>
+              <td className="py-2.5 text-right tabular-nums text-emerald-700">{formatBRL(caixa)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
 
