@@ -102,8 +102,11 @@ import { EditorTopbar } from "./smartflow/editor-topbar";
 import { EditorPaleta } from "./smartflow/editor-paleta";
 import { EditorTestarDialog } from "./smartflow/editor-testar-dialog";
 import { EditorCanvasToolbar, calcularAutoLayout } from "./smartflow/editor-canvas-toolbar";
-import { EditorPainelSaida } from "./smartflow/editor-painel-saida";
+import { variaveisPublicadasPorPasso } from "./smartflow/editor-painel-saida";
+import { PainelVariaveis } from "./smartflow/editor-painel-variaveis";
 import { validarPasso, ValidacaoPassoPanel } from "./smartflow/editor-validacao-passo";
+import { VariaveisFluxoContext } from "@/hooks/useSmartFlowVariaveis";
+import type { Variavel } from "@/components/VariableInput";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Ícones por tipo (mantidos no frontend p/ não poluir shared) ───────────
@@ -940,6 +943,44 @@ export default function SmartFlowEditor() {
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
   const gatilhoNode = nodes.find(isGatilhoNode) || null;
 
+  // Catálogo de variáveis do backend (gatilho + campos personalizados).
+  const { data: catalogoVars } = (trpc as any).smartflow.catalogoVariaveis.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
+
+  // Lista COMPLETA de variáveis do fluxo: variáveis do gatilho atual +
+  // campos personalizados (do backend) + variáveis publicadas por cada
+  // passo no canvas (categoria "passos"). Provida via Context pra todos os
+  // VariableInput/Trigger e pro drawer "Informações".
+  const variaveisCompletas: Variavel[] = useMemo(() => {
+    const gatilhoAtual = gatilhoNode?.data.gatilho ?? "mensagem_canal";
+    const doGatilho: Variavel[] = Array.isArray(catalogoVars)
+      ? ((catalogoVars.find((c: any) => c.gatilho === gatilhoAtual)?.variaveis as Variavel[]) ?? [])
+      : [];
+    const vistos = new Set(doGatilho.map((v) => v.path));
+    const dosPassos: Variavel[] = [];
+    for (const node of nodes) {
+      if (node.type !== "passo") continue;
+      const pn = node as PassoNode;
+      const pub = variaveisPublicadasPorPasso(pn.data.tipo, pn.data.config);
+      for (const v of pub) {
+        if (vistos.has(v.path)) continue;
+        vistos.add(v.path);
+        dosPassos.push({
+          path: v.path,
+          label: v.label,
+          exemplo: "",
+          // Campos personalizados persistidos viram categoria própria;
+          // resto é "resultado de passo anterior".
+          categoria: v.path.startsWith("cliente.campos.") ? "campos_personalizados" : "passos",
+        });
+      }
+    }
+    return [...doGatilho, ...dosPassos];
+  }, [catalogoVars, gatilhoNode, nodes]);
+
   // Callbacks canvas. Drag/move/select também passa por `onNodesChange`,
   // mas só os tipos com efeito persistente marcam dirty (skip "select").
   const onNodesChange = useCallback(
@@ -1287,6 +1328,9 @@ export default function SmartFlowEditor() {
     // Anula o padding p-6 do <main> do AppLayout e ocupa toda a viewport
     // (menos o header mobile h-14). Sem altura explícita o ReactFlow
     // colapsa pra 0px e o canvas fica invisível.
+    // Provê a lista completa de variáveis pra todos os VariableInput/Trigger
+    // do editor (inclui variáveis publicadas pelos passos do fluxo).
+    <VariaveisFluxoContext.Provider value={variaveisCompletas}>
     <div className="-m-6 flex flex-col h-[calc(100vh-3.5rem)] md:h-screen bg-background">
       <EditorTopbar
         nome={nome}
@@ -1418,10 +1462,10 @@ export default function SmartFlowEditor() {
             <Tabs defaultValue="config" className="flex flex-col flex-1">
               <TabsList className="grid grid-cols-2 mx-2 mt-2 h-8 shrink-0">
                 <TabsTrigger value="config" className="text-[11px] gap-1">
-                  ⚙ Configuração
+                  ⚙ Configurar
                 </TabsTrigger>
-                <TabsTrigger value="saida" className="text-[11px] gap-1">
-                  📤 Saída
+                <TabsTrigger value="info" className="text-[11px] gap-1">
+                  📚 Informações
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="config" className="flex-1 mt-0 overflow-y-auto">
@@ -1432,14 +1476,8 @@ export default function SmartFlowEditor() {
                   onChangeGatilho={trocarGatilho}
                 />
               </TabsContent>
-              <TabsContent value="saida" className="flex-1 mt-0 overflow-y-auto">
-                <EditorPainelSaida
-                  tipoPasso={isGatilhoNode(selectedNode) ? null : selectedNode.data.tipo}
-                  gatilho={gatilhoNode?.data.gatilho ?? "mensagem_canal"}
-                  configPasso={
-                    isGatilhoNode(selectedNode) ? undefined : (selectedNode.data.config as Record<string, unknown>)
-                  }
-                />
+              <TabsContent value="info" className="flex-1 mt-0 overflow-y-auto p-0 data-[state=active]:flex data-[state=active]:flex-col">
+                <PainelVariaveis variaveis={variaveisCompletas} />
               </TabsContent>
             </Tabs>
           ) : (
@@ -1491,6 +1529,7 @@ export default function SmartFlowEditor() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </VariaveisFluxoContext.Provider>
   );
 }
 

@@ -12,7 +12,7 @@
  * via prop `as`.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Braces } from "lucide-react";
@@ -21,6 +21,51 @@ export interface Variavel {
   path: string;
   label: string;
   exemplo: string;
+  /** Categoria semântica pra agrupar no drawer "Informações". Opcional. */
+  categoria?: string;
+}
+
+/** Label humano de cada categoria — usado pra agrupar o dropdown de variáveis. */
+const CATEGORIA_LABEL: Record<string, string> = {
+  passos: "Resultados de passos anteriores",
+  cliente: "Dados do cliente",
+  campos_personalizados: "Campos personalizados",
+  mensagem: "Mensagem / conversa",
+  pagamento: "Pagamento / cobrança",
+  acao: "Ação / processo",
+  agendamento: "Agendamento",
+  ia: "Resultados da IA",
+  outros: "Outras informações",
+};
+
+const CATEGORIA_ORDEM = [
+  "passos", "cliente", "campos_personalizados", "mensagem",
+  "pagamento", "acao", "agendamento", "ia", "outros",
+];
+
+/** Agrupa variáveis por categoria, na ordem canônica, pra render em seções. */
+function agruparPorCategoria(vars: Variavel[]): Array<{ categoria: string; label: string; itens: Variavel[] }> {
+  const mapa = new Map<string, Variavel[]>();
+  for (const v of vars) {
+    const cat = v.categoria || "outros";
+    const lista = mapa.get(cat) ?? [];
+    lista.push(v);
+    mapa.set(cat, lista);
+  }
+  const out: Array<{ categoria: string; label: string; itens: Variavel[] }> = [];
+  for (const cat of CATEGORIA_ORDEM) {
+    const itens = mapa.get(cat);
+    if (itens && itens.length > 0) {
+      out.push({ categoria: cat, label: CATEGORIA_LABEL[cat] || cat, itens });
+    }
+  }
+  // Categorias desconhecidas (não na ordem) vão no fim.
+  for (const [cat, itens] of mapa) {
+    if (!CATEGORIA_ORDEM.includes(cat) && itens.length > 0) {
+      out.push({ categoria: cat, label: CATEGORIA_LABEL[cat] || cat, itens });
+    }
+  }
+  return out;
 }
 
 interface VariableInputProps {
@@ -68,10 +113,15 @@ export function VariableTrigger({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const filtrados = variaveis.filter(
-    (v) => v.path.toLowerCase().includes(filtro.toLowerCase()) ||
-           v.label.toLowerCase().includes(filtro.toLowerCase()),
-  );
+  const grupos = useMemo(() => {
+    const f = filtro.toLowerCase();
+    const filtrados = variaveis.filter(
+      (v) => v.path.toLowerCase().includes(f) || v.label.toLowerCase().includes(f),
+    );
+    return agruparPorCategoria(filtrados);
+  }, [variaveis, filtro]);
+
+  const total = grupos.reduce((s, g) => s + g.itens.length, 0);
 
   return (
     <div className="relative inline-block">
@@ -82,43 +132,48 @@ export function VariableTrigger({
           setOpen((v) => !v);
           setFiltro("");
         }}
-        title="Inserir variável"
-        className="inline-flex items-center justify-center h-5 w-5 rounded text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
+        title="Inserir informação"
+        className="inline-flex items-center gap-1 h-5 px-1.5 rounded text-[10px] font-medium text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-950/30 transition-colors"
       >
         <Braces className="h-3 w-3" />
+        Inserir
       </button>
       {open && (
-        <div className="absolute z-50 right-0 top-full mt-1 w-72 max-h-64 overflow-auto rounded-md border bg-popover shadow-md">
-          <div className="sticky top-0 bg-popover border-b p-2">
+        <div className="absolute z-50 right-0 top-full mt-1 w-72 max-h-80 overflow-auto rounded-md border bg-popover shadow-lg">
+          <div className="sticky top-0 bg-popover border-b p-2 z-10">
             <input
               autoFocus
               type="text"
-              placeholder="Filtrar..."
+              placeholder="Buscar informação (ex: nome, cpf...)"
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
               className="w-full text-xs px-2 py-1 rounded border bg-background outline-none focus:ring-1 focus:ring-violet-400"
             />
           </div>
-          {filtrados.length === 0 ? (
-            <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma variável encontrada.</p>
+          {total === 0 ? (
+            <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma informação encontrada.</p>
           ) : (
-            <div className="py-1">
-              {filtrados.map((v) => (
-                <button
-                  key={v.path}
-                  type="button"
-                  onClick={() => {
-                    onInsert(v.path);
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-accent transition-colors"
-                >
-                  <code className="text-[11px] text-violet-600 font-mono">{`{{${v.path}}}`}</code>
-                  <p className="text-[11px] text-foreground mt-0.5">{v.label}</p>
-                  <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>
-                </button>
-              ))}
-            </div>
+            grupos.map((g) => (
+              <div key={g.categoria}>
+                <p className="px-3 py-1 text-[9px] uppercase tracking-wider font-bold text-muted-foreground bg-muted/40 sticky top-[41px]">
+                  {g.label}
+                </p>
+                {g.itens.map((v) => (
+                  <button
+                    key={v.path}
+                    type="button"
+                    onClick={() => {
+                      onInsert(v.path);
+                      setOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-colors"
+                  >
+                    <p className="text-[11.5px] text-foreground font-medium">{v.label}</p>
+                    {v.exemplo && <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>}
+                  </button>
+                ))}
+              </div>
+            ))
           )}
         </div>
       )}
@@ -242,10 +297,10 @@ export function VariableInput({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()} // evita blur do input
                 onClick={() => inserirVariavel(v.path)}
-                className="w-full text-left px-3 py-1.5 hover:bg-accent transition-colors"
+                className="w-full text-left px-3 py-1.5 hover:bg-violet-50 dark:hover:bg-violet-950/20 transition-colors"
               >
-                <code className="text-[11px] text-violet-600 font-mono">{v.path}</code>
-                <p className="text-[10px] text-muted-foreground">{v.label}</p>
+                <p className="text-[11.5px] text-foreground font-medium">{v.label}</p>
+                {v.exemplo && <p className="text-[10px] text-muted-foreground italic">ex: {v.exemplo}</p>}
               </button>
             ))}
           </div>

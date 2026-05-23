@@ -104,7 +104,7 @@ export const smartflowRouter = router({
     const { CATALOGO_VARIAVEIS } = await import("./interpolar");
     // Enriquece com os campos personalizados do escritório — ficam
     // disponíveis pra todos os gatilhos que tenham `contatoId` no contexto.
-    let camposExtras: { path: string; label: string; exemplo: string }[] = [];
+    let camposExtras: { path: string; label: string; exemplo: string; categoria: string }[] = [];
     try {
       const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -123,6 +123,7 @@ export const smartflowRouter = router({
             path: `cliente.campos.${r.chave}`,
             label: r.label,
             exemplo: r.tipo === "data" ? "2025-04-01" : r.tipo === "numero" ? "123" : r.label.toLowerCase(),
+            categoria: "campos_personalizados",
           }));
         }
       }
