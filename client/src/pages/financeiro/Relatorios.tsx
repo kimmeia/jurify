@@ -127,6 +127,13 @@ export function RelatoriosTab() {
   );
   const kpis = kpisQ?.data;
 
+  // Quebra por forma de pagamento do recebido POR VENCIMENTO (bate com Asaas)
+  const formaVencQ = (trpc as any).financeiro?.recebidoVencimentoPorForma?.useQuery?.(
+    { dataInicio, dataFim },
+    { retry: false, enabled: dataInicio.length === 10 && dataFim.length === 10 },
+  );
+  const formaVenc = formaVencQ?.data;
+
   const csvMut = (trpc as any).financeiro?.exportarDreCsv?.useMutation?.({
     onSuccess: (r: { filename: string; content: string; mimeType: string }) => {
       baixarBlob(r.content, r.filename, r.mimeType);
@@ -286,7 +293,7 @@ export function RelatoriosTab() {
 
           {/* Recebido: por vencimento (= Asaas) + discriminação de prazo + caixa real */}
           {kpis && (kpis.recebido > 0 || kpis.recebidoAsaasPorVencimento > 0) && (
-            <RecebidoPorPrazoSection kpis={kpis} />
+            <RecebidoPorPrazoSection kpis={kpis} formaVenc={formaVenc} />
           )}
 
           {/* Tabela receitas */}
@@ -1031,7 +1038,7 @@ function DiagnosticoDivergenciaDialog({
  * Asaas (que conta por vencimento): tira o atraso, soma o pago adiantado
  * que vence no período.
  */
-function RecebidoPorPrazoSection({ kpis }: { kpis: any }) {
+function RecebidoPorPrazoSection({ kpis, formaVenc }: { kpis: any; formaVenc?: any }) {
   const caixaTotal = kpis.recebido ?? 0;          // tudo pago no período (asaas + manual)
   const caixaCount = kpis.recebidoCount ?? 0;
   const manual = kpis.recebidoManual ?? 0;        // origem=manual (Caixa Escritório)
@@ -1094,6 +1101,17 @@ function RecebidoPorPrazoSection({ kpis }: { kpis: any }) {
                 <span className="font-semibold tabular-nums">{formatBRL(atraso)} · {atrasoCount}</span>
               </div>
             </div>
+            {formaVenc?.itens?.length > 0 && (
+              <div className="border-t border-indigo-100 dark:border-indigo-900 pt-3 mt-3 space-y-1.5">
+                <p className="text-[11px] font-medium text-slate-500">Por forma de pagamento (bate com Asaas):</p>
+                {formaVenc.itens.map((f: any) => (
+                  <div key={f.forma} className="flex items-center justify-between text-xs">
+                    <span className="text-slate-700 dark:text-slate-300">{f.forma}</span>
+                    <span className="font-semibold tabular-nums">{formatBRL(f.valor)} · {f.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Caixa real (fluxo de caixa) */}
