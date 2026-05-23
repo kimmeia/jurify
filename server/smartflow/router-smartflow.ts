@@ -13,43 +13,17 @@ import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { executarManual } from "./dispatcher";
 import { createLogger } from "../_core/logger";
+import { GATILHO_META, TIPO_PASSO_META, type GatilhoSmartflow, type TipoPasso } from "../../shared/smartflow-types";
 
 const log = createLogger("smartflow");
 
-const GATILHOS = [
-  "whatsapp_mensagem",
-  "mensagem_canal",
-  "novo_lead",
-  "agendamento_criado",
-  "agendamento_cancelado",
-  "agendamento_remarcado",
-  "agendamento_lembrete",
-  "pagamento_recebido",
-  "pagamento_vencido",
-  "pagamento_proximo_vencimento",
-  "manual",
-] as const;
-const TIPOS_PASSO = [
-  "ia_classificar",
-  "ia_responder",
-  "ia_extrair_campos",
-  "crm_buscar_contato",
-  "crm_listar_acoes_cliente",
-  "processo_buscar_movimentacoes",
-  "calcom_horarios",
-  "calcom_agendar",
-  "calcom_listar",
-  "calcom_cancelar",
-  "calcom_remarcar",
-  "whatsapp_enviar",
-  "whatsapp_aguardar_resposta",
-  "transferir",
-  "condicional",
-  "para_cada_item",
-  "esperar",
-  "webhook",
-  "kanban_criar_card",
-] as const;
+// Enums de validação derivados da FONTE ÚNICA no shared (GATILHO_META /
+// TIPO_PASSO_META). Antes eram arrays manuais que dessincronizavam — o
+// `TIPOS_PASSO` ficou sem kanban_mover_card/asaas_*/definir_* e o save de
+// cenários com esses passos falhava. Derivar garante que tudo que o editor
+// oferece é aceito no save.
+const GATILHOS = GATILHO_META.map((g) => g.id) as [GatilhoSmartflow, ...GatilhoSmartflow[]];
+const TIPOS_PASSO = TIPO_PASSO_META.map((t) => t.id) as [TipoPasso, ...TipoPasso[]];
 
 const passoInputSchema = z.object({
   tipo: z.enum(TIPOS_PASSO),
