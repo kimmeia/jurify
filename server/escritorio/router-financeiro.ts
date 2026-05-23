@@ -1022,6 +1022,169 @@ export const financeiroRouter = router({
     }),
 
   /**
+   * Comparação AO VIVO com o Asaas — cruza cobrança-a-cobrança o que o
+   * Jurify tem como recebido no período contra o que o Asaas retorna por
+   * `paymentDate`. Revela a causa de o bruto do Jurify ser MAIOR que o do
+   * Asaas (impossível se fosse só espelho):
+   *  - `soNoJurify`: cobranças que o Jurify conta como pagas mas o Asaas
+   *    NÃO retorna no período (estornadas/deletadas no Asaas sem webhook,
+   *    ou paymentDate divergente — Jurify usa data do pagamento, Asaas
+   *    data do crédito).
+   *  - `statusDivergente`: mesma cobrança, status diferente entre os dois
+   *    (ex: Jurify RECEIVED, Asaas REFUNDED).
+   *
+   * É mutation (não query) porque consome cota do Asaas: 1 sweep paginado
+   * por `paymentDate`. Disparado sob demanda pelo botão de diagnóstico.
+   */
+  compararRecebidoComAsaas: protectedProcedure
+    .input(
+      z.object({
+        dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "ver");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const { getAsaasClientForEscritorio } = await import(
+        "../integracoes/asaas-sync"
+      );
+      const client = await getAsaasClientForEscritorio(esc.escritorio.id);
+      if (!client) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Asaas não conectado.",
+        });
+      }
+
+      // 1) Asaas: o que ELES consideram pago no período (filtro paymentDate)
+      const asaasMap = new Map<
+        string,
+        { value: number; netValue: number | null; status: string }
+      >();
+      let offset = 0;
+      let hasMore = true;
+      let paginas = 0;
+      try {
+        while (hasMore && paginas < 500) {
+          paginas++;
+          const res = await client.listarCobrancasPorJanela({
+            paymentDateGe: input.dataInicio,
+            paymentDateLe: input.dataFim,
+            limit: 100,
+            offset,
+          });
+          for (const c of res.data) {
+            if (!c.deleted) {
+              asaasMap.set(c.id, {
+                value: c.value,
+                netValue: c.netValue ?? null,
+                status: c.status,
+              });
+            }
+          }
+          hasMore = res.hasMore;
+          offset += res.limit;
+        }
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.cause?.response?.status;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            status === 429
+              ? "Asaas em rate limit (429). Tente após a janela liberar ou use o reset do rate guard."
+              : `Erro ao consultar Asaas: ${err?.message ?? "desconhecido"}`,
+        });
+      }
+
+      const totalAsaasValue = Array.from(asaasMap.values()).reduce(
+        (acc, c) => acc + c.value,
+        0,
+      );
+
+      // 2) Jurify: cobranças com status pago + dataPagamento no período
+      const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
+      const jurifyRows = await db
+        .select({
+          id: asaasCobrancas.id,
+          asaasPaymentId: asaasCobrancas.asaasPaymentId,
+          origem: asaasCobrancas.origem,
+          status: asaasCobrancas.status,
+          valor: asaasCobrancas.valor,
+          dataPagamento: asaasCobrancas.dataPagamento,
+          descricao: asaasCobrancas.descricao,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          inArray(asaasCobrancas.status, STATUS_PAGOS),
+          between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
+        ));
+
+      const totalJurifyValue = jurifyRows.reduce(
+        (acc, r) => acc + Number(r.valor || 0),
+        0,
+      );
+
+      // 3) Diff
+      const soNoJurify: typeof jurifyRows = [];
+      const statusDivergente: Array<{
+        row: (typeof jurifyRows)[number];
+        statusAsaas: string;
+      }> = [];
+      for (const r of jurifyRows) {
+        if (!r.asaasPaymentId) {
+          // Cobrança manual (origem != asaas) não tem par no Asaas — ignora
+          if (r.origem === "asaas") soNoJurify.push(r);
+          continue;
+        }
+        const noAsaas = asaasMap.get(r.asaasPaymentId);
+        if (!noAsaas) {
+          soNoJurify.push(r);
+        } else if (noAsaas.status !== r.status) {
+          statusDivergente.push({ row: r, statusAsaas: noAsaas.status });
+        }
+      }
+      const totalSoNoJurify = soNoJurify.reduce(
+        (acc, r) => acc + Number(r.valor || 0),
+        0,
+      );
+
+      // Cobranças que o Asaas tem pagas mas o Jurify não tem (ou não como pago)
+      const jurifyIds = new Set(
+        jurifyRows.map((r) => r.asaasPaymentId).filter(Boolean),
+      );
+      let soNoAsaasCount = 0;
+      let soNoAsaasValue = 0;
+      for (const [id, c] of asaasMap.entries()) {
+        if (!jurifyIds.has(id)) {
+          soNoAsaasCount++;
+          soNoAsaasValue += c.value;
+        }
+      }
+
+      return {
+        periodo: { inicio: input.dataInicio, fim: input.dataFim },
+        totalAsaas: { value: totalAsaasValue, count: asaasMap.size },
+        totalJurify: { value: totalJurifyValue, count: jurifyRows.length },
+        diferenca: totalJurifyValue - totalAsaasValue,
+        soNoJurify: {
+          itens: soNoJurify.slice(0, 100),
+          total: totalSoNoJurify,
+          count: soNoJurify.length,
+        },
+        statusDivergente: {
+          itens: statusDivergente.slice(0, 100),
+          count: statusDivergente.length,
+        },
+        soNoAsaas: { count: soNoAsaasCount, value: soNoAsaasValue },
+      };
+    }),
+
+  /**
    * Gera CSV do DRE pra download. Retorna `{ filename, content }` —
    * frontend cria Blob e faz download. Conteúdo já inclui BOM UTF-8
    * pra Excel reconhecer acentos.

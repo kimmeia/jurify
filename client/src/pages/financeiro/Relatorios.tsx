@@ -530,6 +530,11 @@ function DiagnosticoDivergenciaDialog({
   );
   const data = q?.data;
 
+  const compararMut = (trpc as any).financeiro?.compararRecebidoComAsaas?.useMutation?.({
+    onError: (err: any) => toast.error("Erro ao comparar", { description: err.message }),
+  });
+  const comp = compararMut?.data;
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
@@ -550,6 +555,129 @@ function DiagnosticoDivergenciaDialog({
               <strong>{data.periodo.fim}</strong>. Compare cada bloco abaixo
               com o painel Asaas pra identificar a causa da diferença.
             </p>
+
+            {/* Comparação ao vivo com o Asaas */}
+            <section className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                  Comparação ao vivo com o Asaas
+                </h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => compararMut?.mutate?.({ dataInicio, dataFim })}
+                  disabled={compararMut?.isPending}
+                >
+                  {compararMut?.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Search className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Comparar agora
+                </Button>
+              </div>
+              <p className="text-[11px] text-indigo-800 dark:text-indigo-200 mb-2">
+                Consulta o Asaas ao vivo (gasta cota) e cruza cobrança-a-cobrança.
+                Identifica as cobranças que o Jurify conta como recebidas mas o
+                Asaas não retorna — a causa do bruto estar maior aqui.
+              </p>
+
+              {comp && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-indigo-700 dark:text-indigo-300">Asaas (paymentDate)</p>
+                      <p className="font-bold tabular-nums">{formatBRL(comp.totalAsaas.value)}</p>
+                      <p className="text-[10px] text-slate-500">{comp.totalAsaas.count} cobranças</p>
+                    </div>
+                    <div>
+                      <p className="text-indigo-700 dark:text-indigo-300">Jurify (dataPagamento)</p>
+                      <p className="font-bold tabular-nums">{formatBRL(comp.totalJurify.value)}</p>
+                      <p className="text-[10px] text-slate-500">{comp.totalJurify.count} cobranças</p>
+                    </div>
+                    <div>
+                      <p className="text-indigo-700 dark:text-indigo-300">Diferença</p>
+                      <p className="font-bold tabular-nums text-red-600">{formatBRL(comp.diferenca)}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-xs bg-white dark:bg-slate-900 rounded p-2 space-y-1">
+                    <p>
+                      <strong>{comp.soNoJurify.count}</strong> cobranças só no Jurify
+                      (total <strong>{formatBRL(comp.soNoJurify.total)}</strong>) — o
+                      Asaas não retornou no período. <strong>Esta é a causa provável.</strong>
+                    </p>
+                    <p>
+                      <strong>{comp.statusDivergente.count}</strong> com status
+                      diferente entre Jurify e Asaas.
+                    </p>
+                    <p>
+                      <strong>{comp.soNoAsaas.count}</strong> só no Asaas
+                      (total {formatBRL(comp.soNoAsaas.value)}) — Asaas tem como pago
+                      mas o Jurify não.
+                    </p>
+                  </div>
+
+                  {comp.soNoJurify.itens.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
+                        Cobranças só no Jurify (sobrando)
+                      </p>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-[10px]">Data pag.</TableHead>
+                            <TableHead className="text-[10px]">Status</TableHead>
+                            <TableHead className="text-[10px]">Descrição</TableHead>
+                            <TableHead className="text-[10px]">ID Asaas</TableHead>
+                            <TableHead className="text-[10px] text-right">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {comp.soNoJurify.itens.map((c: any) => (
+                            <TableRow key={c.id}>
+                              <TableCell className="text-[10px]">{c.dataPagamento ?? "—"}</TableCell>
+                              <TableCell className="text-[10px] font-mono">{c.status}</TableCell>
+                              <TableCell className="text-[10px] max-w-[140px] truncate">{c.descricao ?? "—"}</TableCell>
+                              <TableCell className="text-[9px] font-mono text-slate-500">{c.asaasPaymentId ?? "(manual)"}</TableCell>
+                              <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(Number(c.valor || 0))}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {comp.statusDivergente.itens.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
+                        Status divergente (Jurify ≠ Asaas)
+                      </p>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-[10px]">Descrição</TableHead>
+                            <TableHead className="text-[10px]">Status Jurify</TableHead>
+                            <TableHead className="text-[10px]">Status Asaas</TableHead>
+                            <TableHead className="text-[10px] text-right">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {comp.statusDivergente.itens.map((d: any) => (
+                            <TableRow key={d.row.id}>
+                              <TableCell className="text-[10px] max-w-[140px] truncate">{d.row.descricao ?? "—"}</TableCell>
+                              <TableCell className="text-[10px] font-mono">{d.row.status}</TableCell>
+                              <TableCell className="text-[10px] font-mono text-red-600">{d.statusAsaas}</TableCell>
+                              <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(Number(d.row.valor || 0))}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
 
             {data.resumo && (
               <section className="rounded-lg border border-amber-200 bg-amber-50/40 dark:bg-amber-950/20 p-3">
