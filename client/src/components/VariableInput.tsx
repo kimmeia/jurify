@@ -82,6 +82,43 @@ interface VariableInputProps {
   maxLength?: number;
   /** id do input pra label associar */
   id?: string;
+  /**
+   * Destaca as variáveis `{{...}}` com pill colorida no próprio campo
+   * (overlay sobre o textarea). Só funciona com `as="textarea"`.
+   */
+  highlight?: boolean;
+  /**
+   * Mostra abaixo do campo um preview do texto com as variáveis trocadas
+   * pelos exemplos — ajuda o usuário a ver como a mensagem real vai sair.
+   */
+  preview?: boolean;
+}
+
+/** Quebra o texto em partes, marcando os trechos `{{...}}` como variável. */
+function partesComVariaveis(texto: string): Array<{ tipo: "texto" | "var"; valor: string }> {
+  const out: Array<{ tipo: "texto" | "var"; valor: string }> = [];
+  const re = /\{\{[^}]+\}\}/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(texto)) !== null) {
+    if (m.index > last) out.push({ tipo: "texto", valor: texto.slice(last, m.index) });
+    out.push({ tipo: "var", valor: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < texto.length) out.push({ tipo: "texto", valor: texto.slice(last) });
+  return out;
+}
+
+/**
+ * Substitui `{{path}}` pelo exemplo da variável (ou pelo label) — usado no
+ * preview ao vivo. Variável desconhecida fica como está.
+ */
+function montarPreview(texto: string, variaveis: Variavel[]): string {
+  return texto.replace(/\{\{([^}]+)\}\}/g, (full, path: string) => {
+    const v = variaveis.find((x) => x.path === path.trim());
+    if (!v) return full;
+    return v.exemplo || v.label;
+  });
 }
 
 /**
@@ -191,11 +228,28 @@ export function VariableInput({
   rows = 3,
   maxLength,
   id,
+  highlight = false,
+  preview = false,
 }: VariableInputProps) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const [autocompleteOpen, setAutocompleteOpen] = useState(false);
   const [autocompleteFiltro, setAutocompleteFiltro] = useState("");
   const [posicaoCaret, setPosicaoCaret] = useState(0);
+
+  // Highlight só faz sentido em textarea. Métricas idênticas às do
+  // componente Textarea (px-3 py-2 text-base md:text-sm) garantem que o
+  // texto do backdrop alinhe exatamente com o do textarea por cima.
+  const usarHighlight = highlight && as === "textarea";
+  const metricasTextarea = "min-h-16 w-full rounded-md border px-3 py-2 text-base md:text-sm leading-normal";
+
+  // Mantém o scroll do backdrop sincronizado com o textarea (texto longo).
+  function syncScroll() {
+    if (backdropRef.current && inputRef.current) {
+      backdropRef.current.scrollTop = inputRef.current.scrollTop;
+      backdropRef.current.scrollLeft = inputRef.current.scrollLeft;
+    }
+  }
 
   // Detecta `{{...` na posição atual do caret pra abrir autocomplete.
   function detectarTrigger(novoValor: string, posCaret: number) {
@@ -259,21 +313,64 @@ export function VariableInput({
            v.label.toLowerCase().includes(autocompleteFiltro.toLowerCase()),
   );
 
+  const temVariavel = /\{\{[^}]+\}\}/.test(value);
+
   return (
     <div className="relative">
       {as === "textarea" ? (
-        <Textarea
-          ref={inputRef as any}
-          id={id}
-          value={value}
-          onChange={handleChange}
-          onKeyUp={handleKeyUp}
-          onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
-          placeholder={placeholder}
-          className={className}
-          rows={rows}
-          maxLength={maxLength}
-        />
+        usarHighlight ? (
+          <div className="relative">
+            {/* Backdrop: mesmo texto do textarea, mas com {{...}} em pill.
+                Mantém os MESMOS caracteres (não troca {{x}} por label) pra
+                não desalinhar o caret do textarea por cima. */}
+            <div
+              ref={backdropRef}
+              aria-hidden
+              className={`${metricasTextarea} ${className ?? ""} absolute inset-0 overflow-auto whitespace-pre-wrap break-words pointer-events-none border-transparent text-foreground`}
+            >
+              {partesComVariaveis(value).map((p, i) =>
+                p.tipo === "var" ? (
+                  <span
+                    key={i}
+                    className="rounded bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 ring-1 ring-violet-300/50"
+                  >
+                    {p.valor}
+                  </span>
+                ) : (
+                  <span key={i}>{p.valor}</span>
+                ),
+              )}
+              {/* newline final pra altura bater quando texto termina em \n */}
+              {"\n"}
+            </div>
+            <Textarea
+              ref={inputRef as any}
+              id={id}
+              value={value}
+              onChange={handleChange}
+              onKeyUp={handleKeyUp}
+              onScroll={syncScroll}
+              onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
+              placeholder={placeholder}
+              className={`${className ?? ""} relative bg-transparent text-transparent caret-foreground selection:bg-violet-200/40`}
+              rows={rows}
+              maxLength={maxLength}
+            />
+          </div>
+        ) : (
+          <Textarea
+            ref={inputRef as any}
+            id={id}
+            value={value}
+            onChange={handleChange}
+            onKeyUp={handleKeyUp}
+            onBlur={() => setTimeout(() => setAutocompleteOpen(false), 150)}
+            placeholder={placeholder}
+            className={className}
+            rows={rows}
+            maxLength={maxLength}
+          />
+        )
       ) : (
         <Input
           ref={inputRef as any}
@@ -286,6 +383,17 @@ export function VariableInput({
           className={className}
           maxLength={maxLength}
         />
+      )}
+
+      {preview && temVariavel && (
+        <div className="mt-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-muted/40 px-2.5 py-1.5">
+          <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold mb-0.5">
+            👁 Como vai sair pro cliente
+          </p>
+          <p className="text-[11px] text-foreground/80 italic leading-snug whitespace-pre-wrap">
+            {montarPreview(value, variaveis)}
+          </p>
+        </div>
       )}
 
       {autocompleteOpen && filtrados.length > 0 && (

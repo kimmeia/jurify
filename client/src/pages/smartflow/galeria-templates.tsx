@@ -297,6 +297,8 @@ function WizardPersonalizar({
                   id={`wiz-${k}`}
                   as="textarea"
                   rows={3}
+                  highlight
+                  preview
                   value={valor}
                   onChange={(v) => setValor(k, v)}
                   variaveis={variaveis}

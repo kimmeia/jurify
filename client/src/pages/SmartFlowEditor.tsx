@@ -2784,6 +2784,8 @@ function ConfigWhatsappEnviarFields({
         id="cfg-whatsapp-template"
         as="textarea"
         rows={4}
+        highlight
+        preview
         value={String(cfg.template || "")}
         onChange={(v) => onChange({ template: v })}
         variaveis={variaveis}
@@ -2843,6 +2845,8 @@ function ConfigWhatsappAguardarRespostaFields({
           id="cfg-aguardar-template"
           as="textarea"
           rows={3}
+          highlight
+          preview
           value={String(cfg.template || "")}
           onChange={(v) => onChange({ template: v })}
           variaveis={variaveis}
@@ -3120,6 +3124,7 @@ function ConfigKanbanCriarCardFields({
           id="cfg-descricao"
           as="textarea"
           rows={2}
+          highlight
           value={String(cfg.descricao || "")}
           onChange={(v) => onChange({ descricao: v })}
           variaveis={variaveis}
