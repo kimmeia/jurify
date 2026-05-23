@@ -601,6 +601,40 @@ function DiagnosticoDivergenciaDialog({
                     </div>
                   </div>
 
+                  {comp.asaasPorStatus && comp.asaasPorStatus.length > 0 && (
+                    <div className="bg-white dark:bg-slate-900 rounded p-2">
+                      <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
+                        Cobranças da API por status — o painel "Recebidas" do Asaas conta só RECEIVED.
+                        RECEIVED_IN_CASH (pago manual) fica de fora lá, mas conta no Caixa Asaas aqui.
+                      </p>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-[10px]">Status</TableHead>
+                            <TableHead className="text-[10px] text-right">Cobranças</TableHead>
+                            <TableHead className="text-[10px] text-right">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {comp.asaasPorStatus.map((s: any) => (
+                            <TableRow key={s.status}>
+                              <TableCell className="text-[10px] font-mono">
+                                {s.status}
+                                {s.status === "RECEIVED_IN_CASH" && (
+                                  <span className="ml-1 text-[9px] text-amber-700 bg-amber-50 px-1 rounded">
+                                    fora do painel
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-[10px] text-right tabular-nums">{s.count}</TableCell>
+                              <TableCell className="text-[10px] text-right tabular-nums">{formatBRL(s.value)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
                   <div className="text-xs bg-white dark:bg-slate-900 rounded p-2 space-y-1">
                     <p>
                       <strong>{comp.soNoJurify.count}</strong> cobranças só no Jurify
