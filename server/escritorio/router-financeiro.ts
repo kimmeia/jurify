@@ -1063,7 +1063,7 @@ export const financeiroRouter = router({
       // 1) Asaas: o que ELES consideram pago no período (filtro paymentDate)
       const asaasMap = new Map<
         string,
-        { value: number; netValue: number | null; status: string }
+        { value: number; netValue: number | null; status: string; paymentDate?: string; creditDate?: string }
       >();
       let offset = 0;
       let hasMore = true;
@@ -1083,6 +1083,8 @@ export const financeiroRouter = router({
                 value: c.value,
                 netValue: c.netValue ?? null,
                 status: c.status,
+                paymentDate: c.paymentDate,
+                creditDate: c.creditDate ?? c.estimatedCreditDate,
               });
             }
           }
@@ -1115,6 +1117,33 @@ export const financeiroRouter = router({
         cur.value += c.value;
         asaasPorStatus.set(c.status, cur);
       }
+
+      // Cobranças pagas no período mas com crédito em mês diferente — a
+      // causa de o painel "Recebidas Este mês" (filtra creditDate) não
+      // contar cobranças que o paymentDate caiu no mês (boleto D+1 pago
+      // no fim do mês credita no mês seguinte).
+      const creditoMesDiferente: Array<{
+        id: string;
+        value: number;
+        paymentDate?: string;
+        creditDate?: string;
+      }> = [];
+      for (const [id, c] of asaasMap.entries()) {
+        const mesPag = c.paymentDate?.slice(0, 7);
+        const mesCred = c.creditDate?.slice(0, 7);
+        if (mesPag && mesCred && mesPag !== mesCred) {
+          creditoMesDiferente.push({
+            id,
+            value: c.value,
+            paymentDate: c.paymentDate,
+            creditDate: c.creditDate,
+          });
+        }
+      }
+      const totalCreditoMesDiferente = creditoMesDiferente.reduce(
+        (acc, c) => acc + c.value,
+        0,
+      );
 
       // 2) Jurify: cobranças com status pago + dataPagamento no período
       const STATUS_PAGOS = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH", "DUNNING_RECEIVED"];
@@ -1188,6 +1217,11 @@ export const financeiroRouter = router({
         asaasPorStatus: Array.from(asaasPorStatus.entries())
           .map(([status, v]) => ({ status, count: v.count, value: v.value }))
           .sort((a, b) => b.value - a.value),
+        creditoMesDiferente: {
+          count: creditoMesDiferente.length,
+          total: totalCreditoMesDiferente,
+          itens: creditoMesDiferente.slice(0, 50),
+        },
         diferenca: totalJurifyValue - totalAsaasValue,
         soNoJurify: {
           itens: soNoJurify.slice(0, 100),
