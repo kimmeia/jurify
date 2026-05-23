@@ -52,6 +52,7 @@ import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
 import { adminBackupRouter } from "./admin/router-admin-backup";
 import { adminEmailLogRouter } from "./admin/router-admin-email-log";
+import { adminTribunaisRouter } from "./admin/router-admin-tribunais";
 import { roadmapRouter } from "./router-roadmap";
 import { asaasRouter } from "./integracoes/router-asaas";
 
@@ -130,6 +131,7 @@ export const appRouter = router({
   adminErros: adminErrosRouter,
   adminBackup: adminBackupRouter,
   adminEmailLog: adminEmailLogRouter,
+  adminTribunais: adminTribunaisRouter,
   roadmap: roadmapRouter,
   asaas: asaasRouter,
 
