@@ -222,10 +222,62 @@ const GATILHO_NODE_ID = "__gatilho__";
 
 // ─── Nós visuais ───────────────────────────────────────────────────────────
 
+/**
+ * Gradiente do header + cor da borda por "família visual" do passo.
+ * Agrupa tipos relacionados na mesma cor pra bater o olho e identificar.
+ */
+const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
+  ia_classificar: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
+  ia_responder: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
+  ia_extrair_campos: { grad: "from-fuchsia-500 to-purple-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
+  crm_buscar_contato: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
+  crm_listar_acoes_cliente: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
+  processo_buscar_movimentacoes: { grad: "from-indigo-500 to-blue-500", border: "border-indigo-300 dark:border-indigo-800" },
+  calcom_horarios: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
+  calcom_agendar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
+  calcom_listar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
+  calcom_cancelar: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
+  calcom_remarcar: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
+  whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
+  whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
+  transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
+  para_cada_item: { grad: "from-amber-500 to-yellow-500", border: "border-amber-300 dark:border-amber-800" },
+  esperar: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+  webhook: { grad: "from-pink-500 to-rose-500", border: "border-pink-300 dark:border-pink-800" },
+  kanban_criar_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  kanban_mover_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  kanban_atribuir_responsavel: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  kanban_tags: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  asaas_gerar_cobranca: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
+  asaas_cancelar_cobranca: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
+  asaas_consultar_valor_aberto: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
+  asaas_marcar_recebida: { grad: "from-emerald-500 to-green-600", border: "border-emerald-300 dark:border-emerald-800" },
+  definir_variavel: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+  definir_campo_personalizado: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+};
+
 function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
   const resumo = resumirConfig(data.tipo, data.config);
+  const cor = FAMILIA_COR_NO[data.tipo] ?? { grad: "from-slate-500 to-slate-600", border: "border-border" };
+
+  // Gatilho atual (pra validar). Lido direto do ReactFlow a cada render —
+  // sem memo, senão o valor congela no mount e não acompanha troca de gatilho.
+  const { getNodes } = useReactFlow();
+  const gatilho = (getNodes() as AnyNode[]).find(isGatilhoNode)?.data.gatilho ?? "mensagem_canal";
+
+  // Validação → status dot + mensagem inline.
+  const validacoes = validarPasso(data.tipo, gatilho, data.config);
+  const temErro = validacoes.some((v) => v.severidade === "erro");
+  const temAviso = !temErro && validacoes.some((v) => v.severidade === "aviso");
+  const statusCor = temErro ? "bg-red-400" : temAviso ? "bg-amber-400" : "bg-emerald-400";
+  const primeiroProblema = validacoes.find((v) => v.severidade === "erro")
+    ?? validacoes.find((v) => v.severidade === "aviso");
+
+  // Variáveis publicadas pra mostrar como chips no rodapé.
+  const publicadas = variaveisPublicadasPorPasso(data.tipo, data.config);
 
   // O condicional ganha um handle por ramo. Cada condição tem um id estável
   // (`config.condicoes[i].id`), mais o "fallback". Pros demais passos basta
@@ -237,23 +289,65 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
 
   return (
     <div
-      className={`rounded-lg border-2 shadow-sm bg-card min-w-[220px] max-w-[280px] ${
-        selected ? "border-primary" : "border-border"
+      className={`rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-hidden transition-shadow ${
+        selected ? "ring-2 ring-violet-400 ring-offset-1 border-violet-400" : cor.border
       }`}
     >
       <Handle type="target" position={Position.Top} className="!bg-muted-foreground/40" />
-      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-t-[6px] ${meta.cor}`}>
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-xs font-semibold truncate">{meta.label}</span>
+
+      {/* Header com gradiente da família + status dot */}
+      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r ${cor.grad} text-white`}>
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="text-[11px] font-bold truncate flex-1 uppercase tracking-wide">{meta.label}</span>
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${statusCor}`}
+          title={temErro ? "Tem erro de configuração" : temAviso ? "Tem aviso" : "Configuração OK"}
+          style={{ boxShadow: "0 0 0 2px rgba(255,255,255,0.5)" }}
+        />
       </div>
+
+      {/* Body: preview da config */}
       {resumo && (
-        <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground border-t bg-muted/30 rounded-b-[6px]">
+        <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground border-t bg-card">
           {resumo}
         </div>
       )}
 
+      {/* Validação inline (só erro/aviso, compacto) */}
+      {primeiroProblema && (
+        <div
+          className={`px-2.5 py-1 text-[9.5px] flex items-start gap-1 border-t leading-snug ${
+            temErro
+              ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+              : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300"
+          }`}
+        >
+          <AlertTriangle className="h-2.5 w-2.5 shrink-0 mt-0.5" />
+          <span className="line-clamp-2">{primeiroProblema.mensagem}</span>
+        </div>
+      )}
+
+      {/* Footer: chips de variáveis publicadas */}
+      {publicadas.length > 0 && (
+        <div className="px-2 py-1.5 bg-muted/40 border-t flex flex-wrap items-center gap-1">
+          <span className="text-[8.5px] uppercase tracking-wider text-muted-foreground font-bold">dá</span>
+          {publicadas.slice(0, 2).map((v) => (
+            <span
+              key={v.path}
+              className="text-[8.5px] font-mono font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 truncate max-w-[110px]"
+              title={v.label}
+            >
+              {`{{${v.path}}}`}
+            </span>
+          ))}
+          {publicadas.length > 2 && (
+            <span className="text-[8.5px] text-muted-foreground">+{publicadas.length - 2}</span>
+          )}
+        </div>
+      )}
+
       {isCondicional ? (
-        <div className="border-t bg-muted/20 rounded-b-[6px] py-1">
+        <div className="border-t bg-muted/20 py-1">
           {condicoes.map((c, idx) => (
             <HandleRow
               key={c.id}
@@ -267,7 +361,7 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
       ) : data.tipo === "para_cada_item" ? (
         // Loop tem 2 saídas: "corpo" (subfluxo da iteração) e "depois"
         // (continuação após o loop terminar).
-        <div className="border-t bg-muted/20 rounded-b-[6px] py-1">
+        <div className="border-t bg-muted/20 py-1">
           <HandleRow handleId="corpo" label="🔁 corpo do loop" cor="#f59e0b" />
           <HandleRow handleId="depois" label="depois (terminou)" cor="#3b82f6" />
         </div>
