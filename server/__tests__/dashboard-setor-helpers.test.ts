@@ -20,6 +20,7 @@ import {
   classificarTarefaPrazo,
   calcularRangeCashFlow,
 } from "../routers/dashboard-setor-helpers";
+import { metaProporcionalPeriodo } from "../escritorio/router-relatorios";
 
 describe("proporcionalizarMeta", () => {
   it("range cheio do mês (1-31 mai) retorna meta cheia", () => {
@@ -64,6 +65,61 @@ describe("proporcionalizarMeta", () => {
     const fim = new Date(2026, 4, 14);
     expect(proporcionalizarMeta(-100, ini, fim)).toBeNull();
   });
+
+  // Regressão: com HORA no range (ex.: mês vigente à tarde, ou filtro até
+  // 23:59:59), a contagem de dias precisa ser floor(diff)+1 — NÃO round.
+  // Math.round inflava o range em 1 dia e baixava o % da meta só aqui.
+  it("range com hora à tarde (1mai 00h → 23mai 18h) conta 23 dias, não 24", () => {
+    const ini = new Date(2026, 4, 1, 0, 0, 0);
+    const fim = new Date(2026, 4, 23, 18, 0, 0);
+    // 30000 * 23/31 = 22258.06 (com round seria 24/31 = 23225.81)
+    expect(proporcionalizarMeta(30000, ini, fim)).toBeCloseTo(30000 * (23 / 31), 1);
+  });
+
+  it("filtro de data até 23:59:59 (1mai → 23mai 23:59:59) conta 23 dias", () => {
+    const ini = new Date(2026, 4, 1, 0, 0, 0);
+    const fim = new Date(2026, 4, 23, 23, 59, 59);
+    expect(proporcionalizarMeta(30000, ini, fim)).toBeCloseTo(30000 * (23 / 31), 1);
+  });
+
+  it("manhã e tarde do mesmo dia dão o MESMO resultado (estável ao longo do dia)", () => {
+    const ini = new Date(2026, 4, 1, 0, 0, 0);
+    const manha = proporcionalizarMeta(30000, ini, new Date(2026, 4, 23, 9, 0, 0));
+    const tarde = proporcionalizarMeta(30000, ini, new Date(2026, 4, 23, 18, 0, 0));
+    expect(manha).toBe(tarde);
+  });
+
+  it("range maior que o mês escala acima de 100% (sem teto, como o relatório)", () => {
+    // 1 mar → 31 mai ≈ 92 dias; mês de início (março) tem 31 dias.
+    const ini = new Date(2026, 2, 1, 0, 0, 0);
+    const fim = new Date(2026, 4, 31, 0, 0, 0);
+    const r = proporcionalizarMeta(30000, ini, fim)!;
+    // Antes (com Math.min(1, ...)) travava em 30000; agora escala proporcional.
+    expect(r).toBeGreaterThan(30000);
+  });
+});
+
+describe("proporcionalizarMeta × metaProporcionalPeriodo — paridade dashboard/relatório", () => {
+  // O dashboard comercial e o relatório comercial mostram "% da meta" pra
+  // mesma pessoa/período. Ambos partem da meta proporcional ao range, então
+  // os dois helpers TÊM que dar o mesmo número — senão as telas divergem.
+  const meta = 30000;
+  const cenarios: Array<[string, Date, Date]> = [
+    ["mês vigente à tarde", new Date(2026, 4, 1, 0, 0, 0), new Date(2026, 4, 23, 18, 0, 0)],
+    ["mês vigente de manhã", new Date(2026, 4, 1, 0, 0, 0), new Date(2026, 4, 23, 9, 0, 0)],
+    ["filtro até 23:59:59", new Date(2026, 4, 1, 0, 0, 0), new Date(2026, 4, 23, 23, 59, 59)],
+    ["range de 7 dias cravados", new Date(2026, 4, 1, 0, 0, 0), new Date(2026, 4, 7, 0, 0, 0)],
+    ["cross-mês curto (25abr → 5mai)", new Date(2026, 3, 25, 0, 0, 0), new Date(2026, 4, 5, 23, 59, 59)],
+    ["multi-mês (1mar → 31mai)", new Date(2026, 2, 1, 0, 0, 0), new Date(2026, 4, 31, 0, 0, 0)],
+  ];
+
+  for (const [nome, ini, fim] of cenarios) {
+    it(`${nome}: dashboard === relatório`, () => {
+      const dash = proporcionalizarMeta(meta, ini, fim);
+      const rel = +metaProporcionalPeriodo(meta, ini, fim).toFixed(2);
+      expect(dash).toBe(rel);
+    });
+  }
 });
 
 describe("calcularProgressoMeta", () => {

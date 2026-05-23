@@ -817,7 +817,11 @@ export const dashboardRouter = router({
           gte(asaasCobrancas.dataPagamento, dataInicioStr),
           lte(asaasCobrancas.dataPagamento, dataFimStr),
           buildFiltroComissaoSQL(["sim"])!,
-          inArray(asaasCobrancas.contatoId, contatosFechadosAtual),
+          // Cliente real = COALESCE(beneficiário, pagador). Cobrança paga
+          // pela esposa (contatoId) com beneficiário marido (quem fechou o
+          // lead) precisa contar pro atendente. Sem COALESCE, o dashboard
+          // contava só pelo pagador e divergia do relatório comercial.
+          sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${contatosFechadosAtual})`,
         ))
         .groupBy(asaasCobrancas.atendenteId);
 
