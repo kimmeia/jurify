@@ -2991,7 +2991,9 @@ export const asaasRouter = router({
     const ZERO = {
       recebido: 0, recebidoLiquido: 0, recebidoCount: 0,
       pendente: 0, vencido: 0,
-      recebidoComVencimentoNoPeriodo: 0, recebidoComVencimentoNoPeriodoCount: 0,
+      recebidoComVencimentoNoPeriodo: 0,
+      recebidoAsaasPorVencimento: 0, recebidoAsaasPorVencimentoCount: 0,
+      recebidoManual: 0, recebidoManualCount: 0,
       recebidoNoPrazo: 0, recebidoNoPrazoCount: 0,
       recebidoAtraso: 0, recebidoAtrasoCount: 0,
       recebidoAdiantado: 0, recebidoAdiantadoCount: 0,
@@ -3047,6 +3049,11 @@ export const asaasRouter = router({
       const ehPago = inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]);
       const ehPending = inArray(asaasCobrancas.status, STATUS_PENDENTE_ASAAS as unknown as string[]);
       const ehOverdue = inArray(asaasCobrancas.status, STATUS_VENCIDO_ASAAS as unknown as string[]);
+      // Discriminação e ponte com o Asaas contam SÓ origem='asaas' — o painel
+      // do Asaas não conhece cobranças manuais (Caixa Escritório). Manual
+      // entra como linha própria na reconciliação.
+      const ehAsaas = sql`${asaasCobrancas.origem} = 'asaas'`;
+      const ehManual = sql`${asaasCobrancas.origem} = 'manual'`;
       const pendingNoFuturo = sql`${asaasCobrancas.vencimento} >= ${hojeStr}`;
       const pendingNoPassado = sql`${asaasCobrancas.vencimento} < ${hojeStr}`;
       // Discriminação do recebido (caixa real, pago no período) por situação
@@ -3068,16 +3075,21 @@ export const asaasRouter = router({
           vencido: sql<string>`COALESCE(SUM(CASE WHEN ((${ehPending} AND ${pendingNoPassado}) OR ${ehOverdue}) AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
           // Cobranças pagas cujo VENCIMENTO foi no período (independente de quando o pagamento ocorreu).
           // Usado pra calcular taxa de inadimplência exata: do que deveria ser pago no período, quanto foi.
-          // É também a "ponte com o Asaas": o painel deles conta por vencimento.
           recebidoComVencimentoNoPeriodo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoComVencimentoNoPeriodoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangeVenc} THEN 1 ELSE 0 END), 0)`,
-          // Discriminação do caixa real por situação de prazo
-          recebidoNoPrazo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencNoPrazo} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoNoPrazoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencNoPrazo} THEN 1 ELSE 0 END), 0)`,
-          recebidoAtraso: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAtraso} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoAtrasoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAtraso} THEN 1 ELSE 0 END), 0)`,
-          recebidoAdiantado: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAdiantado} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoAdiantadoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} AND ${vencAdiantado} THEN 1 ELSE 0 END), 0)`,
+          // PONTE COM ASAAS: cobranças Asaas (origem=asaas) pagas com vencimento
+          // no período. É o que o painel "Recebidas" do Asaas conta (por venc).
+          recebidoAsaasPorVencimento: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAsaasPorVencimentoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} THEN 1 ELSE 0 END), 0)`,
+          // Caixa manual (origem=manual, Caixa Escritório) pago no período
+          recebidoManual: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehManual} AND ${inRangePag} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoManualCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehManual} AND ${inRangePag} THEN 1 ELSE 0 END), 0)`,
+          // Discriminação do caixa Asaas por situação de prazo (só origem=asaas)
+          recebidoNoPrazo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencNoPrazo} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoNoPrazoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencNoPrazo} THEN 1 ELSE 0 END), 0)`,
+          recebidoAtraso: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAtraso} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAtrasoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAtraso} THEN 1 ELSE 0 END), 0)`,
+          recebidoAdiantado: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAdiantado} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAdiantadoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAdiantado} THEN 1 ELSE 0 END), 0)`,
           recebidoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN 1 ELSE 0 END), 0)`,
           totalCobrancas: sql<number>`COALESCE(SUM(CASE
             WHEN ${ehPago} AND ${inRangePag} THEN 1
@@ -3095,7 +3107,10 @@ export const asaasRouter = router({
         pendente: Number(agg?.pendente ?? 0),
         vencido: Number(agg?.vencido ?? 0),
         recebidoComVencimentoNoPeriodo: Number(agg?.recebidoComVencimentoNoPeriodo ?? 0),
-        recebidoComVencimentoNoPeriodoCount: Number(agg?.recebidoComVencimentoNoPeriodoCount ?? 0),
+        recebidoAsaasPorVencimento: Number(agg?.recebidoAsaasPorVencimento ?? 0),
+        recebidoAsaasPorVencimentoCount: Number(agg?.recebidoAsaasPorVencimentoCount ?? 0),
+        recebidoManual: Number(agg?.recebidoManual ?? 0),
+        recebidoManualCount: Number(agg?.recebidoManualCount ?? 0),
         recebidoNoPrazo: Number(agg?.recebidoNoPrazo ?? 0),
         recebidoNoPrazoCount: Number(agg?.recebidoNoPrazoCount ?? 0),
         recebidoAtraso: Number(agg?.recebidoAtraso ?? 0),
