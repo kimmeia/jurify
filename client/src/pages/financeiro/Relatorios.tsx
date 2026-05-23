@@ -601,6 +601,20 @@ function DiagnosticoDivergenciaDialog({
                     </div>
                   </div>
 
+                  {comp.creditoMesDiferente && comp.creditoMesDiferente.count > 0 && (
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 rounded p-2 text-xs">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100">
+                        Crédito em mês diferente do pagamento: {comp.creditoMesDiferente.count} cobranças
+                        ({formatBRL(comp.creditoMesDiferente.total)})
+                      </p>
+                      <p className="text-[11px] text-amber-800 dark:text-amber-200 mt-1">
+                        Pagas neste mês mas creditadas em outro (boleto D+1 pago no fim do mês).
+                        O painel "Recebidas" do Asaas filtra por data de crédito — por isso não
+                        conta essas. Se este número bate com a diferença, mistério resolvido.
+                      </p>
+                    </div>
+                  )}
+
                   {comp.asaasPorStatus && comp.asaasPorStatus.length > 0 && (
                     <div className="bg-white dark:bg-slate-900 rounded p-2">
                       <p className="text-[11px] font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
