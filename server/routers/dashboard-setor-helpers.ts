@@ -31,12 +31,15 @@ export function proporcionalizarMeta(
     dataInicio.getMonth() + 1,
     0,
   ).getDate();
+  // Contagem inclusiva de dias civis = floor(diff) + 1, idêntica a
+  // `metaProporcionalPeriodo`. Math.round inflava o range em 1 dia quando
+  // havia hora no range (default à tarde ou filtro até 23:59:59), baixando
+  // o % da meta só no dashboard e divergindo do relatório.
   const diasNoRange = Math.max(
     1,
-    Math.round((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+    Math.floor((dataFim.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1,
   );
-  const fracao = Math.min(1, diasNoRange / diasNoMes);
-  return +(metaTotal * fracao).toFixed(2);
+  return +(metaTotal * (diasNoRange / diasNoMes)).toFixed(2);
 }
 
 /**
