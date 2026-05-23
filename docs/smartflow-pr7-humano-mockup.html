@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — UX simples (PR-7 revisado)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .section-divider { background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent); height: 1px; }
+
+    /* Browser frame */
+    .browser {
+      border-radius: 16px;
+      border: 2px solid #cbd5e1;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+      overflow: hidden;
+      background: white;
+    }
+    .browser-bar {
+      background: #f1f5f9;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .browser-bar .dots { display: flex; gap: 6px; }
+    .browser-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+
+    /* Variável (chip humano) */
+    .chip-humano {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 8px;
+      background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+      color: #5b21b6;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1.5px solid #c4b5fd;
+      vertical-align: middle;
+    }
+
+    /* Drawer variáveis */
+    .drawer-var {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+    .drawer-var .cat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f1f5f9;
+      transition: background 0.15s;
+    }
+    .drawer-var .cat-header:hover { background: #f8fafc; }
+    .drawer-var .var-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px 6px 32px;
+      cursor: grab;
+      font-size: 12px;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .drawer-var .var-row:hover {
+      background: #f5f3ff;
+      border-left-color: #8b5cf6;
+    }
+    .drawer-var .var-row .exemplo {
+      font-size: 10px;
+      color: #94a3b8;
+      font-style: italic;
+      margin-left: auto;
+    }
+
+    /* Sidebar app */
+    .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: #475569; }
+    .sidebar-item.active { background: rgb(237 233 254); color: rgb(91 33 182); font-weight: 600; }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+
+  <!-- Top bar -->
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 px-6 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center">
+        <i data-lucide="heart-handshake" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold">PR-7 revisado · mais humano</p>
+        <h1 class="text-lg font-bold">SmartFlow — UX simplificada</h1>
+      </div>
+      <div class="flex gap-2 text-xs">
+        <a href="#filosofia" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🎯 O que muda</a>
+        <a href="#variaveis" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">📚 Variáveis</a>
+        <a href="#editor" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">✏️ Editor</a>
+        <a href="#wizard" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🪄 Wizard</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto p-6 space-y-12">
+
+    <!-- ════════════════ FILOSOFIA ════════════════ -->
+    <section id="filosofia" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Diagnóstico</p>
+        <h2 class="text-2xl font-bold">🎯 O que estava complicado</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-rose-50 border border-rose-200 rounded-xl p-4">
+          <p class="font-bold text-rose-900 mb-2 flex items-center gap-1.5">
+            <i data-lucide="x-circle" class="w-4 h-4"></i>
+            Como estava
+          </p>
+          <ul class="text-xs text-rose-900/80 space-y-1.5 leading-relaxed">
+            <li>• Variáveis em <code class="bg-rose-100 px-1 rounded text-[10px]">{`{{nomeCliente}}`}</code> — usuário tem que decorar nome técnico</li>
+            <li>• Termos: "ctx", "schema", "tool calling", "interpolação", "path"</li>
+            <li>• Pra ver variáveis, tem que digitar <code class="text-[10px]">{`{{`}</code> e esperar autocomplete</li>
+            <li>• Catálogo cobre só 3 gatilhos — faltam 8</li>
+            <li>• "Adicione um passo `crm_buscar_contato` antes" — quem entende isso?</li>
+            <li>• Canvas vazio sem template assusta</li>
+          </ul>
+        </div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+          <p class="font-bold text-emerald-900 mb-2 flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            Como vai ficar
+          </p>
+          <ul class="text-xs text-emerald-900/80 space-y-1.5 leading-relaxed">
+            <li>• Variáveis viram <span class="chip-humano text-[10px]">📌 Nome do cliente</span> visualmente</li>
+            <li>• Termos em pt-BR claros: "Quando rodar?", "Ação", "Informação"</li>
+            <li>• <strong>Painel "📚 Variáveis"</strong> sempre aberto à direita — busca + categorias</li>
+            <li>• Catálogo cobre <strong>todos os 11 gatilhos</strong> + variáveis publicadas por cada ação</li>
+            <li>• "Adicione um passo que <strong>busca o cliente pelo CPF</strong>" — linguagem natural</li>
+            <li>• Galeria de <strong>templates prontos</strong> + wizard guiado</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ VARIÁVEIS COMPLETAS ════════════════ -->
+    <section id="variaveis" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Catálogo</p>
+        <h2 class="text-2xl font-bold">📚 Drawer de variáveis (todas em um lugar)</h2>
+      </div>
+      <p class="text-sm text-slate-600 max-w-3xl">
+        Drawer fixo no editor, sempre visível à direita. Busca por nome humano,
+        agrupado por categoria, com <strong>exemplo do valor real</strong>.
+        Clica e insere no campo focado — não precisa decorar nada.
+      </p>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- Drawer principal -->
+        <div class="lg:col-span-2 drawer-var">
+          <div class="p-3 border-b bg-gradient-to-br from-slate-50 to-violet-50/30">
+            <p class="text-xs uppercase tracking-wider font-bold text-violet-700 flex items-center gap-1.5">
+              <i data-lucide="library" class="w-3.5 h-3.5"></i>
+              Informações disponíveis pra usar
+            </p>
+            <p class="text-[10px] text-slate-500 mt-0.5">Clica num item pra inserir onde o cursor está</p>
+          </div>
+          <div class="p-2.5 border-b bg-white">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input type="text" placeholder="Buscar (ex: cpf, nome, processo...)" class="text-xs h-8 pl-8 pr-2 rounded-md border border-slate-300 bg-white w-full focus:outline-none focus:border-violet-400">
+            </div>
+          </div>
+
+          <!-- Cliente -->
+          <div class="cat-header bg-violet-50/50">
+            <i data-lucide="user" class="w-3.5 h-3.5 text-violet-600"></i>
+            <span class="text-xs font-bold flex-1">Dados do cliente</span>
+            <span class="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-bold">5</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+          <div class="var-row"><i data-lucide="user" class="w-3 h-3 text-violet-500"></i><span><strong>Nome do cliente</strong></span><span class="exemplo">"João Silva"</span></div>
+          <div class="var-row"><i data-lucide="phone" class="w-3 h-3 text-violet-500"></i><span><strong>Telefone</strong></span><span class="exemplo">"(11) 99999-0000"</span></div>
+          <div class="var-row"><i data-lucide="mail" class="w-3 h-3 text-violet-500"></i><span><strong>Email</strong></span><span class="exemplo">"joao@ex.com"</span></div>
+          <div class="var-row"><i data-lucide="user-check" class="w-3 h-3 text-violet-500"></i><span><strong>Atendente responsável</strong></span><span class="exemplo">colab. #7</span></div>
+          <div class="var-row"><i data-lucide="hash" class="w-3 h-3 text-violet-500"></i><span><strong>ID interno</strong></span><span class="exemplo">42</span></div>
+
+          <!-- Campos personalizados -->
+          <div class="cat-header bg-pink-50/50">
+            <i data-lucide="file-text" class="w-3.5 h-3.5 text-pink-600"></i>
+            <span class="text-xs font-bold flex-1">Campos personalizados do cadastro</span>
+            <span class="text-[9px] bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded font-bold">8</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+          <div class="var-row"><i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>CPF</strong></span><span class="exemplo">"123.456.789-00"</span></div>
+          <div class="var-row"><i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>RG</strong></span><span class="exemplo">"12.345.678-9"</span></div>
+          <div class="var-row"><i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>Profissão</strong></span><span class="exemplo">"Advogado"</span></div>
+          <div class="var-row"><i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>Data de nascimento</strong></span><span class="exemplo">"12/05/1985"</span></div>
+          <div class="var-row"><i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>Estado civil</strong></span><span class="exemplo">"Casado(a)"</span></div>
+          <div class="var-row text-slate-400 italic"><i data-lucide="plus" class="w-3 h-3"></i><span>+ 3 outros campos do escritório...</span></div>
+
+          <!-- Pagamento -->
+          <div class="cat-header bg-emerald-50/50">
+            <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span class="text-xs font-bold flex-1">Pagamento / Cobrança</span>
+            <span class="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">9</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+          <!-- Processo / Ação -->
+          <div class="cat-header bg-indigo-50/50">
+            <i data-lucide="briefcase" class="w-3.5 h-3.5 text-indigo-600"></i>
+            <span class="text-xs font-bold flex-1">Ação / Processo do cliente</span>
+            <span class="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">7</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+          <!-- Agendamento -->
+          <div class="cat-header bg-orange-50/50">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-orange-600"></i>
+            <span class="text-xs font-bold flex-1">Agendamento (Cal.com)</span>
+            <span class="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">6</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+          <!-- IA -->
+          <div class="cat-header bg-fuchsia-50/50">
+            <i data-lucide="brain" class="w-3.5 h-3.5 text-fuchsia-600"></i>
+            <span class="text-xs font-bold flex-1">Resultados da IA</span>
+            <span class="text-[9px] bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded font-bold">3+</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+          <!-- Outros passos -->
+          <div class="cat-header bg-amber-50/50">
+            <i data-lucide="workflow" class="w-3.5 h-3.5 text-amber-600"></i>
+            <span class="text-xs font-bold flex-1">Resultados de passos anteriores</span>
+            <span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">11</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+          <!-- Mensagem/comunicação -->
+          <div class="cat-header bg-blue-50/50">
+            <i data-lucide="message-circle" class="w-3.5 h-3.5 text-blue-600"></i>
+            <span class="text-xs font-bold flex-1">Comunicação (mensagem do cliente)</span>
+            <span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">4</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+        </div>
+
+        <!-- Side info -->
+        <div class="space-y-4">
+          <div class="bg-violet-50 border border-violet-200 rounded-xl p-4">
+            <p class="text-sm font-bold text-violet-900 mb-1.5">🧠 Inteligente por contexto</p>
+            <p class="text-xs text-violet-900/80 leading-relaxed">
+              O drawer mostra só variáveis <strong>relevantes pro gatilho escolhido</strong>.
+              Em cenário de "pagamento", aparecem dados de pagamento; em cenário de
+              "mensagem", aparecem dados da conversa.
+            </p>
+          </div>
+          <div class="bg-pink-50 border border-pink-200 rounded-xl p-4">
+            <p class="text-sm font-bold text-pink-900 mb-1.5">📋 Campos personalizados automático</p>
+            <p class="text-xs text-pink-900/80 leading-relaxed">
+              <strong>Todos</strong> os campos que você criou em
+              <strong>Configurações → Campos personalizados</strong> aparecem aqui
+              automaticamente — sem precisar saber o "nome técnico".
+            </p>
+          </div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p class="text-sm font-bold text-amber-900 mb-1.5">🔄 Variáveis dos passos</p>
+            <p class="text-xs text-amber-900/80 leading-relaxed">
+              Adicionou um passo "Buscar movimentações"? As variáveis dele (lista,
+              mais recente, etc.) aparecem em <strong>"Resultados de passos
+              anteriores"</strong> automaticamente.
+            </p>
+          </div>
+          <div class="bg-slate-100 border border-slate-200 rounded-xl p-4">
+            <p class="text-sm font-bold text-slate-700 mb-1.5">⚙️ Modo avançado</p>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Toggle no canto pra ver o <strong>nome técnico</strong> de cada
+              variável (<code class="text-[10px] bg-white px-1 rounded">{`{{nomeCliente}}`}</code>)
+              — só pra quem programa quiser usar.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista completa de variáveis -->
+      <div class="mt-6">
+        <p class="text-sm font-bold text-slate-700 mb-3">
+          📋 Catálogo completo (todas as variáveis que vão entrar no drawer)
+        </p>
+        <div class="bg-white border border-slate-200 rounded-xl p-5">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-xs">
+
+            <div>
+              <p class="font-bold text-violet-700 mb-1.5 uppercase text-[10px]">👤 Dados do cliente</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Nome do cliente</li>
+                <li>Telefone</li>
+                <li>Email</li>
+                <li>ID interno (CRM)</li>
+                <li>Atendente responsável</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-pink-700 mb-1.5 uppercase text-[10px]">📋 Campos personalizados</p>
+              <ul class="space-y-1 text-slate-700">
+                <li><em>Todos do catálogo do escritório</em></li>
+                <li class="text-slate-400 italic">(ex: CPF, RG, Profissão, OAB...)</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-blue-700 mb-1.5 uppercase text-[10px]">💬 Mensagem / conversa</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Mensagem original</li>
+                <li>Resposta do cliente (multi-turn)</li>
+                <li>Opção escolhida (menu)</li>
+                <li>Tipo de canal (WhatsApp/IG)</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-emerald-700 mb-1.5 uppercase text-[10px]">💰 Pagamento / cobrança</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Valor</li>
+                <li>Descrição</li>
+                <li>Tipo (PIX/BOLETO/...)</li>
+                <li>Vencimento</li>
+                <li>Dias de atraso</li>
+                <li>Dias até vencer</li>
+                <li>Total pago pelo cliente</li>
+                <li>Percentual quitado</li>
+                <li>É a primeira cobrança?</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-indigo-700 mb-1.5 uppercase text-[10px]">⚖️ Ação / processo</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Apelido da ação</li>
+                <li>Número CNJ</li>
+                <li>Classe</li>
+                <li>Tipo (litigioso/extrajudicial)</li>
+                <li>Polo (autor/réu)</li>
+                <li>Valor da causa</li>
+                <li>Lista completa de ações</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-orange-700 mb-1.5 uppercase text-[10px]">📅 Agendamento</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Horário</li>
+                <li>Horário anterior (remarcação)</li>
+                <li>Fim do agendamento</li>
+                <li>Email do participante</li>
+                <li>Motivo do cancelamento</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-fuchsia-700 mb-1.5 uppercase text-[10px]">🧠 Resultados de IA</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Categoria detectada</li>
+                <li>Resposta gerada pela IA</li>
+                <li>Dados extraídos (CPF, email...)</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-amber-700 mb-1.5 uppercase text-[10px]">🔄 Passos do fluxo</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Contato encontrado? (sim/não)</li>
+                <li>Lista de ações do cliente</li>
+                <li>Lista de movimentações</li>
+                <li>Mov. mais recente</li>
+                <li>Valor total em aberto</li>
+                <li>Card criado (Kanban)</li>
+                <li>Link de pagamento gerado</li>
+                <li>Horários disponíveis</li>
+                <li>Item atual (em loops)</li>
+                <li>Posição na lista</li>
+              </ul>
+            </div>
+
+            <div>
+              <p class="font-bold text-slate-600 mb-1.5 uppercase text-[10px]">⚡ Específico do gatilho</p>
+              <ul class="space-y-1 text-slate-700">
+                <li>Origem do lead (novo lead)</li>
+                <li>É a primeira cobrança da ação?</li>
+                <li>Hora do disparo (slot)</li>
+                <li>+ outras por gatilho</li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ EDITOR SIMPLIFICADO ════════════════ -->
+    <section id="editor" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Editor</p>
+        <h2 class="text-2xl font-bold">✏️ Como o passo fica mais humano</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Configuração escrita em pt-BR. Variáveis viram chips visuais coloridos.
+        Preview ao vivo mostra como a mensagem real vai sair pro cliente.
+      </p>
+
+      <!-- Antes vs depois do painel direito -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- ANTES -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-xs font-bold px-2 py-1 rounded bg-slate-300 text-slate-800">ANTES</span>
+            <p class="text-sm text-slate-600">painel atual do passo "Extrair dados"</p>
+          </div>
+          <div class="bg-white border border-slate-300 rounded-lg p-4 text-xs space-y-3">
+            <div>
+              <label class="text-xs font-semibold">De onde vem a mensagem?</label>
+              <input value="mensagem" class="mt-1 w-full px-2 py-1 border border-slate-300 rounded font-mono text-[10px]" readonly>
+              <p class="text-[9px] text-slate-500 mt-0.5">Caminho no contexto. Default <code>mensagem</code>. Quando vier depois de "aguardar resposta", troque pra <code>respostaUsuario</code>.</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold">Campos a extrair</p>
+              <div class="border rounded p-2 mt-1 space-y-1.5 bg-slate-50">
+                <div class="flex gap-1">
+                  <input value="cpf" class="text-[10px] font-mono px-1 py-0.5 border rounded flex-1" readonly>
+                  <select class="text-[10px] px-1 border rounded"><option>cpf</option></select>
+                </div>
+                <div class="flex gap-2 text-[10px]">
+                  <label><input type="checkbox" checked> Obrigatório</label>
+                  <label><input type="checkbox" checked> Salvar no cadastro</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-600 mt-3 space-y-1">
+            <li>• "chave" — termo técnico</li>
+            <li>• "Caminho no contexto" — gíria de programador</li>
+            <li>• <code>mensagem</code>, <code>respostaUsuario</code> — usuário não sabe o que existe</li>
+          </ul>
+        </div>
+
+        <!-- DEPOIS -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-xs font-bold px-2 py-1 rounded bg-violet-600 text-white">DEPOIS</span>
+            <p class="text-sm text-slate-600">redesenhado pra humano</p>
+          </div>
+          <div class="bg-white border border-violet-300 rounded-lg p-4 text-xs space-y-4">
+            <div>
+              <label class="text-xs font-bold flex items-center gap-1">
+                Qual mensagem a IA vai analisar?
+                <i data-lucide="help-circle" class="w-3 h-3 text-slate-400 cursor-help"></i>
+              </label>
+              <select class="mt-1 w-full px-2 py-1.5 border border-violet-300 rounded text-xs">
+                <option>📥 A mensagem que o cliente acabou de enviar</option>
+                <option>💬 A resposta que ele deu pra última pergunta do fluxo</option>
+              </select>
+            </div>
+
+            <div>
+              <p class="text-xs font-bold mb-1.5 flex items-center gap-1">
+                O que a IA precisa identificar e guardar?
+                <i data-lucide="help-circle" class="w-3 h-3 text-slate-400 cursor-help"></i>
+              </p>
+              <div class="border border-violet-200 rounded p-2 space-y-1.5 bg-violet-50/30">
+                <div class="flex gap-1 items-center bg-white p-1.5 rounded border border-slate-200">
+                  <i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i>
+                  <span class="text-xs flex-1"><strong>CPF do cliente</strong></span>
+                  <label class="text-[10px] text-emerald-600 flex items-center gap-0.5">
+                    <input type="checkbox" checked class="w-3 h-3"> salvar no cadastro
+                  </label>
+                  <button class="text-rose-400 hover:text-rose-600"><i data-lucide="x" class="w-3 h-3"></i></button>
+                </div>
+                <button class="w-full text-xs py-1.5 border border-dashed border-violet-300 text-violet-700 rounded hover:bg-violet-50 flex items-center justify-center gap-1">
+                  <i data-lucide="plus" class="w-3 h-3"></i>
+                  Identificar mais um dado
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-md bg-emerald-50 border border-emerald-200 p-2.5 text-[11px] text-emerald-900">
+              <p class="font-bold mb-0.5 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> Resultado</p>
+              <p>O CPF identificado vai ficar disponível como <span class="chip-humano text-[10px]">📋 CPF do cliente</span> nos próximos passos. <strong>Também vai ser salvo no cadastro</strong> do cliente automaticamente.</p>
+            </div>
+          </div>
+          <ul class="text-xs text-slate-600 mt-3 space-y-1">
+            <li>• Tudo em pt-BR, sem jargão</li>
+            <li>• Tooltips (?) com explicação humana</li>
+            <li>• Variáveis aparecem como <strong>chips coloridos</strong> com nome humano</li>
+            <li>• Caixa verde no final explica o que vai acontecer</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Editor com chips e preview -->
+      <div class="mt-8">
+        <p class="text-sm font-bold text-slate-700 mb-3">📝 Template de mensagem com chips visuais</p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs font-bold px-2 py-1 rounded bg-slate-300 text-slate-800">ANTES</span>
+              <p class="text-sm text-slate-600">textarea com sintaxe técnica</p>
+            </div>
+            <div class="bg-white border border-slate-300 rounded-lg p-4 space-y-3">
+              <label class="text-xs font-semibold">Template da mensagem</label>
+              <textarea class="w-full p-2 border border-slate-300 rounded text-xs font-mono" rows="4">Olá {{nomeCliente}}, sobre seu processo {{acaoApelido}}, a última movimentação foi: {{movimentacaoMaisRecente.conteudo}}</textarea>
+              <p class="text-[10px] text-slate-500">Use <code>{`{{`}</code> pra inserir variável dinâmica.</p>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs font-bold px-2 py-1 rounded bg-violet-600 text-white">DEPOIS</span>
+              <p class="text-sm text-slate-600">chips visuais + preview ao vivo</p>
+            </div>
+            <div class="bg-white border border-violet-300 rounded-lg p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-bold">Mensagem pra enviar</label>
+                <button class="text-[10px] text-violet-600 hover:underline flex items-center gap-1">
+                  <i data-lucide="library" class="w-3 h-3"></i> Inserir informação
+                </button>
+              </div>
+              <div class="w-full min-h-[100px] p-3 border border-violet-200 rounded bg-white text-xs leading-relaxed">
+                Olá <span class="chip-humano">📌 Nome do cliente</span>, sobre seu processo <span class="chip-humano" style="background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4338ca; border-color: #a5b4fc;">⚖️ Apelido da ação</span>, a última movimentação foi: <span class="chip-humano" style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; border-color: #fcd34d;">🔄 Movimentação mais recente</span>
+              </div>
+
+              <div class="bg-slate-50 border border-slate-200 rounded p-2.5">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">👁 Pré-visualização</p>
+                <p class="text-xs text-slate-700 italic leading-relaxed">
+                  "Olá <strong>João Silva</strong>, sobre seu processo <strong>"Reclamação trabalhista"</strong>, a última movimentação foi: <strong>"Sentença procedente. Concedido prazo de 30 dias..."</strong>"
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ WIZARD ════════════════ -->
+    <section id="wizard" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Onboarding</p>
+        <h2 class="text-2xl font-bold">🪄 Galeria de templates + Wizard</h2>
+      </div>
+      <p class="text-sm text-slate-600">
+        Quem nunca usou nunca mais vê canvas em branco. Página inicial do
+        SmartFlow tem 6 templates prontos. Clica num e responde 2-3 perguntas
+        em linguagem natural — cenário criado.
+      </p>
+
+      <!-- Galeria de templates -->
+      <div class="bg-gradient-to-br from-violet-50 via-white to-indigo-50/30 rounded-2xl border border-violet-200 p-6">
+        <p class="text-sm font-bold mb-4 text-slate-700">
+          Quando clicar em <strong>"+ Novo cenário"</strong>:
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+
+          <div class="bg-white rounded-xl border-2 border-blue-200 p-4 hover:border-blue-400 hover:shadow-md cursor-pointer transition-all">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-2">
+              <i data-lucide="message-circle-heart" class="w-5 h-5 text-white"></i>
+            </div>
+            <p class="text-sm font-bold mb-1">Atendimento inteligente</p>
+            <p class="text-xs text-slate-600 leading-snug mb-2">
+              Cliente manda mensagem, IA verifica cadastro, busca a ação dele e responde com as últimas movimentações.
+            </p>
+            <span class="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-semibold">popular</span>
+          </div>
+
+          <div class="bg-white rounded-xl border-2 border-emerald-200 p-4 hover:border-emerald-400 hover:shadow-md cursor-pointer transition-all">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-2">
+              <i data-lucide="dollar-sign" class="w-5 h-5 text-white"></i>
+            </div>
+            <p class="text-sm font-bold mb-1">Avisar pagamento recebido</p>
+            <p class="text-xs text-slate-600 leading-snug mb-2">
+              Quando o cliente paga, envia agradecimento por WhatsApp e cria card no Kanban automaticamente.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl border-2 border-amber-200 p-4 hover:border-amber-400 hover:shadow-md cursor-pointer transition-all">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-red-500 flex items-center justify-center mb-2">
+              <i data-lucide="alert-triangle" class="w-5 h-5 text-white"></i>
+            </div>
+            <p class="text-sm font-bold mb-1">Cobrar quem atrasou</p>
+            <p class="text-xs text-slate-600 leading-snug mb-2">
+              X dias após o vencimento, manda mensagem amigável com link de pagamento.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl border-2 border-orange-200 p-4 hover:border-orange-400 hover:shadow-md cursor-pointer transition-all">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center mb-2">
+              <i data-lucide="calendar-clock" class="w-5 h-5 text-white"></i>
+            </div>
+            <p class="text-sm font-bold mb-1">Lembrete antes da reunião</p>
+            <p class="text-xs text-slate-600 leading-snug mb-2">
+              1 dia antes do agendamento Cal.com, envia WhatsApp lembrando o cliente.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl border-2 border-violet-200 p-4 hover:border-violet-400 hover:shadow-md cursor-pointer transition-all">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center mb-2">
+              <i data-lucide="user-plus" class="w-5 h-5 text-white"></i>
+            </div>
+            <p class="text-sm font-bold mb-1">Boas-vindas pra novo lead</p>
+            <p class="text-xs text-slate-600 leading-snug mb-2">
+              Quando aparece contato novo no CRM, envia mensagem de boas-vindas e abre card de triagem.
+            </p>
+          </div>
+
+          <div class="bg-white rounded-xl border-2 border-slate-300 p-4 hover:border-slate-500 hover:shadow-md cursor-pointer transition-all">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center mb-2">
+              <i data-lucide="plus" class="w-5 h-5 text-white"></i>
+            </div>
+            <p class="text-sm font-bold mb-1">Criar do zero</p>
+            <p class="text-xs text-slate-600 leading-snug mb-2">
+              Pra quem já tem uma ideia clara e quer montar passo a passo.
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Wizard em ação -->
+      <div class="mt-6">
+        <p class="text-sm font-bold text-slate-700 mb-3">
+          🎯 Wizard ao clicar em "Atendimento inteligente"
+        </p>
+        <div class="bg-white border border-violet-300 rounded-2xl shadow-lg max-w-xl mx-auto overflow-hidden">
+          <div class="px-5 py-3 bg-gradient-to-r from-violet-100 to-indigo-100 border-b border-violet-200 flex items-center gap-2">
+            <i data-lucide="wand-sparkles" class="w-4 h-4 text-violet-600"></i>
+            <p class="text-sm font-bold text-violet-900">Vamos montar seu atendimento</p>
+            <span class="ml-auto text-[10px] text-violet-700 font-bold">2 de 3</span>
+          </div>
+
+          <div class="p-5 space-y-4">
+            <p class="text-sm font-bold text-slate-800">
+              O que a IA deve fazer quando o cliente perguntar sobre o próprio processo?
+            </p>
+            <div class="space-y-2">
+              <label class="flex items-start gap-2 p-3 border-2 border-violet-300 bg-violet-50 rounded-lg cursor-pointer">
+                <input type="radio" checked class="mt-0.5">
+                <div>
+                  <p class="text-sm font-semibold">Verificar cadastro, buscar as ações e responder com as últimas movimentações</p>
+                  <p class="text-xs text-slate-600 mt-0.5">Mais completo. Cliente recebe resposta detalhada.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-2 p-3 border-2 border-slate-200 hover:border-slate-300 rounded-lg cursor-pointer">
+                <input type="radio" class="mt-0.5">
+                <div>
+                  <p class="text-sm font-semibold">Só passar a bola pra um atendente humano</p>
+                  <p class="text-xs text-slate-600 mt-0.5">Mais simples. Notifica e o humano cuida.</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-2 p-3 border-2 border-slate-200 hover:border-slate-300 rounded-lg cursor-pointer">
+                <input type="radio" class="mt-0.5">
+                <div>
+                  <p class="text-sm font-semibold">Responder de forma genérica e marcar como pendente</p>
+                  <p class="text-xs text-slate-600 mt-0.5">Cliente recebe acolhimento sem detalhe técnico.</p>
+                </div>
+              </label>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t">
+              <button class="text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded">← Voltar</button>
+              <div class="flex gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-violet-600"></span>
+                <span class="w-2 h-2 rounded-full bg-violet-600"></span>
+                <span class="w-2 h-2 rounded-full bg-slate-300"></span>
+              </div>
+              <button class="text-xs px-4 py-1.5 bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded font-semibold">
+                Continuar →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ════════════════ EDITOR INTEIRO ════════════════ -->
+    <section class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Visão geral</p>
+        <h2 class="text-2xl font-bold">🖥️ O editor inteiro com a UX nova</h2>
+      </div>
+
+      <div class="browser">
+        <div class="browser-bar">
+          <div class="dots">
+            <div class="dot bg-red-400"></div>
+            <div class="dot bg-amber-400"></div>
+            <div class="dot bg-emerald-400"></div>
+          </div>
+          <div class="flex-1 mx-3 bg-white rounded px-3 py-1 text-[11px] text-slate-500">
+            juridflow.com.br/smartflow/12/editar
+          </div>
+        </div>
+
+        <div class="flex" style="min-height: 580px;">
+          <!-- Sidebar app -->
+          <aside class="w-44 bg-white border-r border-slate-200 p-2 space-y-0.5">
+            <div class="px-2 py-2 mb-2 flex items-center gap-2">
+              <div class="w-6 h-6 rounded bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+                <i data-lucide="scale" class="w-3.5 h-3.5 text-white"></i>
+              </div>
+              <span class="font-bold text-xs">JuridFlow</span>
+            </div>
+            <div class="sidebar-item"><i data-lucide="layout-dashboard" class="w-3 h-3"></i>Dashboard</div>
+            <div class="sidebar-item"><i data-lucide="users" class="w-3 h-3"></i>Clientes</div>
+            <div class="sidebar-item active"><i data-lucide="zap" class="w-3 h-3"></i>SmartFlow</div>
+            <div class="sidebar-item"><i data-lucide="message-circle" class="w-3 h-3"></i>Atendimento</div>
+            <div class="sidebar-item"><i data-lucide="bot" class="w-3 h-3"></i>Agentes IA</div>
+          </aside>
+
+          <!-- Conteúdo: top bar + workspace -->
+          <main class="flex-1 flex flex-col">
+            <!-- Top bar -->
+            <div class="flex items-center gap-2 px-3 py-2 border-b bg-white text-xs">
+              <button class="flex items-center gap-1 px-2 py-1 hover:bg-slate-100 rounded"><i data-lucide="arrow-left" class="w-3 h-3"></i> Voltar</button>
+              <div class="h-5 w-px bg-slate-200"></div>
+              <div class="w-7 h-7 rounded bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-white"></i>
+              </div>
+              <div class="flex-1">
+                <p class="text-xs font-bold">Atendimento inteligente — Movimentações</p>
+                <p class="text-[10px] text-slate-500 flex items-center gap-1">
+                  <i data-lucide="message-circle" class="w-2.5 h-2.5 text-blue-500"></i>
+                  Mensagem recebida · 6 ações · <span class="text-emerald-600 flex items-center gap-0.5"><div class="w-1 h-1 rounded-full bg-emerald-500"></div> Salvo há 1 min</span>
+                </p>
+              </div>
+              <div class="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 border border-emerald-200 rounded text-[10px] font-semibold text-emerald-700">
+                <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Ativo
+              </div>
+              <button class="px-2 py-1 border border-slate-300 rounded flex items-center gap-1 text-[10px]"><i data-lucide="play" class="w-3 h-3"></i> Testar</button>
+              <button class="px-3 py-1 bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded font-semibold flex items-center gap-1 text-[10px]"><i data-lucide="save" class="w-3 h-3"></i> Salvar</button>
+            </div>
+
+            <!-- Workspace -->
+            <div class="flex flex-1">
+
+              <!-- Paleta esquerda -->
+              <aside class="w-48 border-r bg-slate-50/60 p-2.5 text-xs space-y-1.5">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Quando rodar</p>
+                <div class="bg-blue-50 border-2 border-blue-300 rounded p-2 mb-3">
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <i data-lucide="message-circle" class="w-3 h-3 text-blue-600"></i>
+                    <span class="text-[11px] font-bold">Mensagem recebida</span>
+                  </div>
+                  <button class="w-full text-[10px] py-1 border border-blue-300 bg-white rounded">Trocar</button>
+                </div>
+
+                <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Adicionar ação</p>
+                <div class="space-y-1">
+                  <div class="px-2 py-1.5 border border-violet-200 bg-violet-50/30 rounded flex items-center gap-1.5 text-[11px] font-semibold text-violet-700"><i data-lucide="brain" class="w-3 h-3"></i> Inteligência artificial</div>
+                  <div class="px-2 py-1.5 border border-slate-200 bg-white rounded flex items-center gap-1.5 text-[11px]"><i data-lucide="user" class="w-3 h-3 text-violet-500"></i> Cliente / CRM</div>
+                  <div class="px-2 py-1.5 border border-slate-200 bg-white rounded flex items-center gap-1.5 text-[11px]"><i data-lucide="briefcase" class="w-3 h-3 text-indigo-500"></i> Ações / processos</div>
+                  <div class="px-2 py-1.5 border border-slate-200 bg-white rounded flex items-center gap-1.5 text-[11px]"><i data-lucide="message-circle" class="w-3 h-3 text-teal-500"></i> Mensagem</div>
+                  <div class="px-2 py-1.5 border border-slate-200 bg-white rounded flex items-center gap-1.5 text-[11px]"><i data-lucide="git-branch" class="w-3 h-3 text-amber-500"></i> Decisões / loops</div>
+                </div>
+              </aside>
+
+              <!-- Canvas -->
+              <div class="flex-1 bg-gradient-to-br from-slate-50 via-white to-violet-50/20 p-6 relative">
+                <div class="flex flex-col items-center gap-3 max-w-xs mx-auto">
+                  <div class="w-full bg-white border-2 border-blue-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-[11px] font-bold uppercase">⚡ Gatilho · Mensagem recebida</div>
+                    <div class="p-2 text-[10px] text-slate-600">Cliente: "quero saber da minha ação"</div>
+                  </div>
+                  <div class="w-0.5 h-6 bg-violet-300"></div>
+                  <div class="w-full bg-white border-2 border-fuchsia-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="px-3 py-2 bg-gradient-to-r from-fuchsia-500 to-purple-500 text-white text-[11px] font-bold uppercase">🧠 Extrair · CPF</div>
+                    <div class="p-2 text-[10px] text-slate-600">Da mensagem do cliente → CPF</div>
+                  </div>
+                  <div class="w-0.5 h-6 bg-violet-300"></div>
+                  <div class="w-full bg-white border-2 border-violet-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="px-3 py-2 bg-gradient-to-r from-violet-500 to-pink-500 text-white text-[11px] font-bold uppercase">🔍 Buscar cliente</div>
+                    <div class="p-2 text-[10px] text-slate-600">Por CPF → <span class="chip-humano text-[9px]">📋 CPF identificado</span></div>
+                  </div>
+                  <div class="w-0.5 h-6 bg-violet-300"></div>
+                  <div class="w-full bg-white border-2 border-indigo-200 rounded-xl overflow-hidden shadow-sm shadow-violet-200">
+                    <div class="px-3 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-[11px] font-bold uppercase">📜 Movimentações</div>
+                    <div class="p-2 text-[10px] text-slate-600">Da ação <span class="chip-humano text-[9px]" style="background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4338ca; border-color: #a5b4fc;">⚖️ Ação</span> · últimos 30 dias</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Painel direito (com Variáveis aberto!) -->
+              <aside class="w-72 border-l bg-white flex flex-col">
+                <div class="flex border-b">
+                  <button class="flex-1 text-[11px] py-2 font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700">⚙ Configurar</button>
+                  <button class="flex-1 text-[11px] py-2 font-bold border-b-2 border-violet-600 text-violet-700 bg-violet-50/50">📚 Informações</button>
+                  <button class="flex-1 text-[11px] py-2 font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700">📤 Saída</button>
+                </div>
+                <div class="p-2 border-b bg-slate-50/50">
+                  <div class="relative">
+                    <i data-lucide="search" class="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" placeholder="Buscar (ex: nome, cpf...)" class="text-[11px] h-7 pl-7 pr-2 rounded border border-slate-300 bg-white w-full focus:outline-none">
+                  </div>
+                </div>
+                <div class="flex-1 overflow-y-auto text-[11px]">
+                  <div class="px-2.5 py-1.5 bg-violet-50/50 flex items-center gap-1.5 border-b border-slate-100">
+                    <i data-lucide="user" class="w-3 h-3 text-violet-600"></i>
+                    <span class="font-bold flex-1">Cliente</span>
+                    <span class="text-[9px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">5</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+                  </div>
+                  <div class="px-2.5 py-1.5 hover:bg-violet-50/40 cursor-pointer flex items-center gap-1.5 border-l-2 border-transparent hover:border-violet-400">
+                    <i data-lucide="user" class="w-3 h-3 text-violet-500"></i><span><strong>Nome do cliente</strong></span><span class="ml-auto text-[9px] italic text-slate-400">"João Silva"</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 hover:bg-violet-50/40 cursor-pointer flex items-center gap-1.5 border-l-2 border-transparent hover:border-violet-400">
+                    <i data-lucide="phone" class="w-3 h-3 text-violet-500"></i><span><strong>Telefone</strong></span><span class="ml-auto text-[9px] italic text-slate-400">"(11)..."</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 hover:bg-violet-50/40 cursor-pointer flex items-center gap-1.5 border-l-2 border-transparent hover:border-violet-400">
+                    <i data-lucide="mail" class="w-3 h-3 text-violet-500"></i><span><strong>Email</strong></span>
+                  </div>
+
+                  <div class="px-2.5 py-1.5 bg-pink-50/50 flex items-center gap-1.5 border-b border-t border-slate-100">
+                    <i data-lucide="file-text" class="w-3 h-3 text-pink-600"></i>
+                    <span class="font-bold flex-1">Campos personalizados</span>
+                    <span class="text-[9px] bg-pink-100 text-pink-700 px-1 py-0.5 rounded">8</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+                  </div>
+                  <div class="px-2.5 py-1.5 hover:bg-pink-50/40 cursor-pointer flex items-center gap-1.5 border-l-2 border-transparent hover:border-pink-400">
+                    <i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>CPF</strong></span><span class="ml-auto text-[9px] italic text-slate-400">"123..."</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 hover:bg-pink-50/40 cursor-pointer flex items-center gap-1.5 border-l-2 border-transparent hover:border-pink-400">
+                    <i data-lucide="file-text" class="w-3 h-3 text-pink-500"></i><span><strong>Profissão</strong></span>
+                  </div>
+
+                  <div class="px-2.5 py-1.5 bg-indigo-50/50 flex items-center gap-1.5 border-b border-t border-slate-100">
+                    <i data-lucide="briefcase" class="w-3 h-3 text-indigo-600"></i>
+                    <span class="font-bold flex-1">Ação / Processo</span>
+                    <span class="text-[9px] bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded">7</span>
+                    <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+                  </div>
+
+                  <div class="px-2.5 py-1.5 bg-amber-50/50 flex items-center gap-1.5 border-b border-t border-slate-100">
+                    <i data-lucide="workflow" class="w-3 h-3 text-amber-600"></i>
+                    <span class="font-bold flex-1">Passos anteriores</span>
+                    <span class="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">4</span>
+                    <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+                  </div>
+
+                  <div class="px-2.5 py-1.5 bg-blue-50/50 flex items-center gap-1.5 border-b border-t border-slate-100">
+                    <i data-lucide="message-circle" class="w-3 h-3 text-blue-600"></i>
+                    <span class="font-bold flex-1">Mensagem</span>
+                    <span class="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">3</span>
+                    <i data-lucide="chevron-right" class="w-3 h-3 text-slate-400"></i>
+                  </div>
+                </div>
+              </aside>
+
+            </div>
+          </main>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════ RESUMO ════════════════ -->
+    <div class="bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-5 text-sm">
+      <p class="font-bold text-violet-900 mb-2">📦 O que o PR-7 entrega (revisado)</p>
+      <ol class="text-xs text-violet-900/90 space-y-1.5 list-decimal list-inside leading-relaxed">
+        <li><strong>Catálogo COMPLETO</strong> de variáveis (todos os 11 gatilhos + variáveis publicadas por cada passo + campos personalizados do escritório).</li>
+        <li><strong>Drawer "📚 Informações"</strong> no painel direito — terceira aba ao lado de Config/Saída. Busca + categorias colapsáveis + nomes humanos + exemplos.</li>
+        <li><strong>Chips visuais</strong> coloridos no textarea em vez de <code class="bg-violet-100 text-[10px] px-1 rounded">{`{{var}}`}</code> técnico (toggle pra modo avançado pra quem prefere texto).</li>
+        <li><strong>Preview ao vivo</strong> mostrando como a mensagem real vai sair pro cliente, com os exemplos das variáveis substituídos.</li>
+        <li><strong>Galeria de 5 templates prontos</strong> + opção "criar do zero" em vez de canvas em branco.</li>
+        <li><strong>Wizard de 3 passos</strong> ao clicar num template — perguntas em pt-BR sem jargão técnico.</li>
+        <li><strong>Visual do nó</strong> repaginado (header colorido + preview da config) — como já estava no mockup anterior.</li>
+        <li><strong>Renomeações pt-BR</strong>: "Gatilho" → "Quando rodar", "Passo" → "Ação", "Variável" → "Informação", e remoção de jargão técnico ("chave", "caminho", "path", "tool calling").</li>
+      </ol>
+      <p class="text-xs text-violet-700 mt-3">
+        <strong>Risco baixo:</strong> tudo é frontend. Motor, dispatcher e schedulers não mexem.
+      </p>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-xl p-4 text-sm">
+      <p class="font-bold mb-2 text-slate-700">❓ Pergunta antes de eu codar</p>
+      <ol class="text-xs text-slate-600 space-y-1 list-decimal list-inside">
+        <li>O drawer "📚 Informações" com **busca + categorias** funciona? Quer ele <strong>na 3ª aba do painel direito</strong> (atual) ou <strong>flutuante</strong> (drawer separado)?</li>
+        <li>Chips visuais coloridos no textarea — implemento agora ou na próxima fase (TipTap dá trabalho)?</li>
+        <li>Galeria de templates + wizard — vai junto ou divide PR?</li>
+        <li>Renomeação pt-BR ("Quando rodar", "Ação", "Informação") — aprovado?</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="bg-slate-900 text-slate-400 text-center py-4 text-xs">
+    PR-7 revisado · SmartFlow · JuridFlow
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
