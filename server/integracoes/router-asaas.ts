@@ -3060,12 +3060,17 @@ export const asaasRouter = router({
       // de prazo, comparando o vencimento com o período de pagamento. Só faz
       // sentido quando pagIni/pagFim estão definidos (filtro de período).
       //  - no prazo: venceu dentro do período
-      //  - atraso: venceu ANTES do período (pago em atraso neste período)
-      //  - adiantado: vence DEPOIS do período (pago adiantado neste período)
-      const vencNoPrazo = sql`(${pagIni} IS NOT NULL AND ${pagFim} IS NOT NULL
-        AND ${asaasCobrancas.vencimento} >= ${pagIni} AND ${asaasCobrancas.vencimento} <= ${pagFim})`;
-      const vencAtraso = sql`(${pagIni} IS NOT NULL AND ${asaasCobrancas.vencimento} < ${pagIni})`;
-      const vencAdiantado = sql`(${pagFim} IS NOT NULL AND ${asaasCobrancas.vencimento} > ${pagFim})`;
+      // Discriminação por situação de prazo: compara a DATA DE PAGAMENTO
+      // com a DATA DE VENCIMENTO de cada cobrança (não com o mês). Aplicada
+      // sobre as cobranças que VENCEM no período (inRangeVenc), pra bater
+      // com o conjunto que o painel Asaas mostra em "Recebidas".
+      //  - adiantado: pagou ANTES do vencimento
+      //  - no prazo: pagou no DIA do vencimento
+      //  - atraso: pagou DEPOIS do vencimento
+      // Datas são strings YYYY-MM-DD — comparação lexicográfica == cronológica.
+      const pagAdiantado = sql`(${asaasCobrancas.dataPagamento} IS NOT NULL AND ${asaasCobrancas.dataPagamento} < ${asaasCobrancas.vencimento})`;
+      const pagNoPrazo = sql`(${asaasCobrancas.dataPagamento} IS NOT NULL AND ${asaasCobrancas.dataPagamento} = ${asaasCobrancas.vencimento})`;
+      const pagAtraso = sql`(${asaasCobrancas.dataPagamento} IS NOT NULL AND ${asaasCobrancas.dataPagamento} > ${asaasCobrancas.vencimento})`;
 
       const [agg] = await db
         .select({
@@ -3083,13 +3088,14 @@ export const asaasRouter = router({
           // Caixa manual (origem=manual, Caixa Escritório) pago no período
           recebidoManual: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehManual} AND ${inRangePag} THEN ${valorDec} ELSE 0 END), 0)`,
           recebidoManualCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehManual} AND ${inRangePag} THEN 1 ELSE 0 END), 0)`,
-          // Discriminação do caixa Asaas por situação de prazo (só origem=asaas)
-          recebidoNoPrazo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencNoPrazo} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoNoPrazoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencNoPrazo} THEN 1 ELSE 0 END), 0)`,
-          recebidoAtraso: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAtraso} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoAtrasoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAtraso} THEN 1 ELSE 0 END), 0)`,
-          recebidoAdiantado: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAdiantado} THEN ${valorDec} ELSE 0 END), 0)`,
-          recebidoAdiantadoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangePag} AND ${vencAdiantado} THEN 1 ELSE 0 END), 0)`,
+          // Discriminação do recebido POR VENCIMENTO (bate com painel Asaas)
+          // por situação de prazo (pagamento vs vencimento de cada cobrança).
+          recebidoNoPrazo: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} AND ${pagNoPrazo} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoNoPrazoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} AND ${pagNoPrazo} THEN 1 ELSE 0 END), 0)`,
+          recebidoAtraso: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} AND ${pagAtraso} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAtrasoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} AND ${pagAtraso} THEN 1 ELSE 0 END), 0)`,
+          recebidoAdiantado: sql<string>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} AND ${pagAdiantado} THEN ${valorDec} ELSE 0 END), 0)`,
+          recebidoAdiantadoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${ehAsaas} AND ${inRangeVenc} AND ${pagAdiantado} THEN 1 ELSE 0 END), 0)`,
           recebidoCount: sql<number>`COALESCE(SUM(CASE WHEN ${ehPago} AND ${inRangePag} THEN 1 ELSE 0 END), 0)`,
           totalCobrancas: sql<number>`COALESCE(SUM(CASE
             WHEN ${ehPago} AND ${inRangePag} THEN 1

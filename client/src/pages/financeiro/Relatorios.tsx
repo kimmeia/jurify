@@ -284,8 +284,8 @@ export function RelatoriosTab() {
             />
           </div>
 
-          {/* Recebido: caixa real + discriminação de prazo + ponte Asaas */}
-          {kpis && (kpis.recebido > 0 || kpis.recebidoComVencimentoNoPeriodo > 0) && (
+          {/* Recebido: por vencimento (= Asaas) + discriminação de prazo + caixa real */}
+          {kpis && (kpis.recebido > 0 || kpis.recebidoAsaasPorVencimento > 0) && (
             <RecebidoPorPrazoSection kpis={kpis} />
           )}
 
@@ -1032,157 +1032,99 @@ function DiagnosticoDivergenciaDialog({
  * que vence no período.
  */
 function RecebidoPorPrazoSection({ kpis }: { kpis: any }) {
-  const caixaTotal = kpis.recebido ?? 0;          // tudo (asaas + manual)
+  const caixaTotal = kpis.recebido ?? 0;          // tudo pago no período (asaas + manual)
+  const caixaCount = kpis.recebidoCount ?? 0;
   const manual = kpis.recebidoManual ?? 0;        // origem=manual (Caixa Escritório)
   const manualCount = kpis.recebidoManualCount ?? 0;
-  const noPrazo = kpis.recebidoNoPrazo ?? 0;      // asaas, venc e pago no período
-  const atraso = kpis.recebidoAtraso ?? 0;        // asaas, venc antes
-  const adiantado = kpis.recebidoAdiantado ?? 0;  // asaas, vence depois
-  const noPrazoCount = kpis.recebidoNoPrazoCount ?? 0;
-  const atrasoCount = kpis.recebidoAtrasoCount ?? 0;
-  const adiantadoCount = kpis.recebidoAdiantadoCount ?? 0;
-  const caixaAsaas = noPrazo + atraso + adiantado; // só asaas
-  const caixaAsaasCount = noPrazoCount + atrasoCount + adiantadoCount;
-  const porVencimento = kpis.recebidoAsaasPorVencimento ?? 0; // ponte (bate com painel)
+  const caixaAsaas = caixaTotal - manual;         // origem=asaas pago no período
+  const caixaAsaasCount = caixaCount - manualCount;
+  // Recebido POR VENCIMENTO (bate com o painel Asaas "Recebidas")
+  const porVencimento = kpis.recebidoAsaasPorVencimento ?? 0;
   const porVencimentoCount = kpis.recebidoAsaasPorVencimentoCount ?? 0;
-  // Cobranças Asaas que vencem no período mas foram pagas fora dele (adiantado
-  // em meses anteriores) — o que o Asaas conta a mais que o "no prazo".
-  const vencPeriodoPagoFora = porVencimento - noPrazo;
-  const vencPeriodoPagoForaCount = porVencimentoCount - noPrazoCount;
+  // Discriminação por situação de prazo (pagamento vs vencimento), dentro do
+  // recebido por vencimento — soma = porVencimento.
+  const adiantado = kpis.recebidoAdiantado ?? 0;
+  const adiantadoCount = kpis.recebidoAdiantadoCount ?? 0;
+  const noPrazo = kpis.recebidoNoPrazo ?? 0;
+  const noPrazoCount = kpis.recebidoNoPrazoCount ?? 0;
+  const atraso = kpis.recebidoAtraso ?? 0;
+  const atrasoCount = kpis.recebidoAtrasoCount ?? 0;
+  // Diferença caixa Asaas (pago no período) x por vencimento — cobranças
+  // pagas neste mês mas que vencem em outro (e vice-versa).
+  const difCaixaVenc = caixaAsaas - porVencimento;
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-emerald-600" />
-          Recebido — fluxo de caixa real
+          Recebido — caixa real e comparação com Asaas
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Caixa real total + discriminação Asaas */}
-          <div className="lg:col-span-2 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Caixa real total (quando o dinheiro entrou)</p>
-            <p className="text-2xl font-bold text-emerald-600 tabular-nums">{formatBRL(caixaTotal)}</p>
-            <p className="text-xs text-slate-500 mb-3">{kpis.recebidoCount ?? 0} cobranças pagas no período</p>
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
-              <p className="text-[11px] font-medium text-slate-500">Cobranças Asaas, por situação de prazo:</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Recebido por vencimento (bate com Asaas) + discriminação de prazo */}
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/20 p-4">
+            <p className="text-xs text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+              Recebido por vencimento <span className="normal-case">(= painel Asaas "Recebidas")</span>
+            </p>
+            <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{formatBRL(porVencimento)}</p>
+            <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80 mb-3">{porVencimentoCount} cobranças · vencimento no período</p>
+            <div className="border-t border-indigo-100 dark:border-indigo-900 pt-3 space-y-2">
+              <p className="text-[11px] font-medium text-slate-500">Por situação de prazo (pagamento vs vencimento):</p>
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                  <span className="w-2 h-2 rounded-full bg-sky-400" />
+                  Adiantado <span className="text-slate-400">(pagou antes do venc.)</span>
+                </span>
+                <span className="font-semibold tabular-nums">{formatBRL(adiantado)} · {adiantadoCount}</span>
+              </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  No prazo <span className="text-slate-400">(venceu no período)</span>
+                  No prazo <span className="text-slate-400">(pagou no dia do venc.)</span>
                 </span>
                 <span className="font-semibold tabular-nums">{formatBRL(noPrazo)} · {noPrazoCount}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Em atraso <span className="text-slate-400">(venceu antes)</span>
+                  Em atraso <span className="text-slate-400">(pagou após o venc.)</span>
                 </span>
                 <span className="font-semibold tabular-nums">{formatBRL(atraso)} · {atrasoCount}</span>
               </div>
+            </div>
+          </div>
+
+          {/* Caixa real (fluxo de caixa) */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20 p-4">
+            <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+              Caixa real <span className="normal-case">(quando o dinheiro entrou)</span>
+            </p>
+            <p className="text-2xl font-bold text-emerald-600 tabular-nums">{formatBRL(caixaTotal)}</p>
+            <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mb-3">{caixaCount} cobranças pagas no período</p>
+            <div className="border-t border-emerald-100 dark:border-emerald-900 pt-3 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span className="w-2 h-2 rounded-full bg-sky-400" />
-                  Adiantado <span className="text-slate-400">(vence depois)</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Cobranças Asaas
                 </span>
-                <span className="font-semibold tabular-nums">{formatBRL(adiantado)} · {adiantadoCount}</span>
+                <span className="font-semibold tabular-nums">{formatBRL(caixaAsaas)} · {caixaAsaasCount}</span>
               </div>
               {manual > 0 && (
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-dashed border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                     <span className="w-2 h-2 rounded-full bg-slate-400" />
-                    Caixa Escritório <span className="text-slate-400">(manual, fora do Asaas)</span>
+                    Caixa Escritório <span className="text-slate-400">(manual)</span>
                   </span>
                   <span className="font-semibold tabular-nums">{formatBRL(manual)} · {manualCount}</span>
                 </div>
               )}
+              <p className="text-[11px] text-slate-400 pt-1 leading-relaxed">
+                Caixa Asaas ({formatBRL(caixaAsaas)}) difere do "por vencimento" em {formatBRL(Math.abs(difCaixaVenc))}: são cobranças pagas neste mês mas que vencem em outro (e vice-versa).
+              </p>
             </div>
           </div>
-
-          {/* Ponte Asaas */}
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 dark:bg-indigo-950/20 p-4">
-            <p className="text-xs text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">↻ Ponte com Asaas</p>
-            <p className="text-[11px] text-indigo-800 dark:text-indigo-200 mb-2 leading-relaxed">
-              Só cobranças Asaas, por vencimento. Bate com o card "Recebidas" do painel:
-            </p>
-            <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{formatBRL(porVencimento)}</p>
-            <p className="text-[11px] text-indigo-600 dark:text-indigo-400">
-              {porVencimentoCount} cobranças · vencimento no período
-            </p>
-          </div>
-        </div>
-
-        {/* Reconciliação caixa → Asaas */}
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Reconciliação: caixa real → critério Asaas</p>
-          </div>
-          <table className="w-full text-xs">
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              <tr>
-                <td className="px-4 py-2 text-slate-700 dark:text-slate-300">No prazo <span className="text-slate-400">(venc. e pago no período)</span></td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-500">{noPrazoCount}</td>
-                <td className="px-4 py-2 text-right font-semibold tabular-nums">{formatBRL(noPrazo)}</td>
-              </tr>
-              <tr className="bg-amber-50/40 dark:bg-amber-950/10">
-                <td className="px-4 py-2 text-slate-700 dark:text-slate-300">+ Recebido em atraso <span className="text-slate-400">(Asaas)</span></td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-500">{atrasoCount}</td>
-                <td className="px-4 py-2 text-right font-semibold tabular-nums text-amber-700">{formatBRL(atraso)}</td>
-              </tr>
-              {adiantado > 0 && (
-                <tr className="bg-sky-50/40 dark:bg-sky-950/10">
-                  <td className="px-4 py-2 text-slate-700 dark:text-slate-300">+ Recebido adiantado <span className="text-slate-400">(Asaas)</span></td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-500">{adiantadoCount}</td>
-                  <td className="px-4 py-2 text-right font-semibold tabular-nums text-sky-700">{formatBRL(adiantado)}</td>
-                </tr>
-              )}
-              <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 font-medium border-t border-emerald-200">
-                <td className="px-4 py-2 text-slate-800 dark:text-slate-200">= Caixa Asaas</td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-600">{caixaAsaasCount}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-emerald-700">{formatBRL(caixaAsaas)}</td>
-              </tr>
-              {manual > 0 && (
-                <tr>
-                  <td className="px-4 py-2 text-slate-700 dark:text-slate-300">+ Caixa Escritório <span className="text-slate-400">(manual)</span></td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-500">{manualCount}</td>
-                  <td className="px-4 py-2 text-right font-semibold tabular-nums text-slate-700">{formatBRL(manual)}</td>
-                </tr>
-              )}
-              <tr className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
-                <td className="px-4 py-2 text-slate-900 dark:text-slate-100">= Caixa real total (Jurify)</td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-600">{kpis.recebidoCount ?? 0}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-emerald-700">{formatBRL(caixaTotal)}</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-2 text-slate-500" colSpan={3}>
-                  <span className="text-[11px] italic">Pra chegar no critério do painel Asaas (por vencimento), partindo do Caixa Asaas:</span>
-                </td>
-              </tr>
-              <tr>
-                <td className="px-4 py-2 text-slate-500">− Recebido em atraso <span className="text-slate-400">(não vence no período)</span></td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-400">{atrasoCount}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-500">− {formatBRL(atraso)}</td>
-              </tr>
-              {adiantado > 0 && (
-                <tr>
-                  <td className="px-4 py-2 text-slate-500">− Recebido adiantado <span className="text-slate-400">(não vence no período)</span></td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-400">{adiantadoCount}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-500">− {formatBRL(adiantado)}</td>
-                </tr>
-              )}
-              <tr className="bg-sky-50/40 dark:bg-sky-950/10">
-                <td className="px-4 py-2 text-slate-700 dark:text-slate-300">+ Vence no período, pago fora <span className="text-slate-400">(adiantado em outro mês)</span></td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-500">{vencPeriodoPagoForaCount}</td>
-                <td className="px-4 py-2 text-right font-semibold tabular-nums text-sky-700">{formatBRL(vencPeriodoPagoFora)}</td>
-              </tr>
-              <tr className="bg-indigo-50/60 dark:bg-indigo-950/20 font-semibold border-t-2 border-indigo-200">
-                <td className="px-4 py-2 text-slate-900 dark:text-slate-100">= Por vencimento (= painel Asaas)</td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-600">{porVencimentoCount}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-indigo-700">{formatBRL(porVencimento)}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </CardContent>
     </Card>
