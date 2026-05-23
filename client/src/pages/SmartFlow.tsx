@@ -46,6 +46,7 @@ import {
   type StatusExecucao,
 } from "@shared/smartflow-types";
 import { SmartFlowHero } from "./smartflow/smartflow-hero";
+import { GaleriaTemplatesDialog } from "./smartflow/galeria-templates";
 import {
   CenarioCard,
   categoriaDoGatilho,
@@ -94,6 +95,7 @@ export default function SmartFlow() {
   const [tab, setTab] = useState("cenarios");
   const [detalheId, setDetalheId] = useState<number | null>(null);
   const [excluirCenario, setExcluirCenario] = useState<{ id: number; nome: string } | null>(null);
+  const [galeriaOpen, setGaleriaOpen] = useState(false);
   const [busca, setBusca] = useState("");
   const [categoriaFilter, setCategoriaFilter] = useState<FiltroCategoria>("todas");
   const [statusFilter, setStatusFilter] = useState<"todos" | StatusExecucao>("todos");
@@ -105,14 +107,6 @@ export default function SmartFlow() {
     { refetchInterval: 10000 },
   );
 
-  const criarTemplateMut = (trpc as any).smartflow.criarTemplateAtendimento.useMutation({
-    onSuccess: () => { toast.success("Cenário de atendimento criado!"); refetch(); },
-    onError: (e: any) => toast.error(e.message),
-  });
-  const criarPgtoKanbanMut = (trpc as any).smartflow.criarTemplatePagamentoKanban.useMutation({
-    onSuccess: () => { toast.success("Cenário Pagamento → Kanban criado!"); refetch(); },
-    onError: (e: any) => toast.error(e.message),
-  });
   const toggleMut = (trpc as any).smartflow.toggleAtivo.useMutation({ onSuccess: () => refetch() });
   const deletarMut = (trpc as any).smartflow.deletar.useMutation({
     onSuccess: () => {
@@ -200,12 +194,9 @@ export default function SmartFlow() {
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
-      <SmartFlowHero
-        onCriarAtendimento={() => criarTemplateMut.mutate()}
-        onCriarPagamentoKanban={() => criarPgtoKanbanMut.mutate()}
-        pendingAtendimento={criarTemplateMut.isPending}
-        pendingPagamento={criarPgtoKanbanMut.isPending}
-      />
+      <SmartFlowHero onNovoCenario={() => setGaleriaOpen(true)} />
+
+      <GaleriaTemplatesDialog open={galeriaOpen} onOpenChange={setGaleriaOpen} />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-2 h-9">
@@ -273,8 +264,16 @@ export default function SmartFlow() {
                 <Zap className="h-12 w-12 text-muted-foreground/20 mb-4" />
                 <h3 className="text-lg font-semibold">Nenhum cenário criado</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                  Use um template rápido no topo ou clique em <strong>Novo cenário</strong> para abrir o editor visual.
+                  Comece com um fluxo pronto (atendimento, cobrança, lembrete...) ou monte do zero.
                 </p>
+                <Button
+                  size="sm"
+                  className="mt-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                  onClick={() => setGaleriaOpen(true)}
+                >
+                  <Zap className="h-3.5 w-3.5 mr-1.5" />
+                  Criar primeiro cenário
+                </Button>
               </CardContent>
             </Card>
           ) : cenariosVisiveis.length === 0 ? (

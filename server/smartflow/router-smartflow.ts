@@ -374,71 +374,51 @@ export const smartflowRouter = router({
       return { success: r.executou, execId: r.execId, erro: r.erro, respostas: r.respostas };
     }),
 
-  /** Cria cenário template "Atendimento + Agendamento" */
-  criarTemplateAtendimento: protectedProcedure.mutation(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  /**
+   * Cria um cenário a partir de um template da galeria (shared/smartflow-templates).
+   * Materializa gatilho + configGatilho + passos prontos. Retorna o id pra
+   * navegar pro editor e ajustar.
+   */
+  criarDeTemplate: requireModulo("smartflow")
+    .input(z.object({ templateId: z.string().max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "smartflow", "criar");
+      if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar cenários SmartFlow." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    const [result] = await db.insert(smartflowCenarios).values({
-      escritorioId: esc.escritorio.id,
-      nome: "Atendimento + Agendamento",
-      descricao: "Atende cliente via WhatsApp, tira dúvidas iniciais e agenda reunião automaticamente pelo Cal.com.",
-      gatilho: "whatsapp_mensagem",
-      criadoPor: ctx.user.id,
-    });
-    const cenarioId = (result as { insertId: number }).insertId;
+      const { getTemplate } = await import("../../shared/smartflow-templates");
+      const tpl = getTemplate(input.templateId);
+      if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
 
-    const passos = [
-      { ordem: 1, tipo: "ia_classificar", config: { categorias: ["agendar", "duvida", "emergencia", "outro"] } },
-      { ordem: 2, tipo: "ia_responder", config: { prompt: "Você é recepcionista de um escritório de advocacia. Se o cliente quer agendar, diga que vai verificar os horários. Se tem dúvida, responda de forma educada. Se é emergência, diga que vai transferir." } },
-      { ordem: 3, tipo: "calcom_horarios", config: { duracao: 30 } },
-    ];
-
-    for (const p of passos) {
-      await db.insert(smartflowPassos).values({
-        cenarioId,
-        ordem: p.ordem,
-        tipo: p.tipo as any,
-        config: JSON.stringify(p.config),
+      const [result] = await db.insert(smartflowCenarios).values({
+        escritorioId: perm.escritorioId,
+        nome: tpl.nome,
+        descricao: tpl.descricao,
+        gatilho: tpl.gatilho,
+        configGatilho: tpl.configGatilho ? JSON.stringify(tpl.configGatilho) : null,
+        criadoPor: ctx.user.id,
+        // Templates nascem inativos — usuário revisa e ativa quando estiver pronto.
+        ativo: false,
       });
-    }
+      const cenarioId = (result as { insertId: number }).insertId;
 
-    return { id: cenarioId, nome: "Atendimento + Agendamento" };
-  }),
+      for (let i = 0; i < tpl.passos.length; i++) {
+        const p = tpl.passos[i];
+        await db.insert(smartflowPassos).values({
+          cenarioId,
+          ordem: i + 1,
+          tipo: p.tipo as any,
+          config: JSON.stringify(p.config),
+          clienteId: p.clienteId || null,
+          proximoSe: p.proximoSe && Object.keys(p.proximoSe).length > 0
+            ? JSON.stringify(p.proximoSe)
+            : null,
+        });
+      }
 
-  /** Cria cenário template "Pagamento → Kanban" */
-  criarTemplatePagamentoKanban: protectedProcedure.mutation(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) throw new TRPCError({ code: "FORBIDDEN" });
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-    const [result] = await db.insert(smartflowCenarios).values({
-      escritorioId: esc.escritorio.id,
-      nome: "Pagamento → Kanban",
-      descricao: "Quando cliente paga a primeira cobrança (não assinatura), cria card automático no Kanban na coluna 'Dar entrada'.",
-      gatilho: "pagamento_recebido",
-      criadoPor: ctx.user.id,
-    });
-    const cenarioId = (result as { insertId: number }).insertId;
-
-    const passos = [
-      { ordem: 1, tipo: "condicional", config: { campo: "assinaturaId", operador: "nao_existe" } },
-      { ordem: 2, tipo: "condicional", config: { campo: "primeiraCobranca", operador: "verdadeiro" } },
-      { ordem: 3, tipo: "kanban_criar_card", config: { prioridade: "media" } },
-    ];
-
-    for (const p of passos) {
-      await db.insert(smartflowPassos).values({
-        cenarioId, ordem: p.ordem, tipo: p.tipo as any,
-        config: JSON.stringify(p.config),
-      });
-    }
-
-    return { id: cenarioId, nome: "Pagamento → Kanban" };
-  }),
+      return { id: cenarioId, nome: tpl.nome };
+    }),
 
   /** Execuções recentes (lista) */
   execucoes: protectedProcedure
