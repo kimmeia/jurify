@@ -1341,10 +1341,15 @@ export async function runMigrations(): Promise<void> {
       }
     }
 
-    // SmartFlow enum updates
+    // SmartFlow enum updates.
+    // IMPORTANTE: esta lista é a FONTE DA VERDADE do enum — roda todo boot e
+    // sobrescreve o enum inteiro. Tem que incluir TODOS os tipos de passo,
+    // senão um reboot remove os valores adicionados por migrations de arquivo
+    // (que só rodam uma vez) e INSERTs com o tipo "sumido" passam a falhar.
+    // Ao adicionar tipo novo de passo: incluir AQUI + no schema.ts.
     try {
       await connection.query(`ALTER TABLE smartflow_cenarios MODIFY COLUMN gatilhoSF ENUM('whatsapp_mensagem','mensagem_canal','novo_lead','agendamento_criado','agendamento_cancelado','agendamento_remarcado','agendamento_lembrete','pagamento_recebido','pagamento_vencido','pagamento_proximo_vencimento','manual') NOT NULL`);
-      await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','calcom_horarios','calcom_agendar','calcom_listar','calcom_cancelar','calcom_remarcar','whatsapp_enviar','transferir','condicional','esperar','webhook','kanban_criar_card','kanban_mover_card','kanban_atribuir_responsavel','kanban_tags','asaas_gerar_cobranca','asaas_cancelar_cobranca','asaas_consultar_valor_aberto','asaas_marcar_recebida','definir_variavel','definir_campo_personalizado') NOT NULL`);
+      await connection.query(`ALTER TABLE smartflow_passos MODIFY COLUMN tipoPasso ENUM('ia_classificar','ia_responder','ia_extrair_campos','crm_buscar_contato','crm_listar_acoes_cliente','processo_buscar_movimentacoes','calcom_horarios','calcom_agendar','calcom_listar','calcom_cancelar','calcom_remarcar','whatsapp_enviar','whatsapp_aguardar_resposta','transferir','condicional','para_cada_item','esperar','webhook','kanban_criar_card','kanban_mover_card','kanban_atribuir_responsavel','kanban_tags','asaas_gerar_cobranca','asaas_cancelar_cobranca','asaas_consultar_valor_aberto','asaas_marcar_recebida','definir_variavel','definir_campo_personalizado') NOT NULL`);
     } catch (err: any) {
       if (!isHarmlessError(err.message || String(err))) log.warn({ err: err.message }, "Falha ao atualizar enums SmartFlow");
     }
@@ -1352,6 +1357,11 @@ export async function runMigrations(): Promise<void> {
     // SmartFlow scheduler — coluna retomarEmExec p/ retomar passos "esperar"
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN retomarEmExec TIMESTAMP NULL`); } catch { /* exists */ }
     try { await connection.query(`ALTER TABLE smartflow_execucoes ADD INDEX idx_sfe_retomar (retomarEmExec)`); } catch { /* exists */ }
+
+    // SmartFlow multi-turn — coluna p/ retomar execução aguardando resposta
+    // do contato (passo whatsapp_aguardar_resposta).
+    try { await connection.query(`ALTER TABLE smartflow_execucoes ADD COLUMN aguardandoMensagemContatoIdExec INT NULL`); } catch { /* exists */ }
+    try { await connection.query(`ALTER TABLE smartflow_execucoes ADD INDEX idx_sfe_aguardando (escritorioIdExec, aguardandoMensagemContatoIdExec, statusExec)`); } catch { /* exists */ }
 
     // SmartFlow configGatilhoSF — config específica do gatilho (canais, dias, etc.)
     try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN configGatilhoSF TEXT NULL`); } catch { /* exists */ }
