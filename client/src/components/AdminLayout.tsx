@@ -180,6 +180,7 @@ function AdminSidebarContent({
     { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
     { icon: ScrollText, label: "Auditoria", path: "/admin/auditoria" },
     { icon: Bug, label: "Erros", path: "/admin/erros" },
+    { icon: Radar, label: "Tribunais", path: "/admin/tribunais" },
     { icon: Mail, label: "Log de Emails", path: "/admin/email-log" },
     { icon: Database, label: "Backups", path: "/admin/backups" },
     { icon: Plug, label: "Integrações", path: "/admin/integrations" },
