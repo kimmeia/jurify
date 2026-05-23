@@ -18,6 +18,7 @@ import {
   SmartflowExecutores,
   Passo,
 } from "../smartflow/engine";
+import { TIPO_PASSO_META } from "../../shared/smartflow-types";
 
 // ─── Mock executores ────────────────────────────────────────────────────────
 
@@ -61,6 +62,27 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
 // ─── Testes ─────────────────────────────────────────────────────────────────
 
 describe("SmartFlow Engine", () => {
+  describe("sincronização catálogo ↔ engine", () => {
+    // Regressão: o editor oferece todo tipo de TIPO_PASSO_META; se algum não
+    // tiver tratamento no engine, executar dá "Tipo de passo desconhecido".
+    // (Foi o que aconteceu com asaas_consultar_valor_aberto no enum do router.)
+    it("todo tipo do catálogo tem tratamento no engine (sem 'tipo desconhecido')", async () => {
+      const exec = criarMockExecutores();
+      for (const meta of TIPO_PASSO_META) {
+        // `para_cada_item` precisa de proximoSe.corpo — testamos só que não é
+        // rejeitado como tipo desconhecido (ele falha por outra razão, ok).
+        const passos: Passo[] = [
+          { id: 1, ordem: 1, tipo: meta.id, config: {}, clienteId: "n1" },
+        ];
+        const r = await executarCenario(passos, { mensagem: "oi", contatoId: 1 }, exec);
+        expect(
+          r.erro ?? "",
+          `tipo "${meta.id}" deveria ter tratamento no engine`,
+        ).not.toContain("Tipo de passo desconhecido");
+      }
+    });
+  });
+
   describe("ia_classificar", () => {
     it("classifica intenção corretamente", async () => {
       const exec = criarMockExecutores({ chamarIA: vi.fn().mockResolvedValue("agendar") });
