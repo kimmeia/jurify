@@ -1120,6 +1120,10 @@ export const financeiroRouter = router({
         .from(asaasCobrancas)
         .where(and(
           eq(asaasCobrancas.escritorioId, esc.escritorio.id),
+          // Só origem='asaas' — a comparação é Caixa Asaas vs API Asaas.
+          // Cobranças manuais (Caixa Escritório) não têm par no Asaas e
+          // inflariam o total do Jurify sem correspondência.
+          eq(asaasCobrancas.origem, "asaas"),
           inArray(asaasCobrancas.status, STATUS_PAGOS),
           between(asaasCobrancas.dataPagamento, input.dataInicio, input.dataFim),
         ));
