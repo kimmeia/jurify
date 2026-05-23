@@ -29,6 +29,7 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
   useReactFlow,
+  ReactFlowProvider,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -834,7 +835,21 @@ function agrupar<T extends { grupo: GrupoSmartflow }>(
 
 // ─── Componente principal ─────────────────────────────────────────────────
 
+/**
+ * Wrapper que provê o contexto do ReactFlow pra TODO o editor — não só pro
+ * `<ReactFlow>`. Necessário porque o painel direito (fora do `<ReactFlow>`)
+ * usa `useReactFlow()` pra ler o gatilho atual na validação dos passos.
+ * Sem o provider, esse hook quebra com "zustand provider ... ancestor".
+ */
 export default function SmartFlowEditor() {
+  return (
+    <ReactFlowProvider>
+      <SmartFlowEditorInner />
+    </ReactFlowProvider>
+  );
+}
+
+function SmartFlowEditorInner() {
   const params = useParams<{ id?: string }>();
   const [, navigate] = useLocation();
   const utils = (trpc as any).useUtils?.() || (trpc as any).useContext?.();
