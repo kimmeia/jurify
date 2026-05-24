@@ -266,6 +266,19 @@ export interface SmartflowExecutores {
     dataFim: string;
   }) => Promise<{ disponivel: boolean; conflitos: number }>;
   /**
+   * Edita/cancela um compromisso da Agenda interna pelo ID. Usado pelas ações
+   * "editar" e "cancelar" do passo agenda_criar. Campos ausentes ficam intactos.
+   */
+  editarAgendamentoInterno: (params: {
+    agendamentoId: number;
+    dataInicio?: string;
+    dataFim?: string;
+    responsavelId?: number;
+    titulo?: string;
+    descricao?: string;
+    status?: string;
+  }) => Promise<void>;
+  /**
    * Lista bookings do Cal.com (usado pelo passo `calcom_listar`). O resultado
    * vai para `ctx.bookings` sem formatação específica.
    */
@@ -1723,6 +1736,7 @@ async function handleAgendaCriar(
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
   const cfg = passo.config as {
+    acao?: "agendar" | "verificar_horario" | "editar" | "cancelar";
     responsavelId?: number;
     responsavelAuto?: boolean;
     responsavelVar?: string;
@@ -1734,67 +1748,115 @@ async function handleAgendaCriar(
     prioridade?: string;
     local?: string;
     verificarDisponibilidade?: boolean;
+    agendamentoIdVar?: string;
   };
-
+  const acao = cfg.acao || "agendar";
   const { interpolarVariaveis } = await import("./interpolar");
 
-  // Responsável: pode ser fixo (id), automático (atendente do cliente) ou
-  // uma variável/expressão (ex: "{{atendenteResponsavelId}}" — o atendente
-  // que pegou o lead).
-  let responsavelId: number | undefined;
-  if (cfg.responsavelVar && cfg.responsavelVar.trim()) {
-    const v = Number(interpolarVariaveis(cfg.responsavelVar, ctx as any).trim());
-    responsavelId = Number.isNaN(v) ? undefined : v;
-  } else if (cfg.responsavelAuto) {
-    responsavelId = typeof ctx.atendenteResponsavelId === "number" ? ctx.atendenteResponsavelId : undefined;
-  } else if (cfg.responsavelId) {
-    const v = Number(cfg.responsavelId);
-    responsavelId = Number.isNaN(v) ? undefined : v;
-  }
-  if (!responsavelId) {
-    return {
-      sucesso: false,
-      contexto: ctx,
-      mensagemErro: "Sem responsável pro agendamento — configure um advogado, use o atendente do cliente, ou garanta que o lead já tem atendente.",
-    };
-  }
+  // Responsável: fixo (id), automático (atendente do cliente) ou variável.
+  const resolverResponsavel = (): number | undefined => {
+    if (cfg.responsavelVar && cfg.responsavelVar.trim()) {
+      const v = Number(interpolarVariaveis(cfg.responsavelVar, ctx as any).trim());
+      return Number.isNaN(v) ? undefined : v;
+    }
+    if (cfg.responsavelAuto) {
+      return typeof ctx.atendenteResponsavelId === "number" ? ctx.atendenteResponsavelId : undefined;
+    }
+    if (cfg.responsavelId) {
+      const v = Number(cfg.responsavelId);
+      return Number.isNaN(v) ? undefined : v;
+    }
+    return undefined;
+  };
 
-  const tituloRaw = (cfg.titulo && cfg.titulo.trim())
-    ? interpolarVariaveis(cfg.titulo, ctx as any).trim()
-    : `Consulta inicial — ${ctx.nomeCliente || "cliente"}`;
+  // Data: distingue "horário específico" de "sem horário" (vazio → agora/pendente).
+  const resolverData = () => {
+    const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
+    const p = dataRaw ? new Date(dataRaw) : null;
+    const especifico = !!p && !Number.isNaN(p.getTime());
+    const dataInicio = especifico ? (p as Date) : new Date();
+    const duracao = Number(cfg.duracaoMinutos) > 0 ? Number(cfg.duracaoMinutos) : 60;
+    const dataFim = new Date(dataInicio.getTime() + duracao * 60 * 1000);
+    return { dataInicio, dataFim, especifico };
+  };
 
-  // Data: interpola e tenta parsear. Distingue "horário específico" (o usuário
-  // informou) de "sem horário" (vazio → agora, nasce pendente pra equipe marcar).
-  const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
-  const dataParseada = dataRaw ? new Date(dataRaw) : null;
-  const temHorarioEspecifico = !!dataParseada && !Number.isNaN(dataParseada.getTime());
-  const dataInicio = temHorarioEspecifico ? (dataParseada as Date) : new Date();
-
-  const duracao = Number(cfg.duracaoMinutos) > 0 ? Number(cfg.duracaoMinutos) : 60;
-  const dataFim = new Date(dataInicio.getTime() + duracao * 60 * 1000);
-
-  const descricao = cfg.descricao
-    ? interpolarVariaveis(cfg.descricao, ctx as any).trim()
-    : undefined;
-
-  const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
-  const contatoTelefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente : undefined;
+  // ID do agendamento alvo (editar/cancelar): da config ou de {{agendamentoInternoId}}.
+  const resolverAgendamentoId = (): number | undefined => {
+    const raw = (cfg.agendamentoIdVar && cfg.agendamentoIdVar.trim())
+      ? interpolarVariaveis(cfg.agendamentoIdVar, ctx as any).trim()
+      : (typeof ctx.agendamentoInternoId === "number" ? String(ctx.agendamentoInternoId) : "");
+    const v = Number(raw);
+    return Number.isNaN(v) || v <= 0 ? undefined : v;
+  };
 
   try {
-    // Verifica disponibilidade só quando há horário específico (não faz sentido
-    // pra "agora/pendente"). Em conflito, NÃO cria — sinaliza via agendaDisponivel
-    // pra o fluxo poder oferecer outro horário (condição no ramo seguinte).
-    if (cfg.verificarDisponibilidade && temHorarioEspecifico) {
+    // ── Verificar horário disponível (não cria nada) ──
+    if (acao === "verificar_horario") {
+      const responsavelId = resolverResponsavel();
+      if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: "Verificar horário: configure o responsável." };
+      const { dataInicio, dataFim } = resolverData();
+      const r = await exec.verificarDisponibilidadeAgenda({
+        responsavelId,
+        dataInicio: dataInicio.toISOString(),
+        dataFim: dataFim.toISOString(),
+      });
+      return { sucesso: true, contexto: { ...ctx, agendaDisponivel: r.disponivel, agendaConflitos: r.conflitos } };
+    }
+
+    // ── Cancelar ──
+    if (acao === "cancelar") {
+      const agId = resolverAgendamentoId();
+      if (!agId) return { sucesso: false, contexto: ctx, mensagemErro: "Cancelar: sem ID do agendamento (use {{agendamentoInternoId}} ou informe um)." };
+      await exec.editarAgendamentoInterno({ agendamentoId: agId, status: "cancelado" });
+      return { sucesso: true, contexto: { ...ctx, agendamentoCancelado: agId } };
+    }
+
+    // ── Editar (remarcar / reatribuir / mudar dados) ──
+    if (acao === "editar") {
+      const agId = resolverAgendamentoId();
+      if (!agId) return { sucesso: false, contexto: ctx, mensagemErro: "Editar: sem ID do agendamento (use {{agendamentoInternoId}} ou informe um)." };
+      const patch: Parameters<typeof exec.editarAgendamentoInterno>[0] = { agendamentoId: agId };
+      const respEdit = resolverResponsavel();
+      if (respEdit) patch.responsavelId = respEdit;
+      const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
+      if (dataRaw) {
+        const { dataInicio, dataFim } = resolverData();
+        patch.dataInicio = dataInicio.toISOString();
+        patch.dataFim = dataFim.toISOString();
+      }
+      if (cfg.titulo && cfg.titulo.trim()) patch.titulo = interpolarVariaveis(cfg.titulo, ctx as any).trim();
+      if (cfg.descricao) patch.descricao = interpolarVariaveis(cfg.descricao, ctx as any).trim();
+      await exec.editarAgendamentoInterno(patch);
+      return { sucesso: true, contexto: { ...ctx, agendamentoEditado: agId } };
+    }
+
+    // ── Agendar (default): cria o compromisso ──
+    const responsavelId = resolverResponsavel();
+    if (!responsavelId) {
+      return {
+        sucesso: false,
+        contexto: ctx,
+        mensagemErro: "Sem responsável pro agendamento — configure um advogado, use o atendente do cliente, ou garanta que o lead já tem atendente.",
+      };
+    }
+    const { dataInicio, dataFim, especifico } = resolverData();
+    const tituloRaw = (cfg.titulo && cfg.titulo.trim())
+      ? interpolarVariaveis(cfg.titulo, ctx as any).trim()
+      : `Consulta inicial — ${ctx.nomeCliente || "cliente"}`;
+    const descricao = cfg.descricao ? interpolarVariaveis(cfg.descricao, ctx as any).trim() : undefined;
+    const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
+    const contatoTelefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente : undefined;
+
+    // Em conflito (com checagem ligada e horário específico), NÃO cria — sinaliza
+    // agendaDisponivel pra o fluxo oferecer outro horário.
+    if (cfg.verificarDisponibilidade && especifico) {
       const r = await exec.verificarDisponibilidadeAgenda({
         responsavelId,
         dataInicio: dataInicio.toISOString(),
         dataFim: dataFim.toISOString(),
       });
       if (!r.disponivel) {
-        return {
-          sucesso: true,
-          contexto: { ...ctx, agendaDisponivel: false, agendaConflitos: r.conflitos },
-        };
+        return { sucesso: true, contexto: { ...ctx, agendaDisponivel: false, agendaConflitos: r.conflitos } };
       }
     }
 

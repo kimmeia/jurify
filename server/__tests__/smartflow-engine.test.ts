@@ -34,6 +34,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
     verificarDisponibilidadeAgenda: vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 }),
+    editarAgendamentoInterno: vi.fn().mockResolvedValue(undefined),
     listarBookings: vi.fn().mockResolvedValue([]),
     cancelarBooking: vi.fn().mockResolvedValue(true),
     reagendarBooking: vi.fn().mockResolvedValue(true),
@@ -1551,6 +1552,69 @@ describe("SmartFlow Engine", () => {
       expect(verificarDisponibilidadeAgenda).toHaveBeenCalledWith(
         expect.objectContaining({ responsavelId: 9 }),
       );
+    });
+
+    it("ação verificar_horario só checa, não cria", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const verificarDisponibilidadeAgenda = vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 });
+      const exec = criarMockExecutores({ criarAgendamentoInterno, verificarDisponibilidadeAgenda });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "agenda_criar",
+          config: { acao: "verificar_horario", responsavelId: 9, dataInicio: "2026-06-01T10:00:00Z" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { contatoId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.agendaDisponivel).toBe(true);
+      expect(verificarDisponibilidadeAgenda).toHaveBeenCalled();
+      expect(criarAgendamentoInterno).not.toHaveBeenCalled();
+    });
+
+    it("ação cancelar marca o agendamento como cancelado", async () => {
+      const editarAgendamentoInterno = vi.fn().mockResolvedValue(undefined);
+      const exec = criarMockExecutores({ editarAgendamentoInterno });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { acao: "cancelar" } },
+      ];
+
+      // usa o agendamentoInternoId do contexto (de um "agendar" anterior)
+      const resultado = await executarCenario(passos, { agendamentoInternoId: 321 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(editarAgendamentoInterno).toHaveBeenCalledWith({ agendamentoId: 321, status: "cancelado" });
+    });
+
+    it("ação editar atualiza o agendamento informado", async () => {
+      const editarAgendamentoInterno = vi.fn().mockResolvedValue(undefined);
+      const exec = criarMockExecutores({ editarAgendamentoInterno });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "agenda_criar",
+          config: { acao: "editar", agendamentoIdVar: "42", dataInicio: "2026-07-01T14:00:00Z" },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(editarAgendamentoInterno).toHaveBeenCalledWith(
+        expect.objectContaining({ agendamentoId: 42, dataInicio: expect.any(String) }),
+      );
+    });
+
+    it("editar/cancelar sem ID falha com mensagem clara", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { acao: "cancelar" } },
+      ];
+
+      const resultado = await executarCenario(passos, {}, exec); // sem agendamentoInternoId
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("ID do agendamento");
     });
   });
 

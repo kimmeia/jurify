@@ -3557,86 +3557,45 @@ function ConfigAgendaCriarFields({
       : cfg.responsavelId
         ? String(cfg.responsavelId)
         : "";
+  const acao = (cfg.acao as string) || "agendar";
 
-  return (
-    <div className="space-y-3">
-      <div className="rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 p-2">
-        <p className="text-[11px] text-orange-800 dark:text-orange-300">
-          Cria o compromisso na <strong>Agenda do escritório</strong> (não no Cal.com), vinculado ao cliente.
-          Nasce como <strong>"pendente"</strong> — a equipe confirma o horário em /agenda.
-        </p>
-      </div>
-
-      <div>
-        <Label className="text-xs">Responsável (advogado)</Label>
-        <Select
-          value={respValor}
-          onValueChange={(v) => {
-            if (v === "_auto") onChange({ responsavelAuto: true, responsavelId: null, responsavelVar: "" });
-            else if (v === "_var") onChange({ responsavelAuto: false, responsavelId: null, responsavelVar: cfg.responsavelVar || "{{atendenteResponsavelId}}" });
-            else onChange({ responsavelId: Number(v), responsavelAuto: false, responsavelVar: "" });
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Escolha o responsável" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_auto">Atendente do cliente (automático)</SelectItem>
-            <SelectItem value="_var">Variável / expressão…</SelectItem>
-            {colaboradoresAtivos.map((c: any) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.userName ?? "—"} ({c.cargo})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {respValor === "_var" ? (
-          <Input
-            className="mt-1 font-mono text-xs"
-            value={String(cfg.responsavelVar ?? "")}
-            onChange={(e) => onChange({ responsavelVar: e.target.value })}
-            placeholder="{{atendenteResponsavelId}}"
-          />
-        ) : null}
-        <p className="text-[10px] text-muted-foreground mt-1">
-          <strong>Atendente do cliente</strong> usa quem pegou o lead (o "atendente que caiu"). Ou escolha um advogado fixo, ou uma variável que resolva pra um ID.
-        </p>
-      </div>
-
-      <div>
-        <Label className="text-xs">Tipo</Label>
-        <Select
-          value={(cfg.tipo as string) || "reuniao_comercial"}
-          onValueChange={(v) => onChange({ tipo: v })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="reuniao_comercial">Reunião comercial</SelectItem>
-            <SelectItem value="follow_up">Follow-up</SelectItem>
-            <SelectItem value="tarefa">Tarefa</SelectItem>
-            <SelectItem value="outro">Outro</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <Label className="text-xs">Título</Label>
-          <VariableTrigger inputId="cfg-agenda-titulo" variaveis={variaveis} onInsert={insertTitulo} />
-        </div>
-        <VariableInput
-          id="cfg-agenda-titulo"
-          highlight
-          value={String(cfg.titulo ?? "")}
-          onChange={(v) => onChange({ titulo: v })}
-          variaveis={variaveis}
-          placeholder="Consulta inicial — {{nomeCliente}}"
+  const responsavelField = (label: string, hint: string) => (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      <Select
+        value={respValor}
+        onValueChange={(v) => {
+          if (v === "_auto") onChange({ responsavelAuto: true, responsavelId: null, responsavelVar: "" });
+          else if (v === "_var") onChange({ responsavelAuto: false, responsavelId: null, responsavelVar: cfg.responsavelVar || "{{atendenteResponsavelId}}" });
+          else onChange({ responsavelId: Number(v), responsavelAuto: false, responsavelVar: "" });
+        }}
+      >
+        <SelectTrigger><SelectValue placeholder="Escolha o responsável" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_auto">Atendente do cliente (automático)</SelectItem>
+          <SelectItem value="_var">Variável / expressão…</SelectItem>
+          {colaboradoresAtivos.map((c: any) => (
+            <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {respValor === "_var" ? (
+        <Input
+          className="mt-1 font-mono text-xs"
+          value={String(cfg.responsavelVar ?? "")}
+          onChange={(e) => onChange({ responsavelVar: e.target.value })}
+          placeholder="{{atendenteResponsavelId}}"
         />
-      </div>
+      ) : null}
+      <p className="text-[10px] text-muted-foreground mt-1">{hint}</p>
+    </div>
+  );
 
+  const dataField = (
+    <>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <Label className="text-xs">Data/hora (opcional)</Label>
+          <Label className="text-xs">Data/hora</Label>
           <VariableInput
             id="cfg-agenda-data"
             highlight
@@ -3657,39 +3616,143 @@ function ConfigAgendaCriarFields({
         </div>
       </div>
       <p className="text-[10px] text-muted-foreground -mt-1">
-        Data vazia → nasce "pendente" pra equipe marcar. Pode usar uma variável capturada (ex: <code>{"{{data_agendamento}}"}</code>).
+        Pode usar uma variável capturada (ex: <code>{"{{data_agendamento}}"}</code>).
       </p>
+    </>
+  );
 
-      <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 bg-muted/20">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={cfg.verificarDisponibilidade !== false && !!cfg.verificarDisponibilidade}
-          onChange={(e) => onChange({ verificarDisponibilidade: e.target.checked })}
-        />
-        <span className="text-[11px] leading-snug">
-          <strong>Verificar disponibilidade</strong> antes de marcar. Se o responsável já tiver compromisso no horário,
-          o fluxo <strong>não cria</strong> e marca <code>agendaDisponivel = false</code> — use uma Decisão depois pra oferecer outro horário.
-          <span className="text-muted-foreground"> (só vale quando há horário específico, não pro "pendente".)</span>
-        </span>
-      </label>
-
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <Label className="text-xs">Descrição do caso (opcional)</Label>
-          <VariableTrigger inputId="cfg-agenda-descricao" variaveis={variaveis} onInsert={insertDescricao} />
-        </div>
-        <VariableInput
-          id="cfg-agenda-descricao"
-          as="textarea"
-          rows={3}
-          highlight
-          value={String(cfg.descricao ?? "")}
-          onChange={(v) => onChange({ descricao: v })}
-          variaveis={variaveis}
-          placeholder="Resumo do caso pro advogado já chegar situado. Ex: Financiamento de R$ {{valor_financiado}}, {{parcelas_atrasadas}} parcelas em atraso."
-        />
+  const tituloField = (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <Label className="text-xs">Título</Label>
+        <VariableTrigger inputId="cfg-agenda-titulo" variaveis={variaveis} onInsert={insertTitulo} />
       </div>
+      <VariableInput
+        id="cfg-agenda-titulo"
+        highlight
+        value={String(cfg.titulo ?? "")}
+        onChange={(v) => onChange({ titulo: v })}
+        variaveis={variaveis}
+        placeholder="Consulta inicial — {{nomeCliente}}"
+      />
+    </div>
+  );
+
+  const descricaoField = (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <Label className="text-xs">Descrição do caso (opcional)</Label>
+        <VariableTrigger inputId="cfg-agenda-descricao" variaveis={variaveis} onInsert={insertDescricao} />
+      </div>
+      <VariableInput
+        id="cfg-agenda-descricao"
+        as="textarea"
+        rows={3}
+        highlight
+        value={String(cfg.descricao ?? "")}
+        onChange={(v) => onChange({ descricao: v })}
+        variaveis={variaveis}
+        placeholder="Resumo do caso pro advogado já chegar situado. Ex: Financiamento de R$ {{valor_financiado}}, {{parcelas_atrasadas}} parcelas em atraso."
+      />
+    </div>
+  );
+
+  const agendamentoIdField = (
+    <div>
+      <Label className="text-xs">Qual agendamento?</Label>
+      <Input
+        className="font-mono text-xs"
+        value={String(cfg.agendamentoIdVar ?? "")}
+        onChange={(e) => onChange({ agendamentoIdVar: e.target.value })}
+        placeholder="{{agendamentoInternoId}}"
+      />
+      <p className="text-[10px] text-muted-foreground mt-1">
+        ID do compromisso. Vazio usa <code>{"{{agendamentoInternoId}}"}</code> (criado por um passo "Agendar" anterior).
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-xs">O que fazer</Label>
+        <Select value={acao} onValueChange={(v) => onChange({ acao: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="agendar">Agendar (criar compromisso)</SelectItem>
+            <SelectItem value="verificar_horario">Verificar horário disponível</SelectItem>
+            <SelectItem value="editar">Editar / remarcar</SelectItem>
+            <SelectItem value="cancelar">Cancelar</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {acao === "agendar" && (
+        <>
+          <div className="rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 p-2">
+            <p className="text-[11px] text-orange-800 dark:text-orange-300">
+              Cria o compromisso na <strong>Agenda do escritório</strong>, vinculado ao cliente. Nasce <strong>"pendente"</strong> pra equipe confirmar.
+            </p>
+          </div>
+          {responsavelField("Responsável (advogado)", 'Atendente do cliente = quem pegou o lead. Ou um advogado fixo, ou uma variável.')}
+          <div>
+            <Label className="text-xs">Tipo</Label>
+            <Select value={(cfg.tipo as string) || "reuniao_comercial"} onValueChange={(v) => onChange({ tipo: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="reuniao_comercial">Reunião comercial</SelectItem>
+                <SelectItem value="follow_up">Follow-up</SelectItem>
+                <SelectItem value="tarefa">Tarefa</SelectItem>
+                <SelectItem value="outro">Outro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {tituloField}
+          {dataField}
+          <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 bg-muted/20">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={!!cfg.verificarDisponibilidade}
+              onChange={(e) => onChange({ verificarDisponibilidade: e.target.checked })}
+            />
+            <span className="text-[11px] leading-snug">
+              <strong>Verificar disponibilidade</strong> antes de marcar. Em conflito, não cria e marca <code>agendaDisponivel = false</code>.
+              <span className="text-muted-foreground"> (só com horário específico.)</span>
+            </span>
+          </label>
+          {descricaoField}
+        </>
+      )}
+
+      {acao === "verificar_horario" && (
+        <>
+          <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-2">
+            <p className="text-[11px] text-blue-800 dark:text-blue-300">
+              Só <strong>verifica</strong> se o responsável tem o horário livre — não cria nada. Saída: <code>agendaDisponivel</code> (use numa Decisão).
+            </p>
+          </div>
+          {responsavelField("Responsável (advogado)", "De quem checar a agenda.")}
+          {dataField}
+        </>
+      )}
+
+      {acao === "editar" && (
+        <>
+          {agendamentoIdField}
+          {responsavelField("Novo responsável (opcional)", "Deixe sem escolher pra não trocar o responsável.")}
+          {dataField}
+          {tituloField}
+          {descricaoField}
+        </>
+      )}
+
+      {acao === "cancelar" && (
+        <>
+          {agendamentoIdField}
+          <p className="text-[11px] text-muted-foreground">Marca o compromisso como <strong>cancelado</strong> na agenda.</p>
+        </>
+      )}
     </div>
   );
 }
