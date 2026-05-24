@@ -3742,10 +3742,10 @@ function ConfigAgendaCriarFields({
         <>
           <div className="rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 p-2">
             <p className="text-[11px] text-violet-800 dark:text-violet-300">
-              <strong>Lista os compromissos</strong> do responsável nos próximos N dias (datas em <strong>ISO 8601</strong>) e salva num campo. Use esse campo no prompt de um passo <strong>"Responder com IA"</strong> depois — a IA sugere os horários livres.
+              Calcula os <strong>horários LIVRES</strong> do responsável (datas em <strong>ISO 8601</strong>, fuso de Brasília) e salva num campo. Use esse campo no prompt de um passo <strong>"Responder com IA"</strong> pra ela oferecer os horários ao cliente.
             </p>
           </div>
-          {responsavelField("Responsável (advogado)", "De quem listar a agenda.")}
+          {responsavelField("Responsável (advogado)", "De quem calcular os horários livres.")}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Dias pra frente</Label>
@@ -3758,17 +3758,64 @@ function ConfigAgendaCriarFields({
               />
             </div>
             <div>
-              <Label className="text-xs">Salvar em</Label>
+              <Label className="text-xs">Duração da reunião</Label>
+              <Select
+                value={String(Number(cfg.duracaoSlotMinutos) || 30)}
+                onValueChange={(v) => onChange({ duracaoSlotMinutos: Number(v) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutos</SelectItem>
+                  <SelectItem value="30">30 minutos</SelectItem>
+                  <SelectItem value="60">1 hora</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Hora início (comercial)</Label>
               <Input
-                className="font-mono text-xs"
-                value={String(cfg.salvarEm ?? "")}
-                onChange={(e) => onChange({ salvarEm: e.target.value })}
-                placeholder="agendaResponsavel"
+                type="number"
+                min={0}
+                max={23}
+                value={Number.isFinite(Number(cfg.horaInicio)) ? Number(cfg.horaInicio) : 9}
+                onChange={(e) => onChange({ horaInicio: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Hora fim (comercial)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={24}
+                value={Number.isFinite(Number(cfg.horaFim)) ? Number(cfg.horaFim) : 18}
+                onChange={(e) => onChange({ horaFim: Number(e.target.value) })}
               />
             </div>
           </div>
+          <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 bg-muted/20">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={!!cfg.incluirFimDeSemana}
+              onChange={(e) => onChange({ incluirFimDeSemana: e.target.checked })}
+            />
+            <span className="text-[11px] leading-snug">
+              <strong>Incluir fim de semana</strong> (sábado e domingo). Desmarcado = só dias úteis.
+            </span>
+          </label>
+          <div>
+            <Label className="text-xs">Salvar em</Label>
+            <Input
+              className="font-mono text-xs"
+              value={String(cfg.salvarEm ?? "")}
+              onChange={(e) => onChange({ salvarEm: e.target.value })}
+              placeholder="horariosLivres"
+            />
+          </div>
           <p className="text-[10px] text-muted-foreground -mt-1">
-            Depois use <code>{`{{${String(cfg.salvarEm || "agendaResponsavel")}}}`}</code> no prompt da IA. Também ficam disponíveis <code>{"{{agendaConsultaInicio}}"}</code> e <code>{"{{agendaConsultaFim}}"}</code> (ISO).
+            Depois use <code>{`{{${String(cfg.salvarEm || "horariosLivres")}}}`}</code> no prompt da IA.
           </p>
         </>
       )}

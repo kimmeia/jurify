@@ -14,6 +14,8 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   executarCenario,
+  gerarSlotsLivres,
+  formatarISOComOffset,
   SmartflowContexto,
   SmartflowExecutores,
   Passo,
@@ -883,6 +885,65 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("gerarSlotsLivres (horários livres pra oferecer)", () => {
+    const meiaNoiteBRT = new Date("2026-05-25T03:00:00Z"); // 00:00 BRT, dia 0 todo no futuro
+
+    it("formatarISOComOffset mostra o relógio local com offset -03:00", () => {
+      // 12:00 UTC = 09:00 BRT
+      const ms = Date.UTC(2026, 4, 26, 12, 0, 0);
+      expect(formatarISOComOffset(ms, -3)).toBe("2026-05-26T09:00:00-03:00");
+    });
+
+    it("respeita a duração: 9h–18h em blocos de 30 min = 18 slots/dia", () => {
+      const slots = gerarSlotsLivres({
+        agora: meiaNoiteBRT, dias: 1, incluirFimDeSemana: true,
+        duracaoMin: 30, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 1000,
+      });
+      expect(slots).toHaveLength(18);
+      expect(slots[0].inicioISO).toBe("2026-05-25T09:00:00-03:00");
+    });
+
+    it("fim de semana: 7 dias incluindo = 7×9; sem incluir = 5×9 (2 dias de fds)", () => {
+      const base = { agora: meiaNoiteBRT, dias: 7, duracaoMin: 60, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 1000 };
+      const com = gerarSlotsLivres({ ...base, incluirFimDeSemana: true });
+      const sem = gerarSlotsLivres({ ...base, incluirFimDeSemana: false });
+      expect(com).toHaveLength(7 * 9);
+      expect(sem).toHaveLength(5 * 9);
+    });
+
+    it("exclui slot que colide com compromisso ocupado", () => {
+      const slots = gerarSlotsLivres({
+        agora: meiaNoiteBRT, dias: 1, incluirFimDeSemana: true,
+        duracaoMin: 60, horaInicio: 9, horaFim: 18,
+        // ocupado 10:00–11:00 BRT (13:00–14:00 UTC)
+        ocupados: [{ inicio: "2026-05-25T13:00:00.000Z", fim: "2026-05-25T14:00:00.000Z" }],
+        maxSlots: 1000,
+      });
+      expect(slots).toHaveLength(8); // 9 - 1 ocupado
+      expect(slots.some((s) => s.inicioISO === "2026-05-25T10:00:00-03:00")).toBe(false);
+      expect(slots.some((s) => s.inicioISO === "2026-05-25T09:00:00-03:00")).toBe(true);
+    });
+
+    it("pula slots no passado", () => {
+      const slots = gerarSlotsLivres({
+        agora: new Date("2026-05-25T17:00:00Z"), // 14:00 BRT
+        dias: 1, incluirFimDeSemana: true,
+        duracaoMin: 60, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 1000,
+      });
+      // só 14,15,16,17h sobram
+      expect(slots).toHaveLength(4);
+      expect(slots[0].inicioISO).toBe("2026-05-25T14:00:00-03:00");
+    });
+
+    it("respeita maxSlots", () => {
+      const slots = gerarSlotsLivres({
+        agora: meiaNoiteBRT, dias: 30, incluirFimDeSemana: true,
+        duracaoMin: 30, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 10,
+      });
+      expect(slots).toHaveLength(10);
+    });
+  });
+
   describe("retomada graph-aware (loop conversacional)", () => {
     // Fluxo: IA responde → aguarda resposta → decisão (quer agendar?).
     // Se "sim" → transferir (sai). Senão → volta pra IA (loop até confirmar).
@@ -1626,17 +1687,14 @@ describe("SmartFlow Engine", () => {
       expect(criarAgendamentoInterno).not.toHaveBeenCalled();
     });
 
-    it("ação consultar lista compromissos em ISO e salva no campo escolhido", async () => {
-      const listarAgendaResponsavel = vi.fn().mockResolvedValue([
-        { titulo: "Reunião A", inicio: "2026-05-26T14:00:00.000Z", fim: "2026-05-26T15:00:00.000Z", status: "confirmado" },
-        { titulo: "Audiência", inicio: "2026-05-27T09:00:00.000Z", fim: "2026-05-27T10:30:00.000Z", status: "pendente" },
-      ]);
+    it("ação consultar salva horários LIVRES em ISO no campo escolhido", async () => {
+      const listarAgendaResponsavel = vi.fn().mockResolvedValue([]); // agenda vazia → tudo livre
       const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
       const exec = criarMockExecutores({ listarAgendaResponsavel, criarAgendamentoInterno });
       const passos: Passo[] = [
         {
           id: 1, ordem: 1, tipo: "agenda_criar",
-          config: { acao: "consultar", responsavelId: 9, diasParaFrente: 5, salvarEm: "agendaDoDr" },
+          config: { acao: "consultar", responsavelId: 9, diasParaFrente: 7, duracaoSlotMinutos: 30, salvarEm: "agendaDoDr" },
         },
       ];
 
@@ -1644,29 +1702,12 @@ describe("SmartFlow Engine", () => {
 
       expect(r.sucesso).toBe(true);
       expect(criarAgendamentoInterno).not.toHaveBeenCalled();
-      // chamou com janela de 5 dias
-      expect(listarAgendaResponsavel).toHaveBeenCalledWith(
-        expect.objectContaining({ responsavelId: 9 }),
-      );
+      expect(listarAgendaResponsavel).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 9 }));
       const texto = String(r.contexto.agendaDoDr);
-      // datas ISO presentes no texto pra IA
-      expect(texto).toContain("2026-05-26T14:00:00.000Z");
-      expect(texto).toContain("2026-05-27T09:00:00.000Z");
-      expect(texto).toContain("Reunião A");
-      // estruturado também disponível
-      expect(Array.isArray(r.contexto.agendaCompromissos)).toBe(true);
-      expect((r.contexto.agendaCompromissos as any[]).length).toBe(2);
-    });
-
-    it("ação consultar com agenda vazia diz que está livre", async () => {
-      const listarAgendaResponsavel = vi.fn().mockResolvedValue([]);
-      const exec = criarMockExecutores({ listarAgendaResponsavel });
-      const passos: Passo[] = [
-        { id: 1, ordem: 1, tipo: "agenda_criar", config: { acao: "consultar", responsavelId: 9, salvarEm: "ag" } },
-      ];
-      const r = await executarCenario(passos, { contatoId: 5 }, exec);
-      expect(r.sucesso).toBe(true);
-      expect(String(r.contexto.ag)).toContain("livre");
+      expect(texto).toContain("LIVRES");
+      expect(texto).toContain("-03:00"); // ISO com offset Brasília
+      expect(Array.isArray(r.contexto.agendaSlotsLivres)).toBe(true);
+      expect((r.contexto.agendaSlotsLivres as any[]).length).toBeGreaterThan(0);
     });
 
     it("ação consultar sem responsável falha com mensagem clara", async () => {
