@@ -33,6 +33,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
+    verificarDisponibilidadeAgenda: vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 }),
     listarBookings: vi.fn().mockResolvedValue([]),
     cancelarBooking: vi.fn().mockResolvedValue(true),
     reagendarBooking: vi.fn().mockResolvedValue(true),
@@ -1485,6 +1486,71 @@ describe("SmartFlow Engine", () => {
 
       expect(resultado.sucesso).toBe(false);
       expect(resultado.erro).toContain("responsável");
+    });
+
+    it("responsavelAuto usa o atendente do cliente (o que pegou o lead)", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const exec = criarMockExecutores({ criarAgendamentoInterno });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { responsavelAuto: true } },
+      ];
+
+      const resultado = await executarCenario(passos, { atendenteResponsavelId: 42 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 42 }));
+    });
+
+    it("responsavelVar resolve o ID a partir de uma variável", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const exec = criarMockExecutores({ criarAgendamentoInterno });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { responsavelVar: "{{atendenteResponsavelId}}" } },
+      ];
+
+      const resultado = await executarCenario(passos, { atendenteResponsavelId: 7 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(expect.objectContaining({ responsavelId: 7 }));
+    });
+
+    it("horário ocupado: não cria e marca agendaDisponivel=false", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const verificarDisponibilidadeAgenda = vi.fn().mockResolvedValue({ disponivel: false, conflitos: 1 });
+      const exec = criarMockExecutores({ criarAgendamentoInterno, verificarDisponibilidadeAgenda });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "agenda_criar",
+          config: { responsavelId: 9, dataInicio: "2026-06-01T10:00:00Z", verificarDisponibilidade: true },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { nomeCliente: "Ana", contatoId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.agendaDisponivel).toBe(false);
+      expect(criarAgendamentoInterno).not.toHaveBeenCalled();
+    });
+
+    it("horário livre: cria e marca agendaDisponivel=true", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(99);
+      const verificarDisponibilidadeAgenda = vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 });
+      const exec = criarMockExecutores({ criarAgendamentoInterno, verificarDisponibilidadeAgenda });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "agenda_criar",
+          config: { responsavelId: 9, dataInicio: "2026-06-01T10:00:00Z", verificarDisponibilidade: true },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { nomeCliente: "Ana", contatoId: 5 }, exec);
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.agendaDisponivel).toBe(true);
+      expect(resultado.contexto.agendamentoInternoId).toBe(99);
+      expect(verificarDisponibilidadeAgenda).toHaveBeenCalledWith(
+        expect.objectContaining({ responsavelId: 9 }),
+      );
     });
   });
 

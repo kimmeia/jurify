@@ -30,6 +30,10 @@ export interface SmartflowContexto {
   agendamentoId?: string;
   /** ID do compromisso criado na Agenda interna (passo agenda_criar) */
   agendamentoInternoId?: number;
+  /** false = horário pedido estava ocupado (agenda_criar não criou) */
+  agendaDisponivel?: boolean;
+  /** Qtd de compromissos em conflito no horário pedido (agenda_criar) */
+  agendaConflitos?: number;
   /** Se deve transferir pra humano */
   transferir?: boolean;
   /** Mensagens enviadas */
@@ -251,6 +255,16 @@ export interface SmartflowExecutores {
     contatoId?: number;
     contatoTelefone?: string;
   }) => Promise<number>;
+  /**
+   * Verifica se o responsável tem conflito de horário na Agenda interna no
+   * intervalo [dataInicio, dataFim]. Usado pelo passo `agenda_criar` antes de
+   * criar, pra não marcar em cima de outro compromisso.
+   */
+  verificarDisponibilidadeAgenda: (params: {
+    responsavelId: number;
+    dataInicio: string;
+    dataFim: string;
+  }) => Promise<{ disponivel: boolean; conflitos: number }>;
   /**
    * Lista bookings do Cal.com (usado pelo passo `calcom_listar`). O resultado
    * vai para `ctx.bookings` sem formatação específica.
@@ -1710,6 +1724,8 @@ async function handleAgendaCriar(
 ): Promise<PassoResultado> {
   const cfg = passo.config as {
     responsavelId?: number;
+    responsavelAuto?: boolean;
+    responsavelVar?: string;
     tipo?: string;
     titulo?: string;
     descricao?: string;
@@ -1717,22 +1733,42 @@ async function handleAgendaCriar(
     duracaoMinutos?: number;
     prioridade?: string;
     local?: string;
+    verificarDisponibilidade?: boolean;
   };
 
-  const responsavelId = Number(cfg.responsavelId);
-  if (!responsavelId || Number.isNaN(responsavelId)) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Configure o responsável (advogado) do agendamento." };
+  const { interpolarVariaveis } = await import("./interpolar");
+
+  // Responsável: pode ser fixo (id), automático (atendente do cliente) ou
+  // uma variável/expressão (ex: "{{atendenteResponsavelId}}" — o atendente
+  // que pegou o lead).
+  let responsavelId: number | undefined;
+  if (cfg.responsavelVar && cfg.responsavelVar.trim()) {
+    const v = Number(interpolarVariaveis(cfg.responsavelVar, ctx as any).trim());
+    responsavelId = Number.isNaN(v) ? undefined : v;
+  } else if (cfg.responsavelAuto) {
+    responsavelId = typeof ctx.atendenteResponsavelId === "number" ? ctx.atendenteResponsavelId : undefined;
+  } else if (cfg.responsavelId) {
+    const v = Number(cfg.responsavelId);
+    responsavelId = Number.isNaN(v) ? undefined : v;
+  }
+  if (!responsavelId) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: "Sem responsável pro agendamento — configure um advogado, use o atendente do cliente, ou garanta que o lead já tem atendente.",
+    };
   }
 
-  const { interpolarVariaveis } = await import("./interpolar");
   const tituloRaw = (cfg.titulo && cfg.titulo.trim())
     ? interpolarVariaveis(cfg.titulo, ctx as any).trim()
     : `Consulta inicial — ${ctx.nomeCliente || "cliente"}`;
 
-  // Data: interpola e tenta parsear. Inválida/vazia → agora.
+  // Data: interpola e tenta parsear. Distingue "horário específico" (o usuário
+  // informou) de "sem horário" (vazio → agora, nasce pendente pra equipe marcar).
   const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
-  let dataInicio = dataRaw ? new Date(dataRaw) : new Date();
-  if (Number.isNaN(dataInicio.getTime())) dataInicio = new Date();
+  const dataParseada = dataRaw ? new Date(dataRaw) : null;
+  const temHorarioEspecifico = !!dataParseada && !Number.isNaN(dataParseada.getTime());
+  const dataInicio = temHorarioEspecifico ? (dataParseada as Date) : new Date();
 
   const duracao = Number(cfg.duracaoMinutos) > 0 ? Number(cfg.duracaoMinutos) : 60;
   const dataFim = new Date(dataInicio.getTime() + duracao * 60 * 1000);
@@ -1745,6 +1781,23 @@ async function handleAgendaCriar(
   const contatoTelefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente : undefined;
 
   try {
+    // Verifica disponibilidade só quando há horário específico (não faz sentido
+    // pra "agora/pendente"). Em conflito, NÃO cria — sinaliza via agendaDisponivel
+    // pra o fluxo poder oferecer outro horário (condição no ramo seguinte).
+    if (cfg.verificarDisponibilidade && temHorarioEspecifico) {
+      const r = await exec.verificarDisponibilidadeAgenda({
+        responsavelId,
+        dataInicio: dataInicio.toISOString(),
+        dataFim: dataFim.toISOString(),
+      });
+      if (!r.disponivel) {
+        return {
+          sucesso: true,
+          contexto: { ...ctx, agendaDisponivel: false, agendaConflitos: r.conflitos },
+        };
+      }
+    }
+
     const id = await exec.criarAgendamentoInterno({
       responsavelId,
       tipo: cfg.tipo || "reuniao_comercial",
@@ -1757,7 +1810,7 @@ async function handleAgendaCriar(
       contatoId,
       contatoTelefone,
     });
-    return { sucesso: true, contexto: { ...ctx, agendamentoInternoId: id } };
+    return { sucesso: true, contexto: { ...ctx, agendamentoInternoId: id, agendaDisponivel: true } };
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `Agenda: ${err.message}` };
   }

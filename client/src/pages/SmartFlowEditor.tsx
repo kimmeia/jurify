@@ -3546,6 +3546,17 @@ function ConfigAgendaCriarFields({
     const atual = String(cfg.titulo || "");
     onChange({ titulo: atual + (atual ? " " : "") + `{{${path}}}` });
   };
+  const insertDescricao = (path: string) => {
+    const atual = String(cfg.descricao || "");
+    onChange({ descricao: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  const respValor = cfg.responsavelVar
+    ? "_var"
+    : cfg.responsavelAuto
+      ? "_auto"
+      : cfg.responsavelId
+        ? String(cfg.responsavelId)
+        : "";
 
   return (
     <div className="space-y-3">
@@ -3559,13 +3570,19 @@ function ConfigAgendaCriarFields({
       <div>
         <Label className="text-xs">Responsável (advogado)</Label>
         <Select
-          value={cfg.responsavelId ? String(cfg.responsavelId) : ""}
-          onValueChange={(v) => onChange({ responsavelId: Number(v) })}
+          value={respValor}
+          onValueChange={(v) => {
+            if (v === "_auto") onChange({ responsavelAuto: true, responsavelId: null, responsavelVar: "" });
+            else if (v === "_var") onChange({ responsavelAuto: false, responsavelId: null, responsavelVar: cfg.responsavelVar || "{{atendenteResponsavelId}}" });
+            else onChange({ responsavelId: Number(v), responsavelAuto: false, responsavelVar: "" });
+          }}
         >
           <SelectTrigger>
             <SelectValue placeholder="Escolha o responsável" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="_auto">Atendente do cliente (automático)</SelectItem>
+            <SelectItem value="_var">Variável / expressão…</SelectItem>
             {colaboradoresAtivos.map((c: any) => (
               <SelectItem key={c.id} value={String(c.id)}>
                 {c.userName ?? "—"} ({c.cargo})
@@ -3573,7 +3590,17 @@ function ConfigAgendaCriarFields({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-muted-foreground mt-1">A quem o compromisso fica atribuído na agenda.</p>
+        {respValor === "_var" ? (
+          <Input
+            className="mt-1 font-mono text-xs"
+            value={String(cfg.responsavelVar ?? "")}
+            onChange={(e) => onChange({ responsavelVar: e.target.value })}
+            placeholder="{{atendenteResponsavelId}}"
+          />
+        ) : null}
+        <p className="text-[10px] text-muted-foreground mt-1">
+          <strong>Atendente do cliente</strong> usa quem pegou o lead (o "atendente que caiu"). Ou escolha um advogado fixo, ou uma variável que resolva pra um ID.
+        </p>
       </div>
 
       <div>
@@ -3632,6 +3659,37 @@ function ConfigAgendaCriarFields({
       <p className="text-[10px] text-muted-foreground -mt-1">
         Data vazia → nasce "pendente" pra equipe marcar. Pode usar uma variável capturada (ex: <code>{"{{data_agendamento}}"}</code>).
       </p>
+
+      <label className="flex items-start gap-2 cursor-pointer rounded-md border p-2 bg-muted/20">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={cfg.verificarDisponibilidade !== false && !!cfg.verificarDisponibilidade}
+          onChange={(e) => onChange({ verificarDisponibilidade: e.target.checked })}
+        />
+        <span className="text-[11px] leading-snug">
+          <strong>Verificar disponibilidade</strong> antes de marcar. Se o responsável já tiver compromisso no horário,
+          o fluxo <strong>não cria</strong> e marca <code>agendaDisponivel = false</code> — use uma Decisão depois pra oferecer outro horário.
+          <span className="text-muted-foreground"> (só vale quando há horário específico, não pro "pendente".)</span>
+        </span>
+      </label>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Descrição do caso (opcional)</Label>
+          <VariableTrigger inputId="cfg-agenda-descricao" variaveis={variaveis} onInsert={insertDescricao} />
+        </div>
+        <VariableInput
+          id="cfg-agenda-descricao"
+          as="textarea"
+          rows={3}
+          highlight
+          value={String(cfg.descricao ?? "")}
+          onChange={(v) => onChange({ descricao: v })}
+          variaveis={variaveis}
+          placeholder="Resumo do caso pro advogado já chegar situado. Ex: Financiamento de R$ {{valor_financiado}}, {{parcelas_atrasadas}} parcelas em atraso."
+        />
+      </div>
     </div>
   );
 }
