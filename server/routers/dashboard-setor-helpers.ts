@@ -8,7 +8,7 @@
  *   - Classificação de tarefa/agenda por prazo
  */
 
-import { dataHojeBR } from "../../shared/escritorio-types";
+import { dataHojeBR, inicioDoDiaNoFuso, fimDoDiaNoFuso } from "../../shared/escritorio-types";
 
 /**
  * Calcula a meta proporcional ao range de datas.
@@ -187,4 +187,43 @@ export function resolverRangeCashFlow(
   const days = daysOverride ?? dia!;
   const anchor = new Date(Date.UTC(ano!, mes! - 1, dia!, 12, 0, 0));
   return calcularRangeCashFlow(days, anchor);
+}
+
+/**
+ * Resolve o período (range de datas) dos painéis setoriais — Comercial,
+ * Operacional e Financeiro.
+ *
+ * Default = mês civil corrente (dia 1 → hoje) NO FUSO do escritório. Antes, o
+ * server (UTC) calculava `new Date().getMonth()`/`getDate()`, e na virada de
+ * mês à noite BRT o painel mostrava o mês seguinte vazio (e o "fim" do range
+ * virava "amanhã" entre 21h–24h). Com `input.dataInicio/dataFim`, usa o range
+ * explícito recebido.
+ *
+ * Retorna os dois formatos exigidos pelas queries:
+ *   - `dataInicioStr`/`dataFimStr` (YYYY-MM-DD): comparam com colunas DATE
+ *     (varchar) como `vencimento`/`dataPagamento`.
+ *   - `dataInicio`/`dataFim` (Date = instante UTC do início/fim do dia no fuso):
+ *     comparam com colunas DATETIME (timestamp) como `createdAt`/`concluidaAt`.
+ */
+export function resolverPeriodoDashboard(
+  agora: Date,
+  tz: string,
+  input?: { dataInicio?: string; dataFim?: string },
+): { dataInicio: Date; dataFim: Date; dataInicioStr: string; dataFimStr: string } {
+  let dataInicioStr: string;
+  let dataFimStr: string;
+  if (input?.dataInicio && input?.dataFim) {
+    dataInicioStr = input.dataInicio;
+    dataFimStr = input.dataFim;
+  } else {
+    const hojeStr = dataHojeBR(tz, agora);
+    dataInicioStr = `${hojeStr.slice(0, 7)}-01`;
+    dataFimStr = hojeStr;
+  }
+  return {
+    dataInicio: inicioDoDiaNoFuso(dataInicioStr, tz),
+    dataFim: fimDoDiaNoFuso(dataFimStr, tz),
+    dataInicioStr,
+    dataFimStr,
+  };
 }
