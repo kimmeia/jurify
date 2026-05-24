@@ -163,10 +163,28 @@ export async function revalidarCofreCredenciais(
       revalidadas++;
     } catch (err: any) {
       erros++;
+      const msg = err?.message ?? String(err);
       log.error(
-        { credencialId: c.id, err: err?.message ?? String(err) },
+        { credencialId: c.id, err: msg },
         "[cron-cofre] exceção durante revalidação",
       );
+      // Exceção técnica (Playwright/Chromium indisponível, timeout, crash do
+      // browser) NÃO pode morrer só no log: marca a credencial como caída,
+      // grava o motivo em ultimoErro e notifica o dono. Sem isso o
+      // monitoramento para em silêncio e ninguém percebe até os processos
+      // pararem de atualizar — exatamente o cenário que não pode acontecer.
+      try {
+        const { marcarCredencialExpirada } = await import("./cofre-helpers");
+        await marcarCredencialExpirada(
+          c.id,
+          `Erro técnico na revalidação automática: ${msg.slice(0, 300)}`,
+        );
+      } catch (persistErr: any) {
+        log.error(
+          { credencialId: c.id, err: persistErr?.message ?? String(persistErr) },
+          "[cron-cofre] falha ao persistir erro técnico de revalidação",
+        );
+      }
     }
   }
 

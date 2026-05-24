@@ -41,7 +41,7 @@ import {
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
 import { consultarTjce } from "../processos/adapters/pje-tjce";
-import { hashEvento } from "../processos/cron-monitoramento";
+import { resolverDedupMovimentacao } from "../processos/cron-monitoramento";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 
 const log = createLogger("processos-motor");
@@ -1492,12 +1492,18 @@ export const processosRouter = router({
             dataInvalida++;
             continue;
           }
-          const dedupHash = hashEvento([
-            "movimentacao",
+          const { dedup: dedupHash, jaConhecida } = await resolverDedupMovimentacao(
+            db,
+            mon.escritorioId,
             mon.searchKey,
             mov.data,
-            mov.texto.slice(0, 200),
-          ]);
+            mov.texto,
+          );
+          if (jaConhecida) {
+            // Já gravada sob o hash legado (migrada agora) — conta como dedup.
+            dedup++;
+            continue;
+          }
           try {
             await db.insert(eventosProcesso).values({
               monitoramentoId: mon.id,
@@ -1980,102 +1986,52 @@ export const processosRouter = router({
         .limit(1);
       if (!mon) throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
 
-      if (!mon.credencialId) {
-        return { ok: false, mensagem: "Credencial não vinculada" };
+      // Reaproveita EXATAMENTE a lógica do cron (pollarUmMonitoramentoNovasAcoes),
+      // que aplica os filtros de relevância — polo ativo (cliente é o autor),
+      // ajuizado antes do cadastro do cliente e CNJ muito antigo sem data de
+      // referência. Antes esta procedure duplicava a lógica SEM esses filtros:
+      // marcava TODA ação como não-lida e somava todas em totalNovasAcoes,
+      // reintroduzindo os falsos-positivos que o cron silencia. A função do
+      // cron trata credencial/sessão ausente internamente (grava status="erro"
+      // e devolve `erro`), então não repetimos as checagens aqui.
+      const { pollarUmMonitoramentoNovasAcoes } = await import(
+        "../processos/cron-monitoramento"
+      );
+      const inicio = Date.now();
+      const r = await pollarUmMonitoramentoNovasAcoes(mon);
+      const latenciaMs = Date.now() - inicio;
+
+      if (!r.ok) {
+        return { ok: false, mensagem: r.erro ?? "Erro desconhecido" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
-      if (!sessao) {
-        return {
-          ok: false,
-          mensagem: "Sessão expirou. Vá em Cofre de Credenciais → Validar pra renovar.",
-        };
-      }
-
-      let resultado;
-      if (mon.tribunal === "tjce") {
-        const { consultarTjcePorCpf } = await import("../processos/adapters/pje-tjce");
-        resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
-      } else {
-        return { ok: false, mensagem: `Tribunal ${mon.tribunal} sem adapter de CPF` };
-      }
-
-      if (!resultado.ok) {
-        await db
-          .update(motorMonitoramentos)
-          .set({
-            ultimaConsultaEm: new Date(),
-            ultimoErro: resultado.mensagemErro ?? "Erro na consulta",
-          })
-          .where(eq(motorMonitoramentos.id, mon.id));
-        return {
-          ok: false,
-          mensagem: resultado.mensagemErro ?? "Erro desconhecido",
-        };
-      }
-
-      // Compara com cnjsConhecidos (igual cron faz)
-      const cnjsConhecidos: string[] = mon.cnjsConhecidos
-        ? (JSON.parse(mon.cnjsConhecidos) as string[])
-        : [];
-      const cnjsNovos = resultado.cnjs.filter((c) => !cnjsConhecidos.includes(c));
-      const isPrimeiraExecucao = cnjsConhecidos.length === 0;
-
-      // Atualiza cnjsConhecidos
-      const todosCnjs = isPrimeiraExecucao
-        ? resultado.cnjs
-        : [...cnjsConhecidos, ...cnjsNovos];
-
-      await db
-        .update(motorMonitoramentos)
-        .set({
-          cnjsConhecidos: JSON.stringify(todosCnjs),
-          totalNovasAcoes: isPrimeiraExecucao
-            ? mon.totalNovasAcoes
-            : mon.totalNovasAcoes + cnjsNovos.length,
-          ultimaConsultaEm: new Date(),
-          ultimoErro: null,
-        })
-        .where(eq(motorMonitoramentos.id, mon.id));
-
-      // Se NÃO é primeira execução E há CNJs novos, INSERT eventos
-      if (!isPrimeiraExecucao && cnjsNovos.length > 0) {
-        const crypto = await import("node:crypto");
-        for (const cnj of cnjsNovos) {
-          const dedup = crypto
-            .createHash("sha256")
-            .update(["nova_acao", String(mon.id), cnj].join("|"))
-            .digest("hex");
-          try {
-            await db.insert(eventosProcesso).values({
-              monitoramentoId: mon.id,
-              escritorioId: mon.escritorioId,
-              tipo: "nova_acao",
-              dataEvento: new Date(),
-              fonte: "pje",
-              conteudo: `Nova ação: ${cnj} contra ${mon.apelido ?? mon.searchKey}`,
-              conteudoJson: JSON.stringify({
-                cnj,
-                searchKey: mon.searchKey,
-                searchType: mon.searchType,
-                tribunal: mon.tribunal,
-              }),
-              cnjAfetado: cnj,
-              hashDedup: dedup,
-              lido: false,
-            });
-          } catch {
-            /* dedup */
-          }
+      // cnjsTotal = total de CNJs já conhecidos após o poll (a função do cron
+      // atualiza cnjsConhecidos no DB). Re-lê pra montar o toast que o
+      // frontend mostra ("baseline: N processos" / "N já conhecidos").
+      const [monAtualizado] = await db
+        .select({ cnjsConhecidos: motorMonitoramentos.cnjsConhecidos })
+        .from(motorMonitoramentos)
+        .where(eq(motorMonitoramentos.id, mon.id))
+        .limit(1);
+      let cnjsTotal = 0;
+      if (monAtualizado?.cnjsConhecidos) {
+        try {
+          const arr = JSON.parse(monAtualizado.cnjsConhecidos) as string[];
+          cnjsTotal = Array.isArray(arr) ? arr.length : 0;
+        } catch {
+          /* cnjsConhecidos malformado → mantém 0 */
         }
       }
 
+      // cnjsNovos agora reflete só as ações RELEVANTES (r.detectadas) —
+      // consistente com o cron e com o badge "N ações novas". Antes contava
+      // todas as novas (incl. polo ativo / antigas), inflando o número.
       return {
         ok: true,
-        cnjsTotal: resultado.cnjs.length,
-        cnjsNovos: isPrimeiraExecucao ? 0 : cnjsNovos.length,
-        baseline: isPrimeiraExecucao,
-        latenciaMs: resultado.latenciaMs,
+        cnjsTotal,
+        cnjsNovos: r.baseline ? 0 : r.detectadas,
+        baseline: r.baseline ?? false,
+        latenciaMs,
       };
     }),
 });

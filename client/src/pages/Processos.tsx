@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import type { SistemaCofre } from "@shared/cofre-credenciais-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -334,7 +335,7 @@ function ConsultarTab() {
   const [carregandoCnj, setCarregandoCnj] = useState<string | null>(null);
   const history = useSearchHistory();
 
-  const carregarDetalhesMut = (trpc.processos as any).consultarCNJSincrono.useMutation({
+  const carregarDetalhesMut = trpc.processos.consultarCNJSincrono.useMutation({
     onSuccess: (d: any, vars: { cnj: string }) => {
       if (d?.lawsuit) {
         setDetalhesPorCnj((prev) => ({ ...prev, [vars.cnj]: d.lawsuit }));
@@ -352,7 +353,7 @@ function ConsultarTab() {
     if (carregandoCnj) return;
     setCarregandoCnj(cnj);
     const credId = credencialId ? Number(credencialId) : undefined;
-    (carregarDetalhesMut.mutate as any)({ cnj, credencialId: credId });
+    carregarDetalhesMut.mutate({ cnj, credencialId: credId });
   };
 
   // Credenciais do cofre para segredo de justiça
@@ -360,7 +361,7 @@ function ConsultarTab() {
   // pra qualquer colaborador (não só admin do cofre). View retornada já
   // é mascarada — usuário comum vê apelido + usernameMascarado, sem
   // expor senha/secret.
-  const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsDisponiveis = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const consultarCNJ = trpc.processos.consultarCNJ.useMutation({
@@ -388,17 +389,17 @@ function ConsultarTab() {
       }
     },
   });
-  const consultarDoc = (trpc.processos as any).consultarDocumento.useMutation({ onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e: any) => { setBuscando(false); toast.error(e.message); } });
+  const consultarDoc = trpc.processos.consultarDocumento.useMutation({ onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e: any) => { setBuscando(false); toast.error(e.message); } });
   // Buscar clientes do escritório para verificar se partes do processo são clientes
   const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });
   const todosClientes = clientesData?.clientes || [];
 
-  const monitorarMut = (trpc.processos.criarMonitoramento as any).useMutation({
+  const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`),
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
 
-  const vincularMut = (trpc as any).clienteProcessos.vincular.useMutation({
+  const vincularMut = trpc.clienteProcessos.vincular.useMutation({
     onSuccess: (r: any) => {
       toast.success(r.monitorando ? "Processo vinculado ao cliente e monitoramento criado!" : "Processo vinculado ao cliente!");
       setVincularDialog(null);
@@ -488,8 +489,8 @@ function ConsultarTab() {
     setBuscando(true); setResultados(null); setRequestId(""); setTentativas(0);
     history.add(tipo, valor.trim());
     const credId = credencialId ? Number(credencialId) : undefined;
-    if (tipo === "lawsuit_cnj") (consultarCNJ.mutate as any)({ cnj: valor.trim(), credencialId: credId });
-    else (consultarDoc.mutate as any)({ tipo: tipo as any, valor: valor.trim(), credencialId: credId });
+    if (tipo === "lawsuit_cnj") consultarCNJ.mutate({ cnj: valor.trim(), credencialId: credId });
+    else consultarDoc.mutate({ tipo: tipo as "cpf" | "cnpj", valor: valor.trim(), credencialId: credId });
   };
 
   const handleSelectHistorico = (t: string, v: string) => {
@@ -891,7 +892,7 @@ function MonitoramentoCard({
   const [processoCompleto, setProcessoCompleto] = useState<any>(null);
   const utils = trpc.useUtils();
 
-  const resumoMut = (trpc.processos as any).resumoIA.useMutation({
+  const resumoMut = trpc.processos.resumoIA.useMutation({
     onSuccess: (data: any) => {
       setResumoIA(data.resumo);
       // O resumo IA agora retorna o processo completo junto
@@ -914,7 +915,7 @@ function MonitoramentoCard({
   // passaria pelo disabled e dispararia 2ª request. Lock baseado em ref bloqueia
   // imediatamente.
   const buscarLockRef = useRef(false);
-  const buscarCompletoMut = (trpc.processos as any).buscarProcessoCompleto.useMutation({
+  const buscarCompletoMut = trpc.processos.buscarProcessoCompleto.useMutation({
     onSuccess: (data: any) => {
       if (data.encontrado && data.processo) {
         setProcessoCompleto(data.processo);
@@ -935,7 +936,7 @@ function MonitoramentoCard({
         toast.error(data.mensagem || "Processo não encontrado");
         if (ehErroSessaoCofre({ message: data.mensagem })) {
           utils.cofreCredenciais.listarMinhas.invalidate();
-          (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+          utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
         }
       }
     },
@@ -943,7 +944,7 @@ function MonitoramentoCard({
       toast.error("Erro ao buscar", { description: e.message });
       if (ehErroSessaoCofre(e)) {
         utils.cofreCredenciais.listarMinhas.invalidate();
-        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
       }
     },
     onSettled: () => {
@@ -954,13 +955,18 @@ function MonitoramentoCard({
   function clickHistorico() {
     if (buscarLockRef.current) return;
     buscarLockRef.current = true;
-    buscarCompletoMut.mutate({ cnj: searchKey, credencialId: mon.credencialId || undefined, monitoramentoId: mon.id });
+    buscarCompletoMut.mutate({ monitoramentoId: mon.id });
   }
 
   const searchType = mon.searchType || mon.search?.search_type || "";
   const st = STATUS_MON[status] || { label: status, cor: "" };
 
   // Busca o histórico de movimentações quando o card abre (local DB — atualizações do webhook)
+  // `as any`: o retorno de historicoMonitoramento é uma união com formatos
+  // diferentes (early-returns sem capa/partes vs. retorno completo), e o
+  // merge de capa/partes abaixo depende desses campos. Tipar exige
+  // harmonizar o contrato no servidor + a tipagem da capa — fica pra um
+  // passo separado, verificável na UI.
   const { data: historico, isLoading: loadingHist, refetch: refetchHist } = (trpc.processos as any).historicoMonitoramento.useQuery(
     { monitoramentoId: mon.id, page: 1, pageSize: 50 },
     { enabled: aberto && !!mon.id, retry: false },
@@ -1020,8 +1026,8 @@ function MonitoramentoCard({
   // título do processo (classe + assunto) e partes no card colapsado.
   // Shape: { classe, assuntos: string[], orgaoJulgador, valorCausaCentavos,
   //   dataDistribuicao, partes: [{nome, polo: "ativo"|"passivo"}], ... }
-  const capa = (mon as any).capa;
-  const partesCacheadas: any[] = Array.isArray((mon as any).partes) ? (mon as any).partes : [];
+  const capa = mon.capa;
+  const partesCacheadas: any[] = Array.isArray(mon.partes) ? mon.partes : [];
   const polosAtivosNomes: string[] = partesCacheadas
     .filter((p: any) => String(p?.polo || "").toLowerCase() === "ativo")
     .map((p: any) => p?.nome)
@@ -1039,10 +1045,10 @@ function MonitoramentoCard({
     : null;
   const temCapa = !!(classeProcesso || assuntoPrincipal || polosAtivosNomes.length > 0 || polosPassivosNomes.length > 0 || valorCausaBRL || orgaoJulgador);
   // Aguardando 1ª sync = monitor de CNJ sem capa AINDA (sem erro)
-  const aguardandoCapa = searchType === "lawsuit_cnj" && !temCapa && !(mon as any).ultimoErro;
+  const aguardandoCapa = searchType === "lawsuit_cnj" && !temCapa && !mon.ultimoErro;
 
   // Cor de borda lateral baseada no status — espelha o health-dot
-  const temErro = !!(mon as any).ultimoErro || status === "erro";
+  const temErro = !!mon.ultimoErro || status === "erro";
   const pausado = status === "paused" || status === "pausado";
   const corLateral = temErro
     ? "border-l-rose-500"
@@ -1094,7 +1100,7 @@ function MonitoramentoCard({
                 statusJudit={status}
                 updatedAt={mon.updatedAt ? (typeof mon.updatedAt === "string" ? mon.updatedAt : (mon.updatedAt as Date).toISOString()) : null}
                 createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
-                ultimoErro={(mon as any).ultimoErro}
+                ultimoErro={mon.ultimoErro}
               />
               <p
                 className="text-sm font-bold truncate max-w-[320px]"
@@ -1205,11 +1211,11 @@ function MonitoramentoCard({
               )}
               {tempoRelativo && <span className="text-slate-300">·</span>}
               <span className="tabular-nums">{mon.totalAtualizacoes || 0} atualização{mon.totalAtualizacoes === 1 ? "" : "ões"}</span>
-              {(mon as any).ultimoErro && (
+              {mon.ultimoErro && (
                 <>
                   <span className="text-slate-300">·</span>
-                  <span className="text-rose-600 truncate max-w-[260px]" title={(mon as any).ultimoErro}>
-                    "{(mon as any).ultimoErro}"
+                  <span className="text-rose-600 truncate max-w-[260px]" title={mon.ultimoErro}>
+                    "{mon.ultimoErro}"
                   </span>
                 </>
               )}
@@ -1448,10 +1454,10 @@ function MonitorarTab() {
   const listaMons = mons || [];
 
   // Credenciais do cofre
-  const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
-  const criarMut = (trpc.processos.criarMonitoramento as any).useMutation({
+  const criarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento de movimentações criado!");
       setNovoOpen(false);
@@ -1475,17 +1481,24 @@ function MonitorarTab() {
   const semCredenciais = !credsAtivas || credsAtivas.length === 0;
 
   // "Atualizar todos" — mutation + polling do progresso
-  const atualizarTodosMut = (trpc.processos as any).atualizarTodosMonitoramentos.useMutation({
+  const atualizarTodosMut = trpc.processos.atualizarTodosMonitoramentos.useMutation({
     onSuccess: (d: any) => {
       setAtualOperacaoId(d.operacaoId);
       setAtualDrawerOpen(true);
       toast.success(`Atualizando ${d.total} monitoramento(s)…`);
     },
-    onError: (e: any) => toast.error("Falha ao iniciar atualização", { description: e.message }),
+    onError: (e: any) => {
+      const msg = e?.message ?? "";
+      if (/nenhum monitoramento/i.test(msg)) {
+        toast.info("Nenhum monitoramento pra atualizar no momento.");
+      } else {
+        toast.error("Falha ao iniciar atualização", { description: msg });
+      }
+    },
   });
 
-  const { data: progresso } = (trpc.processos as any).progressoAtualizacao.useQuery(
-    { operacaoId: atualOperacaoId },
+  const { data: progresso } = trpc.processos.progressoAtualizacao.useQuery(
+    { operacaoId: atualOperacaoId ?? "" },
     {
       enabled: !!atualOperacaoId,
       // Refetch a cada 2s enquanto rodando. Quando 'concluido', backend
@@ -1512,14 +1525,14 @@ function MonitorarTab() {
       );
       if (teveErroSessao) {
         utils.cofreCredenciais.listarMinhas.invalidate();
-        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
       }
     }
   }, [progresso?.status, refetch, utils, progresso]);
 
   // Retomar operações em andamento quando user volta pra página.
   // operacoesPendentes lê o runner em memória do servidor.
-  const { data: pendentes } = (trpc.processos as any).operacoesPendentes.useQuery(undefined, {
+  const { data: pendentes } = trpc.processos.operacoesPendentes.useQuery(undefined, {
     enabled: !atualOperacaoId,
     retry: false,
   });
@@ -1551,7 +1564,7 @@ function MonitorarTab() {
     todos: listaMons.length,
     ativo: listaMons.filter((m: any) => (m.statusJudit || m.status) === "ativo" || (m.statusJudit || m.status) === "created" || (m.statusJudit || m.status) === "updated").length,
     pausado: listaMons.filter((m: any) => (m.statusJudit || m.status) === "pausado" || (m.statusJudit || m.status) === "paused").length,
-    erro: listaMons.filter((m: any) => (m.statusJudit || m.status) === "erro" || !!(m as any).ultimoErro).length,
+    erro: listaMons.filter((m: any) => (m.statusJudit || m.status) === "erro" || !!m.ultimoErro).length,
   };
   // Normaliza string pra busca: trim, lowercase, remove acentos e
   // não-alfanuméricos. Faz CPF "123.456.789-00" bater com "12345678900".
@@ -1568,7 +1581,7 @@ function MonitorarTab() {
       const st = m.statusJudit || m.status;
       if (filtroStatus === "ativo") return st === "ativo" || st === "created" || st === "updated";
       if (filtroStatus === "pausado") return st === "pausado" || st === "paused";
-      if (filtroStatus === "erro") return st === "erro" || !!(m as any).ultimoErro;
+      if (filtroStatus === "erro") return st === "erro" || !!m.ultimoErro;
       return true;
     })
     .filter((m: any) => {
@@ -1601,23 +1614,21 @@ function MonitorarTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {totalAtualizaveis > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
-                disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-                onClick={() => atualizarTodosMut.mutate({})}
-                title="Roda os polls de todos os monitoramentos ativos em paralelo (limit 3). Sem custo de créditos."
-              >
-                {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-3.5 w-3.5 mr-1" />
-                )}
-                Atualizar todos
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
+              title="Roda os polls de todos os monitoramentos (inclui os com erro, pra reprocessar) em paralelo (limit 3). Sem custo de créditos."
+            >
+              {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+              )}
+              Atualizar todos
+            </Button>
             <Button
               size="sm"
               className="h-9 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
@@ -1667,7 +1678,7 @@ function MonitorarTab() {
                 <button
                   key={chip.id}
                   type="button"
-                  onClick={() => setFiltroStatus(chip.id as any)}
+                  onClick={() => setFiltroStatus(chip.id as "todos" | "ativo" | "pausado" | "erro")}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
                     active
                       ? ativoColors[chip.cor]
@@ -1848,13 +1859,17 @@ function MonitorarTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() =>
+              onClick={() => {
+                // credencialId é obrigatório no backend; sem ele a mutation
+                // falharia na validação zod. Guarda + botão desabilitado
+                // evitam o clique inválido (antes o `as any` escondia isso).
+                if (!novoCredencialId) return;
                 criarMut.mutate({
                   numeroCnj: novoValor.trim(),
-                  credencialId: novoCredencialId ? Number(novoCredencialId) : undefined,
-                })
-              }
-              disabled={!novoValor.trim() || criarMut.isPending}
+                  credencialId: Number(novoCredencialId),
+                });
+              }}
+              disabled={!novoValor.trim() || !novoCredencialId || criarMut.isPending}
             >
               {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Radar className="h-4 w-4 mr-2" />}
               Monitorar
@@ -1901,11 +1916,11 @@ function HeroProcessos({ saldo }: { saldo: number }) {
     { tipoMonitoramento: "movimentacoes" },
     { retry: false, refetchOnWindowFocus: false },
   );
-  const { data: novasAcoesData } = (trpc.processos as any).listarNovasAcoes.useQuery(
+  const { data: novasAcoesData } = trpc.processos.listarNovasAcoes.useQuery(
     { apenasNaoLidas: true, limite: 1 },
     { retry: false, refetchInterval: 60000 },
   );
-  const { data: alertasData } = (trpc as any).prazosSugeridos?.contador?.useQuery?.(
+  const { data: alertasData } = trpc.prazosSugeridos?.contador?.useQuery?.(
     undefined,
     { retry: false, refetchInterval: 60000 },
   ) ?? { data: undefined };
@@ -2000,8 +2015,8 @@ export default function Processos() {
       const detail = (ev as CustomEvent).detail;
       if (!detail) return;
       if (detail.tipo === "credencial_erro" || detail.tipo === "credencial_recuperada") {
-        (utils.cofreCredenciais as any).listarMinhas?.invalidate?.();
-        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        utils.cofreCredenciais.listarMinhas?.invalidate?.();
+        utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
       }
     };
     window.addEventListener("jurify:notif", onNotif);
@@ -2010,7 +2025,7 @@ export default function Processos() {
 
   // Cofre é restrito a admin do módulo (verTodos em processos = dono/gestor).
   // Atendente/SDR/estagiário não veem a aba nem as credenciais.
-  const { data: minhasPerms } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+  const { data: minhasPerms } = trpc.permissoes?.minhasPermissoes?.useQuery?.(
     undefined,
     { retry: false, refetchOnWindowFocus: false },
   ) || { data: null };
@@ -2092,26 +2107,26 @@ function AlertasTab() {
   const [ajusteData, setAjusteData] = useState("");
   const utils = trpc.useUtils();
 
-  const { data: sugestoes, refetch, isLoading } = (trpc as any).prazosSugeridos?.listar?.useQuery?.(
+  const { data: sugestoes, refetch, isLoading } = trpc.prazosSugeridos?.listar?.useQuery?.(
     { status: "pendente", limite: 100 },
     { retry: false, refetchInterval: 30000 },
   ) ?? { data: undefined, refetch: () => {}, isLoading: false };
 
-  const aprovarMut = (trpc as any).prazosSugeridos?.aprovar?.useMutation?.({
+  const aprovarMut = trpc.prazosSugeridos?.aprovar?.useMutation?.({
     onSuccess: () => {
       toast.success("Prazo criado na agenda!");
       setAprovarTarget(null);
       refetch();
-      try { (utils as any).prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
+      try { utils.prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
     },
     onError: (e: any) => toast.error("Erro ao criar prazo", { description: e.message }),
   });
 
-  const descartarMut = (trpc as any).prazosSugeridos?.descartar?.useMutation?.({
+  const descartarMut = trpc.prazosSugeridos?.descartar?.useMutation?.({
     onSuccess: () => {
       toast.success("Sugestão descartada");
       refetch();
-      try { (utils as any).prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
+      try { utils.prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
     },
     onError: (e: any) => toast.error("Erro", { description: e.message }),
   });
@@ -2346,7 +2361,7 @@ function MonitoramentosCount() {
 }
 
 function NovasAcoesBadge() {
-  const { data } = (trpc.processos as any).listarNovasAcoes.useQuery(
+  const { data } = trpc.processos.listarNovasAcoes.useQuery(
     { apenasNaoLidas: true, limite: 1 },
     { retry: false, refetchInterval: 60000 },
   );
@@ -2360,7 +2375,7 @@ function NovasAcoesBadge() {
 }
 
 function AlertasBadge() {
-  const { data } = (trpc as any).prazosSugeridos?.contador?.useQuery?.(undefined, {
+  const { data } = trpc.prazosSugeridos?.contador?.useQuery?.(undefined, {
     retry: false,
     refetchInterval: 60000,
   }) ?? { data: undefined };
@@ -2398,14 +2413,14 @@ function NovasAcoesTab() {
   const [carregandoAcaoId, setCarregandoAcaoId] = useState<number | null>(null);
   const utils = trpc.useUtils();
 
-  const { data: credenciais } = (trpc.cofreCredenciais as any).listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
+  const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
 
   const LIMITE_PAGINA = 25;
   const [cursor, setCursor] = useState(0);
   const [acoesAcumuladas, setAcoesAcumuladas] = useState<any[]>([]);
 
-  const { data, refetch, isLoading, isFetching } = (trpc.processos as any).listarNovasAcoes.useQuery(
+  const { data, refetch, isLoading, isFetching } = trpc.processos.listarNovasAcoes.useQuery(
     { apenasNaoLidas, limite: LIMITE_PAGINA, cursor },
     { retry: false },
   );
@@ -2441,7 +2456,7 @@ function NovasAcoesTab() {
   );
   const clientes = (clientesData?.clientes || []).filter((c: any) => c.cpfCnpj);
 
-  const criarMut = (trpc.processos as any).criarMonitoramentoNovasAcoes.useMutation({
+  const criarMut = trpc.processos.criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento criado!");
       setNovoOpen(false);
@@ -2461,7 +2476,7 @@ function NovasAcoesTab() {
     },
   });
 
-  const removerAcaoMut = (trpc.processos as any).removerNovaAcao.useMutation({
+  const removerAcaoMut = trpc.processos.removerNovaAcao.useMutation({
     onMutate: ({ id }: { id: number }) => {
       setAcoesAcumuladas((prev) => prev.filter((a) => a.id !== id));
     },
@@ -2472,7 +2487,7 @@ function NovasAcoesTab() {
     },
   });
 
-  const monitorarMut = (trpc.processos.criarMonitoramento as any).useMutation({
+  const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
       toast.success(`Processo agora monitorado (${d?.custoCred ?? 2} cred/mês)`, {
         description: "As próximas movimentações vão aparecer na aba Movimentações.",
@@ -2483,11 +2498,15 @@ function NovasAcoesTab() {
       toast.error("Falha ao monitorar", { description: e.message });
       if (ehErroSessaoCofre(e)) {
         utils.cofreCredenciais.listarMinhas.invalidate();
-        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
       }
     },
   });
 
+  // `as any`: passamos `acaoId` extra no input do mutate só pra recuperá-lo
+  // em onSuccess (vars.acaoId) e casar o resultado com a ação certa — não é
+  // campo do input da procedure. Tipar exigiria mover o onSuccess pra opção
+  // por-chamada; mantido como cast documentado.
   const carregarDetalhesMut = (trpc.processos as any).consultarCNJSincrono.useMutation({
     onSuccess: (d: any, vars: { cnj: string; acaoId: number }) => {
       if (d?.lawsuit) {
@@ -2503,7 +2522,7 @@ function NovasAcoesTab() {
       setCarregandoAcaoId(null);
       if (ehErroSessaoCofre(e)) {
         utils.cofreCredenciais.listarMinhas.invalidate();
-        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
       }
     },
   });
@@ -2511,7 +2530,7 @@ function NovasAcoesTab() {
   const carregarDetalhes = (acaoId: number, cnj: string, credIdMon?: number | null) => {
     if (carregandoAcaoId !== null) return;
     setCarregandoAcaoId(acaoId);
-    (carregarDetalhesMut.mutate as any)({ cnj, credencialId: credIdMon ?? undefined, acaoId });
+    carregarDetalhesMut.mutate({ cnj, credencialId: credIdMon ?? undefined, acaoId });
   };
 
   /** Pega credencialId do monitoramento parent (do cliente). Cada nova ação
@@ -2541,13 +2560,13 @@ function NovasAcoesTab() {
     }
   };
 
-  const atualizarAgoraMut = (trpc.processos as any).atualizarNovasAcoesAgora.useMutation({
+  const atualizarAgoraMut = trpc.processos.atualizarNovasAcoesAgora.useMutation({
     onSuccess: (r: any) => {
       if (!r.ok) {
         toast.error("Falha na busca", { description: r.mensagem ?? "Erro desconhecido", duration: 8000 });
         if (ehErroSessaoCofre({ message: r.mensagem })) {
           utils.cofreCredenciais.listarMinhas.invalidate();
-          (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+          utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
         }
         return;
       }
@@ -2567,7 +2586,7 @@ function NovasAcoesTab() {
       toast.error("Erro ao atualizar", { description: e.message });
       if (ehErroSessaoCofre(e)) {
         utils.cofreCredenciais.listarMinhas.invalidate();
-        (utils.cofreCredenciais as any).listarParaSelecao?.invalidate?.();
+        utils.cofreCredenciais.listarParaSelecao?.invalidate?.();
       }
     },
   });
@@ -2581,17 +2600,24 @@ function NovasAcoesTab() {
     onError: (e: any) => toast.error("Erro ao remover", { description: e.message }),
   });
 
-  const atualizarTodosMut = (trpc.processos as any).atualizarTodosMonitoramentos.useMutation({
+  const atualizarTodosMut = trpc.processos.atualizarTodosMonitoramentos.useMutation({
     onSuccess: (d: any) => {
       setAtualOperacaoId(d.operacaoId);
       setAtualDrawerOpen(true);
       toast.success(`Atualizando ${d.total} monitoramento(s) de novas ações…`);
     },
-    onError: (e: any) => toast.error("Falha ao iniciar atualização", { description: e.message }),
+    onError: (e: any) => {
+      const msg = e?.message ?? "";
+      if (/nenhum monitoramento/i.test(msg)) {
+        toast.info("Nenhum monitoramento pra atualizar no momento.");
+      } else {
+        toast.error("Falha ao iniciar atualização", { description: msg });
+      }
+    },
   });
 
-  const { data: progresso } = (trpc.processos as any).progressoAtualizacao.useQuery(
-    { operacaoId: atualOperacaoId },
+  const { data: progresso } = trpc.processos.progressoAtualizacao.useQuery(
+    { operacaoId: atualOperacaoId ?? "" },
     {
       enabled: !!atualOperacaoId,
       refetchInterval: (q: any) => {
@@ -2612,8 +2638,8 @@ function NovasAcoesTab() {
   const acoesRaw = acoesAcumuladas;
   const monitoramentosRaw = data?.monitoramentos || [];
   const hasMore = data?.hasMore ?? false;
-  const idsNovasAcoes = (monitoramentosRaw as any[]).map((m: any) => m.id);
-  const totalAtualizaveisNovas = (monitoramentosRaw as any[]).filter((m: any) => m.statusJudit === "ativo" || m.status === "ativo" || m.statusJudit === "created" || m.statusJudit === "updated").length;
+  const idsNovasAcoes = monitoramentosRaw.map((m: any) => m.id);
+  const totalAtualizaveisNovas = monitoramentosRaw.filter((m: any) => m.statusJudit === "ativo" || m.status === "ativo" || m.statusJudit === "created" || m.statusJudit === "updated").length;
 
   // Normalização Unicode-segura (acentos + pontuação) — mesma lógica do
   // MonitorarTab. CPF "123.456.789-00" bate com "12345678900".
@@ -2626,7 +2652,7 @@ function NovasAcoesTab() {
   const buscaNormalizada = normalizar(buscaTexto);
   const monitoramentos = !buscaNormalizada
     ? monitoramentosRaw
-    : (monitoramentosRaw as any[]).filter((m: any) => {
+    : monitoramentosRaw.filter((m: any) => {
         const campos = [m.apelido, m.searchKey].filter(Boolean).map((c: string) => normalizar(String(c)));
         return campos.some((c: string) => c.includes(buscaNormalizada));
       });
@@ -2664,23 +2690,21 @@ function NovasAcoesTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {totalAtualizaveisNovas > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
-                disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-                onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
-                title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
-              >
-                {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-3.5 w-3.5 mr-1" />
-                )}
-                Atualizar todos
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
+              title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
+            >
+              {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+              )}
+              Atualizar todos
+            </Button>
             <Button
               size="sm"
               className="h-9 rounded-lg bg-gradient-to-br from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 shadow-sm"
@@ -2771,7 +2795,7 @@ function NovasAcoesTab() {
                   Monitorando {monitoramentosRaw.length} {monitoramentosRaw.length === 1 ? "cliente" : "clientes"}
                 </p>
                 <p className="text-[10px] text-slate-500">
-                  {monitoramentosRaw.filter((m: any) => (m.statusJudit || m.status) === "ativo").length} ativos · {monitoramentosRaw.filter((m: any) => !!(m as any).ultimoErro).length} com erro
+                  {monitoramentosRaw.filter((m: any) => (m.statusJudit || m.status) === "ativo").length} ativos · {monitoramentosRaw.filter((m: any) => !!m.ultimoErro).length} com erro
                 </p>
               </div>
             </div>
@@ -2791,7 +2815,7 @@ function NovasAcoesTab() {
             ) : (
               monitoramentos.map((m: any) => {
                 const status = m.statusJudit || m.status;
-                const temErro = !!(m as any).ultimoErro;
+                const temErro = !!m.ultimoErro;
                 const pausado = status === "paused" || status === "pausado";
                 const nome = m.apelido || m.searchKey || "Cliente";
                 const corteBorda = temErro
@@ -2836,8 +2860,8 @@ function NovasAcoesTab() {
                             </div>
                           )}
                           {temErro && (
-                            <p className="text-[9.5px] text-rose-600 mt-1 truncate" title={(m as any).ultimoErro}>
-                              ⚠ {(m as any).ultimoErro}
+                            <p className="text-[9.5px] text-rose-600 mt-1 truncate" title={m.ultimoErro}>
+                              ⚠ {m.ultimoErro}
                             </p>
                           )}
                         </div>
@@ -3265,7 +3289,7 @@ function NovasAcoesTab() {
                 const clean = (clienteSelecionado.cpfCnpj || "").replace(/\D/g, "");
                 const tipo = clean.length === 14 ? "cnpj" : "cpf";
                 criarMut.mutate({
-                  tipo: tipo as any,
+                  tipo,
                   valor: clean,
                   apelido: clienteSelecionado.nome,
                   credencialId: Number(credencialId),
@@ -3316,7 +3340,7 @@ function NovasAcoesTab() {
 
 function CofreTab() {
   const { data: credenciais, refetch, isLoading } = trpc.cofreCredenciais.listarMinhas.useQuery();
-  const { data: sistemas } = (trpc.cofreCredenciais as any).listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
+  const { data: sistemas } = trpc.cofreCredenciais.listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [form, setForm] = useState({
@@ -3358,7 +3382,7 @@ function CofreTab() {
   // Re-valida credencial fazendo login real no tribunal — usado quando
   // status fica preso em "validando" ou pra confirmar manualmente que o
   // login ainda funciona (senha pode ter mudado, conta pode ter caído).
-  const validarMut = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
+  const validarMut = trpc.cofreCredenciais.validarMinha?.useMutation({
     onSuccess: (data: any) => {
       if (data?.status === "ativa") {
         toast.success("Credencial válida!", { description: data.mensagem || "Login confirmado." });
@@ -3600,7 +3624,7 @@ function CofreTab() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setNovoOpen(false)}>Cancelar</Button>
             <Button
-              onClick={() => (cadastrarMut.mutate as any)(form)}
+              onClick={() => cadastrarMut.mutate({ ...form, sistema: form.sistema as SistemaCofre })}
               disabled={
                 !form.apelido || !form.sistema || !form.username || !form.password ||
                 cadastrarMut.isPending
