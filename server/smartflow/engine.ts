@@ -1205,8 +1205,19 @@ function handleCondicional(
   passo: Passo,
   ctx: SmartflowContexto,
 ): PassoResultado {
+  type Requisito = { campo?: string; operador?: string; valor?: string; valor2?: string };
   const cfg = passo.config as {
-    condicoes?: Array<{ id: string; campo: string; operador: string; valor?: string; valor2?: string }>;
+    condicoes?: Array<{
+      id: string;
+      // Compostas: lista de requisitos + lógica de combinação.
+      requisitos?: Requisito[];
+      logica?: "E" | "OU";
+      // Legado: 1 requisito inline.
+      campo?: string;
+      operador?: string;
+      valor?: string;
+      valor2?: string;
+    }>;
     campo?: string;
     operador?: string;
     valor?: string;
@@ -1217,13 +1228,19 @@ function handleCondicional(
   // Caminho novo: condicoes[] populadas
   if (condicoes.length > 0) {
     for (const c of condicoes) {
-      const bate = avaliarCondicao(
-        c.campo || "intencao",
-        c.operador || "igual",
-        c.valor || "",
-        c.valor2,
-        ctx,
+      // Normaliza pra lista de requisitos: compostos (requisitos[]) ou o
+      // requisito único legado (campo/operador/valor da própria condição).
+      const reqs: Requisito[] =
+        Array.isArray(c.requisitos) && c.requisitos.length > 0
+          ? c.requisitos
+          : [{ campo: c.campo, operador: c.operador, valor: c.valor, valor2: c.valor2 }];
+
+      const resultados = reqs.map((r) =>
+        avaliarCondicao(r.campo || "intencao", r.operador || "igual", r.valor || "", r.valor2, ctx),
       );
+      // "OU" = qualquer requisito basta; "E" (default) = todos precisam bater.
+      const bate = c.logica === "OU" ? resultados.some(Boolean) : resultados.every(Boolean);
+
       if (bate) {
         return { sucesso: true, contexto: ctx, proximoRamoId: `cond_${c.id}` };
       }

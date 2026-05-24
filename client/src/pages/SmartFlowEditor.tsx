@@ -2506,13 +2506,31 @@ function ConfigProcessoBuscarMovimentacoesFields({
   );
 }
 
-interface CondicaoItem {
-  id: string;
-  label?: string;
+interface RequisitoCondicao {
   campo: string;
   operador: string;
   valor?: string;
   valor2?: string;
+}
+
+interface CondicaoItem {
+  id: string;
+  label?: string;
+  /** Requisitos da condição (compostos). Combinados pela `logica`. */
+  requisitos?: RequisitoCondicao[];
+  /** Como combinar os requisitos: "E" (todos) ou "OU" (qualquer). Default "E". */
+  logica?: "E" | "OU";
+  // Legado (1 requisito inline) — cenários antigos. Engine e UI normalizam.
+  campo?: string;
+  operador?: string;
+  valor?: string;
+  valor2?: string;
+}
+
+/** Normaliza uma condição (legada ou nova) numa lista de requisitos pra UI. */
+function requisitosDaCondicao(c: CondicaoItem): RequisitoCondicao[] {
+  if (Array.isArray(c.requisitos) && c.requisitos.length > 0) return c.requisitos;
+  return [{ campo: c.campo || "intencao", operador: c.operador || "igual", valor: c.valor, valor2: c.valor2 }];
 }
 
 /**
@@ -2578,9 +2596,8 @@ function ConfigCondicionalFields({
   const adicionar = () => {
     const nova: CondicaoItem = {
       id: novoClienteId().slice(0, 8),
-      campo: "intencao",
-      operador: "igual",
-      valor: "",
+      logica: "E",
+      requisitos: [{ campo: "intencao", operador: "igual", valor: "" }],
     };
     update([...condicoes, nova]);
   };
@@ -2631,41 +2648,98 @@ function ConfigCondicionalFields({
                 placeholder={`Nome (ex: "Condição ${idx + 1}", "Cliente VIP"…)`}
                 className="h-7 text-xs"
               />
-              <CampoCondicaoCombobox
-                value={String(c.campo || "")}
-                onChange={(v) => atualizar(idx, { campo: v })}
-                grupos={sugestoesAgrupadas}
-              />
-              <Select value={c.operador || "igual"} onValueChange={(v) => atualizar(idx, { operador: v })}>
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="igual">igual a</SelectItem>
-                  <SelectItem value="diferente">diferente de</SelectItem>
-                  <SelectItem value="existe">existe (preenchido)</SelectItem>
-                  <SelectItem value="nao_existe">não existe (vazio)</SelectItem>
-                  <SelectItem value="verdadeiro">é verdadeiro</SelectItem>
-                  <SelectItem value="maior">maior que (número)</SelectItem>
-                  <SelectItem value="menor">menor que (número)</SelectItem>
-                  <SelectItem value="contem">contém (texto)</SelectItem>
-                  <SelectItem value="entre">entre (range numérico)</SelectItem>
-                </SelectContent>
-              </Select>
-              {c.operador !== "existe" && c.operador !== "nao_existe" && c.operador !== "verdadeiro" && (
-                <Input
-                  value={String(c.valor || "")}
-                  onChange={(e) => atualizar(idx, { valor: e.target.value })}
-                  placeholder={c.operador === "entre" ? "Mínimo" : "Valor"}
-                  className="h-7 text-xs"
-                />
-              )}
-              {c.operador === "entre" && (
-                <Input
-                  value={String(c.valor2 || "")}
-                  onChange={(e) => atualizar(idx, { valor2: e.target.value })}
-                  placeholder="Máximo"
-                  className="h-7 text-xs"
-                />
-              )}
+              {(() => {
+                const reqs = requisitosDaCondicao(c);
+                const logica = c.logica === "OU" ? "OU" : "E";
+                const setReqs = (novos: RequisitoCondicao[]) =>
+                  atualizar(idx, { requisitos: novos, logica, campo: undefined, operador: undefined, valor: undefined, valor2: undefined });
+                const atualizarReq = (ri: number, patch: Partial<RequisitoCondicao>) =>
+                  setReqs(reqs.map((r, j) => (j === ri ? { ...r, ...patch } : r)));
+                return (
+                  <div className="space-y-1.5">
+                    {reqs.length > 1 && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-muted-foreground">Combinar:</span>
+                        <div className="flex rounded border overflow-hidden">
+                          {(["E", "OU"] as const).map((op) => (
+                            <button
+                              key={op}
+                              type="button"
+                              onClick={() => atualizar(idx, { logica: op })}
+                              className={`px-2 py-0.5 text-[10px] font-bold ${logica === op ? "bg-violet-600 text-white" : "bg-card text-muted-foreground hover:bg-accent"}`}
+                            >
+                              {op === "E" ? "E (todos)" : "OU (qualquer)"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {reqs.map((r, ri) => (
+                      <div key={ri} className="space-y-1.5">
+                        {ri > 0 && <div className="text-[9px] font-bold text-violet-500 text-center">{logica}</div>}
+                        <div className="flex items-start gap-1">
+                          <div className="flex-1 space-y-1.5">
+                            <CampoCondicaoCombobox
+                              value={String(r.campo || "")}
+                              onChange={(v) => atualizarReq(ri, { campo: v })}
+                              grupos={sugestoesAgrupadas}
+                            />
+                            <Select value={r.operador || "igual"} onValueChange={(v) => atualizarReq(ri, { operador: v })}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="igual">igual a</SelectItem>
+                                <SelectItem value="diferente">diferente de</SelectItem>
+                                <SelectItem value="existe">existe (preenchido)</SelectItem>
+                                <SelectItem value="nao_existe">não existe (vazio)</SelectItem>
+                                <SelectItem value="verdadeiro">é verdadeiro</SelectItem>
+                                <SelectItem value="maior">maior que (número)</SelectItem>
+                                <SelectItem value="menor">menor que (número)</SelectItem>
+                                <SelectItem value="contem">contém (texto)</SelectItem>
+                                <SelectItem value="entre">entre (range numérico)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && (
+                              <Input
+                                value={String(r.valor || "")}
+                                onChange={(e) => atualizarReq(ri, { valor: e.target.value })}
+                                placeholder={r.operador === "entre" ? "Mínimo" : "Valor"}
+                                className="h-7 text-xs"
+                              />
+                            )}
+                            {r.operador === "entre" && (
+                              <Input
+                                value={String(r.valor2 || "")}
+                                onChange={(e) => atualizarReq(ri, { valor2: e.target.value })}
+                                placeholder="Máximo"
+                                className="h-7 text-xs"
+                              />
+                            )}
+                          </div>
+                          {reqs.length > 1 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-6 p-0 text-destructive shrink-0"
+                              onClick={() => setReqs(reqs.filter((_, j) => j !== ri))}
+                              title="Remover requisito"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 gap-1 text-[10px] w-full justify-center border border-dashed"
+                      onClick={() => setReqs([...reqs, { campo: "intencao", operador: "igual", valor: "" }])}
+                    >
+                      <Plus className="h-3 w-3" /> Adicionar requisito (E/OU)
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>

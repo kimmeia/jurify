@@ -1884,6 +1884,77 @@ describe("SmartFlow Engine", () => {
       expect(r.respostas.join("|")).toBe("ACHOU");
     });
 
+    it("condição composta E: só bate quando TODOS os requisitos batem", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_pronto: "agendar", fallback: "continua" },
+          config: {
+            condicoes: [
+              {
+                id: "pronto",
+                logica: "E",
+                requisitos: [
+                  { campo: "confirmacao_agendamento", operador: "igual", valor: "SIM" },
+                  { campo: "first_name", operador: "existe" },
+                  { campo: "data_agendamento", operador: "existe" },
+                ],
+              },
+            ],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "agendar", config: { template: "AGENDAR" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "continua", config: { template: "CONTINUA" } },
+      ];
+
+      // Falta a data → não bate → fallback
+      const rFalta = await executarCenario(
+        passos,
+        { confirmacao_agendamento: "SIM", first_name: "Ana" },
+        exec,
+      );
+      expect(rFalta.respostas.join("|")).toBe("CONTINUA");
+
+      // Tudo presente → bate
+      const rOk = await executarCenario(
+        passos,
+        { confirmacao_agendamento: "SIM", first_name: "Ana", data_agendamento: "2026-06-01" },
+        exec,
+      );
+      expect(rOk.respostas.join("|")).toBe("AGENDAR");
+    });
+
+    it("condição composta OU: basta um requisito bater", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_transf: "transferir", fallback: "segue" },
+          config: {
+            condicoes: [
+              {
+                id: "transf",
+                logica: "OU",
+                requisitos: [
+                  { campo: "motivo", operador: "igual", valor: "TRANSFERIR" },
+                  { campo: "conteudo_sexual", operador: "igual", valor: "SIM" },
+                ],
+              },
+            ],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "transferir", config: { template: "TRANSF" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "segue", config: { template: "SEGUE" } },
+      ];
+
+      const rUm = await executarCenario(passos, { conteudo_sexual: "SIM" }, exec);
+      expect(rUm.respostas.join("|")).toBe("TRANSF");
+
+      const rNenhum = await executarCenario(passos, { motivo: "DUVIDA" }, exec);
+      expect(rNenhum.respostas.join("|")).toBe("SEGUE");
+    });
+
     it("guarda contra loop infinito", async () => {
       // Passo aponta pra si mesmo via "default"
       const exec = criarMockExecutores();
