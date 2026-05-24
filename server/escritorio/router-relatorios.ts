@@ -26,6 +26,14 @@ import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "./router-financeiro";
+import {
+  resolverPeriodoNoFuso,
+  subtrairUmMesISO,
+  inicioDoDiaNoFuso,
+  fimDoDiaNoFuso,
+  dataHojeBR,
+  FUSO_HORARIO_PADRAO,
+} from "../../shared/escritorio-types";
 
 const log = createLogger("relatorios");
 
@@ -46,27 +54,6 @@ const AtendimentoInput = z
     atendenteId: z.number().int().positive().optional(),
   })
   .optional();
-
-/** Mês vigente como range default — primeiro do mês até agora. */
-export function mesVigente(): { dataInicio: Date; dataFim: Date } {
-  const agora = new Date();
-  const ini = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
-  return { dataInicio: ini, dataFim: agora };
-}
-
-/** Subtrai 1 mês preservando o dia, mas com clamp pro último dia do mês
- *  anterior quando o original não existe (ex.: 31 mar → 28 fev, nunca 3 mar).
- *  Date#setMonth sozinho rola pra frente quando o dia não cabe — quebra
- *  comparações MTD vs LMTD em fim de mês. */
-export function subtrairUmMesClamped(d: Date): Date {
-  const r = new Date(d);
-  const dia = r.getDate();
-  r.setDate(1);
-  r.setMonth(r.getMonth() - 1);
-  const ultimoDia = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
-  r.setDate(Math.min(dia, ultimoDia));
-  return r;
-}
 
 /** Meta mensal proporcional ao range — `meta * (diasNoRange / diasNoMes)`.
  *  Usa o mês civil de `dataInicio` como denominador. Ranges multi-mês
@@ -174,19 +161,17 @@ export const relatoriosRouter = router({
     if (!db) return null;
     const eid = esc.escritorio.id;
 
-    // Range: range custom > preset dias > mês vigente
+    // Range: range custom > preset dias > mês vigente (no fuso do escritório)
+    const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
     let dataInicio: Date;
     let dataFim: Date;
-    if (input?.dataInicio && input?.dataFim) {
-      dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-      dataFim = new Date(`${input.dataFim}T23:59:59`);
-    } else if (input?.dias) {
+    if (input?.dias && !(input?.dataInicio && input?.dataFim)) {
       dataInicio = desdeDias(input.dias);
       dataFim = new Date();
     } else {
-      const m = mesVigente();
-      dataInicio = m.dataInicio;
-      dataFim = m.dataFim;
+      const p = resolverPeriodoNoFuso(new Date(), tz, input);
+      dataInicio = p.dataInicio;
+      dataFim = p.dataFim;
     }
 
     const perm = await checkPermission(ctx.user.id, "relatorios", "ver");
@@ -305,13 +290,15 @@ export const relatoriosRouter = router({
     if (!db) return null;
     const eid = esc.escritorio.id;
 
-    // ── Período: range custom sobrepõe preset de dias ──────────────────────
+    // ── Período: range custom sobrepõe preset de dias (no fuso do escritório) ─
+    const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
     const dias = input?.dias || 30;
     let dataInicio: Date;
     let dataFim: Date;
     if (input?.dataInicio && input?.dataFim) {
-      dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-      dataFim = new Date(`${input.dataFim}T23:59:59`);
+      const p = resolverPeriodoNoFuso(new Date(), tz, input);
+      dataInicio = p.dataInicio;
+      dataFim = p.dataFim;
     } else {
       dataInicio = desdeDias(dias);
       dataFim = new Date();
@@ -556,34 +543,34 @@ export const relatoriosRouter = router({
       const soProprios = !perm.verTodos && perm.verProprios;
       const colabId = esc.colaborador.id;
 
-      // ── Range: dataInicio/dataFim sobrepõe; default = mês vigente ─────────
-      let dataInicio: Date;
-      let dataFim: Date;
-      if (input?.dataInicio && input?.dataFim) {
-        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-        dataFim = new Date(`${input.dataFim}T23:59:59`);
-      } else {
-        const m = mesVigente();
-        dataInicio = m.dataInicio;
-        dataFim = m.dataFim;
-      }
+      // ── Range: dataInicio/dataFim sobrepõe; default = mês vigente (no fuso) ─
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
+        resolverPeriodoNoFuso(new Date(), tz, input);
 
       // Período anterior: quando o range cai inteiro num único mês civil,
       // compara com os MESMOS DIAS no mês anterior (ex.: 1-13 mai vs 1-13
       // abr) — padrão MTD vs LMTD que gestor espera. Pra ranges cross-mês,
       // mantém o fallback "mesmos N dias antes" (sliding window).
-      const mesmoMesCivil =
-        dataInicio.getFullYear() === dataFim.getFullYear()
-        && dataInicio.getMonth() === dataFim.getMonth();
+      // A aritmética de mês é feita sobre as STRINGS civis (subtrairUmMesISO),
+      // não sobre Date UTC — senão o "fim do dia no fuso" (que cai no dia
+      // seguinte em UTC à noite) deslocaria o mês anterior em 1 dia.
+      const mesmoMesCivil = dataInicioStr.slice(0, 7) === dataFimStr.slice(0, 7);
       let dataInicioAnterior: Date;
       let dataFimAnterior: Date;
+      let dataInicioAnteriorStr: string;
+      let dataFimAnteriorStr: string;
       if (mesmoMesCivil) {
-        dataInicioAnterior = subtrairUmMesClamped(dataInicio);
-        dataFimAnterior = subtrairUmMesClamped(dataFim);
+        dataInicioAnteriorStr = subtrairUmMesISO(dataInicioStr);
+        dataFimAnteriorStr = subtrairUmMesISO(dataFimStr);
+        dataInicioAnterior = inicioDoDiaNoFuso(dataInicioAnteriorStr, tz);
+        dataFimAnterior = fimDoDiaNoFuso(dataFimAnteriorStr, tz);
       } else {
         const duracaoMs = dataFim.getTime() - dataInicio.getTime();
         dataFimAnterior = new Date(dataInicio.getTime() - 1);
         dataInicioAnterior = new Date(dataFimAnterior.getTime() - duracaoMs);
+        dataInicioAnteriorStr = dataHojeBR(tz, dataInicioAnterior);
+        dataFimAnteriorStr = dataHojeBR(tz, dataFimAnterior);
       }
 
       // ── Atendentes elegíveis (do setor escolhido ou tipo='comercial') ─────
@@ -645,12 +632,12 @@ export const relatoriosRouter = router({
       if (idsAtendentes.length === 0) {
         return {
           periodo: {
-            dataInicio: dataInicio.toISOString().slice(0, 10),
-            dataFim: dataFim.toISOString().slice(0, 10),
+            dataInicio: dataInicioStr,
+            dataFim: dataFimStr,
           },
           periodoAnterior: {
-            dataInicio: dataInicioAnterior.toISOString().slice(0, 10),
-            dataFim: dataFimAnterior.toISOString().slice(0, 10),
+            dataInicio: dataInicioAnteriorStr,
+            dataFim: dataFimAnteriorStr,
           },
           kpis: {
             faturado: 0,
@@ -679,10 +666,7 @@ export const relatoriosRouter = router({
       }
 
       // ── KPIs período atual ────────────────────────────────────────────────
-      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
-      const dataFimStr = dataFim.toISOString().slice(0, 10);
-      const dataInicioAnteriorStr = dataInicioAnterior.toISOString().slice(0, 10);
-      const dataFimAnteriorStr = dataFimAnterior.toISOString().slice(0, 10);
+      // (dataInicioStr/dataFimStr e os *AnteriorStr já resolvidos no fuso acima)
 
       // Subquery: contatos com lead fechado_ganho no período corrente / anterior.
       // O ranking comercial só conta cobranças cujo cliente fechou DENTRO do
@@ -1130,19 +1114,13 @@ export const relatoriosRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Atendente não encontrado." });
       }
 
-      // Range: default = mês vigente
-      let dataInicio: Date;
-      let dataFim: Date;
-      if (input.dataInicio && input.dataFim) {
-        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-        dataFim = new Date(`${input.dataFim}T23:59:59`);
-      } else {
-        const m = mesVigente();
-        dataInicio = m.dataInicio;
-        dataFim = m.dataFim;
-      }
-      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
-      const dataFimStr = dataFim.toISOString().slice(0, 10);
+      // Range: default = mês vigente (no fuso do escritório)
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { dataInicio, dataFim, dataInicioStr, dataFimStr } = resolverPeriodoNoFuso(
+        new Date(),
+        tz,
+        { dataInicio: input.dataInicio, dataFim: input.dataFim },
+      );
 
       // ── Leads fechado_ganho do atendente, agrupados por contatoId ──────────
       const leadsRows = await db
