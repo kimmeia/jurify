@@ -16,6 +16,12 @@ const log = createLogger("llm-extracao");
 
 const TIMEOUT_MS = 30000;
 
+/** Turno de conversa pro contexto da extração (mesmo shape do chatbot). */
+export interface MensagemHistorico {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
 /**
  * Tipos suportados de campo. Mapeiam para JSON Schema:
  *   - texto/email/cpf/cnpj/telefone/data → string (string livre; IA cuida do formato)
@@ -128,6 +134,9 @@ function montarSchemaCampos(campos: CampoParaExtrair[]): {
  * @param campos lista de campos esperados
  * @param contextoExtra texto opcional adicionado ao system prompt (ex: campos
  *   já capturados em interações anteriores — evita IA pedir info repetida)
+ * @param historico mensagens anteriores da conversa. Sem isso, a extração só
+ *   enxerga a última mensagem — e perde dados que o cliente informou antes
+ *   (ex: disse o nome 3 mensagens atrás e a data agora).
  *
  * Retorna `{ campos: {}, tokensUsados }` se a IA não achou nenhum campo —
  * NÃO joga erro; o caller decide o que fazer com extração vazia (pode estar
@@ -138,6 +147,7 @@ export async function extrairCamposEstruturados(
   mensagem: string,
   campos: CampoParaExtrair[],
   contextoExtra?: string,
+  historico: MensagemHistorico[] = [],
 ): Promise<ResultadoExtracao> {
   if (campos.length === 0) {
     throw new Error("Lista de campos vazia — informe pelo menos 1 campo a extrair.");
@@ -151,21 +161,22 @@ export async function extrairCamposEstruturados(
   const maxTokens = cfg.maxTokens ?? 1024;
 
   const systemPrompt = [
-    "Você é um extrator de dados. Analisa a mensagem do usuário e extrai apenas os campos pedidos.",
+    "Você é um extrator de dados. Analise a CONVERSA do usuário e extraia apenas os campos pedidos.",
+    "Considere TODAS as mensagens do usuário na conversa — não só a última. O dado pode ter sido informado antes.",
     "Regras:",
-    "  - Se um campo não foi mencionado pelo usuário, NÃO inclua no resultado (omita a chave).",
-    "  - Não invente valores. Só extraia o que está literalmente na mensagem.",
+    "  - Se um campo não foi informado em nenhum momento da conversa, NÃO inclua no resultado (omita a chave).",
+    "  - Não invente valores. Só extraia o que o usuário realmente informou.",
     "  - Mantenha o formato exato que o usuário usou (ex: se ele digitou CPF com pontuação, mantenha).",
     contextoExtra ? `\nContexto adicional do cliente:\n${contextoExtra}` : "",
   ].join("\n");
 
   if (cfg.provider === "anthropic") {
     if (!cfg.anthropicApiKey) throw new Error("anthropicApiKey ausente.");
-    return invocarAnthropicComTool(cfg.anthropicApiKey, cfg.modelo, systemPrompt, mensagem, schema, temperatura, maxTokens);
+    return invocarAnthropicComTool(cfg.anthropicApiKey, cfg.modelo, systemPrompt, mensagem, schema, temperatura, maxTokens, historico);
   }
 
   if (!cfg.openaiApiKey) throw new Error("openaiApiKey ausente.");
-  return invocarOpenAIComTool(cfg.openaiApiKey, cfg.modelo, systemPrompt, mensagem, schema, temperatura, maxTokens);
+  return invocarOpenAIComTool(cfg.openaiApiKey, cfg.modelo, systemPrompt, mensagem, schema, temperatura, maxTokens, historico);
 }
 
 async function invocarAnthropicComTool(
@@ -176,7 +187,11 @@ async function invocarAnthropicComTool(
   schema: { properties: Record<string, unknown>; required: string[] },
   temperatura: number,
   maxTokens: number,
+  historico: MensagemHistorico[] = [],
 ): Promise<ResultadoExtracao> {
+  const msgsHist = historico
+    .slice(-20)
+    .map((m) => ({ role: m.role === "system" ? ("user" as const) : m.role, content: m.content }));
   const body = {
     model: modelo || "claude-haiku-4-5-20251001",
     max_tokens: maxTokens,
@@ -185,7 +200,7 @@ async function invocarAnthropicComTool(
     tools: [
       {
         name: "salvar_campos_extraidos",
-        description: "Salva os campos extraídos da mensagem do usuário. Omita campos que não foram mencionados.",
+        description: "Salva os campos que o usuário informou em qualquer momento da conversa. Omita campos que não foram informados.",
         input_schema: {
           type: "object",
           properties: schema.properties,
@@ -194,7 +209,7 @@ async function invocarAnthropicComTool(
       },
     ],
     tool_choice: { type: "tool", name: "salvar_campos_extraidos" },
-    messages: [{ role: "user", content: mensagem }],
+    messages: [...msgsHist, { role: "user" as const, content: mensagem }],
   };
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -238,13 +253,18 @@ async function invocarOpenAIComTool(
   schema: { properties: Record<string, unknown>; required: string[] },
   temperatura: number,
   maxTokens: number,
+  historico: MensagemHistorico[] = [],
 ): Promise<ResultadoExtracao> {
+  const msgsHist = historico
+    .slice(-20)
+    .map((m) => ({ role: m.role === "system" ? ("user" as const) : m.role, content: m.content }));
   const body = {
     model: modelo || "gpt-4o-mini",
     max_tokens: maxTokens,
     temperature: temperatura,
     messages: [
       { role: "system", content: systemPrompt },
+      ...msgsHist,
       { role: "user", content: mensagem },
     ],
     tools: [
@@ -252,7 +272,7 @@ async function invocarOpenAIComTool(
         type: "function",
         function: {
           name: "salvar_campos_extraidos",
-          description: "Salva os campos extraídos da mensagem do usuário. Omita campos que não foram mencionados.",
+          description: "Salva os campos que o usuário informou em qualquer momento da conversa. Omita campos que não foram informados.",
           parameters: {
             type: "object",
             properties: schema.properties,
