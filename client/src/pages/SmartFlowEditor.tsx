@@ -3681,7 +3681,7 @@ function ConfigAgendaCriarFields({
           <SelectContent>
             <SelectItem value="agendar">Agendar (criar compromisso)</SelectItem>
             <SelectItem value="verificar_horario">Verificar horário disponível</SelectItem>
-            <SelectItem value="consultar">Consultar agenda (listar compromissos)</SelectItem>
+            <SelectItem value="consultar">Consultar agenda (horários livres)</SelectItem>
             <SelectItem value="editar">Editar / remarcar</SelectItem>
             <SelectItem value="cancelar">Cancelar</SelectItem>
           </SelectContent>
