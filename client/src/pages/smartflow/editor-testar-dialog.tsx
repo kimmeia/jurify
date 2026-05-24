@@ -242,12 +242,16 @@ function exemploContexto(gatilho: GatilhoSmartflow): string {
       mensagem: "Olá, gostaria de agendar uma consulta",
       nomeCliente: "João Silva",
       telefoneCliente: "(11) 99999-0000",
+      contatoId: 42,
+      atendenteResponsavelId: 1,
     },
     mensagem_canal: {
       mensagem: "Olá, gostaria de agendar uma consulta",
       nomeCliente: "João Silva",
       telefoneCliente: "(11) 99999-0000",
       canalTipo: "whatsapp_qr",
+      contatoId: 42,
+      atendenteResponsavelId: 1,
     },
     novo_lead: {
       contatoId: 42,

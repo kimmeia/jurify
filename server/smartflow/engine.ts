@@ -1734,6 +1734,83 @@ async function handleDefinirCampoPersonalizado(
   }
 }
 
+export interface SlotLivre {
+  inicioISO: string;
+  fimISO: string;
+}
+
+/**
+ * Formata um instante (epoch ms) em ISO 8601 COM offset (ex:
+ * `2026-05-26T09:00:00-03:00`). Mantém o relógio de parede local visível —
+ * a IA consegue ler "09:00" direto, sem precisar converter de UTC.
+ */
+export function formatarISOComOffset(epochMs: number, offsetHoras: number): string {
+  const local = new Date(epochMs + offsetHoras * 3600 * 1000); // desloca p/ os componentes UTC baterem com o relógio local
+  const p = (n: number) => String(n).padStart(2, "0");
+  const sinal = offsetHoras <= 0 ? "-" : "+";
+  const abs = Math.abs(offsetHoras);
+  return `${local.getUTCFullYear()}-${p(local.getUTCMonth() + 1)}-${p(local.getUTCDate())}T${p(local.getUTCHours())}:${p(local.getUTCMinutes())}:00${sinal}${p(abs)}:00`;
+}
+
+/**
+ * Calcula os horários LIVRES do responsável pra oferecer numa reunião.
+ *
+ * Varre `dias` dias pra frente a partir de `agora`, em janelas diárias
+ * [`horaInicio`, `horaFim`) fatiadas em blocos de `duracaoMin`, pulando:
+ *   - fim de semana (sáb/dom) se `incluirFimDeSemana=false`;
+ *   - slots no passado;
+ *   - slots que colidem com algum compromisso de `ocupados`.
+ *
+ * Fuso fixo Brasília (-03:00) — o Brasil não tem horário de verão desde 2019.
+ * Retorna ISO 8601 com offset. Limita a `maxSlots` (default 60) pra não estourar
+ * o prompt da IA.
+ */
+export function gerarSlotsLivres(params: {
+  agora: Date;
+  dias: number;
+  incluirFimDeSemana: boolean;
+  duracaoMin: number;
+  horaInicio: number;
+  horaFim: number;
+  ocupados: Array<{ inicio: string; fim: string }>;
+  offsetHoras?: number;
+  maxSlots?: number;
+}): SlotLivre[] {
+  const offset = params.offsetHoras ?? -3;
+  const maxSlots = params.maxSlots ?? 60;
+  const dur = params.duracaoMin;
+  const agoraMs = params.agora.getTime();
+  const ocup = params.ocupados.map((o) => [new Date(o.inicio).getTime(), new Date(o.fim).getTime()] as const);
+
+  // "Hoje" no relógio local: desloca `agora` pelo offset e lê componentes UTC.
+  const baseLocal = new Date(agoraMs + offset * 3600 * 1000);
+  const out: SlotLivre[] = [];
+
+  for (let d = 0; d < params.dias && out.length < maxSlots; d++) {
+    const diaLocal = new Date(baseLocal.getTime() + d * 86400000);
+    const ano = diaLocal.getUTCFullYear();
+    const mes = diaLocal.getUTCMonth();
+    const dom = diaLocal.getUTCDate();
+    const weekday = diaLocal.getUTCDay(); // 0=Dom, 6=Sáb
+    if (!params.incluirFimDeSemana && (weekday === 0 || weekday === 6)) continue;
+
+    for (let min = params.horaInicio * 60; min + dur <= params.horaFim * 60 && out.length < maxSlots; min += dur) {
+      const hh = Math.floor(min / 60);
+      const mm = min % 60;
+      const startMs = Date.UTC(ano, mes, dom, hh, mm) - offset * 3600 * 1000;
+      const endMs = startMs + dur * 60 * 1000;
+      if (startMs < agoraMs) continue; // passado
+      const ocupado = ocup.some(([os, oe]) => os < endMs && oe > startMs);
+      if (ocupado) continue;
+      out.push({
+        inicioISO: formatarISOComOffset(startMs, offset),
+        fimISO: formatarISOComOffset(endMs, offset),
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Handler do passo `agenda_criar`. Cria um compromisso na Agenda NATIVA do
  * escritório (não no Cal.com), atribuído a um responsável e vinculado ao
@@ -1764,6 +1841,10 @@ async function handleAgendaCriar(
     agendamentoIdVar?: string;
     diasParaFrente?: number;
     salvarEm?: string;
+    incluirFimDeSemana?: boolean;
+    duracaoSlotMinutos?: number;
+    horaInicio?: number;
+    horaFim?: number;
   };
   const acao = cfg.acao || "agendar";
   const { interpolarVariaveis } = await import("./interpolar");
@@ -1782,6 +1863,18 @@ async function handleAgendaCriar(
       return Number.isNaN(v) ? undefined : v;
     }
     return undefined;
+  };
+
+  // Mensagem clara quando o responsável não resolve — distingue o caso
+  // "automático sem atendente" (comum em lead novo) do "não configurado".
+  const erroResponsavel = (): string => {
+    if (cfg.responsavelAuto) {
+      return "Responsável automático: este contato ainda não tem atendente atribuído. Escolha um advogado fixo neste passo (ex: você mesmo), ou atribua um atendente ao contato no CRM.";
+    }
+    if (cfg.responsavelVar && cfg.responsavelVar.trim()) {
+      return `Responsável via variável não resolveu (${cfg.responsavelVar}). Confira se a variável tem um ID válido neste ponto do fluxo.`;
+    }
+    return "Configure o responsável (advogado) neste passo.";
   };
 
   // Data: distingue "horário específico" de "sem horário" (vazio → agora/pendente).
@@ -1808,7 +1901,7 @@ async function handleAgendaCriar(
     // ── Verificar horário disponível (não cria nada) ──
     if (acao === "verificar_horario") {
       const responsavelId = resolverResponsavel();
-      if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: "Verificar horário: configure o responsável." };
+      if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: `Verificar horário — ${erroResponsavel()}` };
       const { dataInicio, dataFim } = resolverData();
       const r = await exec.verificarDisponibilidadeAgenda({
         responsavelId,
@@ -1818,33 +1911,45 @@ async function handleAgendaCriar(
       return { sucesso: true, contexto: { ...ctx, agendaDisponivel: r.disponivel, agendaConflitos: r.conflitos } };
     }
 
-    // ── Consultar agenda (lista compromissos — não cria nada) ──
+    // ── Consultar agenda: calcula HORÁRIOS LIVRES p/ oferecer (não cria nada) ──
     if (acao === "consultar") {
       const responsavelId = resolverResponsavel();
-      if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: "Consultar agenda: configure o responsável." };
+      if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: `Consultar agenda — ${erroResponsavel()}` };
       const dias = Math.max(1, Math.min(365, Number(cfg.diasParaFrente) || 7));
-      const inicio = new Date();
-      const fim = new Date(inicio.getTime() + dias * 24 * 60 * 60 * 1000);
-      const compromissos = await exec.listarAgendaResponsavel({
+      const incluirFimDeSemana = !!cfg.incluirFimDeSemana;
+      const duracaoMin = [15, 30, 60].includes(Number(cfg.duracaoSlotMinutos)) ? Number(cfg.duracaoSlotMinutos) : 30;
+      const horaInicio = Math.max(0, Math.min(23, Number.isFinite(Number(cfg.horaInicio)) ? Number(cfg.horaInicio) : 9));
+      const horaFim = Math.max(horaInicio + 1, Math.min(24, Number.isFinite(Number(cfg.horaFim)) ? Number(cfg.horaFim) : 18));
+
+      const agora = new Date();
+      const fim = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000);
+      const ocupados = await exec.listarAgendaResponsavel({
         responsavelId,
-        dataInicio: inicio.toISOString(),
+        dataInicio: agora.toISOString(),
         dataFim: fim.toISOString(),
       });
 
-      // Texto pronto pra interpolar num passo de IA depois — datas em ISO 8601.
-      const cabecalho = `Janela consultada (ISO 8601): ${inicio.toISOString()} até ${fim.toISOString()} (${dias} dia(s)).`;
-      const corpo = compromissos.length === 0
-        ? "Nenhum compromisso na janela — responsável totalmente livre."
-        : [
-            `Horários OCUPADOS do responsável (${compromissos.length}):`,
-            ...compromissos.map((c) => `- início: ${c.inicio} | fim: ${c.fim}${c.titulo ? ` | ${c.titulo}` : ""}`),
-          ].join("\n");
+      const livres = gerarSlotsLivres({
+        agora,
+        dias,
+        incluirFimDeSemana,
+        duracaoMin,
+        horaInicio,
+        horaFim,
+        ocupados,
+      });
+
+      const fds = incluirFimDeSemana ? "incluindo fim de semana" : "sem fim de semana";
+      const cabecalho = `Horários LIVRES do responsável — próximos ${dias} dia(s), reuniões de ${duracaoMin} min, ${horaInicio}h–${horaFim}h, ${fds}. Datas em ISO 8601 (fuso -03:00, Brasília).`;
+      const corpo = livres.length === 0
+        ? "Nenhum horário livre encontrado com esses critérios."
+        : livres.map((s) => `- ${s.inicioISO} (até ${s.fimISO})`).join("\n");
       const texto = `${cabecalho}\n${corpo}`;
 
       const novoCtx: SmartflowContexto = {
         ...ctx,
-        agendaCompromissos: compromissos, // estruturado (ISO), caso queira usar em outro lugar
-        agendaConsultaInicio: inicio.toISOString(),
+        agendaSlotsLivres: livres, // estruturado (ISO), caso queira usar em outro lugar
+        agendaConsultaInicio: agora.toISOString(),
         agendaConsultaFim: fim.toISOString(),
       };
       const salvarEm = (cfg.salvarEm || "").trim();
@@ -1882,11 +1987,7 @@ async function handleAgendaCriar(
     // ── Agendar (default): cria o compromisso ──
     const responsavelId = resolverResponsavel();
     if (!responsavelId) {
-      return {
-        sucesso: false,
-        contexto: ctx,
-        mensagemErro: "Sem responsável pro agendamento — configure um advogado, use o atendente do cliente, ou garanta que o lead já tem atendente.",
-      };
+      return { sucesso: false, contexto: ctx, mensagemErro: `Agendar — ${erroResponsavel()}` };
     }
     const { dataInicio, dataFim, especifico } = resolverData();
     const tituloRaw = (cfg.titulo && cfg.titulo.trim())
