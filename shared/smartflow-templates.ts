@@ -40,6 +40,75 @@ export interface TemplateSmartflow {
 
 export const TEMPLATES_SMARTFLOW: ReadonlyArray<TemplateSmartflow> = [
   {
+    id: "atendente_conversa_agenda",
+    nome: "Atendente que conversa e agenda",
+    descricao:
+      "A IA conversa com o cliente lembrando do papo, vai captando os dados e, quando ele confirma que quer agendar, cria o agendamento e passa pro humano. A cada nova mensagem o fluxo recomeça sozinho — você não precisa desenhar loop.",
+    icone: "calendar-clock",
+    gradiente: "from-violet-500 to-indigo-500",
+    gatilho: "mensagem_canal",
+    badge: "novo",
+    dica: "Defina o agente/prompt no passo 'Responder com IA'. No bloco 'Agendamento', escolha um advogado responsável (ou garanta que o lead recebe um atendente).",
+    passos: [
+      {
+        clienteId: "tpl-sdr-1",
+        tipo: "crm_buscar_contato",
+        config: { tipoBusca: "telefone", valor: "{{telefoneCliente}}" },
+        proximoSe: { default: "tpl-sdr-2" },
+      },
+      {
+        clienteId: "tpl-sdr-2",
+        tipo: "ia_responder",
+        config: {
+          prompt:
+            "Você é um atendente do escritório. Converse de forma acolhedora e profissional, faça UMA pergunta por vez pra entender o caso do cliente e, quando fizer sentido, ofereça agendar uma consulta sem custo. Não prometa resultado nem invente informação.",
+        },
+        proximoSe: { default: "tpl-sdr-3" },
+      },
+      {
+        clienteId: "tpl-sdr-3",
+        tipo: "ia_extrair_campos",
+        config: {
+          fonteMensagem: "mensagem",
+          campos: [
+            { chave: "intencao_agendar", tipo: "texto", descricao: "Responda 'sim' SE o cliente confirmou que quer agendar/marcar uma consulta. Senão, não preencha.", persistir: false },
+            { chave: "first_name", tipo: "texto", descricao: "Primeiro nome do cliente, se ele disse.", persistir: false },
+          ],
+        },
+        proximoSe: { default: "tpl-sdr-4" },
+      },
+      {
+        clienteId: "tpl-sdr-4",
+        tipo: "whatsapp_enviar",
+        config: { template: "{{respostaIA}}" },
+        proximoSe: { default: "tpl-sdr-5" },
+      },
+      {
+        clienteId: "tpl-sdr-5",
+        tipo: "condicional",
+        config: {
+          // Sai do "loop" quando o cliente confirma o agendamento. Senão, o
+          // fluxo termina aqui e a PRÓXIMA mensagem recomeça do topo (com memória).
+          condicoes: [
+            { id: "agendar", campo: "extracao.intencao_agendar", operador: "contem", valor: "sim" },
+          ],
+        },
+        proximoSe: { cond_agendar: "tpl-sdr-6" },
+      },
+      {
+        clienteId: "tpl-sdr-6",
+        tipo: "agenda_criar",
+        config: { acao: "agendar", responsavelAuto: true, titulo: "Consulta inicial — {{nomeCliente}}" },
+        proximoSe: { default: "tpl-sdr-7" },
+      },
+      {
+        clienteId: "tpl-sdr-7",
+        tipo: "transferir",
+        config: { mensagem: "Perfeito! Já registrei seu pedido de agendamento e um de nossos advogados vai confirmar o horário com você. 🙌" },
+      },
+    ],
+  },
+  {
     id: "atendimento_processo",
     nome: "Atendimento sobre processo",
     descricao:
