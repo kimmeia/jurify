@@ -32,6 +32,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
+    criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
     listarBookings: vi.fn().mockResolvedValue([]),
     cancelarBooking: vi.fn().mockResolvedValue(true),
     reagendarBooking: vi.fn().mockResolvedValue(true),
@@ -1442,6 +1443,51 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("agenda_criar", () => {
+    it("cria compromisso na agenda interna com título interpolado e vincula o contato", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(555);
+      const exec = criarMockExecutores({ criarAgendamentoInterno });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "agenda_criar",
+          config: { responsavelId: 9, titulo: "Consulta — {{nomeCliente}}", duracaoMinutos: 30 },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { nomeCliente: "Maria", contatoId: 77, telefoneCliente: "5585999990000" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.agendamentoInternoId).toBe(555);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(
+        expect.objectContaining({
+          responsavelId: 9,
+          tipo: "reuniao_comercial",
+          titulo: "Consulta — Maria",
+          contatoId: 77,
+          contatoTelefone: "5585999990000",
+        }),
+      );
+    });
+
+    it("falha de forma clara sem responsável configurado", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { nomeCliente: "Ana" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("responsável");
+    });
+  });
+
   describe("whatsapp_enviar", () => {
     it("substitui variáveis no template", async () => {
       const exec = criarMockExecutores();
@@ -1836,6 +1882,77 @@ describe("SmartFlow Engine", () => {
 
       const r = await executarCenario(passos, { mensagem: "isso aqui é urgente!!" }, exec);
       expect(r.respostas.join("|")).toBe("ACHOU");
+    });
+
+    it("condição composta E: só bate quando TODOS os requisitos batem", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_pronto: "agendar", fallback: "continua" },
+          config: {
+            condicoes: [
+              {
+                id: "pronto",
+                logica: "E",
+                requisitos: [
+                  { campo: "confirmacao_agendamento", operador: "igual", valor: "SIM" },
+                  { campo: "first_name", operador: "existe" },
+                  { campo: "data_agendamento", operador: "existe" },
+                ],
+              },
+            ],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "agendar", config: { template: "AGENDAR" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "continua", config: { template: "CONTINUA" } },
+      ];
+
+      // Falta a data → não bate → fallback
+      const rFalta = await executarCenario(
+        passos,
+        { confirmacao_agendamento: "SIM", first_name: "Ana" },
+        exec,
+      );
+      expect(rFalta.respostas.join("|")).toBe("CONTINUA");
+
+      // Tudo presente → bate
+      const rOk = await executarCenario(
+        passos,
+        { confirmacao_agendamento: "SIM", first_name: "Ana", data_agendamento: "2026-06-01" },
+        exec,
+      );
+      expect(rOk.respostas.join("|")).toBe("AGENDAR");
+    });
+
+    it("condição composta OU: basta um requisito bater", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_transf: "transferir", fallback: "segue" },
+          config: {
+            condicoes: [
+              {
+                id: "transf",
+                logica: "OU",
+                requisitos: [
+                  { campo: "motivo", operador: "igual", valor: "TRANSFERIR" },
+                  { campo: "conteudo_sexual", operador: "igual", valor: "SIM" },
+                ],
+              },
+            ],
+          },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "transferir", config: { template: "TRANSF" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "segue", config: { template: "SEGUE" } },
+      ];
+
+      const rUm = await executarCenario(passos, { conteudo_sexual: "SIM" }, exec);
+      expect(rUm.respostas.join("|")).toBe("TRANSF");
+
+      const rNenhum = await executarCenario(passos, { motivo: "DUVIDA" }, exec);
+      expect(rNenhum.respostas.join("|")).toBe("SEGUE");
     });
 
     it("guarda contra loop infinito", async () => {

@@ -61,6 +61,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   calcom_remarcar: [
     { path: "horarioEscolhido", label: "Novo horário (sobrescreve o anterior)", tipo: "texto" },
   ],
+  agenda_criar: [
+    { path: "agendamentoInternoId", label: "ID do compromisso criado na Agenda do escritório", tipo: "número" },
+  ],
   whatsapp_enviar: [
     { path: "mensagensEnviadas", label: "Lista de mensagens enviadas", tipo: "lista" },
   ],

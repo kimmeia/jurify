@@ -68,6 +68,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   calcom_listar: CalendarSearch,
   calcom_cancelar: CalendarX,
   calcom_remarcar: CalendarClock,
+  agenda_criar: CalendarCheck,
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
