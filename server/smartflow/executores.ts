@@ -452,6 +452,11 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
       const { extrairCamposEstruturados } = await import("../integracoes/llm-extracao");
       const contextoCliente = await resolverContextoCliente(escritorioId, params.contatoId);
+      // Histórico da conversa: sem isso a extração só via a última mensagem e
+      // perdia dados informados antes (nome numa msg, data noutra).
+      const historico = params.conversaId
+        ? await carregarHistoricoConversa(params.conversaId, params.mensagem)
+        : [];
       const r = await extrairCamposEstruturados(
         {
           provider: config.provider,
@@ -465,6 +470,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         params.mensagem,
         params.campos,
         contextoCliente || undefined,
+        historico,
       );
       return r.campos;
     },

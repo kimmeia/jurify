@@ -166,6 +166,8 @@ export interface SmartflowExecutores {
       obrigatorio?: boolean;
     }>;
     contatoId?: number;
+    /** Conversa pra carregar histórico — extrai dados de toda a conversa, não só da última msg. */
+    conversaId?: number;
   }) => Promise<Record<string, unknown>>;
   /**
    * Busca contato no CRM por telefone/email/cpf. Retorna `null` quando
@@ -439,6 +441,8 @@ async function handleIAExtrairCampos(
         obrigatorio: c.obrigatorio,
       })),
       contatoId: typeof ctx.contatoId === "number" ? ctx.contatoId : undefined,
+      // Histórico: extrai dados de toda a conversa, não só da última mensagem.
+      conversaId: typeof ctx.conversaId === "number" ? ctx.conversaId : undefined,
     });
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `Extração IA: ${err.message}` };
@@ -459,9 +463,14 @@ async function handleIAExtrairCampos(
   // específico falhar (loga via mensagemErro só se TODOS falharem).
   const persistRequests = campos.filter((c) => c.persistir && c.chave in extraidos);
   const contatoIdNum = typeof ctx.contatoId === "number" ? ctx.contatoId : null;
+  // Coleta motivos de falha na persistência. Antes isso era engolido calado
+  // (catch {}), então o usuário via "não salvou" sem nenhuma pista. Agora
+  // vai pro contexto (captacaoAvisos) pra ficar visível.
+  const avisosCaptura: string[] = [];
   if (persistRequests.length > 0 && contatoIdNum == null) {
-    // Não temos contatoId — não dá pra persistir; só pula sem dar erro.
-    // O dado fica em ctx.extracao do mesmo jeito.
+    avisosCaptura.push(
+      "Não dá pra salvar nos campos do cliente sem identificar o contato (use um passo \"Buscar contato\" antes). Os dados ficaram só no contexto do fluxo.",
+    );
   } else if (persistRequests.length > 0 && contatoIdNum != null) {
     for (const c of persistRequests) {
       const valor = extraidos[c.chave];
@@ -473,9 +482,10 @@ async function handleIAExtrairCampos(
           valor: String(valor),
         });
         novosCamposCliente[c.chave] = String(valor);
-      } catch {
-        // Campo provavelmente não existe no catálogo do escritório. Não falha
-        // o passo inteiro — extração funcionou, persistência opcional.
+      } catch (err: any) {
+        // Não falha o passo (a extração funcionou), mas NÃO engole o erro:
+        // registra o motivo (ex: campo não existe no catálogo do escritório).
+        avisosCaptura.push(`Campo "${c.chave}" não salvo: ${err?.message ?? "erro desconhecido"}`);
       }
     }
   }
@@ -486,6 +496,7 @@ async function handleIAExtrairCampos(
       ...ctx,
       extracao: novaExtracao,
       cliente: { ...clienteAtual, campos: novosCamposCliente },
+      ...(avisosCaptura.length > 0 ? { captacaoAvisos: avisosCaptura } : {}),
     },
   };
 }

@@ -273,6 +273,50 @@ describe("SmartFlow Engine", () => {
       );
     });
 
+    it("passa conversaId pro extrator (extrai da conversa toda, não só da última msg)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ nome: "Ana" });
+      const exec = criarMockExecutores({ extrairCamposIA });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "nome", tipo: "texto" }] },
+        },
+      ];
+
+      await executarCenario(passos, { mensagem: "é Ana", contatoId: 7, conversaId: 99 }, exec);
+
+      expect(extrairCamposIA).toHaveBeenCalledWith(
+        expect.objectContaining({ conversaId: 99, contatoId: 7 }),
+      );
+    });
+
+    it("registra aviso visível quando o campo não salva (não engole o erro)", async () => {
+      const extrairCamposIA = vi.fn().mockResolvedValue({ nome: "Ana" });
+      const definirCampoPersonalizadoCliente = vi
+        .fn()
+        .mockRejectedValue(new Error('Campo personalizado "nome" não existe no catálogo do escritório'));
+      const exec = criarMockExecutores({ extrairCamposIA, definirCampoPersonalizadoCliente });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "ia_extrair_campos",
+          config: { campos: [{ chave: "nome", tipo: "texto", persistir: true }] },
+        },
+      ];
+
+      const resultado = await executarCenario(passos, { mensagem: "é Ana", contatoId: 7 }, exec);
+
+      // O passo não falha (a extração funcionou), mas o motivo fica visível.
+      expect(resultado.sucesso).toBe(true);
+      const avisos = (resultado.contexto as any).captacaoAvisos as string[];
+      expect(Array.isArray(avisos)).toBe(true);
+      expect(avisos[0]).toContain("nome");
+      expect(avisos[0]).toContain("catálogo");
+    });
+
     it("falha graciosamente sem campos configurados", async () => {
       const exec = criarMockExecutores();
       const passos: Passo[] = [
