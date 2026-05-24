@@ -271,6 +271,7 @@ async function startServer() {
   server.listen(port, () => {
     log.info({ port }, `Server running on http://localhost:${port}/`);
     verificarMysqldumpDisponivel();
+    verificarChromiumDisponivel();
     iniciarJobs();
   });
 }
@@ -300,6 +301,44 @@ function verificarMysqldumpDisponivel(): void {
     const log = createLogger("backup-startup");
     log.info({ versao: r.stdout.trim() }, "[backup-startup] mysqldump OK");
   });
+}
+
+// Diagnóstico de boot: confirma se o Chromium do Playwright está instalado.
+// O motor próprio (auto-validação de credenciais do cofre + monitoramento de
+// processos) depende dele em runtime. Se o binário não estiver no container,
+// TODA revalidação automática falha — e o sintoma (processos param de
+// atualizar) aparece longe da causa. Logando no boot, a ausência fica óbvia
+// na hora, em vez de virar uma falha silenciosa no meio de um cron.
+function verificarChromiumDisponivel(): void {
+  const log = createLogger("motor-startup");
+  import("@playwright/test")
+    .then(async ({ chromium }) => {
+      const { existsSync } = await import("node:fs");
+      let execPath: string | null = null;
+      try {
+        execPath = chromium.executablePath();
+      } catch {
+        execPath = null;
+      }
+      if (!execPath || !existsSync(execPath)) {
+        log.error(
+          {
+            execPath,
+            ambiente: resolverAmbiente(),
+            jurifyAmbiente: process.env.JURIFY_AMBIENTE ?? "(unset)",
+          },
+          "[motor-startup] Chromium do Playwright NÃO encontrado — auto-validação de credenciais e monitoramento do motor próprio vão falhar neste ambiente.",
+        );
+        return;
+      }
+      log.info({ execPath }, "[motor-startup] Chromium do motor próprio disponível");
+    })
+    .catch((err) => {
+      log.error(
+        { err: err instanceof Error ? err.message : String(err) },
+        "[motor-startup] não foi possível verificar o Chromium (pacote @playwright/test ausente em runtime?)",
+      );
+    });
 }
 
 // Captura erros assíncronos que escapam de promises e exceções não tratadas.
