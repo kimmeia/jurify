@@ -266,6 +266,16 @@ export interface SmartflowExecutores {
     dataFim: string;
   }) => Promise<{ disponivel: boolean; conflitos: number }>;
   /**
+   * Lista os compromissos (não cancelados) do responsável na janela
+   * [dataInicio, dataFim], ordenados por início. Datas em ISO 8601. Usado pelo
+   * passo `agenda_criar` na ação "consultar" — alimenta um passo de IA depois.
+   */
+  listarAgendaResponsavel: (params: {
+    responsavelId: number;
+    dataInicio: string;
+    dataFim: string;
+  }) => Promise<Array<{ titulo: string; inicio: string; fim: string; status: string }>>;
+  /**
    * Edita/cancela um compromisso da Agenda interna pelo ID. Usado pelas ações
    * "editar" e "cancelar" do passo agenda_criar. Campos ausentes ficam intactos.
    */
@@ -1739,7 +1749,7 @@ async function handleAgendaCriar(
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
   const cfg = passo.config as {
-    acao?: "agendar" | "verificar_horario" | "editar" | "cancelar";
+    acao?: "agendar" | "verificar_horario" | "consultar" | "editar" | "cancelar";
     responsavelId?: number;
     responsavelAuto?: boolean;
     responsavelVar?: string;
@@ -1752,6 +1762,8 @@ async function handleAgendaCriar(
     local?: string;
     verificarDisponibilidade?: boolean;
     agendamentoIdVar?: string;
+    diasParaFrente?: number;
+    salvarEm?: string;
   };
   const acao = cfg.acao || "agendar";
   const { interpolarVariaveis } = await import("./interpolar");
@@ -1804,6 +1816,40 @@ async function handleAgendaCriar(
         dataFim: dataFim.toISOString(),
       });
       return { sucesso: true, contexto: { ...ctx, agendaDisponivel: r.disponivel, agendaConflitos: r.conflitos } };
+    }
+
+    // ── Consultar agenda (lista compromissos — não cria nada) ──
+    if (acao === "consultar") {
+      const responsavelId = resolverResponsavel();
+      if (!responsavelId) return { sucesso: false, contexto: ctx, mensagemErro: "Consultar agenda: configure o responsável." };
+      const dias = Math.max(1, Math.min(365, Number(cfg.diasParaFrente) || 7));
+      const inicio = new Date();
+      const fim = new Date(inicio.getTime() + dias * 24 * 60 * 60 * 1000);
+      const compromissos = await exec.listarAgendaResponsavel({
+        responsavelId,
+        dataInicio: inicio.toISOString(),
+        dataFim: fim.toISOString(),
+      });
+
+      // Texto pronto pra interpolar num passo de IA depois — datas em ISO 8601.
+      const cabecalho = `Janela consultada (ISO 8601): ${inicio.toISOString()} até ${fim.toISOString()} (${dias} dia(s)).`;
+      const corpo = compromissos.length === 0
+        ? "Nenhum compromisso na janela — responsável totalmente livre."
+        : [
+            `Horários OCUPADOS do responsável (${compromissos.length}):`,
+            ...compromissos.map((c) => `- início: ${c.inicio} | fim: ${c.fim}${c.titulo ? ` | ${c.titulo}` : ""}`),
+          ].join("\n");
+      const texto = `${cabecalho}\n${corpo}`;
+
+      const novoCtx: SmartflowContexto = {
+        ...ctx,
+        agendaCompromissos: compromissos, // estruturado (ISO), caso queira usar em outro lugar
+        agendaConsultaInicio: inicio.toISOString(),
+        agendaConsultaFim: fim.toISOString(),
+      };
+      const salvarEm = (cfg.salvarEm || "").trim();
+      if (salvarEm) novoCtx[salvarEm] = texto;
+      return { sucesso: true, contexto: novoCtx };
     }
 
     // ── Cancelar ──

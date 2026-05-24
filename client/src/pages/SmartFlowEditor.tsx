@@ -3681,6 +3681,7 @@ function ConfigAgendaCriarFields({
           <SelectContent>
             <SelectItem value="agendar">Agendar (criar compromisso)</SelectItem>
             <SelectItem value="verificar_horario">Verificar horário disponível</SelectItem>
+            <SelectItem value="consultar">Consultar agenda (listar compromissos)</SelectItem>
             <SelectItem value="editar">Editar / remarcar</SelectItem>
             <SelectItem value="cancelar">Cancelar</SelectItem>
           </SelectContent>
@@ -3734,6 +3735,41 @@ function ConfigAgendaCriarFields({
           </div>
           {responsavelField("Responsável (advogado)", "De quem checar a agenda.")}
           {dataField}
+        </>
+      )}
+
+      {acao === "consultar" && (
+        <>
+          <div className="rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 p-2">
+            <p className="text-[11px] text-violet-800 dark:text-violet-300">
+              <strong>Lista os compromissos</strong> do responsável nos próximos N dias (datas em <strong>ISO 8601</strong>) e salva num campo. Use esse campo no prompt de um passo <strong>"Responder com IA"</strong> depois — a IA sugere os horários livres.
+            </p>
+          </div>
+          {responsavelField("Responsável (advogado)", "De quem listar a agenda.")}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Dias pra frente</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={Number(cfg.diasParaFrente) || 7}
+                onChange={(e) => onChange({ diasParaFrente: Number(e.target.value) || 7 })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Salvar em</Label>
+              <Input
+                className="font-mono text-xs"
+                value={String(cfg.salvarEm ?? "")}
+                onChange={(e) => onChange({ salvarEm: e.target.value })}
+                placeholder="agendaResponsavel"
+              />
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground -mt-1">
+            Depois use <code>{`{{${String(cfg.salvarEm || "agendaResponsavel")}}}`}</code> no prompt da IA. Também ficam disponíveis <code>{"{{agendaConsultaInicio}}"}</code> e <code>{"{{agendaConsultaFim}}"}</code> (ISO).
+          </p>
         </>
       )}
 
