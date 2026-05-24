@@ -882,6 +882,58 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("retomada graph-aware (loop conversacional)", () => {
+    // Fluxo: IA responde → aguarda resposta → decisão (quer agendar?).
+    // Se "sim" → transferir (sai). Senão → volta pra IA (loop até confirmar).
+    const passosLoop = (): Passo[] => [
+      { id: 1, ordem: 1, tipo: "ia_responder", clienteId: "ia", config: {}, proximoSe: { default: "wait" } },
+      { id: 2, ordem: 2, tipo: "whatsapp_aguardar_resposta", clienteId: "wait", config: { template: "Quer agendar?" }, proximoSe: { default: "cond" } },
+      {
+        id: 3, ordem: 3, tipo: "condicional", clienteId: "cond",
+        config: { condicoes: [{ id: "ok", campo: "respostaUsuario", operador: "contem", valor: "sim" }] },
+        proximoSe: { cond_ok: "fim", fallback: "ia" },
+      },
+      { id: 4, ordem: 4, tipo: "transferir", clienteId: "fim", config: { mensagem: "Combinado!" } },
+    ];
+    const ctxBase = { contatoId: 1, canalId: 9, telefoneCliente: "5585999990000" };
+
+    it("primeira passada para no 'aguardar' e marca o nó", async () => {
+      const exec = criarMockExecutores({ chamarIA: vi.fn().mockResolvedValue("Olá! Posso ajudar?") });
+      const r = await executarCenario(passosLoop(), { ...ctxBase }, exec);
+      expect(r.contexto.aguardandoMensagem).toBe(true);
+      expect(r.contexto.aguardandoNodeClienteId).toBe("wait");
+    });
+
+    it("resposta que NÃO confirma volta pra IA e pausa de novo (loop)", async () => {
+      const chamarIA = vi.fn().mockResolvedValue("Entendi, me conta mais?");
+      const exec = criarMockExecutores({ chamarIA });
+      // simula o que o dispatcher faz ao retomar: injeta resposta + marca o nó de retomada
+      const ctxResume = {
+        ...ctxBase,
+        respostaUsuario: "ainda estou pensando",
+        __resumindoWaitClienteId: "wait",
+      };
+      const r = await executarCenario(passosLoop(), ctxResume, exec);
+      // passou pelo wait → cond → fallback → IA (respondeu de novo) → wait (pausou)
+      expect(chamarIA).toHaveBeenCalled();
+      expect(r.contexto.aguardandoMensagem).toBe(true);
+      expect(r.contexto.aguardandoNodeClienteId).toBe("wait");
+      expect(r.contexto.transferir).toBeFalsy();
+    });
+
+    it("resposta que confirma sai do loop e transfere", async () => {
+      const exec = criarMockExecutores({ chamarIA: vi.fn().mockResolvedValue("x") });
+      const ctxResume = {
+        ...ctxBase,
+        respostaUsuario: "sim, quero agendar",
+        __resumindoWaitClienteId: "wait",
+      };
+      const r = await executarCenario(passosLoop(), ctxResume, exec);
+      expect(r.contexto.transferir).toBe(true);
+      expect(r.contexto.aguardandoMensagem).toBeFalsy();
+    });
+  });
+
   describe("para_cada_item", () => {
     it("itera 0 vezes quando lista está vazia (não falha)", async () => {
       const enviarWhatsApp = vi.fn().mockResolvedValue(true);
