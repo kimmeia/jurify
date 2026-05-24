@@ -431,6 +431,7 @@ function TrocarGatilhoPopover({
   const porGrupo = useMemo(() => {
     const m = new Map<GrupoSmartflow, GatilhoMeta[]>();
     for (const g of GATILHO_META) {
+      if (g.oculto) continue; // gatilhos legados (ex: WhatsApp QR) não aparecem pra escolher
       const list = m.get(g.grupo) ?? [];
       list.push(g);
       m.set(g.grupo, list);

@@ -185,13 +185,13 @@ const GRUPO_ICON: Record<GrupoSmartflow, LucideIcon> = {
  * precisamos materializar um gatilho concreto no nó.
  */
 function primeiraOperacaoDaCategoria(grupo: GrupoSmartflow): GatilhoSmartflow | null {
-  const meta = GATILHO_META.find((g) => g.grupo === grupo);
+  const meta = GATILHO_META.find((g) => g.grupo === grupo && !g.oculto);
   return meta?.id ?? null;
 }
 
-/** Operações (gatilhos) disponíveis numa categoria, mantendo a ordem de `GATILHO_META`. */
+/** Operações (gatilhos) disponíveis numa categoria, mantendo a ordem de `GATILHO_META`. Gatilhos ocultos (legados) ficam de fora. */
 function operacoesDaCategoria(grupo: GrupoSmartflow): GatilhoMeta[] {
-  return GATILHO_META.filter((g) => g.grupo === grupo);
+  return GATILHO_META.filter((g) => g.grupo === grupo && !g.oculto);
 }
 
 // ─── Tipagem dos nós ───────────────────────────────────────────────────────
@@ -2815,6 +2815,64 @@ function ConfigWhatsappEnviarFields({
 }
 
 /**
+ * Config do passo `transferir`. Pausa o bot (marca a conversa como
+ * "em_atendimento") e, opcionalmente, envia uma mensagem de despedida antes
+ * de pausar. Campo vazio = pausa em silêncio.
+ */
+function ConfigTransferirFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  // Diferencia "ainda não configurado" (undefined → usa texto padrão no motor)
+  // de "configurado vazio" (string vazia → silêncio).
+  const definido = typeof cfg.mensagem === "string";
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.mensagem || "");
+    onChange({ mensagem: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2">
+        <p className="text-[11px] text-amber-800 dark:text-amber-300">
+          Ao chegar aqui, o fluxo <strong>encerra</strong> e o bot <strong>para de responder</strong> essa
+          conversa (fica "em atendimento"). Um atendente assume pela tela de Atendimento.
+        </p>
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Mensagem de despedida (opcional)</Label>
+          <VariableTrigger
+            inputId="cfg-transferir-mensagem"
+            variaveis={variaveis}
+            onInsert={insertNoCfg}
+          />
+        </div>
+        <VariableInput
+          id="cfg-transferir-mensagem"
+          as="textarea"
+          rows={3}
+          highlight
+          preview
+          value={String(cfg.mensagem ?? "")}
+          onChange={(v) => onChange({ mensagem: v })}
+          variaveis={variaveis}
+          placeholder="Vou transferir você para um de nossos advogados. Um momento, por favor."
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {definido
+            ? "Deixe em branco para pausar o bot sem enviar nenhuma mensagem."
+            : "Sem preencher, enviamos uma mensagem padrão de transferência. Edite para personalizar — ou apague tudo para pausar em silêncio."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Config do passo `whatsapp_aguardar_resposta`. Envia mensagem + lista
  * opcional de opções (vira menu numerado) + timeout. O fluxo pausa até
  * o cliente responder; quando há opções, a resposta é parseada pra
@@ -3954,12 +4012,7 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
     case "whatsapp_enviar":
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
     case "transferir":
-      return (
-        <p className="text-xs text-muted-foreground">
-          Marca a conversa como "em_atendimento" e encerra o fluxo. Útil em últimos passos de um caminho
-          condicional (ex: quando IA classifica como emergência).
-        </p>
-      );
+      return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
     case "condicional":
       return <ConfigCondicionalFields cfg={cfg} onChange={onChange} />;
     case "esperar":
