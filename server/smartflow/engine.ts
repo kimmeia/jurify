@@ -26,8 +26,10 @@ export interface SmartflowContexto {
   horariosDisponiveis?: string[];
   /** Horário escolhido pelo cliente */
   horarioEscolhido?: string;
-  /** ID do agendamento criado */
+  /** ID do agendamento criado (Cal.com) */
   agendamentoId?: string;
+  /** ID do compromisso criado na Agenda interna (passo agenda_criar) */
+  agendamentoInternoId?: number;
   /** Se deve transferir pra humano */
   transferir?: boolean;
   /** Mensagens enviadas */
@@ -233,6 +235,22 @@ export interface SmartflowExecutores {
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
   criarAgendamento: (horario: string, nome: string, email: string) => Promise<string>;
+  /**
+   * Cria um compromisso na Agenda NATIVA do escritório (tabela `agendamentos`),
+   * sem depender do Cal.com. Usado pelo passo `agenda_criar`. Retorna o id.
+   */
+  criarAgendamentoInterno: (params: {
+    responsavelId: number;
+    tipo: string;
+    titulo: string;
+    dataInicio: string;
+    dataFim?: string;
+    descricao?: string;
+    local?: string;
+    prioridade?: string;
+    contatoId?: number;
+    contatoTelefone?: string;
+  }) => Promise<number>;
   /**
    * Lista bookings do Cal.com (usado pelo passo `calcom_listar`). O resultado
    * vai para `ctx.bookings` sem formatação específica.
@@ -1187,8 +1205,19 @@ function handleCondicional(
   passo: Passo,
   ctx: SmartflowContexto,
 ): PassoResultado {
+  type Requisito = { campo?: string; operador?: string; valor?: string; valor2?: string };
   const cfg = passo.config as {
-    condicoes?: Array<{ id: string; campo: string; operador: string; valor?: string; valor2?: string }>;
+    condicoes?: Array<{
+      id: string;
+      // Compostas: lista de requisitos + lógica de combinação.
+      requisitos?: Requisito[];
+      logica?: "E" | "OU";
+      // Legado: 1 requisito inline.
+      campo?: string;
+      operador?: string;
+      valor?: string;
+      valor2?: string;
+    }>;
     campo?: string;
     operador?: string;
     valor?: string;
@@ -1199,13 +1228,19 @@ function handleCondicional(
   // Caminho novo: condicoes[] populadas
   if (condicoes.length > 0) {
     for (const c of condicoes) {
-      const bate = avaliarCondicao(
-        c.campo || "intencao",
-        c.operador || "igual",
-        c.valor || "",
-        c.valor2,
-        ctx,
+      // Normaliza pra lista de requisitos: compostos (requisitos[]) ou o
+      // requisito único legado (campo/operador/valor da própria condição).
+      const reqs: Requisito[] =
+        Array.isArray(c.requisitos) && c.requisitos.length > 0
+          ? c.requisitos
+          : [{ campo: c.campo, operador: c.operador, valor: c.valor, valor2: c.valor2 }];
+
+      const resultados = reqs.map((r) =>
+        avaliarCondicao(r.campo || "intencao", r.operador || "igual", r.valor || "", r.valor2, ctx),
       );
+      // "OU" = qualquer requisito basta; "E" (default) = todos precisam bater.
+      const bate = c.logica === "OU" ? resultados.some(Boolean) : resultados.every(Boolean);
+
       if (bate) {
         return { sucesso: true, contexto: ctx, proximoRamoId: `cond_${c.id}` };
       }
@@ -1659,6 +1694,75 @@ async function handleDefinirCampoPersonalizado(
   }
 }
 
+/**
+ * Handler do passo `agenda_criar`. Cria um compromisso na Agenda NATIVA do
+ * escritório (não no Cal.com), atribuído a um responsável e vinculado ao
+ * cliente. Pensado pro "agendar consulta sem custo" do SDR: o lead cai na
+ * agenda do escritório como "reunião comercial pendente" pra equipe confirmar.
+ *
+ * Data: `config.dataInicio` é interpolado; se vier vazio ou inválido, usa
+ * agora (o compromisso nasce "pendente" mesmo — a equipe ajusta o horário).
+ */
+async function handleAgendaCriar(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    responsavelId?: number;
+    tipo?: string;
+    titulo?: string;
+    descricao?: string;
+    dataInicio?: string;
+    duracaoMinutos?: number;
+    prioridade?: string;
+    local?: string;
+  };
+
+  const responsavelId = Number(cfg.responsavelId);
+  if (!responsavelId || Number.isNaN(responsavelId)) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Configure o responsável (advogado) do agendamento." };
+  }
+
+  const { interpolarVariaveis } = await import("./interpolar");
+  const tituloRaw = (cfg.titulo && cfg.titulo.trim())
+    ? interpolarVariaveis(cfg.titulo, ctx as any).trim()
+    : `Consulta inicial — ${ctx.nomeCliente || "cliente"}`;
+
+  // Data: interpola e tenta parsear. Inválida/vazia → agora.
+  const dataRaw = cfg.dataInicio ? interpolarVariaveis(cfg.dataInicio, ctx as any).trim() : "";
+  let dataInicio = dataRaw ? new Date(dataRaw) : new Date();
+  if (Number.isNaN(dataInicio.getTime())) dataInicio = new Date();
+
+  const duracao = Number(cfg.duracaoMinutos) > 0 ? Number(cfg.duracaoMinutos) : 60;
+  const dataFim = new Date(dataInicio.getTime() + duracao * 60 * 1000);
+
+  const descricao = cfg.descricao
+    ? interpolarVariaveis(cfg.descricao, ctx as any).trim()
+    : undefined;
+
+  const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
+  const contatoTelefone = typeof ctx.telefoneCliente === "string" ? ctx.telefoneCliente : undefined;
+
+  try {
+    const id = await exec.criarAgendamentoInterno({
+      responsavelId,
+      tipo: cfg.tipo || "reuniao_comercial",
+      titulo: tituloRaw,
+      dataInicio: dataInicio.toISOString(),
+      dataFim: dataFim.toISOString(),
+      descricao,
+      local: cfg.local ? interpolarVariaveis(cfg.local, ctx as any).trim() : undefined,
+      prioridade: cfg.prioridade,
+      contatoId,
+      contatoTelefone,
+    });
+    return { sucesso: true, contexto: { ...ctx, agendamentoInternoId: id } };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Agenda: ${err.message}` };
+  }
+}
+
 // ─── Engine principal ───────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
@@ -1673,6 +1777,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   calcom_listar: handleCalcomListar,
   calcom_cancelar: handleCalcomCancelar,
   calcom_remarcar: handleCalcomRemarcar,
+  agenda_criar: handleAgendaCriar,
   whatsapp_enviar: handleWhatsAppEnviar,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   transferir: handleTransferir,
