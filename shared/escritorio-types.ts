@@ -71,15 +71,19 @@ export const FUSO_HORARIO_PADRAO = "America/Sao_Paulo";
  * preserva a percepção do usuário.
  *
  * Recebe optional `tz` pra suportar escritórios em outros fusos brasileiros
- * (Manaus, Acre, Noronha). Sem `tz`, usa o padrão.
+ * (Manaus, Acre, Noronha). Sem `tz`, usa o padrão. `agora` é injetável pra
+ * testes determinísticos (sem precisar mockar o relógio global).
  */
-export function dataHojeBR(tz: string = FUSO_HORARIO_PADRAO): string {
+export function dataHojeBR(
+  tz: string = FUSO_HORARIO_PADRAO,
+  agora: Date = new Date(),
+): string {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(agora);
   const get = (t: string) => partes.find((p) => p.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }

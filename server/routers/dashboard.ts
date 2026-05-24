@@ -33,7 +33,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { parseValorBR } from "../../shared/valor-br";
-import { dataHojeBR } from "../../shared/escritorio-types";
+import { dataHojeBR, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
@@ -43,7 +43,7 @@ import {
   percentInadimplenciaPorValor,
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
-  calcularRangeCashFlow,
+  resolverRangeCashFlow,
 } from "./dashboard-setor-helpers";
 
 const log = createLogger("dashboard-router");
@@ -395,7 +395,7 @@ export const dashboardRouter = router({
     .input(
       z
         .object({
-          days: z.number().int().min(1).max(365).default(30),
+          days: z.number().int().min(1).max(365).optional(),
         })
         .optional(),
     )
@@ -413,9 +413,12 @@ export const dashboardRouter = router({
         return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
       }
 
-      const days = input?.days ?? 30;
-      const { inicioStr, pontosKeys } = calcularRangeCashFlow(days, new Date());
-      const hoje = dataHojeBR();
+      // Range ancorado no fuso do escritório (não no relógio UTC do server),
+      // pra não "pular o dia 1" entre 21h–24h BRT. Sem `days`, usa o mês civil
+      // corrente (dia 1 → hoje); com `days`, usa "últimos N dias".
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { inicioStr, pontosKeys } = resolverRangeCashFlow(new Date(), tz, input?.days);
+      const hoje = dataHojeBR(tz);
 
       try {
         // Critério "recebido": filtra por `dataPagamento` (quando foi
