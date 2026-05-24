@@ -161,9 +161,6 @@ export function RelatoriosTab() {
       toast.error("Erro ao exportar PDF", { description: err.message }),
   });
 
-  const resultado = dre?.resultadoLiquido ?? 0;
-  const positivo = resultado >= 0;
-
   // "Recebido de outros meses" = caixa (pago no período) − competência
   // (vence no período). Completa as tabelas de receita pro total do caixa.
   const outrosMesesValor = Math.max(
@@ -178,6 +175,13 @@ export function RelatoriosTab() {
     outrosMesesValor > 0
       ? { valor: outrosMesesValor, count: outrosMesesCount }
       : undefined;
+
+  // KPIs do topo usam o CAIXA (receita de competência + outros meses), pra
+  // bater com o total das tabelas e com o "Entrou no caixa" do Financeiro.
+  const receitaCaixa = (dre?.receitas.total ?? 0) + outrosMesesValor;
+  const resultado = receitaCaixa - (dre?.despesas.total ?? 0);
+  const positivo = resultado >= 0;
+  const margemCaixa = receitaCaixa > 0 ? (resultado / receitaCaixa) * 100 : NaN;
 
   return (
     <div className="space-y-4">
@@ -286,7 +290,7 @@ export function RelatoriosTab() {
             <DreKpi
               icon={<TrendingUp className="h-4 w-4" />}
               label="Receita total"
-              valor={dre.receitas.total}
+              valor={receitaCaixa}
               accent="text-emerald-600"
             />
             <DreKpi
@@ -307,9 +311,7 @@ export function RelatoriosTab() {
               label="Margem"
               valor={null}
               textoCustom={
-                isNaN(dre.margemPercent)
-                  ? "—"
-                  : `${dre.margemPercent.toFixed(1)}%`
+                isNaN(margemCaixa) ? "—" : `${margemCaixa.toFixed(1)}%`
               }
               accent={positivo ? "text-emerald-600" : "text-red-600"}
             />
