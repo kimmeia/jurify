@@ -25,6 +25,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   ia_responder: [
     { path: "respostaIA", label: "Resposta gerada pela IA", tipo: "texto" },
   ],
+  // ia_consultar publica o campo dinâmico `salvarEm` — resolvido em
+  // `variaveisPublicadasPorPasso`. Vazio aqui só satisfaz o tipo.
+  ia_consultar: [],
   // Variáveis publicadas por ia_extrair_campos são dinâmicas (chaves da config) —
   // resolvidas em `variaveisPublicadasPorPasso`. Vazio aqui só satisfaz o tipo.
   ia_extrair_campos: [],
@@ -145,6 +148,20 @@ export function variaveisPublicadasPorPasso(
       { path: nomeVar, label: "Item atual da iteração (objeto da lista)", tipo: "objeto" },
       { path: "indice", label: "Posição na lista (0-indexed)", tipo: "número" },
     ];
+  }
+  if (tipoPasso === "ia_consultar") {
+    const chave = String(configPasso?.salvarEm || "").trim();
+    if (!chave) return [];
+    return [{ path: chave, label: "Resposta da IA (consulta interna)", tipo: "texto" }];
+  }
+  if (tipoPasso === "agenda_criar") {
+    const base = (SAIDA_POR_TIPO.agenda_criar || []).slice();
+    if (configPasso?.acao === "consultar") {
+      base.push({ path: "agendaSlotsLivres", label: "Horários livres (lista estruturada, ISO)", tipo: "lista" });
+      const chave = String(configPasso?.salvarEm || "").trim();
+      if (chave) base.push({ path: chave, label: "Horários livres formatados (ISO) pra IA", tipo: "texto" });
+    }
+    return base;
   }
   if (tipoPasso === "ia_extrair_campos") {
     const campos = Array.isArray(configPasso?.campos)

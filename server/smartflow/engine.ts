@@ -767,6 +767,46 @@ async function handleIAResponder(
   }
 }
 
+/**
+ * Handler do passo `ia_consultar` — consulta INTERNA à IA. Diferente de
+ * `ia_responder`, NÃO retorna `resposta` (logo não vai pro cliente): apenas
+ * salva o texto gerado em `ctx[salvarEm]` pra uso em passos seguintes.
+ *
+ * Entrada = `config.prompt` interpolado (a pergunta). Sem `conversaId` de
+ * propósito — é uma consulta focada no prompt, não uma resposta de chat.
+ */
+async function handleIAConsultar(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { prompt?: string; agenteId?: number; salvarEm?: string };
+  const salvarEm = (cfg.salvarEm || "").trim();
+  if (!salvarEm) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Consultar IA: escolha o campo em 'Salvar em' pra guardar a resposta." };
+  }
+  const usaAgente = typeof cfg.agenteId === "number" && cfg.agenteId > 0;
+  const { interpolarVariaveis } = await import("./interpolar");
+  const pergunta = interpolarVariaveis(String(cfg.prompt ?? ""), ctx as any).trim();
+  if (!pergunta && !usaAgente) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Consultar IA: escreva a pergunta (prompt) ou escolha um agente." };
+  }
+  const contatoIdCtx = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
+  try {
+    let resposta: string;
+    if (usaAgente) {
+      resposta = await exec.executarAgente(cfg.agenteId as number, pergunta, contatoIdCtx, undefined);
+    } else {
+      const sistema = "Você é um assistente que responde consultas internas de um fluxo de atendimento jurídico. Responda de forma direta e objetiva, retornando apenas a resposta — sem saudações nem comentários.";
+      resposta = await exec.chamarIA(sistema, pergunta, contatoIdCtx, undefined);
+    }
+    // Sem campo `resposta` → não é enviado ao cliente. Só guarda no contexto.
+    return { sucesso: true, contexto: { ...ctx, [salvarEm]: resposta } };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Consultar IA: ${err.message}` };
+  }
+}
+
 async function handleCalcomHorarios(
   passo: Passo,
   ctx: SmartflowContexto,
@@ -2033,6 +2073,7 @@ async function handleAgendaCriar(
 const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExecutores) => Promise<PassoResultado> | PassoResultado> = {
   ia_classificar: handleIAClassificar,
   ia_responder: handleIAResponder,
+  ia_consultar: handleIAConsultar,
   ia_extrair_campos: handleIAExtrairCampos,
   crm_buscar_contato: handleCrmBuscarContato,
   crm_listar_acoes_cliente: handleCrmListarAcoesCliente,
