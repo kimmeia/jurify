@@ -63,6 +63,7 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   ],
   agenda_criar: [
     { path: "agendamentoInternoId", label: "ID do compromisso criado na Agenda do escritório", tipo: "número" },
+    { path: "agendaDisponivel", label: "false se o horário pedido estava ocupado (não criou)", tipo: "booleano" },
   ],
   whatsapp_enviar: [
     { path: "mensagensEnviadas", label: "Lista de mensagens enviadas", tipo: "lista" },

@@ -572,6 +572,46 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       return id;
     },
 
+    async verificarDisponibilidadeAgenda(params): Promise<{ disponivel: boolean; conflitos: number }> {
+      try {
+        const { getDb } = await import("../db");
+        const { agendamentos } = await import("../../drizzle/schema");
+        const { eq, and, gte, lte } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return { disponivel: true, conflitos: 0 }; // sem DB: não bloqueia
+        const nStart = new Date(params.dataInicio);
+        const nFim = new Date(params.dataFim);
+        // Busca compromissos do responsável começando até 1 dia antes do fim
+        // pedido (cobre overlaps de compromissos longos sem varrer a agenda toda).
+        const janelaInicio = new Date(nStart.getTime() - 24 * 60 * 60 * 1000);
+        const rows = await db
+          .select({
+            dataInicio: agendamentos.dataInicio,
+            dataFim: agendamentos.dataFim,
+            status: agendamentos.status,
+          })
+          .from(agendamentos)
+          .where(and(
+            eq(agendamentos.escritorioId, escritorioId),
+            eq(agendamentos.responsavelId, params.responsavelId),
+            gte(agendamentos.dataInicio, janelaInicio),
+            lte(agendamentos.dataInicio, nFim),
+          ));
+        let conflitos = 0;
+        for (const r of rows) {
+          if (r.status === "cancelado") continue;
+          const eStart = new Date(r.dataInicio);
+          const eEnd = r.dataFim ? new Date(r.dataFim) : new Date(eStart.getTime() + 60 * 60 * 1000);
+          // Overlap clássico: começa antes do fim do novo E termina depois do início.
+          if (eStart < nFim && eEnd > nStart) conflitos++;
+        }
+        return { disponivel: conflitos === 0, conflitos };
+      } catch (err: any) {
+        log.warn({ err: err.message }, "SmartFlow: falha ao verificar disponibilidade da agenda");
+        return { disponivel: true, conflitos: 0 }; // em erro, não bloqueia o fluxo
+      }
+    },
+
     async listarBookings(params) {
       try {
         const client = await obterCalcomClient(escritorioId);
