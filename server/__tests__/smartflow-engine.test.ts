@@ -150,10 +150,11 @@ describe("SmartFlow Engine", () => {
       const resultado = await executarCenario(passos, { mensagem: "oi" }, exec);
 
       expect(resultado.sucesso).toBe(true);
-      // 3º arg = contatoId (undefined porque o ctx do teste não tem contato).
-      // Os executores reais recebem esse param pra injetar contexto cliente
-      // no system prompt da IA quando disponível.
-      expect(executarAgente).toHaveBeenCalledWith(42, "oi", undefined);
+      // 3º arg = contatoId, 4º = conversaId (ambos undefined: o ctx do teste
+      // não tem contato/conversa). Os executores reais usam contatoId pra
+      // injetar contexto do cliente e conversaId pra carregar o histórico
+      // (memória da IA).
+      expect(executarAgente).toHaveBeenCalledWith(42, "oi", undefined, undefined);
       expect(chamarIA).not.toHaveBeenCalled();
       expect(resultado.contexto.respostaIA).toBe("resposta do agente 42");
       expect(resultado.respostas[0]).toBe("resposta do agente 42");
@@ -168,7 +169,33 @@ describe("SmartFlow Engine", () => {
 
       await executarCenario(passos, { mensagem: "oi", contatoId: 777 }, exec);
 
-      expect(executarAgente).toHaveBeenCalledWith(42, "oi", 777);
+      expect(executarAgente).toHaveBeenCalledWith(42, "oi", 777, undefined);
+    });
+
+    it("passa conversaId pro executarAgente (memória da IA)", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("resposta com memória");
+      const chamarIA = vi.fn().mockResolvedValue("nunca");
+      const exec = criarMockExecutores({ executarAgente, chamarIA });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { agenteId: 42 } },
+      ];
+
+      await executarCenario(passos, { mensagem: "oi", contatoId: 777, conversaId: 555 }, exec);
+
+      expect(executarAgente).toHaveBeenCalledWith(42, "oi", 777, 555);
+    });
+
+    it("passa conversaId pro chamarIA no fallback sem agente", async () => {
+      const chamarIA = vi.fn().mockResolvedValue("resposta fallback");
+      const exec = criarMockExecutores({ chamarIA });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: {} },
+      ];
+
+      await executarCenario(passos, { mensagem: "oi", contatoId: 777, conversaId: 555 }, exec);
+
+      // chamarIA(prompt, mensagem, contatoId, conversaId)
+      expect(chamarIA).toHaveBeenCalledWith(expect.any(String), "oi", 777, 555);
     });
 
     it("cai no fallback chamarIA quando agenteId é 0 ou ausente", async () => {

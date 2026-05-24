@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — Opção B: Canvas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family:'Inter',sans-serif; }
+    code,.mono { font-family:'JetBrains Mono',monospace; }
+    .chip-in { display:inline-flex;align-items:center;gap:3px;padding:1px 6px;background:#dbeafe;color:#1d4ed8;border-radius:999px;font-size:10px;font-weight:600;border:1px solid #93c5fd; }
+    .chip-out{ display:inline-flex;align-items:center;gap:3px;padding:1px 6px;background:#ede9fe;color:#6d28d9;border-radius:999px;font-size:10px;font-weight:600;border:1px solid #c4b5fd; }
+    .node{ position:absolute;width:184px;border-radius:13px;border:2px solid;background:white;box-shadow:0 3px 12px rgb(0 0 0/.10);overflow:hidden;z-index:10; }
+    .node.sel{ box-shadow:0 0 0 3px #a78bfa,0 10px 24px rgb(99 102 241/.28);z-index:20; }
+    .node .head{ padding:8px 11px;color:white;font-weight:700;font-size:11.5px;display:flex;align-items:center;gap:6px; }
+    .node .body{ padding:8px 11px;font-size:11px;color:#334155; }
+    .node .dados{ background:#f8fafc;border-top:1px solid #eef2f7;padding:5px 11px;display:flex;gap:5px;flex-wrap:wrap;align-items:center; }
+    .b-gat{border-color:#93c5fd;border-style:dashed;} .b-gat .head{background:linear-gradient(135deg,#3b82f6,#06b6d4);}
+    .b-ia{border-color:#c4b5fd;} .b-ia .head{background:linear-gradient(135deg,#8b5cf6,#6366f1);}
+    .b-msg{border-color:#5eead4;} .b-msg .head{background:linear-gradient(135deg,#14b8a6,#0891b2);}
+    .b-cap{border-color:#f0abfc;} .b-cap .head{background:linear-gradient(135deg,#d946ef,#a855f7);}
+    .b-cond{border-color:#fcd34d;} .b-cond .head{background:linear-gradient(135deg,#f59e0b,#d97706);}
+    .b-cal{border-color:#fdba74;} .b-cal .head{background:linear-gradient(135deg,#f97316,#f59e0b);}
+    .b-tr{border-color:#fca5a5;} .b-tr .head{background:linear-gradient(135deg,#f43f5e,#e11d48);}
+    .handle{position:absolute;width:9px;height:9px;border-radius:999px;background:white;border:2px solid #a78bfa;left:50%;transform:translateX(-50%);z-index:11;}
+    .field-label{font-size:11px;font-weight:600;color:#475569;margin-bottom:3px;display:block;}
+    .field{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:6px 9px;font-size:12px;background:white;color:#1e293b;}
+    .var{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:7px;font-size:11px;font-weight:600;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;cursor:pointer;}
+    .var:hover{background:#eef2ff;border-color:#c7d2fe;color:#4338ca;}
+    .dots{background-image:radial-gradient(#d3dbe5 1.2px,transparent 1.2px);background-size:20px 20px;}
+    .palbtn{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;}
+    .palbtn:hover{background:#f1f5f9;border-color:#e2e8f0;}
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900">
+
+  <!-- TOPBAR -->
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-5 py-2.5 flex items-center gap-3 shadow-md sticky top-0 z-50">
+    <div class="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center"><i data-lucide="wand-sparkles" class="w-5 h-5"></i></div>
+    <div class="flex-1 min-w-0">
+      <p class="text-[10px] uppercase tracking-wider opacity-80 font-semibold">SmartFlow · Opção B — Canvas</p>
+      <h1 class="text-sm font-bold truncate">Atendimento que agenda</h1>
+    </div>
+    <div class="hidden md:flex items-center gap-3 text-[11px] mr-1">
+      <span class="flex items-center gap-1"><span class="chip-in">📥 usa</span> de onde vem</span>
+      <span class="flex items-center gap-1"><span class="chip-out">📤 salva</span> onde guarda</span>
+    </div>
+    <button class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold flex items-center gap-1.5"><i data-lucide="play" class="w-3.5 h-3.5"></i> Testar</button>
+    <button class="px-3 py-1.5 rounded-lg bg-white text-violet-700 hover:bg-violet-50 text-xs font-bold flex items-center gap-1.5"><i data-lucide="save" class="w-3.5 h-3.5"></i> Salvar</button>
+  </div>
+
+  <div class="flex" style="height:calc(100vh - 54px);">
+
+    <!-- PALETA (arraste daqui) -->
+    <div class="w-[60px] shrink-0 bg-white border-r border-slate-200 flex flex-col items-center py-3 gap-1">
+      <p class="text-[8px] uppercase tracking-wide text-slate-400 font-bold mb-1 text-center leading-tight">arraste</p>
+      <div class="palbtn" title="Responder com IA"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center"><i data-lucide="bot" class="w-4 h-4 text-white"></i></div></div>
+      <div class="palbtn" title="Captar dado"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-fuchsia-500 to-purple-500 flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-white"></i></div></div>
+      <div class="palbtn" title="Enviar mensagem"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center"><i data-lucide="send" class="w-4 h-4 text-white"></i></div></div>
+      <div class="palbtn" title="Decisão"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><i data-lucide="git-branch" class="w-4 h-4 text-white"></i></div></div>
+      <div class="palbtn" title="Agendar"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center"><i data-lucide="calendar" class="w-4 h-4 text-white"></i></div></div>
+      <div class="palbtn" title="Transferir p/ humano"><div class="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center"><i data-lucide="phone-call" class="w-4 h-4 text-white"></i></div></div>
+      <div class="w-7 border-t border-slate-200 my-1"></div>
+      <div class="palbtn" title="Mais opções (avançado)"><div class="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center"><i data-lucide="ellipsis" class="w-4 h-4 text-slate-500"></i></div></div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="flex-1 overflow-auto dots relative">
+      <div class="relative mx-auto" style="width:680px;height:800px;">
+
+        <!-- EDGES -->
+        <svg width="680" height="800" class="absolute inset-0" style="z-index:1;">
+          <defs>
+            <marker id="ar" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#a78bfa"/></marker>
+            <marker id="arG" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#10b981"/></marker>
+            <marker id="arA" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f59e0b"/></marker>
+          </defs>
+          <!-- spine: gatilho→IA→enviar→captar→decisão (centrado em x=322) -->
+          <line x1="322" y1="92" x2="322" y2="128" stroke="#a78bfa" stroke-width="2" marker-end="url(#ar)"/>
+          <line x1="322" y1="212" x2="322" y2="248" stroke="#a78bfa" stroke-width="2" marker-end="url(#ar)"/>
+          <line x1="322" y1="316" x2="322" y2="352" stroke="#a78bfa" stroke-width="2" marker-end="url(#ar)"/>
+          <line x1="322" y1="448" x2="322" y2="484" stroke="#a78bfa" stroke-width="2" marker-end="url(#ar)"/>
+          <!-- branch verde: decisão→agendar -->
+          <path d="M300,612 C220,650 180,650 162,660" fill="none" stroke="#10b981" stroke-width="2.2" marker-end="url(#arG)"/>
+          <!-- branch âmbar: decisão→transferir -->
+          <path d="M344,612 C430,650 470,650 492,660" fill="none" stroke="#f59e0b" stroke-width="2.2" marker-end="url(#arA)"/>
+          <!-- labels nas saídas -->
+          <rect x="186" y="628" width="62" height="17" rx="8" fill="#ecfdf5" stroke="#a7f3d0"/>
+          <text x="217" y="640" font-size="10.5" font-weight="700" fill="#047857" text-anchor="middle">Sim 🟢</text>
+          <rect x="406" y="628" width="64" height="17" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+          <text x="438" y="640" font-size="10.5" font-weight="700" fill="#b45309" text-anchor="middle">senão 🟠</text>
+        </svg>
+
+        <!-- NODES -->
+        <!-- 1 GATILHO -->
+        <div class="node b-gat" style="left:230px;top:18px;">
+          <div class="head"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Mensagem recebida</div>
+          <div class="dados"><span class="chip-out">📤</span> <code>Mensagem cliente</code></div>
+          <div class="handle" style="bottom:-5px;"></div>
+        </div>
+        <!-- 2 IA (sel) -->
+        <div class="node b-ia sel" style="left:230px;top:130px;">
+          <div class="handle" style="top:-5px;"></div>
+          <div class="head"><i data-lucide="bot" class="w-3.5 h-3.5"></i> Responder com IA</div>
+          <div class="dados"><span class="chip-in">📥</span> <code>Mensagem cliente</code> <span class="chip-out">📤</span> <code>Resposta IA</code></div>
+          <div class="handle" style="bottom:-5px;"></div>
+        </div>
+        <!-- 3 ENVIAR -->
+        <div class="node b-msg" style="left:230px;top:250px;">
+          <div class="handle" style="top:-5px;"></div>
+          <div class="head"><i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar pro cliente</div>
+          <div class="dados"><span class="chip-in">📥</span> <code>Resposta IA</code></div>
+          <div class="handle" style="bottom:-5px;"></div>
+        </div>
+        <!-- 4 CAPTAR -->
+        <div class="node b-cap" style="left:230px;top:354px;">
+          <div class="handle" style="top:-5px;"></div>
+          <div class="head"><i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Captar dado</div>
+          <div class="dados"><span class="chip-out">📤</span> <code>Quer agendar?</code></div>
+          <div class="handle" style="bottom:-5px;"></div>
+        </div>
+        <!-- 5 DECISÃO -->
+        <div class="node b-cond" style="left:230px;top:486px;">
+          <div class="handle" style="top:-5px;"></div>
+          <div class="head"><i data-lucide="git-branch" class="w-3.5 h-3.5"></i> Decisão</div>
+          <div class="body text-[10.5px] leading-relaxed">
+            <strong>SE</strong> <span class="bg-white border rounded px-1 font-semibold">Quer agendar?</span> <strong>for</strong> <span class="bg-white border rounded px-1 font-semibold">Sim</span>
+          </div>
+        </div>
+        <!-- 6 AGENDAR -->
+        <div class="node b-cal" style="left:70px;top:660px;">
+          <div class="head"><i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> Agendar reunião</div>
+          <div class="dados"><span class="chip-out">📤</span> <code>Agendamento</code></div>
+        </div>
+        <!-- 7 TRANSFERIR -->
+        <div class="node b-tr" style="left:400px;top:660px;">
+          <div class="head"><i data-lucide="phone-call" class="w-3.5 h-3.5"></i> Transferir p/ humano</div>
+          <div class="body text-[10px] text-slate-500">para o bot · avisa atendente</div>
+        </div>
+      </div>
+
+      <!-- TOOLBAR (zoom + organizar) -->
+      <div class="sticky bottom-3 ml-3 inline-flex items-center gap-1 bg-white border border-slate-200 rounded-xl shadow-md px-1.5 py-1" style="z-index:40;">
+        <button class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center"><i data-lucide="minus" class="w-4 h-4 text-slate-600"></i></button>
+        <span class="text-[11px] font-semibold text-slate-500 px-1">100%</span>
+        <button class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center"><i data-lucide="plus" class="w-4 h-4 text-slate-600"></i></button>
+        <button class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center" title="Ajustar à tela"><i data-lucide="maximize" class="w-4 h-4 text-slate-600"></i></button>
+        <div class="w-px h-5 bg-slate-200 mx-0.5"></div>
+        <button class="px-2.5 h-7 rounded-lg bg-violet-100 hover:bg-violet-200 text-violet-700 text-[11px] font-bold flex items-center gap-1.5"><i data-lucide="layout-list" class="w-3.5 h-3.5"></i> Organizar</button>
+      </div>
+    </div>
+
+    <!-- PAINEL DIREITO (idêntico ao da Opção A) -->
+    <div class="w-[330px] shrink-0 bg-white border-l border-slate-200 overflow-y-auto">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center"><i data-lucide="bot" class="w-4 h-4 text-white"></i></div>
+        <div><p class="text-sm font-bold leading-none">Responder com IA</p><p class="text-[10.5px] text-slate-400 mt-0.5">Use quando quiser que a IA responda o cliente</p></div>
+      </div>
+      <div class="p-4 space-y-3.5">
+        <div>
+          <label class="field-label">📥 De onde vem a informação?</label>
+          <select class="field"><option>Mensagem do cliente</option><option>Resposta IA</option><option>Quer agendar?</option></select>
+        </div>
+        <div>
+          <label class="field-label">Qual agente responde?</label>
+          <select class="field"><option>Atendimento jurídico</option><option>Triagem inicial</option></select>
+          <p class="text-[10px] text-slate-400 mt-1">Os agentes vêm do módulo Agentes de IA.</p>
+        </div>
+        <div>
+          <label class="field-label">📤 Onde salvar a resposta?</label>
+          <input class="field" value="Resposta IA" />
+          <p class="text-[10px] text-slate-400 mt-1">Você escolhe o nome. É assim que os próximos blocos vão usar esse valor.</p>
+        </div>
+        <div class="border-t border-slate-100 pt-3">
+          <p class="field-label flex items-center gap-1"><i data-lucide="braces" class="w-3.5 h-3.5"></i> Variáveis disponíveis <span class="text-[9px] font-normal text-slate-400">(clique pra inserir)</span></p>
+          <p class="text-[10px] text-slate-400 mb-1.5 mt-1">Do sistema</p>
+          <div class="flex flex-wrap gap-1.5"><span class="var">Mensagem cliente</span><span class="var">Nome cliente</span><span class="var">Telefone</span><span class="var">Resposta IA</span></div>
+          <p class="text-[10px] text-slate-400 mb-1.5 mt-2.5">Campos personalizados do cliente</p>
+          <div class="flex flex-wrap gap-1.5"><span class="var">Quer agendar?</span><span class="var">CPF</span><span class="var">Nº do processo</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSET: GUIA "QUAL BLOCO USAR" -->
+  <div class="max-w-md mx-auto my-7 px-6">
+    <div class="bg-white border border-violet-200 rounded-xl shadow-sm overflow-hidden">
+      <div class="px-4 py-2.5 bg-violet-50 border-b border-violet-100 flex items-center gap-2">
+        <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-violet-600"></i>
+        <p class="text-xs font-bold text-violet-800">Passando o mouse na paleta (ou em "Mais opções") — cada bloco diz "use quando..."</p>
+      </div>
+      <div class="p-3 space-y-1.5">
+        <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50"><div class="w-7 h-7 rounded bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shrink-0"><i data-lucide="bot" class="w-4 h-4 text-white"></i></div><div><p class="text-xs font-semibold">Responder com IA</p><p class="text-[10.5px] text-slate-500">Use quando quiser que a IA responda a mensagem.</p></div></div>
+        <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50"><div class="w-7 h-7 rounded bg-gradient-to-br from-fuchsia-500 to-purple-500 flex items-center justify-center shrink-0"><i data-lucide="sparkles" class="w-4 h-4 text-white"></i></div><div><p class="text-xs font-semibold">Captar dado</p><p class="text-[10.5px] text-slate-500">Use quando quiser descobrir e guardar algo (CPF, se quer agendar...).</p></div></div>
+        <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50"><div class="w-7 h-7 rounded bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shrink-0"><i data-lucide="send" class="w-4 h-4 text-white"></i></div><div><p class="text-xs font-semibold">Enviar mensagem</p><p class="text-[10.5px] text-slate-500">Use quando quiser mandar um texto pro cliente.</p></div></div>
+        <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50"><div class="w-7 h-7 rounded bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0"><i data-lucide="git-branch" class="w-4 h-4 text-white"></i></div><div><p class="text-xs font-semibold">Decisão</p><p class="text-[10.5px] text-slate-500">Use quando o fluxo precisa seguir caminhos diferentes.</p></div></div>
+        <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50"><div class="w-7 h-7 rounded bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shrink-0"><i data-lucide="calendar" class="w-4 h-4 text-white"></i></div><div><p class="text-xs font-semibold">Agendar (Cal.com)</p><p class="text-[10.5px] text-slate-500">Use quando quiser marcar uma reunião.</p></div></div>
+        <div class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-50"><div class="w-7 h-7 rounded bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shrink-0"><i data-lucide="phone-call" class="w-4 h-4 text-white"></i></div><div><p class="text-xs font-semibold">Transferir p/ humano</p><p class="text-[10.5px] text-slate-500">Use no fim de um caminho pra parar o bot e passar pro atendente.</p></div></div>
+        <button class="w-full text-left flex items-center gap-2 px-2 py-2 mt-1 rounded-lg text-[11px] text-slate-500 hover:bg-slate-50 border-t border-slate-100"><i data-lucide="chevron-right" class="w-3.5 h-3.5"></i> Mais opções (avançado) — Webhook, Asaas, Kanban, Loop...</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-slate-900 text-slate-400 text-center py-3 text-xs">Opção B · Canvas livre + botão "Organizar" · SmartFlow · JuridFlow</div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
