@@ -612,6 +612,19 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async editarAgendamentoInterno(params): Promise<void> {
+      const { atualizarAgendamento } = await import("../escritorio/db-agendamento");
+      await atualizarAgendamento(params.agendamentoId, escritorioId, {
+        dataInicio: params.dataInicio,
+        dataFim: params.dataFim,
+        responsavelId: params.responsavelId,
+        titulo: params.titulo,
+        descricao: params.descricao,
+        status: params.status as any,
+      });
+      log.info({ agendamentoId: params.agendamentoId, status: params.status }, "SmartFlow: compromisso da Agenda interna editado");
+    },
+
     async listarBookings(params) {
       try {
         const client = await obterCalcomClient(escritorioId);
