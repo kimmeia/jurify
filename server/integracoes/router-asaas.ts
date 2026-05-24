@@ -49,7 +49,7 @@ import {
 import { checkPermission } from "../escritorio/check-permission";
 import { exigirDonoOuAdmin } from "../escritorio/router-backup";
 import { createLogger } from "../_core/logger";
-import { dataHojeBR } from "../../shared/escritorio-types";
+import { dataHojeBR, FUSO_HORARIO_PADRAO, chavesMesesAteHojeNoFuso } from "../../shared/escritorio-types";
 import {
   decidirExcluirCobranca,
   decidirVinculoBeneficiario,
@@ -3155,6 +3155,7 @@ export const asaasRouter = router({
       if (!esc) return ZERO;
       const db = await getDb();
       if (!db) return ZERO;
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
 
       // Decide range + granularidade.
       // - Sem custom: presets contam meses pra trás (granularidade=mes)
@@ -3196,12 +3197,10 @@ export const asaasRouter = router({
           }
         }
       } else {
-        const meses = input?.meses ?? 6;
-        const hoje = new Date();
-        for (let i = meses - 1; i >= 0; i--) {
-          const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-          chaves.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-        }
+        // Mês corrente ancorado no FUSO do escritório — não no relógio UTC do
+        // server (que, na virada de mês à noite BRT, listava até o mês seguinte
+        // e empurrava o mês corrente pra penúltima coluna).
+        chaves = chavesMesesAteHojeNoFuso(input?.meses ?? 6, tz);
       }
 
       try {
@@ -3222,7 +3221,7 @@ export const asaasRouter = router({
           return { granularidade, pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
         }
 
-        const hojeStr = dataHojeBR();
+        const hojeStr = dataHojeBR(tz);
         const sliceLen = granularidade === "dia" ? 10 : 7;
         // Limites do range pra filtro de WHERE: 1º dia do 1º bucket até
         // último dia do último bucket. Em granularidade=dia as chaves já

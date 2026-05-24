@@ -33,7 +33,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { parseValorBR } from "../../shared/valor-br";
-import { dataHojeBR, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { dataHojeBR, FUSO_HORARIO_PADRAO, resolverPeriodoNoFuso } from "../../shared/escritorio-types";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
@@ -44,7 +44,6 @@ import {
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
   resolverRangeCashFlow,
-  resolverPeriodoDashboard,
 } from "./dashboard-setor-helpers";
 
 const log = createLogger("dashboard-router");
@@ -728,7 +727,7 @@ export const dashboardRouter = router({
       // do server). Bate com `relatorios.comercialDashboard`.
       const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
       const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
-        resolverPeriodoDashboard(new Date(), tz, input);
+        resolverPeriodoNoFuso(new Date(), tz, input);
 
       // Atendentes elegíveis: todo colaborador ativo em setor tipo='comercial'.
       // Quem não tem verTodos só vê a si mesmo.
@@ -918,7 +917,7 @@ export const dashboardRouter = router({
       // do server, que virava o mês cedo demais na virada à noite BRT).
       const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
       const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
-        resolverPeriodoDashboard(new Date(), tz, input);
+        resolverPeriodoNoFuso(new Date(), tz, input);
       const hojeStr = dataHojeBR(tz);
 
       // KPIs agregados em SQL — mesmo padrão do `asaas.kpis`. Filtros:
@@ -1064,7 +1063,7 @@ export const dashboardRouter = router({
       // do server, que virava o mês cedo demais na virada à noite BRT).
       const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
       const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
-        resolverPeriodoDashboard(new Date(), tz, input);
+        resolverPeriodoNoFuso(new Date(), tz, input);
 
       const agora = new Date();
       // Estratégia de período pra evitar "estagiário olhando dia 2 do mês
