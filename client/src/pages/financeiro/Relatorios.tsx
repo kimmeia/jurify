@@ -164,6 +164,21 @@ export function RelatoriosTab() {
   const resultado = dre?.resultadoLiquido ?? 0;
   const positivo = resultado >= 0;
 
+  // "Recebido de outros meses" = caixa (pago no período) − competência
+  // (vence no período). Completa as tabelas de receita pro total do caixa.
+  const outrosMesesValor = Math.max(
+    0,
+    (kpis?.recebido ?? 0) - (kpis?.recebidoComVencimentoNoPeriodo ?? 0),
+  );
+  const outrosMesesCount = Math.max(
+    0,
+    (kpis?.recebidoCount ?? 0) - (kpis?.recebidoComVencimentoNoPeriodoCount ?? 0),
+  );
+  const outrosMeses =
+    outrosMesesValor > 0
+      ? { valor: outrosMesesValor, count: outrosMesesCount }
+      : undefined;
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -313,12 +328,13 @@ export function RelatoriosTab() {
             />
           )}
 
-          {/* Tabela receitas */}
+          {/* Tabela receitas — total bate com o caixa via linha "outros meses" */}
           <DreSection
             titulo="Receitas — por categoria"
             total={dre.receitas.total}
             categorias={dre.receitas.porCategoria}
             accent="emerald"
+            outrosMeses={outrosMeses}
           />
 
           {/* Quebra adicional das receitas: Caixa Asaas vs Caixa Escritório */}
@@ -329,6 +345,7 @@ export function RelatoriosTab() {
               linhas={dre.receitas.porOrigem}
               colunaLabel="Origem"
               accent="emerald"
+              outrosMeses={outrosMeses}
             />
           )}
 
@@ -340,6 +357,7 @@ export function RelatoriosTab() {
               linhas={dre.receitas.porFormaPagamento}
               colunaLabel="Forma"
               accent="emerald"
+              outrosMeses={outrosMeses}
             />
           )}
 
@@ -362,6 +380,7 @@ function DreSectionDimensao({
   linhas,
   colunaLabel,
   accent,
+  outrosMeses,
 }: {
   titulo: string;
   total: number;
@@ -374,9 +393,14 @@ function DreSectionDimensao({
   }>;
   colunaLabel: string;
   accent: "emerald" | "red";
+  /** Linha extra "Recebido de outros meses" — completa o total pro caixa. */
+  outrosMeses?: { valor: number; count: number };
 }) {
   const accentClass =
     accent === "emerald" ? "text-emerald-600" : "text-red-600";
+  const temOutros = !!outrosMeses && outrosMeses.valor > 0;
+  const totalCaixa = total + (temOutros ? outrosMeses!.valor : 0);
+  const pct = (v: number) => (totalCaixa > 0 ? (v / totalCaixa) * 100 : 0);
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -388,7 +412,7 @@ function DreSectionDimensao({
           )}
           {titulo}
           <span className="ml-auto font-mono text-base tabular-nums">
-            {formatBRL(total)}
+            {formatBRL(totalCaixa)}
           </span>
         </CardTitle>
       </CardHeader>
@@ -415,14 +439,35 @@ function DreSectionDimensao({
                     {l.count}
                   </TableCell>
                   <TableCell className="text-xs text-right tabular-nums">
-                    {l.percentual.toFixed(1)}%
+                    {pct(l.total).toFixed(1)}%
                   </TableCell>
                   <TableCell className="text-xs text-right tabular-nums font-medium">
                     {formatBRL(l.total)}
                   </TableCell>
                 </TableRow>
               ))}
+              {temOutros && (
+                <TableRow className="bg-amber-50/50 dark:bg-amber-950/10">
+                  <TableCell className="text-xs text-amber-800 dark:text-amber-300">
+                    + Recebido de outros meses{" "}
+                    <span className="text-[10px] text-amber-600">(venceu antes, pago agora)</span>
+                  </TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{outrosMeses!.count}</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{pct(outrosMeses!.valor).toFixed(1)}%</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700">{formatBRL(outrosMeses!.valor)}</TableCell>
+                </TableRow>
+              )}
             </TableBody>
+            {temOutros && (
+              <tfoot>
+                <TableRow className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
+                  <TableCell className="text-xs text-slate-900 dark:text-slate-100">Total recebido (caixa)</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-slate-600"></TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-slate-500">100%</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatBRL(totalCaixa)}</TableCell>
+                </TableRow>
+              </tfoot>
+            )}
           </Table>
         )}
       </CardContent>
@@ -466,6 +511,7 @@ function DreSection({
   total,
   categorias,
   accent,
+  outrosMeses,
 }: {
   titulo: string;
   total: number;
@@ -477,11 +523,16 @@ function DreSection({
     percentual: number;
   }>;
   accent: "emerald" | "red";
+  /** Linha extra "Recebido de outros meses" — completa o total pro caixa. */
+  outrosMeses?: { valor: number; count: number };
 }) {
   const accentClass =
     accent === "emerald"
       ? "text-emerald-600"
       : "text-red-600";
+  const temOutros = !!outrosMeses && outrosMeses.valor > 0;
+  const totalCaixa = total + (temOutros ? outrosMeses!.valor : 0);
+  const pct = (v: number) => (totalCaixa > 0 ? (v / totalCaixa) * 100 : 0);
 
   return (
     <Card>
@@ -494,7 +545,7 @@ function DreSection({
           )}
           {titulo}
           <span className="ml-auto font-mono text-base tabular-nums">
-            {formatBRL(total)}
+            {formatBRL(totalCaixa)}
           </span>
         </CardTitle>
       </CardHeader>
@@ -529,14 +580,35 @@ function DreSection({
                     {cat.count}
                   </TableCell>
                   <TableCell className="text-xs text-right tabular-nums">
-                    {cat.percentual.toFixed(1)}%
+                    {pct(cat.total).toFixed(1)}%
                   </TableCell>
                   <TableCell className="text-xs text-right tabular-nums font-medium">
                     {formatBRL(cat.total)}
                   </TableCell>
                 </TableRow>
               ))}
+              {temOutros && (
+                <TableRow className="bg-amber-50/50 dark:bg-amber-950/10">
+                  <TableCell className="text-xs text-amber-800 dark:text-amber-300">
+                    + Recebido de outros meses{" "}
+                    <span className="text-[10px] text-amber-600">(venceu antes, pago agora)</span>
+                  </TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{outrosMeses!.count}</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-amber-700">{pct(outrosMeses!.valor).toFixed(1)}%</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums font-medium text-amber-700">{formatBRL(outrosMeses!.valor)}</TableCell>
+                </TableRow>
+              )}
             </TableBody>
+            {temOutros && (
+              <tfoot>
+                <TableRow className="bg-emerald-50/60 dark:bg-emerald-950/20 font-semibold border-t-2 border-emerald-200">
+                  <TableCell className="text-xs text-slate-900 dark:text-slate-100">Total recebido (caixa)</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums"></TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-slate-500">100%</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatBRL(totalCaixa)}</TableCell>
+                </TableRow>
+              </tfoot>
+            )}
           </Table>
         )}
       </CardContent>
