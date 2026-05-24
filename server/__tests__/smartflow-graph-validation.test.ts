@@ -39,7 +39,7 @@ describe("validarGrafo", () => {
       { source: "p1", target: "p1" },
     ];
     const r = validarGrafo("gat", passos, edges);
-    expect(r.erros.join("|")).toContain("Ciclo detectado");
+    expect(r.erros.join("|")).toContain("Aguardar resposta");
   });
 
   it("detecta ciclo indireto — A → B → A", () => {
@@ -50,7 +50,7 @@ describe("validarGrafo", () => {
       { source: "p2", target: "p1" }, // volta
     ];
     const r = validarGrafo("gat", passos, edges);
-    expect(r.erros.join("|")).toContain("Ciclo detectado");
+    expect(r.erros.join("|")).toContain("Aguardar resposta");
   });
 
   it("detecta ciclo em grafo longo — A → B → C → D → B", () => {
@@ -63,7 +63,7 @@ describe("validarGrafo", () => {
       { source: "p4", target: "p2" },
     ];
     const r = validarGrafo("gat", passos, edges);
-    expect(r.erros.join("|")).toContain("Ciclo detectado");
+    expect(r.erros.join("|")).toContain("Aguardar resposta");
   });
 
   it("órfão é permitido (não gera erro nem aviso)", () => {
@@ -125,6 +125,41 @@ describe("validarGrafo", () => {
     const r = validarGrafo("gat", passos, edges);
     expect(r.erros).toEqual([]);
     expect(r.avisos).toEqual([]);
+  });
+
+  it("PERMITE ciclo que passa por 'Aguardar resposta' (loop conversacional)", () => {
+    // ia → aguardar → cond; cond volta pra ia (fallback) e tem saída cond_ok.
+    const passos: PassoValidar[] = [
+      { nodeId: "ia", clienteId: "ia", tipo: "ia_responder", config: {}, temProximoSe: true },
+      { nodeId: "wait", clienteId: "wait", tipo: "whatsapp_aguardar_resposta", config: {}, temProximoSe: true },
+      { nodeId: "cond", clienteId: "cond", tipo: "condicional", config: {}, temProximoSe: true },
+      passo("fim", "fim"),
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "ia" },
+      { source: "ia", target: "wait" },
+      { source: "wait", target: "cond" },
+      { source: "cond", target: "ia", sourceHandle: "fallback" }, // loop com espera = ok
+      { source: "cond", target: "fim", sourceHandle: "cond_ok" },
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.erros).toEqual([]);
+  });
+
+  it("BLOQUEIA ciclo sem espera mesmo tendo um aguardar em OUTRO ramo", () => {
+    // p1 → p2 → p1 (sem espera) é inseguro, independente de existir um wait solto.
+    const passos: PassoValidar[] = [
+      passo("p1", "c1"),
+      passo("p2", "c2"),
+      { nodeId: "wsolto", clienteId: "ws", tipo: "whatsapp_aguardar_resposta", config: {}, temProximoSe: false },
+    ];
+    const edges: EdgeValidar[] = [
+      { source: "gat", target: "p1" },
+      { source: "p1", target: "p2" },
+      { source: "p2", target: "p1" }, // ciclo sem espera
+    ];
+    const r = validarGrafo("gat", passos, edges);
+    expect(r.erros.join("|")).toContain("Aguardar resposta");
   });
 
   it("múltiplos erros convivem (ciclo + condicional sem saída)", () => {

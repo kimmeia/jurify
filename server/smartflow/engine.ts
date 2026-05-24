@@ -1063,6 +1063,9 @@ async function handleWhatsappAguardarResposta(
       aguardandoContatoId: contatoId,
       aguardandoTimeoutMinutos: timeoutMinutos,
       aguardandoOpcoes: opcoes,
+      // Em qual NÓ pausou — permite retomada graph-aware (seguir as setas a
+      // partir daqui, inclusive loops). Vazio = retomada linear (legado).
+      aguardandoNodeClienteId: passo.clienteId ?? null,
     },
   };
 }
@@ -1979,12 +1982,18 @@ export async function executarCenario(
   // pra execução inteira (não por iteração de loop).
   const estadoGlobal = { passosExecutados: 0 };
 
+  // Retomada graph-aware: se o contexto traz `__resumindoWaitClienteId`, o
+  // walk começa NESSE nó de aguardar (que será passado direto, já que a
+  // resposta do cliente já chegou) e segue pelas setas — inclusive loops.
+  const resumeWaitId = (contextoInicial as any).__resumindoWaitClienteId as string | undefined;
+  const startNode = (resumeWaitId && porClienteId.get(resumeWaitId)) || passosOrdenados[0];
+
   return walkInterno({
     passos: passosOrdenados,
     porClienteId,
     indicePorId,
     modoGrafo,
-    startNode: passosOrdenados[0],
+    startNode,
     contexto: { ...contextoInicial },
     stopAt: new Set<number>(),
     estadoGlobal,
@@ -2040,6 +2049,23 @@ async function walkInterno(opts: {
     }
 
     const passoAtual: Passo = atual;
+
+    // Retomada graph-aware: ao re-entrar no nó "aguardar resposta" onde
+    // pausamos, NÃO pausa de novo (a resposta do cliente já está no contexto).
+    // Passa direto pro próximo nó pelas setas (default) — é o que permite o
+    // loop "volta pra IA até bater a condição".
+    const resumeWaitId = (contexto as any).__resumindoWaitClienteId as string | undefined;
+    if (
+      resumeWaitId &&
+      passoAtual.clienteId === resumeWaitId &&
+      passoAtual.tipo === "whatsapp_aguardar_resposta"
+    ) {
+      contexto = { ...contexto };
+      delete (contexto as any).__resumindoWaitClienteId;
+      delete (contexto as any).aguardandoNodeClienteId;
+      atual = resolverProximo(passoAtual, "default", porClienteId, indicePorId, modoGrafo, passos);
+      continue;
+    }
 
     // Caso especial: para_cada_item — não passa pelo HANDLERS, é resolvido
     // aqui no walker (precisa de acesso ao grafo de passos).

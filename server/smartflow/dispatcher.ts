@@ -1423,6 +1423,24 @@ async function retomarComResposta(
     }
   }
 
+  // Retomada GRAPH-AWARE: se sabemos em que nó de aguardar pausou E o cenário
+  // está em modo grafo (tem proximoSe), reentra naquele nó e segue pelas setas
+  // — é isso que faz o loop "volta pra IA até bater a condição" funcionar.
+  // Roda o cenário INTEIRO (não um slice), porque o caminho pode voltar pra trás.
+  const waitNodeId = (contextoBase as any).aguardandoNodeClienteId as string | null | undefined;
+  const modoGrafo = cenario.passos.some(
+    (p: any) => p.proximoSe && typeof p.proximoSe === "object" && Object.keys(p.proximoSe).length > 0,
+  );
+  if (waitNodeId && modoGrafo) {
+    delete (contextoBase as any).aguardandoNodeClienteId;
+    (contextoBase as any).__resumindoWaitClienteId = waitNodeId;
+    const executores = criarExecutoresReais(exec.escritorioId);
+    const resultado = await executarCenario(cenario.passos, contextoBase, executores);
+    await finalizarExecucao(execId, resultado);
+    return resultado.respostas;
+  }
+
+  // Retomada LINEAR (legado): continua de `passoAtual` por ordem.
   const passosRestantes = cenario.passos
     .slice()
     .sort((a, b) => a.ordem - b.ordem)
