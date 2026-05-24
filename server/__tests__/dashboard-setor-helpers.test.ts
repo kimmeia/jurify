@@ -20,8 +20,10 @@ import {
   classificarTarefaPrazo,
   calcularRangeCashFlow,
   resolverRangeCashFlow,
+  resolverPeriodoDashboard,
 } from "../routers/dashboard-setor-helpers";
 import { metaProporcionalPeriodo } from "../escritorio/router-relatorios";
+import { dataHojeBR } from "../../shared/escritorio-types";
 
 describe("proporcionalizarMeta", () => {
   it("range cheio do mês (1-31 mai) retorna meta cheia", () => {
@@ -498,6 +500,83 @@ describe("resolverRangeCashFlow — range do Painel Geral no fuso do escritório
     const agora = new Date("2026-05-24T01:00:00Z");
     const antes = agora.getTime();
     resolverRangeCashFlow(agora, SP);
+    expect(agora.getTime()).toBe(antes);
+  });
+});
+
+describe("resolverPeriodoDashboard — range dos painéis Comercial/Operacional/Financeiro", () => {
+  const SP = "America/Sao_Paulo"; // UTC-3
+  const MANAUS = "America/Manaus"; // UTC-4
+
+  it("default no meio do dia (15/mai 12h BRT) → mês civil 01→15/mai no fuso", () => {
+    const r = resolverPeriodoDashboard(new Date("2026-05-15T15:00:00Z"), SP);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-15");
+    // 00h BRT do dia 1 = 03h UTC; 23:59:59.999 BRT do dia 15 = 02:59:59.999 UTC do dia 16.
+    expect(r.dataInicio.toISOString()).toBe("2026-05-01T03:00:00.000Z");
+    expect(r.dataFim.toISOString()).toBe("2026-05-16T02:59:59.999Z");
+  });
+
+  it("BUG virada de mês: 31/mai 22h BRT (= 01/jun 01h UTC) → MAIO, não junho", () => {
+    const r = resolverPeriodoDashboard(new Date("2026-06-01T01:00:00Z"), SP);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-31");
+    expect(r.dataInicio.toISOString()).toBe("2026-05-01T03:00:00.000Z");
+  });
+
+  it("BUG fim do range: 23/mai 22h BRT (= 24/mai 01h UTC) → fim = 23, não 24 (amanhã)", () => {
+    const r = resolverPeriodoDashboard(new Date("2026-05-24T01:00:00Z"), SP);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-23");
+  });
+
+  it("input explícito tem precedência e é interpretado no fuso", () => {
+    const r = resolverPeriodoDashboard(new Date("2026-05-15T15:00:00Z"), SP, {
+      dataInicio: "2026-03-10",
+      dataFim: "2026-03-20",
+    });
+    expect(r.dataInicioStr).toBe("2026-03-10");
+    expect(r.dataFimStr).toBe("2026-03-20");
+    expect(r.dataInicio.toISOString()).toBe("2026-03-10T03:00:00.000Z");
+    expect(r.dataFim.toISOString()).toBe("2026-03-21T02:59:59.999Z");
+  });
+
+  it("input parcial (só dataInicio) é ignorado → cai no mês vigente", () => {
+    const r = resolverPeriodoDashboard(new Date("2026-05-15T15:00:00Z"), SP, {
+      dataInicio: "2026-03-10",
+    });
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-15");
+  });
+
+  it("estável nas 24h do dia: qualquer hora de 15/mai BRT → 01→15/mai", () => {
+    for (let horaBrt = 0; horaBrt <= 23; horaBrt++) {
+      const agora = new Date(Date.UTC(2026, 4, 15, horaBrt + 3, 0, 0));
+      const r = resolverPeriodoDashboard(agora, SP);
+      expect(r.dataInicioStr).toBe("2026-05-01");
+      expect(r.dataFimStr).toBe("2026-05-15");
+    }
+  });
+
+  it("fuso Manaus (UTC-4): virada de mês à noite ainda é maio, início em 04h UTC", () => {
+    // 01/jun 02:00 UTC = 31/mai 22:00 em Manaus (UTC-4)
+    const r = resolverPeriodoDashboard(new Date("2026-06-01T02:00:00Z"), MANAUS);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-31");
+    expect(r.dataInicio.toISOString()).toBe("2026-05-01T04:00:00.000Z");
+  });
+
+  it("início e fim são meia-noite/fim-de-dia NO FUSO (coerência str ↔ Date)", () => {
+    const r = resolverPeriodoDashboard(new Date("2026-05-15T15:00:00Z"), SP);
+    // O instante de início, observado no fuso, cai no 1º dia; o de fim, no último.
+    expect(dataHojeBR(SP, r.dataInicio)).toBe(r.dataInicioStr);
+    expect(dataHojeBR(SP, r.dataFim)).toBe(r.dataFimStr);
+  });
+
+  it("não muta o parâmetro `agora` recebido", () => {
+    const agora = new Date("2026-06-01T01:00:00Z");
+    const antes = agora.getTime();
+    resolverPeriodoDashboard(agora, SP);
     expect(agora.getTime()).toBe(antes);
   });
 });
