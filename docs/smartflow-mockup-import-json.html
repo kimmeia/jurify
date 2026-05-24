@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — Importar/Exportar JSON (estilo n8n)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family:'Inter',sans-serif; }
+    code,.mono,pre { font-family:'JetBrains Mono',monospace; }
+    .card{ background:white; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 2px 10px rgb(0 0 0/.05); }
+    .chip{ display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600; }
+    .dep-ok{ background:#dcfce7;color:#15803d;border:1px solid #86efac; }
+    .dep-falta{ background:#fef3c7;color:#b45309;border:1px solid #fde68a; }
+    .dep-erro{ background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900">
+
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 px-6 sticky top-0 z-50 shadow-md">
+    <div class="max-w-5xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center"><i data-lucide="file-json" class="w-5 h-5"></i></div>
+      <div class="flex-1">
+        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold">SmartFlow · Ideia (mockup)</p>
+        <h1 class="text-lg font-bold">Importar / Exportar fluxos por JSON — estilo n8n</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-5xl mx-auto p-6 space-y-8">
+
+    <!-- POR QUE -->
+    <section class="card p-5">
+      <p class="text-sm font-bold mb-2 flex items-center gap-1.5"><i data-lucide="lightbulb" class="w-4 h-4 text-amber-500"></i> Pra que serve</p>
+      <div class="grid md:grid-cols-4 gap-2 text-xs">
+        <div class="bg-slate-50 rounded-lg p-2.5"><strong>📦 Backup</strong><br>Salvar um fluxo num arquivo antes de mexer.</div>
+        <div class="bg-slate-50 rounded-lg p-2.5"><strong>🔁 Compartilhar</strong><br>Mandar um fluxo pronto pra outro escritório / cliente.</div>
+        <div class="bg-slate-50 rounded-lg p-2.5"><strong>⚡ Montar rápido</strong><br>Importar um fluxo pronto (ex: SDR Boyadjian) em vez de montar na mão.</div>
+        <div class="bg-slate-50 rounded-lg p-2.5"><strong>🕓 Versionar</strong><br>Guardar versões ("v1 funcionando") e voltar se quebrar.</div>
+      </div>
+    </section>
+
+    <!-- EXPORTAR -->
+    <section>
+      <h2 class="text-sm font-bold text-violet-700 uppercase tracking-wide mb-2">1. Exportar</h2>
+      <div class="card p-4 flex items-center gap-4">
+        <div class="flex-1">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center"><i data-lucide="wand-sparkles" class="w-4 h-4 text-white"></i></div>
+            <div>
+              <p class="text-sm font-semibold">Atendimento SDR — Boyadjian</p>
+              <p class="text-[11px] text-slate-500">Gatilho: Mensagem recebida · 6 passos · ativo</p>
+            </div>
+          </div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-50">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Exportar JSON
+        </button>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-1.5 px-1">Baixa um <code>atendimento-sdr.json</code> com gatilho + passos + ligações. <strong>Trivial</strong> — o cenário já é JSON por dentro.</p>
+    </section>
+
+    <!-- IMPORTAR -->
+    <section>
+      <h2 class="text-sm font-bold text-violet-700 uppercase tracking-wide mb-2">2. Importar (o pulo do gato)</h2>
+      <div class="card overflow-hidden">
+        <div class="px-4 py-2.5 bg-violet-600 text-white flex items-center gap-2">
+          <i data-lucide="upload" class="w-4 h-4"></i><p class="text-sm font-bold">Importar fluxo</p>
+        </div>
+        <div class="p-4 space-y-4">
+          <!-- drop -->
+          <div class="border-2 border-dashed border-violet-300 rounded-xl p-5 text-center bg-violet-50/40">
+            <i data-lucide="file-up" class="w-7 h-7 text-violet-400 mx-auto mb-1"></i>
+            <p class="text-xs font-semibold text-slate-700">Arraste o arquivo <code>.json</code> aqui</p>
+            <p class="text-[11px] text-slate-500">ou <span class="underline text-violet-600">cole o conteúdo</span> / <span class="underline text-violet-600">escolha um arquivo</span></p>
+          </div>
+
+          <!-- preview -->
+          <div class="rounded-xl border border-slate-200">
+            <div class="px-3 py-2 border-b bg-slate-50 flex items-center justify-between">
+              <p class="text-xs font-bold flex items-center gap-1.5"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Prévia do que será criado</p>
+              <span class="chip dep-ok"><i data-lucide="check" class="w-3 h-3"></i> Estrutura válida</span>
+            </div>
+            <div class="p-3 text-xs space-y-1.5">
+              <p><strong>Nome:</strong> Atendimento SDR — Boyadjian</p>
+              <p><strong>Gatilho:</strong> Mensagem recebida (WhatsApp API)</p>
+              <p><strong>Passos:</strong> Buscar contato → Responder IA → Enviar → Extrair dados → Decisão → Agendar / Transferir</p>
+            </div>
+          </div>
+
+          <!-- DEPENDÊNCIAS (o que o n8n faz com credenciais) -->
+          <div class="rounded-xl border border-amber-200 bg-amber-50/50">
+            <div class="px-3 py-2 border-b border-amber-200">
+              <p class="text-xs font-bold text-amber-800 flex items-center gap-1.5"><i data-lucide="link" class="w-3.5 h-3.5"></i> Dependências — resolva antes de criar</p>
+              <p class="text-[10.5px] text-amber-700">O fluxo aponta pra coisas do escritório. Igual o n8n pede pra religar as credenciais.</p>
+            </div>
+            <div class="p-3 space-y-2 text-xs">
+              <div class="flex items-center justify-between gap-2">
+                <span>Agente de IA <code>"SDR Jurídico"</code></span>
+                <span class="chip dep-falta"><i data-lucide="alert-triangle" class="w-3 h-3"></i> escolher um agente</span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span>Campos personalizados <code>(22)</code></span>
+                <span class="chip dep-falta"><i data-lucide="plus" class="w-3 h-3"></i> 22 não existem — criar todos</span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span>Responsável do agendamento</span>
+                <span class="chip dep-falta"><i data-lucide="user" class="w-3 h-3"></i> escolher advogado</span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span>Canal WhatsApp (Meta)</span>
+                <span class="chip dep-ok"><i data-lucide="check" class="w-3 h-3"></i> já conectado</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <button class="px-3 py-1.5 rounded-lg border text-xs font-semibold text-slate-600">Cancelar</button>
+            <button class="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5">
+              <i data-lucide="check-check" class="w-3.5 h-3.5"></i> Resolver pendências e criar
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIABILIDADE -->
+    <section class="card p-5">
+      <p class="text-sm font-bold mb-2 flex items-center gap-1.5"><i data-lucide="gauge" class="w-4 h-4 text-emerald-600"></i> Probabilidade de fazer</p>
+      <div class="space-y-2 text-xs">
+        <div class="flex items-start gap-2">
+          <span class="chip dep-ok shrink-0">ALTA</span>
+          <p><strong>Exportar</strong> + <strong>importar no mesmo escritório</strong>: o cenário já é JSON estruturado por dentro. É serializar/desserializar + validar (já temos validação de grafo e dos tipos).</p>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="chip dep-falta shrink-0">MÉDIA</span>
+          <p><strong>Importar de outro escritório / template público</strong>: o fluxo referencia agente de IA, campos, responsável, Kanban, Cal.com — que mudam de escritório pra escritório. Precisa da tela de <strong>"resolver dependências"</strong> acima (o que o n8n faz com credenciais).</p>
+        </div>
+      </div>
+      <div class="mt-3 bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-900">
+        <strong>Recomendação:</strong> começar por <strong>Exportar</strong> (rápido, já ajuda em backup/compartilhar) + <strong>Importar no mesmo escritório</strong>. A reconciliação de dependências (cross-escritório / galeria de templates) vem como fase 2. <br>
+        <span class="text-violet-700">Bônus: assim que existir o import, eu te entrego o <strong>cenário do Boyadjian como JSON pronto</strong> — você importa em vez de montar na mão.</span>
+      </div>
+    </section>
+
+  </div>
+  <div class="bg-slate-900 text-slate-400 text-center py-3 text-xs">Mockup · Importar/Exportar JSON · SmartFlow · JuridFlow</div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
