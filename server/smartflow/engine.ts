@@ -150,7 +150,7 @@ export interface SmartflowExecutores {
    * `contatos.camposPersonalizados` no system prompt pra IA ter ciência
    * dos dados já capturados na conversa.
    */
-  chamarIA: (prompt: string, mensagem: string, contatoId?: number) => Promise<string>;
+  chamarIA: (prompt: string, mensagem: string, contatoId?: number, conversaId?: number) => Promise<string>;
   /**
    * Extração estruturada via tool calling. Recebe a mensagem + lista de
    * campos a extrair; devolve um objeto chave→valor com o que a IA achou.
@@ -226,7 +226,7 @@ export interface SmartflowExecutores {
    * quando o passo tem `config.agenteId`. `contatoId` é injetado no system
    * prompt como contexto do cliente (mesma motivação do `chamarIA`).
    */
-  executarAgente: (agenteId: number, mensagem: string, contatoId?: number) => Promise<string>;
+  executarAgente: (agenteId: number, mensagem: string, contatoId?: number, conversaId?: number) => Promise<string>;
   /** Busca horários disponíveis no Cal.com */
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
@@ -679,13 +679,16 @@ async function handleIAResponder(
     // que já foi coletado pra não repetir perguntas. ia_classificar NÃO
     // recebe esse contexto (é classificação determinística).
     const contatoIdCtx = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
+    // `conversaId` dá memória pra IA: o executor real carrega as mensagens
+    // anteriores dessa conversa pra ela lembrar do que já foi dito.
+    const conversaIdCtx = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
     let resposta: string;
     if (typeof agenteId === "number" && agenteId > 0) {
-      resposta = await exec.executarAgente(agenteId, mensagem, contatoIdCtx);
+      resposta = await exec.executarAgente(agenteId, mensagem, contatoIdCtx, conversaIdCtx);
     } else {
       const promptExtra = passo.config.prompt || "";
       const prompt = `Você é um assistente jurídico educado e profissional. ${promptExtra}\n\nResponda de forma clara e concisa.`;
-      resposta = await exec.chamarIA(prompt, mensagem, contatoIdCtx);
+      resposta = await exec.chamarIA(prompt, mensagem, contatoIdCtx, conversaIdCtx);
     }
 
     return {
