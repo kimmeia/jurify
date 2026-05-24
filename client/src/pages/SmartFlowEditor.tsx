@@ -124,6 +124,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   calcom_listar: CalendarSearch,
   calcom_cancelar: CalendarX,
   calcom_remarcar: CalendarClock,
+  agenda_criar: CalendarCheck,
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   transferir: PhoneCall,
@@ -239,6 +240,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   calcom_listar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
   calcom_cancelar: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
   calcom_remarcar: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
+  agenda_criar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
   whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
   whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
   transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
@@ -3454,6 +3456,112 @@ function ConfigKanbanAtribuirResponsavelFields({
   );
 }
 
+function ConfigAgendaCriarFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
+  const colaboradoresAtivos = (
+    equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []
+  ).filter((c: any) => c.ativo);
+  const insertTitulo = (path: string) => {
+    const atual = String(cfg.titulo || "");
+    onChange({ titulo: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 p-2">
+        <p className="text-[11px] text-orange-800 dark:text-orange-300">
+          Cria o compromisso na <strong>Agenda do escritório</strong> (não no Cal.com), vinculado ao cliente.
+          Nasce como <strong>"pendente"</strong> — a equipe confirma o horário em /agenda.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Responsável (advogado)</Label>
+        <Select
+          value={cfg.responsavelId ? String(cfg.responsavelId) : ""}
+          onValueChange={(v) => onChange({ responsavelId: Number(v) })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Escolha o responsável" />
+          </SelectTrigger>
+          <SelectContent>
+            {colaboradoresAtivos.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.userName ?? "—"} ({c.cargo})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">A quem o compromisso fica atribuído na agenda.</p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Tipo</Label>
+        <Select
+          value={(cfg.tipo as string) || "reuniao_comercial"}
+          onValueChange={(v) => onChange({ tipo: v })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="reuniao_comercial">Reunião comercial</SelectItem>
+            <SelectItem value="follow_up">Follow-up</SelectItem>
+            <SelectItem value="tarefa">Tarefa</SelectItem>
+            <SelectItem value="outro">Outro</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Título</Label>
+          <VariableTrigger inputId="cfg-agenda-titulo" variaveis={variaveis} onInsert={insertTitulo} />
+        </div>
+        <VariableInput
+          id="cfg-agenda-titulo"
+          highlight
+          value={String(cfg.titulo ?? "")}
+          onChange={(v) => onChange({ titulo: v })}
+          variaveis={variaveis}
+          placeholder="Consulta inicial — {{nomeCliente}}"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Data/hora (opcional)</Label>
+          <VariableInput
+            id="cfg-agenda-data"
+            highlight
+            value={String(cfg.dataInicio ?? "")}
+            onChange={(v) => onChange({ dataInicio: v })}
+            variaveis={variaveis}
+            placeholder="vazio = agora"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Duração (min)</Label>
+          <Input
+            type="number"
+            min={15}
+            value={Number(cfg.duracaoMinutos) || 60}
+            onChange={(e) => onChange({ duracaoMinutos: Number(e.target.value) || 60 })}
+          />
+        </div>
+      </div>
+      <p className="text-[10px] text-muted-foreground -mt-1">
+        Data vazia → nasce "pendente" pra equipe marcar. Pode usar uma variável capturada (ex: <code>{"{{data_agendamento}}"}</code>).
+      </p>
+    </div>
+  );
+}
+
 function ConfigKanbanTagsFields({
   cfg,
   onChange,
@@ -4009,6 +4117,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
           </div>
         </div>
       );
+    case "agenda_criar":
+      return <ConfigAgendaCriarFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_enviar":
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
     case "transferir":

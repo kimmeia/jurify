@@ -24,6 +24,10 @@ export async function criarAgendamento(dados: {
   local?: string;
   prioridade?: PrioridadeAgendamento;
   processoId?: number;
+  /** Cliente CRM vinculado (opcional) — deixa o responsável do cliente ver o compromisso. */
+  contatoId?: number;
+  /** Telefone/WhatsApp livre do contato da reunião (opcional). */
+  contatoTelefone?: string;
   corHex?: string;
   lembretes?: { tipo: string; minutosAntes: number }[];
 }) {
@@ -43,6 +47,8 @@ export async function criarAgendamento(dados: {
     local: dados.local || null,
     prioridade: dados.prioridade ?? "normal",
     processoId: dados.processoId ?? null,
+    contatoId: dados.contatoId ?? null,
+    contatoTelefone: dados.contatoTelefone || null,
     corHex: dados.corHex ?? "#3b82f6",
   });
 

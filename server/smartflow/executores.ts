@@ -550,6 +550,28 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async criarAgendamentoInterno(params): Promise<number> {
+      const { criarAgendamento: criarNaAgenda } = await import("../escritorio/db-agendamento");
+      // `criadoPorId`: o bot não é um usuário; atribui ao próprio responsável
+      // (satisfaz o NOT NULL e é coerente — o compromisso "é" do advogado).
+      const id = await criarNaAgenda({
+        escritorioId,
+        criadoPorId: params.responsavelId,
+        responsavelId: params.responsavelId,
+        tipo: params.tipo as any,
+        titulo: params.titulo,
+        descricao: params.descricao,
+        dataInicio: params.dataInicio,
+        dataFim: params.dataFim,
+        local: params.local,
+        prioridade: params.prioridade as any,
+        contatoId: params.contatoId,
+        contatoTelefone: params.contatoTelefone,
+      });
+      log.info({ agendamentoId: id, responsavelId: params.responsavelId }, "SmartFlow: compromisso criado na Agenda interna");
+      return id;
+    },
+
     async listarBookings(params) {
       try {
         const client = await obterCalcomClient(escritorioId);

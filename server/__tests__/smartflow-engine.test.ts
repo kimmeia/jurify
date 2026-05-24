@@ -32,6 +32,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
+    criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
     listarBookings: vi.fn().mockResolvedValue([]),
     cancelarBooking: vi.fn().mockResolvedValue(true),
     reagendarBooking: vi.fn().mockResolvedValue(true),
@@ -1439,6 +1440,51 @@ describe("SmartFlow Engine", () => {
       expect(resultado.sucesso).toBe(true);
       expect(resultado.contexto.transferir).toBe(true);
       expect(resultado.respostas).toEqual([]);
+    });
+  });
+
+  describe("agenda_criar", () => {
+    it("cria compromisso na agenda interna com título interpolado e vincula o contato", async () => {
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(555);
+      const exec = criarMockExecutores({ criarAgendamentoInterno });
+      const passos: Passo[] = [
+        {
+          id: 1,
+          ordem: 1,
+          tipo: "agenda_criar",
+          config: { responsavelId: 9, titulo: "Consulta — {{nomeCliente}}", duracaoMinutos: 30 },
+        },
+      ];
+
+      const resultado = await executarCenario(
+        passos,
+        { nomeCliente: "Maria", contatoId: 77, telefoneCliente: "5585999990000" },
+        exec,
+      );
+
+      expect(resultado.sucesso).toBe(true);
+      expect(resultado.contexto.agendamentoInternoId).toBe(555);
+      expect(criarAgendamentoInterno).toHaveBeenCalledWith(
+        expect.objectContaining({
+          responsavelId: 9,
+          tipo: "reuniao_comercial",
+          titulo: "Consulta — Maria",
+          contatoId: 77,
+          contatoTelefone: "5585999990000",
+        }),
+      );
+    });
+
+    it("falha de forma clara sem responsável configurado", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: {} },
+      ];
+
+      const resultado = await executarCenario(passos, { nomeCliente: "Ana" }, exec);
+
+      expect(resultado.sucesso).toBe(false);
+      expect(resultado.erro).toContain("responsável");
     });
   });
 
