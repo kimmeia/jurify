@@ -91,10 +91,9 @@ export default function DashboardGeral() {
 
   // Dashboard mostra SEMPRE o mês civil corrente (dia 1 até hoje). Pra ver
   // outros períodos, o usuário vai em /relatorios — esta tela é "visão do
-  // mês" e não tem seletor de range. Calculamos `days` como o nº de dias
-  // decorridos no mês.
-  const hojeData = new Date();
-  const diasDoMesAteHoje = hojeData.getDate();
+  // mês" e não tem seletor de range. O range é calculado no servidor, no fuso
+  // do escritório, pra não depender do relógio do browser (que fazia o gráfico
+  // "pular o dia 1" perto da virada de dia em UTC).
 
   const { data: credits } = trpc.dashboard.credits.useQuery(undefined, {
     enabled: !!user,
@@ -112,7 +111,7 @@ export default function DashboardGeral() {
     refetchInterval: 60_000,
   });
   const { data: cashFlow } = trpc.dashboard.cashFlow.useQuery(
-    { days: diasDoMesAteHoje },
+    undefined,
     { enabled: !!user, retry: false, refetchInterval: 120_000 },
   );
   const { data: feed } = trpc.dashboard.activityFeed.useQuery(
@@ -140,13 +139,14 @@ export default function DashboardGeral() {
   const taxaInadimplencia = recebido + vencido > 0
     ? +((vencido / (recebido + vencido)) * 100).toFixed(1)
     : 0;
-  const nomeMesAtual = new Intl.DateTimeFormat("pt-BR", { month: "long" })
-    .format(hojeData)
-    .replace(/^./, (c) => c.toUpperCase());
-
   const nomeUser = user?.name?.split(" ")[0] || "Usuário";
   const dataInicio = cashFlow?.pontos[0]?.data;
   const dataFim = cashFlow?.pontos[cashFlow.pontos.length - 1]?.data;
+  // Nome do mês deriva do início do range (já no fuso do escritório) pra bater
+  // com o período exibido; antes de carregar, cai no mês local como fallback.
+  const nomeMesAtual = new Intl.DateTimeFormat("pt-BR", { month: "long" })
+    .format(dataInicio ? new Date(`${dataInicio}T12:00:00`) : new Date())
+    .replace(/^./, (c) => c.toUpperCase());
 
   return (
     <PainelSection tema="geral">

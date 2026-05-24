@@ -13,10 +13,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   desdeDias,
-  mesVigente,
-  subtrairUmMesClamped,
   metaProporcionalPeriodo,
 } from "../escritorio/router-relatorios";
+import { subtrairUmMesISO, primeiroDiaDoMesISO } from "../../shared/escritorio-types";
 
 describe("desdeDias", () => {
   beforeEach(() => {
@@ -43,83 +42,48 @@ describe("desdeDias", () => {
   });
 });
 
-describe("mesVigente", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
+describe("primeiroDiaDoMesISO", () => {
+  it("retorna o dia 01 do mês da data", () => {
+    expect(primeiroDiaDoMesISO("2026-05-23")).toBe("2026-05-01");
+    expect(primeiroDiaDoMesISO("2026-12-31")).toBe("2026-12-01");
   });
 
-  it("dataInicio é o dia 1 do mês corrente (00:00 local)", () => {
-    vi.setSystemTime(new Date("2026-05-14T15:30:00"));
-    const { dataInicio, dataFim } = mesVigente();
-    expect(dataInicio.getDate()).toBe(1);
-    expect(dataInicio.getMonth()).toBe(4); // mai = 4
-    expect(dataInicio.getFullYear()).toBe(2026);
-    expect(dataInicio.getHours()).toBe(0);
-    expect(dataInicio.getMinutes()).toBe(0);
-    // dataFim = agora
-    expect(dataFim.getDate()).toBe(14);
-  });
-
-  it("funciona em janeiro (boundary do ano)", () => {
-    vi.setSystemTime(new Date("2026-01-05T10:00:00"));
-    const { dataInicio } = mesVigente();
-    expect(dataInicio.getMonth()).toBe(0);
-    expect(dataInicio.getDate()).toBe(1);
-    expect(dataInicio.getFullYear()).toBe(2026);
+  it("dia 1 retorna ele mesmo", () => {
+    expect(primeiroDiaDoMesISO("2026-01-01")).toBe("2026-01-01");
   });
 });
 
-describe("subtrairUmMesClamped", () => {
-  it("preserva o dia quando o mês anterior também tem aquele dia", () => {
-    // 15 jun → 15 mai
-    const r = subtrairUmMesClamped(new Date(2026, 5, 15, 10, 30));
-    expect(r.getFullYear()).toBe(2026);
-    expect(r.getMonth()).toBe(4); // mai
-    expect(r.getDate()).toBe(15);
-    expect(r.getHours()).toBe(10);
-    expect(r.getMinutes()).toBe(30);
+describe("subtrairUmMesISO", () => {
+  it("preserva o dia quando o mês anterior também tem aquele dia (15 jun → 15 mai)", () => {
+    expect(subtrairUmMesISO("2026-06-15")).toBe("2026-05-15");
   });
 
   it("31 mar → 28 fev (clamp pro último dia, NÃO rola pra 3 mar)", () => {
-    const r = subtrairUmMesClamped(new Date(2026, 2, 31));
-    expect(r.getMonth()).toBe(1); // fev
-    expect(r.getDate()).toBe(28); // 2026 não é bissexto
-    expect(r.getFullYear()).toBe(2026);
+    expect(subtrairUmMesISO("2026-03-31")).toBe("2026-02-28");
   });
 
   it("31 mai → 30 abr (abr tem 30 dias)", () => {
-    const r = subtrairUmMesClamped(new Date(2026, 4, 31));
-    expect(r.getMonth()).toBe(3); // abr
-    expect(r.getDate()).toBe(30);
+    expect(subtrairUmMesISO("2026-05-31")).toBe("2026-04-30");
   });
 
   it("29 mar 2024 → 29 fev 2024 (bissexto preserva)", () => {
-    const r = subtrairUmMesClamped(new Date(2024, 2, 29));
-    expect(r.getMonth()).toBe(1); // fev
-    expect(r.getDate()).toBe(29);
+    expect(subtrairUmMesISO("2024-03-29")).toBe("2024-02-29");
   });
 
   it("29 mar 2026 → 28 fev 2026 (não-bissexto clampa)", () => {
-    const r = subtrairUmMesClamped(new Date(2026, 2, 29));
-    expect(r.getMonth()).toBe(1);
-    expect(r.getDate()).toBe(28);
+    expect(subtrairUmMesISO("2026-03-29")).toBe("2026-02-28");
   });
 
   it("15 jan → 15 dez do ano anterior (cross-year)", () => {
-    const r = subtrairUmMesClamped(new Date(2026, 0, 15));
-    expect(r.getMonth()).toBe(11); // dez
-    expect(r.getDate()).toBe(15);
-    expect(r.getFullYear()).toBe(2025);
+    expect(subtrairUmMesISO("2026-01-15")).toBe("2025-12-15");
   });
 
-  it("não muta o input", () => {
-    const input = new Date(2026, 2, 31);
-    const inputTime = input.getTime();
-    subtrairUmMesClamped(input);
-    expect(input.getTime()).toBe(inputTime);
+  it("01 mai → 01 abr (primeiro dia do mês)", () => {
+    expect(subtrairUmMesISO("2026-05-01")).toBe("2026-04-01");
+  });
+
+  it("31 jan → 31 dez do ano anterior (cross-year sem clamp)", () => {
+    expect(subtrairUmMesISO("2026-01-31")).toBe("2025-12-31");
   });
 });
 

@@ -71,15 +71,19 @@ export const FUSO_HORARIO_PADRAO = "America/Sao_Paulo";
  * preserva a percepção do usuário.
  *
  * Recebe optional `tz` pra suportar escritórios em outros fusos brasileiros
- * (Manaus, Acre, Noronha). Sem `tz`, usa o padrão.
+ * (Manaus, Acre, Noronha). Sem `tz`, usa o padrão. `agora` é injetável pra
+ * testes determinísticos (sem precisar mockar o relógio global).
  */
-export function dataHojeBR(tz: string = FUSO_HORARIO_PADRAO): string {
+export function dataHojeBR(
+  tz: string = FUSO_HORARIO_PADRAO,
+  agora: Date = new Date(),
+): string {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(agora);
   const get = (t: string) => partes.find((p) => p.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
@@ -168,6 +172,88 @@ export function fimDoDiaNoFuso(
   const tentativaUtc = Date.UTC(year, month - 1, day, 23, 59, 59, 999);
   const offset = obterOffsetFusoMs(new Date(tentativaUtc), tz);
   return new Date(tentativaUtc - offset);
+}
+
+/** Primeiro dia do mês de um `YYYY-MM-DD`. Ex: "2026-05-23" → "2026-05-01". */
+export function primeiroDiaDoMesISO(yyyymmdd: string): string {
+  return `${yyyymmdd.slice(0, 7)}-01`;
+}
+
+/**
+ * Subtrai 1 mês civil de `YYYY-MM-DD` preservando o dia, com clamp pro último
+ * dia do mês anterior (31 mar → 28/29 fev, nunca 3 mar). Opera só sobre
+ * componentes de data — sem Date/fuso — pra comparações MTD vs LMTD estáveis
+ * (substitui o antigo `subtrairUmMesClamped`, que mexia em Date e quebrava
+ * quando o range vinha no fuso, com o "fim do dia" caindo no dia UTC seguinte).
+ */
+export function subtrairUmMesISO(yyyymmdd: string): string {
+  const [ano, mes, dia] = yyyymmdd.split("-").map(Number);
+  if (!ano || !mes || !dia) throw new Error(`yyyymmdd inválido: ${yyyymmdd}`);
+  const anoAnt = mes === 1 ? ano - 1 : ano;
+  const mesAnt = mes === 1 ? 12 : mes - 1;
+  const ultimoDiaMesAnt = new Date(Date.UTC(anoAnt, mesAnt, 0)).getUTCDate();
+  const diaClamp = Math.min(dia, ultimoDiaMesAnt);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${anoAnt}-${p(mesAnt)}-${p(diaClamp)}`;
+}
+
+/**
+ * Resolve um período (range de datas) no fuso do escritório.
+ *
+ * Default (sem input) = mês civil corrente: dia 1 → hoje, observado no fuso.
+ * Com `input.dataInicio`+`dataFim`, usa o range explícito. Em ambos os casos
+ * devolve as strings civis `YYYY-MM-DD` (pra colunas DATE como vencimento/
+ * dataPagamento) E os `Date` de início/fim do dia no fuso (pra colunas
+ * DATETIME como createdAt/concluidaAt) — coerentes entre si.
+ *
+ * Centraliza o cálculo usado por Dashboard e Relatórios pra que as duas telas
+ * mostrem o MESMO período (paridade) e nenhuma "pule o dia 1" nem vire o mês
+ * cedo demais por causa do relógio UTC do server.
+ */
+export function resolverPeriodoNoFuso(
+  agora: Date,
+  tz: string,
+  input?: { dataInicio?: string; dataFim?: string },
+): { dataInicio: Date; dataFim: Date; dataInicioStr: string; dataFimStr: string } {
+  let dataInicioStr: string;
+  let dataFimStr: string;
+  if (input?.dataInicio && input?.dataFim) {
+    dataInicioStr = input.dataInicio;
+    dataFimStr = input.dataFim;
+  } else {
+    const hojeStr = dataHojeBR(tz, agora);
+    dataInicioStr = primeiroDiaDoMesISO(hojeStr);
+    dataFimStr = hojeStr;
+  }
+  return {
+    dataInicio: inicioDoDiaNoFuso(dataInicioStr, tz),
+    dataFim: fimDoDiaNoFuso(dataFimStr, tz),
+    dataInicioStr,
+    dataFimStr,
+  };
+}
+
+/**
+ * Chaves `YYYY-MM` dos últimos `meses` meses terminando no mês corrente
+ * observado no fuso `tz` (inclusive). Ex: meses=3, hoje=mai/2026 →
+ * ["2026-03","2026-04","2026-05"].
+ *
+ * Ancora no fuso (não no relógio UTC do server) pra não listar o mês seguinte
+ * na virada de mês à noite BRT. `Date.UTC` normaliza meses negativos (vira o
+ * ano) e `getUTC*` mantém a leitura consistente em qualquer fuso de runner.
+ */
+export function chavesMesesAteHojeNoFuso(
+  meses: number,
+  tz: string,
+  agora: Date = new Date(),
+): string[] {
+  const [ano, mes] = dataHojeBR(tz, agora).split("-").map(Number);
+  const chaves: string[] = [];
+  for (let i = meses - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(ano!, mes! - 1 - i, 1));
+    chaves.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+  return chaves;
 }
 
 // ─── Interfaces ────────────────────────────────────────────────────────────────

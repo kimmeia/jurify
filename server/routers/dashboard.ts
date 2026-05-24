@@ -33,7 +33,7 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { checkPermission } from "../escritorio/check-permission";
 import { createLogger } from "../_core/logger";
 import { parseValorBR } from "../../shared/valor-br";
-import { dataHojeBR } from "../../shared/escritorio-types";
+import { dataHojeBR, FUSO_HORARIO_PADRAO, resolverPeriodoNoFuso } from "../../shared/escritorio-types";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "../escritorio/router-financeiro";
 import { inArray } from "drizzle-orm";
@@ -43,7 +43,7 @@ import {
   percentInadimplenciaPorValor,
   percentInadimplenciaPorCliente,
   taxaConclusaoNoPrazo,
-  calcularRangeCashFlow,
+  resolverRangeCashFlow,
 } from "./dashboard-setor-helpers";
 
 const log = createLogger("dashboard-router");
@@ -395,7 +395,7 @@ export const dashboardRouter = router({
     .input(
       z
         .object({
-          days: z.number().int().min(1).max(365).default(30),
+          days: z.number().int().min(1).max(365).optional(),
         })
         .optional(),
     )
@@ -413,9 +413,12 @@ export const dashboardRouter = router({
         return { pontos: [], totalRecebido: 0, totalPendente: 0, totalVencido: 0 };
       }
 
-      const days = input?.days ?? 30;
-      const { inicioStr, pontosKeys } = calcularRangeCashFlow(days, new Date());
-      const hoje = dataHojeBR();
+      // Range ancorado no fuso do escritório (não no relógio UTC do server),
+      // pra não "pular o dia 1" entre 21h–24h BRT. Sem `days`, usa o mês civil
+      // corrente (dia 1 → hoje); com `days`, usa "últimos N dias".
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { inicioStr, pontosKeys } = resolverRangeCashFlow(new Date(), tz, input?.days);
+      const hoje = dataHojeBR(tz);
 
       try {
         // Critério "recebido": filtra por `dataPagamento` (quando foi
@@ -720,19 +723,11 @@ export const dashboardRouter = router({
       }
       const verTodos = perm.verTodos;
 
-      // Range: default = mês vigente. Bate com `relatorios.comercialDashboard`.
-      let dataInicio: Date;
-      let dataFim: Date;
-      if (input?.dataInicio && input?.dataFim) {
-        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-        dataFim = new Date(`${input.dataFim}T23:59:59`);
-      } else {
-        const agora = new Date();
-        dataInicio = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
-        dataFim = agora;
-      }
-      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
-      const dataFimStr = dataFim.toISOString().slice(0, 10);
+      // Range: default = mês vigente NO FUSO do escritório (não no relógio UTC
+      // do server). Bate com `relatorios.comercialDashboard`.
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
+        resolverPeriodoNoFuso(new Date(), tz, input);
 
       // Atendentes elegíveis: todo colaborador ativo em setor tipo='comercial'.
       // Quem não tem verTodos só vê a si mesmo.
@@ -918,20 +913,12 @@ export const dashboardRouter = router({
       // Frontend mostra mensagem "Sem permissão" se vier dado vazio.
       if (!perm.verTodos) return ZERO;
 
-      // Range default = mês vigente
-      let dataInicio: Date;
-      let dataFim: Date;
-      if (input?.dataInicio && input?.dataFim) {
-        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-        dataFim = new Date(`${input.dataFim}T23:59:59`);
-      } else {
-        const agora = new Date();
-        dataInicio = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
-        dataFim = agora;
-      }
-      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
-      const dataFimStr = dataFim.toISOString().slice(0, 10);
-      const hojeStr = dataHojeBR();
+      // Range default = mês vigente NO FUSO do escritório (não no relógio UTC
+      // do server, que virava o mês cedo demais na virada à noite BRT).
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
+        resolverPeriodoNoFuso(new Date(), tz, input);
+      const hojeStr = dataHojeBR(tz);
 
       // KPIs agregados em SQL — mesmo padrão do `asaas.kpis`. Filtros:
       //   - recebido: status pago + dataPagamento no range
@@ -1072,19 +1059,11 @@ export const dashboardRouter = router({
       if (!perm.allowed) return null;
       const verTodos = perm.verTodos;
 
-      // Range default = mês vigente
-      let dataInicio: Date;
-      let dataFim: Date;
-      if (input?.dataInicio && input?.dataFim) {
-        dataInicio = new Date(`${input.dataInicio}T00:00:00`);
-        dataFim = new Date(`${input.dataFim}T23:59:59`);
-      } else {
-        const agora = new Date();
-        dataInicio = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
-        dataFim = agora;
-      }
-      const dataInicioStr = dataInicio.toISOString().slice(0, 10);
-      const dataFimStr = dataFim.toISOString().slice(0, 10);
+      // Range default = mês vigente NO FUSO do escritório (não no relógio UTC
+      // do server, que virava o mês cedo demais na virada à noite BRT).
+      const tz = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { dataInicio, dataFim, dataInicioStr, dataFimStr } =
+        resolverPeriodoNoFuso(new Date(), tz, input);
 
       const agora = new Date();
       // Estratégia de período pra evitar "estagiário olhando dia 2 do mês
