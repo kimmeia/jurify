@@ -34,6 +34,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
     verificarDisponibilidadeAgenda: vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 }),
+    listarAgendaResponsavel: vi.fn().mockResolvedValue([]),
     editarAgendamentoInterno: vi.fn().mockResolvedValue(undefined),
     listarBookings: vi.fn().mockResolvedValue([]),
     cancelarBooking: vi.fn().mockResolvedValue(true),
@@ -1623,6 +1624,59 @@ describe("SmartFlow Engine", () => {
       expect(resultado.contexto.agendaDisponivel).toBe(true);
       expect(verificarDisponibilidadeAgenda).toHaveBeenCalled();
       expect(criarAgendamentoInterno).not.toHaveBeenCalled();
+    });
+
+    it("ação consultar lista compromissos em ISO e salva no campo escolhido", async () => {
+      const listarAgendaResponsavel = vi.fn().mockResolvedValue([
+        { titulo: "Reunião A", inicio: "2026-05-26T14:00:00.000Z", fim: "2026-05-26T15:00:00.000Z", status: "confirmado" },
+        { titulo: "Audiência", inicio: "2026-05-27T09:00:00.000Z", fim: "2026-05-27T10:30:00.000Z", status: "pendente" },
+      ]);
+      const criarAgendamentoInterno = vi.fn().mockResolvedValue(1);
+      const exec = criarMockExecutores({ listarAgendaResponsavel, criarAgendamentoInterno });
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "agenda_criar",
+          config: { acao: "consultar", responsavelId: 9, diasParaFrente: 5, salvarEm: "agendaDoDr" },
+        },
+      ];
+
+      const r = await executarCenario(passos, { contatoId: 5 }, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(criarAgendamentoInterno).not.toHaveBeenCalled();
+      // chamou com janela de 5 dias
+      expect(listarAgendaResponsavel).toHaveBeenCalledWith(
+        expect.objectContaining({ responsavelId: 9 }),
+      );
+      const texto = String(r.contexto.agendaDoDr);
+      // datas ISO presentes no texto pra IA
+      expect(texto).toContain("2026-05-26T14:00:00.000Z");
+      expect(texto).toContain("2026-05-27T09:00:00.000Z");
+      expect(texto).toContain("Reunião A");
+      // estruturado também disponível
+      expect(Array.isArray(r.contexto.agendaCompromissos)).toBe(true);
+      expect((r.contexto.agendaCompromissos as any[]).length).toBe(2);
+    });
+
+    it("ação consultar com agenda vazia diz que está livre", async () => {
+      const listarAgendaResponsavel = vi.fn().mockResolvedValue([]);
+      const exec = criarMockExecutores({ listarAgendaResponsavel });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { acao: "consultar", responsavelId: 9, salvarEm: "ag" } },
+      ];
+      const r = await executarCenario(passos, { contatoId: 5 }, exec);
+      expect(r.sucesso).toBe(true);
+      expect(String(r.contexto.ag)).toContain("livre");
+    });
+
+    it("ação consultar sem responsável falha com mensagem clara", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "agenda_criar", config: { acao: "consultar", salvarEm: "ag" } },
+      ];
+      const r = await executarCenario(passos, { contatoId: 5 }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("responsável");
     });
 
     it("ação cancelar marca o agendamento como cancelado", async () => {

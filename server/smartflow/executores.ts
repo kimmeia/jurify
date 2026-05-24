@@ -612,6 +612,48 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async listarAgendaResponsavel(params): Promise<Array<{ titulo: string; inicio: string; fim: string; status: string }>> {
+      try {
+        const { getDb } = await import("../db");
+        const { agendamentos } = await import("../../drizzle/schema");
+        const { eq, and, gte, lte } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return [];
+        const nStart = new Date(params.dataInicio);
+        const nFim = new Date(params.dataFim);
+        const rows = await db
+          .select({
+            titulo: agendamentos.titulo,
+            dataInicio: agendamentos.dataInicio,
+            dataFim: agendamentos.dataFim,
+            status: agendamentos.status,
+          })
+          .from(agendamentos)
+          .where(and(
+            eq(agendamentos.escritorioId, escritorioId),
+            eq(agendamentos.responsavelId, params.responsavelId),
+            gte(agendamentos.dataInicio, nStart),
+            lte(agendamentos.dataInicio, nFim),
+          ));
+        return rows
+          .filter((r) => r.status !== "cancelado")
+          .map((r) => {
+            const inicio = new Date(r.dataInicio);
+            const fim = r.dataFim ? new Date(r.dataFim) : new Date(inicio.getTime() + 60 * 60 * 1000);
+            return {
+              titulo: r.titulo ?? "",
+              inicio: inicio.toISOString(),
+              fim: fim.toISOString(),
+              status: r.status ?? "",
+            };
+          })
+          .sort((a, b) => a.inicio.localeCompare(b.inicio));
+      } catch (err: any) {
+        log.warn({ err: err.message }, "SmartFlow: falha ao listar agenda do responsável");
+        return [];
+      }
+    },
+
     async editarAgendamentoInterno(params): Promise<void> {
       const { atualizarAgendamento } = await import("../escritorio/db-agendamento");
       await atualizarAgendamento(params.agendamentoId, escritorioId, {
