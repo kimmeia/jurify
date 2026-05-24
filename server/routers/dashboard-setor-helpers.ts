@@ -8,6 +8,8 @@
  *   - Classificação de tarefa/agenda por prazo
  */
 
+import { dataHojeBR } from "../../shared/escritorio-types";
+
 /**
  * Calcula a meta proporcional ao range de datas.
  *
@@ -158,4 +160,31 @@ export function calcularRangeCashFlow(
     pontosKeys.push(d.toISOString().slice(0, 10));
   }
   return { inicioStr, pontosKeys };
+}
+
+/**
+ * Resolve o range de cash flow do Painel Geral a partir de um instante e do
+ * fuso do escritório.
+ *
+ * O painel mostra o mês civil corrente (dia 1 → hoje) observado NO FUSO do
+ * escritório. Como o server roda em UTC, ancorar direto em `new Date()` fazia
+ * o range "pular o dia 1" na janela 21h–24h BRT: o relógio UTC já tinha virado
+ * pro dia seguinte, então `hoje − (days − 1)` caía no dia 2 e o filtro do banco
+ * descartava o dia 1. Aqui derivamos o dia civil NO FUSO e ancoramos ao
+ * MEIO-DIA UTC desse dia — longe das bordas de dia em qualquer fuso ±11h, o que
+ * neutraliza o offset do server (em UTC ou local).
+ *
+ * `daysOverride` permite pedir "últimos N dias" (uso genérico). Sem ele, o nº
+ * de dias é o próprio dia do mês — i.e. dia 1 até hoje.
+ */
+export function resolverRangeCashFlow(
+  agora: Date,
+  tz: string,
+  daysOverride?: number,
+): { inicioStr: string; pontosKeys: string[] } {
+  const hojeStr = dataHojeBR(tz, agora);
+  const [ano, mes, dia] = hojeStr.split("-").map(Number);
+  const days = daysOverride ?? dia!;
+  const anchor = new Date(Date.UTC(ano!, mes! - 1, dia!, 12, 0, 0));
+  return calcularRangeCashFlow(days, anchor);
 }

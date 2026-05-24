@@ -19,8 +19,10 @@ import {
   taxaConclusaoNoPrazo,
   classificarTarefaPrazo,
   calcularRangeCashFlow,
+  resolverRangeCashFlow,
 } from "../routers/dashboard-setor-helpers";
 import { metaProporcionalPeriodo } from "../escritorio/router-relatorios";
+import { dataHojeBR, resolverPeriodoNoFuso } from "../../shared/escritorio-types";
 
 describe("proporcionalizarMeta", () => {
   it("range cheio do mês (1-31 mai) retorna meta cheia", () => {
@@ -379,5 +381,201 @@ describe("calcularRangeCashFlow", () => {
     const antes = hoje.getTime();
     calcularRangeCashFlow(21, hoje);
     expect(hoje.getTime()).toBe(antes);
+  });
+});
+
+describe("resolverRangeCashFlow — range do Painel Geral no fuso do escritório", () => {
+  const SP = "America/Sao_Paulo"; // UTC-3
+  const MANAUS = "America/Manaus"; // UTC-4
+
+  // Bug reportado: server em UTC + horário noturno BRT fazia o range começar
+  // no dia 02. `agora` aqui é sempre o INSTANTE UTC (como o server vê), e o
+  // range precisa refletir o dia CIVIL no fuso do escritório.
+
+  it("BUG: 23/mai 22h BRT (= 24/mai 01h UTC) → começa em 01/mai, NÃO 02", () => {
+    const agora = new Date("2026-05-24T01:00:00Z");
+    const r = resolverRangeCashFlow(agora, SP);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys[0]).toBe("2026-05-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-23");
+    expect(r.pontosKeys).toHaveLength(23);
+  });
+
+  it("meio do dia (24/mai 12h BRT = 15h UTC) → 01/mai a 24/mai, 24 pontos", () => {
+    const agora = new Date("2026-05-24T15:00:00Z");
+    const r = resolverRangeCashFlow(agora, SP);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-24");
+    expect(r.pontosKeys).toHaveLength(24);
+  });
+
+  it("estável nas 24h do dia: qualquer hora de 15/mai BRT → sempre 01→15/mai", () => {
+    // Varre 00h..23h BRT do dia 15 (incluindo 21h-23h, a janela que bugava).
+    // hora BRT h ↔ instante UTC h+3 (pode virar pro dia 16 em UTC).
+    for (let horaBrt = 0; horaBrt <= 23; horaBrt++) {
+      const agora = new Date(Date.UTC(2026, 4, 15, horaBrt + 3, 0, 0));
+      const r = resolverRangeCashFlow(agora, SP);
+      expect(r.inicioStr).toBe("2026-05-01");
+      expect(r.pontosKeys[0]).toBe("2026-05-01");
+      expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-15");
+      expect(r.pontosKeys).toHaveLength(15);
+    }
+  });
+
+  it("manhã e noite do MESMO dia civil BR dão range idêntico", () => {
+    const manha = resolverRangeCashFlow(new Date("2026-05-23T13:00:00Z"), SP); // 10h BRT dia 23
+    const noite = resolverRangeCashFlow(new Date("2026-05-24T01:00:00Z"), SP); // 22h BRT dia 23
+    expect(noite.inicioStr).toBe(manha.inicioStr);
+    expect(noite.pontosKeys).toEqual(manha.pontosKeys);
+  });
+
+  it("dia 1 à noite (01/mai 22h BRT = 02/mai 01h UTC) → só [01/mai], 1 ponto", () => {
+    const agora = new Date("2026-05-02T01:00:00Z");
+    const r = resolverRangeCashFlow(agora, SP);
+    expect(r.pontosKeys).toEqual(["2026-05-01"]);
+  });
+
+  it("virada de mês à noite BRT (31/mai 22h = 01/jun 01h UTC) → maio inteiro, não junho", () => {
+    const agora = new Date("2026-06-01T01:00:00Z");
+    const r = resolverRangeCashFlow(agora, SP);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-31");
+    expect(r.pontosKeys).toHaveLength(31);
+  });
+
+  it("virada de ano à noite BRT (31/dez 22h = 01/jan 01h UTC) → dezembro/2025", () => {
+    const agora = new Date("2026-01-01T01:00:00Z");
+    const r = resolverRangeCashFlow(agora, SP);
+    expect(r.inicioStr).toBe("2025-12-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2025-12-31");
+    expect(r.pontosKeys).toHaveLength(31);
+  });
+
+  it("fuso Manaus (UTC-4): 23/mai 22h AMT (= 24/mai 02h UTC) → começa em 01/mai", () => {
+    const agora = new Date("2026-05-24T02:00:00Z");
+    const r = resolverRangeCashFlow(agora, MANAUS);
+    expect(r.inicioStr).toBe("2026-05-01");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-23");
+  });
+
+  it("fusos diferentes no MESMO instante podem cair em dias civis distintos", () => {
+    // 24/mai 03:30 UTC → SP (UTC-3) = 00:30 dia 24; Manaus (UTC-4) = 23:30 dia 23.
+    const agora = new Date("2026-05-24T03:30:00Z");
+    const sp = resolverRangeCashFlow(agora, SP);
+    const manaus = resolverRangeCashFlow(agora, MANAUS);
+    expect(sp.pontosKeys[sp.pontosKeys.length - 1]).toBe("2026-05-24");
+    expect(manaus.pontosKeys[manaus.pontosKeys.length - 1]).toBe("2026-05-23");
+    expect(sp.inicioStr).toBe("2026-05-01");
+    expect(manaus.inicioStr).toBe("2026-05-01");
+  });
+
+  it("daysOverride: pede 'últimos 7 dias' terminando hoje (no fuso)", () => {
+    const agora = new Date("2026-05-24T15:00:00Z"); // 12h BRT dia 24
+    const r = resolverRangeCashFlow(agora, SP, 7);
+    expect(r.inicioStr).toBe("2026-05-18");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-24");
+    expect(r.pontosKeys).toHaveLength(7);
+  });
+
+  it("daysOverride atravessa virada de mês mesmo na janela noturna", () => {
+    const agora = new Date("2026-05-02T01:00:00Z"); // 01/mai 22h BRT
+    const r = resolverRangeCashFlow(agora, SP, 10);
+    expect(r.inicioStr).toBe("2026-04-22");
+    expect(r.pontosKeys[r.pontosKeys.length - 1]).toBe("2026-05-01");
+    expect(r.pontosKeys).toHaveLength(10);
+  });
+
+  it("inicioStr é sempre o primeiro ponto e (sem override) é sempre dia 01", () => {
+    for (let dia = 1; dia <= 28; dia++) {
+      const agora = new Date(Date.UTC(2026, 4, dia, 15, 0, 0)); // meio-dia BRT
+      const r = resolverRangeCashFlow(agora, SP);
+      expect(r.inicioStr).toBe(r.pontosKeys[0]);
+      expect(r.pontosKeys[0]).toBe("2026-05-01");
+      expect(r.pontosKeys).toHaveLength(dia);
+    }
+  });
+
+  it("não muta o parâmetro `agora` recebido", () => {
+    const agora = new Date("2026-05-24T01:00:00Z");
+    const antes = agora.getTime();
+    resolverRangeCashFlow(agora, SP);
+    expect(agora.getTime()).toBe(antes);
+  });
+});
+
+describe("resolverPeriodoNoFuso — range dos painéis Comercial/Operacional/Financeiro", () => {
+  const SP = "America/Sao_Paulo"; // UTC-3
+  const MANAUS = "America/Manaus"; // UTC-4
+
+  it("default no meio do dia (15/mai 12h BRT) → mês civil 01→15/mai no fuso", () => {
+    const r = resolverPeriodoNoFuso(new Date("2026-05-15T15:00:00Z"), SP);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-15");
+    // 00h BRT do dia 1 = 03h UTC; 23:59:59.999 BRT do dia 15 = 02:59:59.999 UTC do dia 16.
+    expect(r.dataInicio.toISOString()).toBe("2026-05-01T03:00:00.000Z");
+    expect(r.dataFim.toISOString()).toBe("2026-05-16T02:59:59.999Z");
+  });
+
+  it("BUG virada de mês: 31/mai 22h BRT (= 01/jun 01h UTC) → MAIO, não junho", () => {
+    const r = resolverPeriodoNoFuso(new Date("2026-06-01T01:00:00Z"), SP);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-31");
+    expect(r.dataInicio.toISOString()).toBe("2026-05-01T03:00:00.000Z");
+  });
+
+  it("BUG fim do range: 23/mai 22h BRT (= 24/mai 01h UTC) → fim = 23, não 24 (amanhã)", () => {
+    const r = resolverPeriodoNoFuso(new Date("2026-05-24T01:00:00Z"), SP);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-23");
+  });
+
+  it("input explícito tem precedência e é interpretado no fuso", () => {
+    const r = resolverPeriodoNoFuso(new Date("2026-05-15T15:00:00Z"), SP, {
+      dataInicio: "2026-03-10",
+      dataFim: "2026-03-20",
+    });
+    expect(r.dataInicioStr).toBe("2026-03-10");
+    expect(r.dataFimStr).toBe("2026-03-20");
+    expect(r.dataInicio.toISOString()).toBe("2026-03-10T03:00:00.000Z");
+    expect(r.dataFim.toISOString()).toBe("2026-03-21T02:59:59.999Z");
+  });
+
+  it("input parcial (só dataInicio) é ignorado → cai no mês vigente", () => {
+    const r = resolverPeriodoNoFuso(new Date("2026-05-15T15:00:00Z"), SP, {
+      dataInicio: "2026-03-10",
+    });
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-15");
+  });
+
+  it("estável nas 24h do dia: qualquer hora de 15/mai BRT → 01→15/mai", () => {
+    for (let horaBrt = 0; horaBrt <= 23; horaBrt++) {
+      const agora = new Date(Date.UTC(2026, 4, 15, horaBrt + 3, 0, 0));
+      const r = resolverPeriodoNoFuso(agora, SP);
+      expect(r.dataInicioStr).toBe("2026-05-01");
+      expect(r.dataFimStr).toBe("2026-05-15");
+    }
+  });
+
+  it("fuso Manaus (UTC-4): virada de mês à noite ainda é maio, início em 04h UTC", () => {
+    // 01/jun 02:00 UTC = 31/mai 22:00 em Manaus (UTC-4)
+    const r = resolverPeriodoNoFuso(new Date("2026-06-01T02:00:00Z"), MANAUS);
+    expect(r.dataInicioStr).toBe("2026-05-01");
+    expect(r.dataFimStr).toBe("2026-05-31");
+    expect(r.dataInicio.toISOString()).toBe("2026-05-01T04:00:00.000Z");
+  });
+
+  it("início e fim são meia-noite/fim-de-dia NO FUSO (coerência str ↔ Date)", () => {
+    const r = resolverPeriodoNoFuso(new Date("2026-05-15T15:00:00Z"), SP);
+    // O instante de início, observado no fuso, cai no 1º dia; o de fim, no último.
+    expect(dataHojeBR(SP, r.dataInicio)).toBe(r.dataInicioStr);
+    expect(dataHojeBR(SP, r.dataFim)).toBe(r.dataFimStr);
+  });
+
+  it("não muta o parâmetro `agora` recebido", () => {
+    const agora = new Date("2026-06-01T01:00:00Z");
+    const antes = agora.getTime();
+    resolverPeriodoNoFuso(agora, SP);
+    expect(agora.getTime()).toBe(antes);
   });
 });
