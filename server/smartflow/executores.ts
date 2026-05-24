@@ -9,6 +9,8 @@
 
 import { SmartflowExecutores } from "./engine";
 import { createLogger } from "../_core/logger";
+import { montarHistoricoMensagens } from "./historico-conversa";
+import type { ChatBotMessage } from "../integracoes/chatbot-openai";
 
 const log = createLogger("smartflow-executores");
 
@@ -41,6 +43,7 @@ async function invocarLLM(
   },
   systemPromptBase: string,
   mensagem: string,
+  historico: ChatBotMessage[] = [],
 ): Promise<string> {
   const systemPrompt = [systemPromptBase, cfg.contextoDocumentos, cfg.contextoCliente]
     .filter(Boolean)
@@ -55,7 +58,7 @@ async function invocarLLM(
       cfg.anthropicApiKey,
       cfg.modelo,
       systemPrompt,
-      [],
+      historico,
       mensagem,
       cfg.maxTokens,
       cfg.temperatura,
@@ -68,6 +71,10 @@ async function invocarLLM(
   if (!cfg.openaiApiKey) {
     throw new Error("Provider openai sem openaiApiKey configurada.");
   }
+  const historicoMsgs = historico.slice(-20).map((m) => ({
+    role: m.role === "system" ? ("user" as const) : m.role,
+    content: m.content,
+  }));
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -78,6 +85,7 @@ async function invocarLLM(
       model: cfg.modelo || "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
+        ...historicoMsgs,
         { role: "user", content: mensagem },
       ],
       max_tokens: cfg.maxTokens,
@@ -93,6 +101,41 @@ async function invocarLLM(
     choices?: Array<{ message?: { content?: string } }>;
   };
   return data.choices?.[0]?.message?.content?.trim() || "";
+}
+
+/**
+ * Carrega o histórico recente de uma conversa pra dar memória ao passo
+ * `ia_responder`. Sem isso, a IA respondia cada mensagem no vácuo (só via a
+ * mensagem atual). Busca as últimas mensagens, remove a atual (já salva antes
+ * do fluxo rodar) e devolve em ordem cronológica. Silencioso — falha aqui só
+ * faz a IA perder a memória, não derruba o fluxo.
+ */
+async function carregarHistoricoConversa(
+  conversaId: number,
+  mensagemAtual: string,
+  limite = 20,
+): Promise<ChatBotMessage[]> {
+  try {
+    const { getDb } = await import("../db");
+    const { mensagens } = await import("../../drizzle/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select({
+        direcao: mensagens.direcao,
+        conteudo: mensagens.conteudo,
+        tipo: mensagens.tipo,
+      })
+      .from(mensagens)
+      .where(eq(mensagens.conversaId, conversaId))
+      .orderBy(desc(mensagens.createdAt), desc(mensagens.id))
+      .limit(limite + 10); // margem: a atual + mensagens de sistema/vazias filtradas
+    return montarHistoricoMensagens(rows, mensagemAtual, limite);
+  } catch (err: any) {
+    log.warn({ err: err.message, conversaId }, "SmartFlow: falha ao carregar histórico da conversa");
+    return [];
+  }
 }
 
 /**
@@ -181,7 +224,7 @@ async function resolverContextoCliente(
  */
 export function criarExecutoresReais(escritorioId: number): SmartflowExecutores {
   return {
-    async chamarIA(prompt: string, mensagem: string, contatoId?: number): Promise<string> {
+    async chamarIA(prompt: string, mensagem: string, contatoId?: number, conversaId?: number): Promise<string> {
       // Resolve config do agente ativo do escritório (provider + key + modelo
       // + maxTokens/temperatura + docs RAG). Antes desse fix, esta função
       // ignorava `provider` e tentava OpenAI primeiro — então escritórios
@@ -199,6 +242,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
 
       const contextoCliente = await resolverContextoCliente(escritorioId, contatoId);
+      const historico = conversaId ? await carregarHistoricoConversa(conversaId, mensagem) : [];
 
       return invocarLLM(
         {
@@ -213,6 +257,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         },
         prompt,
         mensagem,
+        historico,
       );
     },
 
@@ -424,7 +469,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       return r.campos;
     },
 
-    async executarAgente(agenteId: number, mensagem: string, contatoId?: number): Promise<string> {
+    async executarAgente(agenteId: number, mensagem: string, contatoId?: number, conversaId?: number): Promise<string> {
       const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
       const cfg = await obterAgentePorId(escritorioId, agenteId);
       if (!cfg) {
@@ -432,6 +477,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
 
       const contextoCliente = await resolverContextoCliente(escritorioId, contatoId);
+      const historico = conversaId ? await carregarHistoricoConversa(conversaId, mensagem) : [];
 
       return invocarLLM(
         {
@@ -446,6 +492,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         },
         cfg.prompt,
         mensagem,
+        historico,
       );
     },
 
