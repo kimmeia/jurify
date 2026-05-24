@@ -45,7 +45,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Banknote, BookOpen, Brain, Bot, Calendar, CheckCircle2, ChevronDown, Circle,
   CircleDollarSign, Clock, DollarSign, Eraser, FileText, GitBranch, LayoutGrid, Loader2, MessageCircle,
-  Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
+  Move, Pause, PhoneCall, Play, Plus, Repeat, Save, Search, Sparkles, Tags as TagsIcon, UserPlus, Users, Webhook, Zap,
   CalendarCheck, CalendarX, CalendarClock, CalendarSearch, Trash2, XCircle,
   Variable as VariableIcon,
 } from "lucide-react";
@@ -115,6 +115,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_classificar: Brain,
   ia_responder: Bot,
+  ia_consultar: Search,
   ia_extrair_campos: Sparkles,
   crm_buscar_contato: Users,
   crm_listar_acoes_cliente: BookOpen,
@@ -231,6 +232,7 @@ const GATILHO_NODE_ID = "__gatilho__";
 const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   ia_classificar: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
   ia_responder: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
+  ia_consultar: { grad: "from-sky-500 to-cyan-500", border: "border-sky-300 dark:border-sky-800" },
   ia_extrair_campos: { grad: "from-fuchsia-500 to-purple-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
   crm_buscar_contato: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
   crm_listar_acoes_cliente: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
@@ -684,6 +686,11 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
     case "ia_responder":
       if (typeof config.agenteId === "number" && config.agenteId > 0) return `Agente #${config.agenteId}`;
       return typeof config.prompt === "string" ? truncar(config.prompt, 60) : "";
+    case "ia_consultar": {
+      const alvo = typeof config.salvarEm === "string" && config.salvarEm.trim() ? `→ {{${config.salvarEm}}}` : "";
+      const q = typeof config.prompt === "string" ? truncar(config.prompt, 40) : "";
+      return [q, alvo].filter(Boolean).join(" ");
+    }
     case "calcom_horarios":
       return config.duracao ? `${config.duracao} min` : "";
     case "calcom_listar":
@@ -2026,6 +2033,94 @@ function ConfigIaResponderFields({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function ConfigIaConsultarFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const agenteId = typeof cfg.agenteId === "number" ? cfg.agenteId : 0;
+  const { data: agentes, isLoading } = (trpc as any).agentesIa.listar.useQuery();
+  const agentesAtivos: Array<{ id: number; nome: string; modelo: string; ativo: boolean; temApiKey: boolean }> =
+    (agentes || []).filter((a: any) => a.ativo);
+
+  const insertPrompt = (path: string) => {
+    const atual = String(cfg.prompt || "");
+    onChange({ prompt: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-2">
+        <p className="text-[11px] text-sky-800 dark:text-sky-300">
+          Faz uma <strong>pergunta à IA e salva a resposta num campo</strong>. <strong>Não envia nada ao cliente</strong> — use a resposta nos próximos passos (numa mensagem, decisão, etc.).
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Pergunta / instrução</Label>
+          <VariableTrigger inputId="cfg-ia-consultar-prompt" variaveis={variaveis} onInsert={insertPrompt} />
+        </div>
+        <VariableInput
+          id="cfg-ia-consultar-prompt"
+          as="textarea"
+          rows={5}
+          highlight
+          value={String(cfg.prompt ?? "")}
+          onChange={(v) => onChange({ prompt: v })}
+          variaveis={variaveis}
+          placeholder="Ex: A partir destes horários livres {{horariosLivres}}, escolha os 3 melhores em horário comercial e liste em linguagem natural."
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Pode usar variáveis do fluxo (ex: <code>{"{{horariosLivres}}"}</code>, <code>{"{{mensagem}}"}</code>).
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Salvar resposta em</Label>
+        <Input
+          className="font-mono text-xs"
+          value={String(cfg.salvarEm ?? "")}
+          onChange={(e) => onChange({ salvarEm: e.target.value })}
+          placeholder="analiseIA"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Nome do campo no contexto. Depois use <code>{`{{${String(cfg.salvarEm || "analiseIA")}}}`}</code> nos próximos passos.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Cérebro (opcional)</Label>
+        <Select
+          value={String(agenteId || "__livre__")}
+          onValueChange={(v) => onChange({ agenteId: v === "__livre__" ? undefined : Number(v) })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={isLoading ? "Carregando…" : "Assistente genérico"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__livre__">
+              <span className="text-muted-foreground">— Assistente genérico —</span>
+            </SelectItem>
+            {agentesAtivos.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {a.nome} <span className="text-muted-foreground ml-2 text-[10px]">{a.modelo}</span>
+                {!a.temApiKey && <span className="ml-2 text-[9px] text-destructive">sem API key</span>}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Opcional: usa um agente pré-treinado como cérebro. Sem agente, usa um assistente genérico.
+        </p>
+      </div>
     </div>
   );
 }
@@ -4288,6 +4383,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
     }
     case "ia_responder":
       return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
+    case "ia_consultar":
+      return <ConfigIaConsultarFields cfg={cfg} onChange={onChange} />;
     case "ia_extrair_campos":
       return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_aguardar_resposta":

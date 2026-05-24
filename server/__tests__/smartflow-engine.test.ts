@@ -235,6 +235,59 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("ia_consultar (consulta interna — NÃO envia ao cliente)", () => {
+    it("salva a resposta no campo escolhido e NÃO manda pro cliente", async () => {
+      const chamarIA = vi.fn().mockResolvedValue("Sugiro terça 14h, quarta 10h e quinta 16h.");
+      const exec = criarMockExecutores({ chamarIA });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_consultar", config: { prompt: "Escolha 3 horários de {{horariosLivres}}", salvarEm: "sugestao" } },
+      ];
+
+      const r = await executarCenario(passos, { mensagem: "oi", horariosLivres: "09:00, 10:00, 14:00" }, exec);
+
+      expect(r.sucesso).toBe(true);
+      expect(r.contexto.sugestao).toBe("Sugiro terça 14h, quarta 10h e quinta 16h.");
+      expect(r.respostas).toHaveLength(0); // nada enviado ao cliente
+      // a pergunta foi interpolada antes de ir pra IA
+      expect(chamarIA).toHaveBeenCalledWith(expect.any(String), expect.stringContaining("09:00, 10:00, 14:00"), undefined, undefined);
+    });
+
+    it("usa o agente quando agenteId está presente", async () => {
+      const chamarIA = vi.fn().mockResolvedValue("nao-deve-chamar");
+      const executarAgente = vi.fn().mockResolvedValue("resposta do agente");
+      const exec = criarMockExecutores({ chamarIA, executarAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_consultar", config: { prompt: "analise", agenteId: 7, salvarEm: "analise" } },
+      ];
+      const r = await executarCenario(passos, { mensagem: "x" }, exec);
+      expect(r.sucesso).toBe(true);
+      expect(executarAgente).toHaveBeenCalled();
+      expect(chamarIA).not.toHaveBeenCalled();
+      expect(r.contexto.analise).toBe("resposta do agente");
+      expect(r.respostas).toHaveLength(0);
+    });
+
+    it("falha se 'Salvar em' não foi configurado", async () => {
+      const exec = criarMockExecutores({ chamarIA: vi.fn().mockResolvedValue("x") });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_consultar", config: { prompt: "algo" } },
+      ];
+      const r = await executarCenario(passos, { mensagem: "x" }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("Salvar em");
+    });
+
+    it("falha se não houver prompt nem agente", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_consultar", config: { salvarEm: "x" } },
+      ];
+      const r = await executarCenario(passos, { mensagem: "x" }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("pergunta");
+    });
+  });
+
   describe("ia_extrair_campos", () => {
     it("salva campos extraídos em ctx.extracao", async () => {
       const extrairCamposIA = vi.fn().mockResolvedValue({

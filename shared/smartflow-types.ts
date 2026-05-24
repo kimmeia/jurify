@@ -61,6 +61,7 @@ export function getGrupoMeta(id: string): GrupoMeta | null {
 export type TipoPasso =
   | "ia_classificar"
   | "ia_responder"
+  | "ia_consultar"
   | "ia_extrair_campos"
   | "crm_buscar_contato"
   | "crm_listar_acoes_cliente"
@@ -185,6 +186,24 @@ export interface ConfigIaResponder {
   agenteId?: number;
   /** Fallback: prompt textual livre quando não há agente selecionado. */
   prompt?: string;
+}
+
+/**
+ * Config do passo `ia_consultar` — faz uma consulta interna à IA e salva a
+ * resposta num campo do contexto. NÃO envia nada ao cliente (diferente de
+ * `ia_responder`). Útil pra raciocinar sobre dados do fluxo (ex: escolher
+ * horários a partir de `{{horariosLivres}}`) e usar a saída em passos seguintes.
+ */
+export interface ConfigIaConsultar {
+  /** A pergunta/instrução pra IA (interpolável: `{{mensagem}}`, `{{horariosLivres}}`...). */
+  prompt?: string;
+  /**
+   * Opcional: usa um agente pré-configurado (`agentesIa`) como "cérebro"
+   * (prompt/modelo/RAG). Sem agente, usa um assistente genérico.
+   */
+  agenteId?: number;
+  /** Campo do contexto onde salvar a resposta da IA (ex: `analiseIA`). */
+  salvarEm?: string;
 }
 
 /**
@@ -539,6 +558,7 @@ export interface ConfigDefinirCampoPersonalizado {
 export type PassoConfigByTipo =
   | { tipo: "ia_classificar"; config: ConfigIaClassificar }
   | { tipo: "ia_responder"; config: ConfigIaResponder }
+  | { tipo: "ia_consultar"; config: ConfigIaConsultar }
   | { tipo: "ia_extrair_campos"; config: ConfigIaExtrairCampos }
   | { tipo: "crm_buscar_contato"; config: ConfigCrmBuscarContato }
   | { tipo: "crm_listar_acoes_cliente"; config: ConfigCrmListarAcoesCliente }
@@ -689,6 +709,7 @@ export type ConfigGatilhoByTipo =
 export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
+  { id: "ia_consultar", label: "Consultar IA (uso interno)", descricao: "Faz uma pergunta à IA e salva a resposta num campo. NÃO envia ao cliente.", cor: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", grupo: "ia" },
   { id: "ia_extrair_campos", label: "Extrair dados (IA)", descricao: "IA lê a mensagem e extrai campos estruturados (CPF, email, datas...). Salva no contexto e opcionalmente no cadastro do cliente.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "ia" },
   { id: "crm_buscar_contato", label: "Buscar contato (CRM)", descricao: "Resolve um cliente pelo telefone, email ou CPF. Popula contatoId, nome e campos personalizados.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
   { id: "crm_listar_acoes_cliente", label: "Listar ações do cliente", descricao: "Lista os processos vinculados ao contato — útil pra IA saber sobre quais ações ele tem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
