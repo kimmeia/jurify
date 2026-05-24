@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow — Construtor simples (mockup)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+    .section-divider { background: linear-gradient(90deg, transparent, rgba(139,92,246,0.3), transparent); height: 1px; }
+
+    /* chip de dado */
+    .chip-in { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; background:#dbeafe; color:#1d4ed8; border-radius:999px; font-size:11px; font-weight:600; border:1px solid #93c5fd; }
+    .chip-out { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; background:#ede9fe; color:#6d28d9; border-radius:999px; font-size:11px; font-weight:600; border:1px solid #c4b5fd; }
+
+    /* bloco */
+    .bloco { border-radius:14px; border:2px solid; background:white; box-shadow:0 2px 10px rgb(0 0 0/0.06); overflow:hidden; }
+    .bloco .head { padding:10px 12px; color:white; font-weight:700; font-size:12px; display:flex; align-items:center; gap:7px; }
+    .bloco .body { padding:11px 13px; font-size:12px; color:#334155; }
+    .b-msg { border-color:#5eead4; } .b-msg .head { background:linear-gradient(135deg,#14b8a6,#0891b2);}
+    .b-ia { border-color:#c4b5fd; } .b-ia .head { background:linear-gradient(135deg,#8b5cf6,#6366f1);}
+    .b-cond { border-color:#fcd34d; } .b-cond .head { background:linear-gradient(135deg,#f59e0b,#d97706);}
+    .b-gat { border-color:#93c5fd; border-style:dashed;} .b-gat .head{background:linear-gradient(135deg,#3b82f6,#06b6d4);}
+    .b-cal { border-color:#fdba74;} .b-cal .head{background:linear-gradient(135deg,#f97316,#f59e0b);}
+
+    .arrow{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #a78bfa;margin:0 auto;}
+    .linev{width:2px;height:18px;background:#c4b5fd;margin:0 auto;}
+    .dados-box{ background:#f8fafc; border-top:1px solid #e2e8f0; padding:7px 12px; display:flex; flex-direction:column; gap:5px; }
+    .dados-linha{ display:flex; align-items:center; gap:6px; font-size:10.5px; color:#64748b; flex-wrap:wrap;}
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+  <div class="bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 px-6 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center"><i data-lucide="wand-sparkles" class="w-5 h-5"></i></div>
+      <div class="flex-1">
+        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold">Construtor simplificado</p>
+        <h1 class="text-lg font-bold">SmartFlow — mais fácil de montar</h1>
+      </div>
+      <div class="flex gap-2 text-xs flex-wrap">
+        <a href="#dados" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">📥 Dados visíveis</a>
+        <a href="#condicao" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">❓ Condição</a>
+        <a href="#ciclo" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🔄 Continuar</a>
+        <a href="#guia" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">📖 Qual bloco</a>
+        <a href="#layout" class="px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25">🖥 Layout</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto p-6 space-y-12">
+
+    <!-- DIAGNÓSTICO -->
+    <section class="space-y-3">
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+        <p class="font-bold mb-2 flex items-center gap-1.5"><i data-lucide="list-checks" class="w-4 h-4"></i> Os 4 problemas que você apontou — e como cada um vai ser resolvido</p>
+        <div class="grid md:grid-cols-2 gap-2 text-xs">
+          <div class="bg-white/60 rounded-lg p-2.5"><strong>1. Não vejo/controlo os dados</strong><br>→ Cada bloco vai mostrar <span class="chip-in">📥 usa</span> e <span class="chip-out">📤 salva</span>, e você escolhe o nome de onde salvar.</div>
+          <div class="bg-white/60 rounded-lg p-2.5"><strong>2. Atendimento não continua</strong><br>→ Bloco "Aguardar resposta" que volta pro começo, mantendo tudo que já foi conversado.</div>
+          <div class="bg-white/60 rounded-lg p-2.5"><strong>3. Condição confusa</strong><br>→ Reescrita em português: "SE [campo] [é] [valor] → siga por aqui".</div>
+          <div class="bg-white/60 rounded-lg p-2.5"><strong>4. Não sei qual bloco usar</strong><br>→ Cada bloco com 1 frase "use quando..." + guia rápido.</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- 1. DADOS VISÍVEIS -->
+    <section id="dados" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Problema 1</p>
+        <h2 class="text-2xl font-bold">📥 Cada bloco mostra o que entra e o que sai</h2>
+      </div>
+      <p class="text-sm text-slate-600 max-w-3xl">
+        Hoje os dados são "invisíveis" — você não sabe o que cada bloco produz nem como usar depois.
+        A ideia: todo bloco exibe, em português, <strong>o que ele usa</strong> (📥 azul) e
+        <strong>o que ele guarda</strong> (📤 roxo). E você pode <strong>dar o nome</strong> do campo onde salva.
+      </p>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- ANTES -->
+        <div>
+          <div class="flex items-center gap-2 mb-3"><span class="text-xs font-bold px-2 py-1 rounded bg-slate-300 text-slate-800">ANTES</span><span class="text-sm text-slate-600">não dá pra saber o que sai daqui</span></div>
+          <div class="bg-slate-100 rounded-xl p-6 flex justify-center">
+            <div class="bloco b-ia" style="width:250px;">
+              <div class="head"><i data-lucide="bot" class="w-3.5 h-3.5"></i> Responder com IA</div>
+              <div class="body">Agente: "Atendimento"</div>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">"E agora? Onde foi parar a resposta? Como uso ela no próximo bloco?" 🤷</p>
+        </div>
+        <!-- DEPOIS -->
+        <div>
+          <div class="flex items-center gap-2 mb-3"><span class="text-xs font-bold px-2 py-1 rounded bg-violet-600 text-white">DEPOIS</span><span class="text-sm text-slate-600">entrada e saída na cara</span></div>
+          <div class="bg-gradient-to-br from-slate-100 to-violet-50/30 rounded-xl p-6 flex justify-center">
+            <div class="bloco b-ia" style="width:260px;">
+              <div class="head"><i data-lucide="bot" class="w-3.5 h-3.5"></i> Responder com IA</div>
+              <div class="body">Atende com o agente <strong>"Atendimento jurídico"</strong></div>
+              <div class="dados-box">
+                <div class="dados-linha"><span class="chip-in">📥 usa</span> a mensagem do cliente</div>
+                <div class="dados-linha"><span class="chip-out">📤 salva em</span> <code>Resposta GPT</code> <span class="text-slate-400">(você escolhe o nome)</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Agora você sabe: a resposta fica em <span class="chip-out">Resposta GPT</span> e pode ser usada/enviada nos próximos blocos.</p>
+        </div>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
+        <p class="font-bold mb-1">Na prática</p>
+        <p class="text-xs leading-relaxed">No painel de cada bloco vai ter, no topo, dois campos claros:
+        <strong>"De onde vem a informação?"</strong> (escolhe a mensagem do cliente, ou outro campo) e
+        <strong>"Onde salvar o resultado?"</strong> (você digita o nome: <em>Resposta GPT</em>, <em>Mensagem cliente</em>, etc.).
+        O bloco no canvas mostra esses dois como etiquetas coloridas.</p>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- 2. CONDIÇÃO -->
+    <section id="condicao" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Problema 3</p>
+        <h2 class="text-2xl font-bold">❓ Condição em português simples</h2>
+      </div>
+      <p class="text-sm text-slate-600 max-w-3xl">Em vez de campos técnicos soltos, a condição vira uma frase montável: "SE tal coisa, siga por tal caminho".</p>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <div class="flex items-center gap-2 mb-3"><span class="text-xs font-bold px-2 py-1 rounded bg-slate-300 text-slate-800">ANTES</span></div>
+          <div class="bg-white border border-slate-300 rounded-lg p-4 space-y-2 text-xs">
+            <div class="grid grid-cols-3 gap-1">
+              <div><label class="text-[10px] text-slate-500">campo</label><div class="border rounded px-2 py-1 font-mono">intencao</div></div>
+              <div><label class="text-[10px] text-slate-500">operador</label><div class="border rounded px-2 py-1">igual</div></div>
+              <div><label class="text-[10px] text-slate-500">valor</label><div class="border rounded px-2 py-1">agendar</div></div>
+            </div>
+            <p class="text-[10px] text-slate-500">"campo? operador? o que é isso?"</p>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-3"><span class="text-xs font-bold px-2 py-1 rounded bg-violet-600 text-white">DEPOIS</span></div>
+          <div class="bg-white border border-violet-300 rounded-lg p-4 space-y-3">
+            <div class="bloco b-cond">
+              <div class="head"><i data-lucide="git-branch" class="w-3.5 h-3.5"></i> Decisão</div>
+              <div class="body space-y-2">
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                  <div class="text-[11px] text-slate-700 leading-relaxed">
+                    <strong>SE</strong>
+                    <span class="inline-block bg-white border rounded px-1.5 py-0.5 mx-0.5">Quer agendar?</span>
+                    <strong>for</strong>
+                    <span class="inline-block bg-white border rounded px-1.5 py-0.5 mx-0.5">Sim</span>
+                  </div>
+                  <p class="text-[10px] text-emerald-700 mt-1">→ segue pelo caminho verde 🟢</p>
+                </div>
+                <button class="w-full text-[11px] py-1.5 border border-dashed border-violet-300 text-violet-700 rounded flex items-center justify-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Adicionar outra opção (ex: "tirou dúvida")</button>
+                <p class="text-[10px] text-slate-500">Se nenhuma bater → caminho "senão" 🟠</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-900">
+        <strong>O campo que a condição verifica</strong> pode ser qualquer coisa que os blocos anteriores guardaram —
+        um campo personalizado do cliente, a resposta da IA, ou um dado captado na conversa (ex: <code>quer_agendar</code>).
+        Você escolhe numa lista, sem decorar nome técnico.
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- 3. CICLO / CONTINUIDADE -->
+    <section id="ciclo" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Problema 2</p>
+        <h2 class="text-2xl font-bold">🔄 Como o atendimento "continua"</h2>
+      </div>
+      <p class="text-sm text-slate-600 max-w-3xl">
+        O segredo é o bloco <strong>"Aguardar resposta"</strong>. Ele envia algo, <strong>pausa</strong> esperando o cliente
+        responder, e quando ele responde, o fluxo <strong>volta</strong> — lembrando de tudo que já foi conversado e captado.
+      </p>
+
+      <div class="bg-gradient-to-br from-slate-100 to-violet-50/30 rounded-2xl border border-violet-200 p-6">
+        <div class="max-w-sm mx-auto flex flex-col items-center gap-0">
+          <div class="bloco b-gat w-full"><div class="head"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Cliente manda mensagem</div>
+            <div class="dados-box"><div class="dados-linha"><span class="chip-out">📤 salva em</span> <code>Mensagem cliente</code></div></div>
+          </div>
+          <div class="linev"></div><div class="arrow"></div>
+          <div class="bloco b-ia w-full"><div class="head"><i data-lucide="bot" class="w-3.5 h-3.5"></i> Responder com IA</div>
+            <div class="dados-box">
+              <div class="dados-linha"><span class="chip-in">📥 usa</span> <code>Mensagem cliente</code></div>
+              <div class="dados-linha"><span class="chip-out">📤 salva em</span> <code>Resposta GPT</code></div>
+            </div>
+          </div>
+          <div class="linev"></div><div class="arrow"></div>
+          <div class="bloco b-msg w-full"><div class="head"><i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar pro cliente</div>
+            <div class="dados-box"><div class="dados-linha"><span class="chip-in">📥 envia</span> <code>Resposta GPT</code></div></div>
+          </div>
+          <div class="linev"></div><div class="arrow"></div>
+          <div class="bloco b-msg w-full" style="border-style:dashed;">
+            <div class="head" style="background:linear-gradient(135deg,#0891b2,#2563eb);"><i data-lucide="pause" class="w-3.5 h-3.5"></i> Aguardar resposta do cliente</div>
+            <div class="body text-[11px]">Pausa aqui até o cliente responder. Quando responder, salva em <code>Mensagem cliente</code> e <strong>volta pro topo</strong> ↩</div>
+          </div>
+          <div class="w-full flex justify-end pr-6 mt-1">
+            <div class="text-[10px] text-violet-600 flex items-center gap-1 font-semibold"><i data-lucide="corner-left-up" class="w-3.5 h-3.5"></i> volta pro "Responder com IA"</div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900">
+        <strong>Importante:</strong> tudo que foi captado fica guardado entre uma mensagem e outra. Então a IA "lembra"
+        que o cliente já disse o nome, o assunto, etc. — e o atendimento flui de verdade, sem recomeçar do zero a cada mensagem.
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- 4. GUIA DE BLOCOS -->
+    <section id="guia" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Problema 4</p>
+        <h2 class="text-2xl font-bold">📖 Qual bloco usar? (guia de 1 linha)</h2>
+      </div>
+      <p class="text-sm text-slate-600">Cada bloco ganha uma frase "use quando quiser...". Os menos usados ficam escondidos num "avançado".</p>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+        <div class="bg-white border-2 border-violet-200 rounded-xl p-3"><div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 rounded bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center"><i data-lucide="bot" class="w-4 h-4 text-white"></i></div><strong>Responder com IA</strong></div><p class="text-slate-600">Use quando quiser que a IA <strong>responda</strong> a mensagem do cliente.</p></div>
+        <div class="bg-white border-2 border-fuchsia-200 rounded-xl p-3"><div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 rounded bg-gradient-to-br from-fuchsia-500 to-purple-500 flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-white"></i></div><strong>Captar dado</strong></div><p class="text-slate-600">Use quando quiser <strong>descobrir e guardar</strong> algo do cliente (CPF, se quer agendar...).</p></div>
+        <div class="bg-white border-2 border-teal-200 rounded-xl p-3"><div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 rounded bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center"><i data-lucide="send" class="w-4 h-4 text-white"></i></div><strong>Enviar mensagem</strong></div><p class="text-slate-600">Use quando quiser <strong>mandar um texto</strong> pro cliente no WhatsApp.</p></div>
+        <div class="bg-white border-2 border-cyan-200 rounded-xl p-3"><div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 rounded bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center"><i data-lucide="pause" class="w-4 h-4 text-white"></i></div><strong>Aguardar resposta</strong></div><p class="text-slate-600">Use quando quiser <strong>esperar o cliente responder</strong> antes de continuar.</p></div>
+        <div class="bg-white border-2 border-amber-200 rounded-xl p-3"><div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 rounded bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center"><i data-lucide="git-branch" class="w-4 h-4 text-white"></i></div><strong>Decisão</strong></div><p class="text-slate-600">Use quando o fluxo precisa <strong>seguir caminhos diferentes</strong> dependendo de uma resposta.</p></div>
+        <div class="bg-white border-2 border-orange-200 rounded-xl p-3"><div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 rounded bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center"><i data-lucide="calendar" class="w-4 h-4 text-white"></i></div><strong>Agendar (Cal.com)</strong></div><p class="text-slate-600">Use quando quiser <strong>marcar uma reunião</strong> com o cliente.</p></div>
+      </div>
+      <p class="text-xs text-slate-500">Blocos avançados (webhook, Asaas, Kanban, loop...) ficam num grupo "Mais opções" — só aparecem se você procurar, pra não assustar.</p>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- 5. LAYOUT -->
+    <section id="layout" class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-violet-600 font-bold">Layout</p>
+        <h2 class="text-2xl font-bold">🖥 Duas formas de montar — qual prefere?</h2>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <!-- OPÇÃO A: LISTA -->
+        <div class="bg-white border-2 border-violet-300 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-1"><span class="text-xs font-bold px-2 py-0.5 rounded bg-violet-600 text-white">OPÇÃO A</span><strong class="text-sm">Lista de cima pra baixo</strong></div>
+          <p class="text-xs text-slate-600 mb-3">Sem arrastar nada. Os blocos ficam empilhados na ordem. Você clica em "+" pra adicionar entre eles. Lê como uma receita.</p>
+          <div class="bg-slate-50 rounded-lg p-4 space-y-0 flex flex-col items-center">
+            <div class="bloco b-gat w-full max-w-xs"><div class="head text-[11px]"><i data-lucide="message-circle" class="w-3 h-3"></i> Cliente manda mensagem</div></div>
+            <button class="my-1 w-6 h-6 rounded-full border border-dashed border-violet-300 text-violet-500 flex items-center justify-center text-sm">+</button>
+            <div class="bloco b-ia w-full max-w-xs"><div class="head text-[11px]"><i data-lucide="bot" class="w-3 h-3"></i> Responder com IA</div></div>
+            <button class="my-1 w-6 h-6 rounded-full border border-dashed border-violet-300 text-violet-500 flex items-center justify-center text-sm">+</button>
+            <div class="bloco b-cond w-full max-w-xs"><div class="head text-[11px]"><i data-lucide="git-branch" class="w-3 h-3"></i> Decisão: quer agendar?</div></div>
+          </div>
+          <div class="mt-3 space-y-1 text-xs">
+            <p class="text-emerald-700">✓ Muito mais simples de entender</p>
+            <p class="text-emerald-700">✓ Impossível "se perder" no canvas</p>
+            <p class="text-amber-700">⚠ Caminhos paralelos (decisão com 3 saídas) ficam recolhidos/aninhados</p>
+          </div>
+        </div>
+
+        <!-- OPÇÃO B: CANVAS -->
+        <div class="bg-white border-2 border-slate-300 rounded-xl p-4">
+          <div class="flex items-center gap-2 mb-1"><span class="text-xs font-bold px-2 py-0.5 rounded bg-slate-600 text-white">OPÇÃO B</span><strong class="text-sm">Canvas (atual) melhorado</strong></div>
+          <p class="text-xs text-slate-600 mb-3">Continua arrastando blocos livremente, mas com um botão "Organizar" que alinha tudo sozinho, visual mais leve e menos "travado".</p>
+          <div class="bg-slate-50 rounded-lg p-4 relative" style="height:200px;">
+            <div class="bloco b-gat absolute" style="top:10px; left:50%; transform:translateX(-50%); width:150px;"><div class="head text-[10px]"><i data-lucide="message-circle" class="w-3 h-3"></i> Mensagem</div></div>
+            <div class="bloco b-ia absolute" style="top:80px; left:50%; transform:translateX(-50%); width:150px;"><div class="head text-[10px]"><i data-lucide="bot" class="w-3 h-3"></i> Responder IA</div></div>
+            <div class="bloco b-cond absolute" style="top:150px; left:30%; width:120px;"><div class="head text-[10px]"><i data-lucide="git-branch" class="w-3 h-3"></i> Decisão</div></div>
+            <div class="bloco b-cal absolute" style="top:150px; left:62%; width:120px;"><div class="head text-[10px]"><i data-lucide="calendar" class="w-3 h-3"></i> Agendar</div></div>
+            <div class="absolute bottom-1 right-1 bg-white border rounded px-1.5 py-0.5 text-[9px] text-violet-600 flex items-center gap-1"><i data-lucide="layout-list" class="w-2.5 h-2.5"></i> Organizar</div>
+          </div>
+          <div class="mt-3 space-y-1 text-xs">
+            <p class="text-emerald-700">✓ Bom pra fluxos com muitos caminhos</p>
+            <p class="text-emerald-700">✓ Visão "de mapa" do fluxo todo</p>
+            <p class="text-amber-700">⚠ Mais liberdade = mais chance de bagunçar (mitigado pelo "Organizar")</p>
+          </div>
+        </div>
+      </div>
+      <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-900">
+        <strong>Minha recomendação:</strong> começar com a <strong>Opção A (lista)</strong> como visão padrão — é a mais fácil pra
+        99% dos atendimentos. Quem precisar de fluxos complexos com muitos caminhos pode alternar pro canvas. Mas é você quem decide.
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- EXEMPLO COMPLETO -->
+    <section class="space-y-4">
+      <div class="flex items-baseline gap-3">
+        <p class="text-xs uppercase tracking-wider text-emerald-600 font-bold">Tudo junto</p>
+        <h2 class="text-2xl font-bold">📋 Exemplo: atendimento que agenda</h2>
+      </div>
+      <p class="text-sm text-slate-600">Como ficaria o cenário que você descreveu, no formato lista (Opção A), com os dados visíveis:</p>
+
+      <div class="bg-gradient-to-br from-slate-100 to-violet-50/30 rounded-2xl border border-violet-200 p-6">
+        <div class="max-w-md mx-auto flex flex-col items-center gap-0">
+          <div class="bloco b-gat w-full"><div class="head"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Quando o cliente manda mensagem</div>
+            <div class="dados-box"><div class="dados-linha"><span class="chip-out">📤</span> <code>Mensagem cliente</code></div></div></div>
+          <div class="linev"></div><div class="arrow"></div>
+          <div class="bloco b-ia w-full"><div class="head"><i data-lucide="bot" class="w-3.5 h-3.5"></i> Responder com IA</div>
+            <div class="dados-box"><div class="dados-linha"><span class="chip-in">📥</span> <code>Mensagem cliente</code> <span class="chip-out">📤</span> <code>Resposta GPT</code></div></div></div>
+          <div class="linev"></div><div class="arrow"></div>
+          <div class="bloco b-msg w-full"><div class="head"><i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar <code style="color:white">Resposta GPT</code></div></div>
+          <div class="linev"></div><div class="arrow"></div>
+          <div class="bloco b-cond w-full"><div class="head"><i data-lucide="git-branch" class="w-3.5 h-3.5"></i> O cliente quer agendar?</div>
+            <div class="body text-[11px]">SE <code>Quer agendar?</code> for <strong>Sim</strong> 🟢 · senão 🟠</div></div>
+          <div class="flex gap-3 w-full mt-3">
+            <div class="flex-1"><p class="text-[10px] text-center text-emerald-700 font-bold mb-1">🟢 quer agendar</p>
+              <div class="bloco b-cal"><div class="head text-[10px]"><i data-lucide="calendar" class="w-3 h-3"></i> Agendar reunião</div></div></div>
+            <div class="flex-1"><p class="text-[10px] text-center text-amber-700 font-bold mb-1">🟠 senão</p>
+              <div class="bloco b-msg" style="border-style:dashed;"><div class="head text-[10px]" style="background:linear-gradient(135deg,#0891b2,#2563eb)"><i data-lucide="pause" class="w-3 h-3"></i> Aguardar resposta ↩</div></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- PERGUNTAS -->
+    <section class="space-y-3">
+      <h2 class="text-2xl font-bold">❓ Me confirma pra eu começar</h2>
+      <div class="grid md:grid-cols-2 gap-3 text-sm">
+        <div class="bg-white border rounded-xl p-4"><p class="font-bold text-violet-700 mb-1">1. Dados visíveis + nomeáveis</p><p class="text-xs text-slate-600">Cada bloco mostrar 📥 usa / 📤 salva, e você poder nomear o campo (ex: "Resposta GPT") — aprovado?</p></div>
+        <div class="bg-white border rounded-xl p-4"><p class="font-bold text-violet-700 mb-1">2. Condição em português</p><p class="text-xs text-slate-600">"SE [campo] for [valor] → caminho" com listas pra escolher — aprovado?</p></div>
+        <div class="bg-white border rounded-xl p-4"><p class="font-bold text-violet-700 mb-1">3. Guia "use quando..."</p><p class="text-xs text-slate-600">Frase explicativa em cada bloco + esconder os avançados — aprovado?</p></div>
+        <div class="bg-white border rounded-xl p-4"><p class="font-bold text-violet-700 mb-1">4. Layout</p><p class="text-xs text-slate-600">Começo pela <strong>lista (Opção A)</strong> como padrão? Ou prefere o canvas melhorado (B)?</p></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="bg-slate-900 text-slate-400 text-center py-4 text-xs">Construtor simplificado · SmartFlow · JuridFlow</div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

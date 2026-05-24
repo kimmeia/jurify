@@ -259,12 +259,43 @@ async function executarCenarioCarregado(
 
   await finalizarExecucao(execId, resultado);
 
+  // Se o fluxo terminou pedindo transferência pra humano (bloco "Transferir"),
+  // marca a conversa como `em_atendimento`. Isso faz o bot PARAR de responder
+  // essa conversa — o dispatcher de mensagem ignora conversas em_atendimento.
+  // Sem isso, cada mensagem nova re-dispararia o cenário e a IA responderia
+  // de novo, infinitamente ("preso no bloco").
+  if (resultado.contexto?.transferir === true && refs?.conversaId) {
+    await marcarConversaEmAtendimento(refs.conversaId, escritorioId);
+  }
+
   log.info(
     { cenarioId: cenario.cenarioId, execId, gatilho: cenario.gatilho, passos: resultado.passosExecutados, sucesso: resultado.sucesso },
     `SmartFlow: cenário "${cenario.nome}" executado (${cenario.gatilho})`,
   );
 
   return { executou: true, respostas: resultado.respostas, execId };
+}
+
+/**
+ * Marca a conversa como `em_atendimento` (humano assumiu) — usado quando o
+ * cenário aciona o bloco "Transferir para humano". Enquanto a conversa
+ * estiver nesse status, `dispararMensagemCanal` ignora o SmartFlow, então o
+ * bot para de responder. O atendente reassume pela UI de Atendimento.
+ * Idempotente e silencioso — falha aqui não deve derrubar a execução.
+ */
+async function marcarConversaEmAtendimento(conversaId: number, escritorioId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    const { conversas } = await import("../../drizzle/schema");
+    await db
+      .update(conversas)
+      .set({ status: "em_atendimento" })
+      .where(and(eq(conversas.id, conversaId), eq(conversas.escritorioId, escritorioId)));
+    log.info({ conversaId }, "SmartFlow: conversa marcada em_atendimento (bot pausado)");
+  } catch (err: any) {
+    log.warn({ err: err.message, conversaId }, "SmartFlow: falha ao marcar conversa em_atendimento");
+  }
 }
 
 // ─── Dispatchers públicos ───────────────────────────────────────────────────
