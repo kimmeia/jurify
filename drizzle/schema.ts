@@ -1975,6 +1975,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
   tipo: mysqlEnum("tipoPasso", [
     "ia_classificar",                // IA classifica intenção da mensagem
     "ia_responder",                  // IA gera resposta contextual
+    "ia_consultar",                  // IA responde consulta interna (salva em campo, não envia ao cliente)
     "ia_extrair_campos",             // IA extrai dados estruturados via tool calling
     "crm_buscar_contato",            // resolve contato por telefone/email/cpf
     "crm_listar_acoes_cliente",     // lista cliente_processos do contato
