@@ -5,12 +5,13 @@
 
 import { Badge } from "@/components/ui/badge";
 import { FileText, Variable, CheckCircle2, ArrowRight } from "lucide-react";
+import { Reveal } from "./lpkit";
 
 export function Demo() {
   return (
     <section id="demo" className="border-y bg-white">
       <div className="mx-auto max-w-6xl px-4 py-24">
-        <div className="grid items-center gap-14 lg:grid-cols-2">
+        <Reveal as="div" className="grid items-center gap-14 lg:grid-cols-2">
           {/* Copy */}
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">Contratos</p>
@@ -108,7 +109,7 @@ export function Demo() {
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

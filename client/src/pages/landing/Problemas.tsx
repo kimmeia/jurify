@@ -2,7 +2,9 @@
  * Seção "Problemas" — nomeia 3 dores antes de apresentar a solução.
  */
 
+import { motion } from "framer-motion";
 import { MessageSquareOff, ReceiptText, FileWarning } from "lucide-react";
+import { Reveal, staggerParent, staggerItem } from "./lpkit";
 
 const problemas = [
   {
@@ -31,7 +33,7 @@ const problemas = [
 export function Problemas() {
   return (
     <section className="mx-auto max-w-6xl px-4 pt-24 pb-4">
-      <div className="mx-auto mb-12 max-w-2xl text-center">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
         <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">
           O que está custando dinheiro
         </p>
@@ -42,19 +44,29 @@ export function Problemas() {
           São os mesmos no escritório de 1, 5 ou 50 advogados. Ferramentas espalhadas
           viram horas perdidas — e dinheiro na mesa.
         </p>
-      </div>
+      </Reveal>
 
-      <div className="grid gap-5 md:grid-cols-3">
+      <motion.div
+        variants={staggerParent}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-60px" }}
+        className="grid gap-5 md:grid-cols-3"
+      >
         {problemas.map((p) => (
-          <div key={p.titulo} className="rounded-2xl border bg-card p-6 transition-colors hover:border-foreground/20">
+          <motion.div
+            key={p.titulo}
+            variants={staggerItem}
+            className="rounded-2xl border bg-card p-6 transition-all hover:-translate-y-1 hover:border-foreground/20 hover:shadow-lg"
+          >
             <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${p.box}`}>
               <p.icon className={`h-6 w-6 ${p.fg}`} />
             </div>
             <h3 className="mb-2 text-lg font-bold">{p.titulo}</h3>
             <p className="text-sm leading-relaxed text-muted-foreground">{p.desc}</p>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

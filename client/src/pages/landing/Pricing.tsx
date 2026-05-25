@@ -6,11 +6,13 @@
  */
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Sparkles } from "lucide-react";
+import { Reveal, staggerParent, staggerItem } from "./lpkit";
 
 interface Props {
   onCta: (modo: "login" | "signup") => void;
@@ -38,9 +40,9 @@ export function Pricing({ onCta }: Props) {
   }
 
   return (
-    <section id="pricing" className="border-y bg-white">
+    <section id="pricing" className="border-y bg-gradient-to-b from-white to-violet-50/40">
       <div className="mx-auto max-w-6xl px-4 py-24">
-        <div className="mx-auto mb-12 max-w-2xl text-center">
+        <Reveal className="mx-auto mb-12 max-w-2xl text-center">
           <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">Planos</p>
           <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
             Comece grátis. Cresça quando quiser.
@@ -50,7 +52,7 @@ export function Pricing({ onCta }: Props) {
               ? `${trialMaiorDias} dias de teste em qualquer plano pago. Sem cartão de crédito pra começar.`
               : "Sem cartão de crédito pra começar."}
           </p>
-        </div>
+        </Reveal>
 
         {isLoading || !planos ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -59,20 +61,29 @@ export function Pricing({ onCta }: Props) {
             ))}
           </div>
         ) : (
-          <div className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <motion.div
+            variants={staggerParent}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: "-60px" }}
+            className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-4"
+          >
             {planos.map((p: any) => {
               const destaque = !!p.popular;
               const gratis = p.precoMensalCentavos === 0;
               const preco = gratis ? "R$ 0" : formatBRL(p.precoMensalCentavos);
               return (
-                <div
+                <motion.div
                   key={p.slug}
-                  className={`relative flex flex-col rounded-2xl border bg-card p-6 ${
-                    destaque ? "border-2 border-violet-600 shadow-xl shadow-violet-600/15" : ""
+                  variants={staggerItem}
+                  className={`relative flex flex-col rounded-2xl border bg-card p-6 transition-all hover:-translate-y-1 ${
+                    destaque
+                      ? "border-2 border-violet-600 shadow-[0_30px_70px_-24px_rgba(124,58,237,0.6)]"
+                      : "hover:shadow-xl"
                   }`}
                 >
                   {destaque && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-violet-600 text-white">
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-[0_8px_22px_-6px_rgba(147,51,234,0.7)]">
                       <Sparkles className="mr-1 h-3 w-3" />
                       Mais popular
                     </Badge>
@@ -93,7 +104,11 @@ export function Pricing({ onCta }: Props) {
                   </p>
 
                   <Button
-                    className={`my-4 w-full ${destaque ? "bg-violet-600 hover:bg-violet-700" : ""}`}
+                    className={`my-4 w-full ${
+                      destaque
+                        ? "border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-500 hover:to-purple-500"
+                        : ""
+                    }`}
                     size="lg"
                     variant={destaque ? "default" : "outline"}
                     onClick={() => selecionarPlano(p.slug)}
@@ -109,10 +124,10 @@ export function Pricing({ onCta }: Props) {
                       </li>
                     ))}
                   </ul>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         )}
 
         <p className="mt-7 text-center text-[13px] text-muted-foreground">

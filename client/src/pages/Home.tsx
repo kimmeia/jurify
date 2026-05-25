@@ -1,9 +1,7 @@
 /**
- * Landing Page do JuridFlow.
- *
- * Monta as 8 seções em ordem (Hero → Problemas → Pilares → Demo →
- * Comparativo → Pricing → FAQ → CTA Final) + Navbar fixa no topo +
- * Footer. Auth via dialog do `AuthForms` (preserva fluxo existente).
+ * Landing Page do JuridFlow (direção híbrida — hero dark cinematográfico,
+ * corpo claro). Navbar scroll-aware + seções + Footer. Auth via dialog do
+ * `AuthForms` (preserva fluxo existente).
  *
  * Comportamento de redirect (preservado da versão anterior):
  *  - Admin → /admin
@@ -27,10 +25,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
+import { cn } from "@/lib/utils";
+
 import { Logo } from "./landing/Logo";
 import { Hero } from "./landing/Hero";
 import { Integracoes } from "./landing/Integracoes";
 import { Problemas } from "./landing/Problemas";
+import { SmartFlow } from "./landing/SmartFlow";
 import { Pilares } from "./landing/Pilares";
 import { Demo } from "./landing/Demo";
 import { Comparativo } from "./landing/Comparativo";
@@ -87,6 +88,7 @@ export default function Home() {
         <Hero onCta={setAuthOpen} />
         <Integracoes />
         <Problemas />
+        <SmartFlow />
         <Pilares />
         <Demo />
         <Comparativo />
@@ -123,36 +125,52 @@ export default function Home() {
   );
 }
 
-/** Navbar minimalista fixa no topo. */
+/**
+ * Navbar fixa scroll-aware: transparente com texto claro sobre o hero
+ * escuro; ao rolar vira vidro branco com texto escuro.
+ */
 function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const linkCls = cn(
+    "hidden px-3 text-sm transition-colors sm:inline-block",
+    scrolled ? "text-muted-foreground hover:text-foreground" : "text-white/75 hover:text-white",
+  );
+
   return (
-    <nav className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
+    <nav
+      className={cn(
+        "fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300",
+        scrolled ? "border-border bg-background/80 backdrop-blur-md" : "border-transparent bg-transparent",
+      )}
+    >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Logo className="text-xl" />
+        <Logo className="text-xl" variant={scrolled ? "light" : "dark"} />
 
         <div className="flex items-center gap-2">
-          <a
-            href="#demo"
-            className="hidden px-3 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
+          <a href="#smartflow" className={linkCls}>Recursos</a>
+          <a href="#pricing" className={linkCls}>Planos</a>
+          <a href="/roadmap" className={linkCls}>Roadmap</a>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onCta("login")}
+            className={scrolled ? "" : "text-white hover:bg-white/10 hover:text-white"}
           >
-            Recursos
-          </a>
-          <a
-            href="#pricing"
-            className="hidden px-3 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
-          >
-            Planos
-          </a>
-          <a
-            href="/roadmap"
-            className="hidden px-3 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
-          >
-            Roadmap
-          </a>
-          <Button variant="ghost" size="sm" onClick={() => onCta("login")}>
             Entrar
           </Button>
-          <Button size="sm" className="bg-violet-600 hover:bg-violet-700" onClick={() => onCta("signup")}>
+          <Button
+            size="sm"
+            onClick={() => onCta("signup")}
+            className="border-0 bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-[0_8px_22px_-6px_rgba(147,51,234,0.6)] hover:from-violet-500 hover:to-purple-500"
+          >
             Começar grátis
           </Button>
         </div>

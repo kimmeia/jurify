@@ -3,7 +3,9 @@
  * Fala dos diferenciais técnicos do JuridFlow, sem desmoralizar concorrente.
  */
 
+import { motion } from "framer-motion";
 import { CheckCircle2, Wallet, BrainCircuit, FileSearch } from "lucide-react";
+import { Reveal, staggerParent, staggerItem } from "./lpkit";
 
 const diffs = [
   {
@@ -41,7 +43,7 @@ const diffs = [
 export function Comparativo() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-24">
-      <div className="mx-auto mb-12 max-w-2xl text-center">
+      <Reveal className="mx-auto mb-12 max-w-2xl text-center">
         <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">
           Por que sair do que você usa hoje
         </p>
@@ -52,11 +54,21 @@ export function Comparativo() {
           Software jurídico tradicional foca em CRM ou peticionamento. O JuridFlow foi
           construído pra ser o sistema operacional inteiro do escritório.
         </p>
-      </div>
+      </Reveal>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <motion.div
+        variants={staggerParent}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-60px" }}
+        className="grid gap-5 lg:grid-cols-3"
+      >
         {diffs.map((d) => (
-          <div key={d.titulo} className="flex flex-col rounded-2xl border bg-card p-7">
+          <motion.div
+            key={d.titulo}
+            variants={staggerItem}
+            className="flex flex-col rounded-2xl border bg-card p-7 transition-all hover:-translate-y-1 hover:border-violet-300 hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.4)]"
+          >
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100">
               <d.icon className="h-6 w-6 text-violet-600" />
             </div>
@@ -70,9 +82,9 @@ export function Comparativo() {
                 </li>
               ))}
             </ul>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </section>
   );
 }

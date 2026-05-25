@@ -8,6 +8,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Reveal } from "./lpkit";
 
 const perguntas = [
   {
@@ -35,12 +36,12 @@ const perguntas = [
 export function Faq() {
   return (
     <section className="mx-auto max-w-3xl px-4 py-24">
-      <div className="mb-10 text-center">
+      <Reveal className="mb-10 text-center">
         <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">FAQ</p>
         <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
           Perguntas frequentes
         </h2>
-      </div>
+      </Reveal>
 
       <Accordion type="single" collapsible className="space-y-3">
         {perguntas.map((p, i) => (
