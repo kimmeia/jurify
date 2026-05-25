@@ -28,6 +28,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   // ia_consultar publica o campo dinâmico `salvarEm` — resolvido em
   // `variaveisPublicadasPorPasso`. Vazio aqui só satisfaz o tipo.
   ia_consultar: [],
+  ia_atendente: [
+    { path: "acaoAtendente", label: "Ação que o atendente disparou (ex: agendar)", tipo: "texto" },
+  ],
   // Variáveis publicadas por ia_extrair_campos são dinâmicas (chaves da config) —
   // resolvidas em `variaveisPublicadasPorPasso`. Vazio aqui só satisfaz o tipo.
   ia_extrair_campos: [],
