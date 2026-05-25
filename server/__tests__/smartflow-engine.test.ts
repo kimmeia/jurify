@@ -988,6 +988,45 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("é cliente? (campos do cadastro no contexto)", () => {
+    const rotaCpf = (): Passo[] => [
+      {
+        id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+        proximoSe: { cond_temcpf: "cli", fallback: "lead" },
+        config: { condicoes: [{ id: "temcpf", campo: "cliente.cpf", operador: "existe" }] },
+      },
+      { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "cli", config: { template: "É CLIENTE" } },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "lead", config: { template: "É LEAD" } },
+    ];
+
+    it("com CPF no cadastro → ramo cliente", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(rotaCpf(), { canalId: 1, telefoneCliente: "5", cliente: { cpf: "123.456.789-00" } }, exec);
+      expect(r.respostas).toContain("É CLIENTE");
+    });
+
+    it("sem CPF → ramo lead", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(rotaCpf(), { canalId: 1, telefoneCliente: "5", cliente: { cpf: "" } }, exec);
+      expect(r.respostas).toContain("É LEAD");
+    });
+
+    it("cliente.ehCliente como booleano direto", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        {
+          id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+          proximoSe: { cond_e: "cli", fallback: "lead" },
+          config: { condicoes: [{ id: "e", campo: "cliente.ehCliente", operador: "verdadeiro" }] },
+        },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "cli", config: { template: "É CLIENTE" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "lead", config: { template: "É LEAD" } },
+      ];
+      const r = await executarCenario(passos, { canalId: 1, telefoneCliente: "5", cliente: { ehCliente: true } }, exec);
+      expect(r.respostas).toContain("É CLIENTE");
+    });
+  });
+
   describe("gerarSlotsLivres (horários livres pra oferecer)", () => {
     const meiaNoiteBRT = new Date("2026-05-25T03:00:00Z"); // 00:00 BRT, dia 0 todo no futuro
 
