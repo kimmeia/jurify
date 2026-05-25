@@ -137,6 +137,10 @@ export async function extrairECaptarCampos(opts: {
   conversaId: number;
   contatoId: number;
   escritorioId: number;
+  /** Pula a heurística de skip (mensagemPareceTerValor). Usado quando a
+   *  extração é disparada explicitamente pelo fluxo (agente num passo) —
+   *  aí sempre tenta, pra não perder capturas tipo "sim"/"casado". */
+  forcar?: boolean;
 }): Promise<CampoCapturado[]> {
   try {
     const db = await getDb();
@@ -177,9 +181,10 @@ export async function extrairECaptarCampos(opts: {
     msgs.reverse();
 
     // Skip se nenhuma das últimas msgs do CLIENTE tem valor extraível
+    // (a menos que `forcar` — fluxo pediu explicitamente).
     const ultimaCliente = [...msgs].reverse().find((m) => m.direcao === "entrada");
     if (!ultimaCliente?.conteudo) return [];
-    if (!mensagemPareceTerValor(ultimaCliente.conteudo)) return [];
+    if (!opts.forcar && !mensagemPareceTerValor(ultimaCliente.conteudo)) return [];
 
     // 4. Pega valores JÁ capturados pra não repetir extração
     const [contato] = await db

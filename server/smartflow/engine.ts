@@ -820,16 +820,28 @@ async function handleIAConsultar(
     return { sucesso: false, contexto: ctx, mensagemErro: "Consultar IA: escreva a pergunta (prompt) ou escolha um agente." };
   }
   const contatoIdCtx = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
+  const conversaIdCtx = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
   try {
     let resposta: string;
+    let novoCtx: SmartflowContexto = { ...ctx };
     if (usaAgente) {
       resposta = await exec.executarAgente(cfg.agenteId as number, pergunta, contatoIdCtx, undefined);
+      // Captura ESCOPADA: o agente está sendo usado num passo do fluxo → extrai
+      // os campos configurados (camposCaptura) da conversa e salva no cadastro.
+      if (contatoIdCtx && conversaIdCtx) {
+        const capturados = await exec.extrairCamposDoAgente(cfg.agenteId as number, contatoIdCtx, conversaIdCtx);
+        if (capturados && Object.keys(capturados).length > 0) {
+          const clienteAtual = (ctx.cliente && typeof ctx.cliente === "object" ? ctx.cliente : {}) as Record<string, unknown>;
+          const camposAtual = (clienteAtual.campos && typeof clienteAtual.campos === "object" ? clienteAtual.campos : {}) as Record<string, unknown>;
+          novoCtx = { ...novoCtx, cliente: { ...clienteAtual, campos: { ...camposAtual, ...capturados } } };
+        }
+      }
     } else {
       const sistema = "Você é um assistente que responde consultas internas de um fluxo de atendimento jurídico. Responda de forma direta e objetiva, retornando apenas a resposta — sem saudações nem comentários.";
       resposta = await exec.chamarIA(sistema, pergunta, contatoIdCtx, undefined);
     }
     // Sem campo `resposta` → não é enviado ao cliente. Só guarda no contexto.
-    return { sucesso: true, contexto: { ...ctx, [salvarEm]: resposta } };
+    return { sucesso: true, contexto: { ...novoCtx, [salvarEm]: resposta } };
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `Consultar IA: ${err.message}` };
   }
