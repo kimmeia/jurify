@@ -2263,6 +2263,19 @@ function ConfigIaAtendenteFields({
     else set.delete(id);
     onChange({ ferramentas: Array.from(set) });
   };
+  const consultas: string[] = Array.isArray(cfg.consultas) ? (cfg.consultas as string[]) : [];
+  const toggleConsulta = (id: string, on: boolean) => {
+    const set = new Set(consultas);
+    if (on) set.add(id);
+    else set.delete(id);
+    onChange({ consultas: Array.from(set) });
+  };
+  const consultaCfg = (cfg.consultaConfig && typeof cfg.consultaConfig === "object" ? cfg.consultaConfig : {}) as {
+    responsavelId?: number; duracaoMin?: number; dias?: number;
+  };
+  const patchConsultaCfg = (patch: Record<string, unknown>) => onChange({ consultaConfig: { ...consultaCfg, ...patch } });
+  const { data: equipeData } = (trpc as any).configuracoes.listarColaboradores.useQuery();
+  const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c: any) => c.ativo);
   const insertRoteiro = (path: string) => {
     const atual = String(cfg.roteiro || "");
     onChange({ roteiro: atual + (atual ? " " : "") + `{{${path}}}` });
@@ -2321,6 +2334,50 @@ function ConfigIaAtendenteFields({
           ))}
         </div>
         <p className="text-[10px] text-muted-foreground mt-1">Cada ação marcada vira uma <strong>saída</strong> no bloco — ligue no que deve acontecer (ex: "Agendar" → bloco Agendamento). O agente só usa as marcadas.</p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Consultas (o agente busca e volta a conversar)</Label>
+        <label className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs mt-1">
+          <Checkbox checked={consultas.includes("ver_horarios")} onCheckedChange={(v) => toggleConsulta("ver_horarios", v === true)} />
+          <span>Ver horários livres da agenda</span>
+        </label>
+        {consultas.includes("ver_horarios") && (
+          <div className="mt-2 space-y-2 rounded border border-cyan-200 dark:border-cyan-900 bg-cyan-50/50 dark:bg-cyan-950/20 p-2">
+            <div>
+              <Label className="text-[11px]">De quem é a agenda</Label>
+              <Select
+                value={consultaCfg.responsavelId ? String(consultaCfg.responsavelId) : ""}
+                onValueChange={(v) => patchConsultaCfg({ responsavelId: Number(v) })}
+              >
+                <SelectTrigger className="h-8"><SelectValue placeholder="Escolha o advogado" /></SelectTrigger>
+                <SelectContent>
+                  {colaboradoresAtivos.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} ({c.cargo})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[11px]">Duração</Label>
+                <Select value={String(consultaCfg.duracaoMin || 30)} onValueChange={(v) => patchConsultaCfg({ duracaoMin: Number(v) })}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15 min</SelectItem>
+                    <SelectItem value="30">30 min</SelectItem>
+                    <SelectItem value="60">1 hora</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px]">Dias pra frente</Label>
+                <Input type="number" min={1} max={60} className="h-8" value={Number(consultaCfg.dias) || 7} onChange={(e) => patchConsultaCfg({ dias: Number(e.target.value) || 7 })} />
+              </div>
+            </div>
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground mt-1">A consulta <strong>não vira saída</strong> — o agente busca os horários, oferece ao cliente e, quando ele escolher, usa a ação "Agendar".</p>
       </div>
     </div>
   );
