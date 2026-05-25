@@ -137,6 +137,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   kanban_mover_card: Move,
   kanban_atribuir_responsavel: UserPlus,
   kanban_tags: TagsIcon,
+  contato_tags: TagsIcon,
   asaas_gerar_cobranca: Banknote,
   asaas_cancelar_cobranca: XCircle,
   asaas_consultar_valor_aberto: CircleDollarSign,
@@ -254,6 +255,7 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   kanban_mover_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
   kanban_atribuir_responsavel: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
   kanban_tags: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
+  contato_tags: { grad: "from-slate-500 to-gray-500", border: "border-slate-300 dark:border-slate-700" },
   asaas_gerar_cobranca: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
   asaas_cancelar_cobranca: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
   asaas_consultar_valor_aberto: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
@@ -736,6 +738,11 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       return config.responsavelAuto === false ? "(sem auto)" : "auto (atendente)";
     }
     case "kanban_tags": {
+      const modo = String(config.modo || "adicionar");
+      const tags = String(config.tags || "").trim();
+      return tags ? `${modo}: ${truncar(tags, 24)}` : modo;
+    }
+    case "contato_tags": {
       const modo = String(config.modo || "adicionar");
       const tags = String(config.tags || "").trim();
       return tags ? `${modo}: ${truncar(tags, 24)}` : modo;
@@ -2821,7 +2828,17 @@ function ConfigCondicionalFields({
                               onChange={(v) => atualizarReq(ri, { campo: v })}
                               grupos={sugestoesAgrupadas}
                             />
-                            <Select value={r.operador || "igual"} onValueChange={(v) => atualizarReq(ri, { operador: v })}>
+                            <Select
+                              value={r.operador || "igual"}
+                              onValueChange={(v) =>
+                                atualizarReq(
+                                  ri,
+                                  v === "tem_tag" || v === "nao_tem_tag"
+                                    ? { operador: v, campo: "cliente.tags" }
+                                    : { operador: v },
+                                )
+                              }
+                            >
                               <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="igual">igual a</SelectItem>
@@ -2833,13 +2850,21 @@ function ConfigCondicionalFields({
                                 <SelectItem value="menor">menor que (número)</SelectItem>
                                 <SelectItem value="contem">contém (texto)</SelectItem>
                                 <SelectItem value="entre">entre (range numérico)</SelectItem>
+                                <SelectItem value="tem_tag">tem a tag (contato)</SelectItem>
+                                <SelectItem value="nao_tem_tag">não tem a tag (contato)</SelectItem>
                               </SelectContent>
                             </Select>
                             {r.operador !== "existe" && r.operador !== "nao_existe" && r.operador !== "verdadeiro" && (
                               <Input
                                 value={String(r.valor || "")}
                                 onChange={(e) => atualizarReq(ri, { valor: e.target.value })}
-                                placeholder={r.operador === "entre" ? "Mínimo" : "Valor"}
+                                placeholder={
+                                  r.operador === "entre"
+                                    ? "Mínimo"
+                                    : r.operador === "tem_tag" || r.operador === "nao_tem_tag"
+                                    ? "nome da tag (ex: cliente)"
+                                    : "Valor"
+                                }
                                 className="h-7 text-xs"
                               />
                             )}
@@ -4037,6 +4062,65 @@ function ConfigKanbanTagsFields({
   );
 }
 
+function ConfigContatoTagsFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const insertNoCfg = (path: string) => {
+    const atual = String(cfg.tags || "");
+    onChange({ tags: atual + (atual ? ", " : "") + `{{${path}}}` });
+  };
+  const modo = (cfg.modo as string) || "adicionar";
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded-md bg-slate-50 dark:bg-slate-900/40 border p-2">
+        <p className="text-[11px] text-muted-foreground">
+          Mexe nas <strong>tags do contato</strong> no CRM (não em card). Depois dá pra ramificar com uma Decisão <strong>"tem a tag X"</strong>.
+        </p>
+      </div>
+      <div>
+        <Label className="text-xs">Modo</Label>
+        <Select value={modo} onValueChange={(v) => onChange({ modo: v })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="adicionar">Adicionar (mantém as existentes)</SelectItem>
+            <SelectItem value="remover">Remover</SelectItem>
+            <SelectItem value="definir">Definir (substitui todas)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Tags (separe por vírgula)</Label>
+          <VariableTrigger inputId="cfg-ctags-tags" variaveis={variaveis} onInsert={insertNoCfg} />
+        </div>
+        <VariableInput
+          id="cfg-ctags-tags"
+          value={String(cfg.tags || "")}
+          onChange={(v) => onChange({ tags: v })}
+          variaveis={variaveis}
+          placeholder="cliente, vip, {{intencao}}"
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {modo === "definir"
+            ? "Substitui todas as tags. Vazio remove todas."
+            : modo === "remover"
+              ? "Remove as tags listadas (case-insensitive)."
+              : "Adiciona à lista atual sem duplicar."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Config do passo "Definir variável" — guarda valor no contexto
  * pra usar em passos seguintes via {{chave}}. O valor suporta
@@ -4580,6 +4664,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigKanbanAtribuirResponsavelFields cfg={cfg} onChange={onChange} />;
     case "kanban_tags":
       return <ConfigKanbanTagsFields cfg={cfg} onChange={onChange} />;
+    case "contato_tags":
+      return <ConfigContatoTagsFields cfg={cfg} onChange={onChange} />;
     case "definir_variavel":
       return <ConfigDefinirVariavelFields cfg={cfg} onChange={onChange} />;
     case "definir_campo_personalizado":

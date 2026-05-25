@@ -88,7 +88,8 @@ export type TipoPasso =
   | "asaas_consultar_valor_aberto"
   | "asaas_marcar_recebida"
   | "definir_variavel"
-  | "definir_campo_personalizado";
+  | "definir_campo_personalizado"
+  | "contato_tags";
 
 /**
  * Categorias de passos com popover na paleta. Cada categoria agrupa
@@ -146,7 +147,7 @@ export const CATEGORIAS_PASSO: ReadonlyArray<CategoriaPassoMeta> = [
     id: "geral",
     label: "Geral",
     grupo: "acoes",
-    tipos: ["definir_variavel", "definir_campo_personalizado"],
+    tipos: ["definir_variavel", "definir_campo_personalizado", "contato_tags"],
   },
 ];
 
@@ -170,7 +171,9 @@ export type OperadorCondicional =
   | "maior"
   | "menor"
   | "contem"
-  | "entre";
+  | "entre"
+  | "tem_tag"
+  | "nao_tem_tag";
 
 export type PrioridadeCard = "baixa" | "media" | "alta";
 
@@ -551,6 +554,21 @@ export interface ConfigDefinirCampoPersonalizado {
 }
 
 /**
+ * Config do passo `contato_tags` — adiciona/remove/define as tags do CONTATO
+ * (CRM), não de um card. `tags` interpolável, separadas por vírgula.
+ */
+export interface ConfigContatoTags {
+  /** Tags separadas por vírgula (interpolável). Ex: "cliente, vip". */
+  tags?: string;
+  /**
+   * - "adicionar": junta às existentes (sem duplicar).
+   * - "remover": tira as informadas.
+   * - "definir": substitui TODAS pelas informadas.
+   */
+  modo?: "adicionar" | "remover" | "definir";
+}
+
+/**
  * Union discriminada por `tipo`. Usada no editor pra garantir type-safety
  * do painel de configuração. O backend aceita `config` como objeto livre
  * (por compatibilidade) mas esses tipos documentam o shape esperado.
@@ -583,7 +601,8 @@ export type PassoConfigByTipo =
   | { tipo: "asaas_cancelar_cobranca"; config: ConfigAsaasCancelarCobranca }
   | { tipo: "asaas_consultar_valor_aberto"; config: ConfigAsaasConsultarValorAberto }
   | { tipo: "asaas_marcar_recebida"; config: ConfigAsaasMarcarRecebida }
-  | { tipo: "definir_campo_personalizado"; config: ConfigDefinirCampoPersonalizado };
+  | { tipo: "definir_campo_personalizado"; config: ConfigDefinirCampoPersonalizado }
+  | { tipo: "contato_tags"; config: ConfigContatoTags };
 
 export interface PassoSmartflow {
   id?: number;
@@ -755,6 +774,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "asaas_marcar_recebida", label: "Marcar como recebida (Asaas)", descricao: "Confirma recebimento manual de uma cobrança.", cor: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", grupo: "acoes" },
   { id: "definir_variavel", label: "Definir variável", descricao: "Guarda um valor no contexto pra usar em passos seguintes.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "acoes" },
   { id: "definir_campo_personalizado", label: "Definir campo personalizado", descricao: "Persiste um valor em campos personalizados do cliente.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "acoes" },
+  { id: "contato_tags", label: "Tags do contato", descricao: "Adiciona, remove ou define as tags do contato no CRM.", cor: "bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300", grupo: "acoes" },
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
