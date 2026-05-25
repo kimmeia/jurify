@@ -505,7 +505,7 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
     async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {
       try {
         const { extrairECaptarCampos } = await import("../integracoes/agente-captura-campos");
-        const capturados = await extrairECaptarCampos({ agenteId, contatoId, conversaId, escritorioId });
+        const capturados = await extrairECaptarCampos({ agenteId, contatoId, conversaId, escritorioId, forcar: true });
         const out: Record<string, unknown> = {};
         for (const c of capturados) out[c.chave] = c.valor;
         if (capturados.length > 0) {

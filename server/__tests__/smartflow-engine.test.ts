@@ -292,6 +292,18 @@ describe("SmartFlow Engine", () => {
       expect(r.respostas).toHaveLength(0);
     });
 
+    it("com agente, também extrai campos e salva no contexto", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("ok");
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ agendar_atendimento: "SIM" });
+      const exec = criarMockExecutores({ executarAgente, extrairCamposDoAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_consultar", config: { prompt: "p", agenteId: 7, salvarEm: "r" } },
+      ];
+      const r = await executarCenario(passos, { mensagem: "sim", contatoId: 5, conversaId: 9 }, exec);
+      expect(extrairCamposDoAgente).toHaveBeenCalledWith(7, 5, 9);
+      expect((r.contexto.cliente as any).campos).toMatchObject({ agendar_atendimento: "SIM" });
+    });
+
     it("falha se 'Salvar em' não foi configurado", async () => {
       const exec = criarMockExecutores({ chamarIA: vi.fn().mockResolvedValue("x") });
       const passos: Passo[] = [
