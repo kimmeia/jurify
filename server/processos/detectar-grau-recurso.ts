@@ -60,3 +60,24 @@ export function detectarSubiuParaSegundoGrau(
 
   return { subiu: indicios.length > 0, indicios };
 }
+
+/**
+ * Junta as movimentações do 1º e do 2º grau num só conjunto, sem duplicar
+ * (chave data+texto). Mantém a ordem (1º grau, depois 2º); o dedup por evento
+ * a jusante cuida do resto. Usado quando o monitoramento detecta que o processo
+ * subiu pro 2º grau (issue #529).
+ */
+export function mesclarMovimentacoes<T extends { data: string; texto: string }>(
+  movs1grau: readonly T[],
+  movs2grau: readonly T[],
+): T[] {
+  const vistos = new Set<string>();
+  const merged: T[] = [];
+  for (const mov of [...movs1grau, ...movs2grau]) {
+    const chave = `${mov.data}|${mov.texto}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    merged.push(mov);
+  }
+  return merged;
+}

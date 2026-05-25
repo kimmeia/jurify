@@ -28,8 +28,8 @@ import {
   prazosSugeridos,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
-import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
-import { detectarSubiuParaSegundoGrau } from "./detectar-grau-recurso";
+import { consultarTjce, consultarTjcePorCpf, TJCE_2G } from "./adapters/pje-tjce";
+import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
@@ -268,6 +268,31 @@ export async function pollarUmMonitoramentoMovs(
           : null,
       })
       .where(eq(motorMonitoramentos.id, mon.id));
+
+    // Auto-detect grau (opção C): quando há indício de que o processo subiu pro
+    // 2º grau, consulta TAMBÉM o portal de 2º grau e junta as movimentações. Só
+    // dispara quando detectado (não consulta sempre). Degrada com elegância: se
+    // o 2º grau falhar (URL/sessão/estrutura), segue só com o 1º grau — sem
+    // regressão no monitoramento que já funciona.
+    if (deteccaoGrau.subiu && mon.tribunal === "tjce") {
+      try {
+        const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+        if (sessao2) {
+          const r2 = await consultarTjce(mon.searchKey, sessao2, TJCE_2G);
+          if (r2.ok && r2.movimentacoes.length > 0) {
+            resultado.movimentacoes = mesclarMovimentacoes(
+              resultado.movimentacoes,
+              r2.movimentacoes,
+            );
+          }
+        }
+      } catch (err) {
+        log.warn(
+          { monId: mon.id, err: err instanceof Error ? err.message : String(err) },
+          "[motor-cron] consulta 2º grau falhou — seguindo só com 1º grau",
+        );
+      }
+    }
 
     const novoHash = hashMovimentacoes(resultado.movimentacoes);
     const isPrimeiraExecucao = !mon.hashUltimasMovs;
