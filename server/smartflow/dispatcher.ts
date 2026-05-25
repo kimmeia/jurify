@@ -142,6 +142,60 @@ async function carregarCenariosAtivos(
   return resultado;
 }
 
+/**
+ * Escolhe UM cenário entre os candidatos de mensagem com base nas palavras-chave
+ * configuradas em `configGatilho`. Regras (ver ConfigGatilhoMensagemCanal):
+ *   1. Match EXATO vence "começa com" (empate → exato).
+ *   2. Dentro do mesmo modo, a palavra mais longa (mais específica) vence.
+ *   3. Sem match → o fluxo marcado `gatilhoPadrao`.
+ *   4. Sem padrão → o primeiro fluxo SEM palavra-chave (catch-all legado).
+ *   5. Nada disso → null (não dispara — evita rodar fluxo de campanha em mensagem aleatória).
+ *
+ * Compat: fluxos antigos não têm `palavrasChave` nem `gatilhoPadrao`, então
+ * caem na regra 4 (o primeiro roda), idêntico ao comportamento anterior.
+ */
+export function selecionarCenarioPorPalavraChave<T extends { configGatilho: Record<string, unknown> }>(
+  cenarios: T[],
+  mensagem: string,
+): T | null {
+  if (cenarios.length === 0) return null;
+  const msg = String(mensagem ?? "").trim().toLowerCase();
+
+  let melhorExato: { cen: T; len: number } | null = null;
+  let melhorComeca: { cen: T; len: number } | null = null;
+  let padrao: T | null = null;
+  let primeiroSemPalavra: T | null = null;
+
+  for (const cen of cenarios) {
+    const cfg = (cen.configGatilho || {}) as Record<string, unknown>;
+    const palavras = Array.isArray(cfg.palavrasChave)
+      ? (cfg.palavrasChave as unknown[]).map((p) => String(p ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
+    const modo = cfg.modoPalavraChave === "comeca_com" ? "comeca_com" : "exato";
+    if (cfg.gatilhoPadrao === true && !padrao) padrao = cen;
+
+    if (palavras.length === 0) {
+      if (cfg.gatilhoPadrao !== true && !primeiroSemPalavra) primeiroSemPalavra = cen;
+      continue;
+    }
+
+    for (const palavra of palavras) {
+      if (modo === "exato") {
+        if (msg === palavra && (!melhorExato || palavra.length > melhorExato.len)) {
+          melhorExato = { cen, len: palavra.length };
+        }
+      } else if (msg.startsWith(palavra) && (!melhorComeca || palavra.length > melhorComeca.len)) {
+        melhorComeca = { cen, len: palavra.length };
+      }
+    }
+  }
+
+  if (melhorExato) return melhorExato.cen;
+  if (melhorComeca) return melhorComeca.cen;
+  if (padrao) return padrao;
+  return primeiroSemPalavra; // null se todos têm palavra-chave e nenhum casou
+}
+
 async function carregarCenarioPorId(
   escritorioId: number,
   cenarioId: number,
@@ -1041,12 +1095,18 @@ export async function dispararMensagemCanal(
     );
 
     if (aceitos.length > 0) {
-      const escolhido = aceitos[0];
-      const r = await executarCenarioCarregado(escritorioId, escolhido, contexto, {
-        contatoId: params.contatoId,
-        conversaId: params.conversaId,
-      });
-      return { executou: true, respostas: r.respostas, execId: r.execId };
+      // Roteamento por palavra-chave: campanha → fluxo específico; senão → padrão.
+      const escolhido = selecionarCenarioPorPalavraChave(aceitos, params.mensagem);
+      if (escolhido) {
+        const r = await executarCenarioCarregado(escritorioId, escolhido, contexto, {
+          contatoId: params.contatoId,
+          conversaId: params.conversaId,
+        });
+        return { executou: true, respostas: r.respostas, execId: r.execId };
+      }
+      // Nenhum fluxo casou e não há padrão — não dispara nada.
+      log.debug({ escritorioId }, "SmartFlow: nenhum fluxo casou palavra-chave e sem fluxo padrão");
+      return { executou: false, respostas: [] };
     }
 
     // 2. Fallback: cenário antigo `whatsapp_mensagem` só pra WhatsApp QR
