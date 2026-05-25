@@ -650,10 +650,16 @@ function resumirConfigGatilho(g: GatilhoSmartflow, cfg: Record<string, unknown>)
   if (!cfg) return "";
   if (g === "mensagem_canal") {
     const canais = Array.isArray(cfg.canais) ? (cfg.canais as string[]) : [];
-    if (canais.length === 0) return "Qualquer canal";
-    return canais
-      .map((c) => TIPO_CANAL_META.find((m) => m.id === c)?.label || c)
-      .join(", ");
+    const palavras = Array.isArray(cfg.palavrasChave) ? (cfg.palavrasChave as string[]) : [];
+    const canalTxt = canais.length === 0
+      ? "Qualquer canal"
+      : canais.map((c) => TIPO_CANAL_META.find((m) => m.id === c)?.label || c).join(", ");
+    const extra = palavras.length > 0
+      ? ` · ${palavras.join("/")} (${cfg.modoPalavraChave === "comeca_com" ? "começa" : "exato"})`
+      : cfg.gatilhoPadrao === true
+      ? " · padrão"
+      : "";
+    return canalTxt + extra;
   }
   if (g === "pagamento_vencido" || g === "pagamento_proximo_vencimento") {
     const base =
@@ -1884,6 +1890,42 @@ function ConfigGatilhoFields({
         <p className="text-[10px] text-muted-foreground">
           Sem seleção = dispara em qualquer canal conectado.
         </p>
+
+        <div className="pt-2 mt-1 border-t space-y-2">
+          <Label className="text-xs">Palavras-chave (roteamento de campanha)</Label>
+          <Input
+            value={(Array.isArray(cfg.palavrasChave) ? (cfg.palavrasChave as string[]) : []).join(", ")}
+            onChange={(e) =>
+              onChange({ palavrasChave: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+            }
+            placeholder="Ex: QUERO50, PROMO (separe por vírgula)"
+          />
+          <div>
+            <Label className="text-xs">Tipo de match</Label>
+            <Select
+              value={cfg.modoPalavraChave === "comeca_com" ? "comeca_com" : "exato"}
+              onValueChange={(v) => onChange({ modoPalavraChave: v })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="exato">Exato (mensagem = palavra)</SelectItem>
+                <SelectItem value="comeca_com">Começa com</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <label className="flex items-start gap-2 cursor-pointer rounded border p-2 bg-muted/20">
+            <Checkbox
+              checked={cfg.gatilhoPadrao === true}
+              onCheckedChange={(v) => onChange({ gatilhoPadrao: v === true })}
+            />
+            <span className="text-[11px] leading-snug">
+              <strong>Fluxo padrão</strong> — roda quando a mensagem não casa com palavra-chave de nenhum fluxo. Marque só um.
+            </span>
+          </label>
+          <p className="text-[10px] text-muted-foreground">
+            Com palavra-chave, só dispara se a mensagem casar (em empate, <strong>exato</strong> vence "começa com"). Sem palavra-chave nem padrão = fluxo geral.
+          </p>
+        </div>
       </div>
     );
   }

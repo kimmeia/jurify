@@ -659,6 +659,24 @@ export interface TipoCanalMeta {
 export interface ConfigGatilhoMensagemCanal {
   /** Canais permitidos. Vazio/ausente = aceita qualquer canal. */
   canais?: TipoCanalMensagem[];
+  /**
+   * Palavras-chave que disparam ESTE fluxo. Vazio = não filtra por palavra
+   * (fluxo geral). Usado pra rotear campanhas: ex. ["QUERO50"] manda quem
+   * mandar "QUERO50" pra um fluxo específico.
+   */
+  palavrasChave?: string[];
+  /**
+   * Como casar as palavras-chave com a mensagem:
+   *   - "exato": a mensagem (sem espaços nas pontas, case-insensitive) é igual à palavra.
+   *   - "comeca_com": a mensagem começa com a palavra.
+   * Default "exato". Em empate entre fluxos, o match exato vence o "começa com".
+   */
+  modoPalavraChave?: "exato" | "comeca_com";
+  /**
+   * Marca este como o FLUXO PADRÃO do canal: roda quando a mensagem não casa
+   * com nenhuma palavra-chave de nenhum fluxo. Só um deveria estar marcado.
+   */
+  gatilhoPadrao?: boolean;
 }
 
 /**
