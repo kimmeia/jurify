@@ -62,6 +62,7 @@ export type TipoPasso =
   | "ia_classificar"
   | "ia_responder"
   | "ia_consultar"
+  | "ia_atendente"
   | "ia_extrair_campos"
   | "crm_buscar_contato"
   | "crm_listar_acoes_cliente"
@@ -201,6 +202,30 @@ export interface ConfigIaConsultar {
   agenteId?: number;
   /** Campo do contexto onde salvar a resposta da IA (ex: `analiseIA`). */
   salvarEm?: string;
+}
+
+/**
+ * Ferramentas (ações) que o "Atendente IA" pode disparar durante a conversa.
+ * Cada uma habilitada vira uma SAÍDA do nó — o agente decide quando usar.
+ * (`capturar` é automático via campos do agente, não é saída.)
+ */
+export type FerramentaAtendente = "agendar" | "transferir" | "encerrar" | "gerar_cobranca" | "buscar_processo";
+
+/**
+ * Config do passo `ia_atendente` — o agente conduz a conversa inteira (roteiro
+ * no prompt), junta mensagens picadas, captura campos do cadastro, e dispara
+ * uma das ferramentas habilitadas quando decide. As ferramentas viram saídas
+ * (`proximoSe[ferramenta]`); sem ferramenta escolhida, ele continua conversando.
+ */
+export interface ConfigIaAtendente {
+  /** Agente (cérebro) que conduz. */
+  agenteId?: number;
+  /** Roteiro/instruções extra em português (somado ao prompt do agente). */
+  roteiro?: string;
+  /** Ferramentas habilitadas — cada uma é uma saída do nó. */
+  ferramentas?: FerramentaAtendente[];
+  /** Janela (segundos) pra juntar mensagens picadas. 0/ausente = desligado. */
+  acumularSegundos?: number;
 }
 
 /**
@@ -571,6 +596,7 @@ export type PassoConfigByTipo =
   | { tipo: "ia_classificar"; config: ConfigIaClassificar }
   | { tipo: "ia_responder"; config: ConfigIaResponder }
   | { tipo: "ia_consultar"; config: ConfigIaConsultar }
+  | { tipo: "ia_atendente"; config: ConfigIaAtendente }
   | { tipo: "ia_extrair_campos"; config: ConfigIaExtrairCampos }
   | { tipo: "crm_buscar_contato"; config: ConfigCrmBuscarContato }
   | { tipo: "crm_listar_acoes_cliente"; config: ConfigCrmListarAcoesCliente }
@@ -741,6 +767,8 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
   { id: "ia_consultar", label: "Consultar IA (uso interno)", descricao: "Faz uma pergunta à IA e salva a resposta num campo. NÃO envia ao cliente.", cor: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", grupo: "ia" },
+  // ia_atendente: fora da paleta de propósito até o cérebro (fase 2) + tela
+  // (fase 3) ficarem prontos. O tipo/handler já existem (fundação).
   { id: "ia_extrair_campos", label: "Extrair dados (IA)", descricao: "IA lê a mensagem e extrai campos estruturados (CPF, email, datas...). Salva no contexto e opcionalmente no cadastro do cliente.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "ia" },
   { id: "crm_buscar_contato", label: "Buscar contato (CRM)", descricao: "Resolve um cliente pelo telefone, email ou CPF. Popula contatoId, nome e campos personalizados.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
   { id: "crm_listar_acoes_cliente", label: "Listar ações do cliente", descricao: "Lista os processos vinculados ao contato — útil pra IA saber sobre quais ações ele tem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },

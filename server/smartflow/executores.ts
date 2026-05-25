@@ -502,6 +502,17 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       );
     },
 
+    async conversarComAgente(params): Promise<{ resposta: string; acao: string | null }> {
+      // FASE 1 (fundação): por enquanto só CONVERSA — gera a resposta via agente
+      // e não decide ação (acao = null). A FASE 2 implementa a decisão de ação
+      // (saída estruturada / function-calling) com base nas `ferramentas`.
+      // O handler já roteia corretamente quando `acao` vier preenchida.
+      const roteiro = params.roteiro?.trim();
+      const mensagemComRoteiro = roteiro ? `${roteiro}\n\n---\nMensagem do cliente: ${params.mensagem}` : params.mensagem;
+      const resposta = await this.executarAgente(params.agenteId, mensagemComRoteiro, params.contatoId, params.conversaId);
+      return { resposta, acao: null };
+    },
+
     async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {
       try {
         const { extrairECaptarCampos } = await import("../integracoes/agente-captura-campos");

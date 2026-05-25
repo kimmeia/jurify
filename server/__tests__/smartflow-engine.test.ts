@@ -33,6 +33,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     buscarMovimentacoesProcesso: vi.fn().mockResolvedValue([]),
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
     extrairCamposDoAgente: vi.fn().mockResolvedValue({}),
+    conversarComAgente: vi.fn().mockResolvedValue({ resposta: "ok", acao: null }),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
@@ -1119,6 +1120,62 @@ describe("SmartFlow Engine", () => {
         duracaoMin: 30, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 10,
       });
       expect(slots).toHaveLength(10);
+    });
+  });
+
+  describe("ia_atendente (Atendente IA com ferramentas)", () => {
+    const noAtendente = (ferramentas: string[], proximoSe: Record<string, string> = {}): Passo => ({
+      id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at",
+      config: { agenteId: 7, ferramentas }, proximoSe,
+    });
+    const ctxBase = { mensagem: "oi", contatoId: 5, conversaId: 9, canalId: 1, telefoneCliente: "5585" };
+
+    it("sem ação → envia a resposta e pausa esperando o cliente", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Oi! Como posso ajudar?", acao: null });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const r = await executarCenario([noAtendente(["agendar", "transferir"])], { ...ctxBase }, exec);
+      expect(r.respostas).toContain("Oi! Como posso ajudar?");
+      expect(r.contexto.aguardandoMensagem).toBe(true);
+      expect(r.contexto.aguardandoNodeClienteId).toBe("at");
+    });
+
+    it("com ação habilitada → envia resposta e roteia pela saída da ferramenta", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "Vou te agendar!", acao: "agendar" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const passos: Passo[] = [
+        noAtendente(["agendar", "transferir"], { agendar: "a", transferir: "t" }),
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "a", config: { template: "AGENDOU" } },
+        { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "t", config: { template: "TRANSFERIU" } },
+      ];
+      const r = await executarCenario(passos, { ...ctxBase, mensagem: "quero agendar" }, exec);
+      expect(r.respostas).toContain("Vou te agendar!");
+      expect(r.respostas).toContain("AGENDOU");
+      expect(r.respostas).not.toContain("TRANSFERIU");
+      expect(r.contexto.aguardandoMensagem).toBeFalsy();
+    });
+
+    it("ação NÃO habilitada é ignorada → continua conversando", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "...", acao: "deletar_tudo" });
+      const exec = criarMockExecutores({ conversarComAgente });
+      const r = await executarCenario([noAtendente(["agendar"], { agendar: "a" })], { ...ctxBase }, exec);
+      expect(r.contexto.aguardandoMensagem).toBe(true);
+    });
+
+    it("captura campos e reflete em cliente.campos", async () => {
+      const conversarComAgente = vi.fn().mockResolvedValue({ resposta: "ok", acao: null });
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ banco: "Itaú" });
+      const exec = criarMockExecutores({ conversarComAgente, extrairCamposDoAgente });
+      const r = await executarCenario([noAtendente([])], { ...ctxBase }, exec);
+      expect(extrairCamposDoAgente).toHaveBeenCalledWith(7, 5, 9);
+      expect((r.contexto.cliente as any).campos).toMatchObject({ banco: "Itaú" });
+    });
+
+    it("sem agente → erro claro", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [{ id: 1, ordem: 1, tipo: "ia_atendente", clienteId: "at", config: {} }];
+      const r = await executarCenario(passos, { mensagem: "oi" }, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("agente");
     });
   });
 

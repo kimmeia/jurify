@@ -242,6 +242,19 @@ export interface SmartflowExecutores {
    * chave→valor dos campos capturados (pra refletir no contexto). Não-fatal.
    */
   extrairCamposDoAgente: (agenteId: number, contatoId: number, conversaId: number) => Promise<Record<string, unknown>>;
+  /**
+   * "Atendente IA": o agente conduz a conversa (roteiro no prompt) e decide se
+   * continua conversando ou dispara uma das `ferramentas` habilitadas. Retorna
+   * o texto a enviar + a ação escolhida (uma das ferramentas) ou null (continua).
+   */
+  conversarComAgente: (params: {
+    agenteId: number;
+    roteiro?: string;
+    ferramentas: string[];
+    mensagem: string;
+    contatoId?: number;
+    conversaId?: number;
+  }) => Promise<{ resposta: string; acao: string | null }>;
   /** Busca horários disponíveis no Cal.com */
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
@@ -844,6 +857,88 @@ async function handleIAConsultar(
     return { sucesso: true, contexto: { ...novoCtx, [salvarEm]: resposta } };
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `Consultar IA: ${err.message}` };
+  }
+}
+
+/**
+ * Handler do passo `ia_atendente` — o "Atendente IA". O agente conduz a conversa
+ * inteira (roteiro no prompt) e, a cada turno:
+ *   - se decide uma AÇÃO (uma das ferramentas habilitadas) → envia a resposta e
+ *     ROTEIA pela saída daquela ferramenta (proximoSe[acao]).
+ *   - senão → envia a resposta e PAUSA esperando a próxima mensagem; ao retomar,
+ *     o nó re-executa (continua a conversa). É o loop, sem o usuário desenhar.
+ * Captura campos do cadastro automaticamente (escopado ao uso no fluxo).
+ */
+async function handleIaAtendente(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { agenteId?: number; roteiro?: string; ferramentas?: string[] };
+  if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
+  }
+  const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
+  // Mensagem do turno: a resposta nova (retomada) ou a 1ª mensagem.
+  const mensagem = typeof ctx.respostaUsuario === "string" && ctx.respostaUsuario.trim()
+    ? ctx.respostaUsuario
+    : String(ctx.mensagem ?? "");
+  const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
+  const conversaId = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
+
+  try {
+    const { resposta, acao } = await exec.conversarComAgente({
+      agenteId: cfg.agenteId,
+      roteiro: cfg.roteiro,
+      ferramentas,
+      mensagem,
+      contatoId,
+      conversaId,
+    });
+
+    // Limpa flags de retomada (este nó re-executa, não "passa direto").
+    let novoCtx: SmartflowContexto = { ...ctx };
+    delete (novoCtx as any).__resumindoWaitClienteId;
+    delete (novoCtx as any).__resumindoWaitMotivo;
+
+    // Captura escopada de campos do cadastro.
+    if (contatoId && conversaId) {
+      const capturados = await exec.extrairCamposDoAgente(cfg.agenteId, contatoId, conversaId);
+      if (capturados && Object.keys(capturados).length > 0) {
+        const cli = (novoCtx.cliente && typeof novoCtx.cliente === "object" ? novoCtx.cliente : {}) as Record<string, unknown>;
+        const campos = (cli.campos && typeof cli.campos === "object" ? cli.campos : {}) as Record<string, unknown>;
+        novoCtx = { ...novoCtx, cliente: { ...cli, campos: { ...campos, ...capturados } } };
+      }
+    }
+
+    // Ação escolhida (e habilitada) → envia a resposta e sai pela ferramenta.
+    if (acao && ferramentas.includes(acao)) {
+      const enviadas = novoCtx.mensagensEnviadas || [];
+      return {
+        sucesso: true,
+        resposta: resposta || undefined,
+        contexto: { ...novoCtx, mensagensEnviadas: resposta ? [...enviadas, resposta] : enviadas, acaoAtendente: acao },
+        proximoRamoId: acao,
+      };
+    }
+
+    // Sem ação → continua a conversa: envia a resposta e pausa esperando o cliente.
+    const enviadas = novoCtx.mensagensEnviadas || [];
+    return {
+      sucesso: true,
+      parar: true,
+      resposta: resposta || undefined,
+      contexto: {
+        ...novoCtx,
+        mensagensEnviadas: resposta ? [...enviadas, resposta] : enviadas,
+        aguardandoMensagem: true,
+        aguardandoContatoId: contatoId,
+        aguardandoTimeoutMinutos: 1440,
+        aguardandoNodeClienteId: passo.clienteId ?? null,
+      },
+    };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Atendente IA: ${err?.message || String(err)}` };
   }
 }
 
@@ -2155,6 +2250,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   ia_classificar: handleIAClassificar,
   ia_responder: handleIAResponder,
   ia_consultar: handleIAConsultar,
+  ia_atendente: handleIaAtendente,
   ia_extrair_campos: handleIAExtrairCampos,
   crm_buscar_contato: handleCrmBuscarContato,
   crm_listar_acoes_cliente: handleCrmListarAcoesCliente,
