@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectarSubiuParaSegundoGrau } from "./detectar-grau-recurso";
+import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 
 const mov = (texto: string) => ({ texto });
 
@@ -53,5 +53,31 @@ describe("detectarSubiuParaSegundoGrau", () => {
 
   it("ignora movimentações sem texto", () => {
     expect(detectarSubiuParaSegundoGrau([mov(""), mov("   ")]).subiu).toBe(false);
+  });
+});
+
+describe("mesclarMovimentacoes", () => {
+  const m = (data: string, texto: string) => ({ data, texto });
+
+  it("junta 1º e 2º grau preservando a ordem", () => {
+    const r = mesclarMovimentacoes(
+      [m("2025-01-01", "Distribuído")],
+      [m("2025-03-01", "Conclusos ao Relator")],
+    );
+    expect(r.map((x) => x.texto)).toEqual(["Distribuído", "Conclusos ao Relator"]);
+  });
+
+  it("dedupe exato (mesma data+texto) entre os graus", () => {
+    const r = mesclarMovimentacoes(
+      [m("2025-01-01", "Petição")],
+      [m("2025-01-01", "Petição"), m("2025-03-01", "Acórdão")],
+    );
+    expect(r).toHaveLength(2);
+    expect(r.map((x) => x.texto)).toEqual(["Petição", "Acórdão"]);
+  });
+
+  it("2º grau vazio → devolve só o 1º grau", () => {
+    const r = mesclarMovimentacoes([m("2025-01-01", "Despacho")], []);
+    expect(r).toHaveLength(1);
   });
 });

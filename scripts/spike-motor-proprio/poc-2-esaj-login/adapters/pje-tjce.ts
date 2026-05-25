@@ -71,6 +71,15 @@ export const TJCE_1G: TribunalPdpjConfig = {
     "https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam",
 };
 
+export const TJCE_2G: TribunalPdpjConfig = {
+  tribunal: "tjce",
+  grau: 2,
+  nome: "Tribunal de Justiça do Ceará — PJe 2º grau (PDPJ-cloud)",
+  urlEntrada: "https://pje.tjce.jus.br/pje2grau/",
+  urlBusca:
+    "https://pje.tjce.jus.br/pje2grau/Processo/ConsultaProcesso/listView.seam",
+};
+
 export interface CredencialPjeTjce {
   username: string;
   password: string;
