@@ -229,6 +229,20 @@ export async function pollarUmMonitoramentoMovs(
       return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter` };
     }
 
+    // Sessão morta no ponto de uso (o PDPJ derrubou antes da nossa estimativa
+    // de 90min): força relogin e tenta de novo UMA vez. Sem isto o auto-login
+    // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
+    // refazer login. Relogin é dedupado por credencial (cofre-helpers).
+    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+      const sessaoNova = await recuperarSessao(mon.credencialId, {
+        tentarRelogin: true,
+        forcarRelogin: true,
+      });
+      if (sessaoNova) {
+        resultado = await consultarTjce(mon.searchKey, sessaoNova);
+      }
+    }
+
     if (!resultado.ok) {
       await db
         .update(motorMonitoramentos)
@@ -685,6 +699,18 @@ export async function pollarUmMonitoramentoNovasAcoes(
       resultado = await consultarTjcePorCpf(mon.searchKey, sessao);
     } else {
       return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter de CPF` };
+    }
+
+    // Sessão morta no ponto de uso: força relogin e tenta de novo uma vez
+    // (mesmo motivo do poll de movimentações). Relogin dedupado por credencial.
+    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+      const sessaoNova = await recuperarSessao(mon.credencialId, {
+        tentarRelogin: true,
+        forcarRelogin: true,
+      });
+      if (sessaoNova) {
+        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova);
+      }
     }
 
     if (!resultado.ok) {
