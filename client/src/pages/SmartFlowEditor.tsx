@@ -300,7 +300,7 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
         selected ? "ring-2 ring-violet-400 ring-offset-1 border-violet-400" : cor.border
       }`}
     >
-      <Handle type="target" position={Position.Top} className="!bg-muted-foreground/40" />
+      <Handle type="target" position={Position.Left} className="!bg-muted-foreground/40" />
 
       {/* Header com gradiente da família + status dot */}
       <div className={`flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-r ${cor.grad} text-white`}>
@@ -373,7 +373,7 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
           <HandleRow handleId="depois" label="depois (terminou)" cor="#3b82f6" />
         </div>
       ) : (
-        <Handle type="source" position={Position.Bottom} id="default" className="!bg-muted-foreground/40" />
+        <Handle type="source" position={Position.Right} id="default" className="!bg-muted-foreground/40" />
       )}
     </div>
   );
@@ -520,7 +520,7 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
           {resumo}
         </div>
       )}
-      <Handle type="source" position={Position.Bottom} className="!bg-amber-500" />
+      <Handle type="source" position={Position.Right} className="!bg-amber-500" />
     </div>
   );
 }
@@ -1013,7 +1013,15 @@ function SmartFlowEditorInner() {
       }
     }
 
-    setNodes([gatilhoNode, ...passosNodes]);
+    // Posições não são persistidas — recalcula o layout horizontal
+    // (esquerda→direita) no load pra um visual sempre organizado.
+    const todosNodes = [gatilhoNode, ...passosNodes];
+    const layoutInicial = calcularAutoLayout(
+      todosNodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
+      es.map((e) => ({ source: e.source, target: e.target })),
+      GATILHO_NODE_ID,
+    );
+    setNodes(todosNodes.map((n) => ({ ...n, position: layoutInicial.get(n.id) ?? n.position })));
     setEdges(es);
 
     // Snapshot do estado salvo — referência pra "Salvo há X" e dirty.
@@ -1192,29 +1200,33 @@ function SmartFlowEditorInner() {
 
   const adicionarPasso = (tipo: TipoPasso) => {
     const passos = nodes.filter((n) => n.type === "passo");
-    const ultimaY = passos.length
-      ? Math.max(...passos.map((n) => n.position.y))
-      : 120; // abaixo do gatilho
-    const novoNode = criarNode(tipo, ultimaY + 120);
+    const novoNode = criarNode(tipo, 0);
     const ultimoId = passos.length > 0
       ? passos[passos.length - 1].id
       : GATILHO_NODE_ID;
-    setNodes((nds) => [...nds, novoNode]);
-    setEdges((eds) => [
-      ...eds,
-      {
-        id: `e${ultimoId}-${novoNode.id}`,
-        source: ultimoId,
-        target: novoNode.id,
-        // Sempre explícito — evita divergência entre edge criada e edge
-        // recarregada do banco (sourceHandle "default" persistido no proximoSe).
-        sourceHandle: ultimoId === GATILHO_NODE_ID ? undefined : "default",
-        type: "removivel",
-        animated: true,
-      },
-    ]);
+    const novaEdge: Edge = {
+      id: `e${ultimoId}-${novoNode.id}`,
+      source: ultimoId,
+      target: novoNode.id,
+      // Sempre explícito — evita divergência entre edge criada e edge
+      // recarregada do banco (sourceHandle "default" persistido no proximoSe).
+      sourceHandle: ultimoId === GATILHO_NODE_ID ? undefined : "default",
+      type: "removivel",
+      animated: true,
+    };
+    const novosNodes = [...nodes, novoNode];
+    const novasEdges = [...edges, novaEdge];
+    // Auto-organiza (esquerda→direita) já na adição — nunca empilha vertical.
+    const layout = calcularAutoLayout(
+      novosNodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
+      novasEdges.map((e) => ({ source: e.source, target: e.target })),
+      GATILHO_NODE_ID,
+    );
+    setNodes(novosNodes.map((n) => ({ ...n, position: layout.get(n.id) ?? n.position })));
+    setEdges(novasEdges);
     setSelectedId(novoNode.id);
     marcarDirty();
+    setTimeout(() => rfInstance?.fitView?.({ padding: 0.15, duration: 300 }), 50);
   };
 
   /**

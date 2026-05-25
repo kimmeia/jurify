@@ -105,11 +105,13 @@ export function calcularAutoLayout(
   edges: Array<{ source: string; target: string }>,
   gatilhoNodeId: string,
 ): Map<string, { x: number; y: number }> {
-  const NIVEL_HEIGHT = 140;
-  const NODE_WIDTH = 260;
-  const NODE_GAP = 40;
-  const X_CENTER = 480;
-  const Y_START = 60;
+  // Layout ESQUERDA → DIREITA: cada nível avança no eixo X; nós irmãos do
+  // mesmo nível (ex: ramos do if/else) empilham no eixo Y.
+  const NIVEL_WIDTH = 340; // distância horizontal entre níveis
+  const NODE_HEIGHT = 150; // altura aproximada de um card + respiro
+  const NODE_GAP = 36;
+  const X_START = 40;
+  const Y_CENTER = 320;
 
   const adjacencia = new Map<string, string[]>();
   for (const e of edges) {
@@ -152,17 +154,17 @@ export function calcularAutoLayout(
     porNivel.get(nv)!.push(n.id);
   }
 
-  // Posiciona
+  // Posiciona: nível → X, irmãos do nível espalhados no eixo Y (centralizados).
   const resultado = new Map<string, { x: number; y: number }>();
   const niveisOrdenados = Array.from(porNivel.keys()).sort((a, b) => a - b);
   for (const nv of niveisOrdenados) {
     const ids = porNivel.get(nv)!;
-    const larguraTotal = ids.length * NODE_WIDTH + (ids.length - 1) * NODE_GAP;
-    const inicioX = X_CENTER - larguraTotal / 2;
+    const alturaTotal = ids.length * NODE_HEIGHT + (ids.length - 1) * NODE_GAP;
+    const inicioY = Y_CENTER - alturaTotal / 2;
     ids.forEach((id, i) => {
       resultado.set(id, {
-        x: inicioX + i * (NODE_WIDTH + NODE_GAP),
-        y: Y_START + nv * NIVEL_HEIGHT,
+        x: X_START + nv * NIVEL_WIDTH,
+        y: inicioY + i * (NODE_HEIGHT + NODE_GAP),
       });
     });
   }
