@@ -26,9 +26,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Scale } from "lucide-react";
 
+import { Logo } from "./landing/Logo";
 import { Hero } from "./landing/Hero";
+import { Integracoes } from "./landing/Integracoes";
 import { Problemas } from "./landing/Problemas";
 import { Pilares } from "./landing/Pilares";
 import { Demo } from "./landing/Demo";
@@ -84,6 +85,7 @@ export default function Home() {
       {/* Sections */}
       <main>
         <Hero onCta={setAuthOpen} />
+        <Integracoes />
         <Problemas />
         <Pilares />
         <Demo />
@@ -124,32 +126,33 @@ export default function Home() {
 /** Navbar minimalista fixa no topo. */
 function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
   return (
-    <nav className="sticky top-0 z-50 backdrop-blur-md bg-background/80 border-b">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
-            <Scale className="h-5 w-5" />
-          </div>
-          <span className="font-bold text-lg tracking-tight">JuridFlow</span>
-        </div>
+    <nav className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <Logo className="text-xl" />
 
         <div className="flex items-center gap-2">
           <a
+            href="#demo"
+            className="hidden px-3 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
+          >
+            Recursos
+          </a>
+          <a
             href="#pricing"
-            className="hidden sm:inline-block text-sm text-muted-foreground hover:text-foreground transition-colors px-3"
+            className="hidden px-3 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
           >
             Planos
           </a>
           <a
             href="/roadmap"
-            className="hidden sm:inline-block text-sm text-muted-foreground hover:text-foreground transition-colors px-3"
+            className="hidden px-3 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
           >
             Roadmap
           </a>
           <Button variant="ghost" size="sm" onClick={() => onCta("login")}>
             Entrar
           </Button>
-          <Button size="sm" onClick={() => onCta("signup")}>
+          <Button size="sm" className="bg-violet-600 hover:bg-violet-700" onClick={() => onCta("signup")}>
             Começar grátis
           </Button>
         </div>
