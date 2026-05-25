@@ -972,9 +972,14 @@ function SmartFlowEditorInner() {
       });
     }
 
-    // Reconstrói edges a partir de `proximoSe` persistido. Se um passo não
-    // tem `proximoSe`, ligamos linear (passo anterior → este) pra manter o
-    // visual coerente em cenários legados.
+    // Reconstrói edges a partir de `proximoSe` persistido. O encadeamento
+    // linear (passo anterior → este) é APENAS pra cenários legados lineares
+    // (nenhum passo tem proximoSe). Em modo grafo, as arestas vêm só do
+    // proximoSe — senão inventaríamos ligações erradas entre ramos irmãos do
+    // if/else (ex: msg "CPF existe" → msg "CPF não existe").
+    const modoGrafo = passos.some(
+      (p) => p.proximoSe && typeof p.proximoSe === "object" && Object.keys(p.proximoSe).length > 0,
+    );
     for (let i = 0; i < passosNodes.length; i++) {
       const p = passos[i];
       const node = passosNodes[i];
@@ -992,24 +997,17 @@ function SmartFlowEditorInner() {
             animated: true,
           });
         }
-      } else if (i > 0) {
-        // Sem proximoSe: edge linear com handle "default"
+      } else if (i > 0 && !modoGrafo) {
+        // Legado linear: edge passo anterior → este pelo handle "default".
         const prev = passosNodes[i - 1];
-        const prevMapa = passos[i - 1].proximoSe;
-        // Só desenha edge linear se o anterior também não tiver proximoSe
-        // (senão viraria duplicata visual).
-        if (!prevMapa || Object.keys(prevMapa).length === 0) {
-          // Passos não-condicionais saem do handle "default" (bottom).
-          // Incluir `sourceHandle` explícito garante persistência idempotente.
-          es.push({
-            id: `e-${prev.id}-${node.id}`,
-            source: prev.id,
-            target: node.id,
-            sourceHandle: "default",
-            type: "removivel",
-            animated: true,
-          });
-        }
+        es.push({
+          id: `e-${prev.id}-${node.id}`,
+          source: prev.id,
+          target: node.id,
+          sourceHandle: "default",
+          type: "removivel",
+          animated: true,
+        });
       }
     }
 
@@ -1201,21 +1199,29 @@ function SmartFlowEditorInner() {
   const adicionarPasso = (tipo: TipoPasso) => {
     const passos = nodes.filter((n) => n.type === "passo");
     const novoNode = criarNode(tipo, 0);
-    const ultimoId = passos.length > 0
-      ? passos[passos.length - 1].id
-      : GATILHO_NODE_ID;
-    const novaEdge: Edge = {
-      id: `e${ultimoId}-${novoNode.id}`,
-      source: ultimoId,
-      target: novoNode.id,
-      // Sempre explícito — evita divergência entre edge criada e edge
-      // recarregada do banco (sourceHandle "default" persistido no proximoSe).
-      sourceHandle: ultimoId === GATILHO_NODE_ID ? undefined : "default",
-      type: "removivel",
-      animated: true,
-    };
+    // Origem do auto-link: o nó SELECIONADO (se for um passo) — mais previsível —
+    // senão o último passo; sem passos, o gatilho.
+    const selecionado = passos.find((n) => n.id === selectedId);
+    const origem = selecionado ?? passos[passos.length - 1];
+    const origemId = origem?.id ?? GATILHO_NODE_ID;
+    // if/else e loop ROTEIAM por handles específicos (cond_x, fallback, corpo…).
+    // Não criar auto-link "default" a partir deles — senão nasce uma aresta
+    // espúria (ex: ligando ramos irmãos). O usuário liga pelo ramo desejado.
+    const origemRamifica = origem?.data.tipo === "condicional" || origem?.data.tipo === "para_cada_item";
     const novosNodes = [...nodes, novoNode];
-    const novasEdges = [...edges, novaEdge];
+    const novasEdges: Edge[] = origemRamifica
+      ? [...edges]
+      : [
+          ...edges,
+          {
+            id: `e${origemId}-${novoNode.id}`,
+            source: origemId,
+            target: novoNode.id,
+            sourceHandle: origemId === GATILHO_NODE_ID ? undefined : "default",
+            type: "removivel",
+            animated: true,
+          },
+        ];
     // Auto-organiza (esquerda→direita) já na adição — nunca empilha vertical.
     const layout = calcularAutoLayout(
       novosNodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
