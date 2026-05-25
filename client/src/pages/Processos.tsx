@@ -1132,6 +1132,14 @@ function MonitoramentoCard({
                   Aguardando 1ª sync
                 </span>
               )}
+              {mon.subiu2grau && (
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                  title={mon.indicios2grau ? `Indícios de 2º grau: ${mon.indicios2grau}` : "As movimentações sugerem que o processo subiu pro 2º grau (recurso)."}
+                >
+                  2º grau?
+                </span>
+              )}
             </div>
 
             {/* Linha "Título do processo" (classe + 1º assunto) — quando capa disponível */}
