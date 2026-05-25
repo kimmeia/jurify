@@ -861,6 +861,32 @@ async function handleIAConsultar(
 }
 
 /**
+ * Interpreta a saída do "Atendente IA". O agente deve devolver JSON
+ * `{resposta, acao}`. Tolerante: tira cercas markdown; se não for JSON válido
+ * ou faltar `resposta`, trata o texto inteiro como resposta e sem ação. Só
+ * aceita `acao` que esteja na lista de ferramentas habilitadas.
+ */
+export function interpretarSaidaAtendente(
+  raw: string,
+  ferramentas: string[],
+): { resposta: string; acao: string | null } {
+  const stripped = (raw || "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  try {
+    const p = JSON.parse(stripped) as { resposta?: unknown; acao?: unknown };
+    if (p && typeof p.resposta === "string") {
+      const acao = typeof p.acao === "string" && ferramentas.includes(p.acao) ? p.acao : null;
+      return { resposta: p.resposta, acao };
+    }
+  } catch {
+    /* não-JSON → fallback abaixo */
+  }
+  return { resposta: raw || "", acao: null };
+}
+
+/**
  * Handler do passo `ia_atendente` — o "Atendente IA". O agente conduz a conversa
  * inteira (roteiro no prompt) e, a cada turno:
  *   - se decide uma AÇÃO (uma das ferramentas habilitadas) → envia a resposta e

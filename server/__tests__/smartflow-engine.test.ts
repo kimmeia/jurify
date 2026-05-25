@@ -14,6 +14,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   executarCenario,
+  interpretarSaidaAtendente,
   gerarSlotsLivres,
   formatarISOComOffset,
   SmartflowContexto,
@@ -1120,6 +1121,33 @@ describe("SmartFlow Engine", () => {
         duracaoMin: 30, horaInicio: 9, horaFim: 18, ocupados: [], maxSlots: 10,
       });
       expect(slots).toHaveLength(10);
+    });
+  });
+
+  describe("interpretarSaidaAtendente (parser da decisão do agente)", () => {
+    const fer = ["agendar", "transferir"];
+    it("JSON válido com ação habilitada", () => {
+      expect(interpretarSaidaAtendente('{"resposta":"Vou agendar!","acao":"agendar"}', fer))
+        .toEqual({ resposta: "Vou agendar!", acao: "agendar" });
+    });
+    it("ação fora da lista é ignorada (acao null)", () => {
+      expect(interpretarSaidaAtendente('{"resposta":"oi","acao":"deletar"}', fer))
+        .toEqual({ resposta: "oi", acao: null });
+    });
+    it("acao null → conversa", () => {
+      expect(interpretarSaidaAtendente('{"resposta":"como ajudo?","acao":null}', fer))
+        .toEqual({ resposta: "como ajudo?", acao: null });
+    });
+    it("tolera cercas markdown ```json", () => {
+      expect(interpretarSaidaAtendente('```json\n{"resposta":"oi","acao":"transferir"}\n```', fer))
+        .toEqual({ resposta: "oi", acao: "transferir" });
+    });
+    it("texto não-JSON vira resposta (fallback, sem ação)", () => {
+      expect(interpretarSaidaAtendente("Olá, tudo bem?", fer))
+        .toEqual({ resposta: "Olá, tudo bem?", acao: null });
+    });
+    it("vazio → resposta vazia, sem ação", () => {
+      expect(interpretarSaidaAtendente("", fer)).toEqual({ resposta: "", acao: null });
     });
   });
 

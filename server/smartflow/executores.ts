@@ -503,14 +503,55 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
     },
 
     async conversarComAgente(params): Promise<{ resposta: string; acao: string | null }> {
-      // FASE 1 (fundação): por enquanto só CONVERSA — gera a resposta via agente
-      // e não decide ação (acao = null). A FASE 2 implementa a decisão de ação
-      // (saída estruturada / function-calling) com base nas `ferramentas`.
-      // O handler já roteia corretamente quando `acao` vier preenchida.
-      const roteiro = params.roteiro?.trim();
-      const mensagemComRoteiro = roteiro ? `${roteiro}\n\n---\nMensagem do cliente: ${params.mensagem}` : params.mensagem;
-      const resposta = await this.executarAgente(params.agenteId, mensagemComRoteiro, params.contatoId, params.conversaId);
-      return { resposta, acao: null };
+      const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
+      const { interpretarSaidaAtendente } = await import("./engine");
+      const cfg = await obterAgentePorId(escritorioId, params.agenteId);
+      if (!cfg) throw new Error(`Agente ${params.agenteId} não encontrado, inativo ou sem API key configurada.`);
+
+      const ferramentas = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
+      const DESC: Record<string, string> = {
+        agendar: "o cliente confirmou que quer marcar/agendar uma consulta",
+        transferir: "o cliente pediu falar com um atendente humano OU você não consegue resolver",
+        encerrar: "a conversa terminou (cliente se despediu ou não quer mais nada)",
+        gerar_cobranca: "é o momento de gerar uma cobrança/pagamento pro cliente",
+        buscar_processo: "o cliente quer saber de um processo dele e é preciso consultar",
+      };
+      const listaFerramentas = ferramentas.length
+        ? ferramentas.map((f) => `- "${f}": use quando ${DESC[f] || f}`).join("\n")
+        : "(nenhuma ação disponível — apenas converse)";
+
+      const instrucao = [
+        params.roteiro?.trim() ? `ROTEIRO DESTE ATENDIMENTO:\n${params.roteiro.trim()}` : "",
+        "Conduza a conversa de forma humana e natural, seguindo o roteiro. A cada turno, responda ao cliente e decida se é hora de disparar uma AÇÃO.",
+        `AÇÕES disponíveis:\n${listaFerramentas}`,
+        "Só dispare uma ação quando for REALMENTE o momento certo. Na dúvida, mantenha `acao` em null e continue conversando.",
+        'Responda SEMPRE em JSON puro (sem markdown), exatamente neste formato: {"resposta": "<mensagem pro cliente>", "acao": "<uma das ações ou null>"}',
+      ].filter(Boolean).join("\n\n");
+
+      const contextoCliente = await resolverContextoCliente(escritorioId, params.contatoId);
+      const historico = params.conversaId ? await carregarHistoricoConversa(params.conversaId, params.mensagem) : [];
+
+      const raw = await invocarLLM(
+        {
+          provider: cfg.provider,
+          modelo: cfg.modelo,
+          openaiApiKey: cfg.openaiApiKey,
+          anthropicApiKey: cfg.anthropicApiKey,
+          maxTokens: cfg.maxTokens,
+          temperatura: cfg.temperatura,
+          contextoDocumentos: cfg.contextoDocumentos,
+          contextoCliente,
+        },
+        `${cfg.prompt}\n\n${instrucao}`,
+        params.mensagem,
+        historico,
+      );
+
+      const { resposta, acao } = interpretarSaidaAtendente(raw, ferramentas);
+      if (!acao && raw && resposta === raw) {
+        log.warn({ agenteId: params.agenteId }, "conversarComAgente: saída não-JSON, tratada como texto");
+      }
+      return { resposta, acao };
     },
 
     async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {
