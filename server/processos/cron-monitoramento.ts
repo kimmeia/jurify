@@ -29,6 +29,7 @@ import {
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
+import { detectarSubiuParaSegundoGrau } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
@@ -238,6 +239,21 @@ export async function pollarUmMonitoramentoMovs(
         .where(eq(motorMonitoramentos.id, mon.id));
       return { ok: false, detectadas: 0, erro: resultado.mensagemErro ?? "Erro na consulta" };
     }
+
+    // Detecção de grau (issue #529): marca se o processo parece ter subido pro
+    // 2º grau a partir das movimentações do 1º grau. Update ISOLADO pra não
+    // mexer na lógica de dedup/baseline abaixo — só persiste o sinal, pra
+    // validar a heurística com dados reais antes de ligar a consulta do 2º grau.
+    const deteccaoGrau = detectarSubiuParaSegundoGrau(resultado.movimentacoes);
+    await db
+      .update(motorMonitoramentos)
+      .set({
+        subiu2grau: deteccaoGrau.subiu,
+        indicios2grau: deteccaoGrau.indicios.length
+          ? deteccaoGrau.indicios.join(" | ").slice(0, 1000)
+          : null,
+      })
+      .where(eq(motorMonitoramentos.id, mon.id));
 
     const novoHash = hashMovimentacoes(resultado.movimentacoes);
     const isPrimeiraExecucao = !mon.hashUltimasMovs;
