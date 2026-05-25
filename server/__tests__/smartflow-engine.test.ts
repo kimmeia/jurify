@@ -15,6 +15,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   executarCenario,
   interpretarSaidaAtendente,
+  orquestrarAtendente,
   gerarSlotsLivres,
   formatarISOComOffset,
   SmartflowContexto,
@@ -1126,28 +1127,61 @@ describe("SmartFlow Engine", () => {
 
   describe("interpretarSaidaAtendente (parser da decisão do agente)", () => {
     const fer = ["agendar", "transferir"];
+    const con = ["ver_horarios"];
     it("JSON válido com ação habilitada", () => {
-      expect(interpretarSaidaAtendente('{"resposta":"Vou agendar!","acao":"agendar"}', fer))
-        .toEqual({ resposta: "Vou agendar!", acao: "agendar" });
+      expect(interpretarSaidaAtendente('{"resposta":"Vou agendar!","acao":"agendar"}', fer, con))
+        .toEqual({ resposta: "Vou agendar!", acao: "agendar", consulta: null });
     });
-    it("ação fora da lista é ignorada (acao null)", () => {
-      expect(interpretarSaidaAtendente('{"resposta":"oi","acao":"deletar"}', fer))
-        .toEqual({ resposta: "oi", acao: null });
+    it("consulta habilitada é reconhecida", () => {
+      expect(interpretarSaidaAtendente('{"resposta":"deixa eu ver","consulta":"ver_horarios"}', fer, con))
+        .toEqual({ resposta: "deixa eu ver", acao: null, consulta: "ver_horarios" });
     });
-    it("acao null → conversa", () => {
-      expect(interpretarSaidaAtendente('{"resposta":"como ajudo?","acao":null}', fer))
-        .toEqual({ resposta: "como ajudo?", acao: null });
+    it("ação/consulta fora da lista são ignoradas", () => {
+      expect(interpretarSaidaAtendente('{"resposta":"oi","acao":"deletar","consulta":"hackear"}', fer, con))
+        .toEqual({ resposta: "oi", acao: null, consulta: null });
     });
     it("tolera cercas markdown ```json", () => {
-      expect(interpretarSaidaAtendente('```json\n{"resposta":"oi","acao":"transferir"}\n```', fer))
-        .toEqual({ resposta: "oi", acao: "transferir" });
+      expect(interpretarSaidaAtendente('```json\n{"resposta":"oi","acao":"transferir"}\n```', fer, con))
+        .toEqual({ resposta: "oi", acao: "transferir", consulta: null });
     });
-    it("texto não-JSON vira resposta (fallback, sem ação)", () => {
-      expect(interpretarSaidaAtendente("Olá, tudo bem?", fer))
-        .toEqual({ resposta: "Olá, tudo bem?", acao: null });
+    it("texto não-JSON vira resposta (fallback)", () => {
+      expect(interpretarSaidaAtendente("Olá, tudo bem?", fer, con))
+        .toEqual({ resposta: "Olá, tudo bem?", acao: null, consulta: null });
     });
-    it("vazio → resposta vazia, sem ação", () => {
-      expect(interpretarSaidaAtendente("", fer)).toEqual({ resposta: "", acao: null });
+  });
+
+  describe("orquestrarAtendente (vai-e-volta da consulta)", () => {
+    const base = { ferramentas: ["agendar"], consultas: ["ver_horarios"] };
+
+    it("sem consulta → devolve a resposta/ação direto", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"oi","acao":null}');
+      const executarConsulta = vi.fn();
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      expect(r).toEqual({ resposta: "oi", acao: null });
+      expect(executarConsulta).not.toHaveBeenCalled();
+      expect(chamarLLM).toHaveBeenCalledTimes(1);
+    });
+
+    it("consulta → executa, re-chama o agente e então retorna a ação", async () => {
+      const chamarLLM = vi.fn()
+        .mockResolvedValueOnce('{"resposta":"deixa eu ver os horários","consulta":"ver_horarios"}')
+        .mockResolvedValueOnce('{"resposta":"tenho ter 14h e qui 16h, qual prefere?","acao":null}');
+      const executarConsulta = vi.fn().mockResolvedValue("ter 14h, qui 16h");
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta });
+      expect(executarConsulta).toHaveBeenCalledWith("ver_horarios");
+      expect(chamarLLM).toHaveBeenCalledTimes(2);
+      // 2ª chamada recebeu o resultado da consulta no contexto extra
+      expect(chamarLLM.mock.calls[1][0]).toContain("ter 14h, qui 16h");
+      expect(r).toEqual({ resposta: "tenho ter 14h e qui 16h, qual prefere?", acao: null });
+    });
+
+    it("respeita maxRodadas (não consulta infinito)", async () => {
+      const chamarLLM = vi.fn().mockResolvedValue('{"resposta":"vendo...","consulta":"ver_horarios"}');
+      const executarConsulta = vi.fn().mockResolvedValue("x");
+      const r = await orquestrarAtendente({ ...base, chamarLLM, executarConsulta, maxRodadas: 2 });
+      // 2 rodadas de consulta + 1 chamada final forçada
+      expect(executarConsulta).toHaveBeenCalledTimes(2);
+      expect(r.acao).toBeNull();
     });
   });
 

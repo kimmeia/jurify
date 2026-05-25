@@ -504,54 +504,71 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
 
     async conversarComAgente(params): Promise<{ resposta: string; acao: string | null }> {
       const { obterAgentePorId } = await import("../integracoes/router-agentes-ia");
-      const { interpretarSaidaAtendente } = await import("./engine");
+      const { orquestrarAtendente, gerarSlotsLivres } = await import("./engine");
       const cfg = await obterAgentePorId(escritorioId, params.agenteId);
       if (!cfg) throw new Error(`Agente ${params.agenteId} não encontrado, inativo ou sem API key configurada.`);
 
       const ferramentas = (params.ferramentas || []).filter((f) => typeof f === "string" && f.trim());
-      const DESC: Record<string, string> = {
-        agendar: "o cliente confirmou que quer marcar/agendar uma consulta",
-        transferir: "o cliente pediu falar com um atendente humano OU você não consegue resolver",
+      const consultas = (params.consultas || []).filter((c) => typeof c === "string" && c.trim());
+      const DESC_ACAO: Record<string, string> = {
+        agendar: "o cliente confirmou um horário e você vai marcar (informe o horário escolhido na resposta)",
+        transferir: "o cliente pediu falar com um humano OU você não consegue resolver",
         encerrar: "a conversa terminou (cliente se despediu ou não quer mais nada)",
         gerar_cobranca: "é o momento de gerar uma cobrança/pagamento pro cliente",
         buscar_processo: "o cliente quer saber de um processo dele e é preciso consultar",
       };
-      const listaFerramentas = ferramentas.length
-        ? ferramentas.map((f) => `- "${f}": use quando ${DESC[f] || f}`).join("\n")
-        : "(nenhuma ação disponível — apenas converse)";
+      const DESC_CONSULTA: Record<string, string> = {
+        ver_horarios: "precisa saber os horários livres pra oferecer ao cliente (use ANTES de agendar)",
+      };
+      const lista = (m: Record<string, string>, ids: string[]) =>
+        ids.length ? ids.map((id) => `- "${id}": use quando ${m[id] || id}`).join("\n") : "(nenhuma)";
 
       const instrucao = [
         params.roteiro?.trim() ? `ROTEIRO DESTE ATENDIMENTO:\n${params.roteiro.trim()}` : "",
-        "Conduza a conversa de forma humana e natural, seguindo o roteiro. A cada turno, responda ao cliente e decida se é hora de disparar uma AÇÃO.",
-        `AÇÕES disponíveis:\n${listaFerramentas}`,
-        "Só dispare uma ação quando for REALMENTE o momento certo. Na dúvida, mantenha `acao` em null e continue conversando.",
-        'Responda SEMPRE em JSON puro (sem markdown), exatamente neste formato: {"resposta": "<mensagem pro cliente>", "acao": "<uma das ações ou null>"}',
+        "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
+        `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
+        `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
+        "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir. Só dispare uma ação quando for o momento certo; senão, mantenha tudo em null e continue conversando.",
+        'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>"}',
       ].filter(Boolean).join("\n\n");
 
       const contextoCliente = await resolverContextoCliente(escritorioId, params.contatoId);
       const historico = params.conversaId ? await carregarHistoricoConversa(params.conversaId, params.mensagem) : [];
+      const llmCfg = {
+        provider: cfg.provider, modelo: cfg.modelo, openaiApiKey: cfg.openaiApiKey,
+        anthropicApiKey: cfg.anthropicApiKey, maxTokens: cfg.maxTokens, temperatura: cfg.temperatura,
+        contextoDocumentos: cfg.contextoDocumentos, contextoCliente,
+      };
 
-      const raw = await invocarLLM(
-        {
-          provider: cfg.provider,
-          modelo: cfg.modelo,
-          openaiApiKey: cfg.openaiApiKey,
-          anthropicApiKey: cfg.anthropicApiKey,
-          maxTokens: cfg.maxTokens,
-          temperatura: cfg.temperatura,
-          contextoDocumentos: cfg.contextoDocumentos,
-          contextoCliente,
-        },
-        `${cfg.prompt}\n\n${instrucao}`,
-        params.mensagem,
-        historico,
-      );
+      // Executa uma consulta e devolve o resultado como texto pro agente.
+      const executarConsulta = async (nome: string): Promise<string> => {
+        if (nome === "ver_horarios") {
+          const respId = params.consultaConfig?.responsavelId;
+          if (!respId) return "Não há responsável configurado para checar a agenda.";
+          const dias = params.consultaConfig?.dias ?? 7;
+          const dur = params.consultaConfig?.duracaoMin ?? 30;
+          const agora = new Date();
+          const fim = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000);
+          const ocupados = await this.listarAgendaResponsavel({ responsavelId: respId, dataInicio: agora.toISOString(), dataFim: fim.toISOString() });
+          const livres = gerarSlotsLivres({ agora, dias, incluirFimDeSemana: false, duracaoMin: dur, horaInicio: 9, horaFim: 18, ocupados });
+          if (livres.length === 0) return "Sem horários livres nos próximos dias.";
+          return "Horários livres (ISO -03:00):\n" + livres.slice(0, 12).map((s) => `- ${s.inicioISO}`).join("\n");
+        }
+        return `Consulta "${nome}" não implementada.`;
+      };
 
-      const { resposta, acao } = interpretarSaidaAtendente(raw, ferramentas);
-      if (!acao && raw && resposta === raw) {
-        log.warn({ agenteId: params.agenteId }, "conversarComAgente: saída não-JSON, tratada como texto");
-      }
-      return { resposta, acao };
+      return orquestrarAtendente({
+        ferramentas,
+        consultas,
+        executarConsulta,
+        chamarLLM: (extra) =>
+          invocarLLM(
+            llmCfg,
+            extra ? `${cfg.prompt}\n\n${instrucao}\n\nDADOS JÁ CONSULTADOS NESTE TURNO:\n${extra}` : `${cfg.prompt}\n\n${instrucao}`,
+            params.mensagem,
+            historico,
+          ),
+      });
     },
 
     async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {
