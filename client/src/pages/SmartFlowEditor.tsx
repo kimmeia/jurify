@@ -1370,8 +1370,46 @@ function SmartFlowEditorInner() {
   };
 
   /**
-   * Auto-arranja todos os nós em layout top-down (BFS por nível a partir
-   * do gatilho). Ramos do condicional aparecem lado a lado.
+   * Insere uma "conversa pronta": um Atendente IA já configurado (roteiro de
+   * exemplo + ações Agendar/Transferir) ligado aos blocos de ação. Atalho pro
+   * caso comum — o usuário só escolhe o agente. Reusa criarNode + auto-layout.
+   */
+  const inserirConversaPronta = () => {
+    const atendente = criarNode("ia_atendente", 0, {
+      ferramentas: ["agendar", "transferir"],
+      roteiro:
+        "Seja acolhedor e humano. Pergunte o nome do cliente e sobre qual assunto ele precisa de ajuda. " +
+        "Explique brevemente que a primeira conversa é sem compromisso. Tire as dúvidas dele com calma. " +
+        'Quando ele confirmar que quer marcar um atendimento, use a ação "agendar". ' +
+        'Se ele pedir para falar com uma pessoa, use a ação "transferir".',
+    });
+    const agendar = criarNode("agenda_criar", 0, {});
+    const transferir = criarNode("transferir", 0, {});
+    const temEdgeGatilho = edges.some((e) => e.source === GATILHO_NODE_ID);
+    const novosNodes = [...nodes, atendente, agendar, transferir];
+    const novasEdges: Edge[] = [
+      ...edges,
+      ...(temEdgeGatilho
+        ? []
+        : [{ id: `e${GATILHO_NODE_ID}-${atendente.id}`, source: GATILHO_NODE_ID, target: atendente.id, type: "removivel", animated: true } as Edge]),
+      { id: `e${atendente.id}-agendar`, source: atendente.id, target: agendar.id, sourceHandle: "agendar", type: "removivel", animated: true },
+      { id: `e${atendente.id}-transferir`, source: atendente.id, target: transferir.id, sourceHandle: "transferir", type: "removivel", animated: true },
+    ];
+    const layout = calcularAutoLayout(
+      novosNodes.map((n) => ({ id: n.id, position: n.position, type: n.type as string })),
+      novasEdges.map((e) => ({ source: e.source, target: e.target })),
+      GATILHO_NODE_ID,
+    );
+    setNodes(novosNodes.map((n) => ({ ...n, position: layout.get(n.id) ?? n.position })));
+    setEdges(novasEdges);
+    setSelectedId(atendente.id);
+    marcarDirty();
+    setTimeout(() => rfInstance?.fitView?.({ padding: 0.15, duration: 400 }), 60);
+    toast.success("Conversa pronta inserida — escolha o agente no painel à direita.");
+  };
+
+  /**
+   * Auto-arranja todos os nós em layout horizontal (esquerda→direita).
    */
   const autoArranjar = () => {
     const layout = calcularAutoLayout(
@@ -1646,11 +1684,18 @@ function SmartFlowEditorInner() {
           />
 
           {passoNodesOrdenados(nodes).length === 0 && (
-            // Hint discreto no rodapé do canvas — não cobre o nó de gatilho.
-            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
+            // Empty-state: oferece o atalho "conversa pronta" + hint.
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+              <button
+                onClick={inserirConversaPronta}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white px-4 py-2 text-xs font-bold shadow-lg hover:from-violet-700 hover:to-indigo-700 transition-colors"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Inserir conversa pronta
+              </button>
               <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-background/80 backdrop-blur px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm">
                 <Zap className="h-3 w-3 text-muted-foreground/60" />
-                Adicione um passo pela paleta à esquerda ou arraste a bolinha do gatilho.
+                …ou monte do zero pela paleta à esquerda.
               </div>
             </div>
           )}
