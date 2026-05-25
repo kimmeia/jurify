@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow — Direção C</title>
+<link rel="stylesheet" href="base.css" />
+<style>
+  /* ===== Direção C — Editorial / Dor → Solução ===== */
+  body { background: #fbfbf9; }
+
+  .nav { position: sticky; top: 0; z-index: 50; background: rgba(251,251,249,.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .nav .wrap { height: 70px; display: flex; align-items: center; justify-content: space-between; }
+  .nav__links { display: flex; align-items: center; gap: 26px; }
+  .nav__links a { font-size: 14.5px; font-weight: 500; color: var(--ink-2); }
+  .nav__cta { display: flex; align-items: center; gap: 10px; }
+
+  .hero { padding: 64px 0 40px; }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; }
+  .hero h1 { font-family: var(--font-display); font-weight: 800; font-size: 66px; line-height: 0.98; letter-spacing: -.035em; color: var(--ink); }
+  .hero h1 .strike { position: relative; color: var(--muted-2); white-space: nowrap; }
+  .hero h1 .strike::after { content:""; position:absolute; left:-2px; right:-2px; top:52%; height:6px; background: var(--rose); border-radius:3px; transform: rotate(-2deg); }
+  .hero h1 .g { color: var(--violet); }
+  .hero p.sub { font-size: 19px; color: var(--ink-2); margin-top: 24px; line-height: 1.6; max-width: 540px; }
+  .hero .ctas { display: flex; gap: 14px; margin-top: 30px; align-items: center; }
+  .hero .micro { font-size: 13.5px; color: var(--muted); margin-top: 18px; }
+  .hero .micro b { color: var(--ink-2); }
+
+  /* visual 5 → 1 */
+  .chaos { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 26px; box-shadow: var(--shadow); }
+  .chaos__lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-2); margin-bottom: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--muted); background: #f4f4f2; border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; position: relative; }
+  .chip .x { color: var(--rose); font-weight: 800; }
+  .arrowdown { display: flex; justify-content: center; margin: 16px 0; }
+  .arrowdown svg { width: 26px; height: 26px; stroke: var(--violet); }
+  .one { display: flex; align-items: center; gap: 12px; background: linear-gradient(120deg, var(--violet-soft), #fff); border: 1.5px solid var(--violet); border-radius: 14px; padding: 16px 18px; }
+  .one .big { font-family: var(--font-display); font-weight: 800; font-size: 22px; }
+  .one .big .f { color: var(--violet); font-weight: 600; }
+  .one .ok { margin-left: auto; }
+  .one .ok svg { width: 24px; height: 24px; stroke: var(--emerald); }
+
+  .wideshot { padding: 24px 0 0; }
+  .wideshot .wrap { max-width: 1120px; }
+  .wideshot .browser { box-shadow: var(--shadow-lg); }
+
+  .sec { padding: 90px 0; }
+  .sec--alt { background: #fff; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .sec__head { max-width: 680px; margin: 0 auto 50px; text-align: center; }
+  .sec__head.left { text-align: left; margin-left: 0; }
+  .sec__head h2 { font-family: var(--font-display); font-weight: 800; font-size: 44px; letter-spacing: -.025em; margin-top: 12px; line-height: 1.05; }
+  .sec__head p { font-size: 18px; color: var(--muted); margin-top: 14px; line-height: 1.55; }
+
+  /* módulos em lista 2 colunas editorial */
+  .modlist { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 56px; }
+  .ml { display: flex; gap: 16px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .ml__ic { width: 46px; height: 46px; border-radius: 12px; background: var(--violet-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .ml__ic svg { width: 23px; height: 23px; stroke: var(--violet); }
+  .ml h3 { font-family: var(--font-display); font-size: 19px; font-weight: 700; margin-bottom: 5px; }
+  .ml p { font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+
+  .feat { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .feat.rev > .browser { order: -1; }
+  .feat .copy h2 { font-family: var(--font-display); font-weight: 800; font-size: 38px; letter-spacing: -.02em; line-height: 1.08; margin: 12px 0 16px; }
+  .feat .copy p { font-size: 17px; color: var(--muted); line-height: 1.6; }
+  .feat ul { list-style: none; margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .feat li { display: flex; gap: 11px; font-size: 15px; }
+  .feat li svg { width: 21px; height: 21px; stroke: var(--emerald); flex-shrink: 0; margin-top: 1px; }
+
+  .price { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .plan { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 26px 22px; display: flex; flex-direction: column; position: relative; }
+  .plan.pop { border: 2px solid var(--violet); box-shadow: var(--shadow-violet); }
+  .plan .tag { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--violet); color: #fff; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 999px; }
+  .plan h3 { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
+  .plan .who { font-size: 13px; color: var(--muted); margin: 4px 0 18px; min-height: 34px; }
+  .plan .val { font-size: 38px; font-weight: 800; letter-spacing: -.02em; font-family: var(--font-display); }
+  .plan .val small { font-size: 15px; color: var(--muted); font-weight: 500; }
+  .plan .trial { font-size: 12.5px; color: var(--violet); font-weight: 600; margin-top: 6px; min-height: 18px; }
+  .plan .btn { margin: 18px 0; justify-content: center; }
+  .plan ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .plan li { display: flex; gap: 9px; font-size: 13.5px; line-height: 1.4; }
+  .plan li svg { width: 17px; height: 17px; stroke: var(--emerald); flex-shrink: 0; margin-top: 2px; }
+  .price__note { text-align: center; font-size: 13px; color: var(--muted); margin-top: 26px; }
+
+  .faq { max-width: 760px; margin: 0 auto; }
+  .qa { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 18px 22px; margin-bottom: 12px; }
+  .qa h4 { font-family: var(--font-display); font-size: 17px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  .qa h4 .plus { color: var(--violet); font-size: 22px; font-weight: 400; }
+  .qa p { font-size: 14.5px; color: var(--muted); line-height: 1.6; margin-top: 10px; }
+
+  .cta { margin: 20px auto 96px; max-width: 1120px; }
+  .cta__box { background: var(--navy); border-radius: 28px; padding: 66px 40px; text-align: center; position: relative; overflow: hidden; }
+  .cta__box::before { content:""; position:absolute; top:-120px; right:-80px; width:480px; height:480px; background: radial-gradient(circle, rgba(124,58,237,.4), transparent 65%); }
+  .cta__box > * { position: relative; z-index: 1; }
+  .cta__box h2 { font-family: var(--font-display); font-weight: 800; font-size: 46px; color: #fff; letter-spacing: -.025em; }
+  .cta__box p { color: rgba(255,255,255,.82); font-size: 18px; margin: 14px 0 30px; }
+
+  .foot { border-top: 1px solid var(--line); padding: 50px 0 40px; background: #fff; }
+  .foot__grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 30px; }
+  .foot p { font-size: 14px; color: var(--muted); margin-top: 12px; max-width: 260px; }
+  .foot h4 { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+  .foot ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .foot ul a { font-size: 14px; color: var(--muted); }
+  .foot__bar { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 22px; display: flex; justify-content: space-between; font-size: 13px; color: var(--muted-2); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="wrap">
+    <span class="logo logo--md"><span class="j">Jurid</span><span class="f">Flow</span></span>
+    <div class="nav__links">
+      <a href="#">Recursos</a>
+      <a href="#">Planos</a>
+      <a href="#">Roadmap</a>
+    </div>
+    <div class="nav__cta">
+      <button class="btn btn-ghost btn-sm">Entrar</button>
+      <button class="btn btn-primary btn-sm">Começar grátis</button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg> Sistema completo do escritório</span>
+      <h1>Pare de pular entre <span class="strike">5 sistemas</span>.<br/>Tudo num <span class="g">só lugar</span>.</h1>
+      <p class="sub">Atendimento no WhatsApp, contratos automáticos, financeiro com Asaas, comissões sem Excel e processos monitorados. O escritório inteiro, integrado de verdade.</p>
+      <div class="ctas">
+        <button class="btn btn-primary btn-lg">Começar grátis<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        <button class="btn btn-outline btn-lg">Ver demonstração</button>
+      </div>
+      <p class="micro"><b>14 dias grátis</b> · Sem cartão de crédito · Cancele quando quiser</p>
+    </div>
+
+    <!-- visual 5 → 1 -->
+    <div class="chaos">
+      <div class="chaos__lbl">Antes — o escritório espalhado</div>
+      <div class="chips">
+        <span class="chip"><span class="x">✕</span> Planilha de comissões</span>
+        <span class="chip"><span class="x">✕</span> WhatsApp pessoal</span>
+        <span class="chip"><span class="x">✕</span> Emissor de boleto</span>
+        <span class="chip"><span class="x">✕</span> Word de contratos</span>
+        <span class="chip"><span class="x">✕</span> Agenda solta</span>
+        <span class="chip"><span class="x">✕</span> Site de tribunal</span>
+      </div>
+      <div class="arrowdown"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/></svg></div>
+      <div class="one">
+        <span class="logo logo--sm"><span class="j">Jurid</span><span class="f">Flow</span></span>
+        <span style="font-size:13px; color:var(--muted);">— um login pra tudo</span>
+        <span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- WIDE SHOT: Financeiro -->
+<section class="wideshot">
+  <div class="wrap">
+    <div class="browser">
+      <div class="browser__bar">
+        <span class="browser__dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>
+        <span class="browser__url">app.juridflow.com.br/financeiro</span>
+      </div>
+      <div class="app" style="min-height:420px;">
+        <aside class="side">
+          <div class="side__head">
+            <div class="side__avatar">SA</div>
+            <div><div class="side__firm">Silva &amp; Associados</div><div class="side__sub">Escritório</div></div>
+          </div>
+          <nav class="nav">
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg> Dashboard</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="9" y2="11"/></svg> Cálculos</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Clientes</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Modelos</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Agenda</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg> Processos</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><path d="M21 16v1a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2z"/><path d="M3 16v1a2 2 0 0 0 2 2h1v-5H5a2 2 0 0 0-2 2z"/></svg> Atendimento</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> SmartFlow</a>
+            <a class="nav__item"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg> Relatórios</a>
+            <a class="nav__item is-active"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Financeiro</a>
+          </nav>
+        </aside>
+
+        <div class="main">
+          <div class="pad">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+              <span class="bdg bdg--emerald"><span class="dot" style="background:#10b981"></span> Asaas conectado</span>
+              <span class="bdg bdg--slate">Saldo Asaas: R$ 18.240</span>
+              <span style="margin-left:auto;" class="bdg bdg--violet">+ Nova cobrança</span>
+            </div>
+
+            <div class="c" style="margin-bottom:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div class="kpi__val t-emerald" style="font-size:26px;">R$ 142.800</div>
+                  <div class="muted" style="font-size:11px;">recebido nos últimos 6 meses</div>
+                </div>
+                <div style="display:flex; gap:4px;">
+                  <span class="bdg bdg--slate">3m</span><span class="bdg bdg--violet">6m</span><span class="bdg bdg--slate">12m</span>
+                </div>
+              </div>
+              <div class="bars mt10" style="height:60px;">
+                <i style="height:48%"></i><i style="height:62%"></i><i style="height:55%"></i><i style="height:78%"></i><i style="height:68%"></i><i style="height:90%"></i><i style="height:82%"></i><i style="height:100%"></i><i style="height:88%"></i><i style="height:74%"></i><i style="height:92%"></i><i style="height:85%"></i>
+              </div>
+            </div>
+
+            <div class="kpis" style="grid-template-columns:repeat(4,1fr); margin-bottom:14px;">
+              <div class="kpi"><div class="kpi__label">Recebido</div><div class="kpi__val t-emerald" style="font-size:16px;">R$ 47.350</div></div>
+              <div class="kpi"><div class="kpi__label">Pendente</div><div class="kpi__val t-amber" style="font-size:16px;">R$ 12.100</div></div>
+              <div class="kpi"><div class="kpi__label">Vencido</div><div class="kpi__val t-rose" style="font-size:16px;">R$ 1.800</div></div>
+              <div class="kpi"><div class="kpi__label">Inadimplência</div><div class="kpi__val" style="font-size:16px;">3,7%</div></div>
+            </div>
+
+            <div class="row"><span class="row__name">Maria Silva</span><span class="bdg bdg--emerald">Pago</span><span class="muted" style="font-size:10.5px;">Pix</span><span class="row__val">R$ 1.500</span><span class="muted" style="font-size:10.5px;">12/out</span></div>
+            <div class="row"><span class="row__name">Carlos Mendes</span><span class="bdg bdg--amber">Pendente</span><span class="muted" style="font-size:10.5px;">Boleto</span><span class="row__val">R$ 3.200</span><span class="muted" style="font-size:10.5px;">18/out</span></div>
+            <div class="row"><span class="row__name">Ana Paula</span><span class="bdg bdg--emerald">Pago</span><span class="muted" style="font-size:10.5px;">Cartão</span><span class="row__val">R$ 850</span><span class="muted" style="font-size:10.5px;">09/out</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MÓDULOS (editorial list) -->
+<section class="sec sec--alt">
+  <div class="wrap">
+    <div class="sec__head">
+      <span class="eyebrow">14 módulos, 1 sistema</span>
+      <h2>Tudo que o escritório faz num dia</h2>
+      <p>Do primeiro "oi" no WhatsApp até a comissão lançada quando o cliente paga. Cada módulo alimenta o próximo.</p>
+    </div>
+    <div class="modlist">
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div><div><h3>CRM jurídico</h3><p>Cadastro completo de cliente: CPF/CNPJ, profissão, estado civil, endereço estruturado, documentos e histórico financeiro.</p></div></div>
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><path d="M21 16v1a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2z"/><path d="M3 16v1a2 2 0 0 0 2 2h1v-5H5a2 2 0 0 0-2 2z"/></svg></div><div><h3>Atendimento omnichannel</h3><p>WhatsApp, Instagram e e-mail num inbox único, com brief de IA, pipeline de leads e Compliance Guard.</p></div></div>
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><h3>Financeiro com Asaas</h3><p>Pix, boleto e cartão emitidos na plataforma, cobrança recorrente, importação de OFX, DRE e fluxo de caixa.</p></div></div>
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><div><h3>Comissões automáticas</h3><p>Atendente fechou o caso? O sistema calcula a comissão e gera a despesa pendente. Sem briga no fim do mês.</p></div></div>
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg></div><div><h3>Contratos &amp; assinatura</h3><p>Modelos DOCX com placeholders que puxam do cadastro. Gera, envia, o cliente assina pelo link e o PDF volta carimbado.</p></div></div>
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="9" y2="11"/></svg></div><div><h3>Cálculos jurídicos</h3><p>Bancário (PRICE/SAC, abusividade, anatocismo), trabalhista, tributário, previdenciário e imobiliário. Parecer em PDF.</p></div></div>
+      <div class="ml"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg></div><div><h3>Processos &amp; Kanban</h3><p>Monitoramento por CPF/CNPJ com motor próprio, análise estratégica por IA, alertas de movimentação e kanban de prazos.</p></div></div>
+      <div class="ml" style="border-bottom:none;"><div class="ml__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><div><h3>SmartFlow + Agentes IA</h3><p>Automações visuais que cobram inadimplente, qualificam lead novo e respondem dúvidas técnicas. Trabalho 24h.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE: Processos -->
+<section class="sec">
+  <div class="wrap">
+    <div class="feat">
+      <div class="copy">
+        <span class="eyebrow">Processos</span>
+        <h2>Nunca mais perca uma movimentação.</h2>
+        <p>Cadastra o CPF/CNPJ do cliente e o JuridFlow monitora os tribunais por você. Cada movimentação vira alerta — e a IA já te entrega a análise e a mensagem pronta pro cliente.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>Motor próprio de busca direto nos tribunais (PJe · TJCE)</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>Alertas por palavra-chave nas movimentações</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>Cofre de credenciais OAB pra processos em segredo de justiça</span></li>
+        </ul>
+      </div>
+      <div class="browser">
+        <div class="browser__bar">
+          <span class="browser__dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>
+          <span class="browser__url">app.juridflow.com.br/processos</span>
+        </div>
+        <div style="padding:16px; background:var(--bg);">
+          <div style="display:flex; gap:6px; margin-bottom:12px;">
+            <span class="bdg bdg--violet">CNJ</span><span class="bdg bdg--slate">CPF</span><span class="bdg bdg--slate">CNPJ</span>
+            <div style="flex:1; background:#fff; border:1px solid var(--line); border-radius:8px; font-size:11px; padding:6px 9px; color:var(--muted-2);">0801234-56.2026.8.06.0001</div>
+          </div>
+          <div class="c" style="margin-bottom:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="dot" style="background:#10b981; width:8px; height:8px;"></span>
+              <b style="font-size:12px;" class="mono">0801234-56.2026.8.06.0001</b>
+              <span class="bdg bdg--slate" style="margin-left:auto;">TJCE · 1ª inst.</span>
+            </div>
+            <div class="muted" style="font-size:11px; margin-top:6px;">Procedimento Comum Cível · 3ª Vara Cível de Fortaleza · Valor: <span class="t-emerald" style="font-weight:600;">R$ 85.000</span></div>
+          </div>
+          <div class="ai-card">
+            <b>✦ Análise estratégica IA</b>
+            <div style="margin-top:6px; color:var(--ink-2);"><b>Situação:</b> sentença publicada, prazo recursal de 15 dias correndo.</div>
+            <div style="margin-top:6px; color:var(--ink-2);"><b>Ação:</b> avaliar apelação. Prazo final: 14/nov.</div>
+            <div style="margin-top:8px; background:var(--emerald-bg); border-radius:8px; padding:8px 10px; font-size:10.5px;"><b style="color:#047857;">Mensagem pronta pro cliente:</b> "Olá! Saiu a sentença do seu processo. Vamos conversar sobre os próximos passos?" <span class="bdg bdg--emerald" style="margin-left:4px;">Copiar</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="sec sec--alt">
+  <div class="wrap">
+    <div class="sec__head">
+      <span class="eyebrow">Planos</span>
+      <h2>Comece grátis. Cresça quando quiser.</h2>
+      <p>14 dias de teste em qualquer plano pago. Sem cartão de crédito pra começar.</p>
+    </div>
+    <div class="price">
+      <div class="plan">
+        <h3>Free</h3><div class="who">Advogado começando</div><div class="val">R$ 0</div><div class="trial">&nbsp;</div>
+        <button class="btn btn-outline">Criar conta grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 usuário</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 10 clientes</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 3 créditos de cálculos/mês</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Modelos de contrato básicos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte por e-mail</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>Básico</h3><div class="who">Advogado autônomo ou dupla</div><div class="val">R$ 97<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div>
+        <button class="btn btn-outline">Começar grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 colaborador</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 100 clientes ativos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Cálculos jurídicos completos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Financeiro com Asaas</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte por chat</li>
+        </ul>
+      </div>
+      <div class="plan pop">
+        <span class="tag">Mais popular</span>
+        <h3>Intermediário</h3><div class="who">Escritório pequeno (3–10 advogados)</div><div class="val">R$ 247<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div>
+        <button class="btn btn-primary">Começar grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 5 colaboradores</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Clientes ilimitados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Atendimento WhatsApp + Instagram</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Comissões automáticas</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> SmartFlow básico</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>Completo</h3><div class="who">Escritório com equipe (10+)</div><div class="val">R$ 497<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div>
+        <button class="btn btn-outline">Começar grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Colaboradores ilimitados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Múltiplas conexões WhatsApp</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Agentes IA personalizados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Monitoramento de processos ilimitado</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte prioritário + onboarding</li>
+        </ul>
+      </div>
+    </div>
+    <p class="price__note">Valores em reais. Pagamento via Pix, boleto ou cartão (Asaas). Você só é cobrado se autorizar — nada automático no fim do teste.</p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="sec">
+  <div class="wrap">
+    <div class="sec__head"><span class="eyebrow">FAQ</span><h2>Perguntas frequentes</h2></div>
+    <div class="faq">
+      <div class="qa"><h4>O JuridFlow substitui o Astrea / Aurum / Projuris? <span class="plus">+</span></h4><p>Em CRM, atendimento, financeiro e cobrança, sim — o JuridFlow cobre o que esses fazem e mais. Na parte de peticionamento profundo, focamos em modelos editáveis em DOCX, não em geradores fechados.</p></div>
+      <div class="qa"><h4>Funciona sem conexão com o Asaas? <span class="plus">+</span></h4><p>Sim. Despesas, comissões, modelos de contrato e CRM funcionam 100% offline. A cobrança você pode lançar manualmente (dinheiro, transferência, cartão presencial) e o sistema mantém o controle de a-receber.</p></div>
+      <div class="qa"><h4>Preciso de cartão de crédito pra começar? <span class="plus">+</span></h4><p>Não. Os 14 dias grátis são liberados só com e-mail. Depois você escolhe um plano e a forma de pagamento. Não cobramos automaticamente — você precisa autorizar.</p></div>
+      <div class="qa"><h4>Como migro do meu sistema atual? <span class="plus">+</span></h4><p>Importação de clientes via CSV e, pra cobrança, é só conectar a API key do Asaas. O suporte ajuda na migração nos planos Intermediário e Completo.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta__box">
+    <h2>Um login. O escritório inteiro.</h2>
+    <p>14 dias grátis em qualquer plano. Sem cartão de crédito. Configura em 5 minutos.</p>
+    <button class="btn btn-light btn-lg">Criar conta grátis<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__grid">
+      <div>
+        <span class="logo logo--sm"><span class="j">Jurid</span><span class="f">Flow</span></span>
+        <p>O sistema operacional do escritório de advocacia moderno.</p>
+      </div>
+      <div><h4>Produto</h4><ul><li><a>Recursos</a></li><li><a>Planos</a></li><li><a>Roadmap</a></li><li><a>Demonstração</a></li></ul></div>
+      <div><h4>Legal</h4><ul><li><a>Termos de uso</a></li><li><a>Privacidade</a></li></ul></div>
+      <div><h4>Suporte</h4><ul><li><a>contato@juridflow.com.br</a></li></ul></div>
+    </div>
+    <div class="foot__bar"><span>© 2026 JuridFlow. Todos os direitos reservados.</span><span>Feito pra advogados que detestam Excel.</span></div>
+  </div>
+</footer>
+
+</body>
+</html>
