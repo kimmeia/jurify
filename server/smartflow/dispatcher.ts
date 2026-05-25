@@ -376,25 +376,29 @@ async function marcarConversaEmAtendimento(conversaId: number, escritorioId: num
  */
 /** Lê os campos personalizados do contato (JSON serializado).
  *  Retorna `{}` se não houver, JSON inválido ou erro. Nunca lança. */
-async function lerCamposPersonalizados(
+async function lerDadosCliente(
   escritorioId: number,
   contatoId: number | undefined,
-): Promise<Record<string, unknown>> {
-  if (!contatoId) return {};
+): Promise<{ campos: Record<string, unknown>; tags: string[] }> {
+  if (!contatoId) return { campos: {}, tags: [] };
   const db = await getDb();
-  if (!db) return {};
+  if (!db) return { campos: {}, tags: [] };
   try {
     const { contatos } = await import("../../drizzle/schema");
+    const { parseTagsTolerante } = await import("../escritorio/db-crm");
     const [c] = await db
-      .select({ camposPersonalizados: contatos.camposPersonalizados })
+      .select({ camposPersonalizados: contatos.camposPersonalizados, tags: contatos.tags })
       .from(contatos)
       .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
       .limit(1);
-    if (!c?.camposPersonalizados) return {};
-    const parsed = JSON.parse(c.camposPersonalizados);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    let campos: Record<string, unknown> = {};
+    if (c?.camposPersonalizados) {
+      const parsed = JSON.parse(c.camposPersonalizados);
+      if (parsed && typeof parsed === "object") campos = parsed;
+    }
+    return { campos, tags: parseTagsTolerante(c?.tags) };
   } catch {
-    return {};
+    return { campos: {}, tags: [] };
   }
 }
 
@@ -1073,9 +1077,9 @@ export async function dispararMensagemCanal(
       return { executou: true, respostas, execId: pendente.id };
     }
 
-    // Lê campos personalizados do cliente (definidos em Configurações)
-    // pra disponibilizar como `cliente.campos.<chave>` no contexto.
-    const camposCliente = await lerCamposPersonalizados(escritorioId, params.contatoId);
+    // Lê campos personalizados + tags do cliente pra disponibilizar como
+    // `cliente.campos.<chave>` e `cliente.tags` no contexto (Decisão "tem a tag").
+    const dadosCliente = await lerDadosCliente(escritorioId, params.contatoId);
 
     const contexto: SmartflowContexto = {
       mensagem: params.mensagem,
@@ -1085,7 +1089,7 @@ export async function dispararMensagemCanal(
       conversaId: params.conversaId,
       canalId: params.canalId,
       canalTipo: params.canalTipo,
-      cliente: { campos: camposCliente },
+      cliente: { campos: dadosCliente.campos, tags: dadosCliente.tags },
     };
 
     // 1. Tenta cenários `mensagem_canal` com filtro de canal

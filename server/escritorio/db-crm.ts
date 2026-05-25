@@ -17,7 +17,7 @@ import { toIsoString } from "../_core/dates";
  * em vez de `["DEFESA EM CRIMINAL"]`), retorna array com o texto bruto
  * como único item ao invés de explodir a query inteira.
  */
-function parseTagsTolerante(raw: unknown): string[] {
+export function parseTagsTolerante(raw: unknown): string[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw.filter((v) => typeof v === "string");
   if (typeof raw !== "string") return [];

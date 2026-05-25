@@ -2003,6 +2003,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "asaas_marcar_recebida",         // confirma recebimento manual
     "definir_variavel",              // grava variável no contexto da execução
     "definir_campo_personalizado",   // persiste em contatos.camposPersonalizados
+    "contato_tags",                  // adiciona/remove/define tags do contato (CRM)
   ]).notNull(),
   /** Configuração do passo (JSON — prompt, template, condição, etc) */
   config: text("configPasso"),

@@ -373,6 +373,15 @@ export interface SmartflowExecutores {
     modo: "adicionar" | "remover" | "definir";
   }) => Promise<boolean>;
   /**
+   * Atualiza as tags do CONTATO (CRM, contatos.tags). Mesmos modos do Kanban.
+   * Retorna a lista de tags resultante (pra refletir no contexto).
+   */
+  atualizarTagsContato: (params: {
+    contatoId: number;
+    tags: string[];
+    modo: "adicionar" | "remover" | "definir";
+  }) => Promise<string[]>;
+  /**
    * Cria cobrança avulsa no Asaas pra um contato. Resolve customerId
    * via vínculo asaasClientes. Retorna payment id + link.
    */
@@ -1257,6 +1266,14 @@ function avaliarCondicao(
       const [min, max] = lo <= hi ? [lo, hi] : [hi, lo];
       return a >= min && a <= max;
     }
+    case "tem_tag":
+    case "nao_tem_tag": {
+      // `valorAtual` deve resolver pra lista de tags do contato (cliente.tags).
+      const arr = Array.isArray(valorAtual) ? valorAtual : [];
+      const alvo = String(valor ?? "").trim().toLowerCase();
+      const tem = alvo.length > 0 && arr.some((t) => String(t).trim().toLowerCase() === alvo);
+      return operador === "tem_tag" ? tem : !tem;
+    }
     default:
       // Operador desconhecido — fallback `igual` para não quebrar cenários
       // legados que salvaram strings estranhas no campo.
@@ -1609,6 +1626,39 @@ async function handleKanbanTags(
     return { sucesso: true, contexto: { ...ctx, kanbanCardId: cardId } };
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `Kanban tags: ${err.message}` };
+  }
+}
+
+/**
+ * Handler do passo `contato_tags` — adiciona/remove/define as tags do CONTATO
+ * (CRM). Atualiza também `ctx.cliente.tags` pra que uma Decisão "tem a tag X"
+ * logo depois enxergue a mudança.
+ */
+async function handleContatoTags(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as { tags?: string; modo?: "adicionar" | "remover" | "definir" };
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Tags do contato: sem contatoId no contexto." };
+  }
+  const { interpolarVariaveis } = await import("./interpolar");
+  const tags = interpolarVariaveis(String(cfg.tags ?? ""), ctx as any)
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  const modo = cfg.modo ?? "adicionar";
+  if (modo !== "definir" && tags.length === 0) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Tags do contato: lista de tags vazia." };
+  }
+  try {
+    const novas = await exec.atualizarTagsContato({ contatoId, tags, modo });
+    const clienteAtual = (ctx.cliente && typeof ctx.cliente === "object" ? ctx.cliente : {}) as Record<string, unknown>;
+    return { sucesso: true, contexto: { ...ctx, cliente: { ...clienteAtual, tags: novas } } };
+  } catch (err: any) {
+    return { sucesso: false, contexto: ctx, mensagemErro: `Tags do contato: ${err.message}` };
   }
 }
 
@@ -2100,6 +2150,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   asaas_marcar_recebida: handleAsaasMarcarRecebida,
   definir_variavel: handleDefinirVariavel,
   definir_campo_personalizado: handleDefinirCampoPersonalizado,
+  contato_tags: handleContatoTags,
 };
 
 export interface ExecutarCenarioResultado {

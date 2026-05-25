@@ -113,6 +113,9 @@ const SAIDA_POR_TIPO: Record<TipoPasso, VarSaida[]> = {
   asaas_marcar_recebida: [],
   definir_variavel: [],
   definir_campo_personalizado: [],
+  contato_tags: [
+    { path: "cliente.tags", label: "Tags atualizadas do contato (lista)", tipo: "lista" },
+  ],
 };
 
 /** Heurística pra mapear tipo lógico do campo extraído → tipo de exibição. */
