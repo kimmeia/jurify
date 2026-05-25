@@ -604,6 +604,17 @@ function MenuConectarPasso({
   onFechar: () => void;
 }) {
   const [busca, setBusca] = useState("");
+  // Grupos grandes (>5 itens) começam recolhidos pra lista não virar paredão.
+  const [recolhidos, setRecolhidos] = useState<Set<string>>(
+    () => new Set(agrupar<TipoPassoMeta>(TIPO_PASSO_META).filter((g) => g.itens.length > 5).map((g) => g.id)),
+  );
+  const toggleGrupo = (id: string) =>
+    setRecolhidos((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onFechar();
@@ -651,29 +662,42 @@ function MenuConectarPasso({
           {grupos.length === 0 ? (
             <p className="text-xs text-muted-foreground px-1 py-3 text-center">Nada encontrado.</p>
           ) : (
-            grupos.map((g) => (
-              <div key={g.id} className="mb-2 last:mb-0">
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 px-1 mb-0.5 font-semibold">
-                  {g.label}
-                </p>
-                <div className="space-y-0.5">
-                  {g.itens.map((t) => {
-                    const Icon = TIPO_ICON[t.id] ?? Zap;
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => onEscolher(t.id)}
-                        className="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-accent"
-                        title={t.descricao}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="flex-1 truncate">{t.label}</span>
-                      </button>
-                    );
-                  })}
+            grupos.map((g) => {
+              // Buscando → sempre aberto (mostra os matches). Senão, respeita o recolhimento.
+              const aberto = q.length > 0 || !recolhidos.has(g.id);
+              return (
+                <div key={g.id} className="mb-1.5 last:mb-0">
+                  <button
+                    onClick={() => toggleGrupo(g.id)}
+                    className="w-full flex items-center gap-1.5 px-1 py-1 rounded hover:bg-accent/50 text-[9px] uppercase tracking-wider text-muted-foreground/80 font-semibold"
+                  >
+                    <ChevronDown
+                      className={`h-3 w-3 shrink-0 transition-transform ${aberto ? "" : "-rotate-90"}`}
+                    />
+                    <span className="flex-1 text-left">{g.label}</span>
+                    <span className="text-muted-foreground/50 font-bold">{g.itens.length}</span>
+                  </button>
+                  {aberto && (
+                    <div className="space-y-0.5 mt-0.5">
+                      {g.itens.map((t) => {
+                        const Icon = TIPO_ICON[t.id] ?? Zap;
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => onEscolher(t.id)}
+                            className="w-full flex items-center gap-2 pl-5 pr-2 py-1 rounded text-left text-xs hover:bg-accent"
+                            title={t.descricao}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="flex-1 truncate">{t.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
