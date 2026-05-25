@@ -189,7 +189,7 @@ export async function salvarSessao(
  */
 export async function recuperarSessao(
   credencialId: number,
-  options: { tentarRelogin?: boolean } = {},
+  options: { tentarRelogin?: boolean; forcarRelogin?: boolean } = {},
 ): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
@@ -200,8 +200,9 @@ export async function recuperarSessao(
     .where(eq(cofreSessoes.credencialId, credencialId))
     .limit(1);
 
-  // Sessão presente e não expirada — caminho feliz
-  if (row && (!row.expiraEmEstimado || new Date(row.expiraEmEstimado) >= new Date())) {
+  // Sessão presente e não expirada — caminho feliz (a menos que forcarRelogin,
+  // usado quando a consulta bateu numa sessão morta no PDPJ apesar da estimativa).
+  if (!options.forcarRelogin && row && (!row.expiraEmEstimado || new Date(row.expiraEmEstimado) >= new Date())) {
     try {
       const json = decrypt(row.cookiesEnc, row.cookiesIv, row.cookiesTag);
       await db
@@ -236,7 +237,23 @@ export async function recuperarSessao(
  * sessão e marca credencial como "ativa". Se falha, marca "expirada" pra
  * UI sinalizar que precisa de ação manual.
  */
-async function tentarReloginAutomatico(credencialId: number): Promise<string | null> {
+// Dedup de relogin concorrente por credencial: quando vários polls da MESMA
+// credencial detectam a sessão caída ao mesmo tempo (ex: "Atualizar todos" com
+// 9 processos), só UM faz o login real; os outros aguardam e reusam a sessão
+// nova. Evita logins simultâneos no PDPJ (rate-limit / códigos 2FA colidindo).
+const reloginEmAndamento = new Map<number, Promise<string | null>>();
+
+function tentarReloginAutomatico(credencialId: number): Promise<string | null> {
+  const emAndamento = reloginEmAndamento.get(credencialId);
+  if (emAndamento) return emAndamento;
+  const promessa = tentarReloginAutomaticoImpl(credencialId).finally(() => {
+    reloginEmAndamento.delete(credencialId);
+  });
+  reloginEmAndamento.set(credencialId, promessa);
+  return promessa;
+}
+
+async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
 

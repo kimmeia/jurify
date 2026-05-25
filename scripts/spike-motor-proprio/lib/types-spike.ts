@@ -121,6 +121,7 @@ export type CategoriaErro =
   | "timeout"
   | "parse_falhou"
   | "tribunal_indisponivel"
+  | "sessao_expirada"
   | "outro";
 
 /**
