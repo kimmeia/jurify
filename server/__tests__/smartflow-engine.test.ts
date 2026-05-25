@@ -32,6 +32,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     listarAcoesCliente: vi.fn().mockResolvedValue([]),
     buscarMovimentacoesProcesso: vi.fn().mockResolvedValue([]),
     executarAgente: vi.fn().mockResolvedValue("resposta-do-agente"),
+    extrairCamposDoAgente: vi.fn().mockResolvedValue({}),
     buscarHorarios: vi.fn().mockResolvedValue(["2026-04-15 10:00", "2026-04-15 14:00", "2026-04-16 09:00"]),
     criarAgendamento: vi.fn().mockResolvedValue("booking_123"),
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
@@ -144,6 +145,29 @@ describe("SmartFlow Engine", () => {
       expect(resultado.contexto.respostaIA).toBe("Claro! Posso ajudar com sua dúvida.");
       expect(resultado.respostas).toHaveLength(1);
       expect(resultado.respostas[0]).toContain("Posso ajudar");
+    });
+
+    it("com agente, extrai campos e salva no contexto (cliente.campos)", async () => {
+      const executarAgente = vi.fn().mockResolvedValue("Claro!");
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ cpf: "123", data_agendamento: "2026-06-01" });
+      const exec = criarMockExecutores({ executarAgente, extrairCamposDoAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { agenteId: 7 } },
+      ];
+      const r = await executarCenario(passos, { mensagem: "meu cpf é 123", contatoId: 5, conversaId: 9 }, exec);
+      expect(r.sucesso).toBe(true);
+      expect(extrairCamposDoAgente).toHaveBeenCalledWith(7, 5, 9);
+      expect((r.contexto.cliente as any).campos).toMatchObject({ cpf: "123", data_agendamento: "2026-06-01" });
+    });
+
+    it("não extrai campos quando NÃO há agente (prompt livre)", async () => {
+      const extrairCamposDoAgente = vi.fn().mockResolvedValue({ cpf: "x" });
+      const exec = criarMockExecutores({ chamarIA: vi.fn().mockResolvedValue("oi"), extrairCamposDoAgente });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "ia_responder", config: { prompt: "seja gentil" } },
+      ];
+      await executarCenario(passos, { mensagem: "oi", contatoId: 5, conversaId: 9 }, exec);
+      expect(extrairCamposDoAgente).not.toHaveBeenCalled();
     });
 
     it("usa executarAgente quando config.agenteId está presente", async () => {
