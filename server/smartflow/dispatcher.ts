@@ -1395,24 +1395,11 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     const cenario = await carregarCenarioPorId(exec.escritorioId, exec.cenarioId);
     if (!cenario) return { retomada: false, erro: "Cenário não encontrado" };
 
-    // Pula os passos já executados. `passoAtual` guarda quantos rodaram,
-    // incluindo o próprio "esperar" que disparou a pausa, então o próximo
-    // índice a executar é passoAtual (0-indexed).
-    const passosRestantes = cenario.passos
-      .slice()
-      .sort((a, b) => a.ordem - b.ordem)
-      .slice(exec.passoAtual);
-
-    if (passosRestantes.length === 0) {
-      // Nada a retomar — marca como concluído.
-      await db
-        .update(smartflowExecucoes)
-        .set({ status: "concluido", retomarEm: null })
-        .where(eq(smartflowExecucoes.id, execId));
-      return { retomada: true };
-    }
-
     const contextoBase: SmartflowContexto = exec.contexto ? JSON.parse(exec.contexto) : {};
+    // Em qual nó de aguardar pausou (se foi um wait que estourou o timeout).
+    // Lido ANTES de limpar as flags.
+    const waitNodeId = (contextoBase as any).aguardandoNodeClienteId as string | null | undefined;
+
     // Limpa flags de espera antes de continuar, senão o finalizar interpreta
     // como se tivesse pedido outra pausa.
     delete (contextoBase as any).esperando;
@@ -1421,8 +1408,39 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
     delete (contextoBase as any).aguardandoContatoId;
     delete (contextoBase as any).aguardandoTimeoutMinutos;
     delete (contextoBase as any).aguardandoOpcoes;
+    delete (contextoBase as any).aguardandoNodeClienteId;
 
     const executores = criarExecutoresReais(exec.escritorioId);
+    const modoGrafo = cenario.passos.some(
+      (p: any) => p.proximoSe && typeof p.proximoSe === "object" && Object.keys(p.proximoSe).length > 0,
+    );
+
+    // TIMEOUT de um "Aguardar resposta" em modo grafo: reentra no nó e segue o
+    // ramo "timeout" (cliente não respondeu no prazo). Sem ramo "timeout"
+    // configurado, o fluxo encerra naturalmente. Roda o cenário INTEIRO.
+    if (waitNodeId && modoGrafo) {
+      (contextoBase as any).__resumindoWaitClienteId = waitNodeId;
+      (contextoBase as any).__resumindoWaitMotivo = "timeout";
+      const resultado = await executarCenario(cenario.passos, contextoBase, executores);
+      await finalizarExecucao(execId, resultado);
+      log.info({ execId, sucesso: resultado.sucesso }, "SmartFlow: execução retomada por timeout (ramo timeout)");
+      return { retomada: true };
+    }
+
+    // Legado / `esperar`: continua de `passoAtual` por ordem (linear).
+    const passosRestantes = cenario.passos
+      .slice()
+      .sort((a, b) => a.ordem - b.ordem)
+      .slice(exec.passoAtual);
+
+    if (passosRestantes.length === 0) {
+      await db
+        .update(smartflowExecucoes)
+        .set({ status: "concluido", retomarEm: null })
+        .where(eq(smartflowExecucoes.id, execId));
+      return { retomada: true };
+    }
+
     const resultado = await executarCenario(passosRestantes, contextoBase, executores);
 
     // Ajusta passosExecutados pra refletir o total acumulado.
