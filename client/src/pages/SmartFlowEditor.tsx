@@ -372,6 +372,13 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
           <HandleRow handleId="corpo" label="🔁 corpo do loop" cor="#f59e0b" />
           <HandleRow handleId="depois" label="depois (terminou)" cor="#3b82f6" />
         </div>
+      ) : data.tipo === "whatsapp_aguardar_resposta" ? (
+        // Aguardar tem 2 saídas: "default" (respondeu) e "timeout" (não
+        // respondeu no prazo — pra encerrar ou seguir outro caminho).
+        <div className="border-t bg-muted/20 py-1">
+          <HandleRow handleId="default" label="respondeu →" cor="#22c55e" />
+          <HandleRow handleId="timeout" label="não respondeu (tempo)" italic cor="#f59e0b" />
+        </div>
       ) : (
         <Handle type="source" position={Position.Right} id="default" className="!bg-muted-foreground/40" />
       )}
