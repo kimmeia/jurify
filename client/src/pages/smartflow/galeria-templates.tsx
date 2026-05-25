@@ -26,13 +26,16 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
-  TEMPLATES_SMARTFLOW,
   camposWizardDoTemplate,
   type CampoWizard,
   type TemplateSmartflow,
 } from "@shared/smartflow-templates";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
 import { useSmartFlowVariaveis } from "@/hooks/useSmartFlowVariaveis";
+
+// Templates exibidos na galeria. Por enquanto vazio — só "Criar do zero".
+// Serão populados pelos templates que o admin criar e marcar como disponíveis.
+const TEMPLATES_GALERIA: TemplateSmartflow[] = [];
 
 const ICONES: Record<string, LucideIcon> = {
   "message-circle-heart": MessageCircleHeart,
@@ -143,13 +146,13 @@ export function GaleriaTemplatesDialog({
                 Como você quer começar?
               </DialogTitle>
               <DialogDescription>
-                Escolha um fluxo pronto pra ajustar, ou comece do zero. Os templates
-                nascem desativados — você revisa e ativa quando quiser.
+                Comece um fluxo do zero. Modelos prontos serão disponibilizados pelo
+                admin em breve.
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-              {TEMPLATES_SMARTFLOW.map((tpl) => {
+              {TEMPLATES_GALERIA.map((tpl) => {
                 const Icon = ICONES[tpl.icone] ?? Sparkles;
                 return (
                   <button
