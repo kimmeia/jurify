@@ -60,6 +60,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   ia_classificar: Brain,
   ia_responder: Bot,
   ia_consultar: Search,
+  ia_atendente: Bot,
   ia_extrair_campos: Sparkles,
   crm_buscar_contato: Search,
   crm_listar_acoes_cliente: BookOpen,

@@ -127,7 +127,9 @@ export function validarGrafo(
 
   // Nós que PAUSAM o fluxo (aguardar resposta) — tornam um ciclo seguro.
   const nodesDeEspera = new Set(
-    passos.filter((p) => p.tipo === "whatsapp_aguardar_resposta").map((p) => p.nodeId),
+    passos
+      .filter((p) => p.tipo === "whatsapp_aguardar_resposta" || p.tipo === "ia_atendente")
+      .map((p) => p.nodeId),
   );
 
   // Ciclo SEM um "Aguardar resposta" no caminho → erro (giraria pra sempre).
