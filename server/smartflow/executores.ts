@@ -502,6 +502,23 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       );
     },
 
+    async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {
+      try {
+        const { extrairECaptarCampos } = await import("../integracoes/agente-captura-campos");
+        const capturados = await extrairECaptarCampos({ agenteId, contatoId, conversaId, escritorioId });
+        const out: Record<string, unknown> = {};
+        for (const c of capturados) out[c.chave] = c.valor;
+        if (capturados.length > 0) {
+          log.info({ agenteId, contatoId, campos: Object.keys(out) }, "SmartFlow: campos capturados pelo agente no fluxo");
+        }
+        return out;
+      } catch (err: any) {
+        // Não-fatal: extração nunca quebra a resposta do agente.
+        log.warn({ err: err?.message || String(err), agenteId }, "SmartFlow: falha ao extrair campos do agente");
+        return {};
+      }
+    },
+
     async buscarHorarios(duracao: number): Promise<string[]> {
       try {
         const client = await obterCalcomClient(escritorioId, duracao);

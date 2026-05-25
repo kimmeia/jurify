@@ -235,6 +235,13 @@ export interface SmartflowExecutores {
    * prompt como contexto do cliente (mesma motivação do `chamarIA`).
    */
   executarAgente: (agenteId: number, mensagem: string, contatoId?: number, conversaId?: number) => Promise<string>;
+  /**
+   * Extrai os campos personalizados configurados no agente (`camposCaptura`)
+   * a partir da conversa e salva no cadastro do contato. Escopo: só roda quando
+   * o agente é usado num passo do fluxo (não age sozinho). Retorna mapa
+   * chave→valor dos campos capturados (pra refletir no contexto). Não-fatal.
+   */
+  extrairCamposDoAgente: (agenteId: number, contatoId: number, conversaId: number) => Promise<Record<string, unknown>>;
   /** Busca horários disponíveis no Cal.com */
   buscarHorarios: (duracao: number) => Promise<string[]>;
   /** Cria agendamento no Cal.com */
@@ -758,8 +765,20 @@ async function handleIAResponder(
     // anteriores dessa conversa pra ela lembrar do que já foi dito.
     const conversaIdCtx = typeof ctx.conversaId === "number" ? ctx.conversaId : undefined;
     let resposta: string;
+    let contextoOut: SmartflowContexto = { ...ctx };
     if (typeof agenteId === "number" && agenteId > 0) {
       resposta = await exec.executarAgente(agenteId, mensagem, contatoIdCtx, conversaIdCtx);
+      // Captura ESCOPADA: como o agente está sendo usado num passo do fluxo,
+      // ele extrai os campos configurados (camposCaptura) da conversa e salva
+      // no cadastro — sem "agir sozinho" fora de fluxo. Não-fatal.
+      if (contatoIdCtx && conversaIdCtx) {
+        const capturados = await exec.extrairCamposDoAgente(agenteId, contatoIdCtx, conversaIdCtx);
+        if (capturados && Object.keys(capturados).length > 0) {
+          const clienteAtual = (ctx.cliente && typeof ctx.cliente === "object" ? ctx.cliente : {}) as Record<string, unknown>;
+          const camposAtual = (clienteAtual.campos && typeof clienteAtual.campos === "object" ? clienteAtual.campos : {}) as Record<string, unknown>;
+          contextoOut = { ...contextoOut, cliente: { ...clienteAtual, campos: { ...camposAtual, ...capturados } } };
+        }
+      }
     } else {
       const promptExtra = passo.config.prompt || "";
       const prompt = `Você é um assistente jurídico educado e profissional. ${promptExtra}\n\nResponda de forma clara e concisa.`;
@@ -768,7 +787,7 @@ async function handleIAResponder(
 
     return {
       sucesso: true,
-      contexto: { ...ctx, respostaIA: resposta },
+      contexto: { ...contextoOut, respostaIA: resposta },
       resposta,
     };
   } catch (err: any) {
