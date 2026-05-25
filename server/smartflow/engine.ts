@@ -251,6 +251,10 @@ export interface SmartflowExecutores {
     agenteId: number;
     roteiro?: string;
     ferramentas: string[];
+    /** Consultas habilitadas (busca-e-volta), ex: ["ver_horarios"]. */
+    consultas?: string[];
+    /** Config das consultas (ex: responsável/duração/dias pra "ver_horarios"). */
+    consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
     mensagem: string;
     contatoId?: number;
     conversaId?: number;
@@ -862,28 +866,67 @@ async function handleIAConsultar(
 
 /**
  * Interpreta a saída do "Atendente IA". O agente deve devolver JSON
- * `{resposta, acao}`. Tolerante: tira cercas markdown; se não for JSON válido
- * ou faltar `resposta`, trata o texto inteiro como resposta e sem ação. Só
- * aceita `acao` que esteja na lista de ferramentas habilitadas.
+ * `{resposta, acao, consulta}`. Tolerante: tira cercas markdown; se não for
+ * JSON válido ou faltar `resposta`, trata o texto inteiro como resposta sem
+ * ação/consulta. Só aceita `acao`/`consulta` que estejam nas listas habilitadas.
+ *   - `acao`: ferramenta de AÇÃO (encerra o turno, roteia o fluxo).
+ *   - `consulta`: ferramenta de CONSULTA (busca um dado e volta pro agente).
  */
 export function interpretarSaidaAtendente(
   raw: string,
   ferramentas: string[],
-): { resposta: string; acao: string | null } {
+  consultas: string[] = [],
+): { resposta: string; acao: string | null; consulta: string | null } {
   const stripped = (raw || "")
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
   try {
-    const p = JSON.parse(stripped) as { resposta?: unknown; acao?: unknown };
+    const p = JSON.parse(stripped) as { resposta?: unknown; acao?: unknown; consulta?: unknown };
     if (p && typeof p.resposta === "string") {
       const acao = typeof p.acao === "string" && ferramentas.includes(p.acao) ? p.acao : null;
-      return { resposta: p.resposta, acao };
+      const consulta = typeof p.consulta === "string" && consultas.includes(p.consulta) ? p.consulta : null;
+      return { resposta: p.resposta, acao, consulta };
     }
   } catch {
     /* não-JSON → fallback abaixo */
   }
-  return { resposta: raw || "", acao: null };
+  return { resposta: raw || "", acao: null, consulta: null };
+}
+
+/**
+ * Orquestra o "vai-e-volta" do Atendente IA: chama o agente; se ele pedir uma
+ * CONSULTA, executa-a, injeta o resultado e RE-CHAMA o agente (até `maxRodadas`
+ * pra evitar loop infinito). Retorna a resposta final + a ação escolhida (ou
+ * null). Puro/injetável — `chamarLLM` e `executarConsulta` vêm de fora (testável).
+ *
+ * `chamarLLM(extraContexto)`: devolve o JSON cru do agente; `extraContexto`
+ * acumula os resultados das consultas já feitas neste turno.
+ */
+export async function orquestrarAtendente(opts: {
+  ferramentas: string[];
+  consultas: string[];
+  chamarLLM: (extraContexto: string) => Promise<string>;
+  executarConsulta: (nome: string) => Promise<string>;
+  maxRodadas?: number;
+}): Promise<{ resposta: string; acao: string | null }> {
+  const max = Math.max(1, opts.maxRodadas ?? 3);
+  let extra = "";
+  for (let i = 0; i < max; i++) {
+    const raw = await opts.chamarLLM(extra);
+    const { resposta, acao, consulta } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
+    if (consulta) {
+      const resultado = await opts.executarConsulta(consulta);
+      extra += `${extra ? "\n\n" : ""}[Resultado da consulta "${consulta}"]:\n${resultado}`;
+      continue; // re-chama o agente com o resultado em mãos
+    }
+    return { resposta, acao };
+  }
+  // Esgotou as rodadas de consulta — força uma resposta final sem ação,
+  // pedindo pro agente concluir com o que já tem.
+  const raw = await opts.chamarLLM(`${extra}\n\n[Pare de consultar e responda ao cliente agora.]`);
+  const { resposta } = interpretarSaidaAtendente(raw, opts.ferramentas, opts.consultas);
+  return { resposta, acao: null };
 }
 
 /**
@@ -900,11 +943,18 @@ async function handleIaAtendente(
   ctx: SmartflowContexto,
   exec: SmartflowExecutores,
 ): Promise<PassoResultado> {
-  const cfg = passo.config as { agenteId?: number; roteiro?: string; ferramentas?: string[] };
+  const cfg = passo.config as {
+    agenteId?: number;
+    roteiro?: string;
+    ferramentas?: string[];
+    consultas?: string[];
+    consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
+  };
   if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
   }
   const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
+  const consultas = Array.isArray(cfg.consultas) ? cfg.consultas.filter((c) => typeof c === "string") : [];
   // Mensagem do turno: a resposta nova (retomada) ou a 1ª mensagem.
   const mensagem = typeof ctx.respostaUsuario === "string" && ctx.respostaUsuario.trim()
     ? ctx.respostaUsuario
@@ -917,6 +967,8 @@ async function handleIaAtendente(
       agenteId: cfg.agenteId,
       roteiro: cfg.roteiro,
       ferramentas,
+      consultas,
+      consultaConfig: cfg.consultaConfig,
       mensagem,
       contatoId,
       conversaId,

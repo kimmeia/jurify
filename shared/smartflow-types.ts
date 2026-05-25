@@ -211,6 +211,9 @@ export interface ConfigIaConsultar {
  */
 export type FerramentaAtendente = "agendar" | "transferir" | "encerrar" | "gerar_cobranca" | "buscar_processo";
 
+/** Consultas (busca-e-volta) que o Atendente IA pode usar no meio da conversa. */
+export type ConsultaAtendente = "ver_horarios";
+
 /**
  * Config do passo `ia_atendente` — o agente conduz a conversa inteira (roteiro
  * no prompt), junta mensagens picadas, captura campos do cadastro, e dispara
@@ -222,8 +225,12 @@ export interface ConfigIaAtendente {
   agenteId?: number;
   /** Roteiro/instruções extra em português (somado ao prompt do agente). */
   roteiro?: string;
-  /** Ferramentas habilitadas — cada uma é uma saída do nó. */
+  /** Ferramentas (ações) habilitadas — cada uma é uma saída do nó. */
   ferramentas?: FerramentaAtendente[];
+  /** Consultas (busca-e-volta) habilitadas — NÃO viram saída; voltam pro agente. */
+  consultas?: ConsultaAtendente[];
+  /** Config das consultas (ex: responsável/duração/dias da "ver_horarios"). */
+  consultaConfig?: { responsavelId?: number; duracaoMin?: number; dias?: number };
   /** Janela (segundos) pra juntar mensagens picadas. 0/ausente = desligado. */
   acumularSegundos?: number;
 }
