@@ -1086,6 +1086,40 @@ describe("SmartFlow Engine", () => {
     });
   });
 
+  describe("retomada por timeout (ramo 'timeout' do aguardar)", () => {
+    const passos = (): Passo[] => [
+      { id: 1, ordem: 1, tipo: "whatsapp_aguardar_resposta", clienteId: "wait", config: { template: "Ainda aí?" }, proximoSe: { default: "resp", timeout: "fim" } },
+      { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "resp", config: { template: "RESPONDEU" } },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "fim", config: { template: "ENCERRADO POR TIMEOUT" } },
+    ];
+    const base = { canalId: 1, telefoneCliente: "5585", __resumindoWaitClienteId: "wait" };
+
+    it("motivo timeout → segue ramo 'timeout'", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(passos(), { ...base, __resumindoWaitMotivo: "timeout" }, exec);
+      expect(r.respostas).toContain("ENCERRADO POR TIMEOUT");
+      expect(r.respostas).not.toContain("RESPONDEU");
+    });
+
+    it("retomada por mensagem (sem motivo) → ramo 'default'", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(passos(), { ...base, respostaUsuario: "oi" }, exec);
+      expect(r.respostas).toContain("RESPONDEU");
+      expect(r.respostas).not.toContain("ENCERRADO POR TIMEOUT");
+    });
+
+    it("timeout sem ramo 'timeout' configurado → encerra sem erro", async () => {
+      const exec = criarMockExecutores();
+      const semTimeout: Passo[] = [
+        { id: 1, ordem: 1, tipo: "whatsapp_aguardar_resposta", clienteId: "wait", config: { template: "Ainda aí?" }, proximoSe: { default: "resp" } },
+        { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "resp", config: { template: "RESPONDEU" } },
+      ];
+      const r = await executarCenario(semTimeout, { ...base, __resumindoWaitMotivo: "timeout" }, exec);
+      expect(r.sucesso).toBe(true);
+      expect(r.respostas).toHaveLength(0); // não segue default; encerra
+    });
+  });
+
   describe("retomada graph-aware (loop conversacional)", () => {
     // Fluxo: IA responde → aguarda resposta → decisão (quer agendar?).
     // Se "sim" → transferir (sai). Senão → volta pra IA (loop até confirmar).

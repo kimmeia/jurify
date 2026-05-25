@@ -2299,10 +2299,16 @@ async function walkInterno(opts: {
       passoAtual.clienteId === resumeWaitId &&
       passoAtual.tipo === "whatsapp_aguardar_resposta"
     ) {
+      // Motivo da retomada decide o ramo: "timeout" → ramo "timeout" (cliente
+      // não respondeu no prazo); senão → "default" (respondeu). Sem ramo
+      // "timeout" configurado, resolverProximo devolve null → fluxo encerra.
+      const motivo = (contexto as any).__resumindoWaitMotivo as string | undefined;
+      const chave = motivo === "timeout" ? "timeout" : "default";
       contexto = { ...contexto };
       delete (contexto as any).__resumindoWaitClienteId;
+      delete (contexto as any).__resumindoWaitMotivo;
       delete (contexto as any).aguardandoNodeClienteId;
-      atual = resolverProximo(passoAtual, "default", porClienteId, indicePorId, modoGrafo, passos);
+      atual = resolverProximo(passoAtual, chave, porClienteId, indicePorId, modoGrafo, passos);
       continue;
     }
 
