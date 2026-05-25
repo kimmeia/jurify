@@ -274,7 +274,7 @@ export class PjeTjceScraper {
         return {
           ...baseResultado,
           latenciaMs: Date.now() - inicio,
-          categoriaErro: "tribunal_indisponivel",
+          categoriaErro: "sessao_expirada",
           mensagemErro: "Sessão expirada — PDPJ-cloud redirecionou pra login do Keycloak",
           finalizadoEm: new Date().toISOString(),
         };
@@ -684,7 +684,7 @@ export class PjeTjceScraper {
         return {
           ...baseResultado,
           latenciaMs: Date.now() - inicio,
-          categoriaErro: "tribunal_indisponivel",
+          categoriaErro: "sessao_expirada",
           mensagemErro: "Sessão expirada — PDPJ-cloud redirecionou pra login",
         };
       }
