@@ -596,6 +596,7 @@ function MenuConectarPasso({
   onEscolher: (tipo: TipoPasso) => void;
   onFechar: () => void;
 }) {
+  const [busca, setBusca] = useState("");
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onFechar();
@@ -603,6 +604,18 @@ function MenuConectarPasso({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onFechar]);
+
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  const q = norm(busca.trim());
+  const grupos = agrupar<TipoPassoMeta>(TIPO_PASSO_META)
+    .map((g) => ({
+      ...g,
+      itens: q
+        ? g.itens.filter((t) => norm(t.label).includes(q) || norm(t.descricao || "").includes(q))
+        : g.itens,
+    }))
+    .filter((g) => g.itens.length > 0);
+  const primeiro = grupos[0]?.itens[0];
 
   return (
     <>
@@ -612,35 +625,50 @@ function MenuConectarPasso({
         style={{ cursor: "default" }}
       />
       <div
-        className="fixed z-50 bg-popover border rounded-md shadow-lg p-2 w-64 max-h-[60vh] overflow-y-auto"
+        className="fixed z-50 bg-popover border rounded-md shadow-lg w-72 max-h-[62vh] flex flex-col overflow-hidden"
         style={{ top: y, left: x }}
       >
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-1 mb-1 font-semibold">
-          Conectar a um novo passo
-        </p>
-        {agrupar<TipoPassoMeta>(TIPO_PASSO_META).map((g) => (
-          <div key={g.id} className="mb-2 last:mb-0">
-            <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 px-1 mb-0.5 font-semibold">
-              {g.label}
-            </p>
-            <div className="space-y-0.5">
-              {g.itens.map((t) => {
-                const Icon = TIPO_ICON[t.id] ?? Zap;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => onEscolher(t.id)}
-                    className="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-accent"
-                    title={t.descricao}
-                  >
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 truncate">{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <div className="p-2 border-b">
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && primeiro) onEscolher(primeiro.id);
+            }}
+            placeholder="Buscar passo…"
+            className="w-full h-8 px-2 text-xs rounded border bg-background focus:outline-none focus:ring-1 focus:ring-violet-400"
+          />
+        </div>
+        <div className="overflow-y-auto p-2">
+          {grupos.length === 0 ? (
+            <p className="text-xs text-muted-foreground px-1 py-3 text-center">Nada encontrado.</p>
+          ) : (
+            grupos.map((g) => (
+              <div key={g.id} className="mb-2 last:mb-0">
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground/70 px-1 mb-0.5 font-semibold">
+                  {g.label}
+                </p>
+                <div className="space-y-0.5">
+                  {g.itens.map((t) => {
+                    const Icon = TIPO_ICON[t.id] ?? Zap;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => onEscolher(t.id)}
+                        className="w-full flex items-center gap-2 px-2 py-1 rounded text-left text-xs hover:bg-accent"
+                        title={t.descricao}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="flex-1 truncate">{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </>
   );
