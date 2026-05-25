@@ -767,8 +767,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
   { id: "ia_classificar", label: "Classificar intenção (IA)", descricao: "Usa IA para categorizar a mensagem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "ia" },
   { id: "ia_responder", label: "Responder com IA", descricao: "Gera resposta contextual com IA.", cor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", grupo: "ia" },
   { id: "ia_consultar", label: "Consultar IA (uso interno)", descricao: "Faz uma pergunta à IA e salva a resposta num campo. NÃO envia ao cliente.", cor: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", grupo: "ia" },
-  // ia_atendente: fora da paleta de propósito até o cérebro (fase 2) + tela
-  // (fase 3) ficarem prontos. O tipo/handler já existem (fundação).
+  { id: "ia_atendente", label: "Atendente IA", descricao: "Conduz a conversa inteira (qualifica, explica, tira dúvidas) e dispara ações (agendar, transferir...) quando decide. O roteiro vai no prompt.", cor: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", grupo: "ia" },
   { id: "ia_extrair_campos", label: "Extrair dados (IA)", descricao: "IA lê a mensagem e extrai campos estruturados (CPF, email, datas...). Salva no contexto e opcionalmente no cadastro do cliente.", cor: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300", grupo: "ia" },
   { id: "crm_buscar_contato", label: "Buscar contato (CRM)", descricao: "Resolve um cliente pelo telefone, email ou CPF. Popula contatoId, nome e campos personalizados.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },
   { id: "crm_listar_acoes_cliente", label: "Listar ações do cliente", descricao: "Lista os processos vinculados ao contato — útil pra IA saber sobre quais ações ele tem.", cor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", grupo: "crm" },

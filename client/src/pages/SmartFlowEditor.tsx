@@ -266,6 +266,14 @@ const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
   definir_campo_personalizado: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
 };
 
+const FERRAMENTA_ATENDENTE_LABEL: Record<string, string> = {
+  agendar: "🗓 quer agendar →",
+  transferir: "🙋 quer humano →",
+  encerrar: "👋 encerrar →",
+  gerar_cobranca: "💰 gerar cobrança →",
+  buscar_processo: "📂 ver processo →",
+};
+
 function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
@@ -294,6 +302,9 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
   const isCondicional = data.tipo === "condicional";
   const condicoes = isCondicional && Array.isArray((data.config as any).condicoes)
     ? ((data.config as any).condicoes as Array<{ id: string; label?: string }>)
+    : [];
+  const ferramentasAtendente = data.tipo === "ia_atendente" && Array.isArray((data.config as any).ferramentas)
+    ? ((data.config as any).ferramentas as string[])
     : [];
 
   return (
@@ -381,6 +392,16 @@ function PassoNodeView({ data, selected }: NodeProps<PassoNode>) {
           <HandleRow handleId="default" label="respondeu →" cor="#22c55e" />
           <HandleRow handleId="timeout" label="não respondeu (tempo)" italic cor="#f59e0b" />
         </div>
+      ) : data.tipo === "ia_atendente" ? (
+        // Atendente IA: uma saída por ferramenta habilitada. O agente decide
+        // quando disparar cada uma; sem ferramenta, ele só conversa (sem saída).
+        ferramentasAtendente.length > 0 ? (
+          <div className="border-t bg-muted/20 py-1">
+            {ferramentasAtendente.map((f) => (
+              <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
+            ))}
+          </div>
+        ) : null
       ) : (
         <Handle type="source" position={Position.Right} id="default" className="!bg-muted-foreground/40" />
       )}
@@ -759,6 +780,11 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
       const alvo = typeof config.salvarEm === "string" && config.salvarEm.trim() ? `→ {{${config.salvarEm}}}` : "";
       const q = typeof config.prompt === "string" ? truncar(config.prompt, 40) : "";
       return [q, alvo].filter(Boolean).join(" ");
+    }
+    case "ia_atendente": {
+      const ags = typeof config.agenteId === "number" && config.agenteId > 0 ? `Agente #${config.agenteId}` : "(sem agente)";
+      const fers = Array.isArray(config.ferramentas) ? (config.ferramentas as string[]).length : 0;
+      return `${ags} · ${fers} ação(ões)`;
     }
     case "calcom_horarios":
       return config.duracao ? `${config.duracao} min` : "";
@@ -2161,6 +2187,96 @@ function ConfigIaResponderFields({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+const FERRAMENTAS_ATENDENTE: Array<{ id: string; label: string }> = [
+  { id: "agendar", label: "Agendar consulta" },
+  { id: "transferir", label: "Transferir p/ humano" },
+  { id: "encerrar", label: "Encerrar conversa" },
+  { id: "gerar_cobranca", label: "Gerar cobrança (Asaas)" },
+  { id: "buscar_processo", label: "Buscar processo do cliente" },
+];
+
+function ConfigIaAtendenteFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const variaveis = useSmartFlowVariaveis();
+  const agenteId = typeof cfg.agenteId === "number" ? cfg.agenteId : 0;
+  const { data: agentes, isLoading } = (trpc as any).agentesIa.listar.useQuery();
+  const agentesAtivos: Array<{ id: number; nome: string; modelo: string; ativo: boolean; temApiKey: boolean }> =
+    (agentes || []).filter((a: any) => a.ativo);
+  const ferramentas: string[] = Array.isArray(cfg.ferramentas) ? (cfg.ferramentas as string[]) : [];
+  const toggleFerramenta = (id: string, on: boolean) => {
+    const set = new Set(ferramentas);
+    if (on) set.add(id);
+    else set.delete(id);
+    onChange({ ferramentas: Array.from(set) });
+  };
+  const insertRoteiro = (path: string) => {
+    const atual = String(cfg.roteiro || "");
+    onChange({ roteiro: atual + (atual ? " " : "") + `{{${path}}}` });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-2">
+        <p className="text-[11px] text-sky-800 dark:text-sky-300">
+          O agente <strong>conduz a conversa inteira</strong> (pelo roteiro abaixo), junta mensagens picadas e <strong>captura campos</strong> do cadastro. Quando decide, dispara uma das <strong>ações</strong> marcadas — cada uma vira uma saída do bloco.
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Agente (cérebro)</Label>
+        <Select value={String(agenteId || "")} onValueChange={(v) => onChange({ agenteId: Number(v) })}>
+          <SelectTrigger><SelectValue placeholder={isLoading ? "Carregando…" : "Escolha um agente"} /></SelectTrigger>
+          <SelectContent>
+            {agentesAtivos.map((a) => (
+              <SelectItem key={a.id} value={String(a.id)}>
+                {a.nome} <span className="text-muted-foreground ml-2 text-[10px]">{a.modelo}</span>
+                {!a.temApiKey && <span className="ml-2 text-[9px] text-destructive">sem API key</span>}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">Crie/edite agentes em <strong>Integrações → Agentes de IA</strong> (lá você também aponta os campos a capturar).</p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <Label className="text-xs">Roteiro / instruções (em português)</Label>
+          <VariableTrigger inputId="cfg-atendente-roteiro" variaveis={variaveis} onInsert={insertRoteiro} />
+        </div>
+        <VariableInput
+          id="cfg-atendente-roteiro"
+          as="textarea"
+          rows={6}
+          highlight
+          value={String(cfg.roteiro ?? "")}
+          onChange={(v) => onChange({ roteiro: v })}
+          variaveis={variaveis}
+          placeholder={"Ex: Seja acolhedor. Pergunte o nome e sobre qual assunto. Explique que a 1ª consulta é sem custo. Pergunte se ficou dúvida e responda. Só então ofereça agendar — se topar, use a ação Agendar; se pedir atendente, use Transferir."}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">Aqui mora o "quase humano": descreva o atendimento completo. O agente segue isso conversando.</p>
+      </div>
+
+      <div>
+        <Label className="text-xs">Ações que o agente pode disparar</Label>
+        <div className="space-y-1 mt-1">
+          {FERRAMENTAS_ATENDENTE.map((f) => (
+            <label key={f.id} className="flex items-center gap-2 cursor-pointer rounded border p-2 bg-muted/20 text-xs">
+              <Checkbox checked={ferramentas.includes(f.id)} onCheckedChange={(v) => toggleFerramenta(f.id, v === true)} />
+              <span>{f.label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">Cada ação marcada vira uma <strong>saída</strong> no bloco — ligue no que deve acontecer (ex: "Agendar" → bloco Agendamento). O agente só usa as marcadas.</p>
+      </div>
     </div>
   );
 }
@@ -4590,6 +4706,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigIaResponderFields cfg={cfg} onChange={onChange} />;
     case "ia_consultar":
       return <ConfigIaConsultarFields cfg={cfg} onChange={onChange} />;
+    case "ia_atendente":
+      return <ConfigIaAtendenteFields cfg={cfg} onChange={onChange} />;
     case "ia_extrair_campos":
       return <ConfigIaExtrairCamposFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_aguardar_resposta":
