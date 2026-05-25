@@ -37,6 +37,7 @@ function criarMockExecutores(overrides?: Partial<SmartflowExecutores>): Smartflo
     criarAgendamentoInterno: vi.fn().mockResolvedValue(555),
     verificarDisponibilidadeAgenda: vi.fn().mockResolvedValue({ disponivel: true, conflitos: 0 }),
     listarAgendaResponsavel: vi.fn().mockResolvedValue([]),
+    atualizarTagsContato: vi.fn().mockResolvedValue([]),
     editarAgendamentoInterno: vi.fn().mockResolvedValue(undefined),
     listarBookings: vi.fn().mockResolvedValue([]),
     cancelarBooking: vi.fn().mockResolvedValue(true),
@@ -935,6 +936,55 @@ describe("SmartFlow Engine", () => {
       const r = parsearOpcaoResposta("5", ["A", "B"]);
       // Não há opção 5 — não usa o número, tenta substring (não bate) → null
       expect(r).toBeNull();
+    });
+  });
+
+  describe("tags do contato (condição + ação)", () => {
+    const rota = (operador: string, valor: string): Passo[] => [
+      {
+        id: 1, ordem: 1, tipo: "condicional", clienteId: "c1",
+        proximoSe: { cond_ec: "sim", fallback: "nao" },
+        config: { condicoes: [{ id: "ec", campo: "cliente.tags", operador, valor }] },
+      },
+      { id: 2, ordem: 2, tipo: "whatsapp_enviar", clienteId: "sim", config: { template: "RAMO-SIM" } },
+      { id: 3, ordem: 3, tipo: "whatsapp_enviar", clienteId: "nao", config: { template: "RAMO-NAO" } },
+    ];
+    const ctxCom = (tags: string[]) => ({ canalId: 1, telefoneCliente: "5585", cliente: { tags } });
+
+    it("Decisão 'tem a tag' roteia conforme cliente.tags (case-insensitive)", async () => {
+      const exec = criarMockExecutores();
+      const sim = await executarCenario(rota("tem_tag", "cliente"), ctxCom(["Cliente"]), exec);
+      expect(sim.respostas).toContain("RAMO-SIM");
+      const nao = await executarCenario(rota("tem_tag", "cliente"), ctxCom(["lead"]), exec);
+      expect(nao.respostas).toContain("RAMO-NAO");
+    });
+
+    it("Decisão 'não tem a tag' inverte", async () => {
+      const exec = criarMockExecutores();
+      const r = await executarCenario(rota("nao_tem_tag", "cliente"), ctxCom(["lead"]), exec);
+      expect(r.respostas).toContain("RAMO-SIM"); // não tem "cliente" → condição verdadeira
+    });
+
+    it("ação contato_tags chama executor e atualiza cliente.tags no contexto", async () => {
+      const atualizarTagsContato = vi.fn().mockResolvedValue(["cliente", "vip"]);
+      const exec = criarMockExecutores({ atualizarTagsContato });
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "contato_tags", config: { tags: "vip", modo: "adicionar" } },
+      ];
+      const r = await executarCenario(passos, { contatoId: 7, cliente: { tags: ["cliente"] } }, exec);
+      expect(r.sucesso).toBe(true);
+      expect(atualizarTagsContato).toHaveBeenCalledWith({ contatoId: 7, tags: ["vip"], modo: "adicionar" });
+      expect((r.contexto.cliente as any).tags).toEqual(["cliente", "vip"]);
+    });
+
+    it("ação contato_tags sem contatoId falha", async () => {
+      const exec = criarMockExecutores();
+      const passos: Passo[] = [
+        { id: 1, ordem: 1, tipo: "contato_tags", config: { tags: "x", modo: "adicionar" } },
+      ];
+      const r = await executarCenario(passos, {}, exec);
+      expect(r.sucesso).toBe(false);
+      expect(r.erro).toContain("contatoId");
     });
   });
 

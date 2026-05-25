@@ -1034,6 +1034,48 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       }
     },
 
+    async atualizarTagsContato(params): Promise<string[]> {
+      const { getDb } = await import("../db");
+      const { contatos } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const { parseTagsTolerante } = await import("../escritorio/db-crm");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      const [c] = await db.select({ id: contatos.id, tags: contatos.tags })
+        .from(contatos)
+        .where(and(eq(contatos.id, params.contatoId), eq(contatos.escritorioId, escritorioId)))
+        .limit(1);
+      if (!c) throw new Error(`Contato ${params.contatoId} não encontrado`);
+
+      const atuais = parseTagsTolerante(c.tags);
+      const novasNorm = params.tags.map((t) => t.trim()).filter((t) => t.length > 0);
+
+      let resultado: string[];
+      if (params.modo === "definir") {
+        resultado = Array.from(new Set(novasNorm));
+      } else if (params.modo === "remover") {
+        const remover = new Set(novasNorm.map((t) => t.toLowerCase()));
+        resultado = atuais.filter((t) => !remover.has(t.toLowerCase()));
+      } else {
+        const lower = new Set(atuais.map((t) => t.toLowerCase()));
+        resultado = [...atuais];
+        for (const t of novasNorm) {
+          if (!lower.has(t.toLowerCase())) {
+            resultado.push(t);
+            lower.add(t.toLowerCase());
+          }
+        }
+      }
+
+      // contatos.tags é JSON (mesmo formato do CRM).
+      await db.update(contatos)
+        .set({ tags: resultado.length > 0 ? JSON.stringify(resultado) : null })
+        .where(eq(contatos.id, params.contatoId));
+      log.info({ contatoId: params.contatoId, modo: params.modo, total: resultado.length }, "SmartFlow: tags do contato atualizadas");
+      return resultado;
+    },
+
     async chamarWebhook(url: string, dados: any): Promise<any> {
       const res = await fetch(url, {
         method: "POST",

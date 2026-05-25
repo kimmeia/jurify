@@ -81,6 +81,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   kanban_mover_card: Move,
   kanban_atribuir_responsavel: UserPlus,
   kanban_tags: TagsIcon,
+  contato_tags: TagsIcon,
   asaas_gerar_cobranca: Banknote,
   asaas_cancelar_cobranca: XCircle,
   asaas_consultar_valor_aberto: CircleDollarSign,
