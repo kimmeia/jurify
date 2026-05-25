@@ -1,14 +1,8 @@
 /**
- * Pricing — landing page.
+ * Pricing — renderiza os planos vindos da tabela `planos` via tRPC.
+ * Admin edita em /admin/financeiro?tab=planos e reflete aqui.
  *
- * Renderiza os planos vindos da tabela `planos` via tRPC. Admin edita em
- * /admin/financeiro?tab=planos e mudanças refletem aqui imediatamente.
- *
- * Botão "Começar grátis" persiste o slug escolhido em sessionStorage
- * pra usar no signup (consumido pelo AuthForms na Fase 3 do roadmap de
- * Planos). Hoje o signup ainda não consome esse valor — o cliente é
- * redirecionado pra /plans depois e escolhe de novo. Em produção isso
- * será resolvido em fase posterior.
+ * "Começar grátis" persiste o slug em sessionStorage pra usar no signup.
  */
 
 import { useMemo } from "react";
@@ -44,87 +38,88 @@ export function Pricing({ onCta }: Props) {
   }
 
   return (
-    <section id="pricing" className="max-w-6xl mx-auto px-4 py-20 lg:py-28">
-      <div className="text-center max-w-2xl mx-auto mb-14">
-        <p className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">Planos</p>
-        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-          Comece grátis. Cancele quando quiser.
-        </h2>
-        <p className="text-muted-foreground mt-4 text-lg">
-          {trialMaiorDias > 0
-            ? `${trialMaiorDias} dias de teste gratuito. Sem cartão de crédito pra começar.`
-            : "Sem cartão de crédito pra começar."}
+    <section id="pricing" className="border-y bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-24">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">Planos</p>
+          <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
+            Comece grátis. Cresça quando quiser.
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground">
+            {trialMaiorDias > 0
+              ? `${trialMaiorDias} dias de teste em qualquer plano pago. Sem cartão de crédito pra começar.`
+              : "Sem cartão de crédito pra começar."}
+          </p>
+        </div>
+
+        {isLoading || !planos ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-[460px] rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid items-stretch gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {planos.map((p: any) => {
+              const destaque = !!p.popular;
+              const gratis = p.precoMensalCentavos === 0;
+              const preco = gratis ? "R$ 0" : formatBRL(p.precoMensalCentavos);
+              return (
+                <div
+                  key={p.slug}
+                  className={`relative flex flex-col rounded-2xl border bg-card p-6 ${
+                    destaque ? "border-2 border-violet-600 shadow-xl shadow-violet-600/15" : ""
+                  }`}
+                >
+                  {destaque && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 border-0 bg-violet-600 text-white">
+                      <Sparkles className="mr-1 h-3 w-3" />
+                      Mais popular
+                    </Badge>
+                  )}
+
+                  <h3 className="font-display text-2xl font-bold">{p.nome}</h3>
+                  <p className="mb-4 mt-1 min-h-[34px] text-[13px] text-muted-foreground">
+                    {p.publicoAlvo ?? p.descricao ?? ""}
+                  </p>
+
+                  <div className="flex items-baseline gap-1">
+                    <span className="font-display text-[38px] font-extrabold tracking-tight">{preco}</span>
+                    {!gratis && <span className="text-muted-foreground">/mês</span>}
+                  </div>
+
+                  <p className="mb-1 mt-1.5 min-h-[18px] text-xs font-semibold text-violet-600">
+                    {p.trialDias > 0 ? `Teste ${p.trialDias} dias grátis` : ""}
+                  </p>
+
+                  <Button
+                    className={`my-4 w-full ${destaque ? "bg-violet-600 hover:bg-violet-700" : ""}`}
+                    size="lg"
+                    variant={destaque ? "default" : "outline"}
+                    onClick={() => selecionarPlano(p.slug)}
+                  >
+                    {gratis ? "Criar conta grátis" : "Começar grátis"}
+                  </Button>
+
+                  <ul className="space-y-2.5 text-sm">
+                    {(p.features ?? []).map((f: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="mt-7 text-center text-[13px] text-muted-foreground">
+          Valores em reais. Pagamento via Pix, boleto ou cartão (Asaas). Você só é cobrado se
+          autorizar — nada automático no fim do teste.
         </p>
       </div>
-
-      {isLoading || !planos ? (
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-[480px] rounded-2xl" />)}
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {planos.map((p: any) => {
-            const destaque = !!p.popular;
-            const preco = p.precoMensalCentavos === 0 ? "Grátis" : formatBRL(p.precoMensalCentavos);
-            return (
-              <div
-                key={p.slug}
-                className={`rounded-2xl border p-7 flex flex-col ${
-                  destaque ? "border-primary shadow-xl bg-card relative" : "bg-card"
-                }`}
-              >
-                {destaque && (
-                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground border-0">
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    Mais popular
-                  </Badge>
-                )}
-
-                <h3 className="text-2xl font-bold">{p.nome}</h3>
-                <p className="text-sm text-muted-foreground mt-1 mb-6">
-                  {p.publicoAlvo ?? p.descricao ?? ""}
-                </p>
-
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-4xl font-bold tracking-tight">{preco}</span>
-                  {p.precoMensalCentavos > 0 && (
-                    <span className="text-muted-foreground">/mês</span>
-                  )}
-                </div>
-
-                {p.trialDias > 0 && (
-                  <p className="text-xs text-primary font-medium mb-4">
-                    Teste {p.trialDias} dias grátis
-                  </p>
-                )}
-                {p.trialDias === 0 && <div className="mb-4" />}
-
-                <Button
-                  className="w-full mb-6"
-                  size="lg"
-                  variant={destaque ? "default" : "outline"}
-                  onClick={() => selecionarPlano(p.slug)}
-                >
-                  {p.precoMensalCentavos === 0 ? "Criar conta grátis" : "Começar grátis"}
-                </Button>
-
-                <ul className="space-y-2.5 text-sm">
-                  {(p.features ?? []).map((f: string, idx: number) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <Check className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <p className="text-center text-xs text-muted-foreground mt-8">
-        Valores em reais. Pagamento via Pix, boleto ou cartão (Asaas). NF-e emitida automaticamente.
-      </p>
     </section>
   );
 }

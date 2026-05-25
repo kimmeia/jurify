@@ -1,14 +1,32 @@
 /**
- * Hero da Landing Page — primeira coisa que o visitante vê.
+ * Hero da Landing Page (Direção A — Light Premium).
  *
- * Estratégia: headline forte focada em dor (5 sistemas → 1) +
- * sub-headline com 4 capacidades-chave + 2 CTAs + mockup do
- * Financeiro (gancho mais sentido por dono de escritório).
+ * Headline centrada + 2 CTAs + screenshot fiel do Dashboard Geral
+ * (sidebar real + painel com KPIs, fluxo de caixa e atividade).
  */
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles, ArrowRight, TrendingUp, Wallet, Clock, AlertCircle } from "lucide-react";
+import {
+  Sparkles,
+  ArrowRight,
+  LayoutDashboard,
+  Calculator,
+  Users,
+  FileText,
+  CalendarDays,
+  FileSearch,
+  Headphones,
+  BrainCircuit,
+  Zap,
+  BarChart3,
+  DollarSign,
+  Clock,
+  AlertTriangle,
+  Target,
+  TrendingUp,
+  MessageCircle,
+  Activity,
+} from "lucide-react";
 
 interface Props {
   onCta: (modo: "login" | "signup") => void;
@@ -17,158 +35,187 @@ interface Props {
 export function Hero({ onCta }: Props) {
   return (
     <section className="relative overflow-hidden">
-      {/* Gradiente sutil de fundo (usa primary do tema OKLCH) */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-info/5" />
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+      {/* Glow violeta sutil atrás do hero */}
+      <div className="pointer-events-none absolute left-1/2 top-[-120px] h-[420px] w-[760px] -translate-x-1/2 rounded-full bg-violet-500/15 blur-3xl" />
 
-      <div className="relative max-w-6xl mx-auto px-4 pt-16 pb-20 lg:pt-24 lg:pb-28">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Coluna esquerda: copy */}
-          <div className="text-center lg:text-left">
-            <Badge className="mb-6 bg-primary/10 text-primary border-0 hover:bg-primary/15 gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              Sistema completo do escritório moderno
-            </Badge>
+      <div className="relative mx-auto max-w-6xl px-4 pt-16 pb-2 text-center lg:pt-24">
+        <span className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3.5 py-1.5 text-sm font-semibold text-violet-700">
+          <Sparkles className="h-4 w-4" />
+          O sistema operacional do escritório moderno
+        </span>
 
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.05]">
-              Pare de pular entre <span className="text-primary">5 sistemas</span>.
-              <br className="hidden md:block" />
-              Tudo que seu escritório precisa,
-              <br className="hidden md:block" />
-              <span className="text-primary">num só lugar.</span>
-            </h1>
+        <h1 className="font-display mx-auto mt-6 max-w-4xl text-4xl font-extrabold leading-[1.05] tracking-tight text-[#0f1115] md:text-5xl lg:text-[55px]">
+          Todo o seu escritório{" "}
+          <span className="whitespace-nowrap bg-gradient-to-r from-violet-600 to-violet-500 bg-clip-text text-transparent">
+            num só lugar
+          </span>
+          .
+          <br />
+          Do primeiro contato ao recebimento.
+        </h1>
 
-            <p className="text-lg md:text-xl text-muted-foreground mt-6 max-w-xl lg:max-w-none">
-              Atendimento por WhatsApp, contratos automáticos, financeiro com
-              Asaas, comissões sem Excel.{" "}
-              <strong className="text-foreground">Tudo integrado.</strong>
-            </p>
+        <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
+          CRM, atendimento no WhatsApp, contratos automáticos, financeiro com Asaas,
+          comissões, processos e cálculos jurídicos. Integrados de verdade — não 5
+          ferramentas remendadas.
+        </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-10 justify-center lg:justify-start">
-              <Button
-                size="lg"
-                className="text-base px-8 shadow-lg hover:shadow-xl transition-all"
-                onClick={() => onCta("signup")}
-              >
-                Começar grátis (7 dias)
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="text-base px-8"
-                onClick={() => {
-                  document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                Ver demonstração
-              </Button>
-            </div>
-
-            <p className="text-xs text-muted-foreground mt-4 lg:text-left text-center">
-              Sem cartão de crédito • Configura em 5 minutos
-            </p>
-          </div>
-
-          {/* Coluna direita: mockup do Financeiro */}
-          <div className="hidden lg:block">
-            <FinanceiroMockup />
-          </div>
+        <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+          <Button
+            size="lg"
+            className="bg-violet-600 px-8 text-base shadow-lg shadow-violet-600/25 hover:bg-violet-700"
+            onClick={() => onCta("signup")}
+          >
+            Começar grátis
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="px-8 text-base"
+            onClick={() => document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })}
+          >
+            Ver demonstração
+          </Button>
         </div>
+
+        <p className="mt-4 text-sm text-muted-foreground">
+          <strong className="text-foreground">14 dias grátis</strong> em qualquer plano · Sem
+          cartão de crédito · Configura em 5 minutos
+        </p>
       </div>
 
-      {/* Mockup mobile (centralizado abaixo, sem coluna) */}
-      <div className="lg:hidden max-w-md mx-auto px-4 pb-16">
-        <FinanceiroMockup />
+      {/* Screenshot do Dashboard */}
+      <div className="relative mx-auto mt-12 max-w-5xl px-4 pb-4">
+        <div className="absolute inset-x-16 top-10 -bottom-8 -z-10 rounded-[40px] bg-violet-500/20 blur-3xl" />
+        <DashboardMockup />
       </div>
     </section>
   );
 }
 
-/** Mockup estilizado do Financeiro pra usar no hero. Dados fictícios. */
-function FinanceiroMockup() {
+/* ─── Screenshot fiel do Dashboard Geral ──────────────────────────────── */
+
+const NAV_ITEMS: { icon: React.ComponentType<{ className?: string }>; label: string; active?: boolean }[] = [
+  { icon: LayoutDashboard, label: "Dashboard", active: true },
+  { icon: Calculator, label: "Cálculos" },
+  { icon: Users, label: "Clientes" },
+  { icon: FileText, label: "Modelos" },
+  { icon: CalendarDays, label: "Agenda" },
+  { icon: FileSearch, label: "Processos" },
+  { icon: Headphones, label: "Atendimento" },
+  { icon: BrainCircuit, label: "Agentes IA" },
+  { icon: Zap, label: "SmartFlow" },
+  { icon: BarChart3, label: "Relatórios" },
+  { icon: DollarSign, label: "Financeiro" },
+];
+
+function DashboardMockup() {
   return (
-    <div className="relative">
-      {/* Glow sutil atrás */}
-      <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 to-info/20 blur-2xl rounded-3xl opacity-50" />
-      <div className="relative rounded-2xl border bg-card shadow-2xl overflow-hidden">
-        {/* Topbar */}
-        <div className="bg-muted/30 border-b px-4 py-3 flex items-center gap-2">
-          <div className="flex gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-          </div>
-          <div className="flex-1 text-center text-[10px] text-muted-foreground font-mono">
-            juridflow.com.br/financeiro
-          </div>
-        </div>
+    <div className="overflow-hidden rounded-2xl border bg-white shadow-2xl">
+      {/* Browser chrome */}
+      <div className="flex h-9 items-center gap-2 border-b bg-slate-100 px-4">
+        <span className="flex gap-1.5">
+          <i className="h-2.5 w-2.5 rounded-full bg-red-400" />
+          <i className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+          <i className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+        </span>
+        <span className="flex-1 text-center font-mono text-[11px] text-slate-400">
+          app.juridflow.com.br/dashboard
+        </span>
+      </div>
 
-        <div className="p-5 space-y-4">
-          {/* Header com nome + saldo */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">Financeiro</p>
-              <h3 className="text-lg font-semibold">Outubro 2026</h3>
+      <div className="flex min-h-[460px] bg-[#fafaff]">
+        {/* Sidebar */}
+        <aside className="hidden w-[200px] shrink-0 flex-col border-r bg-white p-3 sm:flex">
+          <div className="mb-3 flex items-center gap-2.5 border-b pb-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-violet-400 text-xs font-bold text-white">
+              SA
             </div>
-            <Badge className="bg-success-bg text-success-fg border-0 text-[10px]">
-              ● Asaas conectado
-            </Badge>
-          </div>
-
-          {/* Linha de KPIs */}
-          <div className="grid grid-cols-3 gap-2">
-            <MockKpi label="Recebido" valor="R$ 47.350" Icon={TrendingUp} accent="emerald" />
-            <MockKpi label="A receber" valor="R$ 12.100" Icon={Clock} accent="amber" />
-            <MockKpi label="Vencido" valor="R$ 1.800" Icon={AlertCircle} accent="red" />
-          </div>
-
-          {/* "Gráfico" estilizado */}
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-medium">Fluxo de caixa</p>
-              <div className="flex gap-1">
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted">3m</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary text-primary-foreground">6m</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted">12m</span>
-              </div>
-            </div>
-            <div className="h-20 flex items-end gap-1.5">
-              {[40, 55, 30, 70, 85, 65, 95, 100, 90, 60, 75, 85].map((h, i) => (
-                <div
-                  key={i}
-                  className="flex-1 bg-gradient-to-t from-primary/40 to-primary/20 rounded-sm"
-                  style={{ height: `${h}%` }}
-                />
-              ))}
+            <div className="leading-tight">
+              <div className="text-[13px] font-bold text-slate-900">Silva &amp; Associados</div>
+              <div className="text-[10px] text-slate-400">Escritório</div>
             </div>
           </div>
-
-          {/* Tabela mock de cobranças */}
-          <div className="space-y-1.5">
-            {[
-              { cli: "Maria S.", val: "R$ 1.500", st: "Pago", cor: "success" },
-              { cli: "Carlos M.", val: "R$ 3.200", st: "Pendente", cor: "warning" },
-              { cli: "Ana P.", val: "R$ 850", st: "Pago", cor: "success" },
-            ].map((c, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between px-3 py-2 rounded-md border bg-card text-xs"
+          <nav className="flex flex-col gap-0.5">
+            {NAV_ITEMS.map((item) => (
+              <span
+                key={item.label}
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12.5px] font-medium ${
+                  item.active ? "bg-violet-100 font-semibold text-violet-700" : "text-slate-600"
+                }`}
               >
-                <span className="font-medium">{c.cli}</span>
-                <span className="text-muted-foreground tabular-nums">{c.val}</span>
-                <Badge
-                  variant="outline"
-                  className={
-                    c.cor === "success"
-                      ? "bg-success-bg text-success-fg border-0 text-[10px]"
-                      : "bg-warning-bg text-warning-fg border-0 text-[10px]"
-                  }
-                >
-                  {c.st}
-                </Badge>
-              </div>
+                <item.icon className={`h-4 w-4 ${item.active ? "text-violet-600" : "text-slate-400"}`} />
+                {item.label}
+              </span>
             ))}
+          </nav>
+        </aside>
+
+        {/* Conteúdo */}
+        <div className="min-w-0 flex-1">
+          {/* Band */}
+          <div className="bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 px-6 py-5 text-white">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="font-display text-lg font-bold">Painel Geral — Outubro</div>
+                <div className="mt-0.5 text-[11.5px] text-white/75">
+                  1 out — 31 out 2026 · Ver outros períodos →
+                </div>
+              </div>
+              <BarChart3 className="h-7 w-7 text-white/60" />
+            </div>
+            <div className="mt-3.5 flex flex-wrap gap-2 text-[10.5px] font-semibold">
+              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1">
+                <i className="h-1.5 w-1.5 rounded-full bg-red-300" /> 3 movimentações novas
+              </span>
+              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1">
+                <i className="h-1.5 w-1.5 rounded-full bg-amber-300" /> 2 cobranças atrasadas
+              </span>
+              <span className="flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1">
+                <i className="h-1.5 w-1.5 rounded-full bg-blue-300" /> 1 conversa aguardando
+              </span>
+            </div>
+          </div>
+
+          {/* KPIs + cards */}
+          <div className="space-y-3.5 p-5">
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              <Kpi icon={DollarSign} accent="emerald" label="Recebido" valor="R$ 47.350" sub="no período" />
+              <Kpi icon={Clock} accent="blue" label="A receber" valor="R$ 12.100" sub="em dia" />
+              <Kpi icon={AlertTriangle} accent="rose" label="Vencido" valor="R$ 1.800" sub="3,7% inadimplência" />
+              <Kpi icon={Target} accent="violet" label="Pipeline" valor="R$ 89.400" sub="14 leads" />
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+              <div className="rounded-xl border bg-white p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold">
+                  <BarChart3 className="h-3.5 w-3.5 text-violet-600" />
+                  Fluxo de caixa — recebido por dia
+                </div>
+                <div className="flex h-[70px] items-end gap-1.5">
+                  {[42, 58, 35, 70, 52, 88, 64, 95, 78, 60, 82, 100, 71, 90].map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-sm bg-gradient-to-t from-violet-600 to-violet-400"
+                      style={{ height: `${h}%` }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-white p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-bold">
+                  <Activity className="h-3.5 w-3.5 text-violet-600" />
+                  Atividade recente
+                </div>
+                <div className="space-y-2.5">
+                  <ActivityRow icon={DollarSign} accent="emerald" titulo="Maria S. pagou R$ 1.500" desc="Pix via Asaas · há 8 min" />
+                  <ActivityRow icon={MessageCircle} accent="blue" titulo="Nova conversa no WhatsApp" desc="Carlos M. · há 21 min" />
+                  <ActivityRow icon={FileSearch} accent="violet" titulo="Movimentação no proc. 0801…" desc="TJCE · Despacho · há 1 h" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -176,31 +223,60 @@ function FinanceiroMockup() {
   );
 }
 
-function MockKpi({
+const ACCENT: Record<string, { box: string; icon: string; val: string }> = {
+  emerald: { box: "bg-emerald-50", icon: "text-emerald-600", val: "text-emerald-600" },
+  blue: { box: "bg-blue-50", icon: "text-blue-600", val: "text-blue-600" },
+  rose: { box: "bg-rose-50", icon: "text-rose-600", val: "text-rose-600" },
+  violet: { box: "bg-violet-100", icon: "text-violet-600", val: "text-violet-600" },
+};
+
+function Kpi({
+  icon: Icon,
+  accent,
   label,
   valor,
-  Icon,
-  accent,
+  sub,
 }: {
+  icon: React.ComponentType<{ className?: string }>;
+  accent: keyof typeof ACCENT;
   label: string;
   valor: string;
-  Icon: React.ComponentType<{ className?: string }>;
-  accent: "emerald" | "amber" | "red";
+  sub: string;
 }) {
-  const cores = {
-    emerald: "text-emerald-600 bg-emerald-500/10",
-    amber: "text-amber-600 bg-amber-500/10",
-    red: "text-red-600 bg-red-500/10",
-  };
+  const c = ACCENT[accent];
   return (
-    <div className="rounded-lg border bg-card p-2.5">
-      <div className="flex items-center gap-2 mb-1">
-        <div className={`h-6 w-6 rounded ${cores[accent]} flex items-center justify-center`}>
-          <Icon className="h-3 w-3" />
-        </div>
+    <div className="rounded-xl border bg-white p-3">
+      <div className={`mb-2 flex h-7 w-7 items-center justify-center rounded-md ${c.box}`}>
+        <Icon className={`h-4 w-4 ${c.icon}`} />
       </div>
-      <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="text-sm font-bold tabular-nums">{valor}</p>
+      <div className="text-[9.5px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={`text-lg font-extrabold tabular-nums ${c.val}`}>{valor}</div>
+      <div className="text-[10px] text-slate-400">{sub}</div>
+    </div>
+  );
+}
+
+function ActivityRow({
+  icon: Icon,
+  accent,
+  titulo,
+  desc,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  accent: keyof typeof ACCENT;
+  titulo: string;
+  desc: string;
+}) {
+  const c = ACCENT[accent];
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${c.box}`}>
+        <Icon className={`h-3 w-3 ${c.icon}`} />
+      </span>
+      <div className="min-w-0">
+        <div className="truncate text-[11px] font-semibold text-slate-800">{titulo}</div>
+        <div className="text-[9.5px] text-slate-400">{desc}</div>
+      </div>
     </div>
   );
 }
