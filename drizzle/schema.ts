@@ -1685,6 +1685,14 @@ export const motorMonitoramentos = mysqlTable(
     ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
     ultimoErro: text("ultimo_erro"),
     /**
+     * Indicador de que o processo parece ter subido pro 2º grau (recurso),
+     * detectado pelas movimentações do 1º grau. Base da opção C do
+     * monitoramento por grau (issue #529); `indicios2grau` guarda os trechos
+     * que dispararam a detecção, pra auditar a precisão da heurística.
+     */
+    subiu2grau: boolean("subiu_2grau").default(false).notNull(),
+    indicios2grau: text("indicios_2grau"),
+    /**
      * "Desde quando alertar" — usado em monitoramentos `novas_acoes`.
      * Normalmente = `contatos.createdAt` (data em que o cliente foi
      * cadastrado). CNJs ajuizados ANTES dessa data não viram alerta
