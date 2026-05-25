@@ -122,6 +122,20 @@ const VARS_CLIENTE: CatalogoVariavel[] = [
   { path: "emailCliente", label: "Email do cliente", exemplo: "joao@example.com", categoria: "cliente" },
   { path: "contatoId", label: "ID interno do contato", exemplo: "42", categoria: "cliente" },
   { path: "atendenteResponsavelId", label: "Atendente responsável", exemplo: "7", categoria: "cliente" },
+  // Campos do cadastro (CRM). Carregados quando há contatoId no contexto.
+  { path: "cliente.cpf", label: "CPF/CNPJ do cadastro", exemplo: "123.456.789-00", categoria: "cliente" },
+  { path: "cliente.ehCliente", label: "É cliente? (tem CPF/CNPJ cadastrado)", exemplo: "true", categoria: "cliente" },
+  { path: "cliente.nome", label: "Nome no cadastro", exemplo: "João Silva", categoria: "cliente" },
+  { path: "cliente.email", label: "Email no cadastro", exemplo: "joao@example.com", categoria: "cliente" },
+  { path: "cliente.telefone", label: "Telefone no cadastro", exemplo: "(11) 99999-0000", categoria: "cliente" },
+  { path: "cliente.profissao", label: "Profissão", exemplo: "Engenheiro", categoria: "cliente" },
+  { path: "cliente.estadoCivil", label: "Estado civil", exemplo: "casado", categoria: "cliente" },
+  { path: "cliente.nacionalidade", label: "Nacionalidade", exemplo: "brasileiro", categoria: "cliente" },
+  { path: "cliente.cidade", label: "Cidade", exemplo: "Fortaleza", categoria: "cliente" },
+  { path: "cliente.uf", label: "UF", exemplo: "CE", categoria: "cliente" },
+  { path: "cliente.endereco", label: "Endereço completo", exemplo: "Rua X, 100 - Centro, Fortaleza/CE", categoria: "cliente" },
+  { path: "cliente.observacoes", label: "Observações do cadastro", exemplo: "Cliente preferencial", categoria: "cliente" },
+  { path: "cliente.tags", label: "Tags do contato (lista)", exemplo: "cliente, vip", categoria: "cliente" },
 ];
 
 const VARS_MENSAGEM: CatalogoVariavel[] = [

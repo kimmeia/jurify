@@ -379,7 +379,7 @@ async function marcarConversaEmAtendimento(conversaId: number, escritorioId: num
 async function lerDadosCliente(
   escritorioId: number,
   contatoId: number | undefined,
-): Promise<{ campos: Record<string, unknown>; tags: string[] }> {
+): Promise<Record<string, unknown>> {
   if (!contatoId) return { campos: {}, tags: [] };
   const db = await getDb();
   if (!db) return { campos: {}, tags: [] };
@@ -387,16 +387,55 @@ async function lerDadosCliente(
     const { contatos } = await import("../../drizzle/schema");
     const { parseTagsTolerante } = await import("../escritorio/db-crm");
     const [c] = await db
-      .select({ camposPersonalizados: contatos.camposPersonalizados, tags: contatos.tags })
+      .select({
+        nome: contatos.nome,
+        email: contatos.email,
+        telefone: contatos.telefone,
+        cpfCnpj: contatos.cpfCnpj,
+        profissao: contatos.profissao,
+        estadoCivil: contatos.estadoCivil,
+        nacionalidade: contatos.nacionalidade,
+        logradouro: contatos.logradouro,
+        numeroEndereco: contatos.numeroEndereco,
+        bairro: contatos.bairro,
+        cidade: contatos.cidade,
+        uf: contatos.uf,
+        observacoes: contatos.observacoes,
+        camposPersonalizados: contatos.camposPersonalizados,
+        tags: contatos.tags,
+      })
       .from(contatos)
       .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
       .limit(1);
+    if (!c) return { campos: {}, tags: [] };
+
     let campos: Record<string, unknown> = {};
-    if (c?.camposPersonalizados) {
+    if (c.camposPersonalizados) {
       const parsed = JSON.parse(c.camposPersonalizados);
       if (parsed && typeof parsed === "object") campos = parsed;
     }
-    return { campos, tags: parseTagsTolerante(c?.tags) };
+    const enderecoPartes = [
+      [c.logradouro, c.numeroEndereco].filter(Boolean).join(", "),
+      c.bairro,
+      [c.cidade, c.uf].filter(Boolean).join("/"),
+    ].filter((p) => p && p.length > 0);
+
+    return {
+      campos,
+      tags: parseTagsTolerante(c.tags),
+      nome: c.nome ?? "",
+      email: c.email ?? "",
+      telefone: c.telefone ?? "",
+      cpf: c.cpfCnpj ?? "",
+      ehCliente: !!(c.cpfCnpj && c.cpfCnpj.trim()),
+      profissao: c.profissao ?? "",
+      estadoCivil: c.estadoCivil ?? "",
+      nacionalidade: c.nacionalidade ?? "",
+      cidade: c.cidade ?? "",
+      uf: c.uf ?? "",
+      endereco: enderecoPartes.join(" - "),
+      observacoes: c.observacoes ?? "",
+    };
   } catch {
     return { campos: {}, tags: [] };
   }
@@ -1089,7 +1128,7 @@ export async function dispararMensagemCanal(
       conversaId: params.conversaId,
       canalId: params.canalId,
       canalTipo: params.canalTipo,
-      cliente: { campos: dadosCliente.campos, tags: dadosCliente.tags },
+      cliente: dadosCliente,
     };
 
     // 1. Tenta cenários `mensagem_canal` com filtro de canal
