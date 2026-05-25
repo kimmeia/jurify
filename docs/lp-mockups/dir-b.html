@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JuridFlow — Direção B</title>
+<link rel="stylesheet" href="base.css" />
+<style>
+  /* ===== Direção B — Dark Tech / Bold ===== */
+  body { background: var(--navy); color: #e7e7f0; }
+
+  .nav { position: sticky; top: 0; z-index: 50; background: rgba(11,11,23,.7); backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255,255,255,.08); }
+  .nav .wrap { height: 72px; display: flex; align-items: center; justify-content: space-between; }
+  .nav__links { display: flex; align-items: center; gap: 28px; }
+  .nav__links a { font-size: 14.5px; font-weight: 500; color: #b9b9cc; }
+  .nav__cta { display: flex; align-items: center; gap: 12px; }
+  .btn-ghost-d { background: transparent; color: #e7e7f0; }
+
+  .hero { position: relative; overflow: hidden; padding: 70px 0 90px; }
+  .hero::before { content:""; position:absolute; top:-200px; right:-100px; width:760px; height:760px; background: radial-gradient(circle, rgba(124,58,237,.32), transparent 62%); }
+  .hero::after { content:""; position:absolute; bottom:-260px; left:-160px; width:620px; height:620px; background: radial-gradient(circle, rgba(79,70,229,.22), transparent 65%); }
+  .hero .wrap { position: relative; z-index: 1; display: grid; grid-template-columns: 1.02fr 1.1fr; gap: 48px; align-items: center; }
+  .pill-d { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; background: rgba(124,58,237,.16); color: #c4b5fd; border: 1px solid rgba(124,58,237,.3); }
+  .hero h1 { font-family: var(--font-display); font-weight: 800; font-size: 56px; line-height: 1.05; letter-spacing: -.03em; margin-top: 22px; color: #fff; }
+  .hero h1 .g { background: linear-gradient(110deg, #a78bfa, #818cf8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.sub { font-size: 19px; color: #b9b9cc; max-width: 520px; margin-top: 22px; line-height: 1.6; }
+  .hero .ctas { display: flex; gap: 14px; margin-top: 32px; }
+  .hero .micro { font-size: 13.5px; color: #9aa1ad; margin-top: 16px; }
+  .hero .micro b { color: #d7d7e6; }
+
+  .shotwrap { position: relative; }
+  .shotwrap::before { content:""; position:absolute; inset:-40px; background: radial-gradient(ellipse at center, rgba(124,58,237,.4), transparent 68%); filter: blur(30px); }
+  .shotwrap .browser { position: relative; }
+
+  .stats { border-top: 1px solid rgba(255,255,255,.08); border-bottom: 1px solid rgba(255,255,255,.08); padding: 40px 0; background: rgba(255,255,255,.02); }
+  .stats__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; text-align: center; }
+  .stats .n { font-family: var(--font-display); font-weight: 800; font-size: 40px; color: #fff; letter-spacing: -.02em; }
+  .stats .n .u { color: #a78bfa; }
+  .stats .l { font-size: 13.5px; color: #9aa1ad; margin-top: 4px; }
+
+  .sec { padding: 96px 0; }
+  .sec--light { background: #fafaff; color: var(--ink); }
+  .sec__head { text-align: center; max-width: 660px; margin: 0 auto 54px; }
+  .sec__head h2 { font-family: var(--font-display); font-weight: 800; font-size: 42px; letter-spacing: -.02em; margin-top: 12px; }
+  .sec--light .sec__head h2 { color: var(--ink); }
+  .sec__head p { font-size: 18px; margin-top: 14px; line-height: 1.55; }
+  .sec--light .sec__head p { color: var(--muted); }
+  .sec--dark .sec__head p { color: #9aa1ad; }
+  .sec--dark .sec__head h2 { color: #fff; }
+
+  .mods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .mod { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .mod__ic { width: 44px; height: 44px; border-radius: 12px; background: var(--violet-soft); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .mod__ic svg { width: 22px; height: 22px; stroke: var(--violet); }
+  .mod h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .mod p { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+
+  .diffs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .diff { background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 28px; }
+  .diff__ic { width: 48px; height: 48px; border-radius: 13px; background: rgba(124,58,237,.18); border: 1px solid rgba(124,58,237,.3); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+  .diff__ic svg { width: 23px; height: 23px; stroke: #a78bfa; }
+  .diff h3 { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+  .diff p { font-size: 14.5px; color: #b9b9cc; line-height: 1.55; margin-bottom: 16px; }
+  .diff ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .diff li { display: flex; gap: 9px; font-size: 13.5px; color: #d7d7e6; }
+  .diff li svg { width: 17px; height: 17px; stroke: #34d399; flex-shrink: 0; margin-top: 2px; }
+
+  /* Pricing (light) */
+  .price { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .plan { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 26px 22px; display: flex; flex-direction: column; position: relative; }
+  .plan.pop { border: 2px solid var(--violet); box-shadow: var(--shadow-violet); }
+  .plan .tag { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--violet); color: #fff; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 999px; }
+  .plan h3 { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
+  .plan .who { font-size: 13px; color: var(--muted); margin: 4px 0 18px; min-height: 34px; }
+  .plan .val { font-size: 38px; font-weight: 800; letter-spacing: -.02em; font-family: var(--font-display); }
+  .plan .val small { font-size: 15px; color: var(--muted); font-weight: 500; }
+  .plan .trial { font-size: 12.5px; color: var(--violet); font-weight: 600; margin-top: 6px; min-height: 18px; }
+  .plan .btn { margin: 18px 0; justify-content: center; }
+  .plan ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .plan li { display: flex; gap: 9px; font-size: 13.5px; line-height: 1.4; }
+  .plan li svg { width: 17px; height: 17px; stroke: var(--emerald); flex-shrink: 0; margin-top: 2px; }
+  .price__note { text-align: center; font-size: 13px; color: var(--muted); margin-top: 26px; }
+
+  .cta { position: relative; overflow: hidden; padding: 100px 0; text-align: center; }
+  .cta::before { content:""; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:900px; height:500px; background: radial-gradient(ellipse, rgba(124,58,237,.3), transparent 65%); }
+  .cta .wrap { position: relative; z-index: 1; }
+  .cta h2 { font-family: var(--font-display); font-weight: 800; font-size: 50px; color: #fff; letter-spacing: -.025em; }
+  .cta p { color: #b9b9cc; font-size: 19px; margin: 16px 0 32px; }
+
+  .foot { border-top: 1px solid rgba(255,255,255,.08); padding: 50px 0 40px; }
+  .foot__grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 30px; }
+  .foot p { font-size: 14px; color: #9aa1ad; margin-top: 12px; max-width: 260px; }
+  .foot h4 { font-size: 13px; font-weight: 700; color: #d7d7e6; margin-bottom: 12px; }
+  .foot ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .foot ul a { font-size: 14px; color: #9aa1ad; }
+  .foot__bar { border-top: 1px solid rgba(255,255,255,.08); margin-top: 36px; padding-top: 22px; display: flex; justify-content: space-between; font-size: 13px; color: #6f7585; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="wrap">
+    <span class="logo logo--md logo--light"><span class="j">Jurid</span><span class="f">Flow</span></span>
+    <div class="nav__links">
+      <a href="#">Recursos</a>
+      <a href="#">Planos</a>
+      <a href="#">Roadmap</a>
+    </div>
+    <div class="nav__cta">
+      <button class="btn btn-ghost-d btn-sm">Entrar</button>
+      <button class="btn btn-primary btn-sm">Começar grátis</button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <span class="pill-d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg> Atendimento com IA nativa</span>
+      <h1>Seu escritório atende, cobra e fecha — <span class="g">sem trocar de tela</span>.</h1>
+      <p class="sub">WhatsApp, Instagram e e-mail num inbox único. A IA lê a conversa, te dá o brief, sugere a resposta e dispara a cobrança no Asaas. Tudo dentro do JuridFlow.</p>
+      <div class="ctas">
+        <button class="btn btn-primary btn-lg">Começar grátis<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        <button class="btn btn-outline btn-lg" style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,.22);">Ver demonstração</button>
+      </div>
+      <p class="micro"><b>14 dias grátis</b> · Sem cartão de crédito · Configura em 5 minutos</p>
+    </div>
+
+    <!-- SCREENSHOT: Atendimento inbox -->
+    <div class="shotwrap">
+      <div class="browser">
+        <div class="browser__bar">
+          <span class="browser__dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span>
+          <span class="browser__url">app.juridflow.com.br/atendimento</span>
+        </div>
+        <div class="app" style="min-height:430px;">
+          <div class="inbox">
+            <!-- lista -->
+            <div class="inbox__list">
+              <div style="display:flex; gap:5px; margin-bottom:10px;">
+                <span class="bdg bdg--violet">Aguardando 3</span>
+                <span class="bdg bdg--slate">Em atend. 5</span>
+              </div>
+              <div class="conv is-active">
+                <div class="conv__av"><div class="av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">CM</div><span class="conv__ch ch-wa"><svg viewBox="0 0 24 24" stroke-width="0"><path d="M12 2a10 10 0 0 0-8.6 15l-1.4 5 5.2-1.4A10 10 0 1 0 12 2z" fill="#fff"/></svg></span></div>
+                <div><div class="conv__name">Carlos Mendes</div><div class="conv__msg">Doutor, e os honorários?</div></div>
+                <div class="conv__meta"><div class="conv__time">14:32</div><span class="unread">2</span></div>
+              </div>
+              <div class="conv">
+                <div class="conv__av"><div class="av" style="background:linear-gradient(135deg,#8b5cf6,#6366f1)">AP</div><span class="conv__ch ch-ig"><svg viewBox="0 0 24 24" stroke-width="0"><circle cx="12" cy="12" r="6" fill="#fff"/></svg></span></div>
+                <div><div class="conv__name">Ana Paula</div><div class="conv__msg">📷 Foto · Contrato anexo</div></div>
+                <div class="conv__meta"><div class="conv__time">13:10</div></div>
+              </div>
+              <div class="conv">
+                <div class="conv__av"><div class="av" style="background:linear-gradient(135deg,#10b981,#0ea5e9)">RF</div><span class="conv__ch ch-mail"><svg viewBox="0 0 24 24" stroke-width="0"><rect x="4" y="6" width="16" height="12" fill="#fff"/></svg></span></div>
+                <div><div class="conv__name">Roberto F.</div><div class="conv__msg">Re: Audiência marcada</div></div>
+                <div class="conv__meta"><div class="conv__time">11:48</div></div>
+              </div>
+              <div class="conv">
+                <div class="conv__av"><div class="av" style="background:linear-gradient(135deg,#3b82f6,#6366f1)">JL</div><span class="conv__ch ch-wa"><svg viewBox="0 0 24 24" stroke-width="0"><path d="M12 2a10 10 0 0 0-8.6 15l-1.4 5 5.2-1.4A10 10 0 1 0 12 2z" fill="#fff"/></svg></span></div>
+                <div><div class="conv__name">Juliana L.</div><div class="conv__msg">🎤 Áudio · 0:42</div></div>
+                <div class="conv__meta"><div class="conv__time">10:05</div></div>
+              </div>
+            </div>
+
+            <!-- thread -->
+            <div style="display:flex; flex-direction:column;">
+              <div style="padding:10px 14px; border-bottom:1px solid var(--line-2); display:flex; align-items:center; gap:9px;">
+                <div class="av" style="background:linear-gradient(135deg,#f59e0b,#ef4444); width:30px; height:30px;">CM</div>
+                <div><div style="font-size:12.5px; font-weight:700;">Carlos Mendes</div><div style="font-size:10px;" class="muted">+55 85 9 9xxx · WhatsApp</div></div>
+                <span class="bdg bdg--violet" style="margin-left:auto;">você: Dra. Helena</span>
+                <span class="bdg bdg--amber">Aguardando</span>
+              </div>
+              <div class="thread" style="flex:1;">
+                <div class="msg msg--in">Doutora, fechei a proposta. Como faço pra pagar os honorários?</div>
+                <div class="ai-card">
+                  <b>✦ Brief Instantâneo IA</b><br/>
+                  Cliente quer pagar honorários (R$ 3.500). Já tem contrato gerado. Sugestão: enviar cobrança Pix via Asaas e link de assinatura.
+                  <div style="margin-top:8px; display:flex; gap:6px;"><span class="bdg bdg--violet">Gerar cobrança Pix</span><span class="bdg bdg--slate">Enviar contrato</span></div>
+                </div>
+                <div class="msg msg--out">Perfeito, Carlos! Já te enviei o Pix de R$ 3.500 e o contrato pra assinatura digital. 😊</div>
+              </div>
+              <div style="padding:9px 12px; border-top:1px solid var(--line-2); display:flex; gap:8px; align-items:center;">
+                <div style="flex:1; font-size:11px; color:var(--muted-2); background:#f3f4f8; border-radius:8px; padding:8px 11px;">Escreva uma mensagem…</div>
+                <span class="bdg bdg--violet">Tom: cordial</span>
+              </div>
+            </div>
+
+            <!-- rail -->
+            <div class="rail">
+              <h5>Cliente 360°</h5>
+              <div class="item">Status financeiro<span>R$ 3.500 a receber</span></div>
+              <div class="item">Processos<span>2 ativos · TJCE</span></div>
+              <div class="item">Origem<span>Instagram Ads</span></div>
+              <div class="item">Última interação<span>há 3 dias</span></div>
+              <h5 style="margin-top:6px;">Compliance Guard</h5>
+              <div class="bdg bdg--emerald"><span class="dot" style="background:#10b981"></span> Sem promessa de resultado</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- STATS -->
+<section class="stats">
+  <div class="wrap">
+    <div class="stats__grid">
+      <div><div class="n">14<span class="u"> módulos</span></div><div class="l">num único login</div></div>
+      <div><div class="n">3<span class="u"> canais</span></div><div class="l">WhatsApp · Instagram · e-mail</div></div>
+      <div><div class="n">R$ 0<span class="u"></span></div><div class="l">pra começar — sem cartão</div></div>
+      <div><div class="n">24<span class="u">h</span></div><div class="l">automações rodando sozinhas</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- MÓDULOS (light) -->
+<section class="sec sec--light">
+  <div class="wrap">
+    <div class="sec__head">
+      <span class="eyebrow">Tudo num só lugar</span>
+      <h2>Pare de pular entre 5 sistemas</h2>
+      <p>Cliente cadastrado aqui já aparece na cobrança, no contrato, no atendimento e no SmartFlow. Sem integração frágil entre ferramentas diferentes.</p>
+    </div>
+    <div class="mods">
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div><h3>CRM jurídico</h3><p>Cadastro completo: CPF/CNPJ, profissão, estado civil, endereço — pronto pra contrato.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Financeiro + Asaas</h3><p>Pix, boleto e cartão emitidos na plataforma. Cobrança recorrente e fluxo de caixa.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><h3>Comissões</h3><p>Atendente fechou? O sistema calcula a comissão e lança a despesa. Sem planilha.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg></div><h3>Modelos de contrato</h3><p>DOCX com placeholders que mapeiam pro cadastro ou pra preenchimento na hora.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="9" y2="11"/></svg></div><h3>Cálculos jurídicos</h3><p>Bancário, trabalhista, tributário, previdenciário, imobiliário. Resultado em PDF.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg></div><h3>Processos &amp; Kanban</h3><p>Monitoramento por CPF/CNPJ com motor próprio, alertas de movimentação e prazos.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><h3>Agenda</h3><p>Compromissos, audiências e prazos com lembretes automáticos — integra com Cal.com.</p></div>
+      <div class="mod"><div class="mod__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><h3>SmartFlow + Agentes IA</h3><p>Cobra inadimplente, qualifica lead e responde dúvida técnica. Automação 24h.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- DIFERENCIAIS (dark) -->
+<section class="sec sec--dark">
+  <div class="wrap">
+    <div class="sec__head">
+      <span class="eyebrow" style="color:#a78bfa;">Por que JuridFlow</span>
+      <h2>3 coisas que ninguém mais faz</h2>
+      <p>Software jurídico tradicional foca em CRM ou peticionamento. O JuridFlow foi construído pra ser o sistema operacional inteiro do escritório.</p>
+    </div>
+    <div class="diffs">
+      <div class="diff">
+        <div class="diff__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <h3>Asaas embutido</h3>
+        <p>Não é só geração de boleto: é financeiro completo com Pix nativo, cartão, recorrência e comissão por atendente.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Pix instantâneo, sem taxa fixa por boleto</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Webhook: cliente pagou → comissão lançada</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Cobrança manual offline (dinheiro/transf.)</li>
+        </ul>
+      </div>
+      <div class="diff">
+        <div class="diff__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg></div>
+        <h3>IA nativa, não plugin</h3>
+        <p>Agentes que respondem no WhatsApp, qualificam leads e cobram inadimplentes — treinados com os documentos do seu escritório.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> SmartFlow visual: arrasta passos, sem código</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Brief instantâneo + resposta sugerida</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Compliance Guard contra promessa de resultado</li>
+        </ul>
+      </div>
+      <div class="diff">
+        <div class="diff__ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg></div>
+        <h3>Motor próprio de processos</h3>
+        <p>Monitora processos por CPF/CNPJ direto nos tribunais, com análise estratégica por IA e mensagem pronta pro cliente.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Alertas de movimentação por palavra-chave</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Cofre de credenciais OAB (segredo de justiça)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Roadmap público: você vota nas próximas features</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING (light) -->
+<section class="sec sec--light">
+  <div class="wrap">
+    <div class="sec__head">
+      <span class="eyebrow">Planos</span>
+      <h2>Comece grátis. Cresça quando quiser.</h2>
+      <p>14 dias de teste em qualquer plano pago. Sem cartão de crédito pra começar.</p>
+    </div>
+    <div class="price">
+      <div class="plan">
+        <h3>Free</h3><div class="who">Advogado começando</div><div class="val">R$ 0</div><div class="trial">&nbsp;</div>
+        <button class="btn btn-outline">Criar conta grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 usuário</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 10 clientes</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 3 créditos de cálculos/mês</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Modelos de contrato básicos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte por e-mail</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>Básico</h3><div class="who">Advogado autônomo ou dupla</div><div class="val">R$ 97<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div>
+        <button class="btn btn-outline">Começar grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 colaborador</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 100 clientes ativos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Cálculos jurídicos completos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Financeiro com Asaas</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte por chat</li>
+        </ul>
+      </div>
+      <div class="plan pop">
+        <span class="tag">Mais popular</span>
+        <h3>Intermediário</h3><div class="who">Escritório pequeno (3–10 advogados)</div><div class="val">R$ 247<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div>
+        <button class="btn btn-primary">Começar grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Até 5 colaboradores</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Clientes ilimitados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Atendimento WhatsApp + Instagram</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Comissões automáticas</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> SmartFlow básico</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>Completo</h3><div class="who">Escritório com equipe (10+)</div><div class="val">R$ 497<small>/mês</small></div><div class="trial">Teste 14 dias grátis</div>
+        <button class="btn btn-outline">Começar grátis</button>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Colaboradores ilimitados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Múltiplas conexões WhatsApp</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Agentes IA personalizados</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Monitoramento de processos ilimitado</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Suporte prioritário + onboarding</li>
+        </ul>
+      </div>
+    </div>
+    <p class="price__note">Valores em reais. Pagamento via Pix, boleto ou cartão (Asaas). Você só é cobrado se autorizar — nada automático no fim do teste.</p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="wrap">
+    <h2>O escritório inteiro, num login.</h2>
+    <p>14 dias grátis em qualquer plano. Sem cartão de crédito. Cancele quando quiser.</p>
+    <button class="btn btn-primary btn-lg">Criar conta grátis<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__grid">
+      <div>
+        <span class="logo logo--sm logo--light"><span class="j">Jurid</span><span class="f">Flow</span></span>
+        <p>O sistema operacional do escritório de advocacia moderno.</p>
+      </div>
+      <div><h4>Produto</h4><ul><li><a>Recursos</a></li><li><a>Planos</a></li><li><a>Roadmap</a></li><li><a>Demonstração</a></li></ul></div>
+      <div><h4>Legal</h4><ul><li><a>Termos de uso</a></li><li><a>Privacidade</a></li></ul></div>
+      <div><h4>Suporte</h4><ul><li><a>contato@juridflow.com.br</a></li></ul></div>
+    </div>
+    <div class="foot__bar"><span>© 2026 JuridFlow. Todos os direitos reservados.</span><span>Feito pra advogados que detestam Excel.</span></div>
+  </div>
+</footer>
+
+</body>
+</html>

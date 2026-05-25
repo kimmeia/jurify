@@ -121,3 +121,6 @@ test-results/
 playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# LP mockups — PNGs gerados (reproduzíveis via render.mjs)
+docs/lp-mockups/out-*.png
