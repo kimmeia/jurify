@@ -15,10 +15,14 @@ export function CtaFinal({ onCta }: Props) {
     <section className="mx-auto max-w-6xl px-4 pb-24 pt-8">
       <Reveal>
         <div
-          className="relative overflow-hidden rounded-[28px] p-12 text-center lg:p-16"
-          style={{ background: "radial-gradient(120% 140% at 50% -10%, #2a1066, #0d0a1c)" }}
+          className="relative overflow-hidden rounded-[28px] border border-white/10 p-12 text-center shadow-[0_50px_120px_-30px_rgba(124,58,237,0.7)] lg:p-16"
+          style={{ background: "linear-gradient(120deg, #4c1d95, #7c3aed 55%, #4f46e5)" }}
         >
-          <Aurora intensity={0.6} />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(circle at 78% 18%, rgba(255,255,255,.22), transparent 42%)" }}
+          />
+          <Aurora intensity={0.5} />
           <div className="relative z-10">
             <h2 className="font-display text-3xl font-extrabold tracking-tight text-white md:text-5xl">
               Comece em 5 minutos.

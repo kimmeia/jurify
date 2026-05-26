@@ -44,13 +44,13 @@ export function Comparativo() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-24">
       <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">
           Por que sair do que você usa hoje
         </p>
-        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
+        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
           3 coisas que ninguém mais faz
         </h2>
-        <p className="mt-4 text-lg text-muted-foreground">
+        <p className="mt-4 text-lg text-violet-100/70">
           Software jurídico tradicional foca em CRM ou peticionamento. O JuridFlow foi
           construído pra ser o sistema operacional inteiro do escritório.
         </p>
@@ -67,17 +67,17 @@ export function Comparativo() {
           <motion.div
             key={d.titulo}
             variants={staggerItem}
-            className="flex flex-col rounded-2xl border bg-card p-7 transition-all hover:-translate-y-1 hover:border-violet-300 hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.4)]"
+            className="flex flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-7 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
           >
-            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100">
-              <d.icon className="h-6 w-6 text-violet-600" />
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15">
+              <d.icon className="h-6 w-6 text-violet-200" />
             </div>
-            <h3 className="font-display mb-3 text-xl font-bold">{d.titulo}</h3>
-            <p className="mb-5 text-sm leading-relaxed text-muted-foreground">{d.desc}</p>
-            <ul className="mt-auto space-y-2.5">
+            <h3 className="font-display mb-3 text-xl font-bold text-white">{d.titulo}</h3>
+            <p className="mb-5 text-sm leading-relaxed text-violet-100/65">{d.desc}</p>
+            <ul className="mt-auto space-y-2.5 text-violet-100/80">
               {d.bullets.map((b) => (
                 <li key={b} className="flex items-start gap-2 text-sm">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
                   <span>{b}</span>
                 </li>
               ))}

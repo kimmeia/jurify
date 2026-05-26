@@ -79,7 +79,7 @@ export default function Home() {
   if (user) return null; // redirect via useEffect
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#07060f]">
       {/* Navbar fixa */}
       <Navbar onCta={setAuthOpen} />
 
@@ -139,20 +139,17 @@ function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const linkCls = cn(
-    "hidden px-3 text-sm transition-colors sm:inline-block",
-    scrolled ? "text-muted-foreground hover:text-foreground" : "text-white/75 hover:text-white",
-  );
+  const linkCls = "hidden px-3 text-sm text-white/75 transition-colors hover:text-white sm:inline-block";
 
   return (
     <nav
       className={cn(
         "fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300",
-        scrolled ? "border-border bg-background/80 backdrop-blur-md" : "border-transparent bg-transparent",
+        scrolled ? "border-white/10 bg-[#07060f]/80 backdrop-blur-md" : "border-transparent bg-transparent",
       )}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Logo className="text-xl" variant={scrolled ? "light" : "dark"} />
+        <Logo className="text-xl" variant="dark" />
 
         <div className="flex items-center gap-2">
           <a href="#smartflow" className={linkCls}>Recursos</a>
@@ -162,7 +159,7 @@ function Navbar({ onCta }: { onCta: (modo: "login" | "signup") => void }) {
             variant="ghost"
             size="sm"
             onClick={() => onCta("login")}
-            className={scrolled ? "" : "text-white hover:bg-white/10 hover:text-white"}
+            className="text-white hover:bg-white/10 hover:text-white"
           >
             Entrar
           </Button>

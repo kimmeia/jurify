@@ -1,6 +1,6 @@
 /**
  * Módulos em bento grid — uma célula-destaque escura (Atendimento) ancora
- * o layout, cercada por cards claros e um card largo (Processos).
+ * o layout, cercada por cards de vidro e um card largo (Processos).
  */
 
 import { motion } from "framer-motion";
@@ -19,11 +19,11 @@ export function Pilares() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-24">
       <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-600">Tudo num só lugar</p>
-        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-violet-300">Tudo num só lugar</p>
+        <h2 className="font-display mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
           Módulos que conversam entre si
         </h2>
-        <p className="mt-4 text-lg text-muted-foreground">
+        <p className="mt-4 text-lg text-violet-100/70">
           Cliente cadastrado aqui já aparece na cobrança, no contrato, no atendimento e no
           SmartFlow. Sem integração frágil entre sistemas diferentes.
         </p>
@@ -36,7 +36,7 @@ export function Pilares() {
         viewport={{ once: true, margin: "-60px" }}
         className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[168px]"
       >
-        {/* Feature cell — dark */}
+        {/* Feature cell — destaque */}
         <motion.div
           variants={staggerItem}
           className="group relative overflow-hidden rounded-2xl border border-violet-400/40 p-6 text-white sm:col-span-2 lg:row-span-2"
@@ -66,13 +66,13 @@ export function Pilares() {
         {/* Wide cell */}
         <motion.div
           variants={staggerItem}
-          className="group rounded-2xl border bg-card p-6 transition-all hover:-translate-y-1 hover:border-violet-300 hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)] sm:col-span-2 lg:col-span-3"
+          className="group rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)] sm:col-span-2 lg:col-span-3"
         >
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100">
-            <FileSearch className="h-5 w-5 text-violet-600" />
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15">
+            <FileSearch className="h-5 w-5 text-violet-200" />
           </div>
-          <h3 className="font-bold">Processos &amp; Kanban — motor próprio</h3>
-          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          <h3 className="font-bold text-white">Processos &amp; Kanban — motor próprio</h3>
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-violet-100/65">
             Monitoramento por CPF/CNPJ direto nos tribunais, alertas de movimentação por
             palavra-chave e prazos no Kanban.
           </p>
@@ -94,13 +94,13 @@ function BentoCell({
   return (
     <motion.div
       variants={staggerItem}
-      className="group rounded-2xl border bg-card p-5 transition-all hover:-translate-y-1 hover:border-violet-300 hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
+      className="group rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition-all hover:-translate-y-1 hover:border-violet-400/40 hover:bg-white/[0.06] hover:shadow-[0_24px_50px_-22px_rgba(124,58,237,0.45)]"
     >
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-white transition-transform group-hover:scale-110">
-        <Icon className="h-5 w-5 text-violet-600" />
+      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/15 transition-transform group-hover:scale-110">
+        <Icon className="h-5 w-5 text-violet-200" />
       </div>
-      <h3 className="mb-1.5 font-bold">{titulo}</h3>
-      <p className="text-sm leading-relaxed text-muted-foreground">{desc}</p>
+      <h3 className="mb-1.5 font-bold text-white">{titulo}</h3>
+      <p className="text-sm leading-relaxed text-violet-100/65">{desc}</p>
     </motion.div>
   );
 }
