@@ -29,6 +29,7 @@ import {
 import { InadimplentesSection } from "./financeiro/InadimplentesSection";
 import { CuponsSection } from "./financeiro/CuponsSection";
 import { PlanosSection } from "./financeiro/PlanosSection";
+import { KPICard } from "../dashboards/common";
 
 function formatBRL(cents: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -190,123 +191,172 @@ export default function AdminFinanceiro() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/40 dark:to-green-900/40">
-            <DollarSign className="h-6 w-6 text-emerald-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Financeiro SaaS</h1>
-            <p className="text-muted-foreground mt-1">
-              Gestão da cobrança dos escritórios assinantes do JuridFlow.
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={refetchAll}>
-          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-          Atualizar
-        </Button>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm text-muted-foreground">MRR</CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatBRL(kpis?.mrr ?? 0)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {kpis?.assinaturasAtivas ?? 0} assinaturas ativas
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm text-muted-foreground">Recebido 30d</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatBRL(kpis?.receita30d ?? 0)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {kpis?.pago30d ?? 0} pagamentos recebidos
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm text-muted-foreground">Pendente</CardTitle>
-            <Hourglass className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatBRL(kpis?.pendente ?? 0)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Aguardando pagamento
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-red-500/20">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm text-muted-foreground">Vencido</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">{formatBRL(kpis?.vencido ?? 0)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Requer cobrança ativa
-            </p>
-          </CardContent>
-        </Card>
-
-      </div>
-
-      {/* Saldo Asaas */}
-      <Card>
-        <CardContent className="pt-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Wallet className="h-5 w-5 text-emerald-600" />
+      {/* ═══════════ HERO FINANCEIRO ═══════════ */}
+      <div className="rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 p-7 text-white relative overflow-hidden shadow-lg">
+        <Wallet className="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" strokeWidth={1.2} />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
             <div>
-              <p className="text-sm text-muted-foreground">Saldo disponível no Asaas ({status.modo})</p>
-              <p className="text-xl font-bold">{formatBRL((status?.saldo ?? 0) * 100)}</p>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="relative inline-flex items-center justify-center w-1.5 h-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-100" />
+                </span>
+                <p className="text-xs font-medium text-white/85 uppercase tracking-wider">Faturamento da plataforma</p>
+              </div>
+              <p className="text-xs text-white/70">Assinaturas dos escritórios · via Asaas</p>
+            </div>
+            <Button
+              variant="ghost" size="sm" onClick={refetchAll}
+              className="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm h-8 text-xs"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Atualizar
+            </Button>
+          </div>
+          <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+            <div className="lg:col-span-7">
+              <p className="text-sm font-medium text-white/80 mb-1">Receita recorrente mensal (MRR)</p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className="text-5xl font-extrabold tracking-tight tabular-nums leading-none">{formatBRL(kpis?.mrr ?? 0)}</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-300/25 text-emerald-50 border border-emerald-200/30">
+                  <TrendingUp className="w-3 h-3" /> {kpis?.assinaturasAtivas ?? 0} assinaturas ativas
+                </span>
+              </div>
+              <p className="text-xs text-white/65 mt-2 tabular-nums">
+                ARR projetado: {formatBRL((kpis?.mrr ?? 0) * 12)} · recebido nos últimos 30 dias: {formatBRL(kpis?.receita30d ?? 0)}
+              </p>
+            </div>
+            <div className="lg:col-span-5 flex items-center justify-center lg:justify-end">
+              {(() => {
+                const recebido = kpis?.receita30d ?? 0;
+                const vencido = kpis?.vencido ?? 0;
+                const denom = recebido + vencido;
+                const rate = denom > 0 ? Math.round((recebido / denom) * 100) : 100;
+                const c = 2 * Math.PI * 54;
+                const off = c * (1 - rate / 100);
+                return (
+                  <div className="relative w-32 h-32">
+                    <svg width="128" height="128" viewBox="0 0 128 128" className="-rotate-90">
+                      <circle cx="64" cy="64" r="54" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="9" />
+                      <circle cx="64" cy="64" r="54" fill="none" stroke="white" strokeWidth="9" strokeLinecap="round"
+                        strokeDasharray={c} strokeDashoffset={off} style={{ transition: "stroke-dashoffset 0.6s ease" }} />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-bold tabular-nums leading-none">{rate}%</span>
+                      <span className="text-[10px] text-white/75 uppercase tracking-wider mt-1">Adimplência</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Status Asaas — degradado se obterSaldo falhou (status.erro) */}
+      {status.erro ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-amber-950/20 dark:border-amber-900">
+          <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 grid place-items-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Asaas conectado, mas o saldo está indisponível
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 ml-1.5 dark:bg-amber-800 dark:text-amber-100">{status.modo}</span>
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 truncate">{status.erro}</p>
+          </div>
           <a
-            href="https://www.asaas.com/home"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+            href="https://www.asaas.com/home" target="_blank" rel="noopener noreferrer"
+            className="text-xs font-medium text-amber-700 hover:underline inline-flex items-center gap-1 dark:text-amber-300"
           >
             Abrir painel Asaas <ExternalLink className="h-3 w-3" />
           </a>
-        </CardContent>
-      </Card>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 flex-wrap dark:bg-emerald-950/20 dark:border-emerald-900">
+          <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center shrink-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+              Asaas conectado
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 ml-1.5 dark:bg-emerald-800 dark:text-emerald-100">{status.modo}</span>
+            </p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">
+              Saldo disponível {status.saldo != null ? formatBRL(status.saldo * 100) : "—"}
+            </p>
+          </div>
+          <a
+            href="https://www.asaas.com/home" target="_blank" rel="noopener noreferrer"
+            className="text-xs font-medium text-emerald-700 hover:underline inline-flex items-center gap-1 dark:text-emerald-300"
+          >
+            Abrir painel Asaas <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      )}
+
+      {/* KPI cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KPICard
+          label="MRR"
+          value={formatBRL(kpis?.mrr ?? 0)}
+          icon={Repeat}
+          iconBg="bg-emerald-500/10"
+          iconFg="text-emerald-600"
+          hint={`${kpis?.assinaturasAtivas ?? 0} assinaturas ativas`}
+        />
+        <KPICard
+          label="Recebido (30d)"
+          value={formatBRL(kpis?.receita30d ?? 0)}
+          icon={TrendingUp}
+          iconBg="bg-blue-500/10"
+          iconFg="text-blue-600"
+          hint={`${kpis?.pago30d ?? 0} pagamentos recebidos`}
+        />
+        <KPICard
+          label="Pendente"
+          value={formatBRL(kpis?.pendente ?? 0)}
+          icon={Hourglass}
+          iconBg="bg-amber-500/10"
+          iconFg="text-amber-600"
+          hint="Aguardando pagamento"
+        />
+        <KPICard
+          label="Vencido"
+          value={formatBRL(kpis?.vencido ?? 0)}
+          icon={AlertTriangle}
+          iconBg="bg-rose-500/10"
+          iconFg="text-rose-600"
+          valueColor="text-rose-600"
+          hint="Requer cobrança ativa"
+        />
+      </div>
 
       {/* Tabs: Cash Flow / Pagamentos / Assinaturas / Inadimplência / Cupons / Planos */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="visao" className="text-xs">
-            <TrendingUp className="h-3.5 w-3.5 mr-1.5" /> Cash Flow
-          </TabsTrigger>
-          <TabsTrigger value="pagamentos" className="text-xs">
-            <Receipt className="h-3.5 w-3.5 mr-1.5" /> Pagamentos
-          </TabsTrigger>
-          <TabsTrigger value="assinaturas" className="text-xs">
-            <Repeat className="h-3.5 w-3.5 mr-1.5" /> Assinaturas
-          </TabsTrigger>
-          <TabsTrigger value="inadimplencia" className="text-xs">
-            <AlertTriangle className="h-3.5 w-3.5 mr-1.5" /> Inadimplência
-          </TabsTrigger>
-          <TabsTrigger value="cupons" className="text-xs">
-            <Tag className="h-3.5 w-3.5 mr-1.5" /> Cupons
-          </TabsTrigger>
-          <TabsTrigger value="planos" className="text-xs">
-            <Package className="h-3.5 w-3.5 mr-1.5" /> Planos
-          </TabsTrigger>
-        </TabsList>
+        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex dark:bg-slate-900/40 dark:border-slate-800">
+          <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
+            <TabsTrigger value="visao" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <TrendingUp className="h-3.5 w-3.5" /> Visão
+            </TabsTrigger>
+            <TabsTrigger value="pagamentos" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Receipt className="h-3.5 w-3.5" /> Pagamentos
+            </TabsTrigger>
+            <TabsTrigger value="assinaturas" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Repeat className="h-3.5 w-3.5" /> Assinaturas
+            </TabsTrigger>
+            <TabsTrigger value="inadimplencia" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <AlertTriangle className="h-3.5 w-3.5" /> Inadimplência
+            </TabsTrigger>
+            <TabsTrigger value="cupons" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Tag className="h-3.5 w-3.5" /> Cupons
+            </TabsTrigger>
+            <TabsTrigger value="planos" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+              <Package className="h-3.5 w-3.5" /> Planos
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ─── Cash flow ─── */}
         <TabsContent value="visao" className="mt-4">

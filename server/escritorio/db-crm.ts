@@ -137,6 +137,15 @@ export async function criarOuReutilizarContato(dados: {
   escritorioId: number; nome: string; telefone?: string; email?: string;
   cpfCnpj?: string; origem?: string; tags?: string[]; observacoes?: string;
   responsavelId?: number;
+  /**
+   * Estágio do cadastro novo. Default 'lead' — esta função só é chamada
+   * pelos fluxos de atendimento (WhatsApp recebido, iniciar conversa,
+   * novo contato no Atendimento), e quem chega pelo atendimento é lead até
+   * fechar contrato. Cadastro manual de cliente (tela Clientes) e sync
+   * Asaas usam outro caminho de insert e ficam 'cliente' pelo default da
+   * coluna. Reaproveitar contato existente NÃO altera o estágio dele.
+   */
+  estagio?: "lead" | "cliente";
 }): Promise<{ id: number; jaCadastrado: boolean }> {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -169,6 +178,7 @@ export async function criarOuReutilizarContato(dados: {
     email: dados.email || null,
     cpfCnpj: cpfLimpo || null,
     origem: validarOrigem(dados.origem),
+    estagio: dados.estagio ?? "lead",
     tags: dados.tags ? JSON.stringify(dados.tags) : null,
     observacoes: dados.observacoes || null,
     responsavelId: dados.responsavelId ?? null,

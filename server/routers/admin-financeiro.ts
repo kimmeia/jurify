@@ -42,19 +42,20 @@ export const adminFinanceiroRouter = router({
   /** Status da integração + saldo atual */
   status: adminProcedure.query(async () => {
     const ok = await isAsaasBillingConfigured();
-    if (!ok) return { conectado: false, saldo: 0, modo: "sandbox" as const };
+    if (!ok) return { conectado: false, saldo: null as number | null, modo: "sandbox" as string, erro: null as string | null };
 
+    let modo: string = "sandbox";
     try {
       const client = await getAdminAsaasClient();
+      modo = client.modo;
       const saldo = await client.obterSaldo();
-      return {
-        conectado: true,
-        saldo: saldo.balance,
-        modo: client.modo,
-      };
+      return { conectado: true, saldo: saldo.balance as number | null, modo, erro: null as string | null };
     } catch (err: any) {
+      // NÃO mascarar a falha como "sandbox, R$0" — isso escondia outage/auth
+      // do Asaas atrás de um estado aparentemente saudável. Reporta o erro
+      // real + o modo real do client pra UI mostrar estado degradado.
       log.error({ err: err.message }, "Falha ao buscar saldo Asaas");
-      return { conectado: true, saldo: 0, modo: "sandbox" as const };
+      return { conectado: true, saldo: null as number | null, modo, erro: err.message as string | null };
     }
   }),
 

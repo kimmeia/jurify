@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Redesign do Painel Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          display: ['Poppins', 'Inter', 'sans-serif'],
+        },
+        colors: {
+          // Aproximação RGB dos tokens OKLCH do tema real (primary oklch(0.45 0.18 260) ~ indigo/violeta)
+          primary: '#4f46e5',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; }
+  .font-display { font-family: 'Poppins', 'Inter', sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .pulse-dot { position: relative; width: 6px; height: 6px; }
+  .pulse-dot::before { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: #6ee7b7; opacity: .75; animation: ping 1.6s cubic-bezier(0,0,.2,1) infinite; }
+  .pulse-dot::after { content: ''; position: absolute; inset: 0; border-radius: 9999px; background: #34d399; }
+  @keyframes ping { 75%,100% { transform: scale(2.4); opacity: 0; } }
+  .nav-item.active { background: #eef2ff; color: #4f46e5; font-weight: 600; }
+  .nav-item.active .nav-ico { color: #4f46e5; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- ════════════════════════ BARRA EXPLICATIVA ════════════════════════ -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between gap-4 sticky top-0 z-50">
+  <div class="flex items-center gap-2 min-w-0">
+    <i data-lucide="shield-check" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+    <span class="font-semibold truncate">Proposta de redesign — Painel Admin (JuridFlow)</span>
+    <span class="text-slate-500 hidden sm:inline">·</span>
+    <span class="text-slate-400 hidden sm:inline truncate">Mesmo padrão visual dos dashboards do cliente (hero executivo + KPI cards)</span>
+  </div>
+  <span class="text-xs text-slate-400 shrink-0 hidden md:inline">Clique no menu lateral para navegar entre as telas →</span>
+</div>
+
+<!-- ════════════════════════ SHELL DO APP ════════════════════════ -->
+<div class="flex min-h-[calc(100vh-49px)]">
+
+  <!-- ─────────── SIDEBAR ─────────── -->
+  <aside class="w-[248px] shrink-0 bg-[#fbfbfe] border-r border-slate-200 flex flex-col">
+    <!-- header -->
+    <div class="h-16 flex items-center gap-3 px-4 border-b border-slate-100">
+      <button class="h-8 w-8 grid place-items-center rounded-lg hover:bg-slate-100 text-slate-500">
+        <i data-lucide="panel-left" class="w-4 h-4"></i>
+      </button>
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="font-semibold tracking-tight text-slate-800">Admin</span>
+        <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-600 text-white">Painel</span>
+      </div>
+    </div>
+    <!-- nav -->
+    <nav class="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+      <button data-nav="visao" class="nav-item active w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="layout-dashboard" class="nav-ico w-4 h-4 text-slate-500"></i><span>Visão Geral</span>
+      </button>
+      <button data-nav="clientes" class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="users" class="nav-ico w-4 h-4 text-slate-500"></i><span>Clientes</span>
+      </button>
+      <button data-nav="financeiro" class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="dollar-sign" class="nav-ico w-4 h-4 text-slate-500"></i><span>Financeiro</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="credit-card" class="nav-ico w-4 h-4 text-slate-500"></i><span>Assinaturas</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="brain-circuit" class="nav-ico w-4 h-4 text-slate-500"></i><span>Agentes IA</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="bar-chart-3" class="nav-ico w-4 h-4 text-slate-500"></i><span>Relatórios</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="scroll-text" class="nav-ico w-4 h-4 text-slate-500"></i><span>Auditoria</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="bug" class="nav-ico w-4 h-4 text-slate-500"></i><span>Erros</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="radar" class="nav-ico w-4 h-4 text-slate-500"></i><span>Tribunais</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="mail" class="nav-ico w-4 h-4 text-slate-500"></i><span>Log de Emails</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="database" class="nav-ico w-4 h-4 text-slate-500"></i><span>Backups</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="plug" class="nav-ico w-4 h-4 text-slate-500"></i><span>Integrações</span>
+      </button>
+      <button class="nav-item w-full flex items-center gap-3 h-10 px-3 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition">
+        <i data-lucide="settings" class="nav-ico w-4 h-4 text-slate-500"></i><span>Configurações</span>
+      </button>
+    </nav>
+    <!-- footer -->
+    <div class="p-3 border-t border-slate-100">
+      <div class="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-slate-100">
+        <div class="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-xs font-semibold">R</div>
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate leading-none text-slate-800">Rafael Rocha</p>
+          <p class="text-xs text-slate-400 truncate mt-1">mkt@juridflow.com</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ─────────── CONTEÚDO ─────────── -->
+  <main class="flex-1 p-6 overflow-x-hidden">
+
+    <!-- ══════════════ TELA: VISÃO GERAL ══════════════ -->
+    <section data-screen="visao" class="space-y-6 max-w-[1180px]">
+
+      <!-- HERO executivo (gradiente slate→indigo, igual ao "Dashboard Geral" do cliente) -->
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-7 text-white shadow-lg">
+        <i data-lucide="trending-up" class="absolute -right-8 -bottom-10 w-56 h-56 opacity-10" stroke-width="1.2"></i>
+        <div class="relative">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-1">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="pulse-dot"></span>
+                <p class="text-xs font-medium text-white/85 uppercase tracking-wider">Plataforma · Visão consolidada</p>
+              </div>
+              <p class="text-xs text-white/70">01 mai — 26 mai · 2026</p>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/15 border border-white/20">
+              <i data-lucide="zap" class="w-3.5 h-3.5"></i> Tempo real
+            </span>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+            <div class="lg:col-span-7">
+              <p class="text-sm font-medium text-white/80 mb-1">Receita recorrente mensal (MRR)</p>
+              <div class="flex items-baseline gap-3 flex-wrap">
+                <span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none font-display">R$ 48.250</span>
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30">
+                  <i data-lucide="trending-up" class="w-3 h-3"></i> +12,4%
+                </span>
+              </div>
+              <p class="text-xs text-white/65 mt-2 tabular-nums">ARR projetado: R$ 579.000 · ticket médio R$ 189/mês</p>
+              <div class="mt-4 max-w-md">
+                <div class="flex justify-between text-[11px] text-white/75 mb-1.5">
+                  <span>Meta do mês (R$ 55.000)</span><span>88%</span>
+                </div>
+                <div class="h-2 bg-white/15 rounded-full overflow-hidden">
+                  <div style="width:88%" class="h-full rounded-full bg-gradient-to-r from-emerald-300 via-emerald-200 to-white"></div>
+                </div>
+              </div>
+            </div>
+            <div class="lg:col-span-5 flex items-center justify-center lg:justify-end">
+              <div class="relative w-36 h-36">
+                <svg width="144" height="144" viewBox="0 0 144 144" class="-rotate-90">
+                  <circle cx="72" cy="72" r="62" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="9"></circle>
+                  <circle cx="72" cy="72" r="62" fill="none" stroke="white" stroke-width="9" stroke-linecap="round"
+                    stroke-dasharray="389.6" stroke-dashoffset="62.3"></circle>
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                  <span class="text-3xl font-bold tabular-nums leading-none">84%</span>
+                  <span class="text-[10px] text-white/75 uppercase tracking-wider mt-1.5">Retenção 12m</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI CARDS (padrão KPICard do cliente: ícone tintado + valor 2xl + badge variação) -->
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <!-- card -->
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 grid place-items-center"><i data-lucide="dollar-sign" class="w-5 h-5 text-emerald-600"></i></div>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700"><i data-lucide="trending-up" class="w-3 h-3"></i>+12,4%</span>
+          </div>
+          <p class="text-2xl font-bold tracking-tight tabular-nums leading-none text-slate-900">R$ 48.250</p>
+          <p class="text-xs text-slate-500 mt-1.5">Receita mensal (MRR)</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 grid place-items-center"><i data-lucide="credit-card" class="w-5 h-5 text-indigo-600"></i></div>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700"><i data-lucide="trending-up" class="w-3 h-3"></i>+6</span>
+          </div>
+          <p class="text-2xl font-bold tracking-tight tabular-nums leading-none text-slate-900">142</p>
+          <p class="text-xs text-slate-500 mt-1.5">Assinaturas ativas <span class="text-slate-400">· +18 em trial</span></p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-violet-500/10 grid place-items-center"><i data-lucide="users" class="w-5 h-5 text-violet-600"></i></div>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700"><i data-lucide="trending-up" class="w-3 h-3"></i>+23</span>
+          </div>
+          <p class="text-2xl font-bold tracking-tight tabular-nums leading-none text-slate-900">389</p>
+          <p class="text-xs text-slate-500 mt-1.5">Total de escritórios</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/10 grid place-items-center"><i data-lucide="target" class="w-5 h-5 text-amber-600"></i></div>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700"><i data-lucide="trending-down" class="w-3 h-3"></i>-1,2pp</span>
+          </div>
+          <p class="text-2xl font-bold tracking-tight tabular-nums leading-none text-slate-900">36,5%</p>
+          <p class="text-xs text-slate-500 mt-1.5">Conversão trial → pago</p>
+        </div>
+      </div>
+
+      <!-- CHURN / RETENÇÃO -->
+      <div>
+        <h3 class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-slate-400"></i> Churn & retenção</h3>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div class="rounded-xl bg-white border border-slate-200 p-5">
+            <div class="flex items-center justify-between pb-2">
+              <p class="text-sm font-medium text-slate-500">Churn (3 meses)</p>
+              <i data-lucide="trending-down" class="w-4 h-4 text-rose-500"></i>
+            </div>
+            <p class="text-2xl font-bold text-emerald-600 tabular-nums">2,8%</p>
+            <p class="text-xs text-slate-400 mt-1">Média móvel de cancelamentos</p>
+          </div>
+          <div class="rounded-xl bg-white border border-slate-200 p-5">
+            <div class="flex items-center justify-between pb-2">
+              <p class="text-sm font-medium text-slate-500">LTV estimado</p>
+              <i data-lucide="target" class="w-4 h-4 text-violet-500"></i>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 tabular-nums">R$ 6.750</p>
+            <p class="text-xs text-slate-400 mt-1">ARPU ÷ churn mensal</p>
+          </div>
+          <div class="rounded-xl bg-white border border-slate-200 p-5">
+            <div class="flex items-center justify-between pb-2">
+              <p class="text-sm font-medium text-slate-500">Retenção 12 meses</p>
+              <i data-lucide="activity" class="w-4 h-4 text-indigo-500"></i>
+            </div>
+            <p class="text-2xl font-bold text-slate-900 tabular-nums">84%</p>
+            <p class="text-xs text-slate-400 mt-1">Clientes antigos ainda ativos</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- DUAS TABELAS -->
+      <div class="grid gap-6 lg:grid-cols-2">
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+          <div class="px-5 pt-5 pb-3 border-b border-slate-100">
+            <h3 class="text-base font-semibold text-slate-800">Últimas assinaturas</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Assinaturas mais recentes na plataforma</p>
+          </div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+              <th class="px-5 py-2.5 font-medium">Escritório</th><th class="py-2.5 font-medium">Plano</th><th class="py-2.5 pr-5 font-medium">Status</th>
+            </tr></thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr><td class="px-5 py-3 flex items-center gap-2.5"><span class="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white grid place-items-center text-[11px] font-semibold">AS</span><span class="font-medium text-slate-700">Adv. Silva</span></td><td class="text-slate-500">Completo</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span></td></tr>
+              <tr><td class="px-5 py-3 flex items-center gap-2.5"><span class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white grid place-items-center text-[11px] font-semibold">MC</span><span class="font-medium text-slate-700">Mendes & Costa</span></td><td class="text-slate-500">Intermediário</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">Trial</span></td></tr>
+              <tr><td class="px-5 py-3 flex items-center gap-2.5"><span class="h-7 w-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white grid place-items-center text-[11px] font-semibold">LP</span><span class="font-medium text-slate-700">Lima Pereira</span></td><td class="text-slate-500">Básico</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span></td></tr>
+              <tr><td class="px-5 py-3 flex items-center gap-2.5"><span class="h-7 w-7 rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 text-white grid place-items-center text-[11px] font-semibold">RA</span><span class="font-medium text-slate-700">Ramos Adv.</span></td><td class="text-slate-500">Completo</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">Vencida</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+          <div class="px-5 pt-5 pb-3 border-b border-slate-100">
+            <h3 class="text-base font-semibold text-slate-800">Novos escritórios</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Últimos registros na plataforma</p>
+          </div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+              <th class="px-5 py-2.5 font-medium">Nome</th><th class="py-2.5 font-medium">Email</th><th class="py-2.5 pr-5 font-medium">Registro</th>
+            </tr></thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr><td class="px-5 py-3 font-medium text-slate-700">Carla Souza</td><td class="text-slate-500">carla@adv.com</td><td class="pr-5 text-slate-400">24/05</td></tr>
+              <tr><td class="px-5 py-3 font-medium text-slate-700">João Martins</td><td class="text-slate-500">joao@jm.adv.br</td><td class="pr-5 text-slate-400">23/05</td></tr>
+              <tr><td class="px-5 py-3 font-medium text-slate-700">Beatriz Alves</td><td class="text-slate-500">bia@alvesadv.com</td><td class="pr-5 text-slate-400">22/05</td></tr>
+              <tr><td class="px-5 py-3 font-medium text-slate-700">Pedro Nunes</td><td class="text-slate-500">pedro@nunes.law</td><td class="pr-5 text-slate-400">21/05</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ TELA: CLIENTES ══════════════ -->
+    <section data-screen="clientes" class="hidden space-y-6 max-w-[1180px]">
+      <div class="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight text-slate-900 font-display">Clientes</h1>
+          <p class="text-slate-500 mt-1 text-sm">389 escritórios cadastrados na plataforma.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input placeholder="Buscar escritório ou e-mail…" class="h-9 w-64 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+          </div>
+          <button class="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 flex items-center gap-1.5 hover:bg-slate-50"><i data-lucide="filter" class="w-4 h-4"></i> Filtros</button>
+        </div>
+      </div>
+
+      <!-- mini KPIs -->
+      <div class="grid gap-4 sm:grid-cols-4">
+        <div class="rounded-xl p-4 border border-indigo-100 bg-indigo-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-indigo-700">Ativos</p><p class="text-2xl font-bold text-indigo-600 tabular-nums mt-1">312</p></div>
+        <div class="rounded-xl p-4 border border-amber-100 bg-amber-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-amber-700">Em trial</p><p class="text-2xl font-bold text-amber-600 tabular-nums mt-1">18</p></div>
+        <div class="rounded-xl p-4 border border-rose-100 bg-rose-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-rose-700">Inadimplentes</p><p class="text-2xl font-bold text-rose-600 tabular-nums mt-1">9</p></div>
+        <div class="rounded-xl p-4 border border-slate-200 bg-slate-50/60"><p class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Suspensos</p><p class="text-2xl font-bold text-slate-600 tabular-nums mt-1">5</p></div>
+      </div>
+
+      <!-- tabela -->
+      <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50/50">
+            <th class="px-5 py-3 font-medium">Escritório</th><th class="py-3 font-medium">Plano</th><th class="py-3 font-medium">Status</th><th class="py-3 font-medium">Último acesso</th><th class="py-3 font-medium">MRR</th><th class="py-3 pr-5 font-medium text-right">Ações</th>
+          </tr></thead>
+          <tbody class="divide-y divide-slate-50">
+            <tr class="hover:bg-slate-50/50">
+              <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white grid place-items-center text-xs font-semibold">AS</span><div><p class="font-medium text-slate-800">Advocacia Silva</p><p class="text-xs text-slate-400">silva@adv.com</p></div></div></td>
+              <td><span class="text-xs text-slate-600">Completo</span></td>
+              <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-600 text-white font-medium">Ativa</span></td>
+              <td class="text-slate-500 text-xs">há 2 horas</td>
+              <td class="font-medium text-slate-700 tabular-nums">R$ 349</td>
+              <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver detalhes</button></td>
+            </tr>
+            <tr class="hover:bg-slate-50/50">
+              <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white grid place-items-center text-xs font-semibold">MC</span><div><p class="font-medium text-slate-800">Mendes &amp; Costa</p><p class="text-xs text-slate-400">contato@mc.adv.br</p></div></div></td>
+              <td><span class="text-xs text-slate-600">Intermediário</span></td>
+              <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Trial</span></td>
+              <td class="text-slate-500 text-xs">ontem</td>
+              <td class="font-medium text-slate-700 tabular-nums">—</td>
+              <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver detalhes</button></td>
+            </tr>
+            <tr class="hover:bg-slate-50/50">
+              <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-9 w-9 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 text-white grid place-items-center text-xs font-semibold">RA</span><div><p class="font-medium text-slate-800">Ramos Advogados</p><p class="text-xs text-slate-400">ramos@ra.law</p></div></div></td>
+              <td><span class="text-xs text-slate-600">Completo</span></td>
+              <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">Vencida</span></td>
+              <td class="text-slate-500 text-xs">há 5 dias</td>
+              <td class="font-medium text-slate-700 tabular-nums">R$ 349</td>
+              <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver detalhes</button></td>
+            </tr>
+            <tr class="hover:bg-slate-50/50">
+              <td class="px-5 py-3"><div class="flex items-center gap-3"><span class="h-9 w-9 rounded-xl bg-gradient-to-br from-slate-500 to-slate-700 text-white grid place-items-center text-xs font-semibold">LP</span><div><p class="font-medium text-slate-800">Lima Pereira</p><p class="text-xs text-slate-400">lp@limapereira.adv.br</p></div></div></td>
+              <td><span class="text-xs text-slate-600">Básico</span></td>
+              <td><span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 font-medium">Suspensa</span></td>
+              <td class="text-slate-500 text-xs">há 1 mês</td>
+              <td class="font-medium text-slate-700 tabular-nums">R$ 149</td>
+              <td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Ver detalhes</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+          <span>Mostrando 1–4 de 389</span>
+          <div class="flex gap-1"><button class="h-7 px-2.5 rounded-md border border-slate-200 text-slate-500">Anterior</button><button class="h-7 px-2.5 rounded-md border border-slate-200 bg-white text-slate-700">Próxima</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ TELA: FINANCEIRO ══════════════ -->
+    <section data-screen="financeiro" class="hidden space-y-6 max-w-[1180px]">
+      <!-- HERO financeiro (gradiente emerald, igual ao DashboardFinanceiro do cliente) -->
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 p-7 text-white shadow-lg">
+        <i data-lucide="wallet" class="absolute -right-8 -bottom-10 w-56 h-56 opacity-10" stroke-width="1.2"></i>
+        <div class="relative">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="pulse-dot"></span>
+            <p class="text-xs font-medium text-white/85 uppercase tracking-wider">Faturamento da plataforma</p>
+          </div>
+          <p class="text-xs text-white/70 mb-5">Recebido nos últimos 30 dias (Asaas)</p>
+          <p class="text-sm font-medium text-white/80 mb-1">Receita recebida</p>
+          <div class="flex items-baseline gap-3 flex-wrap">
+            <span class="text-5xl font-extrabold tracking-tight tabular-nums leading-none font-display">R$ 44.180</span>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30"><i data-lucide="trending-up" class="w-3 h-3"></i> +8,1%</span>
+          </div>
+          <p class="text-xs text-white/65 mt-2 tabular-nums">A receber: R$ 12.400 · Vencido: R$ 3.270</p>
+        </div>
+      </div>
+
+      <!-- Status integração Asaas (corrige o anti-pattern de status estagnado) -->
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
+        <div class="h-8 w-8 rounded-lg bg-emerald-100 grid place-items-center"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i></div>
+        <div class="flex-1"><p class="text-sm font-medium text-emerald-900">Asaas conectado (produção)</p><p class="text-xs text-emerald-700">Saldo disponível: R$ 18.940 · última verificação há 3 min</p></div>
+        <button class="text-xs font-medium text-emerald-700 hover:underline">Retestar</button>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-emerald-500/10 grid place-items-center mb-3"><i data-lucide="banknote" class="w-5 h-5 text-emerald-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 44.180</p><p class="text-xs text-slate-500 mt-1.5">Recebido (30d)</p></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-blue-500/10 grid place-items-center mb-3"><i data-lucide="clock" class="w-5 h-5 text-blue-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 12.400</p><p class="text-xs text-slate-500 mt-1.5">A receber</p></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-rose-500/10 grid place-items-center mb-3"><i data-lucide="alert-circle" class="w-5 h-5 text-rose-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">R$ 3.270</p><p class="text-xs text-slate-500 mt-1.5">Vencido</p></div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5"><div class="w-10 h-10 rounded-xl bg-violet-500/10 grid place-items-center mb-3"><i data-lucide="repeat" class="w-5 h-5 text-violet-600"></i></div><p class="text-2xl font-bold tabular-nums text-slate-900">96,4%</p><p class="text-xs text-slate-500 mt-1.5">Taxa de adimplência</p></div>
+      </div>
+
+      <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+        <div class="px-5 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+          <div><h3 class="text-base font-semibold text-slate-800">Inadimplentes</h3><p class="text-xs text-slate-400 mt-0.5">Escritórios com cobranças vencidas</p></div>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">9 escritórios</span>
+        </div>
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100"><th class="px-5 py-2.5 font-medium">Escritório</th><th class="py-2.5 font-medium">Valor</th><th class="py-2.5 font-medium">Vencido há</th><th class="py-2.5 pr-5 font-medium text-right">Ação</th></tr></thead>
+          <tbody class="divide-y divide-slate-50">
+            <tr><td class="px-5 py-3 font-medium text-slate-700">Ramos Advogados</td><td class="tabular-nums text-slate-600">R$ 349</td><td class="text-rose-600 text-xs font-medium">12 dias</td><td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Cobrar</button></td></tr>
+            <tr><td class="px-5 py-3 font-medium text-slate-700">Oliveira &amp; Sá</td><td class="tabular-nums text-slate-600">R$ 189</td><td class="text-rose-600 text-xs font-medium">8 dias</td><td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Cobrar</button></td></tr>
+            <tr><td class="px-5 py-3 font-medium text-slate-700">Castro Jurídico</td><td class="tabular-nums text-slate-600">R$ 149</td><td class="text-amber-600 text-xs font-medium">3 dias</td><td class="pr-5 text-right"><button class="text-xs text-indigo-600 font-medium hover:underline">Cobrar</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  lucide.createIcons();
+  const navBtns = document.querySelectorAll('[data-nav]');
+  const screens = document.querySelectorAll('[data-screen]');
+  navBtns.forEach(btn => btn.addEventListener('click', () => {
+    const target = btn.getAttribute('data-nav');
+    if (!target) return;
+    navBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    screens.forEach(s => s.classList.toggle('hidden', s.getAttribute('data-screen') !== target));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }));
+</script>
+</body>
+</html>

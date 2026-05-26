@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JuridFlow — Cadastro do cliente (admin) estilo CRM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f6f7fb; }
+  .font-display { font-family: 'Poppins', 'Inter', sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  ::-webkit-scrollbar { width:8px; } ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:9999px; }
+</style>
+</head>
+<body class="text-slate-900">
+
+<!-- BARRA EXPLICATIVA -->
+<div class="bg-slate-900 text-white py-3 px-6 text-sm flex items-center justify-between gap-4 sticky top-0 z-40">
+  <div class="flex items-center gap-2 min-w-0">
+    <i data-lucide="id-card" class="w-4 h-4 text-indigo-300 shrink-0"></i>
+    <span class="font-semibold truncate">Cadastro do cliente (admin) — mesmo padrão do CRM do dono</span>
+    <span class="text-slate-500 hidden sm:inline">·</span>
+    <span class="text-slate-400 hidden sm:inline truncate">Página inteira com hero + tabs em pill (não mais dialog)</span>
+  </div>
+  <span class="text-xs text-slate-400 shrink-0 hidden md:inline">Troque as abas e abra os diálogos →</span>
+</div>
+
+<div class="max-w-5xl mx-auto p-6 space-y-4">
+
+  <!-- voltar -->
+  <button class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900"><i data-lucide="arrow-left" class="h-3.5 w-3.5"></i> Voltar para clientes</button>
+
+  <!-- ═══════════ HERO ═══════════ -->
+  <div class="rounded-2xl bg-gradient-to-br from-violet-700 via-purple-700 to-indigo-800 p-7 text-white relative overflow-hidden shadow-lg">
+    <i data-lucide="users" class="absolute -right-10 -bottom-12 w-56 h-56 opacity-10" stroke-width="1.2"></i>
+    <div class="relative">
+      <div class="flex items-start gap-5 mb-5 flex-wrap">
+        <!-- avatar grande -->
+        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-2xl font-bold shrink-0 shadow-lg ring-4 ring-white/20 tracking-tight">RS</div>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+            <h2 class="text-2xl font-bold tracking-tight">Dr. Rafael Silva</h2>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/20 text-white border border-white/25"><i data-lucide="crown" class="w-3 h-3"></i> Dono</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-400/25 text-emerald-50 border border-emerald-300/30"><i data-lucide="check-circle-2" class="w-3 h-3"></i> Assinatura ativa</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs text-white/75 flex-wrap">
+            <span class="flex items-center gap-1.5"><i data-lucide="building-2" class="w-3.5 h-3.5"></i> Advocacia Silva</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="mail" class="w-3.5 h-3.5"></i> silva@adv.com</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="users" class="w-3.5 h-3.5"></i> 4 colaboradores</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> Cliente desde 12/03/2025</span>
+          </div>
+        </div>
+
+        <!-- ações admin -->
+        <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+          <button class="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 px-3 text-xs rounded-md inline-flex items-center gap-1"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Impersonar</button>
+          <button class="text-white bg-white/10 hover:bg-white/20 border border-white/25 backdrop-blur-sm shadow-sm h-8 px-3 text-xs rounded-md inline-flex items-center gap-1"><i data-lucide="key-round" class="w-3.5 h-3.5"></i> Resetar senha</button>
+          <button class="text-rose-100 bg-rose-500/15 hover:bg-rose-500/30 border border-rose-300/35 backdrop-blur-sm shadow-sm h-8 px-3 text-xs rounded-md inline-flex items-center gap-1"><i data-lucide="ban" class="w-3.5 h-3.5"></i> Suspender</button>
+        </div>
+      </div>
+
+      <!-- mini KPIs no hero -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="rounded-xl bg-white/10 border border-white/15 p-3"><p class="text-[10px] uppercase tracking-wide text-white/65">MRR</p><p class="text-lg font-bold tabular-nums mt-0.5">R$ 349</p></div>
+        <div class="rounded-xl bg-white/10 border border-white/15 p-3"><p class="text-[10px] uppercase tracking-wide text-white/65">Receita gerada</p><p class="text-lg font-bold tabular-nums mt-0.5">R$ 4.188</p></div>
+        <div class="rounded-xl bg-white/10 border border-white/15 p-3"><p class="text-[10px] uppercase tracking-wide text-white/65">Créditos</p><p class="text-lg font-bold tabular-nums mt-0.5">1.240</p></div>
+        <div class="rounded-xl bg-white/10 border border-white/15 p-3"><p class="text-[10px] uppercase tracking-wide text-white/65">Último acesso</p><p class="text-sm font-semibold mt-1">há 2 horas</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TABS (pill) ═══════════ -->
+  <div class="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex">
+    <div class="flex gap-1">
+      <button onclick="aba('detalhes')" data-tab="detalhes" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="user" class="h-3.5 w-3.5"></i> Detalhes</button>
+      <button onclick="aba('equipe')" data-tab="equipe" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="users" class="h-3.5 w-3.5"></i> Equipe <span class="text-[10px] px-1.5 rounded-full bg-slate-200 text-slate-600">4</span></button>
+      <button onclick="aba('assinatura')" data-tab="assinatura" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center bg-white shadow-sm text-slate-800 font-medium"><i data-lucide="credit-card" class="h-3.5 w-3.5"></i> Assinatura</button>
+      <button onclick="aba('notas')" data-tab="notas" class="tab text-xs gap-1.5 px-3 py-1.5 rounded-lg inline-flex items-center text-slate-500"><i data-lucide="sticky-note" class="h-3.5 w-3.5"></i> Notas</button>
+    </div>
+  </div>
+
+  <!-- ── PAINEL: DETALHES ── -->
+  <div data-panel="detalhes" class="hidden space-y-4">
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="rounded-2xl bg-white border border-slate-200 p-5">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">Dados da conta</h3>
+        <dl class="text-sm space-y-2">
+          <div class="flex justify-between"><dt class="text-slate-400">ID</dt><dd class="font-mono text-slate-700">#1042</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-400">Login</dt><dd class="text-slate-700">E-mail/senha</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-400">Registrado</dt><dd class="text-slate-700">12/03/2025</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-400">Último acesso</dt><dd class="text-slate-700">há 2 horas</dd></div>
+        </dl>
+      </div>
+      <div class="rounded-2xl bg-white border border-slate-200 p-5">
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">Uso</h3>
+        <dl class="text-sm space-y-2">
+          <div class="flex justify-between"><dt class="text-slate-400">Cálculos</dt><dd class="text-slate-700 tabular-nums">312</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-400">Pareceres</dt><dd class="text-slate-700 tabular-nums">48</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-400">Módulos usados</dt><dd class="text-slate-700 tabular-nums">5</dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAINEL: EQUIPE ── -->
+  <div data-panel="equipe" class="hidden space-y-2">
+    <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+      <div class="px-5 pt-4 pb-2 border-b border-slate-100"><h3 class="text-sm font-semibold text-slate-700">Equipe do escritório · 4 membros</h3><p class="text-xs text-slate-400 mt-0.5">Clique num colaborador para abrir o cadastro individual.</p></div>
+      <div class="divide-y divide-slate-50">
+        <div class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 cursor-pointer"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white grid place-items-center text-[11px] font-semibold">RS</span><div class="flex-1"><div class="flex items-center gap-1.5"><p class="text-sm font-medium text-slate-800">Dr. Rafael Silva</p><span class="text-[9px] px-1 rounded bg-indigo-50 text-indigo-700">Dono</span></div><p class="text-xs text-slate-400">Advogado · silva@adv.com</p></div><span class="text-xs text-emerald-600">Ativo</span></div>
+        <div class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 cursor-pointer"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white grid place-items-center text-[11px] font-semibold">MA</span><div class="flex-1"><p class="text-sm font-medium text-slate-800">Marina Alves</p><p class="text-xs text-slate-400">Advogada · marina@adv.com</p></div><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i></div>
+        <div class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 cursor-pointer"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white grid place-items-center text-[11px] font-semibold">CB</span><div class="flex-1"><p class="text-sm font-medium text-slate-800">Carlos Bastos</p><p class="text-xs text-slate-400">Estagiário · carlos@adv.com</p></div><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i></div>
+        <div class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 cursor-pointer"><span class="h-8 w-8 rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 text-white grid place-items-center text-[11px] font-semibold">PF</span><div class="flex-1"><div class="flex items-center gap-1.5"><p class="text-sm font-medium text-slate-800">Paula Freitas</p><span class="text-[9px] px-1 rounded bg-slate-100 text-slate-500">Inativo</span></div><p class="text-xs text-slate-400">Financeiro · paula@adv.com</p></div><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAINEL: ASSINATURA ── -->
+  <div data-panel="assinatura" class="space-y-4">
+    <div class="rounded-2xl bg-white border border-slate-200 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2 text-sm font-semibold text-slate-700"><i data-lucide="credit-card" class="w-4 h-4 text-slate-400"></i> Assinatura atual</div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Ativa</span>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Plano</p><p class="font-semibold text-slate-800 mt-0.5">Completo</p></div>
+        <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Ciclo</p><p class="font-semibold text-slate-800 mt-0.5">Mensal</p></div>
+        <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Valor</p><p class="font-semibold text-slate-800 mt-0.5 tabular-nums">R$ 349/mês</p></div>
+        <div><p class="text-[11px] text-slate-400 uppercase tracking-wide">Próx. cobrança</p><p class="font-semibold text-slate-800 mt-0.5">12/06/2026</p></div>
+      </div>
+      <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 flex-wrap">
+        <button onclick="abrir('trocar')" class="h-8 px-3 rounded-lg border border-slate-200 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="repeat" class="w-3.5 h-3.5"></i> Trocar plano <span class="text-[9px] px-1 rounded bg-amber-100 text-amber-700">novo endpoint</span></button>
+        <button onclick="abrir('cortesia')" class="h-8 px-3 rounded-lg border border-emerald-200 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5"><i data-lucide="gift" class="w-3.5 h-3.5"></i> Marcar cortesia</button>
+        <button onclick="abrir('cancelar')" class="h-8 px-3 rounded-lg border border-rose-200 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-1.5"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Cancelar assinatura</button>
+      </div>
+    </div>
+
+    <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+      <div class="px-5 pt-4 pb-2 border-b border-slate-100 flex items-center gap-2 text-sm font-semibold text-slate-700"><i data-lucide="receipt" class="w-4 h-4 text-slate-400"></i> Histórico de cobranças <span class="text-[9px] px-1 rounded bg-amber-100 text-amber-700">novo endpoint</span></div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-slate-400 border-b border-slate-100"><th class="px-5 py-2 font-medium">Data</th><th class="py-2 font-medium">Descrição</th><th class="py-2 font-medium">Valor</th><th class="py-2 pr-5 font-medium">Status</th></tr></thead>
+        <tbody class="divide-y divide-slate-50">
+          <tr><td class="px-5 py-2.5 text-slate-500">12/05/2026</td><td class="text-slate-700">Plano Completo · mensal</td><td class="tabular-nums text-slate-700">R$ 349</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Pago</span></td></tr>
+          <tr><td class="px-5 py-2.5 text-slate-500">12/04/2026</td><td class="text-slate-700">Plano Completo · mensal</td><td class="tabular-nums text-slate-700">R$ 349</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Pago</span></td></tr>
+          <tr><td class="px-5 py-2.5 text-slate-500">12/03/2026</td><td class="text-slate-700">Plano Completo · mensal</td><td class="tabular-nums text-slate-700">R$ 349</td><td class="pr-5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Pago</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-slate-400 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i> A assinatura/cortesia do dono cobre toda a equipe (4 colaboradores herdam o acesso).</p>
+  </div>
+
+  <!-- ── PAINEL: NOTAS ── -->
+  <div data-panel="notas" class="hidden space-y-3">
+    <div class="rounded-2xl bg-white border border-slate-200 p-5">
+      <textarea placeholder="Adicionar nota interna…" class="w-full h-20 rounded-lg border border-slate-200 p-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"></textarea>
+      <div class="flex justify-end mt-2"><button class="h-8 px-3 rounded-lg bg-indigo-600 text-white text-xs font-medium">Salvar nota</button></div>
+      <div class="mt-4 flex gap-3"><span class="h-7 w-7 rounded-full bg-indigo-100 text-indigo-700 grid place-items-center text-[11px] font-semibold shrink-0">R</span><div><span class="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700">Comercial</span><p class="text-sm text-slate-700 mt-1">Converteu sozinho após o trial.</p><p class="text-[11px] text-slate-400 mt-0.5">Rafael (admin) · 14/05/2026</p></div></div>
+    </div>
+  </div>
+
+  <p class="text-xs text-slate-400 text-center pt-2"><span class="px-1 rounded bg-amber-100 text-amber-700">novo endpoint</span> = precisa de procedure nova · Cancelar e Cortesia já existem.</p>
+</div>
+
+<!-- MODAIS -->
+<div data-modal="trocar" class="hidden fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div class="flex items-center gap-2 mb-1"><i data-lucide="repeat" class="w-5 h-5 text-indigo-600"></i><h3 class="text-base font-semibold">Trocar plano</h3></div>
+    <p class="text-sm text-slate-500 mb-4">Altera o plano de <strong>Advocacia Silva</strong>. A próxima cobrança usa o novo valor.</p>
+    <div class="space-y-2">
+      <label class="flex items-center justify-between rounded-lg border border-slate-200 p-3 cursor-pointer hover:bg-slate-50"><span class="text-sm"><input type="radio" name="p" class="mr-2 align-middle">Básico</span><span class="text-sm font-medium tabular-nums text-slate-600">R$ 149</span></label>
+      <label class="flex items-center justify-between rounded-lg border border-slate-200 p-3 cursor-pointer hover:bg-slate-50"><span class="text-sm"><input type="radio" name="p" class="mr-2 align-middle">Intermediário</span><span class="text-sm font-medium tabular-nums text-slate-600">R$ 249</span></label>
+      <label class="flex items-center justify-between rounded-lg border border-indigo-300 bg-indigo-50/50 p-3 cursor-pointer"><span class="text-sm font-medium"><input type="radio" name="p" checked class="mr-2 align-middle">Completo <span class="text-[10px] text-indigo-600">(atual)</span></span><span class="text-sm font-medium tabular-nums text-slate-700">R$ 349</span></label>
+    </div>
+    <div class="flex justify-end gap-2 mt-5"><button onclick="fechar()" class="h-9 px-4 rounded-lg border border-slate-200 text-sm text-slate-600">Cancelar</button><button onclick="fechar()" class="h-9 px-4 rounded-lg bg-indigo-600 text-white text-sm font-medium">Trocar plano</button></div>
+  </div>
+</div>
+<div data-modal="cancelar" class="hidden fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div class="flex items-center gap-2 mb-1"><i data-lucide="x-circle" class="w-5 h-5 text-rose-600"></i><h3 class="text-base font-semibold">Cancelar assinatura</h3></div>
+    <p class="text-sm text-slate-500 mb-3">Cancela no Asaas e marca como cancelada. Ação auditada.</p>
+    <label class="text-xs font-medium text-slate-600">Motivo</label>
+    <textarea class="w-full h-20 mt-1 rounded-lg border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200" placeholder="Ex: cliente solicitou por e-mail"></textarea>
+    <div class="flex justify-end gap-2 mt-4"><button onclick="fechar()" class="h-9 px-4 rounded-lg border border-slate-200 text-sm text-slate-600">Voltar</button><button onclick="fechar()" class="h-9 px-4 rounded-lg bg-rose-600 text-white text-sm font-medium">Cancelar assinatura</button></div>
+  </div>
+</div>
+<div data-modal="cortesia" class="hidden fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+    <div class="flex items-center gap-2 mb-1"><i data-lucide="gift" class="w-5 h-5 text-emerald-600"></i><h3 class="text-base font-semibold">Marcar como cortesia</h3></div>
+    <p class="text-sm text-slate-500 mb-3">Libera o acesso sem cobrança. Cobre todo o escritório.</p>
+    <label class="text-xs font-medium text-slate-600">Motivo</label>
+    <input class="w-full h-9 mt-1 mb-3 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Ex: cliente piloto">
+    <label class="text-xs font-medium text-slate-600">Expira em (opcional)</label>
+    <input type="date" class="w-full h-9 mt-1 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <div class="flex justify-end gap-2 mt-4"><button onclick="fechar()" class="h-9 px-4 rounded-lg border border-slate-200 text-sm text-slate-600">Voltar</button><button onclick="fechar()" class="h-9 px-4 rounded-lg bg-emerald-600 text-white text-sm font-medium">Ativar cortesia</button></div>
+  </div>
+</div>
+
+<script>
+  lucide.createIcons();
+  function aba(n){
+    document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-panel') !== n));
+    document.querySelectorAll('.tab').forEach(b => {
+      const on = b.getAttribute('data-tab') === n;
+      b.classList.toggle('bg-white', on); b.classList.toggle('shadow-sm', on);
+      b.classList.toggle('text-slate-800', on); b.classList.toggle('font-medium', on);
+      b.classList.toggle('text-slate-500', !on);
+    });
+  }
+  function abrir(m){ document.querySelector(`[data-modal="${m}"]`).classList.remove('hidden'); }
+  function fechar(){ document.querySelectorAll('[data-modal]').forEach(e => e.classList.add('hidden')); }
+  document.querySelectorAll('[data-modal]').forEach(o => o.addEventListener('click', e => { if (e.target === o) fechar(); }));
+</script>
+</body>
+</html>
