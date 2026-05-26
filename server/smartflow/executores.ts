@@ -523,12 +523,16 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
       const lista = (m: Record<string, string>, ids: string[]) =>
         ids.length ? ids.map((id) => `- "${id}": use quando ${m[id] || id}`).join("\n") : "(nenhuma)";
 
+      const hojeFmt = new Date().toLocaleDateString("pt-BR", {
+        timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "long", year: "numeric",
+      });
       const instrucao = [
         params.roteiro?.trim() ? `ROTEIRO DESTE ATENDIMENTO:\n${params.roteiro.trim()}` : "",
         "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
+        `Hoje é ${hojeFmt} (fuso de Brasília). Datas ANTERIORES a hoje já passaram — NUNCA ofereça nem diga que vai "verificar" uma data passada; avise que já passou e ofereça uma data futura.`,
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
-        "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir.",
+        "Quando precisar de um dado (ex: horários), dispare a CONSULTA correspondente AGORA, no MESMO turno. NUNCA responda só \"um momento\"/\"vou verificar\" e pare — isso deixa o cliente esperando sem resposta. Ofereça apenas horários que a consulta retornou; se o cliente pedir um dia que não está na lista, diga quais dias você tem (não invente nem prometa checar separado).",
         "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>", "quando": "<ISO do horário escolhido quando acao=agendar; senão null>"}',
       ].filter(Boolean).join("\n\n");
@@ -553,7 +557,19 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
           const ocupados = await this.listarAgendaResponsavel({ responsavelId: respId, dataInicio: agora.toISOString(), dataFim: fim.toISOString() });
           const livres = gerarSlotsLivres({ agora, dias, incluirFimDeSemana: false, duracaoMin: dur, horaInicio: 9, horaFim: 18, ocupados });
           if (livres.length === 0) return "Sem horários livres nos próximos dias.";
-          return "Horários livres (ISO -03:00):\n" + livres.slice(0, 12).map((s) => `- ${s.inicioISO}`).join("\n");
+          // Espalha por DIA (não só o 1º): até 4 horários por dia, vários dias.
+          // Antes pegava os 12 primeiros — que caíam TODOS no 1º dia, então o
+          // cliente só via (e só conseguia pedir) o dia seguinte.
+          const PORDIA = 4;
+          const MAXDIAS = 6;
+          const porDia = new Map<string, string[]>();
+          for (const s of livres) {
+            const dia = s.inicioISO.slice(0, 10); // YYYY-MM-DD
+            const arr = porDia.get(dia) ?? [];
+            if (arr.length < PORDIA) { arr.push(`${s.inicioISO} (até ${s.fimISO})`); porDia.set(dia, arr); }
+          }
+          const linhas = [...porDia.values()].slice(0, MAXDIAS).flat().map((s) => `- ${s}`).join("\n");
+          return `Horários livres (ISO -03:00, fuso Brasília):\n${linhas}`;
         }
         return `Consulta "${nome}" não implementada.`;
       };
