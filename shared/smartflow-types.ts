@@ -168,7 +168,10 @@ export type OperadorCondicional =
   | "contem"
   | "entre"
   | "tem_tag"
-  | "nao_tem_tag";
+  | "nao_tem_tag"
+  // Baseados no momento atual (fuso de Brasília) — ignoram o campo:
+  | "horario_entre"   // valor="HH:MM" início, valor2="HH:MM" fim (ex: expediente)
+  | "dia_semana";     // valor="seg,ter,qua,qui,sex" (dom..sab) — dias permitidos
 
 export type PrioridadeCard = "baixa" | "media" | "alta";
 
