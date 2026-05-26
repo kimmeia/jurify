@@ -18,6 +18,7 @@ import { eq, and, lt, or, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { cofreCredenciais } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
+import { configPorSistema } from "../processos/tribunais-pdpj";
 
 const log = createLogger("cron-revalidar-cofre");
 
@@ -86,8 +87,9 @@ export async function revalidarCofreCredenciais(
   let puladas = 0;
 
   for (const c of candidatas) {
-    // Hoje só pje_tjce tem adapter de validação real
-    if (c.sistema !== "pje_tjce") {
+    // Login usa o portal do estado da credencial (config por sistema).
+    const cfgTribunal = configPorSistema(c.sistema);
+    if (!cfgTribunal) {
       puladas++;
       continue;
     }
@@ -106,11 +108,14 @@ export async function revalidarCofreCredenciais(
       const { PjeTjceScraper } = await import(
         "../../scripts/spike-motor-proprio/poc-2-esaj-login/adapters/pje-tjce"
       );
-      const scraper = new PjeTjceScraper({
-        username: cred.username,
-        password: cred.password,
-        totpSecret: cred.totpSecret,
-      });
+      const scraper = new PjeTjceScraper(
+        {
+          username: cred.username,
+          password: cred.password,
+          totpSecret: cred.totpSecret,
+        },
+        cfgTribunal,
+      );
       const resultado = await scraper.testarLogin();
 
       await atualizarStatusAposLogin(c.id, {
