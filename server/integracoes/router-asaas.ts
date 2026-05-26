@@ -41,7 +41,13 @@ import {
   type VinculoLinha,
   type CobrancaAgg,
   type ContatoMeta,
+  type ClienteAgregado,
 } from "./asaas-sync";
+import {
+  aplicarFiltrosClientes,
+  defaultSortPorChip,
+  type ClientesSort,
+} from "../../shared/clientes-filtro";
 import {
   garantirCategoriaDespesaTaxasAsaas,
   garantirCategoriaCobrancaServicosAsaas,
@@ -82,6 +88,120 @@ async function contatosVisiveisFinanceiro(
     ));
   return rows.map((r) => r.id);
 }
+
+/** Busca + agrega clientes vinculados respeitando visibilidade e busca textual.
+ *  Compartilhado entre listarClientesVinculados (tela) e exportarClientesPdf. */
+async function buscarClientesVinculadosAgg(
+  userId: number,
+  escritorioId: number,
+  busca?: string,
+): Promise<ClienteAgregado[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const visiveis = await contatosVisiveisFinanceiro(userId, escritorioId);
+  if (visiveis !== null && visiveis.length === 0) return [];
+
+  const conditions: any[] = [eq(asaasClientes.escritorioId, escritorioId)];
+  if (visiveis !== null) conditions.push(inArray(asaasClientes.contatoId, visiveis));
+  if (busca) {
+    const b = `%${busca}%`;
+    conditions.push(or(like(asaasClientes.nome, b), like(asaasClientes.cpfCnpj, b)));
+  }
+
+  const vinculosRaw = await db.select().from(asaasClientes).where(and(...conditions));
+  if (vinculosRaw.length === 0) return [];
+
+  const contatoIds = [...new Set(vinculosRaw.map((v) => v.contatoId))];
+  const customerIds = [...new Set(vinculosRaw.map((v) => v.asaasCustomerId))];
+
+  const contatosList = await db
+    .select({
+      id: contatos.id,
+      nome: contatos.nome,
+      telefone: contatos.telefone,
+      email: contatos.email,
+    })
+    .from(contatos)
+    .where(and(
+      eq(contatos.escritorioId, escritorioId),
+      inArray(contatos.id, contatoIds),
+    ));
+  const contatosMeta: Record<number, ContatoMeta> = {};
+  for (const c of contatosList) {
+    contatosMeta[c.id] = { nome: c.nome, telefone: c.telefone, email: c.email };
+  }
+
+  const cobrancasRaw = customerIds.length > 0
+    ? await db
+        .select({
+          asaasCustomerId: asaasCobrancas.asaasCustomerId,
+          valor: asaasCobrancas.valor,
+          status: asaasCobrancas.status,
+          vencimento: asaasCobrancas.vencimento,
+        })
+        .from(asaasCobrancas)
+        .where(and(
+          eq(asaasCobrancas.escritorioId, escritorioId),
+          inArray(asaasCobrancas.asaasCustomerId, customerIds),
+        ))
+    : [];
+
+  const vinculos: VinculoLinha[] = vinculosRaw.map((v) => ({
+    id: v.id,
+    contatoId: v.contatoId,
+    asaasCustomerId: v.asaasCustomerId,
+    cpfCnpj: v.cpfCnpj,
+    nome: v.nome,
+    primario: (v as { primario?: boolean | null }).primario ?? null,
+  }));
+  const cobrancas: CobrancaAgg[] = cobrancasRaw
+    .filter((c): c is typeof c & { asaasCustomerId: string } => c.asaasCustomerId !== null)
+    .map((c) => ({
+      asaasCustomerId: c.asaasCustomerId,
+      valor: c.valor,
+      status: c.status,
+      vencimento: c.vencimento,
+    }));
+
+  return agregarVinculosPorContato(vinculos, cobrancas, contatosMeta);
+}
+
+/** Monta as linhas descritivas do recorte pro cabeçalho do PDF. */
+function montarLabelsFiltroClientes(
+  chip: "todos" | "inadimplentes" | "pendente" | "bons" | "sem_cobranca",
+  diasAtrasoMin: number | undefined,
+  sort: ClientesSort | null,
+  busca: string | undefined,
+): string[] {
+  const chipLabel: Record<typeof chip, string> = {
+    todos: "Todos os clientes",
+    inadimplentes: "Inadimplentes (com valor vencido)",
+    pendente: "Com valor pendente",
+    bons: "Bons pagadores",
+    sem_cobranca: "Sem cobrança",
+  };
+  const labels: string[] = [chipLabel[chip]];
+  if (diasAtrasoMin != null && diasAtrasoMin > 0) {
+    labels.push(`Atraso > ${diasAtrasoMin} dias`);
+  }
+  const efetivo = sort ?? defaultSortPorChip(chip);
+  const colLabel: Record<ClientesSort["col"], string> = {
+    nome: "Nome",
+    cobrancas: "Cobranças",
+    pendente: "Pendente",
+    vencido: "Vencido",
+    pago: "Pago",
+    atraso: "Atraso",
+  };
+  const dirLabel = efetivo.col === "nome"
+    ? (efetivo.dir === "asc" ? "A → Z" : "Z → A")
+    : (efetivo.dir === "asc" ? "menor → maior" : "maior → menor");
+  labels.push(`Ordenado por ${colLabel[efetivo.col]} (${dirLabel})`);
+  if (busca) labels.push(`Busca: "${busca}"`);
+  return labels;
+}
+
 const log = createLogger("integracoes-router-asaas");
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3523,86 +3643,59 @@ export const asaasRouter = router({
     .query(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) return [];
-
-      const db = await getDb();
-      if (!db) return [];
-
       try {
-        const visiveis = await contatosVisiveisFinanceiro(ctx.user.id, esc.escritorio.id);
-        if (visiveis !== null && visiveis.length === 0) return [];
-
-        const conditions: any[] = [eq(asaasClientes.escritorioId, esc.escritorio.id)];
-        if (visiveis !== null) conditions.push(inArray(asaasClientes.contatoId, visiveis));
-        if (input?.busca) {
-          const b = `%${input.busca}%`;
-          conditions.push(or(like(asaasClientes.nome, b), like(asaasClientes.cpfCnpj, b)));
-        }
-
-        const vinculosRaw = await db.select().from(asaasClientes).where(and(...conditions));
-        if (vinculosRaw.length === 0) return [];
-
-        // Agrega vários customers Asaas (mesmo CPF, duplicatas permitidas pelo
-        // Asaas) num único item por contato do CRM. Sem deletar nada — o
-        // vínculo N:1 é parte do modelo: ver comentário em agregarVinculosPorContato.
-        const contatoIds = [...new Set(vinculosRaw.map((v) => v.contatoId))];
-        const customerIds = [...new Set(vinculosRaw.map((v) => v.asaasCustomerId))];
-
-        const contatosList = await db
-          .select({
-            id: contatos.id,
-            nome: contatos.nome,
-            telefone: contatos.telefone,
-            email: contatos.email,
-          })
-          .from(contatos)
-          .where(and(
-            eq(contatos.escritorioId, esc.escritorio.id),
-            inArray(contatos.id, contatoIds),
-          ));
-        const contatosMeta: Record<number, ContatoMeta> = {};
-        for (const c of contatosList) {
-          contatosMeta[c.id] = { nome: c.nome, telefone: c.telefone, email: c.email };
-        }
-
-        const cobrancasRaw = customerIds.length > 0
-          ? await db
-              .select({
-                asaasCustomerId: asaasCobrancas.asaasCustomerId,
-                valor: asaasCobrancas.valor,
-                status: asaasCobrancas.status,
-                vencimento: asaasCobrancas.vencimento,
-              })
-              .from(asaasCobrancas)
-              .where(and(
-                eq(asaasCobrancas.escritorioId, esc.escritorio.id),
-                inArray(asaasCobrancas.asaasCustomerId, customerIds),
-              ))
-          : [];
-
-        const vinculos: VinculoLinha[] = vinculosRaw.map((v) => ({
-          id: v.id,
-          contatoId: v.contatoId,
-          asaasCustomerId: v.asaasCustomerId,
-          cpfCnpj: v.cpfCnpj,
-          nome: v.nome,
-          primario: (v as { primario?: boolean | null }).primario ?? null,
-        }));
-        // Filtra cobranças com asaasCustomerId não-null — cobranças
-        // manuais (sem vínculo Asaas) não entram nessa agregação que
-        // depende do customerId.
-        const cobrancas: CobrancaAgg[] = cobrancasRaw
-          .filter((c): c is typeof c & { asaasCustomerId: string } => c.asaasCustomerId !== null)
-          .map((c) => ({
-            asaasCustomerId: c.asaasCustomerId,
-            valor: c.valor,
-            status: c.status,
-            vencimento: c.vencimento,
-          }));
-
-        return agregarVinculosPorContato(vinculos, cobrancas, contatosMeta);
+        return await buscarClientesVinculadosAgg(ctx.user.id, esc.escritorio.id, input?.busca);
       } catch {
         return [];
       }
+    }),
+
+  /**
+   * Gera PDF do "Relatório de Clientes" respeitando os filtros da tela
+   * (chip + dias de atraso + ordenação + busca). Retorna base64 (transportável
+   * via tRPC) que o frontend decodifica em Blob — mesmo padrão do DRE.
+   */
+  exportarClientesPdf: protectedProcedure
+    .input(z.object({
+      busca: z.string().optional(),
+      chip: z.enum(["todos", "inadimplentes", "pendente", "bons", "sem_cobranca"]).default("todos"),
+      diasAtrasoMin: z.number().int().nonnegative().optional(),
+      sortCol: z.enum(["nome", "cobrancas", "pendente", "vencido", "pago", "atraso"]).optional(),
+      sortDir: z.enum(["asc", "desc"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado." });
+      }
+
+      const lista = await buscarClientesVinculadosAgg(ctx.user.id, esc.escritorio.id, input.busca);
+      const sort: ClientesSort | null = input.sortCol
+        ? { col: input.sortCol, dir: input.sortDir ?? "desc" }
+        : null;
+      const filtrados = aplicarFiltrosClientes(lista, {
+        chip: input.chip,
+        diasAtrasoMin: input.diasAtrasoMin ?? null,
+        sort,
+      });
+
+      const { gerarClientesPDF } = await import("../escritorio/clientes-pdf");
+      const buffer = await gerarClientesPDF(filtrados, {
+        nomeEscritorio: esc.escritorio.nome,
+        filtros: montarLabelsFiltroClientes(input.chip, input.diasAtrasoMin, sort, input.busca),
+        geradoPor: ctx.user.email ?? ctx.user.name ?? esc.escritorio.nome,
+      });
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      const slug = input.chip === "todos" ? "clientes" : `clientes_${input.chip}`;
+      const sufixoAtraso = input.diasAtrasoMin && input.diasAtrasoMin > 0
+        ? `_atraso-${input.diasAtrasoMin}d`
+        : "";
+      return {
+        filename: `${slug}${sufixoAtraso}_${hoje}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
     }),
 
   // ─── EXCLUIR COBRANÇA ──────────────────────────────────────────────────

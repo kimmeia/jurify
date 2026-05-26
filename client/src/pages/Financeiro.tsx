@@ -29,7 +29,7 @@ import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, Clock, Plus, ExternalLink, Copy,
   RefreshCw, Loader2, Settings, CheckCircle2, XCircle, Receipt, Users,
   UserPlus, Trash2, Search, Wallet, Download, Filter, ArrowUpRight,
-  Paperclip, FileUp, Percent, MoreVertical, CalendarDays, CircleDollarSign,
+  Paperclip, FileUp, FileDown, Percent, MoreVertical, CalendarDays, CircleDollarSign,
   Wand2, Tags,
 } from "lucide-react";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
@@ -45,8 +45,9 @@ import {
 } from "recharts";
 import {
   formatBRL, formatBRLShort, formatMes, formatDiaCurto, formatDiaCompleto, StatusBadge, FormaBadge, CICLO_LABELS, useFinanceiroPerms,
-  exportCobrancasCSV,
+  exportCobrancasCSV, baixarBlob, base64ToBlob,
 } from "./financeiro/helpers";
+import { filtrarClientes, ordenarClientes } from "@shared/clientes-filtro";
 import {
   NovaCobrancaDialog, NovoClienteDialog, AnexosCobrancaDialog,
 } from "./financeiro/dialogs";
@@ -1540,32 +1541,29 @@ function ClientesContent({
     sem_cobranca: clientes.filter((c) => c.totalCobrancas === 0).length,
   }), [clientes]);
 
-  // Aplica filtro do chip + filtro de dias em atraso
-  const filtrados = useMemo(() => {
-    let lista = clientes;
-    if (chip === "inadimplentes") lista = lista.filter((c) => c.vencido > 0);
-    else if (chip === "pendente") lista = lista.filter((c) => c.pendente > 0);
-    else if (chip === "bons") lista = lista.filter((c) => c.pago > 0 && c.vencido === 0);
-    else if (chip === "sem_cobranca") lista = lista.filter((c) => c.totalCobrancas === 0);
-    const minDias = parseInt(filtroDiasAtraso, 10);
-    if (!isNaN(minDias) && minDias > 0) {
-      lista = lista.filter((c) => c.diasAtrasoMax != null && c.diasAtrasoMax >= minDias);
-    }
-    return lista;
-  }, [clientes, chip, filtroDiasAtraso]);
+  // Filtro (chip + dias de atraso) e ordenação via lógica compartilhada com o
+  // server — garante que o PDF exportado reflete exatamente este recorte.
+  const filtrados = useMemo(
+    () => filtrarClientes(clientes, {
+      chip,
+      diasAtrasoMin: filtroDiasAtraso ? parseInt(filtroDiasAtraso, 10) : null,
+    }),
+    [clientes, chip, filtroDiasAtraso],
+  );
 
-  // Ordenação. Quando sort=null, aplica a ordem default conforme o chip ativo.
-  const ordenados = useMemo(() => {
-    const efetivo = sort ?? defaultSortPorChip(chip);
-    const cmp = (a: any, b: any) => {
-      const vA = valorOrdenacao(a, efetivo.col);
-      const vB = valorOrdenacao(b, efetivo.col);
-      if (vA < vB) return efetivo.dir === "asc" ? -1 : 1;
-      if (vA > vB) return efetivo.dir === "asc" ? 1 : -1;
-      return 0;
-    };
-    return [...filtrados].sort(cmp);
-  }, [filtrados, sort, chip]);
+  const ordenados = useMemo(
+    () => ordenarClientes(filtrados, sort, chip),
+    [filtrados, sort, chip],
+  );
+
+  const pdfMut = trpc.asaas.exportarClientesPdf.useMutation({
+    onSuccess: (r: { filename: string; base64: string; mimeType: string }) => {
+      baixarBlob(base64ToBlob(r.base64, r.mimeType), r.filename, r.mimeType);
+      toast.success("Relatório PDF gerado");
+    },
+    onError: (err: any) =>
+      toast.error("Erro ao gerar PDF", { description: err.message }),
+  });
 
   const handleSort = (col: ClientesSortColLocal) => {
     if (!sort || sort.col !== col) {
@@ -1617,6 +1615,27 @@ function ClientesContent({
           </Button>
         )}
         <div className="flex-1" />
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={ordenados.length === 0 || pdfMut.isPending}
+          onClick={() =>
+            pdfMut.mutate({
+              busca: busca || undefined,
+              chip,
+              diasAtrasoMin: filtroDiasAtraso ? parseInt(filtroDiasAtraso, 10) : undefined,
+              sortCol: sort?.col,
+              sortDir: sort?.dir,
+            })
+          }
+        >
+          {pdfMut.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+          ) : (
+            <FileDown className="h-3.5 w-3.5 mr-1" />
+          )}
+          Gerar PDF
+        </Button>
         <Button size="sm" variant="outline" onClick={onNovoCliente}>
           <UserPlus className="h-3.5 w-3.5 mr-1" />
           Novo cliente
@@ -1747,26 +1766,6 @@ function SortBtn({
       <span className={ativo ? "" : "text-muted-foreground/50"}>{icon}</span>
     </button>
   );
-}
-
-function defaultSortPorChip(
-  chip: ClientesChipLocal,
-): { col: ClientesSortColLocal; dir: ClientesSortDirLocal } {
-  if (chip === "inadimplentes") return { col: "atraso", dir: "desc" };
-  if (chip === "pendente") return { col: "pendente", dir: "desc" };
-  if (chip === "bons") return { col: "pago", dir: "desc" };
-  return { col: "nome", dir: "asc" };
-}
-
-function valorOrdenacao(c: any, col: ClientesSortColLocal): number | string {
-  switch (col) {
-    case "nome": return (c.contatoNome || "").toLowerCase();
-    case "cobrancas": return c.totalCobrancas || 0;
-    case "pendente": return c.pendente || 0;
-    case "vencido": return c.vencido || 0;
-    case "pago": return c.pago || 0;
-    case "atraso": return c.diasAtrasoMax ?? -1;
-  }
 }
 
 // ─── Sub-componente: KPI Card ─────────────────────────────────────────────
