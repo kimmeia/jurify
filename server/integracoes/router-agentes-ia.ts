@@ -410,6 +410,12 @@ export const agentesIaRouter = router({
       docCount.set(d.agenteId, (docCount.get(d.agenteId) || 0) + 1);
     }
 
+    // Badge "tem API key": espelha resolverAPIKey. Além da key própria do
+    // agente, vale a key de canal (Configurações → Integrações), de outro
+    // agente do escritório ou a admin global. Calcula o fallback do escritório
+    // uma vez (passando agente vazio = pula a key própria).
+    const keyFallbackEscritorio = await resolverAPIKey(esc.escritorio.id, {});
+
     return rows.map((r) => ({
       id: r.id,
       nome: r.nome,
@@ -422,7 +428,7 @@ export const agentesIaRouter = router({
       maxTokens: r.maxTokens,
       temperatura: r.temperatura,
       modulosPermitidos: r.modulosPermitidos ? r.modulosPermitidos.split(",") : [],
-      temApiKey: !!(r.openaiApiKey && r.apiKeyIv && r.apiKeyTag),
+      temApiKey: !!(r.openaiApiKey && r.apiKeyIv && r.apiKeyTag) || !!keyFallbackEscritorio,
       totalDocumentos: docCount.get(r.id) || 0,
       createdAt: toIsoString(r.createdAt) ?? "",
     }));
@@ -469,6 +475,12 @@ export const agentesIaRouter = router({
         tamanhoConteudo: d.conteudo ? d.conteudo.length : 0,
       }));
 
+      // Badge "tem API key": usa a mesma resolução do runtime (key própria do
+      // agente OU canal OU outro agente OU admin), não só a key própria.
+      const apiKeyResolvida = await resolverAPIKey(
+        perm.escritorioId, agente, providerDoModelo(agente.modelo),
+      );
+
       return {
         id: agente.id,
         nome: agente.nome,
@@ -482,7 +494,7 @@ export const agentesIaRouter = router({
         canalId: agente.canalId,
         modulosPermitidos: agente.modulosPermitidos ? agente.modulosPermitidos.split(",") : [],
         camposCaptura: parseAgenteVariaveis(agente.camposCaptura),
-        temApiKey: !!(agente.openaiApiKey && agente.apiKeyIv && agente.apiKeyTag),
+        temApiKey: !!apiKeyResolvida,
         documentos,
       };
     }),

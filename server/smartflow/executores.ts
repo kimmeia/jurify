@@ -528,7 +528,8 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
         "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
-        "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir. Só dispare uma ação quando for o momento certo; senão, mantenha tudo em null e continue conversando.",
+        "Use uma consulta quando precisar de um dado (ex: horários) ANTES de oferecer/agir.",
+        "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>"}',
       ].filter(Boolean).join("\n\n");
 
@@ -569,6 +570,78 @@ export function criarExecutoresReais(escritorioId: number): SmartflowExecutores 
             historico,
           ),
       });
+    },
+
+    async resolverResponsavelAgenda(params): Promise<number | null> {
+      const { getDb } = await import("../db");
+      const { colaboradores, conversas, escritorios } = await import("../../drizzle/schema");
+      const { eq, and, inArray } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return params.responsavelIdPreferido ?? params.atendenteResponsavelId ?? null;
+
+      // Candidatos em ordem de prioridade (advogado fixo → atendente da
+      // conversa → responsável do contato → padrão do escritório), sem repetir.
+      const candidatos: number[] = [];
+      const add = (v: unknown) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n > 0 && !candidatos.includes(n)) candidatos.push(n);
+      };
+      add(params.responsavelIdPreferido);
+      if (params.conversaId) {
+        const [conv] = await db
+          .select({ atendenteId: conversas.atendenteId })
+          .from(conversas)
+          .where(and(eq(conversas.id, params.conversaId), eq(conversas.escritorioId, escritorioId)))
+          .limit(1);
+        if (conv?.atendenteId) add(conv.atendenteId);
+      }
+      add(params.atendenteResponsavelId);
+
+      const [esc] = await db
+        .select({ padrao: escritorios.agendaResponsavelPadraoId, ownerId: escritorios.ownerId })
+        .from(escritorios)
+        .where(eq(escritorios.id, escritorioId))
+        .limit(1);
+      if (esc?.padrao) add(esc.padrao);
+
+      // Fica só com candidatos que são colaboradores ATIVOS deste escritório,
+      // preservando a ordem (um atendente removido não "fura" a cascata).
+      if (candidatos.length > 0) {
+        const ativos = await db
+          .select({ id: colaboradores.id })
+          .from(colaboradores)
+          .where(and(
+            eq(colaboradores.escritorioId, escritorioId),
+            eq(colaboradores.ativo, true),
+            inArray(colaboradores.id, candidatos),
+          ));
+        const ativoSet = new Set(ativos.map((r) => r.id));
+        for (const c of candidatos) if (ativoSet.has(c)) return c;
+      }
+
+      // Fallback final: colaborador "dono" — garante "nunca sem responsável".
+      const [dono] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.escritorioId, escritorioId),
+          eq(colaboradores.cargo, "dono"),
+          eq(colaboradores.ativo, true),
+        ))
+        .limit(1);
+      if (dono?.id) return dono.id;
+
+      // Último recurso: ownerId (users.id) → colaborador (escritórios legados
+      // sem cargo "dono" explícito).
+      if (esc?.ownerId) {
+        const [ownerColab] = await db
+          .select({ id: colaboradores.id })
+          .from(colaboradores)
+          .where(and(eq(colaboradores.escritorioId, escritorioId), eq(colaboradores.userId, esc.ownerId)))
+          .limit(1);
+        if (ownerColab?.id) return ownerColab.id;
+      }
+      return null;
     },
 
     async extrairCamposDoAgente(agenteId: number, contatoId: number, conversaId: number): Promise<Record<string, unknown>> {

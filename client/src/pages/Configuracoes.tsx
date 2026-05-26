@@ -356,6 +356,7 @@ export default function Configuracoes() {
       diasFuncionamento: escritorio.diasFuncionamento || ["seg", "ter", "qua", "qui", "sex"],
       mensagemAusencia: escritorio.mensagemAusencia || "",
       mensagemBoasVindas: escritorio.mensagemBoasVindas || "",
+      agendaResponsavelPadraoId: (escritorio as any).agendaResponsavelPadraoId ?? null,
     });
     setEditMode(true);
   };
@@ -586,6 +587,51 @@ export default function Configuracoes() {
                   })}
                 </div>
               )}
+            </div>
+          </details>
+
+          {/* Section 2.5: Agenda automática */}
+          <details className="card group rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <summary className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between cursor-pointer list-none">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center"><Calendar className="h-4 w-4" /></span>
+                <div>
+                  <p className="text-sm font-bold tracking-tight">Agenda automática</p>
+                  <p className="text-[10.5px] text-slate-500">Quem fica com os agendamentos do atendente IA quando não há responsável</p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="p-5 space-y-2">
+              {(() => {
+                const colabs = (equipeData?.colaboradores || []).filter((c: any) => c.ativo);
+                const padraoId = (escritorio as any).agendaResponsavelPadraoId ?? null;
+                const padraoColab = padraoId ? colabs.find((c: any) => c.id === padraoId) : null;
+                const nomePadrao = padraoColab?.userName || "Dono do escritório (padrão)";
+                return editMode ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px]">Responsável padrão da agenda</Label>
+                    <Select
+                      value={formPerfil.agendaResponsavelPadraoId ? String(formPerfil.agendaResponsavelPadraoId) : "_dono"}
+                      onValueChange={(v) => setFormPerfil({ ...formPerfil, agendaResponsavelPadraoId: v === "_dono" ? null : Number(v) })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_dono">Dono do escritório (padrão)</SelectItem>
+                        {colabs.map((c: any) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.userName ?? "—"} <span className="text-muted-foreground text-[10px]">({c.cargo})</span></SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10.5px] text-slate-500">Usado quando o Atendente IA está em modo automático e a conversa não tem atendente nem o contato tem responsável. Vazio = dono do escritório.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">🗓 Responsável padrão</p>
+                    <p className="text-[12px] font-medium text-slate-700">{nomePadrao}</p>
+                  </div>
+                );
+              })()}
             </div>
           </details>
 
