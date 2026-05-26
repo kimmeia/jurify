@@ -582,6 +582,18 @@ export const contatos = mysqlTable("contatos", {
   email: varchar("emailContato", { length: 320 }),
   cpfCnpj: varchar("cpfCnpj", { length: 18 }),
   origem: mysqlEnum("origemContato", ["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"]).default("manual").notNull(),
+  /**
+   * Estágio no relacionamento: 'lead' (em atendimento, ainda não fechou
+   * contrato) vs 'cliente' (fechou). É o MESMO cadastro mudando de estágio.
+   *
+   * Default 'cliente' é proposital: toda linha existente e qualquer insert
+   * que não especifique o campo (cadastro manual na tela Clientes, sync
+   * Asaas com cobrança) fica como Cliente. Só o atendimento marca 'lead'
+   * explicitamente (criarOuReutilizarContato). A tela Clientes filtra por
+   * este campo: aba Clientes vs aba Leads. Vira 'cliente' ao registrar um
+   * fechamento (lead chega em fechado_ganho).
+   */
+  estagio: mysqlEnum("estagioContato", ["lead", "cliente"]).default("cliente").notNull(),
   tags: text("tagsContato"),
   observacoes: text("observacoesContato"),
   responsavelId: int("responsavelIdContato"),

@@ -162,6 +162,14 @@ export const clientesRouter = router({
     segmento: z
       .enum(["todos", "vip", "inativo", "novos", "com_email", "com_telefone", "aguardando_docs", "com_debito"])
       .optional(),
+    /**
+     * Estágio: 'cliente' (fechou contrato) | 'lead' (em atendimento) |
+     * 'todos'. A tela Clientes passa 'cliente' (aba Clientes) ou 'lead'
+     * (aba Leads). Quando omitido, NÃO filtra — preserva o comportamento de
+     * outras telas que usam esta lista pra escolher pessoa (Processos,
+     * Agenda, vincular conversa no Atendimento).
+     */
+    estagio: z.enum(["lead", "cliente", "todos"]).optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
@@ -171,6 +179,12 @@ export const clientesRouter = router({
     // Se só pode ver próprios, filtra por responsável
     if (!perm.verTodos && perm.verProprios) { where = and(where, eq(contatos.responsavelId, perm.colaboradorId)); }
     if (input?.busca) { const b = `%${input.busca}%`; where = and(where, or(like(contatos.nome, b), like(contatos.telefone, b), like(contatos.email, b), like(contatos.cpfCnpj, b))); }
+
+    // Estágio (Cliente vs Lead). Omitido ou 'todos' = sem filtro (backcompat
+    // com Processos/Agenda/vincular, que usam esta lista pra escolher pessoa).
+    if (input?.estagio === "lead" || input?.estagio === "cliente") {
+      where = and(where, eq(contatos.estagio, input.estagio));
+    }
 
     // Segmento — `aguardandoDocumentacao` (legacy) mapeia pra "aguardando_docs"
     // pra retrocompat com callers existentes.
@@ -434,7 +448,42 @@ export const clientesRouter = router({
         valorEstimado: input.valorFechamento || undefined,
         origemLead: input.origemFechamento || "manual",
       });
+
+      // Fechou contrato → promove o contato a Cliente. Idempotente: se já
+      // era cliente, o UPDATE não muda nada. É o gatilho de conversão
+      // aprovado (Lead vira Cliente só quando registra fechamento).
+      await db
+        .update(contatos)
+        .set({ estagio: "cliente" })
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
+
       return { leadId };
+    }),
+
+  /**
+   * Troca manual do estágio Lead ↔ Cliente. Cobre dois casos:
+   *  - corrigir uma classificação errada (marquei cliente sem querer);
+   *  - voltar um cliente pra lead (a conversão é reversível, sem perder dados).
+   * Não cria nem apaga lead do funil — só muda o selo do cadastro. Pra
+   * registrar a venda no relatório comercial use `registrarFechamento`.
+   */
+  definirEstagio: protectedProcedure
+    .input(z.object({ contatoId: z.number(), estagio: z.enum(["lead", "cliente"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+      if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+
+      // verProprios: atendente só mexe no estágio de quem é responsável.
+      const pode = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+      if (!pode) throw new Error("Cliente não encontrado ou sem permissão.");
+
+      await db
+        .update(contatos)
+        .set({ estagio: input.estagio })
+        .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
+      return { success: true, estagio: input.estagio };
     }),
 
   atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
@@ -1103,6 +1152,8 @@ export const clientesRouter = router({
   estatisticas: protectedProcedure.query(async ({ ctx }) => {
     const ZERO = {
       total: 0,
+      totalClientes: 0,
+      totalLeads: 0,
       novosHoje: 0,
       comTelefone: 0,
       comEmail: 0,
@@ -1137,6 +1188,8 @@ export const clientesRouter = router({
     const [stats] = await db
       .select({
         total: sql<number | string>`COUNT(*)`,
+        totalClientes: sql<number | string>`SUM(CASE WHEN ${contatos.estagio} = 'cliente' THEN 1 ELSE 0 END)`,
+        totalLeads: sql<number | string>`SUM(CASE WHEN ${contatos.estagio} = 'lead' THEN 1 ELSE 0 END)`,
         novosHoje: sql<number | string>`SUM(CASE WHEN ${contatos.createdAt} >= ${inicioHoje} AND ${contatos.createdAt} < ${fimHoje} THEN 1 ELSE 0 END)`,
         comTelefone: sql<number | string>`SUM(CASE WHEN ${contatos.telefone} IS NOT NULL AND ${contatos.telefone} <> '' THEN 1 ELSE 0 END)`,
         comEmail: sql<number | string>`SUM(CASE WHEN ${contatos.email} IS NOT NULL AND ${contatos.email} <> '' THEN 1 ELSE 0 END)`,
@@ -1180,6 +1233,8 @@ export const clientesRouter = router({
 
     return {
       total: Number(stats?.total ?? 0),
+      totalClientes: Number(stats?.totalClientes ?? 0),
+      totalLeads: Number(stats?.totalLeads ?? 0),
       novosHoje: Number(stats?.novosHoje ?? 0),
       comTelefone: Number(stats?.comTelefone ?? 0),
       comEmail: Number(stats?.comEmail ?? 0),
